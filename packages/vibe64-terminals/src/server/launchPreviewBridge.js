@@ -1,8 +1,8 @@
-const PREVIEW_BRIDGE_MESSAGE_TYPE = "vibe64:preview-location";
-const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
-const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
-const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
-const PREVIEW_BRIDGE_VERSION = 1;
+import {
+  PREVIEW_BRIDGE_VERSION,
+  PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_QUERY_MESSAGE_TYPE
+} from "../shared/launchPreviewProtocol.js";
 
 function launchPreviewBridgeScript({
   debug = false,
@@ -10,10 +10,8 @@ function launchPreviewBridgeScript({
 } = {}) {
   const config = JSON.stringify({
     debug: debug === true,
-    commandMessageType: PREVIEW_COMMAND_MESSAGE_TYPE,
-    messageType: PREVIEW_BRIDGE_MESSAGE_TYPE,
+    locationMessageType: PREVIEW_LOCATION_MESSAGE_TYPE,
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
-    readyMessageType: PREVIEW_READY_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
     version: PREVIEW_BRIDGE_VERSION
   });
@@ -24,7 +22,6 @@ function launchPreviewBridgeScript({
     return;
   }
   let lastHref = "";
-  let readyPublished = false;
   function debugLog(event, details = {}) {
     if (config.debug !== true) {
       return;
@@ -56,9 +53,9 @@ function launchPreviewBridgeScript({
       return String(window.location.href || "");
     }
   }
-  function publishLocation(reason) {
+  function publishLocation(reason, options = {}) {
     const href = targetHref();
-    if (!href || href === lastHref) {
+    if (!href || (options.force !== true && href === lastHref)) {
       return;
     }
     lastHref = href;
@@ -69,104 +66,9 @@ function launchPreviewBridgeScript({
     window.parent.postMessage({
       href,
       reason: String(reason || "location"),
-      type: config.messageType,
+      type: config.locationMessageType,
       version: config.version
     }, "*");
-  }
-  function appRoot() {
-    return document.querySelector("#app") || document.body || null;
-  }
-  function renderedState() {
-    const root = appRoot();
-    if (!root) {
-      return {
-        childElementCount: 0,
-        rendered: false,
-        rootId: "",
-        rootTagName: "",
-        textLength: 0
-      };
-    }
-    const textLength = String(root.textContent || "").trim().length;
-    if (root.id === "app") {
-      return {
-        childElementCount: root.childElementCount,
-        rendered: root.childElementCount > 0 || textLength > 0,
-        rootId: root.id,
-        rootTagName: root.tagName,
-        textLength
-      };
-    }
-    const rendered = Array.from(root.children || []).some((child) => {
-      return child.tagName !== "SCRIPT" && child.tagName !== "STYLE";
-    });
-    return {
-      childElementCount: root.childElementCount,
-      rendered,
-      rootId: root.id || "",
-      rootTagName: root.tagName,
-      textLength
-    };
-  }
-  function appHasRenderedDom() {
-    return renderedState().rendered;
-  }
-  function publishReady(reason, options = {}) {
-    const force = options && options.force === true;
-    const state = renderedState();
-    if ((!force && readyPublished) || !state.rendered) {
-      if (force || !readyPublished) {
-        debugLog("ready.blocked", {
-          alreadyPublished: readyPublished,
-          force,
-          href: targetHref(),
-          reason: String(reason || "rendered"),
-          ...state
-        });
-      }
-      return false;
-    }
-    readyPublished = true;
-    debugLog("ready.publish", {
-      force,
-      href: targetHref(),
-      reason: String(reason || "rendered"),
-      ...state
-    });
-    window.parent.postMessage({
-      href: targetHref(),
-      reason: String(reason || "rendered"),
-      type: config.readyMessageType,
-      version: config.version
-    }, "*");
-    return true;
-  }
-  function watchPreviewReady() {
-    if (publishReady("initial")) {
-      return;
-    }
-    const root = appRoot() || document.documentElement;
-    if (!root || typeof MutationObserver !== "function") {
-      return;
-    }
-    const observer = new MutationObserver(() => {
-      if (publishReady("mutation")) {
-        observer.disconnect();
-      }
-    });
-    observer.observe(root, {
-      childList: true,
-      subtree: true
-    });
-    window.setTimeout(() => {
-      if (!readyPublished) {
-        debugLog("ready.timeout", {
-          href: targetHref(),
-          ...renderedState()
-        });
-      }
-      observer.disconnect();
-    }, 30000);
   }
   function wrapHistoryMethod(methodName) {
     const original = window.history && window.history[methodName];
@@ -191,38 +93,22 @@ function launchPreviewBridgeScript({
       debugLog("query.received", {
         href: targetHref()
       });
-      publishLocation("query");
-      publishReady("query", {
+      publishLocation("query", {
         force: true
       });
       return;
     }
-    if (event.data?.type === config.commandMessageType) {
-      const action = String(event.data?.action || "");
-      debugLog("command.received", {
-        action,
-        href: targetHref()
-      });
-      if (action === "back") {
-        window.history.back();
-      }
-    }
   });
   window.__vibe64PreviewBridge = Object.freeze({
     publishLocation: () => publishLocation("manual"),
-    publishReady: () => publishReady("manual", {
-      force: true
-    }),
     version: config.version
   });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       publishLocation("ready");
-      watchPreviewReady();
     }, { once: true });
   } else {
     publishLocation("ready");
-    watchPreviewReady();
   }
   debugLog("init", {
     href: targetHref(),
@@ -249,11 +135,6 @@ function injectLaunchPreviewBridge(html = "", options = {}) {
 }
 
 export {
-  PREVIEW_BRIDGE_MESSAGE_TYPE,
-  PREVIEW_COMMAND_MESSAGE_TYPE,
-  PREVIEW_BRIDGE_VERSION,
-  PREVIEW_QUERY_MESSAGE_TYPE,
-  PREVIEW_READY_MESSAGE_TYPE,
   injectLaunchPreviewBridge,
   launchPreviewBridgeScript
 };

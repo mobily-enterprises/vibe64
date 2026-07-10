@@ -267,6 +267,7 @@ function createService({
     projectService
   });
   const launchTarget = createLaunchTargetTerminalController({
+    env,
     projectService,
     publishSessionChanged: publishSessionChanged.launchTarget
   });
@@ -726,6 +727,13 @@ function createService({
   }
 
   const service = {
+    async close() {
+      await launchTarget.close();
+      return {
+        ok: true
+      };
+    },
+
     async openProjectRuntime(input = {}) {
       const context = projectRuntimeContext();
       const reason = String(input?.reason || "project-open").trim() || "project-open";

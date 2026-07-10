@@ -207,3 +207,49 @@ test("terminals provider reads scoped JSKIT runtime env without resolving a term
     });
   });
 });
+
+test("terminals provider closes preview resources during application shutdown", async () => {
+  const hooks = new Map();
+  let closeCalls = 0;
+  const service = {
+    async close() {
+      closeCalls += 1;
+    },
+    async closeDormantProjectRuntimes() {
+      return {
+        closedCount: 0,
+        failed: [],
+        ok: true,
+        projectCount: 0
+      };
+    }
+  };
+  const router = {
+    register() {}
+  };
+  const fastify = {
+    get() {}
+  };
+  const app = {
+    addHook(name, hook) {
+      hooks.set(name, hook);
+    },
+    make(token) {
+      if (token === "feature.vibe64-terminals.service") {
+        return service;
+      }
+      if (token === "jskit.fastify") {
+        return fastify;
+      }
+      if (token === "jskit.http.router") {
+        return router;
+      }
+      throw new Error(`Unexpected app lookup: ${token}`);
+    }
+  };
+
+  new Vibe64TerminalsProvider().boot(app);
+  await hooks.get("onClose")();
+
+  assert.equal(closeCalls, 1);
+});

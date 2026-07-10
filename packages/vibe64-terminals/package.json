@@ -6,7 +6,8 @@
   "exports": {
     "./server/actions": "./src/server/actions.js",
     "./server/codexGitCommand": "./src/server/codexGitCommand.js",
-    "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js"
+    "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js",
+    "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",

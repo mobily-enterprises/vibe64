@@ -1042,7 +1042,6 @@ test("launch status does not expose a preview before launch readiness", async ()
   assert.equal(terminal.ok, true);
 
   const controller = createLaunchTargetTerminalController({
-    probeLaunchTargetImpl: async () => false,
     projectService: {
       async createRuntime() {
         return {
@@ -1096,12 +1095,12 @@ test("launch status does not expose a preview before launch readiness", async ()
   }
 });
 
-test("launch status repairs a running preview when the readiness marker was missed", async () => {
-  const sessionId = "launch-ready-probe-repair";
+test("launch status repairs a running preview from retained readiness-marker output", async () => {
+  const sessionId = "launch-ready-marker-repair";
   const namespace = launchTargetTerminalNamespace(sessionId);
+  const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:repair]]";
   const writtenMetadata = {};
   const published = [];
-  const probed = [];
   const store = {
     async mutateSession(_sessionId, operation) {
       return operation();
@@ -1113,7 +1112,7 @@ test("launch status repairs a running preview when the readiness marker was miss
   const terminal = startTerminalSession({
     args: [
       "-e",
-      "process.stdin.resume(); setInterval(() => {}, 1000);"
+      `console.log(${JSON.stringify(readinessMarker)}); process.stdin.resume(); setInterval(() => {}, 1000);`
     ],
     command: process.execPath,
     metadata: {
@@ -1126,6 +1125,7 @@ test("launch status repairs a running preview when the readiness marker was miss
         label: "Open browser"
       },
       previewAuth: "",
+      readinessMarker,
       sessionRoot: "/tmp/vibe64-launch-ready-probe/session",
       targetRoot: "/tmp/vibe64-launch-ready-probe",
       targetUrl: "http://127.0.0.1:4100/app"
@@ -1133,16 +1133,10 @@ test("launch status repairs a running preview when the readiness marker was miss
     namespace
   });
   assert.equal(terminal.ok, true);
+  await waitForCondition(() => readTerminalSession(terminal.id, {
+    namespace
+  }).output.includes(readinessMarker));
   const controller = createLaunchTargetTerminalController({
-    probeLaunchTargetImpl: async (href, options) => {
-      probed.push({
-        href,
-        targetHref: options.targetHref,
-        terminalSessionId: options.terminal.id,
-        timeoutMs: options.timeoutMs
-      });
-      return true;
-    },
     projectService: {
       async createRuntime() {
         return {
@@ -1186,20 +1180,12 @@ test("launch status repairs a running preview when the readiness marker was miss
     assert.equal(status.preview.terminalId, terminal.id);
     assert.equal(status.previewTarget.available, true);
     assert.equal(status.openTarget.previewHref, status.preview.href);
-    assert.deepEqual(probed, [
-      {
-        href: "http://127.0.0.1:4100/app",
-        targetHref: "http://127.0.0.1:4100/app",
-        terminalSessionId: terminal.id,
-        timeoutMs: 1500
-      }
-    ]);
     assert.equal(readTerminalSession(terminal.id, {
       namespace
     }).metadata.launchReady, true);
     assert.equal(readTerminalSession(terminal.id, {
       namespace
-    }).metadata.launchReadySource, "target-probe");
+    }).metadata.launchReadySource, "marker-repair");
     assert.equal(writtenMetadata.launch_target_id, "dev");
     assert.equal(writtenMetadata.launch_target_open_href, "http://127.0.0.1:4100/app");
     assert.equal(writtenMetadata.launch_target_terminal_id, terminal.id);
@@ -1216,9 +1202,10 @@ test("launch status repairs a running preview when the readiness marker was miss
   }
 });
 
-test("launch status keeps a running preview in starting state when readiness repair probe fails", async () => {
-  const sessionId = "launch-ready-probe-fails";
+test("launch status stays starting when retained output has no readiness marker", async () => {
+  const sessionId = "launch-ready-marker-missing";
   const namespace = launchTargetTerminalNamespace(sessionId);
+  const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:missing]]";
   const writtenMetadata = {};
   const published = [];
   const terminal = startTerminalSession({
@@ -1236,13 +1223,13 @@ test("launch status keeps a running preview in starting state when readiness rep
         kind: "url",
         label: "Open browser"
       },
+      readinessMarker,
       targetUrl: "http://127.0.0.1:4100/app"
     },
     namespace
   });
   assert.equal(terminal.ok, true);
   const controller = createLaunchTargetTerminalController({
-    probeLaunchTargetImpl: async () => false,
     projectService: {
       async createRuntime() {
         return {
@@ -1747,7 +1734,6 @@ test("launch readiness marker publishes immediately without the recovery probe",
     const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:stable]]";
     const metadata = {};
     const published = [];
-    const probes = [];
     const session = {
       metadata: {},
       sessionId,
@@ -1755,14 +1741,6 @@ test("launch readiness marker publishes immediately without the recovery probe",
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      probeLaunchTargetImpl: async (href, options) => {
-        probes.push({
-          href,
-          targetHref: options.targetHref,
-          terminalSessionId: options.terminal.id
-        });
-        return false;
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -1848,7 +1826,6 @@ test("launch readiness marker publishes immediately without the recovery probe",
       assert.equal(metadata.launch_target_terminal_id, terminal.id);
       assert.equal(readTerminalSession(terminal.id, { namespace }).metadata.launchReady, true);
       assert.equal(readTerminalSession(terminal.id, { namespace }).metadata.launchReadySource, "marker");
-      assert.deepEqual(probes, []);
       assert.deepEqual(published, [
         {
           payload: {

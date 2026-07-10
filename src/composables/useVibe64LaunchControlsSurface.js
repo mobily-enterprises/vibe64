@@ -1,16 +1,17 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
-  browserCanOpenTarget,
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
-  launchPreviewBaseUrl,
-  launchPreviewDisplayUrl,
-  launchPreviewEmbedUnavailableReason,
-  launchPreviewUrl,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreviewToolbarPosition,
+  resolveLaunchPreviewDestination,
   useVibe64LaunchControls
 } from "@/composables/useVibe64LaunchControls.js";
+import {
+  PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
+  PREVIEW_QUERY_MESSAGE_TYPE
+} from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 import {
   readLocalStorageJson,
   writeLocalStorageJson
@@ -34,30 +35,9 @@ import {
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
 
-const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
-const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_DISPLAY_QUERY_PARAMS = Object.freeze([
-  PREVIEW_RELOAD_QUERY_PARAM,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM
 ]);
-
-function previewUrlWithoutReload(value = "") {
-  const text = String(value || "").trim();
-  if (!text) {
-    return "";
-  }
-  try {
-    const url = new URL(text);
-    url.searchParams.delete(PREVIEW_RELOAD_QUERY_PARAM);
-    return url.toString();
-  } catch {
-    return text
-      .replace(/([?&])vibe64_reload=[^&]*&?/u, (match, prefix) => {
-        return prefix === "?" && match.endsWith("&") ? "?" : "";
-      })
-      .replace(/[?&]$/u, "");
-  }
-}
 
 function previewUrlWithoutDisplayParams(value = "") {
   const text = String(value || "").trim();
@@ -72,18 +52,6 @@ function previewUrlWithoutDisplayParams(value = "") {
     return url.toString();
   } catch {
     return stripPreviewDisplayQueryParams(text);
-  }
-}
-
-function previewProxyToken(value = "") {
-  const text = String(value || "").trim();
-  if (!text) {
-    return "";
-  }
-  try {
-    return new URL(text).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM) || "";
-  } catch {
-    return "";
   }
 }
 
@@ -189,64 +157,52 @@ function previewAddressDisplayText(value = "", {
   return displayUrl;
 }
 
-function launchPreviewReloadBaseUrl({
+function launchPreviewFrameUrl({
   baseUrl = "",
   displayBaseUrl = "",
   visitedUrl = ""
 } = {}) {
-  const normalizedBaseUrl = previewUrlWithoutReload(baseUrl);
-  const normalizedVisitedUrl = previewUrlWithoutReload(visitedUrl);
-  if (!normalizedBaseUrl || !normalizedVisitedUrl) {
-    return normalizedBaseUrl;
+  const baseText = String(baseUrl || "").trim();
+  if (!baseText) {
+    return "";
   }
+  const routeSource = String(visitedUrl || displayBaseUrl || baseText).trim();
   try {
-    const base = new URL(normalizedBaseUrl);
-    const visited = new URL(normalizedVisitedUrl, normalizedBaseUrl);
-    if (visited.origin === base.origin) {
-      return visited.toString();
+    const base = new URL(baseText);
+    const route = new URL(routeSource, String(displayBaseUrl || baseText));
+    const token = base.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM) || "";
+    base.pathname = route.pathname;
+    base.search = route.search;
+    base.hash = route.hash;
+    if (token) {
+      base.searchParams.set(PREVIEW_PROXY_TOKEN_QUERY_PARAM, token);
     }
-    const displayText = previewUrlWithoutReload(displayBaseUrl);
-    if (displayText && visited.origin === new URL(displayText).origin) {
-      const mapped = new URL(normalizedBaseUrl);
-      mapped.pathname = visited.pathname;
-      mapped.search = visited.search;
-      mapped.hash = visited.hash;
-      return mapped.toString();
-    }
-    const mapped = new URL(normalizedBaseUrl);
-    mapped.pathname = visited.pathname;
-    mapped.search = visited.search;
-    mapped.hash = visited.hash;
-    return mapped.toString();
+    return base.toString();
   } catch {
-    return normalizedBaseUrl;
+    return baseText;
   }
 }
 
-function launchPreviewBootstrapBaseUrl({
-  baseUrl = "",
-  displayBaseUrl = "",
-  visitedUrl = ""
-} = {}) {
-  const token = previewProxyToken(baseUrl);
-  if (!token) {
-    return "";
+function previewUrlForDebug(value = "") {
+  return previewUrlWithoutDisplayParams(value);
+}
+
+function redactPreviewDebugDetails(value) {
+  if (typeof value === "string") {
+    return value.includes(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
+      ? previewUrlForDebug(value)
+      : value;
   }
-  const reloadBaseUrl = launchPreviewReloadBaseUrl({
-    baseUrl,
-    displayBaseUrl,
-    visitedUrl
-  });
-  if (!reloadBaseUrl) {
-    return baseUrl;
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactPreviewDebugDetails(entry));
   }
-  try {
-    const bootstrapUrl = new URL(reloadBaseUrl);
-    bootstrapUrl.searchParams.set(PREVIEW_PROXY_TOKEN_QUERY_PARAM, token);
-    return bootstrapUrl.toString();
-  } catch {
-    return baseUrl;
+  if (!value || typeof value !== "object") {
+    return value;
   }
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+    key,
+    redactPreviewDebugDetails(entry)
+  ]));
 }
 
 function normalizePreviewAddressInput(value = "") {
@@ -271,7 +227,7 @@ function launchPreviewAddressNavigationUrl({
   displayBaseUrl = "",
   previewBaseUrl = ""
 } = {}) {
-  const previewBaseText = previewUrlWithoutReload(previewBaseUrl);
+  const previewBaseText = String(previewBaseUrl || "").trim();
   const displayBaseText = previewUrlWithoutDisplayParams(displayBaseUrl || previewBaseText);
   const currentText = previewUrlWithoutDisplayParams(currentUrl || displayBaseText);
   const input = normalizePreviewAddressInput(address);
@@ -319,7 +275,11 @@ function launchPreviewAddressNavigationUrl({
       displayUrl: previewUrlWithoutDisplayParams(displayTarget.toString()),
       error: "",
       ok: true,
-      previewUrl: previewUrlWithoutReload(previewTarget.toString())
+      previewUrl: launchPreviewFrameUrl({
+        baseUrl: previewBaseText,
+        displayBaseUrl: displayBaseText,
+        visitedUrl: displayTarget.toString()
+      })
     };
   } catch {
     return {
@@ -367,6 +327,7 @@ function useVibe64LaunchControlsSurface(props) {
     terminalIndicatorLabel,
     terminalIndicatorState,
     terminalIsRunning,
+    terminalPreviewRequiresProxy,
     terminalStatus,
     terminalSubtitle,
     terminalTitle,
@@ -382,21 +343,21 @@ function useVibe64LaunchControlsSurface(props) {
     busy: () => props.busy,
     session: () => props.session
   });
-  
+
   const runMenuDisabled = computed(() => Boolean(
     launchButtonsDisabled.value ||
     loading.value ||
     launchTargets.value.length < 1
   ));
-  const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
-  const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
-  const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
-  const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
   const previewFrame = ref(null);
+  const previewFrameRequest = ref({
+    id: 0,
+    src: ""
+  });
+  const previewLoadedFrameRequestId = ref(0);
   const previewAddressDraft = ref("");
   const previewAddressError = ref("");
   const previewAddressFocused = ref(false);
-  const previewBootstrapBaseUrl = ref("");
   const previewHistory = ref([]);
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
@@ -406,9 +367,6 @@ function useVibe64LaunchControlsSurface(props) {
   const previewRouteFormValues = ref({});
   const previewRouteSelection = ref(null);
   const previewLogVisible = ref(false);
-  const previewReloadBaseUrl = ref("");
-  const previewReloadKey = ref(0);
-  const previewReadyUrl = ref("");
   const previewVisitedUrl = ref("");
   const previewToolbarExpanded = ref(false);
   const previewToolbarPosition = ref("center");
@@ -478,9 +436,12 @@ function useVibe64LaunchControlsSurface(props) {
   const previewRouteDialogParams = computed(() => previewRouteSelection.value
     ? previewRouteParams(previewRouteSelection.value)
     : []);
-  const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
-  const previewEmbedUnavailableReason = computed(() => launchPreviewEmbedUnavailableReason(launchActions.value));
-  const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
+  const previewDestination = computed(() => resolveLaunchPreviewDestination(launchActions.value, {
+    requirePreviewProxy: terminalPreviewRequiresProxy.value
+  }));
+  const previewBaseUrl = computed(() => previewDestination.value.embedHref);
+  const previewEmbedUnavailableReason = computed(() => previewDestination.value.unavailableReason);
+  const previewDisplayBaseUrl = computed(() => previewDestination.value.displayHref);
   const previewDisplayedUrl = computed(() => (
     previewVisitedUrl.value ||
     previewDisplayBaseUrl.value ||
@@ -496,11 +457,8 @@ function useVibe64LaunchControlsSurface(props) {
     ["ready", "stale"].includes(previewState.value) &&
     previewBaseUrl.value
   ));
-  const previewUrl = computed(() => launchPreviewUrl({
-    baseUrl: previewBootstrapBaseUrl.value || previewReloadBaseUrl.value || previewBaseUrl.value,
-    ready: previewReadyForIframe.value,
-    reloadKey: previewReloadKey.value
-  }));
+  const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
+  const previewUrl = computed(() => previewFrameRequest.value.src);
   const previewStarting = computed(() => Boolean(
     previewState.value === "starting"
   ));
@@ -527,7 +485,8 @@ function useVibe64LaunchControlsSurface(props) {
   });
   const launchStatusChipTitle = computed(() => launchStatusText.value || launchStatusChipText.value);
   const previewLoadingOverlayVisible = computed(() => previewOpeningOverlayVisible({
-    previewReadyUrl: previewReadyUrl.value,
+    loadedFrameRequestId: previewLoadedFrameRequestId.value,
+    previewFrameRequestId: previewFrameRequestId.value,
     previewUrl: previewUrl.value
   }));
   const previewInFlightText = computed(() => launchPreviewInFlightText({
@@ -569,13 +528,25 @@ function useVibe64LaunchControlsSurface(props) {
     previewNotice.value &&
     !embeddedTerminalFrameVisible.value
   ));
-  const previewTryVisible = computed(() => Boolean(
+  const previewRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
-    previewPaneDisplayed.value &&
+    previewNoticeVisible.value &&
     (
-      previewLoadingOverlayVisible.value ||
-      !previewUrl.value
+      (
+        embeddedStartTarget.value?.available !== false &&
+        (previewCanRestart.value || previewCanStart.value)
+      ) ||
+      terminalCanRestart.value ||
+      terminalCanRetry.value
     )
+  ));
+  const previewRecoveryLabel = computed(() => (
+    terminalCanRetry.value &&
+    !previewCanRestart.value &&
+    !previewCanStart.value &&
+    !terminalCanRestart.value
+      ? "Retry preview"
+      : "Restart preview"
   ));
   const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
     embeddedPreview: props.embeddedPreview,
@@ -633,37 +604,75 @@ function useVibe64LaunchControlsSurface(props) {
     if (!previewClientDebugEnabled()) {
       return;
     }
-    vibe64SessionDebugLog(`client.launchPreview.${event}`, {
-      frameSrc: String(previewFrame.value?.src || ""),
+    vibe64SessionDebugLog(`client.launchPreview.${event}`, redactPreviewDebugDetails({
+      frameRequestId: previewFrameRequestId.value,
+      frameSrc: String(previewFrame.value?.getAttribute?.("src") || ""),
+      loadedFrameRequestId: previewLoadedFrameRequestId.value,
       overlayVisible: previewLoadingOverlayVisible.value,
       previewBaseUrl: previewBaseUrl.value,
       previewDisplayBaseUrl: previewDisplayBaseUrl.value,
-      previewReadyUrl: previewUrlWithoutReload(previewReadyUrl.value),
       previewState: previewState.value,
-      previewUrl: previewUrlWithoutReload(previewUrl.value),
+      previewUrl: previewUrl.value,
       projectSlug: projectSlug.value,
-      reloadKey: previewReloadKey.value,
       sessionId: String(props.session?.sessionId || ""),
       ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
-    });
+    }));
   }
-  
+
+  function clearPreviewFrame(reason = "") {
+    if (!previewFrameRequest.value.src) {
+      return false;
+    }
+    previewFrameRequest.value = {
+      id: previewFrameRequest.value.id + 1,
+      src: ""
+    };
+    previewLoadedFrameRequestId.value = 0;
+    previewDebugLog("frame.cleared", {
+      reason
+    });
+    return true;
+  }
+
+  function requestPreviewFrame({
+    force = false,
+    reason = "",
+    src = "",
+    visitedUrl = previewVisitedUrl.value
+  } = {}) {
+    if (!previewReadyForIframe.value) {
+      return false;
+    }
+    const nextSrc = String(src || "").trim() || launchPreviewFrameUrl({
+      baseUrl: previewBaseUrl.value,
+      displayBaseUrl: previewDisplayBaseUrl.value,
+      visitedUrl: visitedUrl || previewDisplayBaseUrl.value || previewBaseUrl.value
+    });
+    if (!nextSrc || (!force && nextSrc === previewFrameRequest.value.src)) {
+      return false;
+    }
+    previewFrameRequest.value = {
+      id: previewFrameRequest.value.id + 1,
+      src: nextSrc
+    };
+    previewDebugLog("frame.requested", {
+      force,
+      reason,
+      src: nextSrc
+    });
+    return true;
+  }
+
   async function reloadPreview() {
+    const requestIdBeforeRefresh = previewFrameRequestId.value;
     await refreshLaunchTargets();
-    previewBootstrapBaseUrl.value = launchPreviewBootstrapBaseUrl({
-      baseUrl: previewBaseUrl.value,
-      displayBaseUrl: previewDisplayBaseUrl.value,
-      visitedUrl: previewVisitedUrl.value
-    });
-    previewReloadBaseUrl.value = launchPreviewReloadBaseUrl({
-      baseUrl: previewBaseUrl.value,
-      displayBaseUrl: previewDisplayBaseUrl.value,
-      visitedUrl: previewVisitedUrl.value
-    });
-    previewReloadKey.value += 1;
-    previewDebugLog("manualReload", {
-      reloadBaseUrl: previewUrlWithoutReload(previewReloadBaseUrl.value),
-      nextReloadKey: previewReloadKey.value
+    await nextTick();
+    if (previewFrameRequestId.value !== requestIdBeforeRefresh) {
+      return true;
+    }
+    return requestPreviewFrame({
+      force: true,
+      reason: "manual-reload"
     });
   }
 
@@ -792,19 +801,22 @@ function useVibe64LaunchControlsSurface(props) {
       return false;
     }
     previewAddressError.value = "";
-    previewBootstrapBaseUrl.value = "";
     previewAddressDraft.value = previewAddressDisplayText(navigation.displayUrl, {
       displayBaseUrl: previewDisplayBaseUrl.value,
       previewBaseUrl: previewBaseUrl.value
     });
-    previewReloadBaseUrl.value = navigation.previewUrl;
-    previewReloadKey.value += 1;
     setPreviewVisitedUrl(navigation.displayUrl, {
       reason: "address"
     });
+    requestPreviewFrame({
+      force: true,
+      reason: "address",
+      src: navigation.previewUrl,
+      visitedUrl: navigation.displayUrl
+    });
     previewDebugLog("address.navigate", {
       displayUrl: navigation.displayUrl,
-      previewUrl: previewUrlWithoutReload(navigation.previewUrl)
+      previewUrl: navigation.previewUrl
     });
     return true;
   }
@@ -847,26 +859,9 @@ function useVibe64LaunchControlsSurface(props) {
     return navigated;
   }
 
-  function postPreviewCommand(action = "") {
-    if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value) {
-      return false;
-    }
-    previewFrame.value.contentWindow.postMessage({
-      action: String(action || ""),
-      type: PREVIEW_COMMAND_MESSAGE_TYPE
-    }, "*");
-    previewDebugLog("command.post", {
-      action: String(action || "")
-    });
-    return true;
-  }
-
   function goPreviewBack() {
     if (!previewBackAvailable.value) {
       return false;
-    }
-    if (postPreviewCommand("back")) {
-      return true;
     }
     const previousUrl = previewHistory.value.at(-2) || "";
     if (previousUrl && navigatePreviewToDisplayUrl(previousUrl)) {
@@ -891,11 +886,23 @@ function useVibe64LaunchControlsSurface(props) {
     }, "*");
   }
   
-  function handlePreviewFrameLoad() {
-    previewDebugLog("iframe.load");
-    if (previewUrl.value) {
-      previewReadyUrl.value = previewUrl.value;
+  function handlePreviewFrameLoad(event) {
+    const frame = event?.currentTarget || null;
+    const requestId = Number(frame?.dataset?.previewFrameRequestId || 0);
+    if (
+      !requestId ||
+      frame !== previewFrame.value ||
+      requestId !== previewFrameRequestId.value
+    ) {
+      previewDebugLog("iframe.loadIgnored", {
+        requestId
+      });
+      return;
     }
+    previewLoadedFrameRequestId.value = requestId;
+    previewDebugLog("iframe.loaded", {
+      requestId
+    });
     requestPreviewState();
   }
   
@@ -906,70 +913,29 @@ function useVibe64LaunchControlsSurface(props) {
     if (!embeddedStartTarget.value || embeddedStartTarget.value.available === false) {
       return false;
     }
-    preservePreviewVisitedRoute();
-    const started = await run(embeddedStartTarget.value, {
+    return run(embeddedStartTarget.value, {
       applyDefaultDisplay: false,
       forceRestart: true
     });
-    preservePreviewVisitedRoute();
-    return started;
   }
 
   async function recoverEmbeddedPreview() {
     if (operationBusy.value) {
       return false;
     }
-    if (embeddedStartTarget.value && (previewCanRestart.value || previewCanStart.value || !terminalVisible.value)) {
+    if (
+      embeddedStartTarget.value?.available !== false &&
+      (previewCanRestart.value || previewCanStart.value)
+    ) {
       return forceStartEmbeddedPreview();
     }
     if (terminalCanRestart.value) {
-      preservePreviewVisitedRoute();
       return restartTerminal();
     }
     if (terminalCanRetry.value) {
       return retryTerminal();
     }
     return false;
-  }
-
-  async function tryEmbeddedPreview() {
-    if (previewEmbedUnavailableReason.value) {
-      const action = launchActions.value.find((candidate) => browserCanOpenTarget(candidate));
-      if (action) {
-        openAction(action);
-        return true;
-      }
-    }
-    if (previewLoadingOverlayVisible.value && previewUrl.value) {
-      await reloadPreview();
-      return true;
-    }
-    if (operationBusy.value) {
-      await retryLaunchStatus();
-      return true;
-    }
-    if (embeddedStartTarget.value && embeddedStartTarget.value.available !== false) {
-      return forceStartEmbeddedPreview();
-    }
-    if (terminalCanRestart.value) {
-      return restartTerminal();
-    }
-    if (terminalCanRetry.value) {
-      return retryTerminal();
-    }
-    await retryLaunchStatus();
-    return true;
-  }
-
-  function preservePreviewVisitedRoute() {
-    const reloadBaseUrl = launchPreviewReloadBaseUrl({
-      baseUrl: previewBaseUrl.value,
-      displayBaseUrl: previewDisplayBaseUrl.value,
-      visitedUrl: previewVisitedUrl.value
-    });
-    if (reloadBaseUrl) {
-      previewReloadBaseUrl.value = reloadBaseUrl;
-    }
   }
 
   function openPreviewOptions() {
@@ -1026,11 +992,10 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   function previewMessageUrl(data = {}) {
-    const messageType = String(data?.type || "");
     if (
       !data ||
       typeof data !== "object" ||
-      ![PREVIEW_LOCATION_MESSAGE_TYPE, PREVIEW_READY_MESSAGE_TYPE].includes(messageType)
+      data.type !== PREVIEW_LOCATION_MESSAGE_TYPE
     ) {
       return "";
     }
@@ -1043,10 +1008,10 @@ function useVibe64LaunchControlsSurface(props) {
       const url = new URL(href, baseUrl);
       const baseOrigin = new URL(baseUrl).origin;
       if (url.origin === baseOrigin) {
-        return previewUrlWithoutReload(url.toString());
+        return previewUrlWithoutDisplayParams(url.toString());
       }
       const mappedUrl = previewMessageTargetUrlToPreviewUrl(url);
-      return mappedUrl ? previewUrlWithoutReload(mappedUrl) : "";
+      return mappedUrl ? previewUrlWithoutDisplayParams(mappedUrl) : "";
     } catch {
       return "";
     }
@@ -1098,10 +1063,7 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   function isPreviewBridgeMessage(value = {}) {
-    return [
-      PREVIEW_LOCATION_MESSAGE_TYPE,
-      PREVIEW_READY_MESSAGE_TYPE
-    ].includes(previewMessageType(value));
+    return previewMessageType(value) === PREVIEW_LOCATION_MESSAGE_TYPE;
   }
   
   function handlePreviewLocationMessage(event) {
@@ -1132,13 +1094,6 @@ function useVibe64LaunchControlsSurface(props) {
       origin: String(event?.origin || ""),
       reason: String(event?.data?.reason || "")
     });
-    if (frameUrl && event.data?.type === PREVIEW_READY_MESSAGE_TYPE) {
-      previewReadyUrl.value = previewUrl.value;
-      previewDebugLog("ready.accepted", {
-        frameUrl,
-        reason: String(event?.data?.reason || "")
-      });
-    }
     if (frameUrl) {
       setPreviewVisitedUrl(frameUrl, {
         reason: String(event?.data?.reason || "")
@@ -1146,36 +1101,44 @@ function useVibe64LaunchControlsSurface(props) {
     }
   }
   
-  watch(previewUrl, (nextUrl, previousUrl) => {
-    const nextDisplayUrl = previewUrlWithoutDisplayParams(nextUrl);
-    const previousDisplayUrl = previewUrlWithoutDisplayParams(previousUrl);
-    previewDebugLog("url.changed", {
-      nextUrl: nextDisplayUrl,
-      previousUrl: previousDisplayUrl
-    });
-    if (nextDisplayUrl !== previousDisplayUrl) {
-      previewReadyUrl.value = "";
+  watch(previewLocationStorageKey, (storageKey, previousStorageKey) => {
+    if (storageKey === previousStorageKey) {
+      return;
     }
-    requestPreviewState();
+    previewVisitedUrl.value = "";
+    resetPreviewHistory("");
+  }, {
+    flush: "sync",
+    immediate: true
   });
 
-  watch(previewBaseUrl, (nextUrl, previousUrl) => {
-    previewBootstrapBaseUrl.value = launchPreviewBootstrapBaseUrl({
-      baseUrl: nextUrl,
-      displayBaseUrl: previewDisplayBaseUrl.value,
-      visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value) || previewDisplayBaseUrl.value
-    });
-    if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
-      const reloadBaseUrl = launchPreviewReloadBaseUrl({
-        baseUrl: nextUrl,
-        displayBaseUrl: previewDisplayBaseUrl.value,
-        visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value)
-      });
-      previewReloadBaseUrl.value = previewUrlWithoutReload(reloadBaseUrl) === previewUrlWithoutReload(nextUrl)
-        ? ""
-        : reloadBaseUrl;
+  watch([
+    previewReadyForIframe,
+    previewBaseUrl,
+    previewDisplayBaseUrl
+  ], ([ready, baseUrl, displayBaseUrl], previous = []) => {
+    const previousDisplayBaseUrl = previous[2] || "";
+    const normalizedDisplayBaseUrl = previewUrlWithoutDisplayParams(displayBaseUrl);
+    if (normalizedDisplayBaseUrl && (
+      !previewVisitedUrl.value ||
+      normalizedDisplayBaseUrl !== previewUrlWithoutDisplayParams(previousDisplayBaseUrl)
+    )) {
+      const restoredUrl = storedPreviewUrl(normalizedDisplayBaseUrl);
+      const route = previewRouteFromUrl(
+        previewVisitedUrl.value || restoredUrl || normalizedDisplayBaseUrl
+      );
+      previewVisitedUrl.value = previewUrlForRoute(route, normalizedDisplayBaseUrl) || normalizedDisplayBaseUrl;
+      resetPreviewHistory(previewVisitedUrl.value);
     }
+    if (!ready || !baseUrl) {
+      clearPreviewFrame("preview-not-ready");
+      return;
+    }
+    requestPreviewFrame({
+      reason: "preview-ready"
+    });
   }, {
+    flush: "sync",
     immediate: true
   });
   
@@ -1188,33 +1151,6 @@ function useVibe64LaunchControlsSurface(props) {
     flush: "sync"
   });
   
-  watch(previewDisplayBaseUrl, (baseUrl) => {
-    const normalizedBaseUrl = previewUrlWithoutDisplayParams(baseUrl);
-    if (!normalizedBaseUrl) {
-      previewVisitedUrl.value = "";
-      resetPreviewHistory("");
-      return;
-    }
-    const restoredUrl = storedPreviewUrl(normalizedBaseUrl);
-    const nextVisitedUrl = previewUrlWithoutDisplayParams(launchPreviewReloadBaseUrl({
-      baseUrl: normalizedBaseUrl,
-      displayBaseUrl: normalizedBaseUrl,
-      visitedUrl: previewVisitedUrl.value || restoredUrl || normalizedBaseUrl
-    }));
-    previewVisitedUrl.value = nextVisitedUrl || normalizedBaseUrl;
-    resetPreviewHistory(previewVisitedUrl.value);
-    const previewRouteUrl = launchPreviewReloadBaseUrl({
-      baseUrl: previewBaseUrl.value,
-      displayBaseUrl: normalizedBaseUrl,
-      visitedUrl: previewVisitedUrl.value
-    });
-    previewReloadBaseUrl.value = previewUrlWithoutReload(previewRouteUrl) === previewUrlWithoutReload(previewBaseUrl.value)
-      ? ""
-      : previewRouteUrl;
-  }, {
-    immediate: true
-  });
-
   watch(previewDisplayedAddress, (url) => {
     if (!previewAddressFocused.value) {
       previewAddressDraft.value = url || "";
@@ -1284,6 +1220,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewEmbedUnavailableReason,
     previewEmptyText,
     previewFrame,
+    previewFrameRequestId,
     previewIssue,
     previewIssueVisible,
     previewInFlightText,
@@ -1305,13 +1242,14 @@ function useVibe64LaunchControlsSurface(props) {
     previewRoutesAvailable,
     previewNotice,
     previewNoticeVisible,
+    previewRecoveryLabel,
+    previewRecoveryVisible,
     previewState,
     previewTerminalRecoveryVisible,
     previewToolbarRecoveryVisible,
     previewStarting,
     previewToolbarExpanded,
     previewToolbarPosition,
-    previewTryVisible,
     previewUrl,
     copyPreviewUrl,
     openPreviewRoute,
@@ -1323,7 +1261,6 @@ function useVibe64LaunchControlsSurface(props) {
     savePreviewOptions,
     submitPreviewRouteDialog,
     submitPreviewAddress,
-    tryEmbeddedPreview,
     restartTerminal,
     retryTerminal,
     run,
@@ -1462,14 +1399,16 @@ function launchPreviewStatusText({
 }
 
 function previewOpeningOverlayVisible({
-  previewReadyUrl = "",
+  loadedFrameRequestId = 0,
+  previewFrameRequestId = 0,
   previewUrl = ""
 } = {}) {
-  const normalizedPreviewUrl = previewUrlWithoutDisplayParams(previewUrl);
-  if (!normalizedPreviewUrl) {
-    return false;
-  }
-  return normalizedPreviewUrl !== previewUrlWithoutDisplayParams(previewReadyUrl);
+  const requestId = Math.max(0, Number(previewFrameRequestId) || 0);
+  return Boolean(
+    String(previewUrl || "").trim() &&
+    requestId > 0 &&
+    requestId !== Math.max(0, Number(loadedFrameRequestId) || 0)
+  );
 }
 
 function launchPreviewIssue({
@@ -1539,9 +1478,8 @@ function launchToolbarDockShouldShow({
 
 export {
   launchPreviewAddressNavigationUrl,
-  launchPreviewBootstrapBaseUrl,
-  launchPreviewReloadBaseUrl,
   launchPreviewEmptyText,
+  launchPreviewFrameUrl,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,
@@ -1551,6 +1489,6 @@ export {
   previewAddressDisplayText,
   previewRouteFromUrl,
   previewUrlForRoute,
-  previewUrlWithoutReload,
+  redactPreviewDebugDetails,
   useVibe64LaunchControlsSurface
 };

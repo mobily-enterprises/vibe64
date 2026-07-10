@@ -53,7 +53,7 @@ const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
 const AUTO_START_ATTEMPT_COOLDOWN_MS = 7000;
 const AUTO_START_STABILITY_DELAY_MS = 750;
-const LAUNCH_STATUS_RETRY_LIMIT = 10;
+const LAUNCH_STATUS_RETRY_LIMIT = 2;
 const LAUNCH_STATUS_RETRY_BASE_DELAY_MS = 1000;
 const LAUNCH_STATUS_RETRY_MAX_DELAY_MS = 5000;
 const LAUNCH_STATUS_IDLE_RECOVERY_INITIAL_DELAY_MS = 1200;
@@ -163,15 +163,10 @@ function openLaunchBrowserTarget(
 }
 
 function launchBrowserTargetHref(target = {}, browserWindow = null) {
-  const targetHref = String(target.href || "").trim();
-  const previewHref = String(target.previewHref || "").trim();
   const studioHref = String(browserWindow?.location?.href || localPreviewBrowserHref()).trim();
-
-  if (previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
-    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
-  }
-
-  return sameSiteLoopbackPreviewUrl(targetHref, studioHref);
+  return resolveLaunchPreviewDestination([target], {
+    studioHref
+  }).displayHref;
 }
 
 function openPendingLaunchBrowserWindow(
@@ -450,75 +445,52 @@ function localPreviewBrowserHref() {
   return String(window.location?.href || "");
 }
 
-function launchPreviewBaseUrl(actions = [], {
+function resolveLaunchPreviewDestination(actions = [], {
   requirePreviewProxy = false,
   studioHref = localPreviewBrowserHref()
 } = {}) {
-  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
-  const previewHref = String(previewAction?.previewHref || "").trim();
-  if (previewHref) {
-    if (
-      remoteStudioCannotEmbedLoopbackTarget(previewHref, studioHref) ||
-      browserWouldBlockEmbeddedPreview(previewHref, studioHref)
-    ) {
-      return "";
-    }
-    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
-  }
-  if (requirePreviewProxy) {
-    return "";
-  }
-  const targetHref = String(previewAction?.href || "").trim();
-  if (remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
-    return "";
-  }
-  return sameSiteLoopbackPreviewUrl(
-    targetHref,
-    studioHref
-  );
-}
+  const action = Array.isArray(actions)
+    ? actions.find((candidate) => browserCanOpenTarget(candidate)) || null
+    : null;
+  const targetHref = String(action?.href || "").trim();
+  const previewHref = String(action?.previewHref || "").trim();
+  const displayHref = previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)
+    ? sameSiteLoopbackPreviewUrl(previewHref, studioHref)
+    : sameSiteLoopbackPreviewUrl(targetHref, studioHref);
+  const embedCandidate = previewHref || (requirePreviewProxy ? "" : targetHref);
 
-function launchPreviewEmbedUnavailableReason(actions = [], {
-  studioHref = localPreviewBrowserHref()
-} = {}) {
-  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
-  const previewHref = String(previewAction?.previewHref || "").trim();
-  if (previewHref && browserWouldBlockEmbeddedPreview(previewHref, studioHref)) {
-    return "HTTP previews cannot be embedded from HTTPS Studio. Open the preview in a browser tab, or open Studio over HTTP for embedded preview.";
+  if (!embedCandidate) {
+    return {
+      action,
+      displayHref,
+      embedHref: "",
+      unavailableReason: requirePreviewProxy && action
+        ? "Waiting for the hosted preview URL."
+        : ""
+    };
   }
-  return "";
-}
-
-function launchPreviewDisplayUrl(actions = [], {
-  studioHref = localPreviewBrowserHref()
-} = {}) {
-  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
-  const targetHref = String(previewAction?.href || "").trim();
-  const previewHref = String(previewAction?.previewHref || "").trim();
-  if (previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
-    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
+  if (remoteStudioCannotEmbedLoopbackTarget(embedCandidate, studioHref)) {
+    return {
+      action,
+      displayHref,
+      embedHref: "",
+      unavailableReason: "This preview URL is only reachable from the server. Restart the preview to create a hosted preview URL."
+    };
   }
-  return targetHref;
-}
-
-function launchPreviewUrl({
-  baseUrl = "",
-  ready = false,
-  reloadKey = 0
-} = {}) {
-  const normalizedBaseUrl = String(baseUrl || "");
-  if (!normalizedBaseUrl || ready !== true) {
-    return "";
+  if (browserWouldBlockEmbeddedPreview(embedCandidate, studioHref)) {
+    return {
+      action,
+      displayHref,
+      embedHref: "",
+      unavailableReason: "HTTP previews cannot be embedded from HTTPS Studio. Open the preview in a browser tab, or open Studio over HTTP for embedded preview."
+    };
   }
-  try {
-    const url = new URL(normalizedBaseUrl);
-    url.searchParams.set("vibe64_reload", String(reloadKey));
-    return url.toString();
-  } catch {
-    // Fall through to the string-only path for relative or otherwise non-URL input.
-  }
-  const separator = normalizedBaseUrl.includes("?") ? "&" : "?";
-  return `${normalizedBaseUrl}${separator}vibe64_reload=${reloadKey}`;
+  return {
+    action,
+    displayHref,
+    embedHref: sameSiteLoopbackPreviewUrl(embedCandidate, studioHref),
+    unavailableReason: ""
+  };
 }
 
 function normalizeLaunchPreview(preview = {}) {
@@ -1680,15 +1652,11 @@ export {
   launchStatusErrorText,
   launchStatusRetryDelay,
   launchStatusShouldRetry,
-  launchPreviewBaseUrl,
-  launchPreviewEmbedUnavailableReason,
-  launchPreviewDisplayUrl,
   launchPreviewLocationStorageKey,
   launchTargetsRealtimeShouldRefresh,
   launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,
   launchPreviewToolbarStorageKey,
-  launchPreviewUrl,
   launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
@@ -1698,6 +1666,7 @@ export {
   openPendingLaunchBrowserWindow,
   openReadyLaunchBrowserTarget,
   readLaunchAutoStartAttemptCooldown,
+  resolveLaunchPreviewDestination,
   sameSiteLoopbackPreviewUrl,
   shouldScheduleLaunchAutoStart,
   useVibe64LaunchControls

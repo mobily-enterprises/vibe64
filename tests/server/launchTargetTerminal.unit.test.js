@@ -88,6 +88,7 @@ function createSpec({
 
 test("preview public origin maps user Studio hosts to the app preview domain", () => {
   const publicOrigin = previewPublicOriginForLaunch({
+    env: {},
     publicHost: "massimo.users.vibe64.dev",
     sessionId: "2026-06-19_14-44-21",
     targetHref: "http://127.0.0.1:4100/home",
@@ -115,7 +116,7 @@ test("preview public origin follows the Studio HTTPS protocol by default", () =>
   assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
 });
 
-test("preview public origin supports an explicit HTTP preview protocol override", () => {
+test("preview public origin follows the configured public protocol", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
       VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
@@ -129,11 +130,33 @@ test("preview public origin supports an explicit HTTP preview protocol override"
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
+});
+
+test("preview public origin stays stable across terminal restarts", () => {
+  const input = {
+    env: {},
+    publicHost: "massimo.users.vibe64.dev",
+    sessionId: "2026-06-19_14-44-21"
+  };
+
+  assert.equal(
+    previewPublicOriginForLaunch({
+      ...input,
+      targetHref: "http://127.0.0.1:4100/home",
+      terminalSessionId: "terminal-one"
+    }),
+    previewPublicOriginForLaunch({
+      ...input,
+      targetHref: "http://127.0.0.1:4999/home",
+      terminalSessionId: "terminal-two"
+    })
+  );
 });
 
 test("preview public origin supports explicit localhost hosted routing config", () => {
   const publicOrigin = previewPublicOriginForLaunch({
+    env: {},
     previewPublicDomain: "localhost:3000",
     publicHost: "merc.users.localhost:3000",
     publicProtocol: "http",
@@ -151,7 +174,6 @@ test("preview public origin supports env-driven localhost hosted routing config"
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
       VIBE64_PREVIEW_PUBLIC_DOMAIN: "localhost:3000",
-      VIBE64_PREVIEW_PUBLIC_PROTOCOL: "http",
       VIBE64_PUBLIC_PROTOCOL: "http",
       VIBE64_PUBLIC_USER_DOMAIN: "users.localhost:3000"
     },

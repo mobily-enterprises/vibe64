@@ -11,7 +11,9 @@ import {
 import crypto from "node:crypto";
 import {
   chmod,
+  lstat,
   mkdir,
+  readdir,
   unlink
 } from "node:fs/promises";
 import path from "node:path";
@@ -44,11 +46,13 @@ import {
 import {
   injectLaunchPreviewBridge
 } from "./launchPreviewBridge.js";
+import {
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM
+} from "../shared/launchPreviewProtocol.js";
 
 const LOOPBACK_HOST = "127.0.0.1";
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/iu;
 const REQUEST_BODY_METHODS = new Set(["PATCH", "POST", "PUT"]);
-const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
@@ -56,6 +60,7 @@ const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_ID
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
+const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.sock$/u;
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -221,7 +226,16 @@ function previewTokenCookieName(proxyOrigin = "") {
 function previewTokenCookie(token = "", {
   proxyOrigin = ""
 } = {}) {
-  return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; SameSite=Lax; HttpOnly`;
+  const secure = previewOriginUsesHttps(proxyOrigin) ? "; Secure" : "";
+  return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; SameSite=Lax; HttpOnly${secure}`;
+}
+
+function previewOriginUsesHttps(value = "") {
+  try {
+    return new URL(String(value || "")).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function stripPreviewTokenCookie(header = "", {
@@ -688,7 +702,7 @@ async function proxyPreviewRequest(request, response, {
     method: String(request.method || "GET").toUpperCase(),
     pathname: requestUrl.pathname,
     proxyOrigin,
-    search: requestUrl.search,
+    search: stripPreviewTokenQueryParam(requestUrl.search),
     sessionId: String(tokenScope.sessionId || ""),
     connectOrigin,
     targetOrigin,
@@ -1023,12 +1037,24 @@ function createLaunchPreviewProxyRegistry({
 } = {}) {
   const proxies = new Map();
   const pendingStarts = new Map();
+  let publicSocketPreparation = null;
   const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, {
     env
   });
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
+    if (publicOrigin) {
+      if (!publicSocketPreparation) {
+        publicSocketPreparation = pruneStalePreviewSockets({
+          env
+        }).catch((error) => {
+          publicSocketPreparation = null;
+          throw error;
+        });
+      }
+      await publicSocketPreparation;
+    }
     const scope = previewProxyScope(input, {
       publicOrigin,
       targetHref: connectHref
@@ -1044,7 +1070,8 @@ function createLaunchPreviewProxyRegistry({
       connectHref: connectUrl.toString(),
       previewAuth,
       publicOrigin,
-      targetHref: targetUrl.toString()
+      targetHref: targetUrl.toString(),
+      terminalSessionId: scope.terminalSessionId
     });
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
@@ -1287,7 +1314,6 @@ function previewProxyKey(scope = {}) {
   return [
     scope.projectScope,
     `session:${scope.sessionId}`,
-    `terminal:${scope.terminalSessionId || "default"}`,
     `origin:${scope.publicOrigin || "local"}`
   ].join(":");
 }
@@ -1296,13 +1322,15 @@ function previewProxyIdentity({
   connectHref = "",
   previewAuth = null,
   publicOrigin = "",
-  targetHref = ""
+  targetHref = "",
+  terminalSessionId = ""
 } = {}) {
   return Object.freeze({
     connectHref: String(connectHref || ""),
     previewAuthFingerprint: previewAuthFingerprint(previewAuth),
     publicOrigin: String(publicOrigin || ""),
-    targetHref: String(targetHref || "")
+    targetHref: String(targetHref || ""),
+    terminalSessionId: String(terminalSessionId || "")
   });
 }
 
@@ -1311,7 +1339,8 @@ function previewProxyMatchesIdentity(proxy = {}, identity = {}) {
     connectHref: proxy.connectHref,
     previewAuth: proxy.previewAuth,
     publicOrigin: proxy.publicOrigin,
-    targetHref: proxy.targetHref
+    targetHref: proxy.targetHref,
+    terminalSessionId: proxy.scope?.terminalSessionId
   }), identity);
 }
 
@@ -1319,6 +1348,7 @@ function previewProxyIdentityMatches(left = {}, right = {}) {
   return left.connectHref === right.connectHref &&
     left.targetHref === right.targetHref &&
     left.publicOrigin === right.publicOrigin &&
+    left.terminalSessionId === right.terminalSessionId &&
     left.previewAuthFingerprint === right.previewAuthFingerprint;
 }
 
@@ -1479,14 +1509,69 @@ async function listenOnPreviewPort(server, {
   throw new Error(`No launch preview proxy port is available in ${firstPort}-${lastPort}.`);
 }
 
+async function preparePreviewSocketDirectory(env = process.env) {
+  const socketDir = previewProxySocketDir(env);
+  await mkdir(socketDir, {
+    mode: 0o700,
+    recursive: true
+  });
+  await chmod(socketDir, 0o700);
+  return socketDir;
+}
+
+async function pruneStalePreviewSockets({
+  env = process.env,
+  socketHasLiveListener = previewSocketHasLiveListener
+} = {}) {
+  const socketDir = await preparePreviewSocketDirectory(env);
+  const names = await readdir(socketDir);
+  let preserved = 0;
+  let removed = 0;
+  for (const name of names) {
+    if (!PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN.test(name)) {
+      continue;
+    }
+    const socketPath = path.join(socketDir, name);
+    let entry;
+    try {
+      entry = await lstat(socketPath);
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+    if (!entry.isSocket()) {
+      preserved += 1;
+      continue;
+    }
+    if (await socketHasLiveListener(socketPath)) {
+      preserved += 1;
+      continue;
+    }
+    await unlinkIfExists(socketPath);
+    removed += 1;
+  }
+  if (removed > 0) {
+    previewProxyDebugLog("server.launchPreviewProxy.staleSocketsPruned", {
+      preserved,
+      removed,
+      socketDir
+    });
+  }
+  return {
+    preserved,
+    removed,
+    socketDir
+  };
+}
+
 async function listenOnPreviewSocket(server, {
   env = process.env,
   publicOrigin = ""
 } = {}) {
   const socketPath = previewPublicSocketPath(publicOrigin, env);
-  await mkdir(path.dirname(socketPath), {
-    recursive: true
-  });
+  await preparePreviewSocketDirectory(env);
   const listened = await tryListenOnPreviewSocket(server, socketPath);
   if (!listened) {
     const hasLiveListener = await previewSocketHasLiveListener(socketPath);
@@ -1499,7 +1584,7 @@ async function listenOnPreviewSocket(server, {
     await unlinkIfExists(socketPath);
     await listenOnPreviewSocketAfterStaleCleanup(server, socketPath);
   }
-  await chmod(socketPath, 0o660);
+  await chmod(socketPath, 0o600);
   return {
     kind: "socket",
     origin: publicOrigin,
@@ -1691,7 +1776,9 @@ export {
   normalizePreviewTargetHref,
   previewPublicSocketPath,
   previewProxyListenHost,
+  previewTokenCookie,
   previewTokenCookieName,
+  pruneStalePreviewSockets,
   proxiedLocation,
   stripPreviewTokenQueryParam
 };

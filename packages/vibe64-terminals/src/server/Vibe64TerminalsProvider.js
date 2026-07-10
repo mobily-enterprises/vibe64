@@ -178,6 +178,8 @@ class Vibe64TerminalsProvider {
     });
     app.addHook("onClose", async () => {
       dormantRuntimeCleanup.stop();
+      const service = app.make(VIBE64_TERMINALS_SERVICE);
+      await service?.close?.();
     });
     void dormantRuntimeCleanup.runNow();
   }

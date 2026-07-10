@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   launchPreviewAddressNavigationUrl,
-  launchPreviewBootstrapBaseUrl,
-  launchPreviewReloadBaseUrl,
   launchPreviewEmptyText,
+  launchPreviewFrameUrl,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,
@@ -13,7 +12,8 @@ import {
   previewAddressDisplayText,
   previewOpeningOverlayVisible,
   previewRouteFromUrl,
-  previewUrlForRoute
+  previewUrlForRoute,
+  redactPreviewDebugDetails
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
@@ -79,28 +79,27 @@ describe("Vibe64 launch controls surface", () => {
 
   it("clears the opening overlay after the iframe load marks the preview URL ready", () => {
     expect(previewOpeningOverlayVisible({
-      previewUrl: "https://preview.example.test/home?vibe64_reload=1"
+      previewFrameRequestId: 1,
+      previewUrl: "https://preview.example.test/home"
     })).toBe(true);
 
     expect(previewOpeningOverlayVisible({
-      previewReadyUrl: "https://preview.example.test/home?vibe64_reload=1",
-      previewUrl: "https://preview.example.test/home?vibe64_reload=1"
-    })).toBe(false);
-
-    expect(previewOpeningOverlayVisible({
-      previewReadyUrl: "https://preview.example.test/home?vibe64_reload=1",
-      previewUrl: "https://preview.example.test/home?vibe64_reload=2"
-    })).toBe(false);
-
-    expect(previewOpeningOverlayVisible({
-      previewReadyUrl: "https://preview.example.test/home?vibe64_preview_token=bootstrap-token",
+      loadedFrameRequestId: 1,
+      previewFrameRequestId: 1,
       previewUrl: "https://preview.example.test/home"
     })).toBe(false);
 
     expect(previewOpeningOverlayVisible({
-      previewReadyUrl: "https://preview.example.test/home",
-      previewUrl: "https://preview.example.test/dashboard"
+      loadedFrameRequestId: 1,
+      previewFrameRequestId: 2,
+      previewUrl: "https://preview.example.test/home"
     })).toBe(true);
+
+    expect(previewOpeningOverlayVisible({
+      loadedFrameRequestId: 1,
+      previewFrameRequestId: 2,
+      previewUrl: ""
+    })).toBe(false);
   });
 
   it("treats a starting server state as preparing preview", () => {
@@ -234,38 +233,30 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe(true);
   });
 
-  it("maps manual preview reloads to the current embedded route", () => {
-    expect(launchPreviewReloadBaseUrl({
-      baseUrl: "http://127.0.0.1:4188/home?vibe64_reload=1",
+  it("builds one immutable frame URL for the current route", () => {
+    expect(launchPreviewFrameUrl({
+      baseUrl: "http://127.0.0.1:4188/home",
       displayBaseUrl: "http://127.0.0.1:4103/home",
       visitedUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files"
     })).toBe("http://127.0.0.1:4188/jobs/42?tab=docs#files");
 
-    expect(launchPreviewReloadBaseUrl({
-      baseUrl: "https://preview.example.test/home?vibe64_reload=1",
+    expect(launchPreviewFrameUrl({
+      baseUrl: "https://preview.example.test/home",
       displayBaseUrl: "https://preview.example.test/home",
       visitedUrl: "https://preview.example.test/settings?tab=users#invite"
     })).toBe("https://preview.example.test/settings?tab=users#invite");
 
-    expect(launchPreviewReloadBaseUrl({
-      baseUrl: "https://new-preview.example.test/home?vibe64_reload=1",
+    expect(launchPreviewFrameUrl({
+      baseUrl: "https://new-preview.example.test/home",
       displayBaseUrl: "https://new-preview.example.test/home",
       visitedUrl: "https://old-preview.example.test/admin/jobs/42?tab=docs#files"
     })).toBe("https://new-preview.example.test/admin/jobs/42?tab=docs#files");
-  });
 
-  it("builds one tokenized preview bootstrap URL before clean reloads take over", () => {
-    expect(launchPreviewBootstrapBaseUrl({
-      baseUrl: "https://preview.example.test/home?vibe64_preview_token=abc&vibe64_reload=1",
+    expect(launchPreviewFrameUrl({
+      baseUrl: "https://preview.example.test/home?vibe64_preview_token=abc",
       displayBaseUrl: "https://app.example.test/home",
       visitedUrl: "https://app.example.test/jobs/42?tab=docs#files"
     })).toBe("https://preview.example.test/jobs/42?tab=docs&vibe64_preview_token=abc#files");
-
-    expect(launchPreviewReloadBaseUrl({
-      baseUrl: "https://preview.example.test/home?vibe64_preview_token=abc&vibe64_reload=1",
-      displayBaseUrl: "https://app.example.test/home",
-      visitedUrl: "https://app.example.test/jobs/42?tab=docs#files"
-    })).toBe("https://preview.example.test/jobs/42?tab=docs#files");
   });
 
   it("stores preview location as a host-independent route", () => {
@@ -276,7 +267,7 @@ describe("Vibe64 launch controls surface", () => {
 
     expect(previewUrlForRoute(
       "/admin/jobs/42?tab=docs#files",
-      "https://new-preview.example.test/home?vibe64_reload=1"
+      "https://new-preview.example.test/home"
     )).toBe("https://new-preview.example.test/admin/jobs/42?tab=docs#files");
   });
 
@@ -289,7 +280,7 @@ describe("Vibe64 launch controls surface", () => {
     )).toBe("/");
 
     expect(previewAddressDisplayText(
-      "http://127.0.0.1:4100/jobs/42?tab=docs&vibe64_reload=2&vibe64_preview_token=abc#files",
+      "http://127.0.0.1:4100/jobs/42?tab=docs&vibe64_preview_token=abc#files",
       {
         displayBaseUrl: "http://127.0.0.1:4100/"
       }
@@ -303,12 +294,23 @@ describe("Vibe64 launch controls surface", () => {
     )).toBe("https://example.test/jobs");
   });
 
+  it("redacts preview bearer tokens from nested debug details", () => {
+    const redacted = redactPreviewDebugDetails({
+      frame: "https://preview.example.test/home?vibe64_preview_token=secret&tab=one",
+      nested: ["/home?vibe64_preview_token=secret#section"]
+    });
+
+    expect(JSON.stringify(redacted)).not.toContain("secret");
+    expect(redacted.frame).toBe("https://preview.example.test/home?tab=one");
+    expect(redacted.nested).toEqual(["/home#section"]);
+  });
+
   it("maps entered preview addresses from display URLs to embedded proxy URLs", () => {
     expect(launchPreviewAddressNavigationUrl({
       address: "/jobs/42?tab=docs#files",
       currentUrl: "http://127.0.0.1:4103/home",
       displayBaseUrl: "http://127.0.0.1:4103/home",
-      previewBaseUrl: "http://127.0.0.1:4188/home?vibe64_reload=1"
+      previewBaseUrl: "http://127.0.0.1:4188/home"
     })).toEqual({
       displayUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files",
       error: "",
@@ -327,12 +329,12 @@ describe("Vibe64 launch controls surface", () => {
       address: "/jobs/42?tab=docs#files",
       currentUrl: "http://127.0.0.1:4103/home",
       displayBaseUrl: "http://127.0.0.1:4103/home",
-      previewBaseUrl: "http://127.0.0.1:4188/home?vibe64_preview_token=abc&vibe64_reload=1"
+      previewBaseUrl: "http://127.0.0.1:4188/home?vibe64_preview_token=abc"
     })).toEqual({
       displayUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files",
       error: "",
       ok: true,
-      previewUrl: "http://127.0.0.1:4188/jobs/42?tab=docs#files"
+      previewUrl: "http://127.0.0.1:4188/jobs/42?tab=docs&vibe64_preview_token=abc#files"
     });
   });
 

@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { request as httpRequest } from "node:http";
-import { request as httpsRequest } from "node:https";
 import path from "node:path";
 
 import stripAnsi from "strip-ansi";
@@ -32,7 +30,7 @@ import {
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_USER_DOMAIN_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
@@ -86,7 +84,6 @@ const LAUNCH_METADATA_NAMES = Object.freeze(Object.values(LAUNCH_METADATA));
 const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
 const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
-const LAUNCH_READY_PROBE_TIMEOUT_MS = 1500;
 const MAX_RESTART_CHANGED_FILES = 20;
 const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
 const PREVIEW_LAST_FILE_NAME = "preview-last.json";
@@ -1098,57 +1095,6 @@ function launchTerminalIsReady(terminalSession = {}, readinessMarker = "") {
   return launchIsReady(terminalSession.metadata || {});
 }
 
-function probeLaunchTargetHref(href = "", {
-  timeoutMs = LAUNCH_READY_PROBE_TIMEOUT_MS
-} = {}) {
-  return new Promise((resolve) => {
-    let targetUrl;
-    try {
-      targetUrl = new URL(String(href || "").trim());
-    } catch {
-      resolve(false);
-      return;
-    }
-    const requestFactory = targetUrl.protocol === "https:"
-      ? httpsRequest
-      : targetUrl.protocol === "http:"
-        ? httpRequest
-        : null;
-    if (!requestFactory) {
-      resolve(false);
-      return;
-    }
-    let settled = false;
-    const finish = (value) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(Boolean(value));
-    };
-    const request = requestFactory(targetUrl, {
-      method: "GET",
-      timeout: Math.max(250, Number(timeoutMs) || LAUNCH_READY_PROBE_TIMEOUT_MS)
-    }, (response) => {
-      response.resume();
-      finish(Number(response.statusCode || 0) < 500);
-    });
-    request.on("timeout", () => {
-      request.destroy();
-      finish(false);
-    });
-    request.on("error", () => finish(false));
-    request.end();
-  });
-}
-
-async function previewProxyTargetHrefForTerminal(terminal = {}, {
-  targetHref = ""
-} = {}) {
-  void terminal;
-  return String(targetHref || "").trim();
-}
-
 function launchTerminalCanBeReused(runningSession = {}, {
   launchEnvHash = "",
   launchInputHash = "",
@@ -1262,6 +1208,7 @@ async function cleanupSupersededLaunchTerminals({
 async function markLaunchTerminalReady({
   namespace = "",
   publishSessionChanged = async () => null,
+  source = "marker",
   store,
   sessionId = "",
   terminalSession = {},
@@ -1280,122 +1227,107 @@ async function markLaunchTerminalReady({
     }, {
       level: "warn"
     });
-    return false;
+    return {
+      ready: false,
+      terminal: currentTerminal,
+      transitioned: false
+    };
+  }
+  if (launchIsReady(currentTerminal.metadata || {})) {
+    return {
+      ready: true,
+      terminal: currentTerminal,
+      transitioned: false
+    };
   }
   const readyMetadata = {
     launchReady: true,
     launchReadyAt: new Date().toISOString(),
-    launchReadySource: "marker"
+    launchReadySource: String(source || "marker")
   };
-  const updatedSession = updateMetadata(readyMetadata);
-  await writeLaunchMetadata(store, sessionId, {
+  const readyTerminal = {
     ...currentTerminal,
     metadata: {
       ...(terminalSession.metadata || {}),
       ...(currentTerminal.metadata || {}),
-      ...readyMetadata,
-      ...(updatedSession?.metadata || {})
+      ...readyMetadata
     }
+  };
+  await writeLaunchMetadata(store, sessionId, readyTerminal);
+  const runningTerminal = readTerminalSession(terminalSessionId, {
+    namespace
   });
+  if (!launchTerminalIsRunning(runningTerminal)) {
+    await clearLaunchMetadataForTerminal(store, sessionId, terminalSessionId);
+    return {
+      ready: false,
+      terminal: runningTerminal,
+      transitioned: false
+    };
+  }
+  const updatedSession = updateMetadata(readyMetadata);
+  const updatedTerminal = readTerminalSession(terminalSessionId, {
+    namespace
+  }) || updatedSession || readyTerminal;
   await publishSessionChanged(sessionId, {
     reason: "launch-target-ready"
   });
   vibe64SessionDebugLog("server.launchTargetTerminal.readyMarker.ready", {
+    source: readyMetadata.launchReadySource,
     sessionId,
     terminalSessionId
   });
-  return true;
+  return {
+    ready: true,
+    terminal: updatedTerminal,
+    transitioned: true
+  };
 }
 
-async function repairLaunchReadinessFromProbe({
+async function repairLaunchReadinessFromOutput({
   context = {},
-  probeLaunchTargetImpl = probeLaunchTargetHref,
+  markReady = markLaunchTerminalReady,
   publishSessionChanged = async () => null,
   sessionId = "",
-  targetHref = "",
   terminal = null
 } = {}) {
   const terminalSessionId = String(terminal?.id || "").trim();
-  const normalizedTargetHref = String(targetHref || "").trim();
+  const readinessMarker = readinessMarkerFromSpec(terminal?.metadata || {});
   if (
     !terminalSessionId ||
-    !normalizedTargetHref ||
+    !readinessMarker ||
     !launchTerminalIsRunning(terminal) ||
-    launchIsReady(terminal?.metadata || {})
+    launchIsReady(terminal?.metadata || {}) ||
+    !launchReadinessMarkerLineSeen(terminal?.output, readinessMarker)
   ) {
     return null;
   }
   const startedAtMs = Date.now();
-  const probeHref = await previewProxyTargetHrefForTerminal(terminal, {
-    targetHref: normalizedTargetHref
-  });
-  let ready = false;
   try {
-    ready = await probeLaunchTargetImpl(probeHref, {
-      context,
+    const result = await markReady({
+      namespace: launchTargetTerminalNamespace(sessionId),
+      publishSessionChanged,
+      source: "marker-repair",
+      store: context.store,
       sessionId,
-      targetHref: normalizedTargetHref,
-      terminal,
-      timeoutMs: LAUNCH_READY_PROBE_TIMEOUT_MS
+      terminalSession: terminal,
+      updateMetadata: (metadata) => updateTerminalSessionMetadata(terminalSessionId, metadata, {
+        namespace: launchTargetTerminalNamespace(sessionId)
+      })
     });
+    return result?.ready ? result.terminal || terminal : null;
   } catch (error) {
-    vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.error", {
+    vibe64SessionDebugLog("server.launchTargetTerminal.readyMarker.repairError", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       error: vibe64SessionDebugError(error),
-      probeHref,
+      readinessMarker,
       sessionId,
-      targetHref: normalizedTargetHref,
       terminalSessionId
     }, {
       level: "warn"
     });
     return null;
   }
-  if (!ready) {
-    return null;
-  }
-  const readyMetadata = {
-    launchReady: true,
-    launchReadyAt: new Date().toISOString(),
-    launchReadySource: "target-probe"
-  };
-  const updatedTerminal = updateTerminalSessionMetadata(terminalSessionId, readyMetadata, {
-    namespace: launchTargetTerminalNamespace(sessionId)
-  });
-  const repairedTerminal = updatedTerminal?.ok === false
-    ? {
-        ...terminal,
-        metadata: {
-          ...(terminal.metadata || {}),
-          ...readyMetadata
-        }
-      }
-    : updatedTerminal;
-  try {
-    await writeLaunchMetadata(context.store, sessionId, repairedTerminal);
-  } catch (error) {
-    vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.metadata.error", {
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      error: vibe64SessionDebugError(error),
-      probeHref,
-      sessionId,
-      targetHref: normalizedTargetHref,
-      terminalSessionId
-    }, {
-      level: "warn"
-    });
-  }
-  await publishSessionChanged(sessionId, {
-    reason: "launch-target-ready"
-  });
-  vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.ready", {
-    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-    probeHref,
-    sessionId,
-    targetHref: normalizedTargetHref,
-    terminalSessionId
-  });
-  return repairedTerminal;
 }
 
 async function readyLaunchPreview({
@@ -1429,9 +1361,6 @@ async function readyLaunchPreview({
     };
   }
   try {
-    const proxyTargetHref = await previewProxyTargetHrefForTerminal(terminal, {
-      targetHref
-    });
     const previewTarget = await launchPreviewProxies.ensure({
       previewPublicOrigin: previewPublicOriginForLaunch({
         env: options.env,
@@ -1439,9 +1368,7 @@ async function readyLaunchPreview({
         publicHost: options.publicHost,
         publicProtocol: options.publicProtocol,
         publicUserDomain: options.publicUserDomain,
-        sessionId,
-        targetHref,
-        terminalSessionId
+        sessionId
       }),
       previewAuth: previewAuthForLaunchTerminal(terminal, {
         sessionId,
@@ -1450,7 +1377,7 @@ async function readyLaunchPreview({
       sessionId,
       targetHref,
       terminalSessionId
-    }, proxyTargetHref);
+    }, targetHref);
     const restartRecovery = await launchRestartRecoveryForTerminal({
       context,
       terminal
@@ -1585,8 +1512,8 @@ async function resolveLaunchPreviewStatus({
   context = {},
   launchPreviewProxies = null,
   launchTargets = [],
+  markReady = markLaunchTerminalReady,
   options = {},
-  probeLaunchTargetImpl = probeLaunchTargetHref,
   publishSessionChanged = async () => null,
   sessionId = ""
 } = {}) {
@@ -1602,13 +1529,12 @@ async function resolveLaunchPreviewStatus({
   if (activeTerminal && launchTerminalIsRunning(activeTerminal)) {
     let terminalForPreview = activeTerminal;
     const targetHref = String(initialOpenTarget?.href || "").trim();
-    if (!launchIsReady(activeTerminal.metadata || {}) && targetHref) {
-      terminalForPreview = await repairLaunchReadinessFromProbe({
+    if (!launchIsReady(activeTerminal.metadata || {})) {
+      terminalForPreview = await repairLaunchReadinessFromOutput({
         context,
-        probeLaunchTargetImpl,
+        markReady,
         publishSessionChanged,
         sessionId,
-        targetHref,
         terminal: activeTerminal
       }) || activeTerminal;
     }
@@ -1685,13 +1611,33 @@ async function resolveLaunchPreviewStatus({
 }
 
 function createLaunchTargetTerminalController({
-  probeLaunchTargetImpl = probeLaunchTargetHref,
+  env = process.env,
   projectService,
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command
 } = {}) {
-  const launchPreviewProxies = createLaunchPreviewProxyRegistry();
+  const launchPreviewProxies = createLaunchPreviewProxyRegistry({
+    env
+  });
+  const launchReadyWrites = new Map();
   const launchStartLocks = new Map();
+
+  function markLaunchReady(input = {}) {
+    const terminalSessionId = String(input.terminalSession?.id || "").trim();
+    const key = `${String(input.namespace || "")}:${terminalSessionId}`;
+    const existing = launchReadyWrites.get(key);
+    if (existing) {
+      return existing;
+    }
+    const write = Promise.resolve().then(() => markLaunchTerminalReady(input));
+    const tracked = write.finally(() => {
+      if (launchReadyWrites.get(key) === tracked) {
+        launchReadyWrites.delete(key);
+      }
+    });
+    launchReadyWrites.set(key, tracked);
+    return tracked;
+  }
 
   async function withLaunchStartLock(sessionId = "", operation = async () => null) {
     const key = String(sessionId || "global");
@@ -1707,6 +1653,11 @@ function createLaunchTargetTerminalController({
   }
 
   return Object.freeze({
+    async close() {
+      await Promise.allSettled([...launchReadyWrites.values()]);
+      await launchPreviewProxies.closeAll();
+    },
+
     async closeAllForSession(sessionId) {
       await launchPreviewProxies.close({
         sessionId
@@ -1733,8 +1684,11 @@ function createLaunchTargetTerminalController({
           context,
           launchPreviewProxies,
           launchTargets,
-          options,
-          probeLaunchTargetImpl,
+          markReady: markLaunchReady,
+          options: {
+            ...options,
+            env
+          },
           publishSessionChanged,
           sessionId
         });
@@ -1753,7 +1707,10 @@ function createLaunchTargetTerminalController({
           context,
           launchPreviewProxies,
           launchTargets,
-          probeLaunchTargetImpl,
+          markReady: markLaunchReady,
+          options: {
+            env
+          },
           publishSessionChanged,
           sessionId,
         });
@@ -1917,7 +1874,7 @@ function createLaunchTargetTerminalController({
             worktreePath: spec.metadata?.runRoot || spec.cwd || cwd
           });
           readinessMarker = readinessMarkerFromSpec(spec);
-          let launchReadyWritten = false;
+          let launchReadyConfirmed = false;
           await closeStoppedLaunchTerminals(sessionId);
           const existingReusableTerminal = forceRestart
             ? null
@@ -2051,17 +2008,27 @@ function createLaunchTargetTerminalController({
                 }, {
                   append: false
                 });
-                if (!readinessMarker || launchReadyWritten || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
+                if (!readinessMarker || launchReadyConfirmed || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
                   return;
                 }
-                launchReadyWritten = true;
-                void markLaunchTerminalReady({
+                void markLaunchReady({
                   namespace,
                   publishSessionChanged,
+                  source: "marker",
                   store: context.store,
                   sessionId,
                   terminalSession: runningTerminalSession,
                   updateMetadata
+                }).then((result) => {
+                  launchReadyConfirmed = result?.ready === true;
+                }).catch((error) => {
+                  vibe64SessionDebugLog("server.launchTargetTerminal.readyMarker.error", {
+                    error: vibe64SessionDebugError(error),
+                    sessionId,
+                    terminalSessionId: runningTerminalSession.id
+                  }, {
+                    level: "warn"
+                  });
                 });
               },
               reuseRunning: forceRestart
@@ -2171,13 +2138,10 @@ function createLaunchTargetTerminalController({
 function previewPublicOriginForLaunch({
   env = process.env,
   previewPublicDomain = "",
-  previewPublicProtocol = "",
   publicHost = "",
   publicProtocol = "",
   publicUserDomain = "",
-  sessionId = "",
-  targetHref = "",
-  terminalSessionId = ""
+  sessionId = ""
 } = {}) {
   const hostname = normalizeHostName(String(publicHost || "").trim());
   if (!hostname || isLoopbackAddress(hostname)) {
@@ -2200,16 +2164,13 @@ function previewPublicOriginForLaunch({
     return "";
   }
   const protocol = normalizePublicProtocol(
-    previewPublicProtocol ||
-      env?.[VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV] ||
+    env?.[VIBE64_PUBLIC_PROTOCOL_ENV] ||
       publicProtocol ||
       DEFAULT_PUBLIC_PROTOCOL
   );
   const hash = stableHash([
     terminalProjectScopeKey(),
-    sessionId,
-    terminalSessionId,
-    targetHref
+    sessionId
   ].join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 12);
   if (!hash) {
     return "";

@@ -403,9 +403,11 @@
     >
       <iframe
         v-if="previewUrl"
+        :key="previewFrameRequestId"
         ref="previewFrame"
         allow="clipboard-write"
         class="vibe64-launch-controls__preview-frame"
+        :data-preview-frame-request-id="previewFrameRequestId"
         :src="previewUrl"
         title="App preview"
         @load="handlePreviewFrameLoad"
@@ -432,14 +434,14 @@
         <span>{{ previewNotice.message }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
           <v-btn
-            v-if="previewTryVisible"
+            v-if="previewRecoveryVisible"
             color="primary"
             :prepend-icon="mdiRefresh"
             size="small"
             variant="flat"
-            @click="tryEmbeddedPreview"
+            @click="recoverEmbeddedPreview"
           >
-            Try
+            {{ previewRecoveryLabel }}
           </v-btn>
           <v-btn
             v-if="previewCanShowLog"
@@ -738,6 +740,7 @@ const {
   previewDisplayedAddress,
   previewEmptyText,
   previewFrame,
+  previewFrameRequestId,
   previewIssue,
   previewIssueVisible,
   previewInFlightText,
@@ -758,11 +761,12 @@ const {
   previewRoutesAvailable,
   previewNotice,
   previewNoticeVisible,
+  previewRecoveryLabel,
+  previewRecoveryVisible,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,
   previewToolbarExpanded,
   previewToolbarPosition,
-  previewTryVisible,
   previewUrl,
   recoverEmbeddedPreview,
   reloadPreview,
@@ -771,7 +775,6 @@ const {
   savePreviewOptions,
   submitPreviewAddress,
   submitPreviewRouteDialog,
-  tryEmbeddedPreview,
   restartTerminal,
   retryTerminal,
   run,

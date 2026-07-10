@@ -1,4 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
+import {
+  injectLaunchPreviewBridge
+} from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 
 import {
   BASE_URL,
@@ -27,7 +33,7 @@ async function openSessionDashboardTool(page: Page, label: string) {
   }).click();
 }
 
-test("embedded preview renders through the proxy and displays the target URL", async ({ page }) => {
+test("@preview-lifecycle renders through the proxy and displays the target URL", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
 
@@ -45,7 +51,7 @@ test("embedded preview renders through the proxy and displays the target URL", a
   ).toBeVisible();
 });
 
-test("embedded preview address bar navigates within the preview and goes back", async ({ page }) => {
+test("@preview-lifecycle address bar navigates within the preview and goes back", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
 
@@ -59,7 +65,7 @@ test("embedded preview address bar navigates within the preview and goes back", 
   await address.fill("/jobs/42?tab=docs#files");
   await address.press("Enter");
 
-  await expect(previewFrame).toHaveAttribute("src", /http:\/\/127\.0\.0\.1:49000\/jobs\/42\?tab=docs&vibe64_reload=\d+#files/u);
+  await expect(previewFrame).toHaveAttribute("src", /http:\/\/127\.0\.0\.1:49000\/jobs\/42\?tab=docs#files/u);
   await expect(address).toHaveValue("/jobs/42?tab=docs#files");
 
   await page.getByRole("button", {
@@ -69,7 +75,7 @@ test("embedded preview address bar navigates within the preview and goes back", 
   await expect(address).toHaveValue("/home");
 });
 
-test("embedded preview back button uses the iframe browser history", async ({ page }) => {
+test("@preview-lifecycle back button follows locations reported by the iframe", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
 
@@ -93,11 +99,6 @@ test("embedded preview back button uses the iframe browser history", async ({ pa
     name: "Go back in preview"
   }).click();
 
-  await expect.poll(async () => {
-    return frame?.evaluate(() => {
-      return (window as unknown as { __vibe64BackCommandCount?: number }).__vibe64BackCommandCount || 0;
-    });
-  }).toBe(1);
   await expect(address).toHaveValue("/home");
 });
 
@@ -144,12 +145,13 @@ test("embedded preview toolbar follows mobile project-pane visibility", async ({
   expect(actionsBox?.y).toBeGreaterThan((addressBox?.y || 0) + (addressBox?.height || 0) - 2);
 });
 
-test("embedded preview loads launch targets from session summaries without worktree paths", async ({ page }) => {
+test("@preview-lifecycle loads launch targets from pathless session summaries", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    session: sessionPayload({
+    session: sessionPayload(),
+    sessionList: [sessionPayload({
       includeWorktreePaths: false
-    })
+    })]
   });
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -160,7 +162,7 @@ test("embedded preview loads launch targets from session summaries without workt
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
 });
 
-test("embedded preview auto-starts the dev target without exposing the target picker", async ({ page }) => {
+test("@preview-lifecycle auto-starts without exposing passive actions", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
     initialLaunchStatus: {
@@ -216,7 +218,7 @@ test("embedded preview auto-starts the dev target without exposing the target pi
   await expect(page.getByText("Run built app")).toHaveCount(0);
 });
 
-test("embedded preview can recover when the first launch status has no targets", async ({ page }) => {
+test("@preview-lifecycle automatically recovers when the first status has no targets", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const emptyLaunchStatus = {
     activeTerminal: null,
@@ -258,9 +260,7 @@ test("embedded preview can recover when the first launch status has no targets",
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
   await expect(page.getByText("Preview will appear here when it is ready.")).toBeVisible();
-  await page.getByRole("button", {
-    name: "Check preview"
-  }).click();
+  await expect(page.locator(".vibe64-launch-controls__preview-empty").getByRole("button")).toHaveCount(0);
 
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
@@ -273,59 +273,9 @@ test("embedded preview can recover when the first launch status has no targets",
   ]);
 });
 
-test("embedded preview shows the start control while launch targets are still loading", async ({ page }) => {
-  await mockLaunchTerminalSocket(page);
-  const launchSession = await mockLaunchSession(page, {
-    initialLaunchStatus: {
-      ...launchStatusPayload(),
-      activeTerminal: null,
-      launchTargets: [
-        {
-          available: true,
-          id: "dev",
-          label: "Run app"
-        }
-      ],
-      openTarget: {
-        available: false,
-        disabledReason: "Run a launch target first.",
-        href: "",
-        kind: "url",
-        label: "Open browser",
-        previewHref: ""
-      },
-      previewTarget: {
-        available: false,
-        disabledReason: "Run a launch target first.",
-        href: "",
-        kind: "url",
-        label: "Preview",
-        targetHref: ""
-      }
-    },
-    launchTargetsDelayMs: 1000
-  });
-
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-
-  const startButton = page.locator(".vibe64-launch-controls__auto-start-button");
-  await expect(startButton).toBeVisible();
-  await expect(startButton).toBeDisabled();
-  await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
-    {
-      launchInput: {
-        values: {}
-      },
-      launchTargetId: "dev",
-      originId: expect.stringMatching(/^tab:/u)
-    }
-  ]);
-});
-
-test("embedded preview clears the opening overlay when bridge reports rendered content", async ({ page }) => {
+test("@preview-lifecycle keeps the loading explanation visible until the iframe loads", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    previewReadyDelayMs: 100,
     previewResponseDelayMs: 1000
   });
 
@@ -342,7 +292,7 @@ test("embedded preview clears the opening overlay when bridge reports rendered c
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
-test("embedded preview lets a slow first iframe load finish without restarting it", async ({ page }) => {
+test("@preview-lifecycle lets a slow first iframe load finish without restarting it", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
     previewResponseDelayMs: 6500
@@ -359,23 +309,26 @@ test("embedded preview lets a slow first iframe load finish without restarting i
   expect(launchSession.getPreviewLoadCount()).toBe(1);
 });
 
-test("embedded preview token bootstrap redirects once without reloading the clean document", async ({ page }) => {
+test("@preview-lifecycle token bootstrap redirects once without reloading the clean document", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
     previewBootstrapToken: "preview-bootstrap-token"
   });
+  try {
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-
-  await expect(
-    page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
-  ).toBeVisible();
-  await expect.poll(() => launchSession.getPreviewLoadCount()).toBe(2);
-  await page.waitForTimeout(500);
-  expect(launchSession.getPreviewLoadCount()).toBe(2);
+    await expect(
+      page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
+    ).toBeVisible();
+    await expect.poll(() => launchSession.getPreviewLoadCount()).toBe(2);
+    await page.waitForTimeout(500);
+    expect(launchSession.getPreviewLoadCount()).toBe(2);
+  } finally {
+    await launchSession.close();
+  }
 });
 
-test("embedded preview stays mounted and does not reload while covered by dashboard", async ({ page }) => {
+test("@preview-lifecycle stays mounted without reloading while covered by dashboard", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page);
 
@@ -947,10 +900,8 @@ async function mockLaunchSession(page: Page, {
   initialLaunchStatus = null,
   launchTargetPreviewOptions = [],
   launchStatusSequence = null,
-  launchTargetsDelayMs = 0,
   launchTerminalDelayMs = 0,
   previewBootstrapToken = "",
-  previewReadyDelayMs = 0,
   previewResponseDelayMs = 0,
   session = sessionPayload(),
   sessionList = null,
@@ -962,10 +913,8 @@ async function mockLaunchSession(page: Page, {
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
   launchTargetPreviewOptions?: unknown[];
   launchStatusSequence?: unknown[] | null;
-  launchTargetsDelayMs?: number;
   launchTerminalDelayMs?: number;
   previewBootstrapToken?: string;
-  previewReadyDelayMs?: number;
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
@@ -984,9 +933,17 @@ async function mockLaunchSession(page: Page, {
   let initialLaunchStatusActive = true;
   let launchStatusRequestCount = 0;
   let previewLoadCount = 0;
+  const previewServer = previewBootstrapToken
+    ? await startPreviewAppServer({
+        bootstrapToken: previewBootstrapToken,
+        responseDelayMs: previewResponseDelayMs,
+        targetOrigin: new URL(TARGET_APP_URL).origin
+      })
+    : null;
+  const proxyAppUrl = previewServer?.href || PROXY_APP_URL;
   const previewHref = previewBootstrapToken
-    ? `${PROXY_APP_URL}?vibe64_preview_token=${encodeURIComponent(previewBootstrapToken)}`
-    : PROXY_APP_URL;
+    ? `${proxyAppUrl}?vibe64_preview_token=${encodeURIComponent(previewBootstrapToken)}`
+    : proxyAppUrl;
   function currentLaunchStatus() {
     if (sequencedLaunchStatuses.length > 0 && !launchStarted) {
       const index = Math.min(launchStatusRequestCount, sequencedLaunchStatuses.length - 1);
@@ -1006,6 +963,9 @@ async function mockLaunchSession(page: Page, {
   }
   function sessionForRequest(pathname: string) {
     const requestedSessionId = decodeURIComponent(pathname.split("/").at(-1) || "");
+    if (session.sessionId === requestedSessionId) {
+      return session;
+    }
     return listedSessions.find((item) => item.sessionId === requestedSessionId) || session;
   }
   await mockStudioReady(page);
@@ -1014,11 +974,6 @@ async function mockLaunchSession(page: Page, {
     const url = new URL(request.url());
     const method = request.method();
     if (method === "GET" && url.pathname.endsWith("/launch-targets")) {
-      if (launchTargetsDelayMs > 0) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, launchTargetsDelayMs);
-        });
-      }
       await fulfillJson(route, currentLaunchStatus());
       return;
     }
@@ -1120,38 +1075,26 @@ async function mockLaunchSession(page: Page, {
       sessions: listedSessions
     });
   });
-  await page.route("http://127.0.0.1:49000/**", async (route) => {
-    previewLoadCount += 1;
-    const url = new URL(route.request().url());
-    if (
-      previewBootstrapToken &&
-      url.searchParams.get("vibe64_preview_token") === previewBootstrapToken
-    ) {
-      url.searchParams.delete("vibe64_preview_token");
+  if (!previewServer) {
+    await page.route("http://127.0.0.1:49000/**", async (route) => {
+      previewLoadCount += 1;
+      if (previewResponseDelayMs > 0) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, previewResponseDelayMs);
+        });
+      }
       await route.fulfill({
-        body: "",
-        headers: {
-          location: url.toString(),
-          "set-cookie": "vibe64_preview_token_49000=preview-bootstrap-token; Path=/; HttpOnly"
-        },
-        status: 302
+        body: previewAppHtml({
+          targetOrigin: new URL(TARGET_APP_URL).origin
+        }),
+        contentType: "text/html"
       });
-      return;
-    }
-    if (previewResponseDelayMs > 0) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, previewResponseDelayMs);
-      });
-    }
-    await route.fulfill({
-      body: previewAppHtml({
-        readyDelayMs: previewReadyDelayMs,
-        targetOrigin: new URL(TARGET_APP_URL).origin
-      }),
-      contentType: "text/html"
     });
-  });
+  }
   return {
+    async close() {
+      await previewServer?.close();
+    },
     getLaunchStartPayloads() {
       return launchStartPayloads;
     },
@@ -1162,7 +1105,7 @@ async function mockLaunchSession(page: Page, {
       return sourceEditor?.getTreeRequests() || [];
     },
     getPreviewLoadCount() {
-      return previewLoadCount;
+      return previewServer?.getLoadCount() || previewLoadCount;
     }
   };
 }
@@ -1647,68 +1590,90 @@ function sortSourceEditorTreeChildren(children: Array<Record<string, unknown>>) 
 }
 
 function previewAppHtml({
-  readyDelayMs = 0,
   targetOrigin = new URL(TARGET_APP_URL).origin
 }: {
-  readyDelayMs?: number;
   targetOrigin?: string;
 } = {}) {
-  const readyDelay = Number(readyDelayMs) || 0;
-  return `<!doctype html><title>Preview</title><body>Preview app<script>
-const targetOrigin = ${JSON.stringify(targetOrigin)};
-function targetHref() {
-  const current = new URL(window.location.href);
-  const target = new URL(targetOrigin);
-  target.pathname = current.pathname;
-  target.search = current.search;
-  target.searchParams.delete("vibe64_reload");
-  target.hash = current.hash;
-  return target.toString();
+  return injectLaunchPreviewBridge(
+    "<!doctype html><html><head><title>Preview</title></head><body><div id=\"app\">Preview app</div></body></html>",
+    {
+      targetOrigin
+    }
+  );
 }
-function postLocation(reason) {
-  parent.postMessage({
-    href: targetHref(),
-    reason,
-    type: "vibe64:preview-location",
-    version: 1
-  }, "*");
-}
-function postReady(reason) {
-  parent.postMessage({
-    href: targetHref(),
-    reason,
-    type: "vibe64:preview-ready",
-    version: 1
-  }, "*");
-}
-function wrapHistoryMethod(methodName) {
-  const original = window.history && window.history[methodName];
-  if (typeof original !== "function") {
-    return;
-  }
-  window.history[methodName] = function vibe64PreviewHistoryMethod(...args) {
-    const result = original.apply(this, args);
-    queueMicrotask(() => postLocation(methodName));
-    return result;
+
+async function startPreviewAppServer({
+  bootstrapToken = "",
+  responseDelayMs = 0,
+  targetOrigin = new URL(TARGET_APP_URL).origin
+}: {
+  bootstrapToken?: string;
+  responseDelayMs?: number;
+  targetOrigin?: string;
+} = {}) {
+  let loadCount = 0;
+  const server = createHttpServer(async (request, response) => {
+    loadCount += 1;
+    const address = server.address() as AddressInfo;
+    const origin = `http://127.0.0.1:${address.port}`;
+    const url = new URL(String(request.url || "/"), origin);
+    if (bootstrapToken && url.searchParams.get("vibe64_preview_token") === bootstrapToken) {
+      url.searchParams.delete("vibe64_preview_token");
+      response.writeHead(302, {
+        Location: url.toString(),
+        "Set-Cookie": `vibe64_preview_token_${address.port}=${bootstrapToken}; Path=/; HttpOnly`
+      });
+      response.end();
+      return;
+    }
+    if (responseDelayMs > 0) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, responseDelayMs);
+      });
+    }
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8"
+    });
+    response.end(previewAppHtml({
+      targetOrigin
+    }));
+  });
+  await listenOnLoopback(server);
+  const address = server.address() as AddressInfo;
+  return {
+    async close() {
+      await closeHttpServer(server);
+    },
+    href: `http://127.0.0.1:${address.port}/home`,
+    getLoadCount() {
+      return loadCount;
+    }
   };
 }
-wrapHistoryMethod("pushState");
-wrapHistoryMethod("replaceState");
-window.addEventListener("hashchange", () => postLocation("hashchange"));
-window.addEventListener("popstate", () => postLocation("popstate"));
-window.__vibe64BackCommandCount = 0;
-window.addEventListener("message", (event) => {
-  if (event.source !== parent || event.data?.type !== "vibe64:preview-command") {
-    return;
+
+function listenOnLoopback(server: HttpServer) {
+  return new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+function closeHttpServer(server: HttpServer) {
+  if (!server.listening) {
+    return Promise.resolve();
   }
-  if (event.data?.action === "back") {
-    window.__vibe64BackCommandCount += 1;
-    window.history.back();
-  }
-});
-postLocation("ready");
-setTimeout(() => postReady("rendered"), ${readyDelay});
-</script></body>`;
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 async function mockLaunchTerminalSocket(page: Page, {
@@ -1887,6 +1852,7 @@ function sessionPayload({
   sessionId?: string;
   title?: string;
 } = {}) {
+  const sourcePath = `/var/lib/vibe64/test/projects/example/sessions/active/${sessionId}/source`;
   const session = {
     actionResults: [],
     actions: [],
@@ -1952,10 +1918,12 @@ function sessionPayload({
     ...session,
     artifactsRoot: `${sessionRuntimeRoot(sessionId)}/artifacts`,
     metadata: {
-      source_path: `${sessionRuntimeRoot(sessionId)}/source`
+      source_kind: "session_clone",
+      source_path: sourcePath,
+      source_path_authority: "managed_session_source"
     },
     targetRoot: "/workspace/example-target-app",
-    source: `${sessionRuntimeRoot(sessionId)}/source`,
+    source: sourcePath,
     sourceReady: true
   };
 }

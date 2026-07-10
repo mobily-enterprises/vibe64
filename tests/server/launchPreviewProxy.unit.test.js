@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect } from "node:net";
@@ -9,10 +9,9 @@ import test from "node:test";
 import WebSocket, { WebSocketServer } from "ws";
 
 import {
-  PREVIEW_BRIDGE_MESSAGE_TYPE,
-  PREVIEW_QUERY_MESSAGE_TYPE,
-  PREVIEW_READY_MESSAGE_TYPE
-} from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
+  PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_QUERY_MESSAGE_TYPE
+} from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -32,7 +31,9 @@ import {
   injectLaunchPreviewBridge,
   normalizePreviewTargetHref,
   previewPublicSocketPath,
+  previewTokenCookie,
   previewTokenCookieName,
+  pruneStalePreviewSockets,
   proxiedLocation,
   stripPreviewTokenQueryParam
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
@@ -44,11 +45,11 @@ test("launch preview bridge injects once and reports target URLs", () => {
   });
 
   assert.match(injected, /data-vibe64-preview-bridge="1"/u);
-  assert.match(injected, new RegExp(PREVIEW_BRIDGE_MESSAGE_TYPE, "u"));
+  assert.match(injected, new RegExp(PREVIEW_LOCATION_MESSAGE_TYPE, "u"));
   assert.match(injected, new RegExp(PREVIEW_QUERY_MESSAGE_TYPE, "u"));
-  assert.match(injected, new RegExp(PREVIEW_READY_MESSAGE_TYPE, "u"));
-  assert.match(injected, /MutationObserver/u);
   assert.match(injected, /force: true/u);
+  assert.doesNotMatch(injected, /vibe64:preview-ready/u);
+  assert.doesNotMatch(injected, /MutationObserver/u);
   assert.match(injected, /http:\/\/127\.0\.0\.1:4103/u);
   assert.equal(injectLaunchPreviewBridge(injected), injected);
 });
@@ -65,6 +66,21 @@ test("launch preview target URLs are constrained to loopback HTTP origins", () =
   assert.throws(() => normalizePreviewTargetHref("file:///tmp/index.html"), /must use HTTP/u);
   assert.throws(() => normalizePreviewTargetHref("https://example.com"), /must be loopback/u);
   assert.throws(() => normalizePreviewTargetHref("http://vibe64-launch-notvalid:4103/home"), /must be loopback/u);
+});
+
+test("launch preview bearer cookies are Secure on hosted HTTPS origins", () => {
+  assert.match(
+    previewTokenCookie("secret", {
+      proxyOrigin: "https://v64preview-abc123def456--workspace.vibe64.dev"
+    }),
+    /; Secure$/u
+  );
+  assert.doesNotMatch(
+    previewTokenCookie("secret", {
+      proxyOrigin: "http://127.0.0.1:49000"
+    }),
+    /; Secure/u
+  );
 });
 
 test("launch preview proxy injects HTML and proxies app-relative requests", async () => {
@@ -236,6 +252,11 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
         }),
         path.join(socketDir, "v64preview-abcd1234--workspace.sock")
       );
+      assert.equal((await stat(socketDir)).mode & 0o777, 0o700);
+      assert.equal(
+        (await stat(path.join(socketDir, "v64preview-abcd1234--workspace.sock"))).mode & 0o777,
+        0o600
+      );
 
       const response = await requestUnixSocket({
         headers: {
@@ -290,6 +311,47 @@ test("launch preview public socket path defaults under XDG runtime dir", () => {
   );
 });
 
+test("launch preview proxy prunes only stale sockets that match its production namespace", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-prune-"));
+  const staleSocketPath = path.join(socketDir, "v64preview-aaaaaaaaaaaa--workspace.sock");
+  const liveSocketPath = path.join(socketDir, "v64preview-bbbbbbbbbbbb--workspace.sock");
+  const regularPath = path.join(socketDir, "v64preview-cccccccccccc--workspace.sock");
+  const unrelatedPath = path.join(socketDir, "somebody-else.sock");
+  const staleServer = createServer();
+  const liveServer = createServer();
+  try {
+    await Promise.all([
+      listenOnUnixSocket(staleServer, staleSocketPath),
+      listenOnUnixSocket(liveServer, liveSocketPath)
+    ]);
+    await writeFile(regularPath, "not a socket");
+    await writeFile(unrelatedPath, "unrelated");
+
+    const result = await pruneStalePreviewSockets({
+      env: {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      },
+      socketHasLiveListener: async (socketPath) => socketPath === liveSocketPath
+    });
+
+    assert.equal(result.removed, 1);
+    await assert.rejects(() => lstat(staleSocketPath), (error) => error?.code === "ENOENT");
+    assert.equal((await lstat(liveSocketPath)).isSocket(), true);
+    assert.equal((await lstat(regularPath)).isFile(), true);
+    assert.equal((await lstat(unrelatedPath)).isFile(), true);
+    assert.equal((await stat(socketDir)).mode & 0o777, 0o700);
+  } finally {
+    await Promise.all([
+      closeServer(staleServer),
+      closeServer(liveServer)
+    ]);
+    await rm(socketDir, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("launch preview proxy reuses an in-flight public Unix socket start", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
@@ -324,6 +386,61 @@ test("launch preview proxy reuses an in-flight public Unix socket start", async 
       });
       assert.equal(response.statusCode, 200);
       assert.match(response.body, /Target home/u);
+    } finally {
+      await registry.closeAll();
+      await rm(socketDir, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
+test("launch preview restarts keep their origin and rotate their bearer token", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-restart-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-123456abcdef--workspace.vibe64.dev";
+    const env = {
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+    };
+    const registry = createLaunchPreviewProxyRegistry({ env });
+    try {
+      const first = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-restart",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-one"
+      });
+      const second = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-restart",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-two"
+      });
+
+      assert.equal(new URL(first.href).origin, new URL(second.href).origin);
+      assert.notEqual(
+        new URL(first.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM),
+        new URL(second.href).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
+      );
+
+      const socketPath = previewPublicSocketPath(publicOrigin, env);
+      const staleTokenResponse = await requestUnixSocket({
+        headers: {
+          Host: new URL(publicOrigin).host
+        },
+        path: `${new URL(first.href).pathname}${new URL(first.href).search}`,
+        socketPath
+      });
+      const currentTokenResponse = await requestUnixSocket({
+        headers: {
+          Host: new URL(publicOrigin).host
+        },
+        path: `${new URL(second.href).pathname}${new URL(second.href).search}`,
+        socketPath
+      });
+      assert.equal(staleTokenResponse.statusCode, 403);
+      assert.equal(currentTokenResponse.statusCode, 200);
     } finally {
       await registry.closeAll();
       await rm(socketDir, {
@@ -1488,6 +1605,25 @@ function withTimeout(promise, timeoutMs, message = "Timed out.") {
       timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
     })
   ]);
+}
+
+function listenOnUnixSocket(server, socketPath) {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+function closeServer(server) {
+  if (!server?.listening) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    server.close(() => resolve());
+  });
 }
 
 function requestUnixSocket({
