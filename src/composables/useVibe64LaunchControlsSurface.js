@@ -87,19 +87,6 @@ function previewProxyToken(value = "") {
   }
 }
 
-function previewProxyBootstrapKey(value = "") {
-  const token = previewProxyToken(value);
-  if (!token) {
-    return "";
-  }
-  try {
-    const url = new URL(value);
-    return `${url.origin}:${token}`;
-  } catch {
-    return token;
-  }
-}
-
 function stripPreviewDisplayQueryParams(value = "") {
   const text = String(value || "");
   const hashIndex = text.indexOf("#");
@@ -409,8 +396,7 @@ function useVibe64LaunchControlsSurface(props) {
   const previewAddressDraft = ref("");
   const previewAddressError = ref("");
   const previewAddressFocused = ref(false);
-  const previewBootstrapPending = ref(false);
-  const previewBootstrappedKey = ref("");
+  const previewBootstrapBaseUrl = ref("");
   const previewHistory = ref([]);
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
@@ -510,15 +496,8 @@ function useVibe64LaunchControlsSurface(props) {
     ["ready", "stale"].includes(previewState.value) &&
     previewBaseUrl.value
   ));
-  const previewBootstrapUrl = computed(() => previewBootstrapPending.value
-    ? launchPreviewBootstrapBaseUrl({
-        baseUrl: previewBaseUrl.value,
-        displayBaseUrl: previewDisplayBaseUrl.value,
-        visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value) || previewDisplayBaseUrl.value
-      })
-    : "");
   const previewUrl = computed(() => launchPreviewUrl({
-    baseUrl: previewBootstrapUrl.value || previewReloadBaseUrl.value || previewBaseUrl.value,
+    baseUrl: previewBootstrapBaseUrl.value || previewReloadBaseUrl.value || previewBaseUrl.value,
     ready: previewReadyForIframe.value,
     reloadKey: previewReloadKey.value
   }));
@@ -671,7 +650,11 @@ function useVibe64LaunchControlsSurface(props) {
   
   async function reloadPreview() {
     await refreshLaunchTargets();
-    previewBootstrapPending.value = Boolean(previewProxyBootstrapKey(previewBaseUrl.value));
+    previewBootstrapBaseUrl.value = launchPreviewBootstrapBaseUrl({
+      baseUrl: previewBaseUrl.value,
+      displayBaseUrl: previewDisplayBaseUrl.value,
+      visitedUrl: previewVisitedUrl.value
+    });
     previewReloadBaseUrl.value = launchPreviewReloadBaseUrl({
       baseUrl: previewBaseUrl.value,
       displayBaseUrl: previewDisplayBaseUrl.value,
@@ -809,6 +792,7 @@ function useVibe64LaunchControlsSurface(props) {
       return false;
     }
     previewAddressError.value = "";
+    previewBootstrapBaseUrl.value = "";
     previewAddressDraft.value = previewAddressDisplayText(navigation.displayUrl, {
       displayBaseUrl: previewDisplayBaseUrl.value,
       previewBaseUrl: previewBaseUrl.value
@@ -911,10 +895,6 @@ function useVibe64LaunchControlsSurface(props) {
     previewDebugLog("iframe.load");
     if (previewUrl.value) {
       previewReadyUrl.value = previewUrl.value;
-    }
-    if (previewBootstrapPending.value) {
-      previewBootstrappedKey.value = previewProxyBootstrapKey(previewBaseUrl.value);
-      previewBootstrapPending.value = false;
     }
     requestPreviewState();
   }
@@ -1180,13 +1160,11 @@ function useVibe64LaunchControlsSurface(props) {
   });
 
   watch(previewBaseUrl, (nextUrl, previousUrl) => {
-    const nextBootstrapKey = previewProxyBootstrapKey(nextUrl);
-    if (nextBootstrapKey && nextBootstrapKey !== previewBootstrappedKey.value) {
-      previewBootstrapPending.value = true;
-    } else if (!nextBootstrapKey) {
-      previewBootstrapPending.value = false;
-      previewBootstrappedKey.value = "";
-    }
+    previewBootstrapBaseUrl.value = launchPreviewBootstrapBaseUrl({
+      baseUrl: nextUrl,
+      displayBaseUrl: previewDisplayBaseUrl.value,
+      visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value) || previewDisplayBaseUrl.value
+    });
     if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
       const reloadBaseUrl = launchPreviewReloadBaseUrl({
         baseUrl: nextUrl,
@@ -1455,7 +1433,8 @@ function launchPreviewInFlightText({
   }
   if (previewLoadingOverlayVisible && previewUrl) {
     const address = String(previewDisplayedAddress || "").trim();
-    return address ? `Opening preview: ${address}.` : "Opening preview frame.";
+    const page = address ? `: ${address}` : "";
+    return `Loading preview page${page}. The server is ready; the browser is still loading the app.`;
   }
   if (loading) {
     return launchStatus || "Checking preview status.";

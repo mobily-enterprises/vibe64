@@ -328,7 +328,10 @@ test("embedded preview clears the opening overlay when bridge reports rendered c
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
+  const loadingOverlay = page.locator(".vibe64-launch-controls__preview-overlay");
+  await expect(loadingOverlay).toContainText("Loading preview page");
+  await expect(loadingOverlay).toContainText("The server is ready; the browser is still loading the app.");
+  await expect(loadingOverlay.locator(".vibe64-launch-controls__preview-pulse")).toBeVisible();
   await expect(
     page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
   ).toBeVisible();
@@ -350,6 +353,22 @@ test("embedded preview lets a slow first iframe load finish without restarting i
   });
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
   expect(launchSession.getPreviewLoadCount()).toBe(1);
+});
+
+test("embedded preview token bootstrap redirects once without reloading the clean document", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page, {
+    previewBootstrapToken: "preview-bootstrap-token"
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(
+    page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
+  ).toBeVisible();
+  await expect.poll(() => launchSession.getPreviewLoadCount()).toBe(2);
+  await page.waitForTimeout(500);
+  expect(launchSession.getPreviewLoadCount()).toBe(2);
 });
 
 test("embedded preview stays mounted and does not reload while covered by dashboard", async ({ page }) => {
@@ -926,6 +945,7 @@ async function mockLaunchSession(page: Page, {
   launchStatusSequence = null,
   launchTargetsDelayMs = 0,
   launchTerminalDelayMs = 0,
+  previewBootstrapToken = "",
   previewReadyDelayMs = 0,
   previewResponseDelayMs = 0,
   session = sessionPayload(),
@@ -940,6 +960,7 @@ async function mockLaunchSession(page: Page, {
   launchStatusSequence?: unknown[] | null;
   launchTargetsDelayMs?: number;
   launchTerminalDelayMs?: number;
+  previewBootstrapToken?: string;
   previewReadyDelayMs?: number;
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
@@ -959,6 +980,9 @@ async function mockLaunchSession(page: Page, {
   let initialLaunchStatusActive = true;
   let launchStatusRequestCount = 0;
   let previewLoadCount = 0;
+  const previewHref = previewBootstrapToken
+    ? `${PROXY_APP_URL}?vibe64_preview_token=${encodeURIComponent(previewBootstrapToken)}`
+    : PROXY_APP_URL;
   function currentLaunchStatus() {
     if (sequencedLaunchStatuses.length > 0 && !launchStarted) {
       const index = Math.min(launchStatusRequestCount, sequencedLaunchStatuses.length - 1);
@@ -969,10 +993,11 @@ async function mockLaunchSession(page: Page, {
       return initialLaunchStatus;
     }
     return launchStatusPayload(launchStarted
-      ? { launchTargetPreviewOptions }
+      ? { launchTargetPreviewOptions, previewHref }
       : {
           activeTerminal: null,
-          launchTargetPreviewOptions
+          launchTargetPreviewOptions,
+          previewHref
         });
   }
   function sessionForRequest(pathname: string) {
@@ -1005,7 +1030,8 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, {
         ok: true,
         ...launchStatusPayload({
-          launchTargetPreviewOptions
+          launchTargetPreviewOptions,
+          previewHref
         }).activeTerminal
       });
       return;
@@ -1092,6 +1118,22 @@ async function mockLaunchSession(page: Page, {
   });
   await page.route("http://127.0.0.1:49000/**", async (route) => {
     previewLoadCount += 1;
+    const url = new URL(route.request().url());
+    if (
+      previewBootstrapToken &&
+      url.searchParams.get("vibe64_preview_token") === previewBootstrapToken
+    ) {
+      url.searchParams.delete("vibe64_preview_token");
+      await route.fulfill({
+        body: "",
+        headers: {
+          location: url.toString(),
+          "set-cookie": "vibe64_preview_token_49000=preview-bootstrap-token; Path=/; HttpOnly"
+        },
+        status: 302
+      });
+      return;
+    }
     if (previewResponseDelayMs > 0) {
       await new Promise((resolve) => {
         setTimeout(resolve, previewResponseDelayMs);
@@ -1776,8 +1818,10 @@ async function mockLaunchTerminalSocket(page: Page, {
 function launchStatusPayload(options: {
   activeTerminal?: unknown;
   launchTargetPreviewOptions?: unknown[];
+  previewHref?: string;
 } = {}) {
   const launchTargetPreviewOptions = options.launchTargetPreviewOptions || [];
+  const previewHref = options.previewHref || PROXY_APP_URL;
   const terminal = Object.hasOwn(options, "activeTerminal")
     ? options.activeTerminal
     : {
@@ -1817,12 +1861,12 @@ function launchStatusPayload(options: {
       href: TARGET_APP_URL,
       kind: "url",
       label: "Open browser",
-      previewHref: PROXY_APP_URL
+      previewHref
     },
     previewTarget: {
       available: true,
       disabledReason: "",
-      href: PROXY_APP_URL,
+      href: previewHref,
       kind: "url",
       label: "Preview",
       targetHref: TARGET_APP_URL
