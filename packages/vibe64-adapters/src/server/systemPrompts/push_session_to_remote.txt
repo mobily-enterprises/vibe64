@@ -5,6 +5,12 @@ Vibe64 standard Git publish instructions for a session clone.
 Goal:
 Publish this session's finished work to the configured project remote without losing remote work or leaking unrelated local changes. Treat the session branch and the remote default branch as the only user-facing Git states unless the user explicitly asks for a named branch or pull request workflow.
 
+Managed Git command path:
+- Use `git` and `gh` exactly as provided by the Vibe64 session environment.
+- Do not call absolute or host Git/GitHub binaries such as `/usr/bin/git`, `/bin/git`, `/usr/local/bin/git`, `/usr/bin/gh`, or `/bin/gh`.
+- Do not bypass the managed command path with `command -p`, stripped `PATH`, `env -i`, shell builtins that force host lookup, or direct executable paths.
+- If managed `git` or `gh` cannot authenticate or cannot reach the remote, report that managed-command failure. Do not retry with host binaries, inspect credentials, or invent alternate authentication.
+
 Fast path first:
 - Start with `git status --short --branch`.
 - If the working tree is clean, identify the current branch/`HEAD`, the configured remote, and the live remote default branch with the fewest commands that answer those questions. Prefer `git ls-remote --symref origin HEAD` for the live default branch over stale local assumptions.

@@ -15,6 +15,7 @@ import {
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
@@ -57,6 +58,13 @@ async function runGit(cwd, args = []) {
   await execFileAsync("git", args, {
     cwd
   });
+}
+
+async function gitOutput(cwd, args = []) {
+  const result = await execFileAsync("git", args, {
+    cwd
+  });
+  return String(result.stdout || "").trim();
 }
 
 async function createGitProject(projectRoot, remotes = {}) {
@@ -252,6 +260,97 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(selected.hasSelection, true);
     assert.equal(selected.targetRoot, expectedTargetRoot);
     assert.equal(selected.currentProject.selected, true);
+  });
+});
+
+test("Studio project context creates local-source projects with a real main branch", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    await context.createWorkspaceProjectRecord({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      },
+      slug: "whs"
+    });
+
+    const projectRoot = path.join(projectsRoot, "whs");
+    assert.equal(await gitOutput(projectRoot, ["branch", "--show-current"]), PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
+    assert.match(
+      await gitOutput(projectRoot, ["rev-parse", "--verify", `refs/heads/${PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH}^{commit}`]),
+      /^[0-9a-f]{40}$/u
+    );
+    assert.equal(await gitOutput(projectRoot, ["log", "-1", "--format=%s"]), "Initial commit");
+    assert.equal(await gitOutput(projectRoot, ["status", "--short"]), "");
+  });
+});
+
+test("Studio project context normalizes imported local-source repositories to main", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "legacy-app");
+    await mkdir(projectRoot, {
+      recursive: true
+    });
+    await runGit(projectRoot, ["init", "--initial-branch=trunk"]);
+    await runGit(projectRoot, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(projectRoot, ["config", "user.name", "Vibe64 Test"]);
+    await writeFile(path.join(projectRoot, "README.md"), "Legacy project\n", "utf8");
+    await runGit(projectRoot, ["add", "-A"]);
+    await runGit(projectRoot, ["commit", "-m", "Legacy commit"]);
+    const trunkCommit = await gitOutput(projectRoot, ["rev-parse", "--verify", "HEAD"]);
+
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await context.createWorkspaceProjectRecord({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      },
+      slug: "legacy-app"
+    });
+
+    assert.equal(await gitOutput(projectRoot, ["branch", "--show-current"]), PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
+    assert.equal(
+      await gitOutput(projectRoot, ["rev-parse", "--verify", `refs/heads/${PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH}^{commit}`]),
+      trunkCommit
+    );
+    assert.equal(await readFile(path.join(projectRoot, "README.md"), "utf8"), "Legacy project\n");
+  });
+});
+
+test("Studio project context normalizes projects updated to local-source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await context.createWorkspaceProjectRecord({
+      slug: "converted-app"
+    });
+
+    await context.updateWorkspaceProjectMetadata({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      },
+      slug: "converted-app"
+    });
+
+    const projectRoot = path.join(projectsRoot, "converted-app");
+    assert.equal(await gitOutput(projectRoot, ["branch", "--show-current"]), PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
+    assert.match(
+      await gitOutput(projectRoot, ["rev-parse", "--verify", `refs/heads/${PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH}^{commit}`]),
+      /^[0-9a-f]{40}$/u
+    );
   });
 });
 

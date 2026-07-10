@@ -39,7 +39,7 @@ const MANAGED_SERVICE_POLICY = [
   "Do not discover replacement credentials, alternate hosts, local sockets, system accounts, or service probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
 ].join(" ");
-const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, project config, and missing-information policy.";
+const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, Git command policy, project config, and missing-information policy.";
 const STATIC_CONTEXT_REFERENCE_MODE = "reference";
 const PROMPT_CONTEXT_BRIEFING_SECTIONS = Object.freeze([
   ["agent_guide_contract", "Agent guide contract"],
@@ -573,6 +573,12 @@ function promptSessionBriefing(contextInput = {}) {
     "",
     "Managed service policy:",
     MANAGED_SERVICE_POLICY,
+    "",
+    "Git command policy:",
+    "Use the managed Vibe64 `git` and `gh` commands from the session environment for all project Git and GitHub work.",
+    "Do not run absolute or host Git/GitHub binaries such as `/usr/bin/git`, `/bin/git`, `/usr/local/bin/git`, `/usr/bin/gh`, or `/bin/gh`.",
+    "Do not bypass the managed command path with `command -p`, a stripped `PATH`, `env -i`, shell builtins that force host lookup, or direct executable paths.",
+    "If managed `git` or `gh` cannot authenticate or cannot reach the remote, report that exact managed-command failure. Do not retry with host binaries, inspect credentials, or invent alternate GitHub authentication.",
     "",
     "Missing information policy:",
     missingInformationPolicyInstruction(),

@@ -27,6 +27,9 @@ import {
   resolveSourceConfigRoot
 } from "@local/vibe64-core/server/projectState";
 import {
+  PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH
+} from "@local/vibe64-core/server/projectRepository";
+import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   explicitSessionSourcePath,
   sessionSourcePath,
@@ -53,6 +56,7 @@ import {
 } from "./repositoryCommandProfile.js";
 import {
   gitWorktreeStatus,
+  readBranchCommitIfPresent,
   readCurrentBranchIfPresent,
   readCurrentCommitIfPresent,
   readCurrentRemoteUrlIfPresent,
@@ -207,6 +211,7 @@ function createWorktreeScript({
   const quotedBranch = shellQuote(branch);
   const quotedCachePath = shellQuote(cachePath);
   const quotedDefaultBranch = shellQuote(defaultBranch);
+  const quotedLocalSourceBranch = shellQuote(PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
   const quotedPrepareWorktreeScriptPath = shellQuote(normalizeText(prepareWorktreeScriptPath));
   const quotedRemoteUrl = shellQuote(remoteUrl);
   const quotedTargetRoot = shellQuote(targetRoot);
@@ -301,7 +306,27 @@ function createWorktreeScript({
     "  fi",
     "  test -n \"$(git -C \"$VIBE64_GIT_CACHE_PATH\" for-each-ref --format='%(refname)' refs/heads | head -n 1)\"",
     "}",
+    "require_local_source_main_branch() {",
+    `  BASE_BRANCH=${quotedLocalSourceBranch}`,
+    `  if ! git -C ${quotedTargetRoot} show-ref --verify --quiet "refs/heads/$BASE_BRANCH"; then`,
+    "    printf '[studio] Local-source projects must have a main branch before Vibe64 can create a session clone.\\n' >&2",
+    "    exit 1",
+    "  fi",
+    `  BASE_COMMIT="$(git -C ${quotedTargetRoot} rev-parse --verify "$BASE_BRANCH^{commit}")"`,
+    "}",
     "complete_existing_session_clone() {",
+    ...(repositoryProfile.localSource ? [
+      "  require_local_source_main_branch",
+      recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
+      recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
+      "  record_session_clone_facts",
+      `  git -C ${quotedWorktreePath} fetch origin "$BASE_BRANCH"`,
+      `  git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$BASE_COMMIT"`,
+      "  remove_session_clone_local_branch \"$BASE_BRANCH\"",
+      "  ensure_session_clone_self_contained",
+      "  prepare_vibe64_worktree",
+      "  return 0"
+    ] : []),
     `  current_branch="$(git -C ${quotedWorktreePath} branch --show-current 2>/dev/null || true)"`,
     `  if [ -n "$current_branch" ] && [ "$current_branch" != ${quotedBranch} ]; then`,
     "    BASE_BRANCH=\"$current_branch\"",
@@ -411,18 +436,14 @@ function createWorktreeScript({
     "clone_from_local_target() {",
     "  if ! git -C " + quotedTargetRoot + " rev-parse --git-dir >/dev/null 2>&1; then",
     "    printf '[studio] Initializing Git repository for local project.\\n'",
-    `    git -C ${quotedTargetRoot} init -b main`,
+    `    git -C ${quotedTargetRoot} init --initial-branch=${quotedLocalSourceBranch}`,
     "  fi",
     `  if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
     "    printf '[studio] Creating initial commit for seeded repository.\\n'",
     `    git -C ${quotedTargetRoot} add -A`,
     `    git -C ${quotedTargetRoot} commit --allow-empty -m "Initial commit"`,
     "  fi",
-    "  BASE_BRANCH=\"$(git -C " + quotedTargetRoot + " branch --show-current)\"",
-    "  if [ -z \"$BASE_BRANCH\" ]; then",
-    "    BASE_BRANCH=main",
-    "  fi",
-    "  BASE_COMMIT=\"$(git -C " + quotedTargetRoot + " rev-parse --verify HEAD)\"",
+    "  require_local_source_main_branch",
     `  mkdir -p "$(dirname ${quotedWorktreePath})"`,
     `  git clone --single-branch --branch "$BASE_BRANCH" ${quotedTargetRoot} ${quotedWorktreePath}`,
     recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
@@ -774,16 +795,21 @@ async function createWorktreeTerminalSpec({
   await mkdir(path.dirname(path.resolve(sourcePath)), {
     recursive: true
   });
-  const [baseBranch, baseCommit] = await Promise.all([
+  const [baseBranch, baseCommit, localMainCommit] = await Promise.all([
     readCurrentBranchIfPresent(resolvedTargetRoot),
-    readCurrentCommitIfPresent(resolvedTargetRoot)
+    readCurrentCommitIfPresent(resolvedTargetRoot),
+    repositoryProfile.localSource ? readBranchCommitIfPresent(resolvedTargetRoot, PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH) : Promise.resolve("")
   ]);
   const metadataBaseBranch = sessionUsesSourcePullRequest(session)
     ? normalizeText(session.metadata?.source_pr_head_ref) || baseBranch
-    : baseBranch;
+    : repositoryProfile.localSource
+      ? PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH
+      : baseBranch;
   const metadataBaseCommit = sessionUsesSourcePullRequest(session)
     ? normalizeText(session.metadata?.source_pr_head_sha) || baseCommit
-    : baseCommit;
+    : repositoryProfile.localSource
+      ? localMainCommit
+      : baseCommit;
   return {
     args: ["-lc", createWorktreeScript({
       branch,
@@ -811,6 +837,7 @@ async function createWorktreeTerminalSpec({
       ...successContext
     }),
     runtimeConfigPhases: false,
+    runtimes: ["git"],
     successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
     successMetadata: sourceMetadata({
       baseBranch: metadataBaseBranch,

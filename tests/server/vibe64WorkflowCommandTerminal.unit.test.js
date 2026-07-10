@@ -407,6 +407,7 @@ test("workflow command specs describe intent without gateway execution policy", 
       targetRoot
     });
     assert.equal(createSourceSpec.ok, true);
+    assert.deepEqual(createSourceSpec.runtimes, ["git"]);
     assertWorkflowCommandSpecHasNoGatewayPolicy(createSourceSpec);
 
     await mkdir(path.dirname(sourcePath), {
@@ -562,6 +563,7 @@ test("create source command selects non-GitHub clone paths from the repository p
       targetRoot
     });
     assert.equal(localSpec.ok, true);
+    assert.deepEqual(localSpec.runtimes, ["git"]);
     assert.equal(localSpec.commandPreview, `git clone ${targetRoot} ${localSourcePath}`);
     assert.equal(localSpec.successMetadata.source_path, localSourcePath);
     assert.equal(localSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
@@ -585,6 +587,7 @@ test("create source command selects non-GitHub clone paths from the repository p
       targetRoot
     });
     assert.equal(canonicalSpec.ok, true);
+    assert.deepEqual(canonicalSpec.runtimes, ["git"]);
     assert.equal(canonicalSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${canonicalSourcePath}`);
     assert.equal(canonicalSpec.successMetadata.source_path, canonicalSourcePath);
     assert.equal(canonicalSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
@@ -822,6 +825,122 @@ test("create source command completes a retry after a partial session clone", as
     assert.equal(facts.base_commit, targetHead);
     assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), targetHead);
     assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/partial-clone-retry");
+  });
+});
+
+test("create source command starts local-source sessions from main even when another branch is checked out", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const oldHead = await commitFile(targetRoot, "README.md", "Older branch state\n", "Initial commit");
+    await execFileAsync("git", ["checkout", "-b", "vibe64/old-session"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["checkout", "main"], {
+      cwd: targetRoot
+    });
+    const mainHead = await commitFile(targetRoot, "README.md", "Main branch state\n", "Main update");
+    await execFileAsync("git", ["checkout", "vibe64/old-session"], {
+      cwd: targetRoot
+    });
+    assert.equal(await gitOutput(targetRoot, ["rev-parse", "HEAD"]), oldHead);
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "local-source-main");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "local-source-main-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "local-source-main", "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "local-source-main",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.base_branch, "main");
+    assert.equal(spec.successMetadata.base_commit, mainHead);
+    assert.equal(spec.successMetadata.source_default_branch, "main");
+    assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: workflowScriptTestEnv({
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      })
+    });
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.main_checkout_root, targetRoot);
+    assert.equal(facts.source_default_branch, "main");
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, mainHead);
+    assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), mainHead);
+    assert.equal(await readFile(path.join(sourcePath, "README.md"), "utf8"), "Main branch state\n");
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/local-source-main");
+    assert.equal(await gitOutput(targetRoot, ["branch", "--show-current"]), "vibe64/old-session");
+  });
+});
+
+test("create source command fails local-source repositories without a main branch", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await execFileAsync("git", ["init", "--initial-branch=trunk"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["config", "user.email", "vibe64@example.test"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["config", "user.name", "Vibe64 Test"], {
+      cwd: targetRoot
+    });
+    await commitFile(targetRoot, "README.md", "Trunk-only local repository\n", "Initial trunk commit");
+    assert.equal(await gitOutput(targetRoot, ["branch", "--show-current"]), "trunk");
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "local-source-no-main");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "local-source-no-main-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "local-source-no-main", "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "local-source-no-main",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.base_branch, "main");
+    assert.equal(spec.successMetadata.base_commit, "");
+
+    await assert.rejects(
+      () => execFileAsync(spec.command, spec.args, {
+        cwd: spec.cwd,
+        env: workflowScriptTestEnv()
+      }),
+      /Local-source projects must have a main branch/u
+    );
+    await assert.rejects(
+      () => gitOutput(sourcePath, ["rev-parse", "HEAD"]),
+      /ENOENT|not found|No such file/u
+    );
   });
 });
 

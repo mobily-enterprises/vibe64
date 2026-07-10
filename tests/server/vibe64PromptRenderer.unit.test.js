@@ -784,6 +784,11 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /generator tokens: database=\$DB_NAME, host=\$DB_HOST/u);
   assert.doesNotMatch(briefing, /interactiveCommand/u);
   assert.doesNotMatch(briefing, /Noisy service note/u);
+  assert.match(briefing, /Git command policy:/u);
+  assert.match(briefing, /Use the managed Vibe64 `git` and `gh` commands/u);
+  assert.match(briefing, /Do not run absolute or host Git\/GitHub binaries such as `\/usr\/bin\/git`/u);
+  assert.match(briefing, /Do not bypass the managed command path with `command -p`/u);
+  assert.match(briefing, /Do not retry with host binaries/u);
   assert.match(briefing, /packageManager/u);
   assert.match(briefing, /"values": \{\n {4}"packageManager": "npm"\n {2}\}/u);
   assert.doesNotMatch(briefing, /fieldValues/u);

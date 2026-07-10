@@ -33,6 +33,7 @@ import {
 } from "./projectBootstrapConfig.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeProjectGithubRepository,
@@ -491,26 +492,88 @@ function githubRepositoryFromRemoteUrl(remoteUrl = "", {
   };
 }
 
+async function runGitCommand(cwd = "", args = [], {
+  timeout = 5000
+} = {}) {
+  const resolvedCwd = normalizeRoot(cwd);
+  return runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [resolvedCwd],
+    args,
+    command: "git",
+    cwd: resolvedCwd,
+    envPolicy: "project",
+    gitSafeDirectories: [resolvedCwd],
+    mode: "capture",
+    purpose: "source-editor",
+    runtimes: ["git"],
+    timeout
+  });
+}
+
+function gitCommandOutput(result = {}) {
+  return String(result.stdout || result.output || "").trim();
+}
+
 async function runGit(cwd = "", args = []) {
   try {
-    const resolvedCwd = normalizeRoot(cwd);
-    const result = await runVibe64Command({
-      actor: "daemon",
-      allowedRoots: [resolvedCwd],
-      args,
-      command: "git",
-      cwd: resolvedCwd,
-      envPolicy: "project",
-      gitSafeDirectories: [resolvedCwd],
-      mode: "capture",
-      purpose: "source-editor",
-      runtimes: ["git"],
-      timeout: 5000
-    });
-    return result.ok ? String(result.stdout || "").trim() : "";
+    const result = await runGitCommand(cwd, args);
+    return result.ok ? gitCommandOutput(result) : "";
   } catch {
     return "";
   }
+}
+
+async function runRequiredGit(cwd = "", args = [], options = {}) {
+  const result = await runGitCommand(cwd, args, options);
+  if (result.ok) {
+    return gitCommandOutput(result);
+  }
+  const error = new Error(String(result.stderr || result.stdout || result.output || result.error || "Git command failed.").trim());
+  error.code = result.code || "vibe64_project_git_command_failed";
+  throw error;
+}
+
+async function gitCommandSucceeds(cwd = "", args = []) {
+  const result = await runGitCommand(cwd, args);
+  return result.ok === true;
+}
+
+async function ensureLocalSourceMainBranch(projectPath = "") {
+  const targetRoot = normalizeRoot(projectPath);
+  const mainBranch = PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH;
+  const insideWorkTree = (await runGit(targetRoot, ["rev-parse", "--is-inside-work-tree"])) === "true";
+  if (!insideWorkTree) {
+    await runRequiredGit(targetRoot, ["init", `--initial-branch=${mainBranch}`], {
+      timeout: 30_000
+    });
+    await runRequiredGit(targetRoot, ["add", "-A"], {
+      timeout: 30_000
+    });
+    await runRequiredGit(targetRoot, ["commit", "--allow-empty", "-m", "Initial commit"], {
+      timeout: 30_000
+    });
+    return;
+  }
+
+  if (await gitCommandSucceeds(targetRoot, ["rev-parse", "--verify", `refs/heads/${mainBranch}^{commit}`])) {
+    return;
+  }
+
+  if (!await gitCommandSucceeds(targetRoot, ["rev-parse", "--verify", "HEAD^{commit}"])) {
+    await runRequiredGit(targetRoot, ["symbolic-ref", "HEAD", `refs/heads/${mainBranch}`]);
+    await runRequiredGit(targetRoot, ["add", "-A"], {
+      timeout: 30_000
+    });
+    await runRequiredGit(targetRoot, ["commit", "--allow-empty", "-m", "Initial commit"], {
+      timeout: 30_000
+    });
+    return;
+  }
+
+  await runRequiredGit(targetRoot, ["checkout", "-B", mainBranch, "HEAD"], {
+    timeout: 30_000
+  });
 }
 
 function parseGithubRemote(value = "") {
@@ -866,6 +929,9 @@ function createStudioProjectContext({
     const metadata = projectMetadataFromInput(input, {
       defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
     });
+    if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+      await ensureLocalSourceMainBranch(targetRoot);
+    }
     if (Object.keys(metadata).length > 0) {
       await writeProjectMetadata(projectRecordPathForSlug(slug), metadata);
     }
@@ -925,6 +991,10 @@ function createStudioProjectContext({
       slug
     });
     await assertDirectoryUsable(targetRoot);
+    const metadata = projectMetadataFromInput(input);
+    if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+      await ensureLocalSourceMainBranch(targetRoot);
+    }
     await writeProjectMetadata(projectRecordPathForSlug(slug), input);
     const project = await workspaceProjectRecordForPath({
       projectRecordPath: projectRecordPathForSlug(slug),

@@ -800,7 +800,7 @@ function promptWithConversationTurnContext({
     ].filter(Boolean).join("\n"),
     sessionBriefingIncluded
       ? ""
-      : "Session briefing: Use the Vibe64 session briefing already provided for static setup facts, fixed paths, adapter contracts, managed services, project config, and missing-information policy.",
+      : "Session briefing: Use the Vibe64 session briefing already provided for static setup facts, fixed paths, adapter contracts, managed services, Git command policy, project config, and missing-information policy.",
     promptContextSection("User/request input", input),
     Object.keys(workflowFacts).length > 0
       ? promptContextSection("Current dynamic workflow facts", workflowFacts)

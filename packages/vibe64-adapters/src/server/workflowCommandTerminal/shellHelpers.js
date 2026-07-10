@@ -83,6 +83,17 @@ async function readCurrentCommitIfPresent(targetRoot) {
   return result.ok ? result.output : "";
 }
 
+async function readBranchCommitIfPresent(targetRoot, branch = "main") {
+  const normalizedBranch = normalizeText(branch);
+  if (!normalizedBranch) {
+    return "";
+  }
+  const result = await gitResult(targetRoot, ["rev-parse", "--verify", `${normalizedBranch}^{commit}`], {
+    timeout: 15_000
+  });
+  return result.ok ? result.output : "";
+}
+
 async function readCurrentRemoteUrlIfPresent(targetRoot, remote = "origin") {
   const result = await gitResult(targetRoot, ["remote", "get-url", remote], {
     timeout: 15_000
@@ -265,6 +276,7 @@ export {
   gitWorktreeStatus,
   isGitWorktree,
   normalizeHookCommandResult,
+  readBranchCommitIfPresent,
   readCurrentBranch,
   readCurrentBranchIfPresent,
   readCurrentCommit,

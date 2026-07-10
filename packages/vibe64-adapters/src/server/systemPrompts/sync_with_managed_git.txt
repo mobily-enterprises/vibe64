@@ -8,6 +8,12 @@ Make this session clone and the configured Vibe64 Git canonical repository agree
 Important boundary:
 This action may commit ordinary source-owned session work before syncing. It must not use GitHub, create issues, open pull requests, inspect provider credentials, stash or discard work, force-push, or commit ambiguous ownership. This is a Git/source sync action, not a full app verification action.
 
+Managed Git command path:
+- Use `git` exactly as provided by the Vibe64 session environment.
+- Do not call absolute or host Git binaries such as `/usr/bin/git`, `/bin/git`, or `/usr/local/bin/git`.
+- Do not bypass the managed command path with `command -p`, stripped `PATH`, `env -i`, shell builtins that force host lookup, or direct executable paths.
+- If managed `git` cannot reach the Vibe64 Git repository, report that managed-command failure. Do not retry with host binaries or inspect credentials.
+
 Ownership rules for dirty files:
 - Safe source-owned project changes may be committed. This includes normal application source files and portable Vibe64 project contract files such as `vibe64.project.json`, `vibe64.runtime-lock.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
 - Do not commit Vibe64-owned runtime/session/deployment/credential state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/user metadata.
