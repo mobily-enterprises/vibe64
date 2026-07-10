@@ -321,6 +321,19 @@ function normalizeHttpStatus(value) {
   return Number.isInteger(status) ? status : null;
 }
 
+function launchStatusShouldRetry(failureCount = 0, error = null) {
+  if (Math.max(0, Number(failureCount) || 0) >= LAUNCH_STATUS_RETRY_LIMIT) {
+    return false;
+  }
+  const status = normalizeHttpStatus(error?.status ?? error?.statusCode);
+  return status == null ||
+    status === 0 ||
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500;
+}
+
 function launchStatusErrorText({
   error = null,
   fallback = "",
@@ -722,7 +735,7 @@ function useVibe64LaunchControls({
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
     queryOptions: {
-      retry: LAUNCH_STATUS_RETRY_LIMIT,
+      retry: launchStatusShouldRetry,
       retryDelay: launchStatusRetryDelay
     },
     queryKey: computed(() => vibe64LaunchTargetsQueryKey(
@@ -1666,6 +1679,7 @@ export {
   launchAutoStartAttemptStorageKey,
   launchStatusErrorText,
   launchStatusRetryDelay,
+  launchStatusShouldRetry,
   launchPreviewBaseUrl,
   launchPreviewEmbedUnavailableReason,
   launchPreviewDisplayUrl,

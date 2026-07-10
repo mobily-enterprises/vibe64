@@ -335,23 +335,21 @@ test("embedded preview clears the opening overlay when bridge reports rendered c
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
 });
 
-test("embedded preview retries when iframe loads without a rendered-content bridge message", async ({ page }) => {
+test("embedded preview lets a slow first iframe load finish without restarting it", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    previewReadyLoadNumber: 2
+    previewResponseDelayMs: 6500
   });
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
-  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
-  const initialSrc = await previewFrame.getAttribute("src");
-  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText("Opening preview.");
-  await expect.poll(() => launchSession.getPreviewLoadCount(), {
-    timeout: 7000
-  }).toBe(2);
-  expect(await previewFrame.getAttribute("src")).not.toBe(initialSrc);
+  await expect(
+    page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
+  ).toBeVisible({
+    timeout: 10000
+  });
   await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
+  expect(launchSession.getPreviewLoadCount()).toBe(1);
 });
 
 test("embedded preview stays mounted and does not reload while covered by dashboard", async ({ page }) => {
@@ -929,7 +927,6 @@ async function mockLaunchSession(page: Page, {
   launchTargetsDelayMs = 0,
   launchTerminalDelayMs = 0,
   previewReadyDelayMs = 0,
-  previewReadyLoadNumber = 1,
   previewResponseDelayMs = 0,
   session = sessionPayload(),
   sessionList = null,
@@ -944,7 +941,6 @@ async function mockLaunchSession(page: Page, {
   launchTargetsDelayMs?: number;
   launchTerminalDelayMs?: number;
   previewReadyDelayMs?: number;
-  previewReadyLoadNumber?: number;
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
@@ -1104,7 +1100,6 @@ async function mockLaunchSession(page: Page, {
     await route.fulfill({
       body: previewAppHtml({
         readyDelayMs: previewReadyDelayMs,
-        readyEnabled: previewLoadCount >= previewReadyLoadNumber,
         targetOrigin: new URL(TARGET_APP_URL).origin
       }),
       contentType: "text/html"
@@ -1607,17 +1602,14 @@ function sortSourceEditorTreeChildren(children: Array<Record<string, unknown>>) 
 
 function previewAppHtml({
   readyDelayMs = 0,
-  readyEnabled = true,
   targetOrigin = new URL(TARGET_APP_URL).origin
 }: {
   readyDelayMs?: number;
-  readyEnabled?: boolean;
   targetOrigin?: string;
 } = {}) {
   const readyDelay = Number(readyDelayMs) || 0;
   return `<!doctype html><title>Preview</title><body>Preview app<script>
 const targetOrigin = ${JSON.stringify(targetOrigin)};
-const readyEnabled = ${JSON.stringify(readyEnabled)};
 function targetHref() {
   const current = new URL(window.location.href);
   const target = new URL(targetOrigin);
@@ -1636,9 +1628,6 @@ function postLocation(reason) {
   }, "*");
 }
 function postReady(reason) {
-  if (!readyEnabled) {
-    return;
-  }
   parent.postMessage({
     href: targetHref(),
     reason,

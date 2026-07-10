@@ -405,8 +405,6 @@ function useVibe64LaunchControlsSurface(props) {
   const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
   const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
   const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
-  const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
-  const PREVIEW_READY_RETRY_LIMIT = 30;
   const previewFrame = ref(null);
   const previewAddressDraft = ref("");
   const previewAddressError = ref("");
@@ -425,12 +423,10 @@ function useVibe64LaunchControlsSurface(props) {
   const previewReloadBaseUrl = ref("");
   const previewReloadKey = ref(0);
   const previewReadyUrl = ref("");
-  const previewReadyRetryCount = ref(0);
   const previewVisitedUrl = ref("");
   const previewToolbarExpanded = ref(false);
   const previewToolbarPosition = ref("center");
   const projectSlug = useVibe64ProjectSlug();
-  let previewReadyRetryTimer = 0;
   const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
   const embeddedTerminalVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -668,7 +664,6 @@ function useVibe64LaunchControlsSurface(props) {
       previewUrl: previewUrlWithoutReload(previewUrl.value),
       projectSlug: projectSlug.value,
       reloadKey: previewReloadKey.value,
-      retryCount: previewReadyRetryCount.value,
       sessionId: String(props.session?.sessionId || ""),
       ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
     });
@@ -677,7 +672,6 @@ function useVibe64LaunchControlsSurface(props) {
   async function reloadPreview() {
     await refreshLaunchTargets();
     previewBootstrapPending.value = Boolean(previewProxyBootstrapKey(previewBaseUrl.value));
-    previewReadyRetryCount.value = 0;
     previewReloadBaseUrl.value = launchPreviewReloadBaseUrl({
       baseUrl: previewBaseUrl.value,
       displayBaseUrl: previewDisplayBaseUrl.value,
@@ -819,7 +813,6 @@ function useVibe64LaunchControlsSurface(props) {
       displayBaseUrl: previewDisplayBaseUrl.value,
       previewBaseUrl: previewBaseUrl.value
     });
-    previewReadyRetryCount.value = 0;
     previewReloadBaseUrl.value = navigation.previewUrl;
     previewReloadKey.value += 1;
     setPreviewVisitedUrl(navigation.displayUrl, {
@@ -923,7 +916,6 @@ function useVibe64LaunchControlsSurface(props) {
       previewBootstrappedKey.value = previewProxyBootstrapKey(previewBaseUrl.value);
       previewBootstrapPending.value = false;
     }
-    stopPreviewReadyRetries();
     requestPreviewState();
   }
   
@@ -1036,69 +1028,6 @@ function useVibe64LaunchControlsSurface(props) {
       return true;
     }
     return true;
-  }
-  
-  function stopPreviewReadyRetries() {
-    if (!previewReadyRetryTimer) {
-      return;
-    }
-    window.clearTimeout(previewReadyRetryTimer);
-    previewReadyRetryTimer = 0;
-    previewDebugLog("retry.stop");
-  }
-  
-  function previewReadyRetryAllowed() {
-    return Boolean(
-      previewPaneDisplayed.value &&
-      previewLoadingOverlayVisible.value &&
-      previewUrl.value &&
-      typeof window !== "undefined"
-    );
-  }
-  
-  function schedulePreviewReadyRetry() {
-    if (!previewReadyRetryAllowed()) {
-      stopPreviewReadyRetries();
-      return;
-    }
-    if (previewReadyRetryTimer) {
-      return;
-    }
-    previewDebugLog("retry.schedule", {
-      intervalMs: PREVIEW_READY_RETRY_INTERVAL_MS
-    });
-    previewReadyRetryTimer = window.setTimeout(() => {
-      void (async () => {
-        previewReadyRetryTimer = 0;
-        if (
-          !previewReadyRetryAllowed() ||
-          previewReadyRetryCount.value >= PREVIEW_READY_RETRY_LIMIT
-        ) {
-          previewDebugLog("retry.skip", {
-            limit: PREVIEW_READY_RETRY_LIMIT,
-            retryAllowed: previewReadyRetryAllowed()
-          });
-          return;
-        }
-        previewReadyRetryCount.value += 1;
-        try {
-          await refreshLaunchTargets();
-        } catch (error) {
-          previewDebugLog("retry.refresh.failed", {
-            error: String(error?.message || error || "")
-          });
-        }
-        if (!previewReadyRetryAllowed()) {
-          previewDebugLog("retry.refresh.resolved");
-          return;
-        }
-        previewReloadKey.value += 1;
-        previewDebugLog("retry.reload", {
-          nextReloadKey: previewReloadKey.value
-        });
-        schedulePreviewReadyRetry();
-      })();
-    }, PREVIEW_READY_RETRY_INTERVAL_MS);
   }
   
   function toggleTerminal() {
@@ -1245,7 +1174,6 @@ function useVibe64LaunchControlsSurface(props) {
       previousUrl: previousDisplayUrl
     });
     if (nextDisplayUrl !== previousDisplayUrl) {
-      previewReadyRetryCount.value = 0;
       previewReadyUrl.value = "";
     }
     requestPreviewState();
@@ -1273,25 +1201,11 @@ function useVibe64LaunchControlsSurface(props) {
     immediate: true
   });
   
-  watch(previewLoadingOverlayVisible, (visible) => {
-    if (visible && previewPaneDisplayed.value) {
-      schedulePreviewReadyRetry();
-      return;
-    }
-    stopPreviewReadyRetries();
-  }, {
-    immediate: true
-  });
-  
   watch(previewPaneDisplayed, (displayed) => {
     if (!displayed) {
-      stopPreviewReadyRetries();
       return;
     }
     requestPreviewState();
-    if (previewLoadingOverlayVisible.value) {
-      schedulePreviewReadyRetry();
-    }
   }, {
     flush: "sync"
   });
@@ -1345,7 +1259,6 @@ function useVibe64LaunchControlsSurface(props) {
   });
   
   onBeforeUnmount(() => {
-    stopPreviewReadyRetries();
     window.removeEventListener("message", handlePreviewLocationMessage);
   });
 

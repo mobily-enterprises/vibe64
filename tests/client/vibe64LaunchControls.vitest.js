@@ -23,6 +23,7 @@ import {
   launchControlScopeKey,
   launchStatusErrorText,
   launchStatusRetryDelay,
+  launchStatusShouldRetry,
   launchTargetWorktreePath,
   launchControlsSessionCanRun,
   nextLaunchPreviewToolbarPosition,
@@ -612,10 +613,16 @@ describe("Vibe64 launch controls", () => {
     expect(storage.getItem(storageKey)).toBe(null);
   });
 
-  it("keeps launch status retries alive and debuggable", () => {
+  it("retries transient launch status failures without polling missing routes", () => {
     expect(LAUNCH_STATUS_RETRY_LIMIT).toBeGreaterThanOrEqual(10);
     expect(launchStatusRetryDelay(0)).toBe(1000);
     expect(launchStatusRetryDelay(10)).toBe(5000);
+    expect(launchStatusShouldRetry(0, { status: 0 })).toBe(true);
+    expect(launchStatusShouldRetry(0, { status: 502 })).toBe(true);
+    expect(launchStatusShouldRetry(0, { status: 429 })).toBe(true);
+    expect(launchStatusShouldRetry(0, { status: 404 })).toBe(false);
+    expect(launchStatusShouldRetry(0, { status: 401 })).toBe(false);
+    expect(launchStatusShouldRetry(LAUNCH_STATUS_RETRY_LIMIT, { status: 502 })).toBe(false);
 
     expect(launchStatusErrorText({
       error: Object.assign(new Error("Request failed."), {
