@@ -123,6 +123,7 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assert.equal(plan.ok, true);
     assert.equal(plan.adapterId, "jskit");
     assert.match(plan.prepare.command, /Preparing JSKIT production database/u);
+    assert.match(plan.serve.command, /Preparing JSKIT production database/u);
     assertNodeRuntimeCommand(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assertNodeRuntimeCommand(plan.build.command, "npm run build");
     assertNodeRuntimeCommand(plan.migrate.command, "npm run db:migrate");
@@ -130,7 +131,7 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assert.deepEqual(plan.prepare.runtimes, ["node22", "mariadb"]);
     assert.deepEqual(plan.build.runtimes, ["node22"]);
     assert.deepEqual(plan.migrate.runtimes, ["node22"]);
-    assert.deepEqual(plan.serve.runtimes, ["node22"]);
+    assert.deepEqual(plan.serve.runtimes, ["node22", "mariadb"]);
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PORT").value, managedPort);

@@ -671,6 +671,46 @@ function jskitDeploymentDatabaseToolingEnv({
   };
 }
 
+function jskitDeploymentDatabasePrepareCommand({
+  databaseEnabled = false,
+  deployment = {},
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  if (!databaseEnabled) {
+    return "";
+  }
+  return jskitPublishedMariaDbPrepareCommand({
+    databaseName: jskitDeploymentDatabaseName({
+      deployment,
+      targetRoot
+    }),
+    serviceDataRoot,
+    targetRoot
+  });
+}
+
+function jskitDeploymentCommandWithDatabase({
+  command = "",
+  databaseEnabled = false,
+  deployment = {},
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  const commands = [
+    jskitDeploymentDatabasePrepareCommand({
+      databaseEnabled,
+      deployment,
+      serviceDataRoot,
+      targetRoot
+    })
+  ];
+  if (normalizeText(command)) {
+    commands.push(command);
+  }
+  return commands.filter(Boolean).join(" && ");
+}
+
 function jskitDeploymentPrepareCommand({
   databaseEnabled = false,
   deployment = {},
@@ -678,30 +718,54 @@ function jskitDeploymentPrepareCommand({
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  const commands = [];
-  if (databaseEnabled) {
-    commands.push(jskitPublishedMariaDbPrepareCommand({
-      databaseName: jskitDeploymentDatabaseName({
-        deployment,
-        targetRoot
-      }),
-      serviceDataRoot,
-      targetRoot
-    }));
-  }
-  if (normalizeText(installPackageCommand)) {
-    commands.push(installPackageCommand);
-  }
-  return commands.filter(Boolean).join(" && ");
+  return jskitDeploymentCommandWithDatabase({
+    command: installPackageCommand,
+    databaseEnabled,
+    deployment,
+    serviceDataRoot,
+    targetRoot
+  });
+}
+
+function jskitDeploymentRuntimesWithDatabase(runtimes = [], {
+  databaseEnabled = false
+} = {}) {
+  return [
+    ...runtimes,
+    ...(databaseEnabled ? ["mariadb"] : [])
+  ];
 }
 
 function jskitDeploymentPrepareRuntimesForPlan(packageManager = "", {
   databaseEnabled = false
 } = {}) {
-  return [
-    ...jskitDeploymentPrepareRuntimes(packageManager),
-    ...(databaseEnabled ? ["mariadb"] : [])
-  ];
+  return jskitDeploymentRuntimesWithDatabase(jskitDeploymentPrepareRuntimes(packageManager), {
+    databaseEnabled
+  });
+}
+
+function jskitDeploymentServeCommand({
+  databaseEnabled = false,
+  deployment = {},
+  serverCommand = "",
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  return jskitDeploymentCommandWithDatabase({
+    command: jskitDeploymentNodeCommand(serverCommand),
+    databaseEnabled,
+    deployment,
+    serviceDataRoot,
+    targetRoot
+  });
+}
+
+function jskitDeploymentServeRuntimesForPlan(runtimes = [], {
+  databaseEnabled = false
+} = {}) {
+  return jskitDeploymentRuntimesWithDatabase(runtimes, {
+    databaseEnabled
+  });
 }
 
 async function jskitDeploymentAuthAppEntries({
@@ -1089,9 +1153,17 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       prepareRuntimes: jskitDeploymentPrepareRuntimesForPlan(packageManager.name, {
         databaseEnabled
       }),
-      serveCommand: jskitDeploymentNodeCommand(publishConfig.serverCommand || publishConfig.testrunCommand),
+      serveCommand: jskitDeploymentServeCommand({
+        databaseEnabled,
+        deployment,
+        serverCommand: publishConfig.serverCommand || publishConfig.testrunCommand,
+        serviceDataRoot: deploymentServiceDataRoot,
+        targetRoot: publishRoot
+      }),
       serveLabel: "Start JSKIT app server.",
-      serveRuntimes: nodeRuntimes
+      serveRuntimes: jskitDeploymentServeRuntimesForPlan(nodeRuntimes, {
+        databaseEnabled
+      })
     });
   }
 
