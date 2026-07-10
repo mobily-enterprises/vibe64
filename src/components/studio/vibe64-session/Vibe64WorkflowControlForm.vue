@@ -1,6 +1,7 @@
 <template>
   <component
     :is="rootTag"
+    ref="formElement"
     class="vibe64-workflow-control-form"
     :class="[
       `vibe64-workflow-control-form--${layout}`,
@@ -81,6 +82,7 @@
                   :title="inlineSubmitButtonTitle"
                   type="button"
                   variant="flat"
+                  @mousedown.prevent
                   @click="handleInlineSubmitButton"
                 >
                   <v-icon :icon="mdiSend" size="20" />
@@ -518,6 +520,7 @@ const props = defineProps({
 });
 
 const attachmentMenuOpen = ref(false);
+const formElement = ref(null);
 const fieldAttachments = ref({});
 const insertTemplateTextDialogItem = ref(null);
 const insertTemplateTextDialogOpen = ref(false);
@@ -748,9 +751,48 @@ function clearAttachments() {
   }
 }
 
+function composerFocusSnapshot() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const textarea = formElement.value?.querySelector?.("textarea");
+  if (!textarea || document.activeElement !== textarea) {
+    return null;
+  }
+  return {
+    direction: textarea.selectionDirection || "none",
+    end: textarea.selectionEnd,
+    start: textarea.selectionStart
+  };
+}
+
+function restoreComposerFocus(snapshot = null) {
+  const textarea = formElement.value?.querySelector?.("textarea");
+  if (!textarea || textarea.disabled || !snapshot) {
+    return false;
+  }
+  const activeElement = typeof document === "undefined" ? null : document.activeElement;
+  if (activeElement && activeElement !== document.body && activeElement !== textarea) {
+    return false;
+  }
+  textarea.focus({
+    preventScroll: true
+  });
+  if (
+    typeof textarea.setSelectionRange === "function" &&
+    Number.isInteger(snapshot.start) &&
+    Number.isInteger(snapshot.end)
+  ) {
+    textarea.setSelectionRange(snapshot.start, snapshot.end, snapshot.direction);
+  }
+  return typeof document !== "undefined" && document.activeElement === textarea;
+}
+
 defineExpose({
   composerMenuGroups,
-  clearAttachments
+  clearAttachments,
+  composerFocusSnapshot,
+  restoreComposerFocus
 });
 </script>
 

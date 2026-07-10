@@ -4,7 +4,7 @@ import {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
   agentTerminalStartAllowed,
-  agentTurnSteerPayloadFromContext,
+  agentTurnControlPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
   runtimeHostAutopilotPageBusy,
@@ -295,8 +295,8 @@ describe("Vibe64 session runtime host", () => {
     });
   });
 
-  it("builds Codex steer command body from command context", () => {
-    const payload = agentTurnSteerPayloadFromContext({
+  it("builds assistant control command bodies from command context", () => {
+    const payload = agentTurnControlPayloadFromContext({
       fields: {
         conversationRequest: "Especially the drying part"
       },
@@ -310,5 +310,14 @@ describe("Vibe64 session runtime host", () => {
       message: "Especially the drying part"
     });
     expect(payload.originId).toMatch(/^tab:/u);
+
+    expect(agentTurnControlPayloadFromContext({
+      afterSubmissionId: "composer:initial",
+      reason: "user_interrupt",
+      sessionId: "2026-06-22_04-04-58"
+    })).toMatchObject({
+      afterSubmissionId: "composer:initial",
+      reason: "user_interrupt"
+    });
   });
 });

@@ -40,13 +40,18 @@ function passiveComposerSteerPayload(message = "", options = {}) {
 }
 
 function passiveComposerCanSteer({
+  agentHandoffPending = false,
   agentSteeringAvailable = false,
   selectedScreenControlVisible = false
 } = {}) {
-  return Boolean(agentSteeringAvailable && !selectedScreenControlVisible);
+  return Boolean(
+    (agentHandoffPending || agentSteeringAvailable) &&
+    !selectedScreenControlVisible
+  );
 }
 
 function passiveComposerSteeringMode({
+  agentHandoffPending = false,
   agentInteractionLocked = false,
   agentSteeringAvailable = false,
   selectedScreenControlVisible = false,
@@ -54,7 +59,7 @@ function passiveComposerSteeringMode({
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (agentInteractionLocked || agentSteeringAvailable || steeringDraftActive)
+    (agentHandoffPending || agentInteractionLocked || agentSteeringAvailable || steeringDraftActive)
   );
 }
 

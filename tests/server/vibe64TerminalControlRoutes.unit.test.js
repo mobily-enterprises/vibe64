@@ -269,68 +269,6 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
   });
 });
 
-test("assistant steer route uses the server Vibe64 user instead of body spoofing", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const calls = [];
-      const app = terminalControlRouteApp({
-        async steerAgentTurn(sessionId, input) {
-          calls.push({
-            input,
-            sessionId
-          });
-          return {
-            ok: true,
-            steered: true
-          };
-        }
-      });
-      registerRoutes(app, {
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app"
-      });
-
-      const serverUser = {
-        email: "owner@example.com"
-      };
-      const spoofedUser = {
-        email: "spoof@example.com"
-      };
-      const route = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-turn/steer`
-      });
-      assert.ok(route, "Expected assistant steer route");
-      const reply = testReply();
-
-      await route.handler({
-        input: {
-          body: {
-            message: "Please commit and push.",
-            vibe64User: spoofedUser
-          }
-        },
-        params: routeProjectParams({
-          sessionId: "session-1"
-        }),
-        vibe64User: serverUser
-      }, reply);
-
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(calls, [
-        {
-          input: {
-            message: "Please commit and push.",
-            vibe64User: serverUser
-          },
-          sessionId: "session-1"
-        }
-      ]);
-    });
-  });
-});
-
 test("assistant terminal control text uses the server Vibe64 user instead of body spoofing", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {

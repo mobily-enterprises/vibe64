@@ -229,6 +229,29 @@ describe("useVibe64SessionData selected session record", () => {
     });
 
     expect(selectedSessionDetailLoadState({
+      detailSession: {
+        presentation: {
+          screen: {
+            kind: "conversation"
+          }
+        },
+        sessionId: "session-1"
+      },
+      fetching: true,
+      listSession: {
+        sessionId: "session-1"
+      },
+      selectedSessionId: "session-1"
+    })).toMatchObject({
+      label: "",
+      loading: false,
+      ready: true,
+      refreshing: true,
+      state: "detailReady",
+      suppressPassiveComposer: false
+    });
+
+    expect(selectedSessionDetailLoadState({
       fetching: true,
       listSession: {
         sessionId: "session-1"

@@ -25,34 +25,6 @@ const agentAttachmentFields = {
   }
 };
 
-const agentTurnSteerFields = {
-  displayFields: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  },
-  fields: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  },
-  message: {
-    type: "string",
-    noTrim: false,
-    required: false
-  },
-  originId: {
-    type: "string",
-    noTrim: false,
-    required: false
-  },
-  text: {
-    type: "string",
-    noTrim: false,
-    required: false
-  }
-};
-
 const commandTerminalFields = {
   advanceOnSuccess: {
     type: "boolean",
@@ -345,11 +317,6 @@ const agentAttachmentActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const agentTurnSteerInputValidator = deepFreeze({
-  schema: createSchema(agentTurnSteerFields),
-  mode: "patch"
-});
-
 const commandTerminalInputValidator = deepFreeze({
   schema: createSchema(commandTerminalFields),
   mode: "patch"
@@ -448,7 +415,6 @@ const openLaunchTargetActionInputValidator = deepFreeze({
 export {
   agentAttachmentActionInputValidator,
   agentAttachmentInputValidator,
-  agentTurnSteerInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
   launchTargetActionInputValidator,

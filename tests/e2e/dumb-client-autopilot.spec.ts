@@ -2290,7 +2290,7 @@ test.describe("Autopilot dumb client contract", () => {
   test("keeps the Codex composer stable and interrupts the active turn from the inline button", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];
-    let interruptRequests = 0;
+    const interruptRequests: Record<string, unknown>[] = [];
     const session = sessionPayload({
       intents: [
         {
@@ -2409,8 +2409,8 @@ test.describe("Autopilot dumb client contract", () => {
           }
         });
       },
-      onAgentTurnInterrupt: () => {
-        interruptRequests += 1;
+      onAgentTurnInterrupt: (body = {}) => {
+        interruptRequests.push(body);
       }
     });
 
@@ -2419,12 +2419,15 @@ test.describe("Autopilot dumb client contract", () => {
     const stableComposerInput = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
     const composerInput = page.getByRole("textbox", { name: "What do you want to ask Codex?" });
     await composerInput.fill("Please tighten this up.");
+    await expect(composerInput).toBeFocused();
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expect.poll(() => intentRequests).toHaveLength(1);
     await expect(stableComposerInput).toBeVisible();
     await expect(stableComposerInput).toBeEnabled();
-    await expect(page.getByRole("textbox", { name: "Steer assistant" })).toBeVisible();
+    const steerInput = page.getByRole("textbox", { name: "Steer assistant" });
+    await expect(steerInput).toBeVisible();
+    await expect(steerInput).toBeFocused();
     const steerButton = page.getByRole("button", { name: "Steer" });
     await expect(steerButton).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask Codex" })).toHaveCount(0);
@@ -2451,7 +2454,11 @@ test.describe("Autopilot dumb client contract", () => {
 
     await stopButton.click();
 
-    await expect.poll(() => interruptRequests).toBe(1);
+    await expect.poll(() => interruptRequests).toHaveLength(1);
+    expect(interruptRequests[0]).toMatchObject({
+      afterSubmissionId: String(intentRequests[0] && (intentRequests[0] as Record<string, unknown>).composerSubmissionId),
+      reason: "user_interrupt"
+    });
     await expect.poll(async () => page.evaluate(() => (
       (window as unknown as { __vibe64CodexTerminalInputs?: string[] }).__vibe64CodexTerminalInputs || []
     ))).toEqual([]);

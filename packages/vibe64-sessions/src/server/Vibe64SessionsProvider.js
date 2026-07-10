@@ -69,12 +69,18 @@ class Vibe64SessionsProvider {
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],
+          interruptAgentTurn: [vibe64SessionChangedServiceEvent({
+            reason: "session-agent-turn-interrupted"
+          })],
           recoverStuckSessionStep: [vibe64SessionChangedServiceEvent({
             reason: "session-step-recovered",
             operation: "updated"
           })],
           returnAgentControl: [vibe64SessionChangedServiceEvent({
             reason: "session-agent-control-returned"
+          })],
+          steerAgentTurn: [vibe64SessionChangedServiceEvent({
+            reason: "session-agent-turn-steered"
           })],
           rewindSession: [vibe64SessionChangedServiceEvent({
             reason: "session-rewound"

@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, ref } from "vue";
 import {
   agentInteractionLocksControls
 } from "@/lib/vibe64AgentInteractionState.js";
@@ -13,8 +13,6 @@ import {
   useVibe64ComposerHandoffPresentation
 } from "@/composables/vibe64-session/composer/useVibe64ComposerHandoffPresentation.js";
 
-const AGENT_INTERRUPT_COOLDOWN_MS = 5000;
-
 function useVibe64ComposerActivity({
   agentThinking = false,
   composerHandoff = null,
@@ -23,9 +21,7 @@ function useVibe64ComposerActivity({
   remoteComposerSubmission = null,
   session = null
 } = {}) {
-  const interruptCooldownActive = ref(false);
   const interruptRequestPending = ref(false);
-  let interruptCooldownTimer = null;
 
   const currentSession = computed(() => readRefOrGetterValue(session) || {});
   const activeAgentTurn = computed(() => {
@@ -46,15 +42,19 @@ function useVibe64ComposerActivity({
     readRefOrGetterValue(remoteComposerSubmission)?.status === "pending"
   ));
   const composerHandoffPresentation = useVibe64ComposerHandoffPresentation(composerHandoff);
-  const agentInterruptVisible = computed(() => activeAgentTurn.value.active === true);
-  const agentInterruptBlocked = computed(() => (
-    interruptCooldownActive.value || interruptRequestPending.value
+  const agentInterruptVisible = computed(() => Boolean(
+    activeAgentTurn.value.active === true ||
+    localComposerSubmissionPending.value ||
+    remoteComposerSubmissionPending.value ||
+    composerHandoffPresentation.value.pending
   ));
+  const agentInterruptBlocked = computed(() => interruptRequestPending.value);
   const composerSubmissionStatus = computed(() => vibe64ComposerSubmissionStatusState({
     agentHandoffLabel: composerHandoffPresentation.value.label,
     agentHandoffPending: composerHandoffPresentation.value.pending,
     agentInterruptBlocked: agentInterruptBlocked.value,
     agentInterruptVisible: agentInterruptVisible.value,
+    agentTurnActive: activeAgentTurn.value.active === true,
     localComposerSubmissionPending: localComposerSubmissionPending.value,
     remoteComposerSubmissionPending: remoteComposerSubmissionPending.value
   }));
@@ -66,28 +66,13 @@ function useVibe64ComposerActivity({
     if (!agentStopEnabled.value) {
       return false;
     }
-    interruptCooldownActive.value = true;
     interruptRequestPending.value = true;
-    if (interruptCooldownTimer) {
-      clearTimeout(interruptCooldownTimer);
-    }
-    interruptCooldownTimer = setTimeout(() => {
-      interruptCooldownActive.value = false;
-      interruptCooldownTimer = null;
-    }, AGENT_INTERRUPT_COOLDOWN_MS);
     try {
       return await interruptAgentTurn(reason);
     } finally {
       interruptRequestPending.value = false;
     }
   }
-
-  onBeforeUnmount(() => {
-    if (interruptCooldownTimer) {
-      clearTimeout(interruptCooldownTimer);
-      interruptCooldownTimer = null;
-    }
-  });
 
   return {
     activeAgentTurn,
@@ -107,6 +92,5 @@ function useVibe64ComposerActivity({
 }
 
 export {
-  AGENT_INTERRUPT_COOLDOWN_MS,
   useVibe64ComposerActivity
 };

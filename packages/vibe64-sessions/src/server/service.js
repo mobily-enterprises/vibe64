@@ -44,10 +44,15 @@ import {
   createComposerHandoffCoordinator
 } from "./composer/handoffCoordinator.js";
 import {
+  COMPOSER_CONTROL_KINDS,
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
+  acceptComposerControl,
   composerHandoffId,
+  composerHandoffRun,
   composerHandoffSnapshot,
+  pendingComposerControls,
+  settleComposerControl,
   transitionComposerHandoff
 } from "./composer/handoffState.js";
 
@@ -1273,6 +1278,75 @@ async function finishComposerHandoff(runtime, session = {}, handoff = {}, provid
   return current;
 }
 
+async function drainComposerControls(terminalService, {
+  runtime = null,
+  session = null
+} = {}) {
+  const sessionId = normalizedInputText(session?.sessionId);
+  if (!sessionId || typeof runtime?.getSession !== "function") {
+    throw new TypeError("Composer control draining requires a runtime session.");
+  }
+
+  while (true) {
+    const currentSession = await runtime.getSession(sessionId);
+    const handoff = composerHandoffSnapshot(currentSession);
+    if (handoff?.state !== COMPOSER_HANDOFF_STATES.ACTIVE || !handoff.submissionId) {
+      return;
+    }
+    const queued = pendingComposerControls(
+      composerHandoffRun(currentSession),
+      handoff.submissionId
+    );
+    if (!queued.length) {
+      return;
+    }
+
+    const request = queued[0];
+    let result;
+    try {
+      const operation = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
+        ? terminalService?.interruptAgentTurn
+        : terminalService?.steerAgentTurn;
+      if (typeof operation !== "function") {
+        throw new TypeError(`Assistant ${request.kind} control is not available.`);
+      }
+      const controlInput = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
+        ? {
+            originId: request.originId,
+            reason: request.reason
+          }
+        : {
+            composerSubmissionId: request.controlRequestId,
+            displayFields: request.displayFields,
+            fields: request.fields,
+            message: request.message,
+            originId: request.originId,
+            text: request.message
+          };
+      result = await operation.call(terminalService, sessionId, controlInput, {
+        runtime,
+        session: currentSession
+      });
+    } catch (error) {
+      await settleComposerControl(runtime, sessionId, request.controlRequestId, {
+        error: error?.message || error,
+        state: "failed"
+      });
+      continue;
+    }
+    if (result?.ok === false) {
+      await settleComposerControl(runtime, sessionId, request.controlRequestId, {
+        error: result.error || "Assistant control delivery failed.",
+        state: "failed"
+      });
+      continue;
+    }
+    await settleComposerControl(runtime, sessionId, request.controlRequestId, {
+      state: "delivered"
+    });
+  }
+}
+
 async function deliverAgentPromptHandoff(terminalService, {
   agentSettings = {},
   handoff = null,
@@ -2072,10 +2146,124 @@ function createService({
         turnId: state.turnId
       }
     ),
-    deliver: (input) => deliverAgentPromptHandoff(terminalService, input)
+    deliver: (input) => deliverAgentPromptHandoff(terminalService, input),
+    drainControls: (input) => drainComposerControls(terminalService, input)
   });
 
+  async function queueComposerControl(sessionId = "", input = {}, kind = "") {
+    const afterSubmissionId = normalizedInputText(input?.afterSubmissionId);
+    const controlRequestId = normalizedInputText(
+      input?.controlRequestId ||
+      input?.composerSubmissionId ||
+      (kind === COMPOSER_CONTROL_KINDS.INTERRUPT && afterSubmissionId
+        ? `interrupt:${afterSubmissionId}`
+        : "")
+    );
+    if (!controlRequestId) {
+      return {
+        code: "vibe64_agent_control_request_required",
+        error: "Queued assistant control requires a request id.",
+        ok: false
+      };
+    }
+    if (
+      kind === COMPOSER_CONTROL_KINDS.STEER &&
+      !normalizedInputText(input?.message || input?.text)
+    ) {
+      return {
+        code: "vibe64_agent_steer_input_required",
+        error: "Assistant steer input is empty.",
+        ok: false
+      };
+    }
+
+    const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+    const session = await runtime.getSession(sessionId);
+    const handoff = composerHandoffSnapshot(session);
+    if (
+      handoff?.pending === true &&
+      handoff.submissionId &&
+      handoff.submissionId !== afterSubmissionId
+    ) {
+      return {
+        code: "vibe64_agent_control_handoff_changed",
+        error: "The assistant handoff changed before this control was accepted.",
+        ok: false
+      };
+    }
+    if (
+      handoff?.submissionId === afterSubmissionId &&
+      handoff.state === COMPOSER_HANDOFF_STATES.FAILED
+    ) {
+      return {
+        code: "vibe64_agent_control_handoff_failed",
+        error: handoff.error || "The assistant handoff failed before this control was accepted.",
+        ok: false
+      };
+    }
+
+    const request = await acceptComposerControl(runtime, sessionId, {
+      ...input,
+      afterSubmissionId,
+      controlRequestId,
+      kind
+    });
+    void composerHandoffCoordinator.drain({
+      runtime,
+      session
+    });
+    return {
+      accepted: true,
+      controlRequestId: request.controlRequestId,
+      ...(kind === COMPOSER_CONTROL_KINDS.STEER
+        ? { composerSubmissionId: request.controlRequestId }
+        : {}),
+      ok: true,
+      queued: true,
+      sessionId
+    };
+  }
+
   return Object.freeze({
+    async interruptAgentTurn(sessionId, input = {}) {
+      const normalizedSessionId = normalizedInputText(sessionId);
+      if (!normalizedSessionId) {
+        return {
+          code: "vibe64_agent_interrupt_session_required",
+          error: "Assistant interrupt requires a session.",
+          ok: false
+        };
+      }
+      if (!normalizedInputText(input?.afterSubmissionId)) {
+        return terminalService.interruptAgentTurn(normalizedSessionId, input);
+      }
+      return queueComposerControl(
+        normalizedSessionId,
+        input,
+        COMPOSER_CONTROL_KINDS.INTERRUPT
+      );
+    },
+
+    async steerAgentTurn(sessionId, input = {}) {
+      const normalizedSessionId = normalizedInputText(sessionId);
+      const afterSubmissionId = normalizedInputText(input?.afterSubmissionId);
+      if (!normalizedSessionId) {
+        return {
+          code: "vibe64_agent_steer_session_required",
+          error: "Assistant steering requires a session.",
+          ok: false
+        };
+      }
+      if (!afterSubmissionId) {
+        return terminalService.steerAgentTurn(normalizedSessionId, input);
+      }
+      return queueComposerControl(
+        normalizedSessionId,
+        input,
+        COMPOSER_CONTROL_KINDS.STEER
+      );
+    },
+
     async readComposerDraft(sessionId, input = {}) {
       const normalizedSessionId = normalizedInputText(sessionId);
       const controlId = normalizedInputText(input?.controlId);

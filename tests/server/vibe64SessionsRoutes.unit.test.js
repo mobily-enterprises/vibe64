@@ -405,3 +405,137 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
     });
   });
 });
+
+test("assistant steer route belongs to sessions and rejects a spoofed Vibe64 user", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = testRouteApp();
+      const make = app.make.bind(app);
+      app.make = (token) => token === "feature.vibe64-sessions.service"
+        ? {
+            async steerAgentTurn(sessionId, input) {
+              calls.push({
+                input,
+                sessionId
+              });
+              return {
+                ok: true,
+                queued: true
+              };
+            }
+          }
+        : make(token);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-turn/steer`
+      });
+      assert.ok(route, "Expected sessions-owned assistant steer route");
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const reply = testReply();
+      await route.handler({
+        input: {
+          body: {
+            afterSubmissionId: "initial-submission",
+            composerSubmissionId: "follow-up-submission",
+            message: "Please also inspect the tests.",
+            vibe64User: {
+              email: "spoof@example.com"
+            }
+          }
+        },
+        params: routeProjectParams({
+          sessionId: "session-1"
+        }),
+        vibe64User: serverUser
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, [
+        {
+          input: {
+            afterSubmissionId: "initial-submission",
+            composerSubmissionId: "follow-up-submission",
+            message: "Please also inspect the tests.",
+            vibe64User: serverUser
+          },
+          sessionId: "session-1"
+        }
+      ]);
+    });
+  });
+});
+
+test("assistant interrupt route belongs to sessions and rejects a spoofed Vibe64 user", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = testRouteApp();
+      const make = app.make.bind(app);
+      app.make = (token) => token === "feature.vibe64-sessions.service"
+        ? {
+            async interruptAgentTurn(sessionId, input) {
+              calls.push({
+                input,
+                sessionId
+              });
+              return {
+                ok: true,
+                queued: true
+              };
+            }
+          }
+        : make(token);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-turn/interrupt`
+      });
+      assert.ok(route, "Expected sessions-owned assistant interrupt route");
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const reply = testReply();
+      await route.handler({
+        input: {
+          body: {
+            afterSubmissionId: "initial-submission",
+            reason: "user_interrupt",
+            vibe64User: {
+              email: "spoof@example.com"
+            }
+          }
+        },
+        params: routeProjectParams({
+          sessionId: "session-1"
+        }),
+        vibe64User: serverUser
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, [
+        {
+          input: {
+            afterSubmissionId: "initial-submission",
+            reason: "user_interrupt",
+            vibe64User: serverUser
+          },
+          sessionId: "session-1"
+        }
+      ]);
+    });
+  });
+});

@@ -11,15 +11,46 @@ import {
 
 function createComposerHandoffCoordinator({
   activate,
-  deliver
+  deliver,
+  drainControls = async () => null
 } = {}) {
-  if (typeof activate !== "function" || typeof deliver !== "function") {
-    throw new TypeError("Composer handoff coordinator requires activation and delivery functions.");
+  if (
+    typeof activate !== "function" ||
+    typeof deliver !== "function" ||
+    typeof drainControls !== "function"
+  ) {
+    throw new TypeError("Composer handoff coordinator requires activation, delivery, and control-drain functions.");
   }
   const tasks = new Map();
+  const repeatedTasks = new Set();
 
-  function taskKey(sessionId = "", handoffId = "") {
-    return `${normalizeText(sessionId)}:${normalizeText(handoffId)}`;
+  function taskKey(kind = "", sessionId = "", handoffId = "") {
+    return `${normalizeText(kind)}:${normalizeText(sessionId)}:${normalizeText(handoffId)}`;
+  }
+
+  function drain({
+    runtime = null,
+    session = null
+  } = {}) {
+    const sessionId = normalizeText(session?.sessionId);
+    if (!sessionId || !runtime) {
+      throw new TypeError("Composer control draining requires a runtime and session.");
+    }
+    const key = taskKey("controls", sessionId, "composer");
+    const existing = tasks.get(key);
+    if (existing) {
+      repeatedTasks.add(key);
+      return existing;
+    }
+    return startTask(key, async () => {
+      do {
+        repeatedTasks.delete(key);
+        await drainControls({
+          runtime,
+          session
+        });
+      } while (repeatedTasks.delete(key));
+    });
   }
 
   function startTask(key = "", operation) {
@@ -49,14 +80,21 @@ function createComposerHandoffCoordinator({
     if (!sessionId || !handoffId || !runtime) {
       throw new TypeError("Composer handoff scheduling requires a runtime, session, and persisted handoff.");
     }
-    const key = taskKey(sessionId, handoffId);
-    return startTask(key, () => deliver({
-      agentSettings,
-      handoff,
-      runtime,
-      session,
-      vibe64User
-    }));
+    const key = taskKey("delivery", sessionId, handoffId);
+    return startTask(key, async () => {
+      const result = await deliver({
+        agentSettings,
+        handoff,
+        runtime,
+        session,
+        vibe64User
+      });
+      await drain({
+        runtime,
+        session
+      });
+      return result;
+    });
   }
 
   function resume({
@@ -67,12 +105,24 @@ function createComposerHandoffCoordinator({
     if (!state) {
       return null;
     }
-    if (state.state === COMPOSER_HANDOFF_STATES.DELIVERED && state.threadId && state.turnId) {
-      return startTask(taskKey(session.sessionId, state.id), () => activate({
+    if (state.state === COMPOSER_HANDOFF_STATES.ACTIVE) {
+      return drain({
         runtime,
-        session,
-        state
-      }));
+        session
+      });
+    }
+    if (state.state === COMPOSER_HANDOFF_STATES.DELIVERED && state.threadId && state.turnId) {
+      return startTask(taskKey("activation", session.sessionId, state.id), async () => {
+        await activate({
+          runtime,
+          session,
+          state
+        });
+        await drain({
+          runtime,
+          session
+        });
+      });
     }
     if (
       ![COMPOSER_HANDOFF_STATES.ACCEPTED, COMPOSER_HANDOFF_STATES.CONNECTING].includes(state.state) ||
@@ -94,6 +144,7 @@ function createComposerHandoffCoordinator({
   }
 
   return Object.freeze({
+    drain,
     resume,
     schedule
   });

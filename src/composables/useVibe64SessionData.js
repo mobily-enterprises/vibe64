@@ -332,16 +332,16 @@ function selectedSessionDetailLoadState({
     };
   }
   if (hasDetail) {
-    const restoring = Boolean(fetching || loading);
     return {
       error: "",
-      label: restoring ? "Refreshing session controls..." : "",
-      loading: restoring,
-      ready: !restoring,
-      restoring,
+      label: "",
+      loading: false,
+      ready: true,
+      refreshing: Boolean(fetching || loading),
+      restoring: false,
       sessionId: normalizedSessionId,
-      state: restoring ? "detailRestoring" : "detailReady",
-      suppressPassiveComposer: restoring
+      state: "detailReady",
+      suppressPassiveComposer: false
     };
   }
   if (loading || fetching) {

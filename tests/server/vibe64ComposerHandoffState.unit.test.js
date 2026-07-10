@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  COMPOSER_CONTROL_KINDS,
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
+  acceptComposerControl,
+  composerControlRequests,
   composerHandoffSnapshot,
   composerPromptHandoffForState,
+  pendingComposerControls,
+  settleComposerControl,
   transitionComposerHandoff
 } from "../../packages/vibe64-sessions/src/server/composer/handoffState.js";
 
@@ -38,7 +43,13 @@ function testRuntime() {
           ...previous,
           ...patch,
           active: !terminal,
-          events: [...previous.events, event],
+          events: [
+            ...previous.events,
+            {
+              ...event,
+              at: event.at || patch.updatedAt || new Date().toISOString()
+            }
+          ],
           id: runId
         };
         session.agentRuns = session.agentRuns.filter((run) => run.id !== runId).concat(next);
@@ -167,4 +178,83 @@ test("composer handoff state finds the private persisted prompt by canonical id"
 
   assert.equal(composerPromptHandoffForState(runtime.session)?.terminalInput, "Please inspect the project.");
   assert.equal(composerHandoffSnapshot(runtime.session)?.id, "handoff-1");
+});
+
+test("composer handoff state keeps ordered controls accepted before provider activation", async () => {
+  const runtime = testRuntime();
+  const first = await acceptComposerControl(runtime, runtime.session.sessionId, {
+    afterSubmissionId: "initial-submission",
+    controlRequestId: "steer-1",
+    displayFields: {
+      conversationRequest: "First follow-up"
+    },
+    fields: {
+      conversationRequest: "First follow-up"
+    },
+    kind: COMPOSER_CONTROL_KINDS.STEER,
+    message: "First follow-up",
+    originId: "browser-1"
+  });
+  await acceptComposerControl(runtime, runtime.session.sessionId, {
+    afterSubmissionId: "initial-submission",
+    controlRequestId: "interrupt-1",
+    kind: COMPOSER_CONTROL_KINDS.INTERRUPT,
+    originId: "browser-1",
+    reason: "user_interrupt"
+  });
+  await acceptComposerControl(runtime, runtime.session.sessionId, {
+    afterSubmissionId: "initial-submission",
+    controlRequestId: "steer-2",
+    kind: COMPOSER_CONTROL_KINDS.STEER,
+    message: "Second follow-up",
+    originId: "browser-1"
+  });
+
+  assert.equal(composerHandoffSnapshot(runtime.session), null);
+  assert.equal(first.state, "accepted");
+  assert.deepEqual(
+    pendingComposerControls(runtime.session).map((request) => request.controlRequestId),
+    ["steer-1", "interrupt-1", "steer-2"]
+  );
+
+  await transitionComposerHandoff(runtime, runtime.session.sessionId, {
+    handoff: promptHandoff(),
+    providerId: "future-provider",
+    state: COMPOSER_HANDOFF_STATES.ACCEPTED,
+    submissionId: "initial-submission",
+    transportId: "future-transport"
+  });
+  await settleComposerControl(runtime, runtime.session.sessionId, "steer-1", {
+    state: "delivered"
+  });
+
+  assert.deepEqual(
+    pendingComposerControls(runtime.session, "initial-submission")
+      .map((request) => request.controlRequestId),
+    ["interrupt-1", "steer-2"]
+  );
+  assert.deepEqual(
+    composerControlRequests(runtime.session).map(({ controlRequestId, kind, state }) => ({
+      controlRequestId,
+      kind,
+      state
+    })),
+    [
+      {
+        controlRequestId: "steer-1",
+        kind: "steer",
+        state: "delivered"
+      },
+      {
+        controlRequestId: "interrupt-1",
+        kind: "interrupt",
+        state: "accepted"
+      },
+      {
+        controlRequestId: "steer-2",
+        kind: "steer",
+        state: "accepted"
+      }
+    ]
+  );
 });

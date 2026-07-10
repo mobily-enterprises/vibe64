@@ -109,7 +109,6 @@ function composerControlProjection({
   passiveComposerFields = [],
   passiveComposerInputDisabled = false,
   passiveComposerSteeringModeActive = false,
-  passiveComposerSteerRunning = false,
   passiveComposerValues = {},
   passiveComposerWorkflowControls = [],
   selectedComposerControl = null,
@@ -184,7 +183,7 @@ function composerControlProjection({
     running: state.stepInput
       ? stepInputSaving
       : state.passive
-      ? passiveComposerSteerRunning
+      ? false
       : selectedComposerRunning,
     selectedControl: state.stepInput
       ? stepInputControl
@@ -251,7 +250,6 @@ function composerInputDisabledReason({
   displayRunning = false,
   localComposerSubmissionPending = false,
   pageBusy = false,
-  passiveComposerSteerRunning = false,
   remoteComposerSubmissionPending = false,
   running = false,
   stepInputSaving = false
@@ -261,8 +259,7 @@ function composerInputDisabledReason({
   }
   if (
     localComposerSubmissionPending ||
-    remoteComposerSubmissionPending ||
-    passiveComposerSteerRunning
+    remoteComposerSubmissionPending
   ) {
     return "";
   }

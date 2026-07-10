@@ -87,7 +87,7 @@ describe("vibe64 autopilot composer control model", () => {
     expect(projection.interruptVisible).toBe(true);
     expect(projection.layout).toBe("split");
     expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.COMPOSER);
-    expect(projection.running).toBe(true);
+    expect(projection.running).toBe(false);
     expect(projection.selectedControl).toBe(passiveControl);
     expect(projection.textareaRows).toBe(2);
     expect(projection.values).toBe(passiveValues);

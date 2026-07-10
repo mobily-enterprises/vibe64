@@ -315,7 +315,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     })).toBe("");
   });
 
-  it("keeps one primary composer draft across selected steer and normal selected modes", async () => {
+  it("keeps one primary composer draft while active work switches to the steering composer", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -324,11 +324,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     await nextTick();
 
-    expect(view.controlSurfaceMode.value).toBe("selected_control");
-    expect(view.selectedComposerControl.value.label).toBe("Steer");
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
 
-    view.updateSelectedControlValue("conversationRequest", "Keep this draft.");
-    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
+    view.updateComposerControlValue("conversationRequest", "Keep this draft.");
+    expect(view.composerControlValues.value.conversationRequest).toBe("Keep this draft.");
 
     props.agentThinking = false;
     await nextTick();
@@ -339,9 +339,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     props.agentThinking = true;
     await nextTick();
 
-    expect(view.controlSurfaceMode.value).toBe("selected_control");
-    expect(view.selectedComposerControl.value.label).toBe("Steer");
-    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
+    expect(view.composerControlValues.value.conversationRequest).toBe("Keep this draft.");
   });
 
   it("keeps the ready primary composer submit target after local selection state clears", async () => {
@@ -386,7 +386,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
       await nextTick();
 
-      view.updateSelectedControlValue("conversationRequest", "Trace me.");
+      view.updateComposerControlValue("conversationRequest", "Trace me.");
       await nextTick();
 
       const entries = sessionDebugEntries(infoSpy);
@@ -402,14 +402,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         agentTerminalRunning: true,
         composerControlCanSubmit: true,
         composerControlInputDisabled: false,
-        composerControlTarget: "selected_control",
-        controlSurfaceMode: "selected_control",
+        composerControlTarget: "passive_composer",
+        controlSurfaceMode: "passive_composer",
         event: "client.autopilot.composerInput.changed",
         fieldName: "conversationRequest",
         privateField: false,
         projectSlug: "draft-test",
         sessionId: "session-1",
-        source: "selected_control",
+        source: "passive_composer",
         valueAfter: "Trace me.",
         valueAfterLength: 9,
         valueBefore: "",
@@ -545,7 +545,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\n[Deslop]");
   });
 
-  it("submits selected primary steer with only the typed composer text", async () => {
+  it("submits active-turn steering only through the passive composer", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -557,53 +557,22 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     await nextTick();
 
-    expect(view.controlSurfaceMode.value).toBe("selected_control");
-    expect(view.selectedComposerControl.value.label).toBe("Steer");
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
 
-    view.updateSelectedControlValue("conversationRequest", "Keep the active steer focused.");
+    view.updatePassiveComposer("conversationRequest", "Keep the active steer focused.");
 
-    expect(await view.submitScreenComposerControl()).toBe(true);
-    expect(steerAgentTurn).toHaveBeenCalledWith({
-      displayFields: {},
+    expect(await view.submitPassiveComposer()).toBe(true);
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
+      displayFields: {
+        conversationRequest: "Keep the active steer focused."
+      },
       fields: {
         conversationRequest: "Keep the active steer focused."
       },
       message: "Keep the active steer focused."
-    });
-  });
-
-  it("expands selected compact prompt references only for the Codex payload", async () => {
-    const {
-      useVibe64AutopilotView
-    } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerAgentTurn = vi.fn(async () => true);
-    const props = viewProps({
-      steerAgentTurn
-    });
-    const view = useVibe64AutopilotView(props, vi.fn());
-
-    await nextTick();
-
-    view.updateSelectedControlValue("conversationRequest", "Please review this.");
-
-    expect(await view.activateComposerMenuItem({
-      id: "deslop",
-      kind: "template",
-      label: "Deslop",
-      text: "Full deslop prompt."
-    })).toBe(true);
-    expect(view.selectedControlValues.value.conversationRequest).toBe("Please review this.\n\n[Deslop]");
-
-    expect(await view.submitScreenComposerControl()).toBe(true);
-    expect(steerAgentTurn).toHaveBeenCalledWith({
-      displayFields: {
-        conversationRequest: "Please review this.\n\n[Deslop]"
-      },
-      fields: {
-        conversationRequest: "Please review this.\n\n[Prompt: Deslop]\nFull deslop prompt."
-      },
-      message: "Please review this.\n\n[Prompt: Deslop]\nFull deslop prompt."
-    });
+    }));
   });
 
   it("submits empty selected prompt templates immediately without writing to the draft", async () => {
@@ -625,7 +594,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       text: "Full deslop prompt."
     })).toBe(true);
     expect(view.selectedControlValues.value.conversationRequest).toBe("");
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayFields: {
         conversationRequest: "Prompt: Deslop"
       },
@@ -633,7 +603,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         conversationRequest: "[Prompt: Deslop]\nFull deslop prompt."
       },
       message: "[Prompt: Deslop]\nFull deslop prompt."
-    });
+    }));
   });
 
   it("can still insert full prompt text into the selected draft explicitly", async () => {
@@ -655,7 +625,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nFull deslop prompt.");
   });
 
-  it("keeps the selected composer visible while its Codex handoff is pending", async () => {
+  it("switches to steering immediately and accepts a follow-up before handoff acknowledgement", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -663,14 +633,25 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const runAction = vi.fn(() => new Promise((resolve) => {
       resolveRunAction = resolve;
     }));
-    const props = viewProps();
+    const interruptAgentTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
+    const props = viewProps({
+      interruptAgentTurn,
+      steerAgentTurn
+    });
     props.agentThinking = false;
+    props.session.composerHandoff = {
+      canonical: true,
+      id: "previous-handoff",
+      state: "active",
+      submissionId: "previous-submission"
+    };
     props.actions.currentActions = [
       {
         enabled: true,
         id: "define_seed_application",
         inputFields: conversationControl().inputFields,
-        label: "Send to Codex"
+        label: "Send to assistant"
       }
     ];
     props.actions.runAction = runAction;
@@ -691,17 +672,52 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("selected_control");
-    view.updateSelectedControlValue("conversationRequest", "This is a test");
+    view.updateSelectedControlValue("conversationRequest", "Start the work.");
 
     const submitPromise = view.submitScreenComposerControl();
     await nextTick();
 
     expect(runAction).toHaveBeenCalledTimes(1);
-    expect(view.controlSurfaceMode.value).toBe("selected_control");
-    expect(view.selectedScreenControlVisible.value).toBe(true);
-    expect(view.passiveComposerVisible.value).toBe(false);
-    expect(view.composerControlInputDisabled.value).toBe(true);
-    expect(view.composerControlSelectedControl.value.id).toBe("talk_to_codex");
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.selectedScreenControlVisible.value).toBe(false);
+    expect(view.passiveComposerVisible.value).toBe(true);
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
+
+    const handoffSubmissionId = view.chatTurns.value.at(-1)?.optimistic?.id;
+    expect(handoffSubmissionId).toMatch(/^composer:/u);
+    expect(view.composerControlInterruptVisible.value).toBe(true);
+    expect(view.composerControlInterruptDisabled.value).toBe(false);
+    expect(await view.requestAgentInterrupt()).toBe(true);
+    expect(interruptAgentTurn).toHaveBeenCalledWith({
+      afterSubmissionId: handoffSubmissionId,
+      reason: "user_interrupt"
+    });
+
+    view.updateComposerControlValue("conversationRequest", "Also check the tests.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(await view.submitComposerControl()).toBe(true);
+
+    const steerSubmissionId = view.chatTurns.value.at(-1)?.optimistic?.id;
+    expect(steerSubmissionId).toMatch(/^composer:/u);
+    expect(steerSubmissionId).not.toBe(handoffSubmissionId);
+    expect(view.chatTurns.value.map((turn) => turn.user?.text)).toEqual([
+      "Start the work.",
+      "Also check the tests."
+    ]);
+    expect(steerAgentTurn).toHaveBeenCalledWith({
+      afterSubmissionId: handoffSubmissionId,
+      composerSubmissionId: steerSubmissionId,
+      displayFields: {
+        conversationRequest: "Also check the tests."
+      },
+      fields: {
+        conversationRequest: "Also check the tests."
+      },
+      message: "Also check the tests."
+    });
+    expect(view.composerControlInputDisabled.value).toBe(false);
 
     resolveRunAction(true);
     expect(await submitPromise).toBe(true);
@@ -793,7 +809,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(await submitPromise).toBe(true);
     expect(view.passiveComposerValues.value.conversationRequest).toBe("");
 
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayFields: {
         conversationRequest: "Keep the new draft focused."
       },
@@ -801,7 +818,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         conversationRequest: "Keep the new draft focused."
       },
       message: "Keep the new draft focused."
-    });
+    }));
   });
 
   it("allows passive steer before Codex exposes the active turn id to the browser", async () => {
@@ -932,17 +949,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerControlCanSubmit.value).toBe(false);
 
     props.sessionDetailState = {
-      label: "Refreshing session controls...",
+      label: "",
+      refreshing: true,
       sessionId: "session-1",
-      state: "detailRestoring",
-      suppressPassiveComposer: true
+      state: "detailReady",
+      suppressPassiveComposer: false
     };
-    props.session.presentation.intents = [
-      {
-        ...conversationControl(),
-        enabled: false
-      }
-    ];
     await nextTick();
 
     expect(view.selectedScreenControlVisible.value).toBe(true);
@@ -957,11 +969,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep the composer stable.");
     expect(view.composerControlCanSubmit.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
-    expect(view.runtimeNoticeMessages.value).toEqual(expect.arrayContaining([
+    expect(view.runtimeNoticeMessages.value).not.toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "session-controls-refresh",
-        text: "Refreshing session controls...",
-        tone: "info"
+        id: "session-controls-refresh"
       })
     ]));
 
@@ -973,7 +983,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     };
     await nextTick();
 
-    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(true);
   });
 
   it("explains why the passive composer is disabled when selected controls are unavailable", async () => {
@@ -1142,17 +1152,18 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).toBe("Running command...");
   });
 
-  it("keeps detail refresh out of the foreground command status", async () => {
+  it("does not surface background detail refresh as foreground status", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
       agentThinking: false,
       sessionDetailState: {
-        label: "Refreshing session controls...",
+        label: "",
+        refreshing: true,
         sessionId: "session-1",
-        state: "detailRestoring",
-        suppressPassiveComposer: true
+        state: "detailReady",
+        suppressPassiveComposer: false
       }
     });
     props.session.__commandRunningForTest = true;
@@ -1165,11 +1176,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.thinkingVisible.value).toBe(true);
     expect(view.thinkingLabel.value).toBe("Running command...");
-    expect(view.runtimeNoticeMessages.value).toEqual(expect.arrayContaining([
+    expect(view.runtimeNoticeMessages.value).not.toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "session-controls-refresh",
-        text: "Refreshing session controls...",
-        tone: "info"
+        id: "session-controls-refresh"
       })
     ]));
   });
@@ -1243,7 +1252,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.composerControlCanSubmit.value).toBe(true);
     expect(await view.submitPassiveComposer()).toBe(true);
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayFields: {
         conversationRequest: "Steer the active app-server turn."
       },
@@ -1251,7 +1261,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         conversationRequest: "Steer the active app-server turn."
       },
       message: "Steer the active app-server turn."
-    });
+    }));
   });
 
   it("keeps passive early typing when the primary composer control appears", async () => {
@@ -1274,6 +1284,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     props.session.presentation.intents = [
       conversationControl()
     ];
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.composerControlValues.value.conversationRequest).toBe("Typed before hydrate.");
+
+    props.agentThinking = false;
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("selected_control");
@@ -1387,7 +1403,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Do not lose this steer.");
-    expect(view.chatTurns.value.at(-1)?.user?.text).not.toBe("Do not lose this steer.");
+    expect(view.chatTurns.value.at(-1)).toMatchObject({
+      optimistic: {
+        status: "failed"
+      },
+      user: {
+        text: "Do not lose this steer."
+      }
+    });
   });
 
   it("submits passive steer attachment references with the typed composer text", async () => {
@@ -1418,7 +1441,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     })).toBe(true);
 
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayFields: {
         conversationRequest: [
           "Please inspect this.",
@@ -1440,7 +1464,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         "Attached files for Codex:",
         "- screenshot.png (2.0 KB): /tmp/vibe64-attachments/session/screenshot.png"
       ].join("\n")
-    });
+    }));
   });
 
   it("adds composer menu prompts to the passive draft as compact references", async () => {
@@ -1487,7 +1511,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     })).toBe(true);
     expect(await view.submitPassiveComposer()).toBe(true);
 
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayFields: {
         conversationRequest: "Keep the new draft focused.\n\n[Deslop]"
       },
@@ -1495,6 +1520,6 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         conversationRequest: "Keep the new draft focused.\n\n[Prompt: Deslop]\nFull deslop prompt."
       },
       message: "Keep the new draft focused.\n\n[Prompt: Deslop]\nFull deslop prompt."
-    });
+    }));
   });
 });

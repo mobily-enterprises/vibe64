@@ -67,6 +67,57 @@ const displayFieldsInputSchema = {
   }
 };
 
+const agentTurnSteerInputValidator = deepFreeze({
+  schema: createSchema({
+    afterSubmissionId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    ...composerSubmissionInputSchema,
+    ...displayFieldsInputSchema,
+    ...originInputSchema,
+    fields: {
+      type: "object",
+      additionalProperties: true,
+      required: false
+    },
+    message: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    text: {
+      type: "string",
+      noTrim: false,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
+const agentTurnInterruptInputValidator = deepFreeze({
+  schema: createSchema({
+    afterSubmissionId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    controlRequestId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    ...originInputSchema,
+    reason: {
+      type: "string",
+      noTrim: false,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
 const sessionListInputValidator = deepFreeze({
   schema: createSchema({
     archive: {
@@ -361,6 +412,8 @@ const sessionRewindInputValidator = deepFreeze({
 });
 
 export {
+  agentTurnInterruptInputValidator,
+  agentTurnSteerInputValidator,
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
   sessionConversationLogInputValidator,

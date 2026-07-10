@@ -282,19 +282,22 @@ describe("vibe64 composer submission state", () => {
     });
 
     expect(vibe64ComposerSubmissionStatusState({
+      agentHandoffLabel: "Connecting to assistant...",
       agentInterruptVisible: true,
+      agentTurnActive: true,
       localComposerSubmissionPending: true
     })).toEqual({
       agentStopEnabled: true,
       agentStopVisible: true,
-      browserHandoffPending: false,
-      handoffPending: false,
+      browserHandoffPending: true,
+      handoffPending: true,
       thinkingLabel: "Assistant is working..."
     });
 
     expect(vibe64ComposerSubmissionStatusState({
       agentInterruptBlocked: true,
-      agentInterruptVisible: true
+      agentInterruptVisible: true,
+      agentTurnActive: true
     })).toEqual({
       agentStopEnabled: false,
       agentStopVisible: true,

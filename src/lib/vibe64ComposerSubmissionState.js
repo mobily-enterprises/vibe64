@@ -34,12 +34,13 @@ function vibe64ComposerSubmissionStatusState({
   agentHandoffPending = false,
   agentInterruptBlocked = false,
   agentInterruptVisible = false,
+  agentTurnActive = false,
   localComposerSubmissionPending = false,
   remoteComposerSubmissionPending = false
 } = {}) {
   const agentStopVisible = Boolean(agentInterruptVisible);
   const browserHandoffPending = Boolean(
-    (localComposerSubmissionPending || remoteComposerSubmissionPending) && !agentStopVisible
+    localComposerSubmissionPending || remoteComposerSubmissionPending
   );
   const handoffPending = Boolean(
     agentHandoffPending || browserHandoffPending
@@ -49,7 +50,9 @@ function vibe64ComposerSubmissionStatusState({
     handoffPending,
     agentStopEnabled: agentStopVisible && !agentInterruptBlocked,
     agentStopVisible,
-    thinkingLabel: String(agentHandoffLabel || "").trim() ||
+    thinkingLabel: agentTurnActive
+      ? "Assistant is working..."
+      : String(agentHandoffLabel || "").trim() ||
       (browserHandoffPending ? "Sending to assistant..." : "Assistant is working...")
   };
 }

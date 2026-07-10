@@ -203,7 +203,7 @@ function artifactReadinessChangeRefreshDecision({
   };
 }
 
-function agentTurnSteerPayloadFromContext(context = {}) {
+function agentTurnControlPayloadFromContext(context = {}) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
   const {
     sessionId: _sessionId,
@@ -481,7 +481,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/agent-turn/interrupt"
       )
     }),
-    buildRawPayload: () => vibe64RealtimeOriginPayload(),
+    buildCommandPayload: (_payload, { context }) => agentTurnControlPayloadFromContext(context),
     fallbackRunError: "Assistant turn could not be interrupted.",
     messages: {
       error: "Assistant turn could not be interrupted."
@@ -504,7 +504,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/agent-turn/steer"
       )
     }),
-    buildCommandPayload: (_payload, { context }) => agentTurnSteerPayloadFromContext(context),
+    buildCommandPayload: (_payload, { context }) => agentTurnControlPayloadFromContext(context),
     fallbackRunError: "Assistant turn could not be steered.",
     messages: {
       error: "Assistant turn could not be steered."
@@ -561,20 +561,24 @@ function useVibe64SessionRuntimeHost(props, emit) {
     });
   }
 
-  async function interruptAgentTurn(reason = "user_interrupt") {
+  async function interruptAgentTurn(input = "user_interrupt") {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
       return false;
     }
+    const control = input && typeof input === "object" && !Array.isArray(input)
+      ? input
+      : { reason: String(input || "user_interrupt") };
     try {
       const result = await interruptAgentTurnCommand.run({
+        ...control,
         sessionId
       });
       await props.sessionData.refreshSessionData().catch(() => null);
       const interrupted = result?.ok !== false;
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt", {
         interrupted,
-        reason,
+        reason: String(control.reason || "user_interrupt"),
         sessionId
       });
       return interrupted;
@@ -582,7 +586,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       await props.sessionData.refreshSessionData().catch(() => null);
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt.error", {
         error: String(error?.message || error || "Assistant interrupt failed."),
-        reason,
+        reason: String(control.reason || "user_interrupt"),
         sessionId
       });
       return false;
@@ -761,7 +765,7 @@ export {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
   agentTerminalStartAllowed,
-  agentTurnSteerPayloadFromContext,
+  agentTurnControlPayloadFromContext,
   runtimeHostAutopilotPageBusy,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,

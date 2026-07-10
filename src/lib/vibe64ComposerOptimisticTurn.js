@@ -7,6 +7,25 @@ function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
   return Number.isFinite(userAtMs) && userAtMs >= optimistic.createdAtMs - 5000;
 }
 
+function unmatchedOptimisticComposerTurns(turns = [], optimisticTurns = []) {
+  const canonicalTurns = Array.isArray(turns) ? turns : [];
+  const claimedCanonicalTurns = new Set();
+  return (Array.isArray(optimisticTurns) ? optimisticTurns : []).filter((optimistic) => {
+    if (optimistic?.status === "failed") {
+      return true;
+    }
+    const canonicalIndex = canonicalTurns.findIndex((turn, index) => (
+      !claimedCanonicalTurns.has(index) &&
+      turnMatchesOptimisticComposerTurn(turn, optimistic)
+    ));
+    if (canonicalIndex < 0) {
+      return true;
+    }
+    claimedCanonicalTurns.add(canonicalIndex);
+    return false;
+  });
+}
+
 function createRemoteComposerOptimisticTurn({
   control = {},
   fields = {},
@@ -45,5 +64,6 @@ function createRemoteComposerOptimisticTurn({
 
 export {
   createRemoteComposerOptimisticTurn,
-  turnMatchesOptimisticComposerTurn
+  turnMatchesOptimisticComposerTurn,
+  unmatchedOptimisticComposerTurns
 };

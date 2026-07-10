@@ -1,6 +1,5 @@
 import {
   agentAttachmentInputValidator,
-  agentTurnSteerInputValidator,
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
   launchTargetInputValidator,
@@ -169,25 +168,6 @@ function registerRoutes(
     summary: "Prepare the Vibe64 assistant session."
   }, (request) => {
     return terminalService().ensureAgentSession(
-      request.params.sessionId,
-      withVibe64User(request, routes.requestBody(request))
-    );
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/interrupt", {
-    summary: "Interrupt the active Vibe64 assistant turn."
-  }, (request) => {
-    return terminalService().interruptAgentTurn(
-      request.params.sessionId,
-      withVibe64User(request, routes.requestBody(request))
-    );
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/steer", {
-    body: agentTurnSteerInputValidator,
-    summary: "Steer the active Vibe64 assistant turn."
-  }, (request) => {
-    return terminalService().steerAgentTurn(
       request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );

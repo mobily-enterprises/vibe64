@@ -19,6 +19,15 @@ const COMPOSER_HANDOFF_PENDING_STATES = new Set([
   COMPOSER_HANDOFF_STATES.CONNECTING,
   COMPOSER_HANDOFF_STATES.DELIVERED
 ]);
+const COMPOSER_CONTROL_KINDS = Object.freeze({
+  INTERRUPT: "interrupt",
+  STEER: "steer"
+});
+const COMPOSER_CONTROL_EVENT_KINDS = Object.freeze({
+  ACCEPTED: "composer-control-accepted",
+  DELIVERED: "composer-control-delivered",
+  FAILED: "composer-control-failed"
+});
 const COMPOSER_HANDOFF_TRANSITIONS = Object.freeze({
   [COMPOSER_HANDOFF_STATES.ACCEPTED]: new Set([
     COMPOSER_HANDOFF_STATES.CONNECTING,
@@ -49,6 +58,173 @@ function composerHandoffId(handoff = {}) {
 function composerHandoffRun(session = {}) {
   return (Array.isArray(session?.agentRuns) ? session.agentRuns : [])
     .find((run) => normalizeText(run?.id) === COMPOSER_HANDOFF_AGENT_RUN_ID) || null;
+}
+
+function normalizeComposerControlKind(value = "") {
+  const kind = normalizeText(value);
+  return Object.values(COMPOSER_CONTROL_KINDS).includes(kind) ? kind : "";
+}
+
+function composerControlRequests(source = {}) {
+  const run = normalizeText(source?.id) === COMPOSER_HANDOFF_AGENT_RUN_ID
+    ? source
+    : composerHandoffRun(source);
+  const requests = new Map();
+  for (const event of Array.isArray(run?.events) ? run.events : []) {
+    const kind = normalizeText(event?.kind);
+    const controlRequestId = normalizeText(
+      event?.request?.controlRequestId || event?.controlRequestId
+    );
+    if (!controlRequestId) {
+      continue;
+    }
+    if (kind === COMPOSER_CONTROL_EVENT_KINDS.ACCEPTED && !requests.has(controlRequestId)) {
+      const request = event.request && typeof event.request === "object" && !Array.isArray(event.request)
+        ? event.request
+        : {};
+      requests.set(controlRequestId, {
+        afterSubmissionId: normalizeText(request.afterSubmissionId),
+        controlRequestId,
+        displayFields: request.displayFields && typeof request.displayFields === "object" && !Array.isArray(request.displayFields)
+          ? request.displayFields
+          : {},
+        error: "",
+        fields: request.fields && typeof request.fields === "object" && !Array.isArray(request.fields)
+          ? request.fields
+          : {},
+        kind: normalizeComposerControlKind(request.kind),
+        message: normalizeText(request.message || request.text),
+        originId: normalizeText(request.originId),
+        reason: normalizeText(request.reason),
+        state: "accepted",
+        submittedAt: normalizeText(event.at || request.submittedAt)
+      });
+      continue;
+    }
+    const current = requests.get(controlRequestId);
+    if (!current) {
+      continue;
+    }
+    if (kind === COMPOSER_CONTROL_EVENT_KINDS.DELIVERED) {
+      requests.set(controlRequestId, {
+        ...current,
+        state: "delivered"
+      });
+    } else if (kind === COMPOSER_CONTROL_EVENT_KINDS.FAILED) {
+      requests.set(controlRequestId, {
+        ...current,
+        error: normalizeText(event.error) || "Assistant control delivery failed.",
+        state: "failed"
+      });
+    }
+  }
+  return [...requests.values()];
+}
+
+function pendingComposerControls(source = {}, afterSubmissionId = "") {
+  const normalizedAfterSubmissionId = normalizeText(afterSubmissionId);
+  return composerControlRequests(source).filter((request) => (
+    request.state === "accepted" &&
+    (!normalizedAfterSubmissionId || request.afterSubmissionId === normalizedAfterSubmissionId)
+  ));
+}
+
+async function acceptComposerControl(runtime, sessionId = "", input = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const request = {
+    afterSubmissionId: normalizeText(input?.afterSubmissionId),
+    controlRequestId: normalizeText(input?.controlRequestId),
+    displayFields: input?.displayFields && typeof input.displayFields === "object" && !Array.isArray(input.displayFields)
+      ? input.displayFields
+      : {},
+    fields: input?.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
+      ? input.fields
+      : {},
+    kind: normalizeComposerControlKind(input?.kind),
+    message: normalizeText(input?.message || input?.text),
+    originId: normalizeText(input?.originId),
+    reason: normalizeText(input?.reason),
+    submittedAt: new Date().toISOString()
+  };
+  if (
+    !normalizedSessionId ||
+    !request.afterSubmissionId ||
+    !request.controlRequestId ||
+    !request.kind ||
+    (request.kind === COMPOSER_CONTROL_KINDS.STEER && !request.message) ||
+    typeof runtime?.getSession !== "function" ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function"
+  ) {
+    throw new TypeError("Queued assistant controls require a session, handoff submission, control request, valid kind, and runtime store.");
+  }
+  const session = await runtime.getSession(normalizedSessionId);
+  const run = composerHandoffRun(session) || {};
+  const existing = composerControlRequests(run)
+    .find((candidate) => candidate.controlRequestId === request.controlRequestId);
+  if (existing) {
+    return existing;
+  }
+  const persistedRun = await runtime.store.writeAgentRunEvent(
+    normalizedSessionId,
+    COMPOSER_HANDOFF_AGENT_RUN_ID,
+    {
+      event: {
+        kind: COMPOSER_CONTROL_EVENT_KINDS.ACCEPTED,
+        request,
+        state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING,
+      },
+      patch: {
+        state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING,
+        updatedAt: request.submittedAt
+      }
+    }
+  );
+  return composerControlRequests(persistedRun)
+    .find((candidate) => candidate.controlRequestId === request.controlRequestId);
+}
+
+async function settleComposerControl(runtime, sessionId = "", controlRequestId = "", {
+  error = "",
+  state = "delivered"
+} = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedControlRequestId = normalizeText(controlRequestId);
+  const eventKind = state === "failed"
+    ? COMPOSER_CONTROL_EVENT_KINDS.FAILED
+    : COMPOSER_CONTROL_EVENT_KINDS.DELIVERED;
+  if (
+    !normalizedSessionId ||
+    !normalizedControlRequestId ||
+    typeof runtime?.getSession !== "function" ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function"
+  ) {
+    throw new TypeError("Assistant control settlement requires a session, control request, and runtime store.");
+  }
+  const session = await runtime.getSession(normalizedSessionId);
+  const run = composerHandoffRun(session) || {};
+  const current = composerControlRequests(run)
+    .find((candidate) => candidate.controlRequestId === normalizedControlRequestId);
+  if (!current || current.state !== "accepted") {
+    return current || null;
+  }
+  const persistedRun = await runtime.store.writeAgentRunEvent(
+    normalizedSessionId,
+    COMPOSER_HANDOFF_AGENT_RUN_ID,
+    {
+      event: {
+        controlRequestId: normalizedControlRequestId,
+        error: normalizeText(error),
+        kind: eventKind,
+        state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING
+      },
+      patch: {
+        state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING,
+        updatedAt: new Date().toISOString()
+      }
+    }
+  );
+  return composerControlRequests(persistedRun)
+    .find((candidate) => candidate.controlRequestId === normalizedControlRequestId);
 }
 
 function composerHandoffSnapshot(source = {}) {
@@ -251,11 +427,16 @@ async function transitionComposerHandoff(runtime, sessionId = "", {
 }
 
 export {
+  COMPOSER_CONTROL_KINDS,
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
+  acceptComposerControl,
+  composerControlRequests,
   composerHandoffId,
   composerHandoffRun,
   composerHandoffSnapshot,
   composerPromptHandoffForState,
+  pendingComposerControls,
+  settleComposerControl,
   transitionComposerHandoff
 };

@@ -655,7 +655,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -777,6 +777,7 @@ const {
   runtimeNoticeMessages,
   runtimeStatusVisible,
   screenContentTitle,
+  screenControlFormRef,
   screenStopAction,
   selectedComposerControl,
   selectedControlFields,
@@ -826,6 +827,23 @@ function saveSessionProjectConfig(values = {}) {
 const timelineControlElement = ref(null);
 const chatBodyElement = ref(null);
 const chatBottomElement = ref(null);
+let pendingComposerFocus = null;
+
+onBeforeUpdate(() => {
+  pendingComposerFocus = screenControlFormRef.value?.composerFocusSnapshot?.() || pendingComposerFocus;
+});
+
+onUpdated(() => {
+  if (!pendingComposerFocus) {
+    return;
+  }
+  const focus = pendingComposerFocus;
+  void nextTick(() => {
+    if (screenControlFormRef.value?.restoreComposerFocus?.(focus)) {
+      pendingComposerFocus = null;
+    }
+  });
+});
 
 function scrollChatBodyToEnd() {
   const element = chatBodyElement.value;

@@ -9,8 +9,8 @@ import {
 } from "@/lib/vueRefOrGetterValue.js";
 
 function useVibe64PassiveComposerSubmission({
+  afterSubmissionId = "",
   clearAcceptedSubmission = () => null,
-  clearOptimisticTurn = () => false,
   control = () => null,
   draft = () => "",
   expandSubmissionOptions = (options) => options,
@@ -22,14 +22,10 @@ function useVibe64PassiveComposerSubmission({
   startOptimisticTurn = () => null,
   steerAgentTurn = async () => false,
   steeringActive = false,
-  steeringRunning = { value: false },
   submitControl = () => null,
   submittedForm = () => null
 } = {}) {
   async function submitPassiveComposer(options = {}) {
-    if (steeringRunning.value) {
-      return false;
-    }
     const form = readRefOrGetterValue(submittedForm);
     const submittedDraft = String(readRefOrGetterValue(draft) || "");
     const rawPayload = passiveComposerSteerPayload(submittedDraft, options);
@@ -78,39 +74,48 @@ function useVibe64PassiveComposerSubmission({
       }
     }
 
+    const targetSubmissionId = String(readRefOrGetterValue(afterSubmissionId) || "").trim();
     const draftSubmission = startOptimisticTurn({
+      afterSubmissionId: targetSubmissionId,
       control: readRefOrGetterValue(control),
       options: {
         displayFields: payload.displayFields,
-        fields: payload.fields
+        fields: payload.fields,
+        message: payload.message
       },
+      steering: true,
       values: {
         [readRefOrGetterValue(fieldName)]: submittedDraft
       }
     });
     setDraft("");
-    steeringRunning.value = true;
     function restoreSubmittedDraft() {
       if (!readRefOrGetterValue(draft)) {
         setDraft(submittedDraft);
       }
     }
     try {
-      const steered = await steerAgentTurn(payload) !== false;
+      const steered = await steerAgentTurn({
+        ...payload,
+        ...(targetSubmissionId ? { afterSubmissionId: targetSubmissionId } : {}),
+        composerSubmissionId: draftSubmission
+      }) !== false;
       if (!steered) {
-        clearOptimisticTurn(draftSubmission);
+        rejectOptimisticTurn(draftSubmission, {
+          restoreDraft: false
+        });
         restoreSubmittedDraft();
       } else {
-        clearOptimisticTurn(draftSubmission);
         clearAcceptedSubmission(form);
       }
       return steered;
-    } catch {
-      clearOptimisticTurn(draftSubmission);
+    } catch (error) {
+      rejectOptimisticTurn(draftSubmission, {
+        error,
+        restoreDraft: false
+      });
       restoreSubmittedDraft();
       return false;
-    } finally {
-      steeringRunning.value = false;
     }
   }
 

@@ -123,3 +123,35 @@ test("composer handoff coordinator activates a delivered handoff without redeliv
   assert.equal(activated.threadId, "thread-1");
   assert.equal(activated.turnId, "turn-1");
 });
+
+test("composer handoff coordinator never loses a control wake-up while draining", async () => {
+  let drains = 0;
+  let releaseFirstDrain;
+  const firstDrain = new Promise((resolve) => {
+    releaseFirstDrain = resolve;
+  });
+  const coordinator = createComposerHandoffCoordinator({
+    async activate() {},
+    async deliver() {},
+    async drainControls() {
+      drains += 1;
+      if (drains === 1) {
+        await firstDrain;
+      }
+    }
+  });
+  const input = {
+    runtime: {},
+    session: {
+      sessionId: "session-1"
+    }
+  };
+
+  const first = coordinator.drain(input);
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = coordinator.drain(input);
+  assert.equal(first, second);
+  releaseFirstDrain();
+  await first;
+  assert.equal(drains, 2);
+});
