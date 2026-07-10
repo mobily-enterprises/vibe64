@@ -12,11 +12,13 @@ import {
   deploymentManagedDatabaseService,
   deploymentPublishPlanFromLaunchDescriptor,
   managedDatabaseEnvironmentEntry,
-  publishRootMissingPlan
+  publishRootMissingPlan,
+  relationalDatabaseDeploymentRequirement
 } from "../../deployment.js";
 import {
-  envValuesFromLines
-} from "../../adapterHelpers/setupEnvFiles.js";
+  deploymentRelationalDatabaseConnection,
+  relationalDatabaseConnectionEnvironment
+} from "../../managedDatabases/deployment.js";
 import {
   createAdapterBlueprintReader
 } from "../../adapterBlueprints.js";
@@ -73,7 +75,7 @@ import {
   createNextjsSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  nextjsDatabaseEnvLines,
+  databaseNameFromTargetRoot,
   nextjsDatabasePromptServiceFacts,
   selectedNextjsDatabaseRuntime
 } from "./databaseRuntime.js";
@@ -193,16 +195,25 @@ function nextjsDatabaseRuntimeLabel(runtime = "") {
   }[String(runtime || "").trim()] || "managed";
 }
 
-function nextjsDeploymentDatabaseEntries({
+async function nextjsDeploymentDatabaseEntries({
   config = {},
+  context = {},
   deployment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  const values = envValuesFromLines(nextjsDatabaseEnvLines({
-    config,
-    databaseName: normalizeText(deployment.databaseName),
+  const provider = selectedNextjsDatabaseRuntime(config);
+  const connection = await deploymentRelationalDatabaseConnection({
+    databaseName: normalizeText(deployment.databaseName) || databaseNameFromTargetRoot(targetRoot),
+    deployment,
+    provider,
+    serviceDataRoot: normalizeText(serviceDataRoot || context.serviceDataRoot),
     targetRoot
-  }));
+  });
+  const values = {
+    ...relationalDatabaseConnectionEnvironment(connection),
+    DATABASE_URL: connection.url
+  };
   return Object.entries(values).map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value
@@ -420,6 +431,8 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
+    config = {},
+    deployment = {},
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -436,6 +449,7 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       worktreePath: publishRoot
     });
     const artifactPath = ".next";
+    const databaseProvider = selectedNextjsDatabaseRuntime(config);
     return deploymentPublishPlanFromLaunchDescriptor({
       adapterId: this.id,
       artifacts: {
@@ -447,13 +461,23 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       descriptor,
       messageReady: "Next.js publish plan is ready.",
       messageServeMissing: "Next.js publish requires a server command.",
+      requirements: databaseProvider === "none"
+        ? []
+        : [
+            relationalDatabaseDeploymentRequirement({
+              databaseName: normalizeText(deployment.databaseName) || databaseNameFromTargetRoot(publishRoot),
+              provider: databaseProvider
+            })
+          ],
       serveLabel: "Start Next.js app server."
     });
   }
 
   async getDeploymentEnvironment({
     config = {},
+    context = {},
     deployment = {},
+    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     const runtime = selectedNextjsDatabaseRuntime(config);
@@ -465,9 +489,11 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       });
     }
     return deploymentEnvironmentResult({
-      appEntries: nextjsDeploymentDatabaseEntries({
+      appEntries: await nextjsDeploymentDatabaseEntries({
         config,
+        context,
         deployment,
+        serviceDataRoot,
         targetRoot
       }),
       services: [

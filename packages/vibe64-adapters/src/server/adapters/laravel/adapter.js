@@ -16,11 +16,13 @@ import {
   deploymentManagedDatabaseService,
   deploymentPublishPlanFromLaunchDescriptor,
   managedDatabaseEnvironmentEntry,
-  publishRootMissingPlan
+  publishRootMissingPlan,
+  relationalDatabaseDeploymentRequirement
 } from "../../deployment.js";
 import {
-  envValuesFromLines
-} from "../../adapterHelpers/setupEnvFiles.js";
+  deploymentRelationalDatabaseConnection,
+  relationalDatabaseConnectionEnvironment
+} from "../../managedDatabases/deployment.js";
 import {
   Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
@@ -68,7 +70,7 @@ import {
   inspectLaravelTargetScripts
 } from "./currentApp.js";
 import {
-  laravelDatabaseEnvLines,
+  laravelDatabaseNameFromTargetRoot,
   laravelDatabasePromptServiceFacts,
   listLaravelDatabaseProjectTools,
   selectedLaravelDatabaseRuntime
@@ -190,16 +192,27 @@ function laravelDatabaseRuntimeLabel(runtime = "") {
   }[String(runtime || "").trim()] || "managed";
 }
 
-function laravelDeploymentDatabaseEntries({
+async function laravelDeploymentDatabaseEntries({
   config = {},
+  context = {},
   deployment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  const values = envValuesFromLines(laravelDatabaseEnvLines({
-    config,
-    databaseName: normalizeText(deployment.databaseName),
+  const provider = selectedLaravelDatabaseRuntime(config);
+  const connection = await deploymentRelationalDatabaseConnection({
+    databaseName: normalizeText(deployment.databaseName) || laravelDatabaseNameFromTargetRoot(targetRoot),
+    deployment,
+    provider,
+    serviceDataRoot: normalizeText(serviceDataRoot || context.serviceDataRoot),
     targetRoot
-  }));
+  });
+  const values = {
+    ...relationalDatabaseConnectionEnvironment(connection),
+    DB_CONNECTION: provider === "postgres" ? "pgsql" : "mariadb",
+    DB_DATABASE: connection.databaseName,
+    DB_USERNAME: connection.user
+  };
   return Object.entries(values).map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value
@@ -497,6 +510,8 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
+    config = {},
+    deployment = {},
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -512,6 +527,7 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       port: PUBLISH_RELEASE_PORT_ENV,
       worktreePath: publishRoot
     });
+    const databaseProvider = selectedLaravelDatabaseRuntime(config);
     return deploymentPublishPlanFromLaunchDescriptor({
       adapterId: this.id,
       artifacts: {
@@ -524,13 +540,23 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       messageServeMissing: "Laravel publish requires a server command.",
       migrateCommand: laravelRuntimeCommand(phpArtisanCommand(LARAVEL_PUBLISH_MIGRATION_ARGS)),
       migrateLabel: "Apply Laravel database migrations.",
+      requirements: laravelDatabaseRuntimeIsManaged(databaseProvider)
+        ? [
+            relationalDatabaseDeploymentRequirement({
+              databaseName: normalizeText(deployment.databaseName) || laravelDatabaseNameFromTargetRoot(publishRoot),
+              provider: databaseProvider
+            })
+          ]
+        : [],
       serveLabel: "Start Laravel app server."
     });
   }
 
   async getDeploymentEnvironment({
     config = {},
+    context = {},
     deployment = {},
+    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     const runtime = selectedLaravelDatabaseRuntime(config);
@@ -542,9 +568,11 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       });
     }
     return deploymentEnvironmentResult({
-      appEntries: laravelDeploymentDatabaseEntries({
+      appEntries: await laravelDeploymentDatabaseEntries({
         config,
+        context,
         deployment,
+        serviceDataRoot,
         targetRoot
       }),
       services: [

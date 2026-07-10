@@ -13,9 +13,14 @@ import {
   deploymentManagedDatabaseService,
   deploymentPublishPlanFromCommands,
   deploymentService,
+  relationalDatabaseDeploymentRequirement,
   managedDatabaseEnvironmentEntry,
   publishRootMissingPlan
 } from "../../deployment.js";
+import {
+  deploymentRelationalDatabaseConnection,
+  relationalDatabaseConnectionEnvironment
+} from "../../managedDatabases/deployment.js";
 import {
   detectPackageManager,
   installCommand,
@@ -74,13 +79,7 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  jskitMariaDbDatabaseName,
-  jskitMariaDbHostPort,
-  jskitMariaDbPublishedAppPassword,
-  jskitMariaDbPublishedAppUser,
-  jskitPublishedMariaDbPrepareCommand,
-  JSKIT_MARIADB_HOST,
-  JSKIT_MARIADB_ROOT_PASSWORD
+  jskitMariaDbDatabaseName
 } from "./setupMariaDbRuntime.js";
 import {
   resolveBuiltLaunchConfig
@@ -613,7 +612,7 @@ function jskitDeploymentDatabaseName({
   return normalizeText(deployment.databaseName) || jskitMariaDbDatabaseName(targetRoot);
 }
 
-function jskitDeploymentDatabaseAppEnv({
+async function jskitDeploymentDatabaseAppEnv({
   deployment = {},
   serviceDataRoot = "",
   targetRoot = ""
@@ -622,26 +621,22 @@ function jskitDeploymentDatabaseAppEnv({
     deployment,
     targetRoot
   });
-  return {
-    DB_CLIENT: "mysql2",
-    DB_HOST: JSKIT_MARIADB_HOST,
-    DB_NAME: databaseName,
-    DB_PASSWORD: jskitMariaDbPublishedAppPassword(databaseName, {
-      targetRoot
-    }),
-    DB_PORT: jskitMariaDbHostPort(targetRoot, {
-      serviceDataRoot
-    }),
-    DB_USER: jskitMariaDbPublishedAppUser(databaseName)
-  };
+  const connection = await deploymentRelationalDatabaseConnection({
+    databaseName,
+    deployment,
+    provider: "mariadb",
+    serviceDataRoot,
+    targetRoot
+  });
+  return relationalDatabaseConnectionEnvironment(connection);
 }
 
-function jskitDeploymentDatabaseAppEntries({
+async function jskitDeploymentDatabaseAppEntries({
   deployment = {},
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  return Object.entries(jskitDeploymentDatabaseAppEnv({
+  return Object.entries(await jskitDeploymentDatabaseAppEnv({
     deployment,
     serviceDataRoot,
     targetRoot
@@ -651,121 +646,16 @@ function jskitDeploymentDatabaseAppEntries({
   }));
 }
 
-function jskitDeploymentDatabaseToolingEnv({
-  deployment = {},
-  serviceDataRoot = "",
-  targetRoot = ""
-} = {}) {
-  const databaseName = jskitDeploymentDatabaseName({
-    deployment,
-    targetRoot
-  });
-  return {
-    MYSQL_DATABASE: databaseName,
-    MYSQL_HOST: JSKIT_MARIADB_HOST,
-    MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-    MYSQL_TCP_PORT: jskitMariaDbHostPort(targetRoot, {
-      serviceDataRoot
-    }),
-    VIBE64_MYSQL_USER: "root"
-  };
-}
-
-function jskitDeploymentDatabasePrepareCommand({
-  databaseEnabled = false,
-  deployment = {},
-  serviceDataRoot = "",
-  targetRoot = ""
-} = {}) {
-  if (!databaseEnabled) {
-    return "";
-  }
-  return jskitPublishedMariaDbPrepareCommand({
-    databaseName: jskitDeploymentDatabaseName({
-      deployment,
-      targetRoot
-    }),
-    serviceDataRoot,
-    targetRoot
-  });
-}
-
-function jskitDeploymentCommandWithDatabase({
-  command = "",
-  databaseEnabled = false,
-  deployment = {},
-  serviceDataRoot = "",
-  targetRoot = ""
-} = {}) {
-  const commands = [
-    jskitDeploymentDatabasePrepareCommand({
-      databaseEnabled,
-      deployment,
-      serviceDataRoot,
-      targetRoot
-    })
-  ];
-  if (normalizeText(command)) {
-    commands.push(command);
-  }
-  return commands.filter(Boolean).join(" && ");
-}
-
 function jskitDeploymentPrepareCommand({
-  databaseEnabled = false,
-  deployment = {},
-  installPackageCommand = "",
-  serviceDataRoot = "",
-  targetRoot = ""
+  installPackageCommand = ""
 } = {}) {
-  return jskitDeploymentCommandWithDatabase({
-    command: installPackageCommand,
-    databaseEnabled,
-    deployment,
-    serviceDataRoot,
-    targetRoot
-  });
-}
-
-function jskitDeploymentRuntimesWithDatabase(runtimes = [], {
-  databaseEnabled = false
-} = {}) {
-  return [
-    ...runtimes,
-    ...(databaseEnabled ? ["mariadb"] : [])
-  ];
-}
-
-function jskitDeploymentPrepareRuntimesForPlan(packageManager = "", {
-  databaseEnabled = false
-} = {}) {
-  return jskitDeploymentRuntimesWithDatabase(jskitDeploymentPrepareRuntimes(packageManager), {
-    databaseEnabled
-  });
+  return normalizeText(installPackageCommand);
 }
 
 function jskitDeploymentServeCommand({
-  databaseEnabled = false,
-  deployment = {},
-  serverCommand = "",
-  serviceDataRoot = "",
-  targetRoot = ""
+  serverCommand = ""
 } = {}) {
-  return jskitDeploymentCommandWithDatabase({
-    command: jskitDeploymentNodeCommand(serverCommand),
-    databaseEnabled,
-    deployment,
-    serviceDataRoot,
-    targetRoot
-  });
-}
-
-function jskitDeploymentServeRuntimesForPlan(runtimes = [], {
-  databaseEnabled = false
-} = {}) {
-  return jskitDeploymentRuntimesWithDatabase(runtimes, {
-    databaseEnabled
-  });
+  return jskitDeploymentNodeCommand(serverCommand);
 }
 
 async function jskitDeploymentAuthAppEntries({
@@ -1106,9 +996,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
 
   async createDeploymentPublishPlan({
     config = {},
-    context = {},
     deployment = {},
-    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -1126,7 +1014,6 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     const nodeRuntimes = ["node22"];
     const artifactPath = "dist";
     const databaseEnabled = jskitConfigNeedsManagedMariaDb(config);
-    const deploymentServiceDataRoot = normalizeText(serviceDataRoot || context.serviceDataRoot);
     return deploymentPublishPlanFromCommands({
       adapterId: this.id,
       artifacts: {
@@ -1143,27 +1030,26 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       migrateLabel: "Apply JSKIT database migrations.",
       migrateRuntimes: nodeRuntimes,
       prepareCommand: jskitDeploymentPrepareCommand({
-        databaseEnabled,
-        deployment,
-        installPackageCommand: installCommand(packageManager.name),
-        serviceDataRoot: deploymentServiceDataRoot,
-        targetRoot: publishRoot
+        installPackageCommand: installCommand(packageManager.name)
       }),
       prepareLabel: "Install JSKIT dependencies.",
-      prepareRuntimes: jskitDeploymentPrepareRuntimesForPlan(packageManager.name, {
-        databaseEnabled
-      }),
+      prepareRuntimes: jskitDeploymentPrepareRuntimes(packageManager.name),
+      requirements: databaseEnabled
+        ? [
+            relationalDatabaseDeploymentRequirement({
+              databaseName: jskitDeploymentDatabaseName({
+                deployment,
+                targetRoot: publishRoot
+              }),
+              provider: "mariadb"
+            })
+          ]
+        : [],
       serveCommand: jskitDeploymentServeCommand({
-        databaseEnabled,
-        deployment,
-        serverCommand: publishConfig.serverCommand || publishConfig.testrunCommand,
-        serviceDataRoot: deploymentServiceDataRoot,
-        targetRoot: publishRoot
+        serverCommand: publishConfig.serverCommand || publishConfig.testrunCommand
       }),
       serveLabel: "Start JSKIT app server.",
-      serveRuntimes: jskitDeploymentServeRuntimesForPlan(nodeRuntimes, {
-        databaseEnabled
-      })
+      serveRuntimes: nodeRuntimes
     });
   }
 
@@ -1180,15 +1066,16 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     });
     const databaseEnabled = jskitConfigNeedsManagedMariaDb(config);
     const deploymentServiceDataRoot = normalizeText(serviceDataRoot || context.serviceDataRoot);
+    const databaseEntries = databaseEnabled
+      ? await jskitDeploymentDatabaseAppEntries({
+          deployment,
+          serviceDataRoot: deploymentServiceDataRoot,
+          targetRoot
+        })
+      : [];
     return deploymentEnvironmentResult({
       appEntries: [
-        ...(databaseEnabled
-          ? jskitDeploymentDatabaseAppEntries({
-            deployment,
-            serviceDataRoot: deploymentServiceDataRoot,
-            targetRoot
-          })
-          : []),
+        ...databaseEntries,
         ...authEntries
       ],
       services: [
@@ -1201,14 +1088,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
           authEntries,
           config
         })
-      ],
-      toolingEnv: databaseEnabled
-        ? jskitDeploymentDatabaseToolingEnv({
-            deployment,
-            serviceDataRoot: deploymentServiceDataRoot,
-            targetRoot
-          })
-        : {}
+      ]
     });
   }
 }

@@ -55,6 +55,7 @@ const VIBE64_COMMAND_RUNTIMES = Object.freeze([
   "gh",
   "mysql",
   "mariadb",
+  "postgresql",
   "ripgrep",
   "bubblewrap",
   "bun",

@@ -57,6 +57,10 @@ const RUNTIME_PACKS = Object.freeze({
     binDirs: ["playwright/bin"],
     managedCommands: ["playwright"]
   },
+  "postgresql": {
+    binDirs: ["postgresql/bin"],
+    managedCommands: ["initdb", "pg_ctl", "pg_isready", "postgres", "psql"]
+  },
   "ripgrep": {
     binDirs: ["ripgrep/bin"],
     managedCommands: []
@@ -71,6 +75,7 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "gh",
   "mysql",
   "mariadb",
+  "postgresql",
   "ripgrep",
   "bubblewrap",
   "bun",

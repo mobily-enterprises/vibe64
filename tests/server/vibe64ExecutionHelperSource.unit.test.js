@@ -36,6 +36,7 @@ test("execution helper default PATH includes every first-class runtime pack", as
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/git\/bin/u);
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/gh\/bin/u);
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/mariadb\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/postgresql\/bin/u);
   assert.match(source, /PATH: DEFAULT_PATH/u);
 });
 
@@ -44,6 +45,28 @@ test("execution helper gives release services the shared runtime PATH", async ()
 
   assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(DEFAULT_PATH\)\}/u);
   assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
+});
+
+test("execution helper gives release services explicit managed-service dependencies", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /assertValidManagedServiceUnitName\(requiredUnit, owner\)/u);
+  assert.match(source, /`After=\$\{\["network-online\.target", \.\.\.dependencies\]\.join\(" "\)\}`/u);
+  assert.match(source, /`Requires=\$\{dependencies\.join\(" "\)\}`/u);
+});
+
+test("execution helper manages provider-neutral simple and forking services", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /"managed-service"/u);
+  assert.match(source, /function handleManagedServiceOperation/u);
+  assert.match(source, /function assertValidManagedServiceProcessModel/u);
+  assert.match(source, /function installSystemdUnit/u);
+  assert.match(source, /const workspace = workspaceFromDaemonUsername\(username\)/u);
+  assert.match(source, /processModel !== "forking" && processModel !== "simple"/u);
+  assert.match(source, /normalizedProcessModel === "forking" \? \[`PIDFile=/u);
+  assert.match(source, /Restart=on-failure/u);
+  assert.doesNotMatch(source, /function handleMariaDb|function handlePostgres|function handleRedis/u);
 });
 
 test("execution helper rejects payloads that did not pass gateway normalization", async () => {

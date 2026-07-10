@@ -136,8 +136,7 @@ import {
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
 import {
   jskitMariaDbHostPort,
-  JSKIT_MARIADB_HOST,
-  JSKIT_MARIADB_ROOT_PASSWORD
+  JSKIT_MARIADB_HOST
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
@@ -170,6 +169,7 @@ const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
 const MAINTENANCE_WORKFLOW_DEFINITION_IDS = coreMaintenanceTesting.workflowDefinitionIds;
 const TEST_WORKFLOW_ORIGIN_ID = "tab:test";
+const UNIT_DATABASE_PASSWORD = "unit-database-password";
 const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
@@ -723,6 +723,7 @@ test("launch terminal start evaluates function env with the allocated terminal i
         },
         async projectConfigEnvironment() {
           return {
+            DB_CLIENT: "mysql2",
             DB_HOST: "127.0.0.1",
             PROJECT_ENV: "project"
           };
@@ -2874,7 +2875,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
             DB_CLIENT: "mysql2",
             DB_HOST: JSKIT_MARIADB_HOST,
             DB_NAME: "captured_provider_env",
-            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PASSWORD: UNIT_DATABASE_PASSWORD,
             DB_PORT: jskitMariaDbHostPort(),
             DB_USER: "vibe64_dev_app"
           };
@@ -5501,7 +5502,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             DB_CLIENT: "mysql2",
             DB_HOST: JSKIT_MARIADB_HOST,
             DB_NAME: "captured_provider_env",
-            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PASSWORD: UNIT_DATABASE_PASSWORD,
             DB_PORT: jskitMariaDbHostPort(),
             DB_USER: "vibe64_dev_app"
           };
@@ -5531,7 +5532,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerFactoryOptions[0].targetRoot, worktree);
     assert.equal(providerFactoryOptions[0].runtimeDir, "");
     assert.equal(providerFactoryOptions[0].terminalEnv.DB_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(providerFactoryOptions[0].terminalEnv.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(providerFactoryOptions[0].terminalEnv.DB_PASSWORD, UNIT_DATABASE_PASSWORD);
     assert.equal(providerFactoryOptions[0].terminalEnv.DB_NAME, "captured_provider_env");
     assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
@@ -9622,7 +9623,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
             DB_CLIENT: "mysql2",
             DB_HOST: JSKIT_MARIADB_HOST,
             DB_NAME: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
-            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PASSWORD: UNIT_DATABASE_PASSWORD,
             DB_PORT: jskitMariaDbHostPort(),
             DB_USER: "vibe64_dev_app"
           };
@@ -9641,7 +9642,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
 
     assert.equal(env.VIBE64_PROJECT_MANIFEST, configDir);
     assert.equal(env.DB_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(env.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.DB_PASSWORD, UNIT_DATABASE_PASSWORD);
     assert.equal(env.DB_PORT, jskitMariaDbHostPort());
     assert.equal(env.DB_USER, "vibe64_dev_app");
     assert.equal(env.DB_NAME, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
@@ -9690,7 +9691,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
             DB_CLIENT: "mysql2",
             DB_HOST: JSKIT_MARIADB_HOST,
             DB_NAME: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
-            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PASSWORD: UNIT_DATABASE_PASSWORD,
             DB_PORT: jskitMariaDbHostPort(),
             DB_USER: "vibe64_dev_app"
           };
@@ -9712,7 +9713,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
     });
 
     assert.equal(env.DB_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(env.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.DB_PASSWORD, UNIT_DATABASE_PASSWORD);
     assert.equal(env.DB_PORT, jskitMariaDbHostPort());
     assert.equal(env.DB_USER, "vibe64_dev_app");
     assert.equal(env.DB_NAME, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
@@ -9795,6 +9796,7 @@ test("Vibe64 terminal env requests server runtime config for Codex terminals", a
         calls.push(input);
         return {
           APP_PUBLIC_URL: "http://localhost:3000",
+          DB_CLIENT: "mysql2",
           DB_HOST: "127.0.0.1",
           DB_NAME: "codex_terminal_runtime_env"
         };
@@ -9870,7 +9872,7 @@ test("Vibe64 terminal env requests project config env for the session source", a
   ]);
 });
 
-test("Vibe64 command terminal process receives gateway DB aliases and shared tool env", async () => {
+test("Vibe64 command terminal process receives native database client env and shared tool env", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const namespace = `unit-command-gateway-env-${crypto.randomUUID()}`;
     const marker = "VIBE64_COMMAND_ENV:";
@@ -9883,6 +9885,7 @@ test("Vibe64 command terminal process receives gateway DB aliases and shared too
         },
         async projectRuntimeConfigEnvironment() {
           return {
+            DB_CLIENT: "mysql2",
             DB_HOST: "127.0.0.1",
             DB_NAME: "command_terminal_db",
             DB_PASSWORD: "command-secret",

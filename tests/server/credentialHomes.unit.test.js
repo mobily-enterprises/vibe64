@@ -49,6 +49,7 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
       }
     },
     terminalEnv: {
+      DB_CLIENT: "mysql2",
       DB_HOST: "127.0.0.1",
       DB_NAME: "tenant_app",
       DB_PASSWORD: "tenant-password",

@@ -1981,9 +1981,6 @@ test("session composer queues provider-neutral controls until the initial handof
           input,
           sessionId
         });
-        return {
-          ok: true
-        };
       }
     }
   });
@@ -2103,15 +2100,15 @@ test("session composer queues provider-neutral controls until the initial handof
       afterSubmissionId: "initial-submission",
       attempts: 1,
       displayMessage: "",
-      error: "",
+      error: "Assistant control delivery returned no result.",
       id: "interrupt:initial-submission",
       kind: "interrupt",
       lastAttemptAt: inspected.composerHandoff.controls[1].lastAttemptAt,
       message: "",
-      operationOutcome: "",
+      operationOutcome: "control_result_missing",
       retryable: false,
       retriedAt: "",
-      state: "delivered",
+      state: "failed",
       submittedAt: inspected.composerHandoff.controls[1].submittedAt,
       threadId: "",
       turnId: ""

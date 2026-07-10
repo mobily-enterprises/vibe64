@@ -16,6 +16,7 @@ const ALLOWED_OPERATIONS = new Set([
   "github-api-command",
   "github-toolchain",
   "github-workflow-command",
+  "managed-service",
   "repair-managed-project-permissions",
   "vibe64-command"
 ]);
@@ -45,6 +46,7 @@ const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/php/bin",
   "/opt/vibe64/runtime-packs/composer/bin",
   "/opt/vibe64/runtime-packs/mariadb/bin",
+  "/opt/vibe64/runtime-packs/postgresql/bin",
   "/opt/vibe64/runtime-packs/playwright/bin",
   "/opt/vibe64/runtime-packs/guard-bin",
   "/usr/local/sbin",
@@ -82,6 +84,10 @@ async function main() {
   }
   if (operation === "deployment-service") {
     handleDeploymentServiceOperation(payload);
+    return;
+  }
+  if (operation === "managed-service") {
+    handleManagedServiceOperation(payload);
     return;
   }
   const username = safeUsername(payload.username);
@@ -203,15 +209,66 @@ function handleDeploymentServiceOperation(payload = {}) {
   const workingDirectory = assertSafeDeploymentServicePath(payload.workingDirectory, owner, "workingDirectory");
   const environmentFile = assertSafeDeploymentServicePath(payload.environmentFile, owner, "environmentFile");
   const startScript = assertSafeDeploymentServicePath(payload.startScript, owner, "startScript");
+  const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
+    .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
   const unitPath = systemdUnitPath(unitName);
-  const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
   const unit = deploymentServiceUnit({
     environmentFile,
     owner,
+    requiredUnits,
     startScript,
     unitName,
     workingDirectory
   });
+  installSystemdUnit({
+    activation: "restart",
+    unit,
+    unitName,
+    unitPath
+  });
+}
+
+function handleManagedServiceOperation(payload = {}) {
+  const owner = resolveOwnerUser();
+  ensureGroup(VIBE64_GROUP);
+  const action = String(payload.action || "").trim();
+  const unitName = assertValidManagedServiceUnitName(payload.unitName, owner);
+  if (action !== "install-start") {
+    throw new Error("Vibe64 exec helper rejected an unknown managed service action.");
+  }
+  const workingDirectory = assertSafeManagedServicePath(payload.workingDirectory, owner, "workingDirectory");
+  const startScript = assertSafeManagedServicePath(payload.startScript, owner, "startScript");
+  const processModel = assertValidManagedServiceProcessModel(payload.processModel);
+  const pidFile = processModel === "forking"
+    ? resolveAllowedManagedServicePath(payload.pidFile, owner)
+    : "";
+  const unitPath = managedSystemdUnitPath(unitName, owner);
+  const unit = managedServiceUnit({
+    owner,
+    pidFile,
+    processModel,
+    startScript,
+    unitName,
+    workingDirectory
+  });
+  installSystemdUnit({
+    activation: "start",
+    unit,
+    unitName,
+    unitPath
+  });
+}
+
+function installSystemdUnit({
+  activation = "start",
+  unit = "",
+  unitName = "",
+  unitPath = ""
+} = {}) {
+  if (activation !== "start" && activation !== "restart") {
+    throw new Error("Vibe64 exec helper rejected an unsupported systemd activation.");
+  }
+  const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
   writeFileSync(temporaryUnitPath, unit, {
     mode: 0o644
   });
@@ -236,7 +293,7 @@ function handleDeploymentServiceOperation(payload = {}) {
     unitName
   ]);
   runRootCommand("systemctl", [
-    "restart",
+    activation,
     unitName
   ]);
 }
@@ -411,6 +468,35 @@ function assertSafeDeploymentServicePath(candidatePath = "", owner = {}, label =
   return resolved;
 }
 
+function assertSafeManagedServicePath(candidatePath = "", owner = {}, label = "path") {
+  const resolved = resolveAllowedManagedServicePath(candidatePath, owner);
+  if (!existsSync(resolved)) {
+    throw new Error(`Vibe64 managed service ${label} does not exist.`);
+  }
+  return resolved;
+}
+
+function managedServiceRoot(owner = {}) {
+  const username = safeUsername(owner.username);
+  const workspace = workspaceFromDaemonUsername(username);
+  if (!workspace) {
+    throw new Error("Vibe64 exec helper could not resolve the managed service workspace.");
+  }
+  return path.join("/var/lib/vibe64", workspace, "services");
+}
+
+function resolveAllowedManagedServicePath(candidatePath = "", owner = {}) {
+  const normalized = String(candidatePath || "").trim();
+  if (!normalized) {
+    throw new Error("Vibe64 exec helper rejected an empty managed service path.");
+  }
+  const resolved = path.resolve(normalized);
+  if (relativePathParts(managedServiceRoot(owner), resolved).length > 0) {
+    return resolved;
+  }
+  throw new Error("Vibe64 exec helper rejected a managed service path outside the workspace service root.");
+}
+
 function resolveAllowedDeploymentServicePath(candidatePath = "", owner = {}) {
   const normalized = String(candidatePath || "").trim();
   if (!normalized) {
@@ -459,22 +545,52 @@ function assertValidDeploymentUnitName(unitName = "") {
   return normalized;
 }
 
+function assertValidManagedServiceUnitName(unitName = "", owner = {}) {
+  const normalized = String(unitName || "").trim();
+  const workspace = path.basename(path.dirname(managedServiceRoot(owner)));
+  if (
+    !normalized.startsWith(`vibe64-managed-${workspace}-`) ||
+    !normalized.endsWith(".service") ||
+    !/^[A-Za-z0-9_.@:-]+$/u.test(normalized) ||
+    normalized.includes("/") ||
+    normalized.includes("..")
+  ) {
+    throw new Error("Vibe64 exec helper rejected an unsafe managed service unit name.");
+  }
+  return normalized;
+}
+
+function assertValidManagedServiceProcessModel(value = "") {
+  const processModel = String(value || "").trim();
+  if (processModel !== "forking" && processModel !== "simple") {
+    throw new Error("Vibe64 exec helper rejected an unsupported managed service process model.");
+  }
+  return processModel;
+}
+
 function systemdUnitPath(unitName = "") {
   return path.join("/etc/systemd/system", assertValidDeploymentUnitName(unitName));
+}
+
+function managedSystemdUnitPath(unitName = "", owner = {}) {
+  return path.join("/etc/systemd/system", assertValidManagedServiceUnitName(unitName, owner));
 }
 
 function deploymentServiceUnit({
   environmentFile = "",
   owner = {},
+  requiredUnits = [],
   startScript = "",
   unitName = "",
   workingDirectory = ""
 } = {}) {
+  const dependencies = Array.isArray(requiredUnits) ? requiredUnits : [];
   return [
     "[Unit]",
     `Description=Vibe64 release service ${unitName}`,
-    "After=network-online.target",
+    `After=${["network-online.target", ...dependencies].join(" ")}`,
     "Wants=network-online.target",
+    ...(dependencies.length > 0 ? [`Requires=${dependencies.join(" ")}`] : []),
     "",
     "[Service]",
     "Type=simple",
@@ -488,6 +604,41 @@ function deploymentServiceUnit({
     "Restart=always",
     "RestartSec=3",
     "KillSignal=SIGTERM",
+    "TimeoutStopSec=30",
+    "",
+    "[Install]",
+    "WantedBy=multi-user.target",
+    ""
+  ].join("\n");
+}
+
+function managedServiceUnit({
+  owner = {},
+  pidFile = "",
+  processModel = "simple",
+  startScript = "",
+  unitName = "",
+  workingDirectory = ""
+} = {}) {
+  const normalizedProcessModel = assertValidManagedServiceProcessModel(processModel);
+  return [
+    "[Unit]",
+    `Description=Vibe64 managed service ${unitName}`,
+    "After=network-online.target",
+    "Wants=network-online.target",
+    "",
+    "[Service]",
+    `Type=${normalizedProcessModel}`,
+    `User=${systemdUnitSafeValue(owner.username)}`,
+    `Group=${systemdUnitSafeValue(owner.username)}`,
+    "SupplementaryGroups=vibe64 nix-users",
+    `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
+    `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
+    `ExecStart=${systemdUnitSafeValue(startScript)}`,
+    ...(normalizedProcessModel === "forking" ? [`PIDFile=${systemdUnitSafeValue(pidFile)}`] : []),
+    "Restart=on-failure",
+    "RestartSec=3",
+    "TimeoutStartSec=90",
     "TimeoutStopSec=30",
     "",
     "[Install]",

@@ -32,6 +32,7 @@ test("runtime toolchain catalog pins Nix-provided runtime packages", () => {
   assert.equal(runtimePackage("nodejs-22").provider, VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX);
   assert.equal(runtimePackage("nodejs-22").nix.attr, "nodejs_22");
   assert.equal(runtimePackage("mariadb").version, "10.11.11");
+  assert.equal(runtimePackage("postgresql").version, "16");
   assert.equal(runtimePackage("codex").provider, VIBE64_RUNTIME_PACKAGE_PROVIDER_SYSTEM);
 });
 

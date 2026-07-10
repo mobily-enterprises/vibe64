@@ -44,7 +44,7 @@ import {
   nodeRuntimeShellCommand
 } from "../../nodePackage.js";
 import {
-  jskitManagedMariaDbStartCommandArgs,
+  jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
 import {
@@ -271,7 +271,7 @@ function jskitManagedMariaDbLaunchPreparationCommand({
     return null;
   }
   return {
-    command: shellCommandFromArgs(jskitManagedMariaDbStartCommandArgs({
+    command: shellCommandFromArgs(jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
       serviceDataRoot,
       targetRoot
     })),

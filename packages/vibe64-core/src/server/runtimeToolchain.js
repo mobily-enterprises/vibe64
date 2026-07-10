@@ -39,6 +39,7 @@ const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
   "nodejs-22",
   "php-8.3",
   "playwright",
+  "postgresql",
   "ripgrep"
 ]));
 
@@ -107,6 +108,42 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
       }
     },
     version: "10.11.11"
+  },
+  postgresql: {
+    family: "postgres",
+    id: "postgresql",
+    label: "PostgreSQL",
+    provider: VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX,
+    role: "runtime-service",
+    nix: {
+      attr: "postgresql_16",
+      flakeRef: VIBE64_NIXPKGS_PIN.flakeRef,
+      pin: VIBE64_NIXPKGS_PIN.id
+    },
+    tools: {
+      initdb: {
+        command: "initdb",
+        expected: "PostgreSQL initdb is available.",
+        label: "PostgreSQL initdb",
+        versionArgs: ["--version"],
+        versionPattern: "\\b16\\."
+      },
+      pg_ctl: {
+        command: "pg_ctl",
+        expected: "PostgreSQL server control is available.",
+        label: "PostgreSQL server control",
+        versionArgs: ["--version"],
+        versionPattern: "\\b16\\."
+      },
+      psql: {
+        command: "psql",
+        expected: "PostgreSQL client is available.",
+        label: "PostgreSQL client",
+        versionArgs: ["--version"],
+        versionPattern: "\\b16\\."
+      }
+    },
+    version: "16"
   },
   "php-8.3": {
     family: "php",

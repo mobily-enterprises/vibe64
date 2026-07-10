@@ -695,6 +695,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     };
     const terminalEnv = {
       VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: gitCommandWrapperHostDir,
+      DB_CLIENT: "mysql2",
       DB_HOST: "127.0.0.1",
       DB_NAME: "codex_app_server_db",
       DB_PASSWORD: "test-root-password",

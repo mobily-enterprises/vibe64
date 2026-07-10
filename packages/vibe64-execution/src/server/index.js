@@ -71,7 +71,6 @@ export {
   VIBE64_GIT_AUTH_TOKEN_ENV
 } from "./env/gitEnv.js";
 export {
-  DATABASE_ENV_ALIASES,
   DATABASE_ENV_NAMES,
   databaseEnv
 } from "./env/databaseEnv.js";

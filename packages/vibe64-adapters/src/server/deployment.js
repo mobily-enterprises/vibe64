@@ -1,6 +1,7 @@
 import {
   isPlainObject,
-  normalizeText
+  normalizeText,
+  vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
   RUNTIME_CONFIG_OWNERS,
@@ -16,6 +17,7 @@ import {
 } from "./disposablePaths.js";
 
 const PUBLISH_RELEASE_PORT_ENV = "${PORT:-4100}";
+const RELATIONAL_DATABASE_REQUIREMENT_KIND = "relational-database";
 
 function deploymentCommand(input = null) {
   if (!input || typeof input !== "object" || !normalizeText(input.command)) {
@@ -60,6 +62,30 @@ function deploymentArtifacts(input = {}) {
   };
 }
 
+function deploymentRequirements(input = undefined) {
+  if (input === undefined || input === null) {
+    return [];
+  }
+  if (!Array.isArray(input)) {
+    throw vibe64Error(
+      "Deployment plan requirements must be an array.",
+      "vibe64_deployment_requirements_invalid"
+    );
+  }
+  const requirements = input.map(deploymentRequirement);
+  const ids = new Set();
+  for (const requirement of requirements) {
+    if (ids.has(requirement.id)) {
+      throw vibe64Error(
+        `Deployment requirement id is duplicated: ${requirement.id}.`,
+        "vibe64_deployment_requirement_duplicate"
+      );
+    }
+    ids.add(requirement.id);
+  }
+  return requirements;
+}
+
 function deploymentPublishPlan(input = {}) {
   return {
     adapterId: normalizeText(input.adapterId),
@@ -70,9 +96,55 @@ function deploymentPublishPlan(input = {}) {
     migrate: deploymentCommand(input.migrate),
     ok: input.ok !== false,
     prepare: deploymentCommand(input.prepare),
+    requirements: deploymentRequirements(input.requirements),
     serve: deploymentCommand(input.serve),
     unsupportedReason: normalizeText(input.unsupportedReason)
   };
+}
+
+function deploymentRequirement(input = null) {
+  if (!isPlainObject(input)) {
+    throw vibe64Error(
+      "Deployment requirements must be objects.",
+      "vibe64_deployment_requirement_invalid"
+    );
+  }
+  const id = normalizeText(input.id);
+  const kind = normalizeText(input.kind);
+  const provider = normalizeText(input.provider);
+  if (!id || !kind || !provider) {
+    throw vibe64Error(
+      "Deployment requirements require id, kind, and provider.",
+      "vibe64_deployment_requirement_identity_required"
+    );
+  }
+  if (input.config !== undefined && !isPlainObject(input.config)) {
+    throw vibe64Error(
+      `Deployment requirement ${id} config must be an object.`,
+      "vibe64_deployment_requirement_config_invalid"
+    );
+  }
+  return {
+    config: isPlainObject(input.config) ? structuredClone(input.config) : {},
+    id,
+    kind,
+    provider
+  };
+}
+
+function relationalDatabaseDeploymentRequirement({
+  databaseName = "",
+  id = "database",
+  provider = ""
+} = {}) {
+  return deploymentRequirement({
+    config: {
+      databaseName: normalizeText(databaseName)
+    },
+    id,
+    kind: RELATIONAL_DATABASE_REQUIREMENT_KIND,
+    provider
+  });
 }
 
 function unsupportedDeploymentPublishPlan({
@@ -116,6 +188,7 @@ function deploymentPublishPlanFromCommands({
   prepareCommand = "",
   prepareLabel = "",
   prepareRuntimes = [],
+  requirements = [],
   serveCommand = "",
   serveLabel = "",
   serveRuntimes = []
@@ -151,6 +224,7 @@ function deploymentPublishPlanFromCommands({
           runtimes: prepareRuntimes
         }
       : null,
+    requirements,
     serve: normalizedServeCommand
       ? {
           command: normalizedServeCommand,
@@ -177,6 +251,7 @@ function deploymentPublishPlanFromLaunchDescriptor({
   migrateCommand = "",
   migrateLabel = "",
   prepareLabel = "Install project dependencies.",
+  requirements = [],
   serveLabel = ""
 } = {}) {
   const metadata = launchDescriptorMetadata(descriptor);
@@ -192,6 +267,7 @@ function deploymentPublishPlanFromLaunchDescriptor({
     migrateLabel,
     prepareCommand: packageManager ? installCommand(packageManager) : "",
     prepareLabel,
+    requirements,
     serveCommand: metadata.serverCommand || metadata.testrunCommand,
     serveLabel
   });
@@ -255,8 +331,7 @@ function deploymentEnvironmentResult(input = {}) {
     controlEnv: normalizeDeploymentEnvObject(input.controlEnv),
     services: (Array.isArray(input.services) ? input.services : [])
       .map(deploymentService)
-      .filter((service) => service.id && service.label),
-    toolingEnv: normalizeDeploymentEnvObject(input.toolingEnv)
+      .filter((service) => service.id && service.label)
   };
 }
 
@@ -288,6 +363,7 @@ function deploymentManagedDatabaseService({
 
 export {
   PUBLISH_RELEASE_PORT_ENV,
+  RELATIONAL_DATABASE_REQUIREMENT_KIND,
   deploymentDatabaseNotRequiredService,
   deploymentAppEnvironmentEntry,
   deploymentEnvironmentEntry,
@@ -297,6 +373,7 @@ export {
   deploymentPublishPlanFromCommands,
   deploymentPublishPlanFromLaunchDescriptor,
   deploymentService,
+  relationalDatabaseDeploymentRequirement,
   managedDatabaseEnvironmentEntry,
   publishRootMissingPlan,
   unsupportedDeploymentPublishPlan

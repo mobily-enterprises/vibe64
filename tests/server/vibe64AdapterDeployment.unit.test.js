@@ -20,10 +20,11 @@ import {
   JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/appAuthConfig.js";
 import {
-  jskitMariaDbHostPort,
-  jskitMariaDbPublishedAppPassword,
-  jskitMariaDbPublishedAppUser
+  jskitMariaDbHostPort
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
+import {
+  relationalDatabaseAppUser
+} from "../../packages/vibe64-adapters/src/server/managedDatabases/deployment.js";
 import {
   createLaravelTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/laravel/index.js";
@@ -98,7 +99,9 @@ test("JSKIT adapter provides deployment publish plan and production database env
     const serviceDataRoot = path.join(root, "services");
     const deployment = {
       databaseName: "v64_prod_jskit_test",
-      secret: async () => "unit-local-auth-session-secret"
+      secret: async ({ key } = {}) => key === "VIBE64_MARIADB_DATABASE_APP_PASSWORD"
+        ? "unit-managed-database-password"
+        : "unit-local-auth-session-secret"
     };
     const plan = await adapter.createDeploymentPublishPlan({
       config,
@@ -122,31 +125,39 @@ test("JSKIT adapter provides deployment publish plan and production database env
 
     assert.equal(plan.ok, true);
     assert.equal(plan.adapterId, "jskit");
-    assert.match(plan.prepare.command, /Preparing JSKIT production database/u);
-    assert.match(plan.serve.command, /Preparing JSKIT production database/u);
+    assert.doesNotMatch(plan.prepare.command, /Preparing JSKIT production database|MYSQL_PWD|GRANT ALL PRIVILEGES/u);
+    assert.doesNotMatch(plan.serve.command, /Preparing JSKIT production database|MYSQL_PWD|GRANT ALL PRIVILEGES/u);
     assertNodeRuntimeCommand(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assertNodeRuntimeCommand(plan.build.command, "npm run build");
     assertNodeRuntimeCommand(plan.migrate.command, "npm run db:migrate");
     assertNodeRuntimeCommand(plan.serve.command, "npm run server");
-    assert.deepEqual(plan.prepare.runtimes, ["node22", "mariadb"]);
+    assert.deepEqual(plan.prepare.runtimes, ["node22"]);
     assert.deepEqual(plan.build.runtimes, ["node22"]);
     assert.deepEqual(plan.migrate.runtimes, ["node22"]);
-    assert.deepEqual(plan.serve.runtimes, ["node22", "mariadb"]);
+    assert.deepEqual(plan.serve.runtimes, ["node22"]);
+    assert.deepEqual(plan.requirements, [
+      {
+        config: {
+          databaseName: "v64_prod_jskit_test"
+        },
+        id: "database",
+        kind: "relational-database",
+        provider: "mariadb"
+      }
+    ]);
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PORT").value, managedPort);
-    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, jskitMariaDbPublishedAppUser("v64_prod_jskit_test"));
-    const dbPasswordEntry = environment.appEntries.find((entry) => entry.name === "DB_PASSWORD");
-    assert.equal(dbPasswordEntry.value, jskitMariaDbPublishedAppPassword("v64_prod_jskit_test", {
-      targetRoot: root
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, relationalDatabaseAppUser("v64_prod_jskit_test", {
+      provider: "mariadb"
     }));
+    const dbPasswordEntry = environment.appEntries.find((entry) => entry.name === "DB_PASSWORD");
+    assert.equal(dbPasswordEntry.value, "unit-managed-database-password");
     assert.equal(dbPasswordEntry.owner, "vibe64");
     assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_PROVIDER").owner, "adapter");
     assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_LOCAL_SESSION_SECRET").value, "unit-local-auth-session-secret");
     assert.equal(environment.appEntries.some((entry) => entry.name === "MYSQL_DATABASE"), false);
-    assert.equal(environment.toolingEnv.MYSQL_DATABASE, "v64_prod_jskit_test");
-    assert.equal(environment.toolingEnv.MYSQL_TCP_PORT, managedPort);
-    assert.equal(environment.toolingEnv.VIBE64_MYSQL_USER, "root");
+    assert.equal(environment.toolingEnv, undefined);
     assert.equal(environment.services[0].status, "ready");
     assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");
   } finally {
@@ -201,7 +212,8 @@ test("Laravel adapter provides deployment publish plan and managed DB env", asyn
       }
     };
     const deployment = {
-      databaseName: "v64_prod_laravel_test"
+      databaseName: "v64_prod_laravel_test",
+      secret: async () => "unit-laravel-database-password"
     };
     const plan = await adapter.createDeploymentPublishPlan({
       config,
@@ -220,9 +232,20 @@ test("Laravel adapter provides deployment publish plan and managed DB env", asyn
     assertNodeRuntimeCommand(plan.build.command, "npm run build");
     assertLaravelRuntimeCommand(plan.migrate.command, "php artisan migrate --force --no-interaction --no-ansi");
     assertLaravelRuntimeCommand(plan.serve.command, "php artisan serve --host=0.0.0.0 --port");
+    assert.deepEqual(plan.requirements, [
+      {
+        config: {
+          databaseName: "v64_prod_laravel_test"
+        },
+        id: "database",
+        kind: "relational-database",
+        provider: "mariadb"
+      }
+    ]);
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_CONNECTION").value, "mariadb");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_DATABASE").value, "v64_prod_laravel_test");
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PASSWORD").value, "unit-laravel-database-password");
     assert.equal(environment.services[0].status, "ready");
   } finally {
     await rm(root, {
@@ -258,7 +281,8 @@ test("Node launch adapters provide deployment publish plans from their launch de
 
     const nextAdapter = createNextjsTargetAdapter();
     const nextDeployment = {
-      databaseName: "v64_prod_nextjs_test"
+      databaseName: "v64_prod_nextjs_test",
+      secret: async () => "unit-nextjs-database-password"
     };
     const nextConfig = {
       values: {
@@ -287,8 +311,19 @@ test("Node launch adapters provide deployment publish plans from their launch de
     assertNodeRuntimeCommand(nextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assertNodeRuntimeCommand(nextPlan.build.command, "npm run build");
     assertNodeRuntimeCommand(nextPlan.serve.command, "npm run start -- -H 0.0.0.0 -p");
+    assert.deepEqual(nextPlan.requirements, [
+      {
+        config: {
+          databaseName: "v64_prod_nextjs_test"
+        },
+        id: "database",
+        kind: "relational-database",
+        provider: "postgres"
+      }
+    ]);
     assert.equal(nextPlan.runtimeServices, undefined);
     assert.match(nextEnvironment.appEntries.find((entry) => entry.name === "DATABASE_URL").value, /\/v64_prod_nextjs_test$/u);
+    assert.equal(nextEnvironment.appEntries.find((entry) => entry.name === "DB_PASSWORD").value, "unit-nextjs-database-password");
     assert.equal(nodePlan.ok, true);
     assert.equal(nodePlan.adapterId, "node-web");
     assertNodeRuntimeCommand(nodePlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");

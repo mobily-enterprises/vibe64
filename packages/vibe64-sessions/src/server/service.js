@@ -1344,6 +1344,14 @@ async function drainComposerControls(terminalService, {
         turnId: error?.turnId
       };
     }
+    if (!isPlainObject(result)) {
+      result = {
+        error: "Assistant control delivery returned no result.",
+        ok: false,
+        operationOutcome: "control_result_missing",
+        retryable: false
+      };
+    }
     const threadId = normalizedInputText(result?.thread?.id || result?.threadId);
     const turnId = normalizedInputText(result?.turn?.id || result?.turnId);
     if (result?.ok !== true) {

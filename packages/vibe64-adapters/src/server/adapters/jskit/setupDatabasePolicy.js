@@ -1,15 +1,18 @@
 import {
   JSKIT_MARIADB_APP_USER,
   JSKIT_MARIADB_HOST,
-  JSKIT_MARIADB_ROOT_PASSWORD,
   jskitMariaDbAppPassword,
   jskitMariaDbDatabaseName,
   jskitMariaDbHostPort,
   jskitMariaDbTenantDatabaseGrantPattern,
-  jskitManagedMariaDbStartCommandArgs,
+  jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   managedMariaDbAccessInstructions,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
+import {
+  managedMariaDbServiceStartCommandArgs,
+  readManagedMariaDbAdminPassword
+} from "../../managedDatabases/mariadbRuntime.js";
 import {
   databaseConnectionFromEnv
 } from "../../adapterHelpers/setupDatabaseConnections.js";
@@ -138,7 +141,7 @@ function createDatabaseTerminalAction(targetRoot, toolkit, {
     autoRun: true,
     commandArgs: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
-      return jskitManagedMariaDbStartCommandArgs({
+      return jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
         databaseName: validation.databaseName,
         serviceDataRoot,
         targetRoot
@@ -170,8 +173,7 @@ function startManagedMariaDbTerminalAction(targetRoot, toolkit, {
   return toolkit.hostCommandTerminalAction({
     actionId: "terminal-start-managed-mariadb",
     autoRun: true,
-    commandArgs: () => jskitManagedMariaDbStartCommandArgs({
-      databaseName: databaseNameFromTargetRoot(targetRoot),
+    commandArgs: () => managedMariaDbServiceStartCommandArgs({
       serviceDataRoot,
       targetRoot
     }),
@@ -247,6 +249,16 @@ async function checkJskitDatabaseRuntime(toolkit, {
     envRepair: runtimeConfigRepair,
     rawEnv: env
   };
+  let rootPassword = "";
+  try {
+    rootPassword = await readManagedMariaDbAdminPassword({
+      serviceDataRoot
+    });
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
   return checkMariaDbConnectionSetup(toolkit, {
     database,
     emptyEnv: !hasAnyRuntimeDatabaseValues(env),
@@ -272,7 +284,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
       port: jskitMariaDbHostPort(targetRoot, {
         serviceDataRoot
       }),
-      rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
+      rootPassword,
       startRepair: startManagedMariaDbRepair(targetRoot, toolkit, {
         serviceDataRoot
       }),

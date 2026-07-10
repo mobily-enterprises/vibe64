@@ -39,13 +39,15 @@ import {
   jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
   jskitMariaDbTenantDatabaseGrantPattern,
-  jskitManagedMariaDbServiceMetadata,
-  jskitManagedMariaDbServicePaths,
-  jskitManagedMariaDbServiceSecrets,
-  jskitManagedMariaDbRuntimeRoot,
-  jskitManagedMariaDbStartScript,
+  jskitManagedMariaDbDevelopmentDatabaseScript,
   stopJskitManagedMariaDbRuntime
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
+import {
+  managedMariaDbRuntimeRoot,
+  managedMariaDbServiceMetadata,
+  managedMariaDbServicePaths,
+  managedMariaDbServiceStartScript
+} from "@local/vibe64-adapters/server/managedDatabases/mariadbRuntime";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
@@ -56,6 +58,15 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
   });
 
   assert.equal(result.status, 0, result.stderr || flattened);
+}
+
+function assertShellScriptSyntax(script) {
+  const result = spawnSync("bash", ["-n"], {
+    encoding: "utf8",
+    input: script
+  });
+
+  assert.equal(result.status, 0, result.stderr || script);
 }
 
 function escapedPattern(value = "") {
@@ -171,7 +182,7 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   assert.match(startedTerminal.terminal.commandPreview, new RegExp(jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   }), "u"));
-  assert.equal(jskitManagedMariaDbRuntimeRoot({
+  assert.equal(managedMariaDbRuntimeRoot({
     serviceDataRoot
   }), path.join(serviceDataRoot, "mariadb"));
   assert.equal(
@@ -190,23 +201,43 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
       serviceDataRoot
     })
   );
-  const startScript = jskitManagedMariaDbStartScript({
+  const startScript = managedMariaDbServiceStartScript({
+    serviceDataRoot,
+    targetRoot
+  });
+  const developmentDatabaseScript = jskitManagedMariaDbDevelopmentDatabaseScript({
+    databaseName: "app_db",
     serviceDataRoot,
     targetRoot
   });
   const tenantGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
     serviceDataRoot
   });
+  assertShellScriptSyntax(startScript);
+  assertShellScriptSyntax(developmentDatabaseScript);
   assert.match(startScript, /mariadb-install-db --no-defaults/u);
   assert.doesNotMatch(startScript, /mysql_install_db --no-defaults/u);
   assert.match(startScript, /mariadbd "\$\{mariadb_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
   assert.match(startScript, /mariadb --no-defaults --protocol=TCP/u);
-  assert.match(startScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
-  assert.match(startScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
+  assert.doesNotMatch(startScript, /CREATE USER|GRANT ALL PRIVILEGES|development_app_password/u);
+  assert.match(developmentDatabaseScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
+  assert.match(developmentDatabaseScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
+  const developmentProvisioningScript = developmentDatabaseScript.slice(
+    developmentDatabaseScript.indexOf("development_admin_password_file=")
+  );
+  assert.match(developmentProvisioningScript, /development_admin_password="\$\(cat "\$development_admin_password_file"\)"/u);
+  assert.match(developmentProvisioningScript, /MYSQL_PWD="\$development_admin_password"/u);
+  assert.match(developmentProvisioningScript, /--port="\$development_mariadb_port"/u);
+  assert.doesNotMatch(developmentProvisioningScript, /\$mariadb_password|\$mariadb_port/u);
   assert.match(startScript, /metadata_file="\$runtime_root\/metadata\.json"/u);
-  assert.match(startScript, /secrets_file="\$runtime_root\/secrets\.json"/u);
+  assert.match(startScript, /admin_password_file="\$runtime_root\/admin-password"/u);
+  assert.match(startScript, /od -An -N32 -tx1 \/dev\/urandom/u);
+  assert.match(startScript, /stored_mariadb_password.*previous_bootstrap_password/u);
+  assert.match(startScript, /mariadb_root_previous_bootstrap --execute="ALTER USER/u);
   assert.match(startScript, /cd "\$runtime_root"/u);
-  assert.match(startScript, /chmod 600 "\$metadata_file" "\$secrets_file"/u);
+  assert.match(startScript, /chmod 600 "\$admin_password_file"/u);
+  assert.match(startScript, /chmod 600 "\$temporary_metadata_file"/u);
+  assert.match(startScript, /mv -f "\$temporary_metadata_file" "\$metadata_file"/u);
   assert.equal(defaultDatabaseEnv(targetRoot, {
     serviceDataRoot
   }).DB_USER, JSKIT_MARIADB_APP_USER);
@@ -216,41 +247,31 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     serviceDataRoot
   }));
 
-  const servicePaths = jskitManagedMariaDbServicePaths(targetRoot, {
+  const servicePaths = managedMariaDbServicePaths({
     serviceDataRoot
   });
-  assert.equal(servicePaths.metadataFile, path.join(jskitManagedMariaDbRuntimeRoot({
+  assert.equal(servicePaths.metadataFile, path.join(managedMariaDbRuntimeRoot({
     serviceDataRoot
   }), "metadata.json"));
-  assert.equal(servicePaths.secretsFile, path.join(jskitManagedMariaDbRuntimeRoot({
+  assert.equal(servicePaths.adminPasswordFile, path.join(managedMariaDbRuntimeRoot({
     serviceDataRoot
-  }), "secrets.json"));
-  const metadata = jskitManagedMariaDbServiceMetadata({
-    databaseName: "app_db",
-    recordedAt: "2026-07-06T00:00:00.000Z",
+  }), "admin-password"));
+  const metadata = managedMariaDbServiceMetadata({
+    configuredAt: "2026-07-06T00:00:00.000Z",
     serviceDataRoot,
     status: "running",
     targetRoot
   });
-  assert.equal(metadata.schema, "vibe64.jskit-managed-mariadb-service");
+  assert.equal(metadata.configuredAt, "2026-07-06T00:00:00.000Z");
+  assert.equal(metadata.schema, "vibe64.managed-service.mariadb");
   assert.equal(metadata.service.catalogEntryId, "mariadb");
   assert.equal(metadata.connection.port, jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   }));
-  assert.equal(metadata.database.name, "app_db");
   assert.equal(metadata.status, "running");
+  assert.equal(metadata.database, undefined);
   assert.deepEqual(Object.keys(metadata).includes("admin"), false);
   assert.doesNotMatch(JSON.stringify(metadata), /vibe64_jskit_root|DB_PASSWORD/u);
-  const secrets = jskitManagedMariaDbServiceSecrets({
-    databaseName: "app_db",
-    serviceDataRoot,
-    targetRoot
-  });
-  assert.equal(secrets.admin.username, "root");
-  assert.equal(secrets.app.username, JSKIT_MARIADB_APP_USER);
-  assert.equal(secrets.app.password, jskitMariaDbAppPassword(targetRoot, {
-    serviceDataRoot
-  }));
 
   const createDatabaseAction = actions.find((action) => action.actionId === "terminal-create-app-db");
   await createDatabaseAction.start({
@@ -325,7 +346,7 @@ test("JSKIT setup runtime service checks resolve Runtime Config without material
 test("JSKIT managed MariaDB stop waits for the validated project pid to exit before removing the pid file", async () => {
   const targetRoot = "/workspace/jskit-managed-mariadb-stop";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
+  const paths = managedMariaDbServicePaths({
     serviceDataRoot
   });
   const output = [];
@@ -389,7 +410,7 @@ test("JSKIT managed MariaDB stop waits for the validated project pid to exit bef
 test("JSKIT managed MariaDB stop escalates when the process ignores SIGTERM", async () => {
   const targetRoot = "/workspace/jskit-managed-mariadb-escalate";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
+  const paths = managedMariaDbServicePaths({
     serviceDataRoot
   });
   const signals = [];
@@ -439,7 +460,7 @@ test("JSKIT managed MariaDB stop escalates when the process ignores SIGTERM", as
 test("JSKIT managed MariaDB stop refuses a pid that is not this project's mariadbd", async () => {
   const targetRoot = "/workspace/jskit-managed-mariadb-wrong-pid";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
+  const paths = managedMariaDbServicePaths({
     serviceDataRoot
   });
   const signals = [];

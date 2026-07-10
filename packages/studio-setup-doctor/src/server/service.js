@@ -40,6 +40,7 @@ const STUDIO_SETUP_RUNTIMES = Object.freeze([
   "gh",
   "mysql",
   "mariadb",
+  "postgresql",
   "ripgrep",
   "bubblewrap",
   "bun",

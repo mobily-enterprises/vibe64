@@ -122,7 +122,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
-test("execution gateway gives Codex commands DB aliases, fallback git identity, shared browser cache, and actor HOME", async () => {
+test("execution gateway gives Codex commands native database client env, fallback git identity, shared browser cache, and actor HOME", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
     actor: "app",
@@ -148,6 +148,7 @@ test("execution gateway gives Codex commands DB aliases, fallback git identity, 
     ],
     project: {
       databaseEnv: {
+        DB_CLIENT: "mysql2",
         DB_HOST: "127.0.0.1",
         DB_NAME: "sas_compas_next",
         DB_PASSWORD: "secret",
@@ -201,6 +202,7 @@ test("execution gateway gives Codex PTY terminals the same DB, Git identity, bro
     mode: "pty",
     project: {
       databaseEnv: {
+        DB_CLIENT: "mysql2",
         DB_HOST: "127.0.0.1",
         DB_NAME: "sas_compas_next"
       },
@@ -441,14 +443,16 @@ test("execution gateway gives preview and terminal commands the same runtime PAT
   assert.equal(preview.stdout.trim(), terminal.stdout.trim());
 });
 
-test("execution gateway resolves canonical DB env and MySQL aliases together", async () => {
+test("execution gateway projects canonical DB env for the selected database client", async () => {
   assert.deepEqual(databaseEnv({
+    DB_CLIENT: "mysql2",
     DB_HOST: "127.0.0.1",
     DB_NAME: "tenant_app",
     DB_PASSWORD: "secret",
     DB_PORT: "3307",
     DB_USER: "vibe64_dev_app"
   }), {
+    DB_CLIENT: "mysql2",
     DB_HOST: "127.0.0.1",
     DB_NAME: "tenant_app",
     DB_PASSWORD: "secret",
@@ -468,20 +472,36 @@ test("execution gateway resolves canonical DB env and MySQL aliases together", a
     MYSQL_TCP_PORT: "3310",
     VIBE64_MYSQL_USER: "root"
   }), {
-    DB_HOST: "localhost",
-    DB_NAME: "legacy_app",
-    DB_PASSWORD: "legacy-secret",
-    DB_PORT: "3310",
-    DB_USER: "root",
     MYSQL_DATABASE: "legacy_app",
     MYSQL_HOST: "localhost",
     MYSQL_PWD: "legacy-secret",
     MYSQL_TCP_PORT: "3310",
     VIBE64_MYSQL_USER: "root"
   });
+
+  assert.deepEqual(databaseEnv({
+    DB_CLIENT: "pg",
+    DB_HOST: "127.0.0.1",
+    DB_NAME: "tenant_app",
+    DB_PASSWORD: "secret",
+    DB_PORT: "5432",
+    DB_USER: "tenant_app"
+  }), {
+    DB_CLIENT: "pg",
+    DB_HOST: "127.0.0.1",
+    DB_NAME: "tenant_app",
+    DB_PASSWORD: "secret",
+    DB_PORT: "5432",
+    DB_USER: "tenant_app",
+    PGDATABASE: "tenant_app",
+    PGHOST: "127.0.0.1",
+    PGPASSWORD: "secret",
+    PGPORT: "5432",
+    PGUSER: "tenant_app"
+  });
 });
 
-test("execution gateway gives preview and deployment commands canonical DB aliases from their own policy sources", async () => {
+test("execution gateway gives preview and deployment commands native database client env from their own policy sources", async () => {
   const dbProbeArgs = [
     "-e",
     [
@@ -499,6 +519,7 @@ test("execution gateway gives preview and deployment commands canonical DB alias
     envPolicy: "preview",
     project: {
       runtimeConfigEnv: {
+        DB_CLIENT: "mysql2",
         DB_NAME: "preview_db",
         DB_PASSWORD: "preview-secret",
         DB_PORT: "24712"
@@ -512,6 +533,7 @@ test("execution gateway gives preview and deployment commands canonical DB alias
     envPolicy: "deployment",
     project: {
       deploymentDatabaseEnv: {
+        DB_CLIENT: "mysql2",
         DB_NAME: "deployment_db",
         DB_PASSWORD: "deployment-secret",
         DB_PORT: "3306"
@@ -560,6 +582,7 @@ test("execution gateway env policies keep deployment commands away from session-
     envPolicy: "deployment",
     project: {
       databaseEnv: {
+        DB_CLIENT: "mysql2",
         DB_NAME: "production_db",
         DB_PASSWORD: "production-secret"
       }
@@ -604,6 +627,7 @@ test("execution gateway gives deployment commands production DB env, Git identit
     gitTransport: "github-https",
     project: {
       deploymentDatabaseEnv: {
+        DB_CLIENT: "mysql2",
         DB_HOST: "127.0.0.1",
         DB_NAME: "prod_sas_app",
         DB_PASSWORD: "prod-secret",
@@ -777,6 +801,7 @@ test("execution gateway resolves project and runtime config env records centrall
       },
       runtimeConfigEnv: {
         APP_PUBLIC_URL: "http://localhost:3000",
+        DB_CLIENT: "mysql2",
         DB_HOST: "127.0.0.1",
         DB_NAME: "sas_compas_next",
         DB_PASSWORD: "runtime-secret"
@@ -872,6 +897,7 @@ test("execution gateway canonicalizes dynamic PTY database env through caller en
     ],
     command: process.execPath,
     env: () => ({
+      DB_CLIENT: "mysql2",
       DB_NAME: "dynamic_db",
       DB_PASSWORD: "dynamic-secret"
     }),
@@ -1052,7 +1078,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 14), [
+  assert.deepEqual(parts.slice(0, 15), [
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
     "/runtime-packs/node22/bin",
@@ -1060,6 +1086,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
     "/runtime-packs/git/bin",
     "/runtime-packs/gh/bin",
     "/runtime-packs/mariadb/bin",
+    "/runtime-packs/postgresql/bin",
     "/runtime-packs/ripgrep/bin",
     "/runtime-packs/bubblewrap/bin",
     "/runtime-packs/bun/bin",

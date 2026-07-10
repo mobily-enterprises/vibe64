@@ -25,7 +25,7 @@ import {
 } from "@local/vibe64-core/server/projectManifest";
 import {
   jskitMariaDbDatabaseName,
-  jskitManagedMariaDbStartCommandArgs,
+  jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   stopJskitManagedMariaDbRuntime
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 
@@ -272,7 +272,7 @@ async function runRuntimeUp(cwd = process.cwd(), {
     stdout.write("No managed runtime services selected.\n");
     return 0;
   }
-  return runCliCommand(jskitManagedMariaDbStartCommandArgs({
+  return runCliCommand(jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
     databaseName: jskitMariaDbDatabaseName(cwd),
     serviceDataRoot: cliServiceDataRoot(cwd),
     targetRoot: cwd
@@ -287,8 +287,7 @@ async function runRuntimeUp(cwd = process.cwd(), {
 async function runRuntimeDown(cwd = process.cwd(), stdout = process.stdout) {
   const result = await stopJskitManagedMariaDbRuntime({
     serviceDataRoot: cliServiceDataRoot(cwd),
-    stdout,
-    targetRoot: cwd
+    stdout
   });
   return result.ok ? 0 : 1;
 }
