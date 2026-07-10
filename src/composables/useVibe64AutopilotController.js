@@ -787,6 +787,7 @@ function useVibe64AutopilotController({
 
   async function runPresentedIntent(intent = {}, {
     agentSettings: requestedAgentSettings = null,
+    composerSubmissionId = "",
     continueAfterCompletion = true,
     displayFields = {},
     fields = {}
@@ -801,6 +802,7 @@ function useVibe64AutopilotController({
       const response = await actions.runIntentById?.({
         ...agentSettingsRequestOptions(requestedAgentSettings || currentAgentSettings.value),
         ...displayFieldsRequestOptions(displayFields),
+        composerSubmissionId,
         fields,
         intentId: intent.id,
         sessionId: currentSession.value?.sessionId || "",

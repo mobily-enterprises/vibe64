@@ -91,6 +91,7 @@ describe("useVibe64AutopilotController", () => {
     });
 
     await context.controller.runPresentedIntent(context.session.value.intents[0], {
+      composerSubmissionId: "composer-submission-1",
       fields: {
         feedback: "Please adjust the copy."
       },
@@ -98,6 +99,7 @@ describe("useVibe64AutopilotController", () => {
     });
 
     expect(context.actions.runIntentById).toHaveBeenCalledWith({
+      composerSubmissionId: "composer-submission-1",
       fields: {
         feedback: "Please adjust the copy."
       },
