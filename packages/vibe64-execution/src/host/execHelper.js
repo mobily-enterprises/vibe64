@@ -432,10 +432,6 @@ function pathIsDeploymentReleasePath(releaseStateRoot = "", candidatePath = "") 
     (parts[4] === "artifact" || parts[4] === "service");
 }
 
-function pathContains(parentPath = "", childPath = "") {
-  return relativePathParts(parentPath, childPath).length > 0 || path.resolve(parentPath) === path.resolve(childPath);
-}
-
 function relativePathParts(parentPath = "", childPath = "") {
   const parent = String(parentPath || "").trim();
   const child = String(childPath || "").trim();

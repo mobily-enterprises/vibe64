@@ -1402,7 +1402,6 @@ function createCommandTerminalController({
               },
               namespace,
               namespaceLimitPrefix: namespace,
-              spec,
               onClose: async ({ exitCode, id, output, resultFile }) => {
                 const onCloseStartedAtMs = Date.now();
                 vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
