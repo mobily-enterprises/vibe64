@@ -1740,7 +1740,7 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
   });
 });
 
-test("launch readiness is published immediately after the target probe succeeds", async () => {
+test("launch readiness marker publishes immediately without the recovery probe", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-ready-stability";
     const namespace = launchTargetTerminalNamespace(sessionId);
@@ -1755,14 +1755,13 @@ test("launch readiness is published immediately after the target probe succeeds"
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      launchReadyStabilityDelayMs: 1000,
       probeLaunchTargetImpl: async (href, options) => {
         probes.push({
           href,
           targetHref: options.targetHref,
           terminalSessionId: options.terminal.id
         });
-        return true;
+        return false;
       },
       projectService: {
         targetRoot,
@@ -1842,18 +1841,14 @@ test("launch readiness is published immediately after the target probe succeeds"
       assert.equal(terminal.ok, true);
       await waitForCondition(
         () => metadata.launch_target_id === "dev",
-        "Launch readiness metadata was not published after the target probe succeeded.",
+        "Launch readiness metadata was not published after the readiness marker.",
         500
       );
       assert.equal(metadata.launch_target_id, "dev");
       assert.equal(metadata.launch_target_terminal_id, terminal.id);
-      assert.deepEqual(probes, [
-        {
-          href: "http://127.0.0.1:4100/app",
-          targetHref: "http://127.0.0.1:4100/app",
-          terminalSessionId: terminal.id
-        }
-      ]);
+      assert.equal(readTerminalSession(terminal.id, { namespace }).metadata.launchReady, true);
+      assert.equal(readTerminalSession(terminal.id, { namespace }).metadata.launchReadySource, "marker");
+      assert.deepEqual(probes, []);
       assert.deepEqual(published, [
         {
           payload: {
@@ -1867,108 +1862,6 @@ test("launch readiness is published immediately after the target probe succeeds"
         namespace
       });
     }
-  });
-});
-
-test("launch readiness is not published when the terminal exits during the stability gate", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "launch-ready-dies-before-stable";
-    const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:unstable]]";
-    const metadata = {};
-    const published = [];
-    const session = {
-      metadata: {},
-      sessionId,
-      sessionRoot: testSessionRoot(targetRoot, sessionId),
-      targetRoot
-    };
-    const controller = createLaunchTargetTerminalController({
-      launchReadyStabilityDelayMs: 80,
-      projectService: {
-        targetRoot,
-        async createRuntime() {
-          return {
-            adapter: {
-              async createLaunchTargetTerminalSpec() {
-                return {
-                  args: [
-                    "-e",
-                    `console.log(${JSON.stringify(readinessMarker)});`
-                  ],
-                  command: process.execPath,
-                  cwd: targetRoot,
-                  metadata: {
-                    launchReady: false,
-                    launchTargetId: "dev",
-                    openTarget: {
-                      href: "http://127.0.0.1:4100/app",
-                      kind: "url",
-                      label: "Open browser"
-                    },
-                    readinessMarker,
-                    targetRoot
-                  },
-                  ok: true,
-                  readinessMarker,
-                  reuseRunning: true
-                };
-              },
-              async listLaunchTargets() {
-                return [
-                  {
-                    id: "dev",
-                    label: "Run app"
-                  }
-                ];
-              }
-            },
-            async getSession() {
-              return session;
-            },
-            projectConfig: {},
-            store: {
-              async deleteMetadataValue(_sessionId, key) {
-                delete metadata[key];
-              },
-              async mutateSession(_sessionId, operation) {
-                return operation();
-              },
-              async readMetadataValue(_sessionId, key) {
-                return metadata[key] || "";
-              },
-              async writeMetadataValue(_sessionId, key, value) {
-                metadata[key] = value;
-              }
-            }
-          };
-        },
-        async projectConfigEnvironment() {
-          return {};
-        }
-      },
-      publishSessionChanged: async (publishedSessionId, payload) => {
-        published.push({
-          payload,
-          sessionId: publishedSessionId
-        });
-      }
-    });
-
-    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
-      launchTargetId: "dev"
-    }));
-
-    assert.equal(terminal.ok, true);
-    await delay(160);
-    assert.equal(metadata.launch_target_id, undefined);
-    assert.deepEqual(published, []);
-    await waitForCondition(
-      () => readTerminalSession(terminal.id, {
-        namespace: launchTargetTerminalNamespace(sessionId)
-      }).status === "exited",
-      "Launch terminal did not exit after emitting readiness before the stability gate.",
-      1000
-    );
   });
 });
 

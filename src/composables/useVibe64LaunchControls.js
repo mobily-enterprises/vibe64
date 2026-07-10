@@ -665,7 +665,6 @@ function useVibe64LaunchControls({
   let scheduledAutoStartKey = "";
   let launchStatusAttemptLoading = false;
   let launchStatusAttemptScopeKey = "";
-  let launchTargetsRefreshInFlight = null;
   let launchStatusIdleRecoveryTimer = 0;
   let launchStatusIdleRecoveryScopeKey = "";
   let launchStatusIdleRecoveryCount = 0;
@@ -1138,25 +1137,11 @@ function useVibe64LaunchControls({
     if (!refreshScopeKey) {
       return null;
     }
-    if (launchTargetsRefreshInFlight?.scopeKey === refreshScopeKey) {
-      return launchTargetsRefreshInFlight.promise;
-    }
-    const refreshPromise = typeof launchTargetsResource.query?.refetch === "function"
+    return typeof launchTargetsResource.query?.refetch === "function"
       ? launchTargetsResource.query.refetch({
-          cancelRefetch: false
+          cancelRefetch: true
         })
       : launchTargetsResource.reload();
-    launchTargetsRefreshInFlight = {
-      promise: refreshPromise,
-      scopeKey: refreshScopeKey
-    };
-    try {
-      return await refreshPromise;
-    } finally {
-      if (launchTargetsRefreshInFlight?.promise === refreshPromise) {
-        launchTargetsRefreshInFlight = null;
-      }
-    }
   }
 
   useRealtimeEvent({
