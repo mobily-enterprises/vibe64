@@ -395,26 +395,6 @@ function codexAppServerAgentRunSnapshot(session = {}) {
     .find((run) => run.id === CODEX_APP_SERVER_AGENT_RUN_ID) || null;
 }
 
-function assertCodexSteerProviderInput(input = "", userText = "", {
-  stepId = "",
-  stepStatus = ""
-} = {}) {
-  assert.match(input, /Vibe64 steering update for the active Codex turn/u);
-  assert.match(input, /Do not stop the turn just to answer this steering text/u);
-  assert.match(input, /finish with the normal Vibe64 agent result envelope/u);
-  assert.ok(input.includes(AGENT_TURN_RESULT_BEGIN));
-  assert.ok(input.includes(AGENT_TURN_RESULT_END));
-  assert.ok(input.includes(`"schema": "${AGENT_TURN_RESULT_SCHEMA}"`));
-  assert.match(input, /"stepStatus": "(?!\{\{)[^"]+"/u);
-  assert.ok(input.includes(userText));
-  if (stepId) {
-    assert.ok(input.includes(`"stepId": "${stepId}"`));
-  }
-  if (stepStatus) {
-    assert.ok(input.includes(`"stepStatus": "${stepStatus}"`));
-  }
-}
-
 function writeAgentRunEventToSession(session = {}, runId = "", {
   event = {},
   patch = {}
@@ -5726,9 +5706,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const userSteerCall = providerCalls.steerTurn[0];
     assert.equal(userSteerCall.threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(userSteerCall.turnId, "codex-app-server-turn-1");
-    assertCodexSteerProviderInput(userSteerCall.input, "What are you up to?", {
-      stepId: "maintenance_conversation"
-    });
+    assert.equal(userSteerCall.input, "What are you up to?");
     assert.equal(session.metadata.codex_context_refresh_pending, "yes");
     assert.equal((await runtime.store.readConversationLog()).at(-1)?.user?.text, "What are you up to?");
     const publishCountBeforeSteerUserMirror = publishSessionEvents.length;
@@ -6941,9 +6919,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
     assert.equal(steerCalls.length, 1);
     assert.equal(steerCalls[0].threadId, threadId);
     assert.equal(steerCalls[0].turnId, turnId);
-    assertCodexSteerProviderInput(steerCalls[0].input, "Use the existing tests as the guide.", {
-      stepId: "issue_file_created"
-    });
+    assert.equal(steerCalls[0].input, "Use the existing tests as the guide.");
     const conversationLog = await runtime.store.readConversationLog(sessionId);
     assert.equal(conversationLog.length, 1);
     assert.equal(conversationLog[0].user.text, "Use the existing tests as the guide.");
@@ -6953,25 +6929,20 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
       steerEvent?.payload?.conversationLogPatch?.turn?.user?.text,
       "Use the existing tests as the guide."
     );
-    const wrappedSteerResult = await controller.steerTurn(sessionId, {
+    const attachmentSteerResult = await controller.steerTurn(sessionId, {
       displayFields: {
         conversationRequest: "Skip verify"
       },
       fields: {
         conversationRequest: "Skip verify\n\nAttached files:\n- image.png: /home/v64d_example/.local/state/vibe64/uploads/image.png"
       },
-      message: [
-        "Vibe64 steering update for the active Codex turn.",
-        "",
-        "User steering text:",
-        "```",
-        "Skip verify",
-        "```"
-      ].join("\n"),
       originId: "tab:test"
     });
-    assert.equal(wrappedSteerResult.ok, true);
-    assert.match(steerCalls.at(-1)?.input, /Vibe64 steering update for the active Codex turn/u);
+    assert.equal(attachmentSteerResult.ok, true);
+    assert.equal(
+      steerCalls.at(-1)?.input,
+      "Skip verify\n\nAttached files:\n- image.png: /home/v64d_example/.local/state/vibe64/uploads/image.png"
+    );
     const displayConversationLog = await runtime.store.readConversationLog(sessionId);
     assert.equal(displayConversationLog.at(-1)?.user.text, "Skip verify");
     const latestSteerEvent = publishSessionEvents
@@ -6991,9 +6962,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
       originId: "tab:test"
     });
     assert.equal(displayOnlySteerResult.ok, true);
-    assertCodexSteerProviderInput(steerCalls.at(-1)?.input, "[Prompt: Check UI]\nFull Check UI prompt text.", {
-      stepId: "issue_file_created"
-    });
+    assert.equal(steerCalls.at(-1)?.input, "[Prompt: Check UI]\nFull Check UI prompt text.");
     const compactPromptConversationLog = await runtime.store.readConversationLog(sessionId);
     assert.equal(compactPromptConversationLog.at(-1)?.user.text, "Prompt: Check UI");
     let session = await runtime.getSession(sessionId);
@@ -7015,9 +6984,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
     assert.equal(gitPromptResult.ok, true);
     assert.equal(steerCalls.at(-1)?.threadId, threadId);
     assert.equal(steerCalls.at(-1)?.turnId, turnId);
-    assertCodexSteerProviderInput(steerCalls.at(-1)?.input, "Please commit and push the current changes now.", {
-      stepId: "issue_file_created"
-    });
+    assert.equal(steerCalls.at(-1)?.input, "Please commit and push the current changes now.");
     session = await runtime.getSession(sessionId);
     assert.equal(session.metadata.session_git_command_actor_scope, "local");
     assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);

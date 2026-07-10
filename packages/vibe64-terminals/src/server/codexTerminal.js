@@ -51,7 +51,6 @@ import {
 import {
   AGENT_TURN_RESULT_BEGIN,
   AGENT_TURN_RESULT_END,
-  agentTurnResultEnvelopeExample,
   parseAgentTurnResultEnvelope,
   stripAgentTurnResultEnvelope
 } from "@local/vibe64-runtime/server/agentTurnResults";
@@ -1267,10 +1266,10 @@ function codexAppServerSteerInputText(input = {}) {
   const fields = isRecord(input.fields) ? input.fields : {};
   const displayFields = isRecord(input.displayFields) ? input.displayFields : {};
   return normalizeText(
-    input.message ||
-    input.text ||
     fields.conversationRequest ||
     fields.message ||
+    input.message ||
+    input.text ||
     displayFields.conversationRequest ||
     displayFields.message
   );
@@ -1291,38 +1290,6 @@ function codexAppServerSteerDisplayText(input = {}, fallback = "") {
     input.message ||
     fallback
   );
-}
-
-function codexAppServerSteerProviderInputText(message = "", session = {}) {
-  const text = normalizeText(message);
-  if (!text) {
-    return "";
-  }
-  const run = codexAppServerAgentRun(session);
-  const stepId = normalizeText(session.currentStep) || normalizeText(run?.stepId) || "{{session.currentStep}}";
-  const stepStatus = normalizeText(session.stepMachine?.status) ||
-    normalizeText(run?.stepStatus) ||
-    "awaiting_agent_result";
-  return [
-    "Vibe64 steering update for the active Codex turn.",
-    "",
-    "This is guidance for the already-running task. Do not stop the turn just to answer this steering text, and do not switch into a standalone Q&A response.",
-    "Fold the steering text into your current work and continue unless the steering text explicitly makes continuation impossible.",
-    "If you must return control, ask the user for input, report a blocker, or otherwise end the routed turn, finish with the normal Vibe64 agent result envelope. Use the active step identifiers and the appropriate `kind` (`ready` or `waiting_for_input`).",
-    "",
-    "Minimum envelope shape if you need to stop and ask/report instead of continuing:",
-    agentTurnResultEnvelopeExample({
-      kind: "waiting_for_input",
-      message: "<question or blocker>",
-      stepId,
-      stepStatus
-    }),
-    "",
-    "User steering text:",
-    "```",
-    text,
-    "```"
-  ].join("\n");
 }
 
 function sessionBriefingIsDelivered(session = {}) {
@@ -7470,8 +7437,7 @@ function createCodexTerminalController({
         workdir
       })
     );
-    const providerMessage = codexAppServerSteerProviderInputText(message, session);
-    const result = await provider.steerTurn(threadId, turnId, providerMessage);
+    const result = await provider.steerTurn(threadId, turnId, message);
     const steerFailure = codexAppServerSteerFailure(result);
     if (steerFailure) {
       return {
