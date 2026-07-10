@@ -11,6 +11,7 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
+  VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_SPARK_MODEL
 } from "@local/vibe64-runtime/shared";
 import {
@@ -104,7 +105,7 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     approvalPolicy: "never",
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
     developerInstructions: "Vibe64 briefing",
-    model: "gpt-5.5",
+    model: VIBE64_CODEX_DEFAULT_MODEL,
     sandbox: "danger-full-access"
   });
   assert.deepEqual(codexAppServerTurnSettings({
@@ -113,7 +114,7 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     approvalPolicy: "never",
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
     effort: "xhigh",
-    model: "gpt-5.5",
+    model: VIBE64_CODEX_DEFAULT_MODEL,
     sandboxPolicy: {
       type: "dangerFullAccess"
     },
@@ -128,7 +129,7 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     approvalPolicy: "never",
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
     effort: "high",
-    model: "gpt-5.5",
+    model: VIBE64_CODEX_DEFAULT_MODEL,
     sandboxPolicy: {
       type: "dangerFullAccess"
     },
@@ -273,7 +274,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
         approvalPolicy: "never",
         cwd: "/repo/worktree",
         developerInstructions: null,
-        model: "gpt-5.5",
+        model: VIBE64_CODEX_DEFAULT_MODEL,
         sandbox: "danger-full-access"
       },
       threadId: "thread-existing"

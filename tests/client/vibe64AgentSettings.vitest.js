@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
+  VIBE64_CODEX_GPT_5_5_MODEL,
+  VIBE64_CODEX_SOL_MODEL,
   VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
   VIBE64_CODEX_SOURCE_EXPLANATION_THINKING,
   VIBE64_CODEX_SPARK_MODEL,
@@ -27,12 +29,17 @@ describe("vibe64AgentSettings", () => {
       providerId: "codex",
       thinking: ""
     });
-    expect(displayVibe64AgentSetting(settings.providerId, "model", settings.model)).toBe("Automatic");
+    expect(displayVibe64AgentSetting(settings.providerId, "model", settings.model)).toBe(
+      "Automatic (GPT-5.6 Sol)"
+    );
     expect(effectiveVibe64AgentSettings(settings)).toEqual({
-      model: VIBE64_CODEX_DEFAULT_MODEL,
+      model: VIBE64_CODEX_SOL_MODEL,
       providerId: "codex",
       thinking: VIBE64_CODEX_DEFAULT_THINKING
     });
+    expect(VIBE64_CODEX_DEFAULT_MODEL).toBe(VIBE64_CODEX_SOL_MODEL);
+    expect(displayVibe64AgentSetting("codex", "model", VIBE64_CODEX_SOL_MODEL)).toBe("GPT-5.6 Sol");
+    expect(displayVibe64AgentSetting("codex", "model", VIBE64_CODEX_GPT_5_5_MODEL)).toBe("GPT-5.5");
   });
 
   it("normalizes unsupported values before they reach an AI provider adapter", () => {

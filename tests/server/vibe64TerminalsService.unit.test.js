@@ -5532,7 +5532,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.sendTurn.length, 2);
     assert.equal(providerCalls.startThread[0].approvalPolicy, "never");
     assert.equal(providerCalls.startThread[0].cwd, worktree);
-    assert.equal(providerCalls.startThread[0].model, "gpt-5.5");
+    assert.equal(providerCalls.startThread[0].model, "gpt-5.6-sol");
     assert.equal(providerCalls.startThread[0].sandbox, "danger-full-access");
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result contract/u);

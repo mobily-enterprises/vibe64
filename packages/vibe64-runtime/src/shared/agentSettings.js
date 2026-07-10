@@ -13,7 +13,9 @@ const VIBE64_AGENT_PARAMETER_IDS = Object.freeze({
 });
 
 const VIBE64_DEFAULT_AGENT_PROVIDER_ID = VIBE64_AGENT_PROVIDER_IDS.CODEX;
-const VIBE64_CODEX_DEFAULT_MODEL = "gpt-5.5";
+const VIBE64_CODEX_SOL_MODEL = "gpt-5.6-sol";
+const VIBE64_CODEX_GPT_5_5_MODEL = "gpt-5.5";
+const VIBE64_CODEX_DEFAULT_MODEL = VIBE64_CODEX_SOL_MODEL;
 const VIBE64_CODEX_DEFAULT_THINKING = "xhigh";
 const VIBE64_CODEX_SPARK_MODEL = "gpt-5.3-codex-spark";
 const VIBE64_CODEX_SOURCE_EXPLANATION_MODEL = VIBE64_CODEX_SPARK_MODEL;
@@ -31,12 +33,16 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
         label: "Model",
         options: Object.freeze([
           Object.freeze({
-            label: "Automatic",
+            label: "Automatic (GPT-5.6 Sol)",
             value: ""
           }),
           Object.freeze({
-            label: "GPT-5.5",
+            label: "GPT-5.6 Sol",
             value: VIBE64_CODEX_DEFAULT_MODEL
+          }),
+          Object.freeze({
+            label: "GPT-5.5",
+            value: VIBE64_CODEX_GPT_5_5_MODEL
           }),
           Object.freeze({
             label: "Codex Spark",
@@ -236,6 +242,8 @@ export {
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
+  VIBE64_CODEX_GPT_5_5_MODEL,
+  VIBE64_CODEX_SOL_MODEL,
   VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
   VIBE64_CODEX_SOURCE_EXPLANATION_THINKING,
   VIBE64_CODEX_SPARK_MODEL,
