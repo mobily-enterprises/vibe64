@@ -200,6 +200,9 @@ test("embedded preview auto-starts the dev target without exposing the target pi
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
+  const waitingState = page.locator(".vibe64-launch-controls__preview-empty");
+  await expect(waitingState).toBeVisible();
+  await expect(waitingState.getByRole("button")).toHaveCount(0);
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
       launchInput: {
@@ -332,6 +335,7 @@ test("embedded preview clears the opening overlay when bridge reports rendered c
   await expect(loadingOverlay).toContainText("Loading preview page");
   await expect(loadingOverlay).toContainText("The server is ready; the browser is still loading the app.");
   await expect(loadingOverlay.locator(".vibe64-launch-controls__preview-pulse")).toBeVisible();
+  await expect(loadingOverlay.getByRole("button")).toHaveCount(0);
   await expect(
     page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
   ).toBeVisible();

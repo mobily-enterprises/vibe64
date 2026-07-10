@@ -418,27 +418,6 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewInFlightText || "Opening preview." }}</span>
-        <div class="vibe64-launch-controls__preview-diagnostic-actions">
-          <v-btn
-            v-if="previewTryVisible"
-            :prepend-icon="mdiRefresh"
-            size="small"
-            title="Try preview"
-            variant="tonal"
-            @click="tryEmbeddedPreview"
-          >
-            Try
-          </v-btn>
-          <v-btn
-            v-if="previewCanShowLog"
-            :prepend-icon="mdiConsoleLine"
-            size="small"
-            variant="text"
-            @click="showLaunchLog"
-          >
-            Show log
-          </v-btn>
-        </div>
       </div>
       <div
         v-if="previewNoticeVisible"
@@ -490,16 +469,6 @@
         >
           {{ launchStatusDetailText }}
         </code>
-        <v-btn
-          v-if="previewTryVisible"
-          :prepend-icon="mdiPlayCircleOutline"
-          size="small"
-          title="Try preview"
-          variant="tonal"
-          @click="tryEmbeddedPreview"
-        >
-          Try
-        </v-btn>
       </div>
       <Vibe64TerminalFrame
         v-if="embeddedTerminalFrameVisible"
