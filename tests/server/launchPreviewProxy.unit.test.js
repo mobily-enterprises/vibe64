@@ -278,6 +278,39 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   });
 });
 
+test("launch preview proxy inherits the host XDG runtime directory when scoped env omits it", async () => {
+  const runtimeDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-runtime-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-feedface1234--workspace.vibe64.dev";
+    const socketPath = previewPublicSocketPath(publicOrigin, {
+      XDG_RUNTIME_DIR: runtimeDir
+    });
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {},
+      hostEnv: {
+        XDG_RUNTIME_DIR: runtimeDir
+      }
+    });
+    try {
+      const preview = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-host-runtime",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-host-runtime"
+      });
+
+      assert.equal(preview.available, true);
+      assert.equal((await stat(socketPath)).isSocket(), true);
+    } finally {
+      await registry.closeAll();
+      await rm(runtimeDir, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
 test("launch preview public socket path supports localhost HTTP origins", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   try {

@@ -1033,13 +1033,15 @@ function upgradeResponseHead(response) {
 
 function createLaunchPreviewProxyRegistry({
   env = process.env,
+  hostEnv = process.env,
   socketIdleTimeoutMs = undefined
 } = {}) {
+  const runtimeEnv = previewProxyRuntimeEnv(env, hostEnv);
   const proxies = new Map();
   const pendingStarts = new Map();
   let publicSocketPreparation = null;
   const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, {
-    env
+    env: runtimeEnv
   });
 
   async function ensure(input = {}, connectHref = "") {
@@ -1047,7 +1049,7 @@ function createLaunchPreviewProxyRegistry({
     if (publicOrigin) {
       if (!publicSocketPreparation) {
         publicSocketPreparation = pruneStalePreviewSockets({
-          env
+          env: runtimeEnv
         }).catch((error) => {
           publicSocketPreparation = null;
           throw error;
@@ -1158,7 +1160,7 @@ function createLaunchPreviewProxyRegistry({
         ...scope,
         targetHref: targetUrl.toString()
       }, {
-        env,
+        env: runtimeEnv,
         previewAuth,
         publicOrigin,
         socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs
@@ -1286,6 +1288,19 @@ function createLaunchPreviewProxyRegistry({
     closeAll,
     ensure
   });
+}
+
+function previewProxyRuntimeEnv(env = {}, hostEnv = process.env) {
+  const hostRuntimeEnv = hostEnv && typeof hostEnv === "object" && !Array.isArray(hostEnv)
+    ? hostEnv
+    : {};
+  const configuredEnv = env && typeof env === "object" && !Array.isArray(env)
+    ? env
+    : {};
+  return {
+    ...hostRuntimeEnv,
+    ...configuredEnv
+  };
 }
 
 function previewProxyScope(input = {}, {
