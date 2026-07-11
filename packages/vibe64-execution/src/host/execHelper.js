@@ -292,10 +292,18 @@ function installSystemdUnit({
     "enable",
     unitName
   ]);
-  runRootCommand("systemctl", [
-    activation,
-    unitName
-  ]);
+  try {
+    runRootCommand("systemctl", [
+      activation,
+      unitName
+    ]);
+  } catch (error) {
+    runRootCommandAllowFailure("systemctl", [
+      "stop",
+      unitName
+    ]);
+    throw error;
+  }
 }
 
 function removeDeploymentServiceUnit(unitName = "") {

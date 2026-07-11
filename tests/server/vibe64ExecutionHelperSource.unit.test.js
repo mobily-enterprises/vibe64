@@ -66,6 +66,7 @@ test("execution helper manages provider-neutral simple and forking services", as
   assert.match(source, /processModel !== "forking" && processModel !== "simple"/u);
   assert.match(source, /normalizedProcessModel === "forking" \? \[`PIDFile=/u);
   assert.match(source, /Restart=on-failure/u);
+  assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"stop",\s*unitName/u);
   assert.doesNotMatch(source, /function handleMariaDb|function handlePostgres|function handleRedis/u);
 });
 
