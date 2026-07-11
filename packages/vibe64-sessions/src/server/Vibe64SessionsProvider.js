@@ -77,6 +77,9 @@ class Vibe64SessionsProvider {
           })],
           broadcastComposerDraft: [vibe64ComposerChangedServiceEvent()],
           broadcastSessionViewState: [vibe64SessionViewChangedServiceEvent()],
+          cancelAgentMessage: [vibe64SessionChangedServiceEvent({
+            reason: "session-agent-message-cancelled"
+          })],
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],

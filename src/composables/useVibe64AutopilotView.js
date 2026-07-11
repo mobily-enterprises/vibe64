@@ -179,6 +179,10 @@ const vibe64AutopilotViewProps = {
     default: false,
     type: Boolean
   },
+  cancelAgentMessage: {
+    default: async () => false,
+    type: Function
+  },
   commandRunner: {
     default: null,
     type: Object
@@ -1057,6 +1061,7 @@ function useVibe64AutopilotView(props, emit) {
   });
   composerHandoffState = useVibe64ComposerHandoffState({
     actionsClear: () => props.actions?.clear?.(),
+    cancelAgentMessage: props.cancelAgentMessage,
     clearSelectedComposerDraft,
     composerHandoff: computed(() => props.session?.composerHandoff || null),
     composerDraftSync: () => composerDraftSync,
@@ -1079,6 +1084,7 @@ function useVibe64AutopilotView(props, emit) {
     sendAgentMessage: props.sendAgentMessage
   });
   const {
+    cancelOptimisticComposerTurn,
     clearLocalComposerSubmissionIfCanonical,
     clearRemoteComposerSubmissionIfCanonical,
     editOptimisticComposerTurn,
@@ -2452,6 +2458,7 @@ function useVibe64AutopilotView(props, emit) {
     composerInputLocked,
     composerMenuItems,
     composerVisible,
+    cancelOptimisticComposerTurn,
     conversationTimelineControlVisible,
     conversationLogVisible,
     controlSurfaceMode,

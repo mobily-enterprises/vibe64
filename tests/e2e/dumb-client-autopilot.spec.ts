@@ -2675,6 +2675,77 @@ test.describe("Autopilot dumb client contract", () => {
     ]);
   });
 
+  test("cancels a failed durable message without losing the composer draft or focus", async ({ page }) => {
+    const cancelledMessageIds: string[] = [];
+    const session = sessionPayload({
+      agentSession: sessionAgentState({
+        active: false
+      }),
+      composerMessages: [
+        {
+          displayMessage: "Please discard this failed message.",
+          error: "The assistant message could not be delivered.",
+          id: "composer:tab:cancel-me",
+          message: "Please discard this failed message.",
+          state: "failed",
+          submittedAt: "2026-07-10T16:00:00.000Z"
+        }
+      ],
+      intents: [
+        {
+          dispatchRoute: "session-message",
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What do you want to ask Codex?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        }
+      ],
+      presentation: {
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        }
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onAgentMessageCancel(messageId) {
+        cancelledMessageIds.push(messageId);
+        session.composerMessages = (session.composerMessages as Record<string, unknown>[])
+          .map((message) => message.id === messageId
+            ? {
+                ...message,
+                state: "cancelled"
+              }
+            : message);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const input = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
+    await input.fill("This draft must survive cancellation");
+    await expect(page.getByText("Please discard this failed message.", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await expect.poll(() => cancelledMessageIds).toEqual(["composer:tab:cancel-me"]);
+    await expect(page.getByText("Please discard this failed message.", { exact: true })).toHaveCount(0);
+    await expect(input).toHaveValue("This draft must survive cancellation");
+    await expect(input).toBeFocused();
+  });
+
   test("surfaces the maintenance finish action beside the active chat composer", async ({ page }) => {
     const actionRequests: unknown[] = [];
     const intentRequests: unknown[] = [];
@@ -4310,6 +4381,7 @@ async function mockVibe64Session(
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
+    onAgentMessageCancel = () => undefined,
     onAgentTurnInterrupt = () => undefined,
     onAgentMessage = () => undefined,
     onConversationLogRead = () => undefined,
@@ -4328,6 +4400,7 @@ async function mockVibe64Session(
     onAdvance?: () => void;
     onCommandTerminalClose?: () => void;
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
+    onAgentMessageCancel?: (messageId: string, body?: Record<string, unknown>) => void;
     onAgentTerminalStart?: () => Record<string, unknown> | void;
     onAgentTurnInterrupt?: (body?: Record<string, unknown>) => void;
     onAgentMessage?: (body?: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -4373,6 +4446,19 @@ async function mockVibe64Session(
         interrupted: true,
         ok: true,
         ...session
+      });
+      return;
+    }
+    if (method === "POST" && /\/agent-message\/[^/]+\/cancel$/u.test(url.pathname)) {
+      const encodedMessageId = url.pathname.split("/").at(-2) || "";
+      onAgentMessageCancel(
+        decodeURIComponent(encodedMessageId),
+        requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>
+      );
+      await fulfillJson(route, {
+        cancelled: true,
+        messageId: decodeURIComponent(encodedMessageId),
+        ok: true
       });
       return;
     }

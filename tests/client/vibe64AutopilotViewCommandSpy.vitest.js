@@ -242,6 +242,20 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(componentSource).toContain("if (!props.active || !chatBodyScrollContainerActive())");
   });
 
+  it("offers durable cancellation beside resend for failed chat messages", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
+    const conversationLogBlock = componentSource.match(/<Vibe64ConversationLog[\s\S]*?\/>/u)?.[0] || "";
+
+    expect(conversationLogSource).toContain("emit('resend-turn', turn.optimistic.id)");
+    expect(conversationLogSource).toContain("emit('cancel-turn', turn.optimistic.id)");
+    expect(conversationLogSource).toContain("Resend");
+    expect(conversationLogSource).toContain("Cancel");
+    expect(conversationLogBlock).toContain("@cancel-turn=\"cancelOptimisticComposerTurnAndFocus\"");
+    expect(componentSource).toContain("function cancelOptimisticComposerTurnAndFocus(submissionId = \"\")");
+    expect(componentSource).toContain("focusBottomComposer();");
+  });
+
   it("lets users scroll away from live conversation updates", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
 

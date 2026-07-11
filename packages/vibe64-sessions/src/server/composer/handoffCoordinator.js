@@ -12,6 +12,11 @@ import {
   pendingComposerMessages
 } from "./messageState.js";
 
+const COMPOSER_DRAIN_OPERATION_NAMES = Object.freeze({
+  controls: "composer-controls-drain",
+  messages: "composer-messages-drain"
+});
+
 function positiveDelayMs(value = 0, fallback = 0) {
   const delay = Number(value);
   return Number.isFinite(delay) && delay > 0 ? delay : fallback;
@@ -93,7 +98,7 @@ function createComposerHandoffCoordinator({
     }
     return startTask(key, async () => {
       const exclusive = await runComposerSessionExclusive({
-        operationName: `composer-${kind}-drain`,
+        operationName: COMPOSER_DRAIN_OPERATION_NAMES[kind],
         runtime,
         session
       }, async () => {
@@ -144,6 +149,20 @@ function createComposerHandoffCoordinator({
 
   function drainMessagesForSession(input = {}) {
     return drainOperation("messages", drainMessages, input);
+  }
+
+  function runMessagesExclusive({
+    runtime = null,
+    session = null
+  } = {}, operation) {
+    if (typeof operation !== "function") {
+      throw new TypeError("Exclusive composer message work requires an operation.");
+    }
+    return runComposerSessionExclusive({
+      operationName: COMPOSER_DRAIN_OPERATION_NAMES.messages,
+      runtime,
+      session
+    }, operation);
   }
 
   async function drainSessionQueues(input = {}) {
@@ -280,6 +299,7 @@ function createComposerHandoffCoordinator({
     drain: drainControlsForSession,
     drainMessages: drainMessagesForSession,
     resume,
+    runMessagesExclusive,
     schedule
   });
 }

@@ -69,6 +69,7 @@ function optimisticComposerMessageFromDelivery(delivery = {}, {
 
 function useVibe64ComposerHandoffState({
   actionsClear = () => null,
+  cancelAgentMessage = async () => false,
   clearSelectedComposerDraft = () => false,
   composerHandoff = null,
   composerDraftSync = () => null,
@@ -340,6 +341,22 @@ function useVibe64ComposerHandoffState({
     return optimisticComposerMessages.value.length !== previousLength;
   }
 
+  async function cancelOptimisticComposerTurn(submissionId = "") {
+    const optimistic = optimisticComposerTurn.value?.id === submissionId
+      ? optimisticComposerTurn.value
+      : optimisticComposerMessages.value.find((turn) => turn.id === submissionId);
+    if (!optimistic || optimistic.id !== submissionId || optimistic.status !== "failed") {
+      return false;
+    }
+    if (
+      optimistic.messageDelivery === true &&
+      await cancelAgentMessage({ messageId: submissionId }) === false
+    ) {
+      return false;
+    }
+    return clearOptimisticComposerTurn(submissionId);
+  }
+
   async function resendOptimisticComposerTurn(submissionId = "") {
     const messageIndex = optimisticComposerMessages.value
       .findIndex((turn) => turn.id === submissionId);
@@ -398,6 +415,12 @@ function useVibe64ComposerHandoffState({
         ? optimisticComposerTurn.value
         : optimisticComposerMessages.value[messageIndex];
       const state = String(delivery?.state || "").trim();
+      if (state === "cancelled") {
+        if (optimistic && clearOptimisticComposerTurn(submissionId)) {
+          changed = true;
+        }
+        continue;
+      }
       if (state === "delivered") {
         if (optimistic && optimistic.status !== "delivered") {
           const delivered = {
@@ -499,6 +522,7 @@ function useVibe64ComposerHandoffState({
   return {
     applyRemoteComposerSubmissionRejected,
     applyRemoteComposerSubmissionStart,
+    cancelOptimisticComposerTurn,
     clearLocalComposerSubmissionIfCanonical,
     clearOptimisticComposerTurn,
     clearRemoteComposerSubmissionIfCanonical,

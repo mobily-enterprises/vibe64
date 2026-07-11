@@ -62,7 +62,9 @@ import {
 import {
   COMPOSER_MESSAGE_AGENT_RUN_ID,
   COMPOSER_MESSAGE_SETTLEMENTS,
+  COMPOSER_MESSAGE_STATES,
   acceptComposerMessage,
+  cancelComposerMessage,
   composerMessageBatch,
   pendingComposerMessages,
   publicComposerMessages,
@@ -2799,6 +2801,66 @@ function createService({
   }
 
   return Object.freeze({
+    async cancelAgentMessage(sessionId, messageId, input = {}) {
+      const startedAtMs = Date.now();
+      const normalizedSessionId = normalizedInputText(sessionId);
+      const normalizedMessageId = normalizedInputText(messageId);
+      if (!normalizedSessionId || !normalizedMessageId) {
+        return {
+          code: "vibe64_agent_message_cancel_input_required",
+          error: "Assistant message cancellation requires a session and message id.",
+          ok: false
+        };
+      }
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
+      const session = await runtime.getSession(normalizedSessionId);
+      const exclusive = await composerHandoffCoordinator.runMessagesExclusive({
+        runtime,
+        session
+      }, () => cancelComposerMessage(runtime, normalizedSessionId, normalizedMessageId, input));
+      if (!exclusive.acquired) {
+        return {
+          code: "vibe64_agent_message_cancel_in_progress",
+          error: "This message is already being delivered and can no longer be cancelled.",
+          messageId: normalizedMessageId,
+          ok: false,
+          sessionId: normalizedSessionId
+        };
+      }
+      const message = exclusive.value;
+      if (!message) {
+        return {
+          code: "vibe64_agent_message_not_found",
+          error: "The assistant message no longer exists.",
+          messageId: normalizedMessageId,
+          ok: false,
+          sessionId: normalizedSessionId
+        };
+      }
+      if (message.state !== COMPOSER_MESSAGE_STATES.CANCELLED) {
+        return {
+          code: "vibe64_agent_message_cancel_unavailable",
+          error: "Only a failed assistant message can be cancelled.",
+          messageId: normalizedMessageId,
+          ok: false,
+          sessionId: normalizedSessionId,
+          state: message.state
+        };
+      }
+      vibe64SessionDebugLog("server.service.composerMessage.cancelled", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        messageId: normalizedMessageId,
+        originId: normalizedInputText(input?.originId),
+        sessionId: normalizedSessionId
+      });
+      return {
+        cancelled: true,
+        messageId: normalizedMessageId,
+        ok: true,
+        sessionId: normalizedSessionId
+      };
+    },
+
     async interruptAgentTurn(sessionId, input = {}) {
       const normalizedSessionId = normalizedInputText(sessionId);
       if (!normalizedSessionId) {
@@ -2891,6 +2953,15 @@ function createService({
         originId: input?.originId,
         vibe64User: input?.vibe64User
       });
+      if (request.state === COMPOSER_MESSAGE_STATES.CANCELLED) {
+        return {
+          code: "vibe64_agent_message_cancelled",
+          error: "This assistant message was cancelled and cannot be resent.",
+          messageId: request.messageId,
+          ok: false,
+          sessionId: normalizedSessionId
+        };
+      }
       void composerHandoffCoordinator.drainMessages({
         runtime,
         session: await runtime.getSession(normalizedSessionId)

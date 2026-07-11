@@ -8,6 +8,7 @@ import {
 const COMPOSER_MESSAGE_AGENT_RUN_ID = "composer_messages";
 const COMPOSER_MESSAGE_STATES = Object.freeze({
   ACCEPTED: "accepted",
+  CANCELLED: "cancelled",
   DELIVERED: "delivered",
   FAILED: "failed"
 });
@@ -18,6 +19,7 @@ const COMPOSER_MESSAGE_SETTLEMENTS = Object.freeze({
 });
 const COMPOSER_MESSAGE_EVENT_KINDS = Object.freeze({
   ACCEPTED: "composer-message-accepted",
+  CANCELLED: "composer-message-cancelled",
   DEFERRED: "composer-message-deferred",
   DELIVERED: "composer-message-delivered",
   FAILED: "composer-message-failed",
@@ -76,6 +78,7 @@ function composerMessageRequests(source = {}) {
           ? request.agentSettings
           : {},
         attempts: 0,
+        cancelledAt: "",
         displayFields: request.displayFields && typeof request.displayFields === "object" && !Array.isArray(request.displayFields)
           ? request.displayFields
           : {},
@@ -102,7 +105,10 @@ function composerMessageRequests(source = {}) {
     if (!current) {
       continue;
     }
-    if (kind === COMPOSER_MESSAGE_EVENT_KINDS.RETRIED) {
+    if (
+      kind === COMPOSER_MESSAGE_EVENT_KINDS.RETRIED &&
+      current.state === COMPOSER_MESSAGE_STATES.FAILED
+    ) {
       const retryRequest = event.request && typeof event.request === "object" && !Array.isArray(event.request)
         ? event.request
         : {};
@@ -122,7 +128,10 @@ function composerMessageRequests(source = {}) {
         submittedAt: normalizeText(event.at) || current.submittedAt,
         vibe64User: composerMessageVibe64User(retryRequest.vibe64User) || current.vibe64User
       });
-    } else if (kind === COMPOSER_MESSAGE_EVENT_KINDS.DEFERRED) {
+    } else if (
+      kind === COMPOSER_MESSAGE_EVENT_KINDS.DEFERRED &&
+      current.state === COMPOSER_MESSAGE_STATES.ACCEPTED
+    ) {
       requests.set(messageId, {
         ...current,
         attempts: current.attempts + 1,
@@ -133,7 +142,10 @@ function composerMessageRequests(source = {}) {
         threadId: normalizeText(event.threadId) || current.threadId,
         turnId: normalizeText(event.turnId) || current.turnId
       });
-    } else if (kind === COMPOSER_MESSAGE_EVENT_KINDS.DELIVERED) {
+    } else if (
+      kind === COMPOSER_MESSAGE_EVENT_KINDS.DELIVERED &&
+      current.state === COMPOSER_MESSAGE_STATES.ACCEPTED
+    ) {
       requests.set(messageId, {
         ...current,
         attempts: current.attempts + 1,
@@ -145,7 +157,10 @@ function composerMessageRequests(source = {}) {
         threadId: normalizeText(event.threadId) || current.threadId,
         turnId: normalizeText(event.turnId) || current.turnId
       });
-    } else if (kind === COMPOSER_MESSAGE_EVENT_KINDS.FAILED) {
+    } else if (
+      kind === COMPOSER_MESSAGE_EVENT_KINDS.FAILED &&
+      current.state === COMPOSER_MESSAGE_STATES.ACCEPTED
+    ) {
       requests.set(messageId, {
         ...current,
         attempts: current.attempts + 1,
@@ -156,6 +171,18 @@ function composerMessageRequests(source = {}) {
         state: COMPOSER_MESSAGE_STATES.FAILED,
         threadId: normalizeText(event.threadId) || current.threadId,
         turnId: normalizeText(event.turnId) || current.turnId
+      });
+    } else if (
+      kind === COMPOSER_MESSAGE_EVENT_KINDS.CANCELLED &&
+      current.state === COMPOSER_MESSAGE_STATES.FAILED
+    ) {
+      requests.set(messageId, {
+        ...current,
+        cancelledAt: normalizeText(event.at),
+        error: "",
+        operationOutcome: "cancelled_by_user",
+        retryable: false,
+        state: COMPOSER_MESSAGE_STATES.CANCELLED
       });
     }
   }
@@ -278,6 +305,34 @@ async function acceptComposerMessage(runtime, sessionId = "", input = {}) {
     .find((candidate) => candidate.messageId === request.messageId);
 }
 
+async function cancelComposerMessage(runtime, sessionId = "", messageId = "", input = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedMessageId = normalizeText(messageId);
+  if (
+    !normalizedSessionId ||
+    !normalizedMessageId ||
+    typeof runtime?.getSession !== "function" ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function"
+  ) {
+    throw new TypeError("Composer message cancellation requires a session, message id, and runtime store.");
+  }
+  const session = await runtime.getSession(normalizedSessionId);
+  const current = composerMessageRequests(session)
+    .find((candidate) => candidate.messageId === normalizedMessageId);
+  if (!current || current.state !== COMPOSER_MESSAGE_STATES.FAILED) {
+    return current || null;
+  }
+  const run = await writeComposerMessageEvent(runtime, normalizedSessionId, {
+    at: new Date().toISOString(),
+    kind: COMPOSER_MESSAGE_EVENT_KINDS.CANCELLED,
+    messageId: normalizedMessageId,
+    originId: normalizeText(input?.originId),
+    vibe64User: composerMessageVibe64User(input?.vibe64User)
+  });
+  return composerMessageRequests(run)
+    .find((candidate) => candidate.messageId === normalizedMessageId);
+}
+
 async function settleComposerMessage(runtime, sessionId = "", messageId = "", {
   error = "",
   operationOutcome = "",
@@ -327,6 +382,7 @@ function publicComposerMessages(source = {}) {
   return composerMessageRequests(source).map((message) => ({
     afterSubmissionId: message.afterSubmissionId,
     attempts: message.attempts,
+    ...(message.cancelledAt ? { cancelledAt: message.cancelledAt } : {}),
     displayMessage: normalizeText(
       message.displayFields?.conversationRequest ||
       message.displayFields?.message ||
@@ -351,6 +407,7 @@ export {
   COMPOSER_MESSAGE_SETTLEMENTS,
   COMPOSER_MESSAGE_STATES,
   acceptComposerMessage,
+  cancelComposerMessage,
   composerMessageBatch,
   composerMessageRequests,
   pendingComposerMessages,

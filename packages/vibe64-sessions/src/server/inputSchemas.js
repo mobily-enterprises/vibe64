@@ -97,6 +97,13 @@ const agentMessageInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const agentMessageCancelInputValidator = deepFreeze({
+  schema: createSchema({
+    ...originInputSchema
+  }),
+  mode: "patch"
+});
+
 const agentTurnInterruptInputValidator = deepFreeze({
   schema: createSchema({
     afterSubmissionId: {
@@ -413,6 +420,7 @@ const sessionRewindInputValidator = deepFreeze({
 });
 
 export {
+  agentMessageCancelInputValidator,
   agentTurnInterruptInputValidator,
   agentMessageInputValidator,
   sessionActionInputValidator,

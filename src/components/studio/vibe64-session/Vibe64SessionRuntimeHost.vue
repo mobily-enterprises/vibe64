@@ -9,6 +9,7 @@
       :automation-enabled="autopilotAutomationEnabled"
       :autopilot-steps="autopilotNavigationSteps"
       :chat-collapsed="props.chatCollapsed"
+      :cancel-agent-message="cancelAgentMessage"
       :command-runner="autopilotCommandRunner"
       :conversation-log="conversationLog"
       :diff="dialogs.diff"
@@ -139,6 +140,7 @@ const {
   autopilotNavigationSteps,
   autopilotSessionToolbar,
   agentTerminal,
+  cancelAgentMessage,
   codexTerminalCanStart,
   codexTerminalListenWhenHidden,
   codexTerminalReadOnly,

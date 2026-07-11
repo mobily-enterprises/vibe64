@@ -574,6 +574,50 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   }
 
+  async function cancelAgentMessage(input = "") {
+    const sessionId = selectedSessionId.value || props.sessionId;
+    const messageId = String(
+      input && typeof input === "object" && !Array.isArray(input)
+        ? input.messageId || input.composerSubmissionId
+        : input
+    ).trim();
+    if (!sessionId || !messageId) {
+      return false;
+    }
+    const path = vibe64SessionPath(
+      readRefOrGetterValue(props.sessionData.sessionsApiPath),
+      sessionId,
+      `/agent-message/${encodeURIComponent(messageId)}/cancel`
+    );
+    vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.cancel.start", {
+      messageId,
+      sessionId
+    });
+    try {
+      const result = await getUsersWebHttpClient().request(path, {
+        body: agentTurnControlPayloadFromContext({ sessionId }),
+        method: "POST",
+        signal: AbortSignal.timeout(AGENT_MESSAGE_ACCEPT_TIMEOUT_MS)
+      });
+      await props.sessionData.refreshSessionData().catch(() => null);
+      const cancelled = Boolean(result?.cancelled === true && result?.ok !== false);
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.cancel", {
+        cancelled,
+        messageId,
+        sessionId
+      });
+      return cancelled;
+    } catch (error) {
+      await props.sessionData.refreshSessionData().catch(() => null);
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.cancel.error", {
+        error: String(error?.message || error || "Assistant message cancellation failed."),
+        messageId,
+        sessionId
+      });
+      return false;
+    }
+  }
+
   function sendAgentMessage(input = {}) {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
@@ -733,6 +777,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     autopilotNavigationSteps,
     autopilotSessionToolbar,
     agentTerminal,
+    cancelAgentMessage,
     codexTerminalCanStart,
     codexTerminalListenWhenHidden,
     codexTerminalReadOnly,

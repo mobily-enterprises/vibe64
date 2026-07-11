@@ -69,11 +69,12 @@
           :source-root="sessionSourceRoot"
           :turns="chatTurns"
           :visible="conversationLogVisible"
-          @edit-turn="editOptimisticComposerTurn"
+          @cancel-turn="cancelOptimisticComposerTurnAndFocus"
+          @edit-turn="editOptimisticComposerTurnAndFocus"
           @load-more="loadMoreChatTurns"
           @open-source-file="openSourceEditorFile"
           @reload="reloadChatPane"
-          @resend-turn="resendOptimisticComposerTurn"
+          @resend-turn="resendOptimisticComposerTurnAndFocus"
         />
 
         <template v-if="reportPreviewVisible">
@@ -740,6 +741,7 @@ const {
   conversationLogVisible,
   conversationScrollKey,
   currentAgentSettings,
+  cancelOptimisticComposerTurn,
   dashboardShellVisible,
   dashboardSessionContext,
   editOptimisticComposerTurn,
@@ -848,6 +850,24 @@ function submitComposerControlAndFocus(options = {}) {
   const submission = submitComposerControl(options);
   focusBottomComposer();
   return submission;
+}
+
+function cancelOptimisticComposerTurnAndFocus(submissionId = "") {
+  const cancellation = cancelOptimisticComposerTurn(submissionId);
+  focusBottomComposer();
+  return cancellation;
+}
+
+function editOptimisticComposerTurnAndFocus(submissionId = "") {
+  const edited = editOptimisticComposerTurn(submissionId);
+  focusBottomComposer();
+  return edited;
+}
+
+function resendOptimisticComposerTurnAndFocus(submissionId = "") {
+  const resend = resendOptimisticComposerTurn(submissionId);
+  focusBottomComposer();
+  return resend;
 }
 
 onBeforeUpdate(() => {

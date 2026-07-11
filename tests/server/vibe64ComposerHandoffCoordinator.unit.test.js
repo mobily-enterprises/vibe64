@@ -220,3 +220,67 @@ test("composer handoff coordinator never loses a control wake-up while draining"
   await first;
   assert.equal(drains, 2);
 });
+
+test("exclusive message actions cannot race the cross-process delivery drain", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({
+      projectLocalRoot: projectRuntimeRoot(targetRoot),
+      targetRoot
+    });
+    const session = await store.createSession({
+      sessionId: "message-action-exclusivity"
+    });
+    const runtime = {
+      store
+    };
+    let markDrainStarted = () => null;
+    let releaseDrain = () => null;
+    const drainStarted = new Promise((resolve) => {
+      markDrainStarted = resolve;
+    });
+    const drainGate = new Promise((resolve) => {
+      releaseDrain = resolve;
+    });
+    const drainingCoordinator = createComposerHandoffCoordinator({
+      async activate() {},
+      async deliver() {},
+      async drainMessages() {
+        markDrainStarted();
+        await drainGate;
+      }
+    });
+    const cancellingCoordinator = createComposerHandoffCoordinator({
+      async activate() {},
+      async deliver() {}
+    });
+
+    const drain = drainingCoordinator.drainMessages({
+      runtime,
+      session
+    });
+    await drainStarted;
+    assert.deepEqual(
+      await cancellingCoordinator.runMessagesExclusive({
+        runtime,
+        session
+      }, async () => "must-not-run"),
+      {
+        acquired: false,
+        value: null
+      }
+    );
+
+    releaseDrain();
+    await drain;
+    assert.deepEqual(
+      await cancellingCoordinator.runMessagesExclusive({
+        runtime,
+        session
+      }, async () => "cancelled"),
+      {
+        acquired: true,
+        value: "cancelled"
+      }
+    );
+  });
+});

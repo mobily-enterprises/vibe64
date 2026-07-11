@@ -1921,6 +1921,77 @@ test("assistant message preparation failures remain durable and resendable", asy
   assert.equal(message.state, "failed");
 });
 
+test("failed assistant messages can be cancelled idempotently and cannot be resent", async () => {
+  const sessionId = "session-message-cancel";
+  const harness = composerMessageRuntimeHarness({
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  let deliveryAttempts = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async sendAgentMessage() {
+        deliveryAttempts += 1;
+        return {
+          error: "Provider unavailable",
+          ok: false,
+          operationOutcome: "provider_unavailable",
+          retryable: false
+        };
+      }
+    }
+  });
+
+  await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "message-cancel-1",
+    message: "Do not send this"
+  });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (publicSessionResponse(harness.currentSession()).composerMessages[0]?.state === "failed") {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.deepEqual(await service.cancelAgentMessage(sessionId, "message-cancel-1", {
+    originId: "browser-1",
+    vibe64User: {
+      username: "alice"
+    }
+  }), {
+    cancelled: true,
+    messageId: "message-cancel-1",
+    ok: true,
+    sessionId
+  });
+  assert.equal(publicSessionResponse(harness.currentSession()).composerMessages[0].state, "cancelled");
+  assert.deepEqual(await service.cancelAgentMessage(sessionId, "message-cancel-1"), {
+    cancelled: true,
+    messageId: "message-cancel-1",
+    ok: true,
+    sessionId
+  });
+
+  const resend = await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "message-cancel-1",
+    message: "Do not send this"
+  });
+  assert.deepEqual(resend, {
+    code: "vibe64_agent_message_cancelled",
+    error: "This assistant message was cancelled and cannot be resent.",
+    messageId: "message-cancel-1",
+    ok: false,
+    sessionId
+  });
+  assert.equal(deliveryAttempts, 1);
+});
+
 test("session composer messages let a stale Stop cancel delivery and interrupt the current handoff", async () => {
   const previousHandoffAt = new Date().toISOString();
   let currentSession = {

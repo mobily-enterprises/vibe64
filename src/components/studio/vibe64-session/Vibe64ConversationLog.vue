@@ -146,6 +146,14 @@
                   size="x-small"
                   type="button"
                   variant="text"
+                  @click="emit('cancel-turn', turn.optimistic.id)"
+                >
+                  Cancel
+                </v-btn>
+                <v-btn
+                  size="x-small"
+                  type="button"
+                  variant="text"
                   @click="emit('edit-turn', turn.optimistic.id)"
                 >
                   Edit
@@ -288,7 +296,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["edit-turn", "load-more", "open-source-file", "reload", "resend-turn"]);
+const emit = defineEmits(["cancel-turn", "edit-turn", "load-more", "open-source-file", "reload", "resend-turn"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);

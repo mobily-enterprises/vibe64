@@ -474,6 +474,71 @@ test("assistant message route belongs to sessions and rejects a spoofed Vibe64 u
   });
 });
 
+test("assistant message cancellation route belongs to sessions and uses the authenticated Vibe64 user", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = testRouteApp();
+      const make = app.make.bind(app);
+      app.make = (token) => token === "feature.vibe64-sessions.service"
+        ? {
+            async cancelAgentMessage(sessionId, messageId, input) {
+              calls.push({
+                input,
+                messageId,
+                sessionId
+              });
+              return {
+                cancelled: true,
+                ok: true
+              };
+            }
+          }
+        : make(token);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-message/:messageId/cancel`
+      });
+      assert.ok(route, "Expected sessions-owned assistant message cancellation route");
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const reply = testReply();
+      await route.handler({
+        input: {
+          body: {
+            originId: "browser-1",
+            vibe64User: {
+              email: "spoof@example.com"
+            }
+          }
+        },
+        params: routeProjectParams({
+          messageId: "message-1",
+          sessionId: "session-1"
+        }),
+        vibe64User: serverUser
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, [{
+        input: {
+          originId: "browser-1",
+          vibe64User: serverUser
+        },
+        messageId: "message-1",
+        sessionId: "session-1"
+      }]);
+    });
+  });
+});
+
 test("assistant interrupt route belongs to sessions and rejects a spoofed Vibe64 user", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {

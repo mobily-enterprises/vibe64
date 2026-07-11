@@ -203,6 +203,62 @@ describe("useVibe64ComposerHandoffState", () => {
     });
   });
 
+  it("cancels a failed message durably before removing its chat bubble", async () => {
+    const submissionId = "composer:tab:message-cancel";
+    const optimisticComposerMessages = ref([{
+      error: "Message delivery failed.",
+      id: submissionId,
+      messageDelivery: true,
+      status: "failed",
+      text: "Do not send this"
+    }]);
+    const cancelAgentMessage = vi.fn(async () => true);
+    const state = useVibe64ComposerHandoffState({
+      cancelAgentMessage,
+      conversationComposerFallbackDraft: ref(""),
+      optimisticComposerMessages,
+      optimisticComposerTurn: ref(null),
+      remoteComposerSubmission: ref(null)
+    });
+
+    expect(await state.cancelOptimisticComposerTurn(submissionId)).toBe(true);
+    expect(cancelAgentMessage).toHaveBeenCalledWith({
+      messageId: submissionId
+    });
+    expect(optimisticComposerMessages.value).toEqual([]);
+  });
+
+  it("keeps a failed bubble recoverable when durable cancellation fails", async () => {
+    const submissionId = "composer:tab:message-cancel-failed";
+    const optimisticComposerMessages = ref([{
+      error: "Message delivery failed.",
+      id: submissionId,
+      messageDelivery: true,
+      status: "failed",
+      text: "Keep this visible"
+    }]);
+    const state = useVibe64ComposerHandoffState({
+      cancelAgentMessage: vi.fn(async () => false),
+      conversationComposerFallbackDraft: ref(""),
+      optimisticComposerMessages,
+      optimisticComposerTurn: ref(null),
+      remoteComposerSubmission: ref(null)
+    });
+
+    expect(await state.cancelOptimisticComposerTurn(submissionId)).toBe(false);
+    expect(optimisticComposerMessages.value).toEqual([
+      expect.objectContaining({
+        id: submissionId,
+        status: "failed"
+      })
+    ]);
+    expect(state.reconcileComposerMessageOutcomes([{
+      id: submissionId,
+      state: "cancelled"
+    }])).toBe(true);
+    expect(optimisticComposerMessages.value).toEqual([]);
+  });
+
   it("settles only the delivered optimistic message while its canonical chat turn catches up", () => {
     const optimisticComposerMessages = ref([
       {

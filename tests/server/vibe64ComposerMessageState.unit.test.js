@@ -5,6 +5,7 @@ import {
   COMPOSER_MESSAGE_AGENT_RUN_ID,
   COMPOSER_MESSAGE_SETTLEMENTS,
   acceptComposerMessage,
+  cancelComposerMessage,
   composerMessageBatch,
   composerMessageRequests,
   pendingComposerMessages,
@@ -226,4 +227,49 @@ test("composer message deferral remains pending for automatic retry", async () =
   assert.equal(message.messageId, "message-waiting");
   assert.equal(message.retryable, true);
   assert.equal(message.attempts, 1);
+});
+
+test("failed composer messages can be durably cancelled but never retried afterwards", async () => {
+  const runtime = testRuntime();
+  await acceptComposerMessage(runtime, runtime.session.sessionId, {
+    composerSubmissionId: "message-cancelled",
+    message: "Do not send this"
+  });
+  await settleComposerMessage(runtime, runtime.session.sessionId, "message-cancelled", {
+    error: "Provider unavailable",
+    operationOutcome: "provider_unavailable",
+    outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED
+  });
+
+  const cancelled = await cancelComposerMessage(
+    runtime,
+    runtime.session.sessionId,
+    "message-cancelled",
+    {
+      originId: "browser-1",
+      vibe64User: {
+        username: "alice"
+      }
+    }
+  );
+  assert.equal(cancelled.state, "cancelled");
+  assert.equal(cancelled.operationOutcome, "cancelled_by_user");
+  assert.match(cancelled.cancelledAt, /^\d{4}-\d{2}-\d{2}T/u);
+  assert.deepEqual(pendingComposerMessages(runtime.session), []);
+
+  const eventCount = runtime.session.agentRuns[0].events.length;
+  const cancelledAgain = await cancelComposerMessage(
+    runtime,
+    runtime.session.sessionId,
+    "message-cancelled"
+  );
+  assert.equal(cancelledAgain.state, "cancelled");
+  assert.equal(runtime.session.agentRuns[0].events.length, eventCount);
+
+  const resend = await acceptComposerMessage(runtime, runtime.session.sessionId, {
+    composerSubmissionId: "message-cancelled",
+    message: "Do not send this"
+  });
+  assert.equal(resend.state, "cancelled");
+  assert.deepEqual(pendingComposerMessages(runtime.session), []);
 });

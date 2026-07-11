@@ -14,6 +14,7 @@ import {
   ACTION_RUN_SESSION_INTENT
 } from "./actions.js";
 import {
+  agentMessageCancelInputValidator,
   agentMessageInputValidator,
   agentTurnInterruptInputValidator
 } from "./inputSchemas.js";
@@ -108,6 +109,17 @@ function registerRoutes(
   }, (request) => {
     return app.make("feature.vibe64-sessions.service").sendAgentMessage(
       request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-message/:messageId/cancel", {
+    body: agentMessageCancelInputValidator,
+    summary: "Cancel a failed Vibe64 assistant message."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").cancelAgentMessage(
+      request.params.sessionId,
+      request.params.messageId,
       withVibe64User(request, routes.requestBody(request))
     );
   });
