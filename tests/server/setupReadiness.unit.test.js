@@ -145,6 +145,30 @@ test("project readiness checks human connections before automatic setup", async 
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["connections"]);
 });
 
+test("connection readiness preserves the service error that blocked delivery", async () => {
+  const readiness = await readVibe64SessionReadiness({
+    connectionSetupService: {
+      async getStatus() {
+        return {
+          code: "vibe64_os_user_required",
+          error: "A Vibe64 OS username and real home are required for GitHub operations.",
+          ok: false,
+          ready: false
+        };
+      }
+    }
+  }, {
+    includeStudioSetup: false
+  });
+
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.currentStage.id, "connections");
+  assert.equal(
+    readiness.message,
+    "A Vibe64 OS username and real home are required for GitHub operations."
+  );
+});
+
 test("project readiness forwards status input to every setup service", async () => {
   const seen = [];
   const service = (id) => ({

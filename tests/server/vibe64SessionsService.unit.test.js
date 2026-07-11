@@ -2523,19 +2523,40 @@ test("assistant message acceptance does not wait for expensive provider handoff 
   const deliveryGate = new Promise((resolve) => {
     releaseDelivery = resolve;
   });
+  const owner = {
+    gid: 1001,
+    github: {
+      avatarUrl: "https://example.test/alice.png",
+      connectedAt: "2026-07-11T00:00:00.000Z",
+      id: 42,
+      login: "alice-github"
+    },
+    home: "/home/alice",
+    uid: 1001,
+    username: "alice"
+  };
+  const readinessInputs = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return harness.runtime;
       }
     },
-    setupServices: readySetupServices(),
+    setupServices: {
+      ...readySetupServices(),
+      connectionSetupService: {
+        async getStatus(input) {
+          readinessInputs.push(input);
+          return {
+            ready: true
+          };
+        }
+      }
+    },
     terminalService: {
       async sendAgentMessage(_sessionId, input) {
         assert.equal(input.originId, "tab-alice");
-        assert.deepEqual(input.vibe64User, {
-          username: "alice"
-        });
+        assert.deepEqual(input.vibe64User, owner);
         markDeliveryStarted();
         await deliveryGate;
         return {
@@ -2554,9 +2575,7 @@ test("assistant message acceptance does not wait for expensive provider handoff 
     composerSubmissionId: "immediate-message-1",
     message: "Accept this before preparing the provider.",
     originId: "tab-alice",
-    vibe64User: {
-      username: "alice"
-    }
+    vibe64User: owner
   }).then((result) => {
     response = result;
     return result;
@@ -2565,6 +2584,11 @@ test("assistant message acceptance does not wait for expensive provider handoff 
   await deliveryStarted;
   await Promise.resolve();
   const responseBeforeDeliveryFinished = response;
+  assert.deepEqual(readinessInputs, [{
+    connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+    refresh: false,
+    vibe64User: owner
+  }]);
   releaseDelivery();
   await acceptance;
 

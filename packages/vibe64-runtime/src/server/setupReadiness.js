@@ -128,7 +128,7 @@ function sessionReadinessStagesForOptions(options = {}) {
 }
 
 function stageNotReadyMessage(stage, status = {}) {
-  return status.blockedReason || nestedStageNotReadyMessage(status) || `${stage.label} is not ready.`;
+  return status.blockedReason || status.error || nestedStageNotReadyMessage(status) || `${stage.label} is not ready.`;
 }
 
 function nestedStageNotReadyMessage(status = {}) {

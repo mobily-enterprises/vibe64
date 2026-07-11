@@ -43,8 +43,12 @@ function composerMessageVibe64User(source = null) {
   if (!username) {
     return null;
   }
+  const home = normalizeText(source?.home);
+  const uid = Number(source?.uid);
+  const gid = Number(source?.gid);
   const githubLogin = normalizeText(source?.github?.login);
   return {
+    ...(Number.isSafeInteger(gid) && gid >= 0 ? { gid } : {}),
     ...(githubLogin
       ? {
           github: {
@@ -55,6 +59,8 @@ function composerMessageVibe64User(source = null) {
           }
         }
       : {}),
+    ...(home ? { home } : {}),
+    ...(Number.isSafeInteger(uid) && uid >= 0 ? { uid } : {}),
     username
   };
 }
