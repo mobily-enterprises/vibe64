@@ -138,25 +138,33 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="terminalDialogOpen" fullscreen>
-      <v-card class="vibe64-project-tools__terminal-dialog">
-        <v-card-text>
-          <Vibe64CommandTerminal
-            v-if="terminalTool"
-            :action="terminalTool"
-            :action-input="runActionInput"
-            ai-fix-available
-            :emit-closed-before-server-ack="true"
-            terminal-kind="tool"
-            :start-request-key="terminalStartKey"
-            :title="terminalTool.label"
-            :vibe64-api-path="vibe64ApiPath"
-            @closed="terminalDialogOpen = false"
-            @fix-requested="handleFixRequested"
-          />
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <Vibe64Terminal
+      v-if="terminalTool"
+      :expanded="commandTerminal.expanded.value"
+      fill
+      :retryable="commandTerminal.canRetry.value"
+      :show-copy="true"
+      :subtitle="commandTerminal.terminalSubtitle.value"
+      :terminal="commandTerminal.terminal"
+      :title="commandTerminal.terminalTitle.value"
+      presentation="fullscreen"
+      :visible="terminalDialogOpen"
+      @close="commandTerminal.closeTerminal"
+      @retry="commandTerminal.restartTerminal"
+      @update:expanded="commandTerminal.toggleExpanded"
+    >
+      <template #actions-before>
+        <v-btn
+          v-if="commandTerminal.canRequestAiFix.value"
+          color="primary"
+          size="small"
+          variant="tonal"
+          @click="commandTerminal.requestAiFix"
+        >
+          Get AI to fix it
+        </v-btn>
+      </template>
+    </Vibe64Terminal>
 
     <Vibe64FixCodexDialog
       v-model="fixDialogOpen"
@@ -167,13 +175,17 @@
 </template>
 
 <script setup>
-import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
+import { reactive } from "vue";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import {
   useVibe64ProjectTools,
   vibe64ProjectToolsEmits,
   vibe64ProjectToolsProps
 } from "@/composables/useVibe64ProjectTools.js";
+import {
+  useVibe64CommandTerminalController
+} from "@/composables/useVibe64CommandTerminalController.js";
 
 const emit = defineEmits(vibe64ProjectToolsEmits);
 const props = defineProps(vibe64ProjectToolsProps);
@@ -205,6 +217,50 @@ const {
   vibe64ApiPath,
   tools
 } = useVibe64ProjectTools(props, emit);
+
+const commandTerminalProps = reactive({
+  get action() {
+    return terminalTool.value;
+  },
+  get actionInput() {
+    return runActionInput.value;
+  },
+  aiFixAvailable: true,
+  closeOnUnmount: true,
+  finishedHoldMs: 500,
+  initialExpanded: true,
+  initialTerminalSessionId: "",
+  launchTarget: null,
+  session: null,
+  sessionsApiPath: "",
+  showInterrupt: true,
+  get startRequestKey() {
+    return terminalStartKey.value;
+  },
+  terminalApiPath: "",
+  terminalKind: "tool",
+  get title() {
+    return terminalTool.value?.label || "Project tool";
+  },
+  get vibe64ApiPath() {
+    return vibe64ApiPath.value;
+  }
+});
+
+function handleCommandTerminalEvent(eventName, payload) {
+  if (eventName === "closed") {
+    terminalDialogOpen.value = false;
+    return;
+  }
+  if (eventName === "fix-requested") {
+    handleFixRequested(payload);
+  }
+}
+
+const commandTerminal = useVibe64CommandTerminalController(
+  commandTerminalProps,
+  handleCommandTerminalEvent
+);
 </script>
 
 <style scoped>
@@ -245,7 +301,4 @@ const {
   gap: 0.85rem;
 }
 
-.vibe64-project-tools__terminal-dialog {
-  min-height: 100%;
-}
 </style>

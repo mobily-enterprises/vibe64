@@ -318,6 +318,9 @@ class FakeWebSocket {
     this.readyState = FakeWebSocket.OPEN;
     this.url = url;
     FakeWebSocket.instances.push(this);
+    queueMicrotask(() => {
+      this.emit("open", {});
+    });
   }
 
   addEventListener(eventName, listener) {

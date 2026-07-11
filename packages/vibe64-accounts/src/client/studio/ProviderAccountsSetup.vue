@@ -363,32 +363,19 @@
             v-if="authTerminalVisible(accountActiveSession(account))"
             class="accounts-setup__terminal"
           >
-            <Vibe64TerminalFrame
+            <Vibe64Terminal
+              close-label="Hide"
+              :collapsible="false"
               :command-preview="authTerminal.terminalCommandPreview"
               :error="authTerminalError(accountActiveSession(account))"
+              presentation="inline"
               :status="authTerminal.terminalStatus"
               subtitle="Use this only if Codex asks for terminal input."
-              :terminal-host-ref="setAuthTerminalHost"
+              :terminal="authTerminal"
               title="Codex login terminal"
-            >
-              <template #actions>
-                <v-btn
-                  :disabled="!authTerminal.terminalSessionId || authTerminal.terminalExited"
-                  size="small"
-                  variant="text"
-                  @click="authTerminal.sendCtrlC"
-                >
-                  Ctrl-C
-                </v-btn>
-                <v-btn
-                  size="small"
-                  variant="text"
-                  @click="closeAuthTerminal"
-                >
-                  Hide
-                </v-btn>
-              </template>
-            </Vibe64TerminalFrame>
+              :visible="true"
+              @close="closeAuthTerminal"
+            />
           </div>
         </div>
       </v-sheet>
@@ -407,7 +394,7 @@ import {
 } from "@mdi/js";
 import codexDeviceAuthorizeImage from "/src/assets/codex-device-code-authorize.png";
 import codexDeviceSettingsImage from "/src/assets/codex-device-code-settings.png";
-import Vibe64TerminalFrame from "/src/components/studio/Vibe64TerminalFrame.vue";
+import Vibe64Terminal from "/src/components/studio/Vibe64Terminal.vue";
 import {
   useProviderAccountsSetup
 } from "../composables/useProviderAccountsSetup.js";
@@ -491,7 +478,6 @@ const {
   primaryAuthLabel,
   requiresGitIdentity,
   sessionStatusMessage,
-  setAuthTerminalHost,
   setCodexAuthStep,
   startAccountApiKeyAuth,
   startAccountAuth,

@@ -472,17 +472,24 @@
           {{ launchStatusDetailText }}
         </code>
       </div>
-      <Vibe64TerminalFrame
+      <Vibe64Terminal
         v-if="embeddedTerminalFrameVisible"
-        class="vibe64-launch-controls__terminal vibe64-launch-controls__terminal--embedded"
+        close-label="Show preview"
+        :collapsible="false"
         :command-preview="terminalCommandPreview"
         :error="terminalError"
+        fill
+        presentation="inline"
         :status="terminalStatus"
         :subtitle="terminalSubtitle"
-        :terminal-host-ref="setTerminalHost"
+        surface-class="vibe64-launch-controls__terminal vibe64-launch-controls__terminal--embedded"
+        :surface-style="embeddedTerminalStyle"
+        :terminal="terminal"
         :title="terminalTitle"
+        :visible="true"
+        @close="toggleTerminal"
       >
-        <template #actions>
+        <template #actions-before>
           <v-btn
             v-if="previewTerminalRecoveryVisible"
             :disabled="operationBusy"
@@ -495,30 +502,25 @@
             Restart preview
           </v-btn>
         </template>
-      </Vibe64TerminalFrame>
+      </Vibe64Terminal>
     </div>
 
-    <Vibe64FloatingTerminalWindow
-      v-if="!embeddedPreview"
-      :displayed="terminalDisplayed"
-      :minimized="false"
-      :storage-key="terminalWindowStorageKey"
+    <Vibe64Terminal
+      v-if="!embeddedPreview && terminalDisplayed"
+      close-label="Minimize"
+      :collapsible="false"
+      :command-preview="terminalCommandPreview"
+      :error="terminalError"
+      :floating-storage-key="terminalWindowStorageKey"
+      presentation="floating"
+      :status="terminalStatus"
+      :subtitle="terminalSubtitle"
+      surface-class="vibe64-launch-controls__terminal"
+      :terminal="terminal"
+      :title="terminalTitle"
       :visible="terminalWindowVisible"
-    >
-      <template #default="{ startDrag }">
-        <Vibe64TerminalFrame
-          class="vibe64-launch-controls__terminal"
-          :command-preview="terminalCommandPreview"
-          draggable
-          :error="terminalError"
-          :status="terminalStatus"
-          :subtitle="terminalSubtitle"
-          :terminal-host-ref="setTerminalHost"
-          :title="terminalTitle"
-          @drag-start="startDrag"
-        />
-      </template>
-    </Vibe64FloatingTerminalWindow>
+      @close="toggleTerminal"
+    />
 
     <v-dialog
       v-model="previewOptionsDialogVisible"
@@ -648,11 +650,22 @@ import {
   mdiRoutes,
   mdiWebClock
 } from "@mdi/js";
-import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
-import Vibe64TerminalFrame from "@/components/studio/Vibe64TerminalFrame.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import {
   useVibe64LaunchControlsSurface
 } from "@/composables/useVibe64LaunchControlsSurface.js";
+
+const embeddedTerminalStyle = Object.freeze({
+  alignSelf: "start",
+  boxShadow: "none",
+  height: "clamp(24rem, 72vh, 56rem)",
+  justifySelf: "stretch",
+  margin: "0.65rem",
+  maxHeight: "calc(100% - 1.3rem)",
+  minHeight: "20rem",
+  overflow: "hidden",
+  zIndex: 2
+});
 
 const props = defineProps({
   buttonLabel: {
@@ -779,8 +792,8 @@ const {
   retryTerminal,
   run,
   runMenuDisabled,
-  setTerminalHost,
   showLaunchLog,
+  terminal,
   terminalCanRestart,
   terminalCanRetry,
   terminalCommandPreview,
@@ -1230,42 +1243,6 @@ const {
   will-change: opacity, transform;
 }
 
-.vibe64-launch-controls__terminal {
-  box-shadow: 0 1rem 3rem rgba(13, 24, 42, 0.24);
-  height: 100%;
-}
-
-.vibe64-launch-controls__terminal--embedded {
-  align-self: start;
-  border-radius: 12px;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  height: clamp(37rem, 72vh, 56rem);
-  justify-self: stretch;
-  margin: 0.65rem;
-  max-height: calc(100% - 1.3rem);
-  min-height: 24rem;
-  overflow: hidden;
-  z-index: 2;
-}
-
-.vibe64-launch-controls__terminal:not(.vibe64-launch-controls__terminal--embedded) :deep(.vibe64-terminal-frame__host) {
-  height: calc(100% - 5rem);
-}
-
-.vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__host) {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-}
-
-.vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__stage) {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 @media (max-width: 980px) {
   .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported),
   .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left:not(.vibe64-launch-controls__toolbar--teleported),
@@ -1379,15 +1356,6 @@ const {
     min-width: min(13rem, 58vw);
   }
 
-  .vibe64-launch-controls__terminal--embedded {
-    height: clamp(24rem, 68vh, 40rem);
-    min-height: 20rem;
-  }
-
-  .vibe64-launch-controls__terminal--embedded :deep(.vibe64-terminal-frame__host) {
-    height: auto;
-    min-height: 0;
-  }
 }
 
 @keyframes vibe64-launch-status-pulse {

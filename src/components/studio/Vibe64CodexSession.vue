@@ -1,151 +1,116 @@
 <template>
-  <v-sheet
-    rounded="lg"
-    class="codex-terminal"
+  <div
+    class="vibe64-codex-session"
     :class="{
-      'codex-terminal--compact': displayMode === 'compact',
-      'codex-terminal--desktop-actionless': true,
-      'codex-terminal--focused': terminalFocused,
-      'codex-terminal--headless': displayMode === 'headless'
+      'vibe64-codex-session--compact': displayMode === 'compact',
+      'vibe64-codex-session--focused': terminalFocused,
+      'vibe64-codex-session--headless': displayMode === 'headless'
     }"
     :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
+    @dragenter.prevent="handleAttachmentDragEnter"
+    @dragover.prevent="handleAttachmentDragOver"
+    @dragleave.prevent="handleAttachmentDragLeave"
+    @drop.prevent="handleAttachmentDrop"
   >
-    <div v-show="displayMode !== 'headless'" class="codex-terminal__content">
-      <div class="codex-terminal__bar">
-        <div class="codex-terminal__actions">
-          <v-btn
-            :icon="expanded ? mdiChevronDown : mdiChevronUp"
-            class="codex-terminal__collapse"
-            size="small"
-            variant="text"
-            @click="toggleExpanded"
-          />
+    <Vibe64Terminal
+      :collapsible="displayMode !== 'headless'"
+      :command-preview="terminalCommandPreview"
+      :error="terminalError"
+      :error-title="terminalErrorTitle"
+      :expanded="expanded"
+      fill
+      height="100%"
+      :presentation="terminalPresentation"
+      show-copy
+      :show-interrupt="!readOnly"
+      :status="terminalStatus"
+      :subtitle="terminalSubtitle"
+      :terminal="terminalController"
+      title="Codex terminal"
+      :visible="terminalStreamActive"
+      @close="closeTerminal"
+      @copy="handleTerminalCopy"
+      @interrupt="handleTerminalInterrupt"
+      @update:expanded="updateTerminalExpanded"
+    >
+      <template #error-actions>
+        <v-btn
+          v-if="terminalCanStart"
+          color="primary"
+          :loading="terminalStarting"
+          :prepend-icon="mdiRestart"
+          size="small"
+          variant="flat"
+          @click="restartTerminal"
+        >
+          {{ terminalErrorActionText }}
+        </v-btn>
+        <v-btn
+          size="small"
+          variant="tonal"
+          @click="closeTerminal"
+        >
+          Close terminal
+        </v-btn>
+      </template>
+
+      <template #overlay>
+        <div
+          v-if="attachmentDragActive || attachmentUploading"
+          class="vibe64-codex-session__drop-overlay"
+        >
+          <v-sheet class="vibe64-codex-session__drop-card" rounded="lg" elevation="10">
+            <v-icon :icon="mdiPaperclip" size="28" />
+            <span>{{ attachmentUploading ? "Uploading temporary file..." : "Drop temporary files for Codex" }}</span>
+          </v-sheet>
         </div>
-      </div>
 
-      <v-expand-transition>
-        <div v-show="expanded" class="codex-terminal__body">
-          <div
-            class="codex-terminal__stage"
-            :class="{ 'codex-terminal__stage--dragging': attachmentDragActive }"
-            @dragenter.prevent="handleAttachmentDragEnter"
-            @dragover.prevent="handleAttachmentDragOver"
-            @dragleave.prevent="handleAttachmentDragLeave"
-            @drop.prevent="handleAttachmentDrop"
-          >
-            <StudioErrorNotice
-              v-if="terminalError"
-              :title="terminalErrorTitle"
-              :error="terminalError"
-              compact
-              overlay
+        <div v-if="showTerminalStartPanel" class="vibe64-codex-session__start-panel">
+          <v-sheet class="vibe64-codex-session__start-card" rounded="lg" elevation="8" role="status">
+            <div class="vibe64-codex-session__start-icon">
+              <v-icon :icon="terminalStartIcon" size="30" />
+            </div>
+            <div class="vibe64-codex-session__start-copy">
+              <strong>{{ terminalStartPanelTitle }}</strong>
+              <span>{{ terminalStartPanelMessage }}</span>
+            </div>
+            <v-btn
+              v-if="terminalStartActionVisible"
+              color="primary"
+              :loading="terminalStarting"
+              :prepend-icon="terminalStartButtonIcon"
+              size="default"
+              variant="flat"
+              @click="restartTerminal"
             >
-              <template #actions>
-                <v-btn
-                  v-if="terminalCanStart"
-                  color="primary"
-                  :loading="terminalStarting"
-                  :prepend-icon="mdiRestart"
-                  size="small"
-                  variant="flat"
-                  @click="restartTerminal"
-                >
-                  {{ terminalErrorActionText }}
-                </v-btn>
-                <v-btn
-                  :prepend-icon="mdiClose"
-                  size="small"
-                  variant="tonal"
-                  @click="closeTerminal"
-                >
-                  Close terminal
-                </v-btn>
-              </template>
-            </StudioErrorNotice>
-            <div
-              class="codex-terminal__host"
-              @click="focusTerminal"
-              @pointerdown.capture="focusTerminal"
-            >
-              <div ref="terminalHost" class="codex-terminal__mount" />
-            </div>
-            <div v-if="attachmentDragActive || attachmentUploading" class="codex-terminal__drop-overlay">
-              <v-sheet class="codex-terminal__drop-card" rounded="lg" elevation="10">
-                <v-icon :icon="mdiPaperclip" size="28" />
-                <span>{{ attachmentUploading ? "Uploading temporary file..." : "Drop temporary files for Codex" }}</span>
-              </v-sheet>
-            </div>
-            <div v-if="showTerminalStartPanel" class="codex-terminal__restart-panel">
-              <v-sheet class="codex-terminal__restart-card" rounded="lg" elevation="8" role="status">
-                <div class="codex-terminal__restart-icon">
-                  <v-icon :icon="terminalStartIcon" size="30" />
-                </div>
-                <div class="codex-terminal__restart-copy">
-                  <strong>{{ terminalStartPanelTitle }}</strong>
-                  <span>{{ terminalStartPanelMessage }}</span>
-                </div>
-                <v-btn
-                  v-if="terminalStartActionVisible"
-                  class="codex-terminal__restart-action"
-                  color="primary"
-                  :loading="terminalStarting"
-                  :prepend-icon="terminalStartButtonIcon"
-                  size="default"
-                  variant="flat"
-                  @click="restartTerminal"
-                >
-                  {{ terminalStartButtonText }}
-                </v-btn>
-              </v-sheet>
-            </div>
-          </div>
-
-          <div class="codex-terminal__footer">
-            <span class="codex-terminal__command">{{ terminalCommandPreview }}</span>
-            <div class="codex-terminal__footer-actions">
-              <v-btn
-                :disabled="!terminalSelectedText"
-                size="small"
-                variant="text"
-                @click="copyTerminalSelection"
-              >
-                Copy
-              </v-btn>
-              <v-btn
-                :disabled="!terminalSessionId || terminalExited"
-                size="small"
-                variant="text"
-                @click="sendCtrlC"
-              >
-                Ctrl-C
-              </v-btn>
-              <v-btn
-                :disabled="!terminalSessionId"
-                size="small"
-                variant="text"
-                @click="closeTerminal"
-              >
-                Close
-              </v-btn>
-            </div>
-          </div>
-
-          <p v-if="copyStatus || attachmentStatus" class="text-caption text-medium-emphasis mb-0">
-            {{ attachmentStatus || copyStatus }}
-          </p>
+              {{ terminalStartButtonText }}
+            </v-btn>
+          </v-sheet>
         </div>
-      </v-expand-transition>
-    </div>
-  </v-sheet>
+      </template>
+
+      <template #footer="{ commandPreview, status }">
+        <span class="vibe64-codex-session__command">
+          {{ commandPreview || "Codex is not running." }}
+        </span>
+        <span
+          v-if="copyStatus || attachmentStatus"
+          class="text-caption text-medium-emphasis"
+        >
+          {{ attachmentStatus || copyStatus }}
+        </span>
+        <v-chip v-if="status" size="x-small" variant="tonal">
+          {{ status }}
+        </v-chip>
+      </template>
+    </Vibe64Terminal>
+  </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
-  mdiChevronDown,
-  mdiChevronUp,
-  mdiClose,
   mdiPaperclip,
   mdiPlayCircleOutline,
   mdiRestart
@@ -156,8 +121,8 @@ import {
 import {
   VIBE64_ACCOUNTS_CHANGED_EVENT
 } from "@local/vibe64-accounts/client";
-import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
+import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import {
   vibe64AgentTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl
@@ -165,7 +130,7 @@ import {
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
-import { writeClipboardText } from "@/lib/clipboard.js";
+import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
   requestVibe64AccountConnectionsDialog
 } from "@/lib/vibe64AccountConnectionsDialog.js";
@@ -285,6 +250,9 @@ const terminalStreamActive = computed(() => Boolean(
   terminalDisplayActive.value ||
   hiddenTerminalListenActive.value
 ));
+const terminalPresentation = computed(() => (
+  terminalDisplayActive.value ? "inline" : "headless"
+));
 const hasTerminalSession = computed(() => Boolean(
   terminalSessionId.value ||
   serverTerminalSession.value.id
@@ -328,29 +296,31 @@ const {
   emitBusyChanged: emitCodexActivityChanged,
   sessionId: terminalScopeId
 });
-const terminalController = useCodexTerminalElement({
-  onBeforeTerminalSessionChange: resetTerminalOutput,
+const terminalController = useVibe64Terminal({
+  driver: createWebSocketTerminalDriver({
+    closeSession: closeCodexTerminalDriverSession,
+    webSocketUrl(terminalId) {
+      return webSocketUrlForScope(terminalScopeId.value, terminalId);
+    }
+  }),
+  fitOnResize: true,
+  initiallyVisible: false,
+  liveResize: true,
   onOutput: handleTerminalOutput,
   onStatusUpdate: handleTerminalStatusUpdate,
   onUserData: handleTerminalUserData,
   readOnly: computed(() => props.readOnly),
-  webSocketUrl(terminalId) {
-    return webSocketUrlForScope(terminalScopeId.value, terminalId);
-  }
+  resizeReportDelayMs: 120
 });
 const {
-  applyCodexTerminalSession,
   closeTerminalSocket,
   connectTerminalSocket,
   disposeTerminalUi,
   focusTerminal: focusTerminalUi,
   resetTerminalDisplay,
   resetTerminalSessionState,
-  sendTerminalData: sendTerminalBytes,
-  setupTerminalUi,
+    sendTerminalData: sendTerminalBytes,
   terminalFocused,
-  terminalHost,
-  terminalSelectedText,
   terminalCommandPreview,
   terminalError,
   terminalExited,
@@ -369,6 +339,15 @@ const terminalErrorTitle = computed(() => {
 const terminalErrorActionText = computed(() => (
   terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE ? "Reconnect Codex" : "Restart Codex"
 ));
+const terminalSubtitle = computed(() => {
+  if (terminalStarting.value) {
+    return "Starting Codex";
+  }
+  if (terminalExited.value) {
+    return "Codex exited";
+  }
+  return terminalStatus.value === "running" ? "Codex is running" : "Codex agent session";
+});
 const {
   attachmentDragActive,
   attachmentStatus,
@@ -464,23 +443,13 @@ function defaultExpanded() {
   return !window.matchMedia("(max-width: 700px)").matches;
 }
 
-async function copyText(value, label) {
-  const text = String(value || "");
-  if (!text) {
-    return false;
-  }
-  try {
-    await writeClipboardText(text);
-    copyStatus.value = `${label} copied.`;
-    return true;
-  } catch (copyError) {
-    copyStatus.value = String(copyError?.message || copyError || "Copy failed.");
-    return false;
-  }
+function handleTerminalCopy() {
+  copyStatus.value = "Terminal text copied.";
 }
 
-async function copyTerminalSelection() {
-  await copyText(terminalSelectedText.value, "Selection");
+function handleTerminalInterrupt() {
+  clearCodexBusy();
+  clearCodexWorking();
 }
 
 function ensureTerminalReady() {
@@ -578,6 +547,55 @@ function closeTerminalSessionForScope(currentScopeId, terminalId) {
     : codexCommands.closeAgentTerminal(currentScopeId, terminalId);
 }
 
+async function closeCodexTerminalDriverSession(terminalId) {
+  const result = await closeTerminalSessionForScope(terminalScopeId.value, terminalId);
+  if (result?.ok === false) {
+    throw new Error(vibe64TerminalErrorMessage(result, "Codex terminal process could not be stopped."));
+  }
+  return result;
+}
+
+async function applyCodexTerminalSession(session = {}, {
+  fallbackStatus = "running",
+  ownership = "attached",
+  preserveOutput = true
+} = {}) {
+  const nextTerminalSessionId = String(session.id || session.terminalSessionId || "").trim();
+  if (!nextTerminalSessionId) {
+    return {
+      applied: false,
+      hasTerminalSession: Boolean(terminalSessionId.value)
+    };
+  }
+
+  const previousTerminalSessionId = String(terminalSessionId.value || "");
+  const sameTerminalSession = previousTerminalSessionId === nextTerminalSessionId;
+  const terminalSessionChanged = Boolean(
+    previousTerminalSessionId &&
+    previousTerminalSessionId !== nextTerminalSessionId
+  );
+  if (terminalSessionChanged) {
+    resetTerminalOutput();
+  }
+
+  await terminalController.attachTerminal({
+    ...session,
+    id: nextTerminalSessionId
+  }, {
+    connect: false,
+    fallbackStatus,
+    ownership,
+    preserveOutput,
+    resize: !sameTerminalSession
+  });
+  return {
+    applied: true,
+    sameTerminalSession,
+    terminalSessionChanged,
+    terminalSessionId: nextTerminalSessionId
+  };
+}
+
 function webSocketUrlForScope(currentScopeId, terminalId) {
   return globalScope.value
     ? vibe64GlobalCodexTerminalWebSocketUrl(currentScopeId, terminalId)
@@ -653,20 +671,14 @@ async function sendTerminalData(data, {
   }
 }
 
-async function sendCtrlC() {
-  await sendTerminalData("\u0003", {
-    source: "user"
-  });
-}
-
 async function sendEscape() {
   return sendTerminalData("\u001b", {
     source: "user"
   });
 }
 
-function toggleExpanded() {
-  expanded.value = !expanded.value;
+function updateTerminalExpanded(value) {
+  expanded.value = Boolean(value);
   if (expanded.value && hasTerminalSession.value) {
     void connectAttachedTerminal().catch((error) => {
       terminalError.value = terminalError.value || String(error?.message || error || "Terminal stream failed to connect.");
@@ -690,20 +702,17 @@ async function focusWritableTerminalWhenShown(visible) {
     return;
   }
   await nextTick();
-  if (await setupTerminalUi()) {
-    focusTerminal();
-    for (const delayMs of [50, 150, 300]) {
-      globalThis.setTimeout(() => {
-        if (terminalDisplayActive.value && props.autoFocus && !props.readOnly && !terminalFocused.value) {
-          focusTerminal();
-        }
-      }, delayMs);
-    }
+  focusTerminal();
+  for (const delayMs of [50, 150, 300]) {
+    globalThis.setTimeout(() => {
+      if (terminalDisplayActive.value && props.autoFocus && !props.readOnly && !terminalFocused.value) {
+        focusTerminal();
+      }
+    }, delayMs);
   }
 }
 
 async function connectAttachedTerminal() {
-  await setupTerminalUi();
   if (!(await connectTerminalSocket())) {
     const message = String(terminalError.value || "Terminal stream failed to connect.");
     if (terminalSessionMissingError(message) || terminalOwnerAccessDenied(message)) {
@@ -736,9 +745,6 @@ async function startTerminalOnce() {
   terminalStarting.value = true;
   terminalError.value = "";
   try {
-    if (!(await setupTerminalUi())) {
-      throw new Error(terminalError.value || "Terminal UI failed to initialize.");
-    }
     const session = await startTerminalSessionForScope(terminalScopeId.value);
     if (session?.ok === false) {
       if (codexReconnectRequiredResult(session)) {
@@ -757,8 +763,9 @@ async function startTerminalOnce() {
     if (!session?.id) {
       throw new Error("Codex terminal failed to start.");
     }
-    applyCodexTerminalSession(session, {
-      fallbackStatus: "running"
+    await applyCodexTerminalSession(session, {
+      fallbackStatus: "running",
+      ownership: "owned"
     });
     emitTerminalSessionState();
     return await connectAttachedTerminal();
@@ -780,7 +787,7 @@ function connectTerminalWhenReady() {
 }
 
 async function attachTerminalSession(session = {}) {
-  const attached = applyCodexTerminalSession(session, {
+  const attached = await applyCodexTerminalSession(session, {
     fallbackStatus: "running"
   });
   if (!attached.applied) {
@@ -840,21 +847,19 @@ function detachTerminal() {
 }
 
 async function closeTerminal() {
-  const existingTerminalId = terminalSessionId.value;
-  closeTerminalSocket();
-  if (existingTerminalId && terminalScopeId.value) {
-    try {
-      const result = await closeTerminalSessionForScope(terminalScopeId.value, existingTerminalId);
-      if (result?.ok === false) {
-        terminalError.value = vibe64TerminalErrorMessage(result, "Codex terminal process could not be stopped.");
-        return false;
-      }
-    } catch (error) {
-      terminalError.value = vibe64TerminalErrorMessage(error, "Codex terminal process could not be stopped.");
-      return false;
-    }
+  if (!terminalSessionId.value) {
+    detachTerminal();
+    return true;
   }
-  detachTerminal();
+  if (!(await terminalController.closeTerminal({
+    deleteSession: true
+  }))) {
+    return false;
+  }
+  terminalStartPromise = null;
+  resetTerminalOutput();
+  clearAttachmentStatus();
+  resetAttachmentDragState();
   return true;
 }
 
@@ -917,18 +922,6 @@ watch(terminalDisplayActive, (visible, previousVisible) => {
   immediate: true
 });
 
-watch(terminalHost, (host) => {
-  if (host && terminalDisplayActive.value && props.autoFocus && !props.readOnly) {
-    void focusWritableTerminalWhenShown(true);
-  }
-  if (host && hasTerminalSession.value) {
-    void setupTerminalUi();
-    connectTerminalWhenReady();
-  }
-}, {
-  flush: "post"
-});
-
 onMounted(() => {
   componentMounted.value = true;
   expanded.value = defaultExpanded();
@@ -936,8 +929,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   componentMounted.value = false;
-  terminalStartPromise = null;
-  void closeTerminal();
+  detachTerminal();
   disposeTerminalUi();
 });
 
@@ -949,188 +941,67 @@ defineExpose({
 </script>
 
 <style scoped>
-.codex-terminal {
+.vibe64-codex-session {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
-  padding: 0.25rem 0 0;
+  position: relative;
 }
 
-.codex-terminal--headless {
+.vibe64-codex-session--headless {
   height: 0;
-  min-height: 0;
-  opacity: 0;
   overflow: hidden;
-  padding: 0;
   pointer-events: none;
   position: absolute;
   width: 0;
 }
 
-.codex-terminal--compact {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
+.vibe64-codex-session--focused :deep(.vibe64-terminal-surface) {
+  border-color: rgba(var(--v-theme-primary), 0.72);
 }
 
-.codex-terminal--compact .codex-terminal__content {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.codex-terminal--compact .codex-terminal__body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 0;
-}
-
-.codex-terminal--compact .codex-terminal__bar,
-.codex-terminal--compact .codex-terminal__footer,
-.codex-terminal--compact .text-caption {
-  display: none;
-}
-
-.codex-terminal--compact .codex-terminal__stage {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.codex-terminal--compact .codex-terminal__host {
-  height: 100%;
-  min-height: 0;
-}
-
-.codex-terminal--compact .codex-terminal__mount {
-  height: 100%;
-  min-height: 0;
-}
-
-.codex-terminal--focused .codex-terminal__host {
-  border-color: #4ea1ff;
-  box-shadow:
-    0 0 0 3px rgba(78, 161, 255, 0.95),
-    0 0 0 9px rgba(78, 161, 255, 0.22),
-    0 0 36px rgba(78, 161, 255, 0.58),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-}
-
-.codex-terminal__bar,
-.codex-terminal__footer {
+.vibe64-codex-session__drop-overlay,
+.vibe64-codex-session__start-panel {
   align-items: center;
-  display: flex;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.codex-terminal__bar {
-  justify-content: flex-end;
-}
-
-.codex-terminal__footer {
-  justify-content: space-between;
-}
-
-.codex-terminal__actions,
-.codex-terminal__footer-actions {
-  align-items: center;
-  display: flex;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.codex-terminal__body {
-  padding-top: 0.5rem;
-}
-
-.codex-terminal__host {
-  background: #101216;
-  border: 2px solid rgba(var(--v-theme-outline), 0.38);
-  border-radius: 6px;
-  height: clamp(37rem, 72vh, 56rem);
-  overflow: hidden;
-  padding: 0.35rem;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
-}
-
-.codex-terminal__mount {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.codex-terminal__mount :deep(.xterm) {
-  text-align: left;
-}
-
-.codex-terminal__stage {
-  position: relative;
-}
-
-.codex-terminal__stage--dragging .codex-terminal__host {
-  border-color: rgb(var(--v-theme-primary));
-  box-shadow:
-    0 0 0 3px rgba(var(--v-theme-primary), 0.3),
-    0 0 28px rgba(var(--v-theme-primary), 0.38);
-}
-
-.codex-terminal__drop-overlay {
-  align-items: center;
-  background: rgba(10, 12, 16, 0.48);
   display: flex;
   inset: 0;
   justify-content: center;
   padding: 1rem;
-  pointer-events: none;
   position: absolute;
 }
 
-.codex-terminal__drop-card {
-  align-items: center;
-  background: rgba(var(--v-theme-surface), 0.96);
-  color: rgb(var(--v-theme-on-surface));
-  display: flex;
-  font-weight: 650;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-}
-
-.codex-terminal__restart-panel {
-  align-items: center;
-  background:
-    linear-gradient(180deg, rgba(16, 18, 22, 0.18), rgba(16, 18, 22, 0.62));
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 1.25rem;
+.vibe64-codex-session__drop-overlay {
+  background: rgba(12, 18, 28, 0.72);
   pointer-events: none;
-  position: absolute;
+  z-index: 5;
 }
 
-.codex-terminal__restart-card {
+.vibe64-codex-session__drop-card {
   align-items: center;
-  background: rgba(var(--v-theme-surface), 0.96);
-  border: 1px solid rgba(var(--v-theme-primary), 0.32);
+  display: flex;
+  gap: 0.7rem;
+  padding: 1rem 1.15rem;
+}
+
+.vibe64-codex-session__start-panel {
+  background: rgba(14, 18, 25, 0.8);
+  z-index: 3;
+}
+
+.vibe64-codex-session__start-card {
+  align-items: center;
   display: grid;
-  gap: 0.9rem;
+  gap: 0.85rem;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  max-width: min(42rem, calc(100% - 1rem));
-  min-width: min(30rem, calc(100% - 1rem));
+  max-width: min(42rem, 100%);
   padding: 1rem;
-  pointer-events: auto;
+  width: 100%;
 }
 
-.codex-terminal__restart-icon {
+.vibe64-codex-session__start-icon {
   align-items: center;
-  background: rgba(var(--v-theme-primary), 0.12);
-  border: 1px solid rgba(var(--v-theme-primary), 0.22);
-  border-radius: 8px;
+  background: rgba(var(--v-theme-primary), 0.14);
+  border-radius: 999px;
   color: rgb(var(--v-theme-primary));
   display: flex;
   height: 3rem;
@@ -1138,41 +1009,23 @@ defineExpose({
   width: 3rem;
 }
 
-.codex-terminal__restart-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
+.vibe64-codex-session__start-copy {
+  display: grid;
+  gap: 0.15rem;
   min-width: 0;
 }
 
-.codex-terminal__restart-copy strong {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-  font-weight: 720;
-  letter-spacing: 0;
-  line-height: 1.2;
+.vibe64-codex-session__start-copy strong {
+  font-size: 0.95rem;
 }
 
-.codex-terminal__restart-copy span {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.88rem;
-  line-height: 1.3;
+.vibe64-codex-session__start-copy span {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
-.codex-terminal__restart-action {
-  justify-self: end;
-  white-space: nowrap;
-}
-
-.codex-terminal__footer {
-  padding-top: 0.35rem;
-}
-
-.codex-terminal__command {
-  color: rgb(var(--v-theme-on-surface-variant));
-  flex: 1 1 auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.72rem;
+.vibe64-codex-session__command {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1180,86 +1033,13 @@ defineExpose({
 }
 
 @media (max-width: 700px) {
-  .codex-terminal__bar,
-  .codex-terminal__footer {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .codex-terminal__actions,
-  .codex-terminal__footer-actions {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-
-  .codex-terminal__host {
-    height: min(74vh, 44rem);
-  }
-
-  .codex-terminal__restart-card {
-    align-items: stretch;
+  .vibe64-codex-session__start-card {
     grid-template-columns: auto minmax(0, 1fr);
-    min-width: min(18rem, calc(100% - 1rem));
   }
 
-  .codex-terminal__restart-action {
+  .vibe64-codex-session__start-card :deep(.v-btn) {
     grid-column: 1 / -1;
-    justify-self: stretch;
-  }
-}
-
-@media (min-width: 981px) {
-  .codex-terminal {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .codex-terminal__content {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .codex-terminal__body {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .codex-terminal__stage {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .codex-terminal__host {
-    height: 100%;
-    min-height: 0;
-  }
-
-  .codex-terminal__mount {
-    height: 100%;
-    min-height: 0;
-  }
-}
-
-@media (min-width: 701px) {
-  .codex-terminal__collapse {
-    display: none;
-  }
-
-  .codex-terminal--desktop-actionless .codex-terminal__bar {
-    display: none;
-  }
-
-  .codex-terminal--desktop-actionless .codex-terminal__body {
-    padding-top: 0;
+    width: 100%;
   }
 }
 </style>

@@ -81,10 +81,6 @@ vi.mock("@xterm/addon-fit", () => ({
 import {
   useDoctorTerminal
 } from "../../src/composables/useDoctorTerminal.js";
-import {
-  STUDIO_TERMINAL_SCROLLBACK_ROWS
-} from "../../src/lib/studioTerminalSize.js";
-
 describe("useDoctorTerminal", () => {
   let originalWindow;
 
@@ -134,7 +130,7 @@ describe("useDoctorTerminal", () => {
     globalThis.window = originalWindow;
   });
 
-  it("starts the terminal action after the xterm UI loads", async () => {
+  it("starts through the polling driver without requiring a mounted display", async () => {
     commandMocks.startRun.mockResolvedValue({
       commandPreview: "gh auth login",
       id: "terminal-1",
@@ -145,7 +141,6 @@ describe("useDoctorTerminal", () => {
       terminalEndpoint: () => "/api/studio/connections/terminal"
     });
 
-    terminal.terminalHost.value = fakeTerminalHost();
     const result = await terminal.openTerminal({
       repair: {
         actionId: "terminal-github-auth-login",
@@ -170,7 +165,9 @@ describe("useDoctorTerminal", () => {
     });
     expect(endpointMocks.reload).toHaveBeenCalledTimes(1);
     expect(recoveryMocks.notify).not.toHaveBeenCalled();
-    expect(xtermMock.FakeTerminal.instances[0]?.options.scrollback).toBe(STUDIO_TERMINAL_SCROLLBACK_ROWS);
+    expect(terminal.terminal.terminalOwnership.value).toBe("owned");
+    expect(xtermMock.FakeTerminal.instances).toHaveLength(0);
+    terminal.terminal.disposeTerminalUi();
   });
 
   it("exposes a URL from terminal output for setup copy actions", async () => {
@@ -192,7 +189,6 @@ describe("useDoctorTerminal", () => {
       terminalEndpoint: () => "/api/studio/connections/terminal"
     });
 
-    terminal.terminalHost.value = fakeTerminalHost();
     await terminal.openTerminal({
       repair: {
         actionId: "terminal-github-auth-login",
@@ -203,12 +199,6 @@ describe("useDoctorTerminal", () => {
     });
 
     expect(terminal.terminalUrl.value).toBe("https://github.com/login/device");
+    terminal.terminal.disposeTerminalUi();
   });
 });
-
-function fakeTerminalHost() {
-  return {
-    addEventListener() {},
-    removeEventListener() {}
-  };
-}

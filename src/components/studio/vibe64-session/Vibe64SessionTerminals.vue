@@ -48,7 +48,7 @@
           />
         </div>
       </header>
-      <CodexSessionTerminal
+      <Vibe64CodexSession
         class="studio-ai-sessions__codex-terminal"
         ref="codexTerminalComponent"
         :class="{
@@ -75,41 +75,61 @@
         'studio-ai-sessions__command-overlay--minimized': commandOverlayMinimized
       }"
     >
-      <Vibe64CommandTerminal
+      <Vibe64Terminal
         v-if="commandTerminal.visible"
         class="studio-ai-sessions__command-terminal"
-        :action="commandTerminal.action"
-        :action-input="commandTerminal.input"
-        ai-fix-available
-        :session="session"
-        :sessions-api-path="sessionsApiPath"
-        :start-request-key="commandTerminal.startKey"
-        @closed="commandTerminal.closed"
-        @expanded-changed="handleCommandTerminalExpandedChanged"
-        @finished="commandTerminal.finished"
-        @fix-requested="openFixCodexDialog"
-        @running-changed="commandTerminal.runningChanged"
-        @state-stale="commandTerminal.stale"
-      />
-      <Vibe64HeadlessCommandOutput
+        :expanded="commandTerminalController.expanded.value"
+        fill
+        :retryable="commandTerminalController.canRetry.value"
+        :show-copy="true"
+        :subtitle="commandTerminalController.terminalSubtitle.value"
+        :terminal="commandTerminalController.terminal"
+        :title="commandTerminalController.terminalTitle.value"
+        :visible="commandTerminal.visible"
+        @close="commandTerminalController.closeTerminal"
+        @retry="commandTerminalController.restartTerminal"
+        @update:expanded="commandTerminalController.toggleExpanded"
+      >
+        <template #actions-before>
+          <v-btn
+            v-if="commandTerminalController.canRequestAiFix.value"
+            color="primary"
+            size="small"
+            variant="tonal"
+            @click="commandTerminalController.requestAiFix"
+          >
+            Get AI to fix it
+          </v-btn>
+        </template>
+      </Vibe64Terminal>
+      <Vibe64Terminal
         v-else
         class="studio-ai-sessions__command-terminal"
-        :action-id="headlessCommandTerminal.actionId"
-        :action-label="headlessCommandTerminal.actionLabel"
-        ai-fix-available
-        :attempted-command="headlessCommandTerminal.attemptedCommand"
         :command-preview="headlessCommandTerminal.commandPreview"
         :error="headlessCommandTerminal.error"
-        :exit-code="headlessCommandTerminal.exitCode"
-        :failed="headlessCommandTerminal.failed"
+        fill
         :output="headlessCommandTerminal.output"
-        :running="headlessCommandTerminal.running"
-        :session-id="session?.sessionId || ''"
-        :status="headlessCommandTerminal.status"
-        :terminal-session-id="headlessCommandTerminal.terminalSessionId"
+        :retryable="false"
+        :show-close="false"
+        :show-copy="true"
+        :show-interrupt="false"
+        :subtitle="headlessCommandTerminal.error || headlessCommandTerminal.commandPreview"
+        :terminal="headlessCommandTerminal.terminal"
         title="Autopilot command output"
-        @fix-requested="openFixCodexDialog"
-      />
+        :visible="headlessCommandTerminal.visible"
+      >
+        <template #actions-before>
+          <v-btn
+            v-if="headlessCommandTerminal.failed"
+            color="primary"
+            size="small"
+            variant="tonal"
+            @click="requestHeadlessCommandFix"
+          >
+            Get AI to fix it
+          </v-btn>
+        </template>
+      </Vibe64Terminal>
     </div>
 
     <Vibe64FixCodexDialog
@@ -121,19 +141,24 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import {
   mdiClose,
   mdiConsoleLine,
   mdiRobotOutline
 } from "@mdi/js";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
-import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
-import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
-import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
+import Vibe64CodexSession from "@/components/studio/Vibe64CodexSession.vue";
 import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
+import {
+  useVibe64CommandTerminalController
+} from "@/composables/useVibe64CommandTerminalController.js";
+import {
+  useVibe64TerminalFailureFixCommand
+} from "@/composables/useVibe64TerminalFailureFixCommand.js";
 
 const props = defineProps({
   agentTerminal: {
@@ -197,6 +222,87 @@ const {
   fixTerminal,
   openFixCodexDialog
 } = useVibe64FixCodexDialog();
+
+const commandTerminalProps = reactive({
+  get action() {
+    return props.commandTerminal.action || null;
+  },
+  get actionInput() {
+    return props.commandTerminal.input || {};
+  },
+  aiFixAvailable: true,
+  closeOnUnmount: true,
+  finishedHoldMs: 500,
+  initialExpanded: true,
+  initialTerminalSessionId: "",
+  launchTarget: null,
+  get session() {
+    return props.session;
+  },
+  get sessionsApiPath() {
+    return props.sessionsApiPath;
+  },
+  showInterrupt: true,
+  get startRequestKey() {
+    return props.commandTerminal.startKey || "";
+  },
+  terminalApiPath: "",
+  terminalKind: "command",
+  title: "",
+  vibe64ApiPath: ""
+});
+
+function handleCommandTerminalEvent(eventName, payload) {
+  switch (eventName) {
+    case "closed":
+      props.commandTerminal.closed?.(payload);
+      break;
+    case "expanded-changed":
+      handleCommandTerminalExpandedChanged(payload);
+      break;
+    case "finished":
+      props.commandTerminal.finished?.(payload);
+      break;
+    case "fix-requested":
+      openFixCodexDialog(payload);
+      break;
+    case "running-changed":
+      props.commandTerminal.runningChanged?.(payload);
+      break;
+    case "state-stale":
+      props.commandTerminal.stale?.(payload);
+      break;
+    default:
+      break;
+  }
+}
+
+const commandTerminalController = useVibe64CommandTerminalController(
+  commandTerminalProps,
+  handleCommandTerminalEvent
+);
+const terminalFailureFix = useVibe64TerminalFailureFixCommand({
+  sessionsApiPath: () => props.sessionsApiPath
+});
+
+async function requestHeadlessCommandFix() {
+  if (!props.headlessCommandTerminal.failed) {
+    return;
+  }
+  openFixCodexDialog(await terminalFailureFix.request({
+    actionId: props.headlessCommandTerminal.actionId,
+    actionLabel: props.headlessCommandTerminal.actionLabel,
+    attemptedCommand: props.headlessCommandTerminal.attemptedCommand,
+    closeError: props.headlessCommandTerminal.error,
+    commandPreview: props.headlessCommandTerminal.commandPreview,
+    exitCode: props.headlessCommandTerminal.exitCode,
+    output: props.headlessCommandTerminal.output,
+    sessionId: props.session?.sessionId || "",
+    terminalKind: "command",
+    terminalSessionId: props.headlessCommandTerminal.terminalSessionId,
+    terminalStatus: props.headlessCommandTerminal.status
+  }));
+}
 const compactMode = computed(() => props.displayMode === "compact");
 const compactTerminalDisplayMode = computed(() => compactTerminalCollapsed.value || compactTerminalHidden.value
   ? "headless"

@@ -66,10 +66,13 @@ import {
   terminalResizeErrorMessage
 } from "../../src/lib/studioTerminalSize.js";
 import {
-  useStudioTerminal
-} from "../../src/composables/useStudioTerminal.js";
+  useVibe64Terminal
+} from "../../src/composables/useVibe64Terminal.js";
+import {
+  createWebSocketTerminalDriver
+} from "../../src/lib/vibe64TerminalDriver.js";
 
-describe("useStudioTerminal", () => {
+describe("useVibe64Terminal", () => {
   let originalWebSocket;
   let originalWindow;
 
@@ -128,8 +131,8 @@ describe("useStudioTerminal", () => {
   });
 
   it("uses the shared finite client scrollback", async () => {
-    const terminal = useStudioTerminal({
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
     });
     terminal.terminalHost.value = fakeTerminalHost();
 
@@ -143,8 +146,8 @@ describe("useStudioTerminal", () => {
     xtermMock.loadXtermModules.mockReturnValueOnce(new Promise((resolve) => {
       resolveModules = resolve;
     }));
-    const terminal = useStudioTerminal({
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
     });
     terminal.terminalHost.value = fakeTerminalHost();
 
@@ -163,8 +166,8 @@ describe("useStudioTerminal", () => {
   });
 
   it("removes host listeners from the mounted terminal host when the ref changes", async () => {
-    const terminal = useStudioTerminal({
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
     });
     const mountedHost = fakeTerminalHost();
     const replacementHost = fakeTerminalHost();
@@ -181,9 +184,9 @@ describe("useStudioTerminal", () => {
 
   it("can refresh terminal metadata without erasing the current byte transcript", () => {
     const onOutput = vi.fn();
-    const terminal = useStudioTerminal({
+    const terminal = useVibe64Terminal({
       onOutput,
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+      driver: testTerminalDriver()
     });
 
     terminal.applyTerminalSession({
@@ -205,9 +208,9 @@ describe("useStudioTerminal", () => {
 
   it("notifies byte-stream observers when websocket output arrives", async () => {
     const onOutput = vi.fn();
-    const terminal = useStudioTerminal({
+    const terminal = useVibe64Terminal({
       onOutput,
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+      driver: testTerminalDriver()
     });
 
     terminal.applyTerminalSession({
@@ -236,8 +239,8 @@ describe("useStudioTerminal", () => {
   });
 
   it("ignores stale snapshots that arrive after newer websocket output", async () => {
-    const terminal = useStudioTerminal({
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
     });
 
     terminal.applyTerminalSession({
@@ -274,8 +277,8 @@ describe("useStudioTerminal", () => {
   });
 
   it("ignores equal-version snapshots that do not extend the current output", () => {
-    const terminal = useStudioTerminal({
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
     });
 
     terminal.applyTerminalSession({
@@ -294,10 +297,134 @@ describe("useStudioTerminal", () => {
     expect(terminal.terminalOutput.value).toBe("draft in progress");
   });
 
+  it("accepts an explicit transcript replacement from polling drivers", () => {
+    const onOutput = vi.fn();
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      onOutput
+    });
+
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      output: "old process output",
+      status: "running"
+    });
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      output: "replacement output",
+      status: "running"
+    }, {
+      replaceOutput: true
+    });
+
+    expect(terminal.terminalOutput.value).toBe("replacement output");
+    expect(onOutput).toHaveBeenLastCalledWith(expect.objectContaining({
+      source: "replacement"
+    }));
+  });
+
+  it("emits settlement exactly once for a terminal session", () => {
+    const onEvent = vi.fn();
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      onEvent
+    });
+
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      status: "running"
+    });
+    terminal.applyTerminalSession({
+      exitCode: 0,
+      id: "terminal-1",
+      status: "exited"
+    });
+    terminal.terminalError.value = "A late transport error";
+
+    expect(onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === "settled")).toHaveLength(1);
+  });
+
+  it("supports named keys and rejects unknown key names", async () => {
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
+    });
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      status: "running"
+    });
+    const connected = terminal.connectTerminalSocket();
+    const socket = FakeWebSocket.instances[0];
+    socket.dispatch("open");
+    await connected;
+
+    await expect(terminal.sendTerminalKey("escape")).resolves.toBe(true);
+    expect(socket.sentMessages()).toContainEqual({
+      data: "\u001b",
+      type: "input"
+    });
+    expect(() => terminal.sendTerminalKey("unknown")).toThrow(/Unsupported terminal key/u);
+  });
+
+  it("detaches shared sessions without losing their transcript", () => {
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver()
+    });
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      output: "retained output",
+      status: "running"
+    });
+
+    terminal.detachTerminal();
+
+    expect(terminal.terminalSessionId.value).toBe("");
+    expect(terminal.terminalOutput.value).toBe("retained output");
+  });
+
+  it("can emit a named policy event when output content appears", () => {
+    const onEvent = vi.fn();
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      initiallyExpanded: false,
+      initiallyVisible: false,
+      matchers: [{
+        id: "runner-ready",
+        pattern: "RUNNER READY"
+      }],
+      onEvent,
+      policies: [{
+        actions: [
+          "expand",
+          {
+            eventType: "runner-ready",
+            type: "emit"
+          }
+        ],
+        id: "announce-runner-ready",
+        on: "match:runner-ready"
+      }]
+    });
+
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      output: "RUNNER READY",
+      status: "running"
+    });
+
+    expect(terminal.terminalVisible.value).toBe(true);
+    expect(terminal.terminalExpanded.value).toBe(true);
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "terminal-1",
+      type: "runner-ready"
+    }));
+  });
+
   it("does not send repeated resize control messages when live resize is disabled", async () => {
-    const terminal = useStudioTerminal({
-      liveResize: false,
-      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      liveResize: false
     });
     terminal.terminalHost.value = fakeTerminalHost();
 
@@ -325,14 +452,25 @@ describe("useStudioTerminal", () => {
     await terminal.setupTerminalUi();
     await flushPromises();
 
-    expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(firstSocket.sentMessages()).toHaveLength(1);
+    const resizeMessages = FakeWebSocket.instances.flatMap((socket) => socket.sentMessages());
+    expect(resizeMessages).toEqual([{
+      cols: 93,
+      rows: 28,
+      type: "resize"
+    }]);
   });
 });
 
 async function flushPromises() {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 6; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+function testTerminalDriver() {
+  return createWebSocketTerminalDriver({
+    webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+  });
 }
 
 function fakeTerminalHost() {
