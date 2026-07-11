@@ -314,6 +314,12 @@ describe("vibe64 autopilot composer control model", () => {
       label: "Waiting for session controls.",
       visible: true
     });
+    expect(composerStatusLaneState({
+      thinkingVisible: true
+    })).toEqual({
+      label: "Working...",
+      visible: true
+    });
     expect(composerInlineInputDisabledReason("Sending to assistant...")).toBe("");
     expect(composerInlineInputDisabledReason("Thinking...")).toBe("");
     expect(composerInlineInputDisabledReason("Command is running.")).toBe("");

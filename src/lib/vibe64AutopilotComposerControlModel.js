@@ -295,7 +295,7 @@ function composerStatusLaneState({
   thinkingVisible = false
 } = {}) {
   return {
-    label: composerStatusReason || thinkingLabel,
+    label: composerStatusReason || thinkingLabel || (thinkingVisible ? "Working..." : ""),
     visible: Boolean(thinkingVisible || composerStatusReason)
   };
 }
