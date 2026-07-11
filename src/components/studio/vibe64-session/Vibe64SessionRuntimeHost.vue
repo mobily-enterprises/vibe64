@@ -8,7 +8,6 @@
       :active="autopilotModeActive"
       :automation-enabled="autopilotAutomationEnabled"
       :autopilot-steps="autopilotNavigationSteps"
-      :agent-thinking="autopilotInteractionLocked"
       :chat-collapsed="props.chatCollapsed"
       :command-runner="autopilotCommandRunner"
       :conversation-log="conversationLog"
@@ -32,7 +31,7 @@
       :session-toolbar="autopilotSessionToolbar"
       :save-project-config="props.saveProjectConfig"
       :saving-project-config="props.savingProjectConfig"
-      :steer-agent-turn="steerAgentTurn"
+      :send-agent-message="sendAgentMessage"
       :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
       @project-attention="emitProjectAttention"
@@ -136,7 +135,6 @@ const {
   activeCodexTerminalState,
   autopilotAutomationEnabled,
   autopilotCommandRunner,
-  autopilotInteractionLocked,
   autopilotModeActive,
   autopilotNavigationSteps,
   autopilotSessionToolbar,
@@ -159,7 +157,7 @@ const {
   selectedAgentTerminalId,
   selection,
   setAutopilotBusy,
-  steerAgentTurn,
+  sendAgentMessage,
   timeline
 } = useVibe64SessionRuntimeHost(props, emit);
 </script>

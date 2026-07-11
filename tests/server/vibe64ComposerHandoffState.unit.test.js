@@ -183,7 +183,7 @@ test("composer handoff state finds the private persisted prompt by canonical id"
   assert.equal(composerHandoffSnapshot(runtime.session)?.id, "handoff-1");
 });
 
-test("composer handoff state keeps ordered controls accepted before provider activation", async () => {
+test("composer handoff state preserves ordered legacy controls accepted before provider activation", async () => {
   const runtime = testRuntime();
   const first = await acceptComposerControl(runtime, runtime.session.sessionId, {
     afterSubmissionId: "initial-submission",
@@ -194,7 +194,7 @@ test("composer handoff state keeps ordered controls accepted before provider act
     fields: {
       conversationRequest: "First follow-up"
     },
-    kind: COMPOSER_CONTROL_KINDS.STEER,
+    kind: COMPOSER_CONTROL_KINDS.LEGACY_STEER,
     message: "First follow-up",
     originId: "browser-1"
   });
@@ -208,7 +208,7 @@ test("composer handoff state keeps ordered controls accepted before provider act
   await acceptComposerControl(runtime, runtime.session.sessionId, {
     afterSubmissionId: "initial-submission",
     controlRequestId: "steer-2",
-    kind: COMPOSER_CONTROL_KINDS.STEER,
+    kind: COMPOSER_CONTROL_KINDS.LEGACY_STEER,
     message: "Second follow-up",
     originId: "browser-1"
   });
@@ -268,7 +268,7 @@ test("composer handoff state keeps ordered controls accepted before provider act
   );
 });
 
-test("composer controls preserve correlated attempts and can be retried with the same durable id", async () => {
+test("legacy composer controls preserve correlated attempts and can be retried with the same durable id", async () => {
   const runtime = testRuntime();
   await transitionComposerHandoff(runtime, runtime.session.sessionId, {
     handoff: promptHandoff(),
@@ -290,7 +290,7 @@ test("composer controls preserve correlated attempts and can be retried with the
   await acceptComposerControl(runtime, runtime.session.sessionId, {
     afterSubmissionId: "initial-submission",
     controlRequestId: "steer-retry-1",
-    kind: COMPOSER_CONTROL_KINDS.STEER,
+    kind: COMPOSER_CONTROL_KINDS.LEGACY_STEER,
     message: "Do not lose this follow-up."
   });
   await settleComposerControl(runtime, runtime.session.sessionId, "steer-retry-1", {
@@ -336,7 +336,7 @@ test("composer controls preserve correlated attempts and can be retried with the
   control = await acceptComposerControl(runtime, runtime.session.sessionId, {
     afterSubmissionId: "initial-submission",
     controlRequestId: "steer-retry-1",
-    kind: COMPOSER_CONTROL_KINDS.STEER,
+    kind: COMPOSER_CONTROL_KINDS.LEGACY_STEER,
     message: "Do not lose this follow-up."
   });
   assert.equal(control.attempts, 2);

@@ -1034,8 +1034,8 @@ function createService({
       return sessionAgent.interruptTurn(sessionId, input, options);
     },
 
-    steerAgentTurn(sessionId, input = {}, options = {}) {
-      return sessionAgent.steerTurn(sessionId, input, options);
+    sendAgentMessage(sessionId, input = {}, options = {}) {
+      return sessionAgent.sendMessage(sessionId, input, options);
     },
 
     injectGlobalCodexPrompt(handoff = {}) {

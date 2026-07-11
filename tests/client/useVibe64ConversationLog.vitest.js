@@ -434,7 +434,7 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
-        reason: "codex-app-server-turn-steered",
+        reason: "codex-app-server-message-delivered",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
@@ -566,7 +566,7 @@ describe("useVibe64ConversationLog", () => {
         },
         type: "upsert-turn"
       },
-      reason: "codex-app-server-turn-steered",
+      reason: "codex-app-server-message-delivered",
       sessionId: "session-1"
     })).toEqual({
       turn: {

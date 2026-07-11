@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   passiveComposerAttachmentField,
-  passiveComposerCanSteer,
+  passiveComposerMessagePayload,
   passiveComposerSteeringMode,
-  passiveComposerShouldShow,
-  passiveComposerSteerPayload
+  passiveComposerShouldShow
 } from "../../src/lib/vibe64PassiveComposerSteer.js";
 import {
   sessionGithubCommandActor
@@ -95,9 +94,9 @@ describe("sessionGithubCommandActor", () => {
   });
 });
 
-describe("Vibe64 passive composer steer state", () => {
+describe("Vibe64 passive composer presentation state", () => {
   it("shows the passive composer during active assistant steer turns", () => {
-    const steeringActive = passiveComposerCanSteer({
+    const steeringActive = passiveComposerSteeringMode({
       agentSteeringAvailable: true,
       selectedScreenControlVisible: false
     });
@@ -113,17 +112,12 @@ describe("Vibe64 passive composer steer state", () => {
   });
 
   it("keeps an unsent steer draft visible during transient turn metadata gaps", () => {
-    const steeringActive = passiveComposerCanSteer({
-      agentSteeringAvailable: false,
-      selectedScreenControlVisible: false
-    });
     const steeringMode = passiveComposerSteeringMode({
       agentSteeringAvailable: false,
       selectedScreenControlVisible: false,
       steeringDraftActive: true
     });
 
-    expect(steeringActive).toBe(false);
     expect(steeringMode).toBe(true);
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
@@ -135,10 +129,6 @@ describe("Vibe64 passive composer steer state", () => {
   });
 
   it("enters passive steer mode while assistant turn metadata refreshes", () => {
-    const steeringActive = passiveComposerCanSteer({
-      agentSteeringAvailable: false,
-      selectedScreenControlVisible: false
-    });
     const steeringMode = passiveComposerSteeringMode({
       agentInteractionLocked: true,
       agentSteeringAvailable: false,
@@ -146,7 +136,6 @@ describe("Vibe64 passive composer steer state", () => {
       steeringDraftActive: false
     });
 
-    expect(steeringActive).toBe(false);
     expect(steeringMode).toBe(true);
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
@@ -188,7 +177,7 @@ describe("Vibe64 passive composer steer state", () => {
   });
 
   it("does not steal the selected primary steer form", () => {
-    const steeringActive = passiveComposerCanSteer({
+    const steeringActive = passiveComposerSteeringMode({
       agentSteeringAvailable: true,
       selectedScreenControlVisible: true
     });
@@ -202,8 +191,8 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(false);
   });
 
-  it("builds the existing Codex steer payload from passive composer text", () => {
-    expect(passiveComposerSteerPayload("  Tighten the tests.  ")).toEqual({
+  it("builds a provider-neutral message payload from passive composer text", () => {
+    expect(passiveComposerMessagePayload("  Tighten the tests.  ")).toEqual({
       displayFields: {
         conversationRequest: "Tighten the tests."
       },
@@ -212,10 +201,10 @@ describe("Vibe64 passive composer steer state", () => {
       },
       message: "Tighten the tests."
     });
-    expect(passiveComposerSteerPayload("   ")).toBeNull();
+    expect(passiveComposerMessagePayload("   ")).toBeNull();
   });
 
-  it("adds passive composer attachment references to the Codex steer payload", () => {
+  it("adds passive composer attachment references to the assistant message payload", () => {
     const attachments = [
       {
         path: "/tmp/vibe64-attachments/session/screenshot.png",
@@ -229,7 +218,7 @@ describe("Vibe64 passive composer steer state", () => {
         conversationRequest: attachments
       }
     })).toEqual(attachments);
-    expect(passiveComposerSteerPayload("Please inspect this.", {
+    expect(passiveComposerMessagePayload("Please inspect this.", {
       attachmentFields: {
         conversationRequest: attachments
       }

@@ -2,7 +2,8 @@ const VIBE64_OPERATION_ROUTES = Object.freeze({
   COMMAND_TERMINAL: "command-terminal",
   SESSION_ACTION: "session-action",
   SESSION_ADVANCE: "session-advance",
-  SESSION_INTENT: "session-intent"
+  SESSION_INTENT: "session-intent",
+  SESSION_MESSAGE: "session-message"
 });
 
 const VIBE64_ACTION_DISPATCH_ROUTES = Object.freeze({

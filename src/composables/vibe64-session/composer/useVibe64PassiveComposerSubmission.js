@@ -2,7 +2,7 @@ import {
   COMPOSER_CONTROL_TARGETS
 } from "@/lib/vibe64AutopilotComposerControlModel.js";
 import {
-  passiveComposerSteerPayload
+  passiveComposerMessagePayload
 } from "@/lib/vibe64PassiveComposerSteer.js";
 import {
   readRefOrGetterValue
@@ -17,73 +17,29 @@ function useVibe64PassiveComposerSubmission({
   fieldName = () => "",
   logInputChanged = () => null,
   rejectOptimisticTurn = () => null,
-  runWorkflowControl = async () => false,
+  sendAgentMessage = async () => false,
   setDraft = () => false,
   startOptimisticTurn = () => null,
-  steerAgentTurn = async () => false,
-  steeringActive = false,
-  submitControl = () => null,
   submittedForm = () => null
 } = {}) {
   async function submitPassiveComposer(options = {}) {
     const form = readRefOrGetterValue(submittedForm);
     const submittedDraft = String(readRefOrGetterValue(draft) || "");
-    const rawPayload = passiveComposerSteerPayload(submittedDraft, options);
+    const rawPayload = passiveComposerMessagePayload(submittedDraft, options);
     if (!rawPayload) {
       return false;
     }
     const payload = expandSubmissionOptions(rawPayload);
-    if (!readRefOrGetterValue(steeringActive)) {
-      const currentControl = readRefOrGetterValue(submitControl);
-      if (!currentControl) {
-        return false;
-      }
-      const draftSubmission = startOptimisticTurn({
-        control: currentControl,
-        options: {
-          displayFields: payload.displayFields,
-          fields: payload.fields
-        },
-        values: {
-          [readRefOrGetterValue(fieldName)]: submittedDraft
-        }
-      });
-      setDraft("");
-      try {
-        const accepted = await runWorkflowControl(currentControl, {
-          ...payload,
-          composerSubmissionId: draftSubmission
-        });
-        if (!accepted) {
-          rejectOptimisticTurn(draftSubmission);
-          if (!readRefOrGetterValue(draft)) {
-            setDraft(submittedDraft);
-          }
-          return false;
-        }
-        clearAcceptedSubmission(form);
-        return true;
-      } catch (error) {
-        rejectOptimisticTurn(draftSubmission, {
-          error
-        });
-        if (!readRefOrGetterValue(draft)) {
-          setDraft(submittedDraft);
-        }
-        return false;
-      }
-    }
-
     const targetSubmissionId = String(readRefOrGetterValue(afterSubmissionId) || "").trim();
     const draftSubmission = startOptimisticTurn({
       afterSubmissionId: targetSubmissionId,
       control: readRefOrGetterValue(control),
+      messageDelivery: true,
       options: {
         displayFields: payload.displayFields,
         fields: payload.fields,
         message: payload.message
       },
-      steering: true,
       values: {
         [readRefOrGetterValue(fieldName)]: submittedDraft
       }
@@ -95,12 +51,12 @@ function useVibe64PassiveComposerSubmission({
       }
     }
     try {
-      const steered = await steerAgentTurn({
+      const accepted = await sendAgentMessage({
         ...payload,
         ...(targetSubmissionId ? { afterSubmissionId: targetSubmissionId } : {}),
         composerSubmissionId: draftSubmission
       }) !== false;
-      if (!steered) {
+      if (!accepted) {
         rejectOptimisticTurn(draftSubmission, {
           restoreDraft: false
         });
@@ -108,7 +64,7 @@ function useVibe64PassiveComposerSubmission({
       } else {
         clearAcceptedSubmission(form);
       }
-      return steered;
+      return accepted;
     } catch (error) {
       rejectOptimisticTurn(draftSubmission, {
         error,

@@ -1,3 +1,7 @@
+import {
+  VIBE64_ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
+
 const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
 
 function buildAgentConversationActionDefinition({
@@ -7,6 +11,7 @@ function buildAgentConversationActionDefinition({
   label = "Talk to Codex"
 } = {}) {
   return {
+    dispatchRoute: VIBE64_ACTION_DISPATCH_ROUTES.SESSION_MESSAGE,
     icon: "codex",
     id,
     inputFields: [

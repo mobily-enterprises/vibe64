@@ -555,6 +555,7 @@ async function ensureCodexAppServerThreadForSession({
 
 async function sendCodexAppServerPromptForSession({
   agentSettings = {},
+  clientUserMessageId = "",
   contextRefresh = "",
   provider,
   prompt = "",
@@ -570,10 +571,15 @@ async function sendCodexAppServerPromptForSession({
   if (!input) {
     throw new Error("Codex app-server prompt is empty.");
   }
-  const turn = await provider.sendTurn(threadId, input, codexAppServerTurnSettings({
-    agentSettings,
-    cwd: workdir
-  }));
+  const turn = await provider.sendTurn(threadId, input, {
+    ...codexAppServerTurnSettings({
+      agentSettings,
+      cwd: workdir
+    }),
+    ...(normalizeAgentText(clientUserMessageId)
+      ? { clientUserMessageId: normalizeAgentText(clientUserMessageId) }
+      : {})
+  });
   return {
     input,
     turn

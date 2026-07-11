@@ -1273,7 +1273,11 @@ class CodexAppServerJsonRpcClient {
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(message.id);
       if (message.error) {
-        pending.reject(new Error(message.error.message || `Codex app-server request failed: ${pending.method}`));
+        const error = new Error(message.error.message || `Codex app-server request failed: ${pending.method}`);
+        error.code = message.error.code;
+        error.data = message.error.data;
+        error.method = pending.method;
+        pending.reject(error);
         return;
       }
       pending.resolve(message.result);

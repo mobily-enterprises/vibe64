@@ -67,13 +67,14 @@ const displayFieldsInputSchema = {
   }
 };
 
-const agentTurnSteerInputValidator = deepFreeze({
+const agentMessageInputValidator = deepFreeze({
   schema: createSchema({
     afterSubmissionId: {
       type: "string",
       noTrim: false,
       required: false
     },
+    ...agentSettingsInputSchema,
     ...composerSubmissionInputSchema,
     ...displayFieldsInputSchema,
     ...originInputSchema,
@@ -413,7 +414,7 @@ const sessionRewindInputValidator = deepFreeze({
 
 export {
   agentTurnInterruptInputValidator,
-  agentTurnSteerInputValidator,
+  agentMessageInputValidator,
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
   sessionConversationLogInputValidator,

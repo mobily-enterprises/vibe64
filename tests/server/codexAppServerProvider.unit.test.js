@@ -1496,6 +1496,32 @@ test("codex JSON-RPC client sends initialize and turn/start over WebSocket", asy
     turnId: "turn-1"
   });
 
+  const failedSteer = client.request("turn/steer", {
+    expectedTurnId: "turn-1",
+    input: codexTurnInput("One more thing"),
+    threadId: "thread-1"
+  });
+  socket.emit("message", {
+    data: JSON.stringify({
+      error: {
+        code: -32602,
+        data: {
+          reason: "NoActiveTurn"
+        },
+        message: "No active turn to steer"
+      },
+      id: 3
+    })
+  });
+  await assert.rejects(failedSteer, (error) => {
+    assert.equal(error.code, -32602);
+    assert.deepEqual(error.data, {
+      reason: "NoActiveTurn"
+    });
+    assert.equal(error.method, "turn/steer");
+    return true;
+  });
+
   client.close();
 });
 

@@ -276,6 +276,7 @@ function normalizeAction(action = {}, stepId = "") {
     disabledReason: normalizeText(action.disabledReason),
     disabledWhenReason: normalizeText(action.disabledWhenReason || action.disabledReason),
     disabledWhen: normalizeWorkflowConditionList(action.disabledWhen, `step ${stepId} action ${id} disabledWhen`),
+    dispatchRoute: normalizeText(action.dispatchRoute),
     enabledWhenReason: normalizeText(action.enabledWhenReason || action.disabledReason),
     enabledWhen: normalizeWorkflowConditionList(action.enabledWhen, `step ${stepId} action ${id} enabledWhen`),
     hrefMetadata: normalizeText(action.hrefMetadata),
@@ -515,6 +516,12 @@ function publicAction(action, state) {
 }
 
 function publicActionDispatchRoute(action = {}) {
+  if (
+    action.type === "prompt" &&
+    action.dispatchRoute === ACTION_DISPATCH_ROUTES.SESSION_MESSAGE
+  ) {
+    return ACTION_DISPATCH_ROUTES.SESSION_MESSAGE;
+  }
   if (action.type === "command") {
     return ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL;
   }

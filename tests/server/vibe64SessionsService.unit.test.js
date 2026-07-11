@@ -220,6 +220,9 @@ function serviceWithDefaultWorkflowOrigin(service, originId = "test-origin") {
     },
     runSessionIntent(sessionId, intentId, input = {}) {
       return service.runSessionIntent(sessionId, intentId, defaultWorkflowOriginInput(input, originId));
+    },
+    sendAgentMessage(sessionId, input = {}) {
+      return service.sendAgentMessage(sessionId, defaultWorkflowOriginInput(input, originId));
     }
   };
 }
@@ -250,6 +253,70 @@ function createService(options = {}) {
     }
   });
   return serviceWithDefaultWorkflowOrigin(service, defaultOriginId);
+}
+
+function composerMessageRuntimeHarness(initialSession = {}) {
+  let currentSession = {
+    actions: [
+      {
+        dispatchRoute: "session-message",
+        id: "continue_with_assistant"
+      }
+    ],
+    agentRuns: [],
+    metadata: {},
+    ...initialSession
+  };
+  return {
+    currentSession() {
+      return currentSession;
+    },
+    updateSession(update) {
+      currentSession = typeof update === "function"
+        ? update(currentSession)
+        : update;
+      return currentSession;
+    },
+    runtime: {
+      async getSession() {
+        return currentSession;
+      },
+      store: {
+        async writeAgentRunEvent(_sessionId, runId, {
+          event = {},
+          patch = {}
+        } = {}) {
+          const runs = Array.isArray(currentSession.agentRuns) ? currentSession.agentRuns : [];
+          const previous = runs.find((run) => run.id === runId) || {
+            events: [],
+            id: runId
+          };
+          const at = event.at || patch.updatedAt || new Date().toISOString();
+          const run = {
+            ...previous,
+            ...patch,
+            events: [
+              ...previous.events,
+              {
+                ...event,
+                at
+              }
+            ],
+            id: runId,
+            updatedAt: at
+          };
+          currentSession = {
+            ...currentSession,
+            agentRuns: [
+              ...runs.filter((candidate) => candidate.id !== runId),
+              run
+            ]
+          };
+          return run;
+        }
+      }
+    }
+  };
 }
 
 test("public session responses omit heavy runtime audit fields", () => {
@@ -1804,7 +1871,51 @@ test("session prompt action acknowledges the canonical handoff before provider d
   ]);
 });
 
-test("session composer queues provider-neutral controls until the initial handoff is active", async () => {
+test("assistant message preparation failures remain durable and resendable", async () => {
+  const harness = composerMessageRuntimeHarness({
+    sessionId: "session-message-preparation-failure",
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  const providerError = Object.assign(new Error("The selected assistant provider is unavailable."), {
+    code: "provider_unavailable"
+  });
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async describeAgentProvider() {
+        throw providerError;
+      }
+    }
+  });
+
+  const result = await service.sendAgentMessage("session-message-preparation-failure", {
+    composerSubmissionId: "durable-message-1",
+    message: "Do not lose this message."
+  });
+
+  assert.deepEqual(result, {
+    accepted: true,
+    composerSubmissionId: "durable-message-1",
+    delivered: false,
+    messageId: "durable-message-1",
+    ok: true,
+    queued: false,
+    sessionId: "session-message-preparation-failure",
+    state: "failed"
+  });
+  const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
+  assert.equal(message.id, "durable-message-1");
+  assert.equal(message.message, "Do not lose this message.");
+  assert.equal(message.operationOutcome, "provider_unavailable");
+  assert.equal(message.state, "failed");
+});
+
+test("session composer messages let a stale Stop cancel delivery and interrupt the current handoff", async () => {
   const previousHandoffAt = new Date().toISOString();
   let currentSession = {
     agentRuns: [{
@@ -1829,8 +1940,8 @@ test("session composer queues provider-neutral controls until the initial handof
     releaseDelivery = resolve;
   });
   const interruptCalls = [];
-  const steerCalls = [];
-  let steerAttempts = 0;
+  const messageCalls = [];
+  let messageAttempts = 0;
   let markActionStarted;
   let releaseAction;
   const actionStarted = new Promise((resolve) => {
@@ -1943,17 +2054,18 @@ test("session composer queues provider-neutral controls until the initial handof
           }
         };
       },
-      async steerAgentTurn(sessionId, input) {
-        steerAttempts += 1;
-        steerCalls.push({
+      async sendAgentMessage(sessionId, input) {
+        messageAttempts += 1;
+        messageCalls.push({
           input,
           sessionId
         });
-        if (steerAttempts === 1) {
+        if (messageAttempts === 1) {
           return {
-            error: "The active provider turn is not ready to steer yet.",
+            delivered: false,
+            error: "The active provider turn is not ready for messages yet.",
             ok: false,
-            operationOutcome: "steer_unavailable",
+            operationOutcome: "active_turn_not_ready",
             retryable: true,
             thread: {
               id: "future-thread"
@@ -1965,8 +2077,10 @@ test("session composer queues provider-neutral controls until the initial handof
           };
         }
         return {
+          delivered: true,
+          deliveryMode: "active_turn",
           ok: true,
-          operationOutcome: "steered",
+          operationOutcome: "delivered_to_active_turn",
           thread: {
             id: "future-thread"
           },
@@ -1995,7 +2109,7 @@ test("session composer queues provider-neutral controls until the initial handof
   );
   await actionStarted;
 
-  const queued = await service.steerAgentTurn(currentSession.sessionId, {
+  const queued = await service.sendAgentMessage(currentSession.sessionId, {
     afterSubmissionId: "initial-submission",
     composerSubmissionId: "follow-up-submission",
     displayFields: {
@@ -2009,7 +2123,10 @@ test("session composer queues provider-neutral controls until the initial handof
   });
   assert.equal(queued.ok, true);
   assert.equal(queued.queued, true);
-  assert.equal(steerCalls.length, 0);
+  for (let attempt = 0; attempt < 10 && messageCalls.length < 1; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(messageCalls.length, 1);
 
   const queuedInterrupt = await service.interruptAgentTurn(currentSession.sessionId, {
     afterSubmissionId: "initial-submission",
@@ -2018,39 +2135,24 @@ test("session composer queues provider-neutral controls until the initial handof
   });
   assert.equal(queuedInterrupt.ok, true);
   assert.equal(queuedInterrupt.queued, true);
-  assert.equal(interruptCalls.length, 0);
+  assert.equal(interruptCalls.length, 1);
 
   releaseAction();
   const initial = await initialPromise;
   assert.equal(initial.composerHandoff.state, "accepted");
 
   releaseDelivery();
-  for (let attempt = 0; attempt < 10 && steerCalls.length < 1; attempt += 1) {
+  for (let attempt = 0; attempt < 10 && interruptCalls.length < 2; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.equal(steerCalls.length, 1);
-  assert.equal(interruptCalls.length, 0);
+  assert.equal(messageCalls.length, 1);
+  assert.equal(interruptCalls.length, 2);
 
   await service.inspectSession(currentSession.sessionId);
-  for (let attempt = 0; attempt < 10 && (steerCalls.length < 2 || !interruptCalls.length); attempt += 1) {
+  for (let attempt = 0; attempt < 10 && !interruptCalls.length; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.deepEqual(steerCalls, [
-    {
-      input: {
-        composerSubmissionId: "follow-up-submission",
-        displayFields: {
-          conversationRequest: "Also inspect the tests."
-        },
-        fields: {
-          conversationRequest: "Also inspect the tests."
-        },
-        message: "Also inspect the tests.",
-        originId: "test-origin",
-        text: "Also inspect the tests."
-      },
-      sessionId: "session-queued-steer"
-    },
+  assert.deepEqual(messageCalls, [
     {
       input: {
         composerSubmissionId: "follow-up-submission",
@@ -2070,6 +2172,14 @@ test("session composer queues provider-neutral controls until the initial handof
   assert.deepEqual(interruptCalls, [
     {
       input: {
+        controlRequestId: "interrupt:previous-submission",
+        originId: "test-origin",
+        reason: "user_interrupt"
+      },
+      sessionId: "session-queued-steer"
+    },
+    {
+      input: {
         controlRequestId: "interrupt:initial-submission",
         originId: "test-origin",
         reason: "user_interrupt"
@@ -2078,42 +2188,355 @@ test("session composer queues provider-neutral controls until the initial handof
     }
   ]);
   const inspected = await service.inspectSession(currentSession.sessionId);
-  assert.deepEqual(inspected.composerHandoff.controls, [
+  assert.deepEqual(inspected.composerMessages, [
     {
       afterSubmissionId: "initial-submission",
       attempts: 2,
       displayMessage: "Also inspect the tests.",
-      error: "",
+      error: "Message was not sent because the assistant was stopped.",
       id: "follow-up-submission",
-      kind: "steer",
-      lastAttemptAt: inspected.composerHandoff.controls[0].lastAttemptAt,
+      lastAttemptAt: inspected.composerMessages[0].lastAttemptAt,
       message: "Also inspect the tests.",
-      operationOutcome: "steered",
-      retryable: false,
-      retriedAt: "",
-      state: "delivered",
-      submittedAt: inspected.composerHandoff.controls[0].submittedAt,
-      threadId: "future-thread",
-      turnId: "future-turn"
-    },
-    {
-      afterSubmissionId: "initial-submission",
-      attempts: 1,
-      displayMessage: "",
-      error: "Assistant control delivery returned no result.",
-      id: "interrupt:initial-submission",
-      kind: "interrupt",
-      lastAttemptAt: inspected.composerHandoff.controls[1].lastAttemptAt,
-      message: "",
-      operationOutcome: "control_result_missing",
+      operationOutcome: "cancelled_by_user",
       retryable: false,
       retriedAt: "",
       state: "failed",
-      submittedAt: inspected.composerHandoff.controls[1].submittedAt,
-      threadId: "",
-      turnId: ""
+      submittedAt: inspected.composerMessages[0].submittedAt,
+      threadId: "future-thread",
+      turnId: "future-turn"
     }
   ]);
+});
+
+test("rapid assistant messages start one new turn and deliver the follow-up after activation", async () => {
+  let currentSession = {
+    actions: [
+      {
+        dispatchRoute: "session-message",
+        id: "agent_conversation"
+      }
+    ],
+    agentRuns: [],
+    metadata: {},
+    sessionId: "session-rapid-messages",
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  };
+  let releaseDelivery;
+  let markDeliveryStarted;
+  const deliveryStarted = new Promise((resolve) => {
+    markDeliveryStarted = resolve;
+  });
+  const deliveryGate = new Promise((resolve) => {
+    releaseDelivery = resolve;
+  });
+  const sendCalls = [];
+  let runActionCalls = 0;
+  const handoff = {
+    handoffId: "rapid-message-handoff",
+    kind: "agent_prompt_handoff",
+    terminalInput: "First message prompt"
+  };
+  const runtime = {
+    async getSession() {
+      return currentSession;
+    },
+    async runAction(sessionId, actionId, input) {
+      runActionCalls += 1;
+      currentSession = {
+        ...currentSession,
+        actionResult: {
+          actionId,
+          agentPromptHandoff: handoff,
+          input,
+          status: "prompt_ready"
+        },
+        sessionId
+      };
+      return currentSession;
+    },
+    store: {
+      async writeAgentRunEvent(_sessionId, runId, {
+        event = {},
+        patch: runPatch = {}
+      } = {}) {
+        const runs = Array.isArray(currentSession.agentRuns) ? currentSession.agentRuns : [];
+        const previous = runs.find((run) => run.id === runId) || {
+          events: [],
+          id: runId
+        };
+        const at = event.at || runPatch.updatedAt || new Date().toISOString();
+        const run = {
+          ...previous,
+          ...runPatch,
+          events: [
+            ...previous.events,
+            {
+              ...event,
+              at
+            }
+          ],
+          id: runId,
+          updatedAt: at
+        };
+        currentSession = {
+          ...currentSession,
+          agentRuns: [
+            ...runs.filter((candidate) => candidate.id !== runId),
+            run
+          ]
+        };
+        return run;
+      }
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async deliverAgentPrompt(_sessionId, _handoff, options = {}) {
+        markDeliveryStarted();
+        await deliveryGate;
+        await options.lifecycle({
+          state: "connecting"
+        });
+        await options.lifecycle({
+          state: "delivered",
+          threadId: "rapid-thread",
+          turnId: "rapid-turn"
+        });
+        await options.lifecycle({
+          state: "active",
+          threadId: "rapid-thread",
+          turnId: "rapid-turn"
+        });
+        return {
+          ok: true,
+          thread: {
+            id: "rapid-thread"
+          },
+          turn: {
+            active: true,
+            id: "rapid-turn"
+          }
+        };
+      },
+      async sendAgentMessage(_sessionId, input) {
+        sendCalls.push(input.message);
+        if (sendCalls.length === 1) {
+          return {
+            delivered: false,
+            newTurnRequired: true,
+            ok: true,
+            operationOutcome: "new_turn_required"
+          };
+        }
+        return {
+          delivered: true,
+          deliveryMode: "active_turn",
+          ok: true,
+          operationOutcome: "delivered_to_active_turn",
+          threadId: "rapid-thread",
+          turnId: "rapid-turn"
+        };
+      }
+    }
+  });
+
+  const first = await service.sendAgentMessage(currentSession.sessionId, {
+    composerSubmissionId: "rapid-message-1",
+    message: "Tell me a short story about a boy.",
+    originId: "test-origin"
+  });
+  const second = await service.sendAgentMessage(currentSession.sessionId, {
+    afterSubmissionId: "rapid-message-1",
+    composerSubmissionId: "rapid-message-2",
+    message: "Actually, make the protagonist a girl.",
+    originId: "test-origin"
+  });
+
+  assert.equal(first.accepted, true);
+  assert.equal(second.accepted, true);
+  await deliveryStarted;
+  assert.equal(runActionCalls, 1);
+  assert.deepEqual(sendCalls, [
+    "Tell me a short story about a boy."
+  ]);
+
+  releaseDelivery();
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const messages = publicSessionResponse(currentSession).composerMessages;
+    if (messages.length === 2 && messages.every((message) => message.state === "delivered")) {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(runActionCalls, 1);
+  assert.deepEqual(sendCalls, [
+    "Tell me a short story about a boy.",
+    "Actually, make the protagonist a girl."
+  ]);
+  assert.deepEqual(
+    publicSessionResponse(currentSession).composerMessages.map((message) => ({
+      id: message.id,
+      operationOutcome: message.operationOutcome,
+      state: message.state
+    })),
+    [
+      {
+        id: "rapid-message-1",
+        operationOutcome: "started_new_turn",
+        state: "delivered"
+      },
+      {
+        id: "rapid-message-2",
+        operationOutcome: "delivered_to_active_turn",
+        state: "delivered"
+      }
+    ]
+  );
+});
+
+test("an assistant message starts a new turn when the previous turn finishes before delivery", async () => {
+  const sessionId = "session-message-finished-race";
+  const harness = composerMessageRuntimeHarness({
+    actions: [
+      {
+        dispatchRoute: "session-message",
+        id: "continue_with_assistant"
+      }
+    ],
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  let runActionCalls = 0;
+  const runActionIds = [];
+  const sentMessages = [];
+  harness.runtime.runAction = async (_sessionId, actionId, input) => {
+    runActionCalls += 1;
+    runActionIds.push(actionId);
+    const handoff = {
+      handoffId: `finished-race-handoff-${runActionCalls}`,
+      kind: "agent_prompt_handoff",
+      terminalInput: input.conversationRequest
+    };
+    return harness.updateSession((session) => ({
+      ...session,
+      actionResult: {
+        actionId,
+        agentPromptHandoff: handoff,
+        input,
+        status: "prompt_ready"
+      }
+    }));
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async deliverAgentPrompt(_sessionId, handoff, options = {}) {
+        const suffix = handoff.handoffId.split("-").at(-1);
+        await options.lifecycle({
+          state: "connecting"
+        });
+        await options.lifecycle({
+          state: "delivered",
+          threadId: `finished-race-thread-${suffix}`,
+          turnId: `finished-race-turn-${suffix}`
+        });
+        await options.lifecycle({
+          state: "active",
+          threadId: `finished-race-thread-${suffix}`,
+          turnId: `finished-race-turn-${suffix}`
+        });
+        return {
+          ok: true,
+          thread: {
+            id: `finished-race-thread-${suffix}`
+          },
+          turn: {
+            active: true,
+            id: `finished-race-turn-${suffix}`
+          }
+        };
+      },
+      async sendAgentMessage(_sessionId, input) {
+        sentMessages.push(input.message);
+        return {
+          delivered: false,
+          newTurnRequired: true,
+          ok: true,
+          operationOutcome: "new_turn_required"
+        };
+      }
+    }
+  });
+
+  const firstResult = await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "finished-race-message-1",
+    message: "Tell me a short story about a boy."
+  });
+  assert.equal(firstResult.queued, true, JSON.stringify({
+    firstResult,
+    messages: publicSessionResponse(harness.currentSession()).composerMessages
+  }));
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
+    if (message?.state === "delivered") {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  await service.sendAgentMessage(sessionId, {
+    afterSubmissionId: "finished-race-message-1",
+    composerSubmissionId: "finished-race-message-2",
+    message: "Actually, make the protagonist a girl."
+  });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const messages = publicSessionResponse(harness.currentSession()).composerMessages;
+    if (messages.length === 2 && messages.every((message) => message.state === "delivered")) {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(runActionCalls, 2);
+  assert.deepEqual(runActionIds, [
+    "continue_with_assistant",
+    "continue_with_assistant"
+  ]);
+  assert.deepEqual(sentMessages, [
+    "Tell me a short story about a boy.",
+    "Actually, make the protagonist a girl."
+  ]);
+  assert.deepEqual(
+    publicSessionResponse(harness.currentSession()).composerMessages.map((message) => ({
+      id: message.id,
+      operationOutcome: message.operationOutcome,
+      state: message.state
+    })),
+    [
+      {
+        id: "finished-race-message-1",
+        operationOutcome: "started_new_turn",
+        state: "delivered"
+      },
+      {
+        id: "finished-race-message-2",
+        operationOutcome: "started_new_turn",
+        state: "delivered"
+      }
+    ]
+  );
 });
 
 test("session user message action observes an active Codex turn instead of starting another", async () => {

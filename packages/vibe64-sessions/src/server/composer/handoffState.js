@@ -21,7 +21,7 @@ const COMPOSER_HANDOFF_PENDING_STATES = new Set([
 ]);
 const COMPOSER_CONTROL_KINDS = Object.freeze({
   INTERRUPT: "interrupt",
-  STEER: "steer"
+  LEGACY_STEER: "steer"
 });
 const COMPOSER_CONTROL_STATES = Object.freeze({
   ACCEPTED: "accepted",
@@ -203,7 +203,7 @@ async function acceptComposerControl(runtime, sessionId = "", input = {}) {
     !request.afterSubmissionId ||
     !request.controlRequestId ||
     !request.kind ||
-    (request.kind === COMPOSER_CONTROL_KINDS.STEER && !request.message) ||
+    (request.kind === COMPOSER_CONTROL_KINDS.LEGACY_STEER && !request.message) ||
     typeof runtime?.getSession !== "function" ||
     typeof runtime?.store?.writeAgentRunEvent !== "function"
   ) {

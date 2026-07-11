@@ -30,10 +30,15 @@ function normalizeCodexSessionResult(result = {}) {
   return {
     ...(normalizeText(source.code) ? { code: normalizeText(source.code) } : {}),
     ...(normalizeText(source.error) ? { error: normalizeText(source.error) } : {}),
+    ...(normalizeText(source.deliveryMode) ? { deliveryMode: normalizeText(source.deliveryMode) } : {}),
+    delivered: source.delivered === true,
     ...(normalizeText(source.operationOutcome) ? { operationOutcome: normalizeText(source.operationOutcome) } : {}),
+    ...(normalizeText(source.reason) ? { reason: normalizeText(source.reason) } : {}),
     connectionReused: typeof source.connectionReused === "boolean" ? source.connectionReused : null,
     identity: source.agentIdentity || null,
+    ...(typeof source.interrupted === "boolean" ? { interrupted: source.interrupted } : {}),
     ok: source.ok !== false,
+    newTurnRequired: source.newTurnRequired === true,
     refreshRecommended: source.refreshRecommended === true,
     retryable: typeof source.retryable === "boolean" ? source.retryable : null,
     sessionUpdated: source.sessionUpdated === true,
@@ -115,8 +120,8 @@ function createCodexSessionAgentAdapter({
     async startTerminal(context, input = {}) {
       return controller.startTerminal(context.sessionId, input);
     },
-    async steerTurn(context, input = {}) {
-      return normalizeCodexSessionResult(await controller.steerTurn(context.sessionId, input));
+    async sendMessage(context, input = {}) {
+      return normalizeCodexSessionResult(await controller.sendMessage(context.sessionId, input));
     },
     async streamDetachedChatTurn(context, input = {}) {
       return controller.streamDetachedChatTurn(context.sessionId, input);

@@ -406,7 +406,7 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
   });
 });
 
-test("assistant steer route belongs to sessions and rejects a spoofed Vibe64 user", async () => {
+test("assistant message route belongs to sessions and rejects a spoofed Vibe64 user", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const calls = [];
@@ -414,7 +414,7 @@ test("assistant steer route belongs to sessions and rejects a spoofed Vibe64 use
       const make = app.make.bind(app);
       app.make = (token) => token === "feature.vibe64-sessions.service"
         ? {
-            async steerAgentTurn(sessionId, input) {
+            async sendAgentMessage(sessionId, input) {
               calls.push({
                 input,
                 sessionId
@@ -434,9 +434,9 @@ test("assistant steer route belongs to sessions and rejects a spoofed Vibe64 use
 
       const route = findRegisteredRoute(app, {
         method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-turn/steer`
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-message`
       });
-      assert.ok(route, "Expected sessions-owned assistant steer route");
+      assert.ok(route, "Expected sessions-owned assistant message route");
       const serverUser = {
         email: "owner@example.com"
       };

@@ -70,6 +70,7 @@ function actionWorkflowControl(action = {}) {
     actionId: id,
     autoOpen: false,
     disabledReason: String(sourceAction.disabledReason || ""),
+    dispatchRoute: String(sourceAction.dispatchRoute || ""),
     enabled: sourceAction.enabled === true,
     id,
     inputFields,

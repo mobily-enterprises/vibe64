@@ -273,8 +273,8 @@ function createSessionAgentManager({
     startTerminal(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("startTerminal", sessionId, input, options);
     },
-    steerTurn(sessionId = "", input = {}, options = {}) {
-      return callSessionAdapter("steerTurn", sessionId, input, options);
+    sendMessage(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("sendMessage", sessionId, input, options);
     },
     streamDetachedChatTurn(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("streamDetachedChatTurn", sessionId, input, options);

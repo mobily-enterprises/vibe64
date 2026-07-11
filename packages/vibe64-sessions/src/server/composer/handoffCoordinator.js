@@ -8,6 +8,9 @@ import {
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  pendingComposerMessages
+} from "./messageState.js";
 
 function positiveDelayMs(value = 0, fallback = 0) {
   const delay = Number(value);
@@ -18,15 +21,17 @@ function createComposerHandoffCoordinator({
   activate,
   deliver,
   drainControls = async () => null,
+  drainMessages = async () => null,
   retryBaseDelayMs = 250,
   retryMaxDelayMs = 4_000
 } = {}) {
   if (
     typeof activate !== "function" ||
     typeof deliver !== "function" ||
-    typeof drainControls !== "function"
+    typeof drainControls !== "function" ||
+    typeof drainMessages !== "function"
   ) {
-    throw new TypeError("Composer handoff coordinator requires activation, delivery, and control-drain functions.");
+    throw new TypeError("Composer handoff coordinator requires activation, delivery, and queue-drain functions.");
   }
   const baseRetryDelay = positiveDelayMs(retryBaseDelayMs, 250);
   const maximumRetryDelay = Math.max(
@@ -42,15 +47,15 @@ function createComposerHandoffCoordinator({
     return `${normalizeText(kind)}:${normalizeText(sessionId)}:${normalizeText(handoffId)}`;
   }
 
-  function drain({
+  function drainOperation(kind = "", operation, {
     runtime = null,
     session = null
   } = {}) {
     const sessionId = normalizeText(session?.sessionId);
     if (!sessionId || !runtime) {
-      throw new TypeError("Composer control draining requires a runtime and session.");
+      throw new TypeError("Composer queue draining requires a runtime and session.");
     }
-    const key = taskKey("controls", sessionId, "composer");
+    const key = taskKey(kind, sessionId, "composer");
     const retryTimer = retryTimers.get(key);
     if (retryTimer) {
       clearTimeout(retryTimer);
@@ -65,7 +70,7 @@ function createComposerHandoffCoordinator({
       let result = null;
       do {
         repeatedTasks.delete(key);
-        result = await drainControls({
+        result = await operation({
           runtime,
           session
         });
@@ -79,7 +84,7 @@ function createComposerHandoffCoordinator({
         );
         const timer = setTimeout(() => {
           retryTimers.delete(key);
-          void drain({
+          void drainOperation(kind, operation, {
             runtime,
             session
           }).catch(() => {
@@ -93,6 +98,22 @@ function createComposerHandoffCoordinator({
       }
       return result;
     });
+  }
+
+  function drainControlsForSession(input = {}) {
+    return drainOperation("controls", drainControls, input);
+  }
+
+  function drainMessagesForSession(input = {}) {
+    return drainOperation("messages", drainMessages, input);
+  }
+
+  async function drainSessionQueues(input = {}) {
+    try {
+      await drainControlsForSession(input);
+    } finally {
+      await drainMessagesForSession(input);
+    }
   }
 
   function startTask(key = "", operation) {
@@ -124,18 +145,27 @@ function createComposerHandoffCoordinator({
     }
     const key = taskKey("delivery", sessionId, handoffId);
     return startTask(key, async () => {
-      const result = await deliver({
-        agentSettings,
-        handoff,
-        runtime,
-        session,
-        vibe64User
-      });
-      await drain({
-        runtime,
-        session
-      });
-      return result;
+      try {
+        return await deliver({
+          agentSettings,
+          handoff,
+          runtime,
+          session,
+          vibe64User
+        });
+      } finally {
+        try {
+          await drainControlsForSession({
+            runtime,
+            session
+          });
+        } finally {
+          await drainMessagesForSession({
+            runtime,
+            session
+          });
+        }
+      }
     });
   }
 
@@ -145,13 +175,12 @@ function createComposerHandoffCoordinator({
   } = {}) {
     const state = composerHandoffSnapshot(session);
     if (!state) {
-      return null;
+      return pendingComposerMessages(session).length
+        ? drainMessagesForSession({ runtime, session })
+        : null;
     }
     if (state.state === COMPOSER_HANDOFF_STATES.ACTIVE) {
-      return drain({
-        runtime,
-        session
-      });
+      return drainSessionQueues({ runtime, session });
     }
     if (state.state === COMPOSER_HANDOFF_STATES.DELIVERED && state.threadId && state.turnId) {
       return startTask(taskKey("activation", session.sessionId, state.id), async () => {
@@ -160,7 +189,7 @@ function createComposerHandoffCoordinator({
           session,
           state
         });
-        await drain({
+        await drainSessionQueues({
           runtime,
           session
         });
@@ -170,23 +199,33 @@ function createComposerHandoffCoordinator({
       ![COMPOSER_HANDOFF_STATES.ACCEPTED, COMPOSER_HANDOFF_STATES.CONNECTING].includes(state.state) ||
       state.turnId
     ) {
-      return null;
+      return pendingComposerMessages(session).length
+        ? drainMessagesForSession({ runtime, session })
+        : null;
     }
     const handoff = composerPromptHandoffForState(session, state.id);
     if (!handoff) {
-      return null;
+      return pendingComposerMessages(session).length
+        ? drainMessagesForSession({ runtime, session })
+        : null;
     }
     const run = composerHandoffRun(session) || {};
     return schedule({
       agentSettings: run.agentSettings || null,
-      handoff,
+      handoff: state.submissionId
+        ? {
+            ...handoff,
+            clientSubmissionId: state.submissionId
+          }
+        : handoff,
       runtime,
       session
     });
   }
 
   return Object.freeze({
-    drain,
+    drain: drainControlsForSession,
+    drainMessages: drainMessagesForSession,
     resume,
     schedule
   });

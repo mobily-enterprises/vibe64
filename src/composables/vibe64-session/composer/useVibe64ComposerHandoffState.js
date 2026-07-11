@@ -22,31 +22,29 @@ function canonicalHandoffAcknowledgesOptimisticTurn(handoff = {}, optimistic = {
   );
 }
 
-function optimisticComposerSteerFromControl(control = {}, {
-  fallbackAfterSubmissionId = "",
-  newTurnControl = null
+function optimisticComposerMessageFromDelivery(delivery = {}, {
+  fallbackAfterSubmissionId = ""
 } = {}) {
-  const id = String(control?.id || "").trim();
-  const message = String(control?.message || "").trim();
-  const state = String(control?.state || "").trim();
+  const id = String(delivery?.id || "").trim();
+  const message = String(delivery?.message || "").trim();
+  const state = String(delivery?.state || "").trim();
   if (
-    control?.kind !== "steer" ||
     !id ||
     !message ||
     !["accepted", "failed"].includes(state)
   ) {
     return null;
   }
-  const displayMessage = String(control?.displayMessage || message).trim();
-  const createdAt = String(control?.submittedAt || "").trim() || new Date().toISOString();
+  const displayMessage = String(delivery?.displayMessage || message).trim();
+  const createdAt = String(delivery?.submittedAt || "").trim() || new Date().toISOString();
   const parsedCreatedAtMs = Date.parse(createdAt);
   return {
-    afterSubmissionId: String(control?.afterSubmissionId || fallbackAfterSubmissionId).trim(),
-    control: newTurnControl || {},
+    afterSubmissionId: String(delivery?.afterSubmissionId || fallbackAfterSubmissionId).trim(),
+    control: {},
     createdAt,
     createdAtMs: Number.isNaN(parsedCreatedAtMs) ? Date.now() : parsedCreatedAtMs,
     error: state === "failed"
-      ? String(control?.error || "Message could not be sent.")
+      ? String(delivery?.error || "Message could not be sent.")
       : "",
     id,
     options: {
@@ -61,7 +59,7 @@ function optimisticComposerSteerFromControl(control = {}, {
     },
     remote: true,
     status: state === "failed" ? "failed" : "pending",
-    steering: true,
+    messageDelivery: true,
     text: displayMessage,
     values: {
       conversationRequest: displayMessage
@@ -80,9 +78,8 @@ function useVibe64ComposerHandoffState({
   conversationComposerDraft = "",
   conversationComposerDraftTextFromFields = () => "",
   conversationComposerFallbackDraft,
-  newTurnControl = null,
   optimisticComposerTurn,
-  optimisticComposerSteers = { value: [] },
+  optimisticComposerMessages = { value: [] },
   optimisticTextFromSubmission = () => "",
   payloadUsesConversationComposer = () => false,
   primaryIntentId = "",
@@ -90,9 +87,8 @@ function useVibe64ComposerHandoffState({
   restoreControlDraft = () => null,
   runWorkflowControl = async () => false,
   selectedComposerDraftText = () => "",
-  setConversationComposerDraft = () => false,
-  steerAgentTurn = async () => false,
-  steeringActive = false
+  sendAgentMessage = async () => false,
+  setConversationComposerDraft = () => false
 } = {}) {
   let optimisticComposerTurnCounter = 0;
 
@@ -215,8 +211,8 @@ function useVibe64ComposerHandoffState({
   function startOptimisticComposerTurn({
     afterSubmissionId = "",
     control = {},
+    messageDelivery = false,
     options = {},
-    steering = false,
     values = {}
   } = {}) {
     const text = optimisticTextFromSubmission(options);
@@ -250,14 +246,14 @@ function useVibe64ComposerHandoffState({
         displayFields: normalizedDraftFields(sourceOptions.displayFields),
         fields: normalizedDraftFields(sourceOptions.fields)
       },
-      steering: steering === true,
+      messageDelivery: messageDelivery === true,
       status: "pending",
       text,
       values: normalizedDraftFields(values)
     };
-    if (optimisticTurn.steering) {
-      optimisticComposerSteers.value = [
-        ...optimisticComposerSteers.value,
+    if (optimisticTurn.messageDelivery) {
+      optimisticComposerMessages.value = [
+        ...optimisticComposerMessages.value,
         optimisticTurn
       ];
     } else {
@@ -270,11 +266,11 @@ function useVibe64ComposerHandoffState({
     error = null,
     restoreDraft = true
   } = {}) {
-    const steerIndex = optimisticComposerSteers.value
+    const messageIndex = optimisticComposerMessages.value
       .findIndex((turn) => turn.id === submissionId);
     const optimistic = optimisticComposerTurn.value?.id === submissionId
       ? optimisticComposerTurn.value
-      : optimisticComposerSteers.value[steerIndex];
+      : optimisticComposerMessages.value[messageIndex];
     if (!submissionId || !optimistic) {
       return;
     }
@@ -283,9 +279,9 @@ function useVibe64ComposerHandoffState({
       error: String(error?.message || error || "Message could not be sent."),
       status: "failed"
     };
-    if (steerIndex >= 0) {
-      optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
-        index === steerIndex ? failed : turn
+    if (messageIndex >= 0) {
+      optimisticComposerMessages.value = optimisticComposerMessages.value.map((turn, index) => (
+        index === messageIndex ? failed : turn
       ));
     } else {
       optimisticComposerTurn.value = failed;
@@ -300,7 +296,7 @@ function useVibe64ComposerHandoffState({
       }
     );
     if (restoreDraft) {
-      if (optimistic.steering) {
+      if (optimistic.messageDelivery) {
         if (!String(readRefOrGetterValue(conversationComposerDraft) || "")) {
           setConversationComposerDraft(optimistic.text);
         }
@@ -320,8 +316,8 @@ function useVibe64ComposerHandoffState({
         error: "Vibe64 restarted before this message reached the assistant. Use Resend when the server is back."
       });
     }
-    for (const steer of optimisticComposerSteers.value.filter((turn) => turn.status === "pending")) {
-      markOptimisticComposerTurnFailed(steer.id, {
+    for (const message of optimisticComposerMessages.value.filter((turn) => turn.status === "pending")) {
+      markOptimisticComposerTurnFailed(message.id, {
         error: "Vibe64 restarted before this message reached the assistant. Use Resend when the server is back.",
         restoreDraft: false
       });
@@ -338,53 +334,44 @@ function useVibe64ComposerHandoffState({
       projectPendingRemoteSubmission();
       return true;
     }
-    const previousLength = optimisticComposerSteers.value.length;
-    optimisticComposerSteers.value = optimisticComposerSteers.value
+    const previousLength = optimisticComposerMessages.value.length;
+    optimisticComposerMessages.value = optimisticComposerMessages.value
       .filter((turn) => turn.id !== submissionId);
-    return optimisticComposerSteers.value.length !== previousLength;
+    return optimisticComposerMessages.value.length !== previousLength;
   }
 
   async function resendOptimisticComposerTurn(submissionId = "") {
-    const steerIndex = optimisticComposerSteers.value
+    const messageIndex = optimisticComposerMessages.value
       .findIndex((turn) => turn.id === submissionId);
     const optimistic = optimisticComposerTurn.value?.id === submissionId
       ? optimisticComposerTurn.value
-      : optimisticComposerSteers.value[steerIndex];
+      : optimisticComposerMessages.value[messageIndex];
     if (!optimistic || optimistic.id !== submissionId || optimistic.status !== "failed") {
       return false;
     }
-    const continueSteering = optimistic.steering === true && readRefOrGetterValue(steeringActive) === true;
     const pending = {
       ...optimistic,
       error: "",
-      steering: continueSteering,
       status: "pending"
     };
-    if (steerIndex >= 0 && continueSteering) {
-      optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
-        index === steerIndex ? pending : turn
+    if (messageIndex >= 0) {
+      optimisticComposerMessages.value = optimisticComposerMessages.value.map((turn, index) => (
+        index === messageIndex ? pending : turn
       ));
-    } else if (steerIndex >= 0) {
-      optimisticComposerSteers.value = optimisticComposerSteers.value
-        .filter((turn) => turn.id !== submissionId);
-      optimisticComposerTurn.value = pending;
     } else {
       optimisticComposerTurn.value = pending;
     }
     let accepted = false;
     try {
-      accepted = continueSteering
-        ? await steerAgentTurn({
+      accepted = optimistic.messageDelivery
+        ? await sendAgentMessage({
             ...optimistic.options,
             ...(optimistic.afterSubmissionId
               ? { afterSubmissionId: optimistic.afterSubmissionId }
               : {}),
             composerSubmissionId: optimistic.id
           })
-        : await runWorkflowControl(
-            readRefOrGetterValue(newTurnControl) || optimistic.control,
-            optimistic.options
-          );
+        : await runWorkflowControl(optimistic.control, optimistic.options);
     } catch (error) {
       markOptimisticComposerTurnFailed(submissionId, {
         error,
@@ -401,39 +388,38 @@ function useVibe64ComposerHandoffState({
     return true;
   }
 
-  function reconcileComposerControlOutcomes(controls = []) {
+  function reconcileComposerMessageOutcomes(deliveries = []) {
     let changed = false;
-    for (const control of Array.isArray(controls) ? controls : []) {
-      const submissionId = String(control?.id || "").trim();
-      const steerIndex = optimisticComposerSteers.value
+    for (const delivery of Array.isArray(deliveries) ? deliveries : []) {
+      const submissionId = String(delivery?.id || "").trim();
+      const messageIndex = optimisticComposerMessages.value
         .findIndex((turn) => turn.id === submissionId);
       const optimistic = optimisticComposerTurn.value?.id === submissionId
         ? optimisticComposerTurn.value
-        : optimisticComposerSteers.value[steerIndex];
+        : optimisticComposerMessages.value[messageIndex];
       if (!optimistic) {
-        const recovered = optimisticComposerSteerFromControl(control, {
-          fallbackAfterSubmissionId: readRefOrGetterValue(composerHandoff)?.submissionId,
-          newTurnControl: readRefOrGetterValue(newTurnControl)
+        const recovered = optimisticComposerMessageFromDelivery(delivery, {
+          fallbackAfterSubmissionId: readRefOrGetterValue(composerHandoff)?.submissionId
         });
         if (recovered) {
-          optimisticComposerSteers.value = [
-            ...optimisticComposerSteers.value,
+          optimisticComposerMessages.value = [
+            ...optimisticComposerMessages.value,
             recovered
           ];
           changed = true;
         }
         continue;
       }
-      const state = String(control?.state || "").trim();
+      const state = String(delivery?.state || "").trim();
       if (state === "failed" && optimistic.status !== "failed") {
         const failed = {
           ...optimistic,
-          error: String(control?.error || "Message could not be sent."),
+          error: String(delivery?.error || "Message could not be sent."),
           status: "failed"
         };
-        if (steerIndex >= 0) {
-          optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
-            index === steerIndex ? failed : turn
+        if (messageIndex >= 0) {
+          optimisticComposerMessages.value = optimisticComposerMessages.value.map((turn, index) => (
+            index === messageIndex ? failed : turn
           ));
         } else {
           optimisticComposerTurn.value = failed;
@@ -445,9 +431,9 @@ function useVibe64ComposerHandoffState({
           error: "",
           status: "pending"
         };
-        if (steerIndex >= 0) {
-          optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
-            index === steerIndex ? pending : turn
+        if (messageIndex >= 0) {
+          optimisticComposerMessages.value = optimisticComposerMessages.value.map((turn, index) => (
+            index === messageIndex ? pending : turn
           ));
         } else {
           optimisticComposerTurn.value = pending;
@@ -461,11 +447,11 @@ function useVibe64ComposerHandoffState({
   function editOptimisticComposerTurn(submissionId = "") {
     const optimistic = optimisticComposerTurn.value?.id === submissionId
       ? optimisticComposerTurn.value
-      : optimisticComposerSteers.value.find((turn) => turn.id === submissionId);
+      : optimisticComposerMessages.value.find((turn) => turn.id === submissionId);
     if (!optimistic || optimistic.id !== submissionId) {
       return false;
     }
-    if (optimistic.steering) {
+    if (optimistic.messageDelivery) {
       setConversationComposerDraft(optimistic.text);
     } else {
       restoreControlDraft(optimistic.control, optimistic.values);
@@ -474,21 +460,21 @@ function useVibe64ComposerHandoffState({
     return true;
   }
 
-  function reconcileOptimisticComposerSteers(turns = []) {
+  function reconcileOptimisticComposerMessages(turns = []) {
     const optimisticTurns = [
       ...(optimisticComposerTurn.value ? [optimisticComposerTurn.value] : []),
-      ...optimisticComposerSteers.value
+      ...optimisticComposerMessages.value
     ];
     const unmatchedIds = new Set(
       unmatchedOptimisticComposerTurns(turns, optimisticTurns)
         .map((turn) => turn.id)
     );
-    const pending = optimisticComposerSteers.value
+    const pending = optimisticComposerMessages.value
       .filter((optimistic) => unmatchedIds.has(optimistic.id));
-    if (pending.length === optimisticComposerSteers.value.length) {
+    if (pending.length === optimisticComposerMessages.value.length) {
       return false;
     }
-    optimisticComposerSteers.value = pending;
+    optimisticComposerMessages.value = pending;
     return true;
   }
 
@@ -501,8 +487,8 @@ function useVibe64ComposerHandoffState({
     editOptimisticComposerTurn,
     failLocalComposerSubmissionForLifecycleDisconnect,
     markOptimisticComposerTurnFailed,
-    reconcileComposerControlOutcomes,
-    reconcileOptimisticComposerSteers,
+    reconcileComposerMessageOutcomes,
+    reconcileOptimisticComposerMessages,
     resendOptimisticComposerTurn,
     startOptimisticComposerTurn
   };

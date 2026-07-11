@@ -2291,11 +2291,12 @@ test.describe("Autopilot dumb client contract", () => {
 
   test("keeps the Codex composer stable and interrupts the active turn from the inline button", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
-    const intentRequests: unknown[] = [];
+    const messageRequests: Record<string, unknown>[] = [];
     const interruptRequests: Record<string, unknown>[] = [];
     const session = sessionPayload({
       intents: [
         {
+          dispatchRoute: "session-message",
           enabled: true,
           id: "talk_to_codex",
           inputFields: [
@@ -2361,8 +2362,8 @@ test.describe("Autopilot dumb client contract", () => {
           }
         }
       ],
-      onIntent: (body) => {
-        intentRequests.push(body);
+      onAgentMessage: (body = {}) => {
+        messageRequests.push(body);
         Object.assign(session, {
           agentSession: sessionAgentState({
             terminal: {
@@ -2424,7 +2425,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(composerInput).toBeFocused();
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
-    await expect.poll(() => intentRequests).toHaveLength(1);
+    await expect.poll(() => messageRequests).toHaveLength(1);
     await expect(stableComposerInput).toBeVisible();
     await expect(stableComposerInput).toBeEnabled();
     const steerInput = page.getByRole("textbox", { name: "Steer assistant" });
@@ -2454,11 +2455,26 @@ test.describe("Autopilot dumb client contract", () => {
     expect(composerFooterAlignment.footerDisplay).toBe("flex");
     expect(Math.abs(composerFooterAlignment.submitCenterY - composerFooterAlignment.toolbarCenterY)).toBeLessThanOrEqual(3);
 
+    await steerInput.fill("And handle this follow-up too.");
+    await steerButton.click();
+    await expect.poll(() => messageRequests).toHaveLength(2);
+    expect(messageRequests[1]).toMatchObject({
+      afterSubmissionId: String(messageRequests[0]?.composerSubmissionId || ""),
+      displayFields: {
+        conversationRequest: "And handle this follow-up too."
+      },
+      fields: {
+        conversationRequest: "And handle this follow-up too."
+      },
+      message: "And handle this follow-up too."
+    });
+    await expect(steerInput).toBeFocused();
+
     await stopButton.click();
 
     await expect.poll(() => interruptRequests).toHaveLength(1);
     expect(interruptRequests[0]).toMatchObject({
-      afterSubmissionId: String(intentRequests[0] && (intentRequests[0] as Record<string, unknown>).composerSubmissionId),
+      afterSubmissionId: String(messageRequests[0]?.composerSubmissionId || ""),
       reason: "user_interrupt"
     });
     await expect.poll(async () => page.evaluate(() => (
@@ -2466,8 +2482,8 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
-  test("restores a failed durable steer in chat and resends its exact message id", async ({ page }) => {
-    const steerRequests: Record<string, unknown>[] = [];
+  test("restores a failed durable message in chat and resends its exact id", async ({ page }) => {
+    const messageRequests: Record<string, unknown>[] = [];
     const session = sessionPayload({
       agentSession: sessionAgentState({
         turn: {
@@ -2477,20 +2493,19 @@ test.describe("Autopilot dumb client contract", () => {
           status: "inProgress"
         }
       }),
+      composerMessages: [
+        {
+          afterSubmissionId: "composer:tab:initial",
+          displayMessage: "Please answer this too.",
+          error: "The assistant message could not be delivered.",
+          id: "composer:tab:follow-up",
+          message: "Please answer this too.\n\nAttached files:\n- image.png: /runtime/image.png",
+          state: "failed",
+          submittedAt: "2026-07-10T16:00:00.000Z"
+        }
+      ],
       composerHandoff: {
         canonical: true,
-        controls: [
-          {
-            afterSubmissionId: "composer:tab:initial",
-            displayMessage: "Please answer this too.",
-            error: "The assistant message could not be delivered.",
-            id: "composer:tab:follow-up",
-            kind: "steer",
-            message: "Please answer this too.\n\nAttached files:\n- image.png: /runtime/image.png",
-            state: "failed",
-            submittedAt: "2026-07-10T16:00:00.000Z"
-          }
-        ],
         state: "active",
         submissionId: "composer:tab:initial"
       },
@@ -2539,8 +2554,8 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
     await mockVibe64Session(page, session, {
-      onAgentTurnSteer: (body) => {
-        steerRequests.push(body);
+      onAgentMessage: (body) => {
+        messageRequests.push(body);
       }
     });
 
@@ -2549,7 +2564,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByText("Please answer this too.", { exact: true })).toBeVisible();
     await expect(page.getByText("The assistant message could not be delivered.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Resend" }).click();
-    await expect.poll(() => steerRequests).toEqual([
+    await expect.poll(() => messageRequests).toEqual([
       {
         afterSubmissionId: "composer:tab:initial",
         composerSubmissionId: "composer:tab:follow-up",
@@ -4200,7 +4215,7 @@ async function mockVibe64Session(
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
     onAgentTurnInterrupt = () => undefined,
-    onAgentTurnSteer = () => undefined,
+    onAgentMessage = () => undefined,
     onConversationLogRead = () => undefined,
     onIntent = () => undefined,
     onSessionRead = () => undefined,
@@ -4219,7 +4234,7 @@ async function mockVibe64Session(
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onAgentTerminalStart?: () => Record<string, unknown> | void;
     onAgentTurnInterrupt?: (body?: Record<string, unknown>) => void;
-    onAgentTurnSteer?: (body?: Record<string, unknown>) => void;
+    onAgentMessage?: (body?: Record<string, unknown>) => void;
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
@@ -4265,8 +4280,8 @@ async function mockVibe64Session(
       });
       return;
     }
-    if (method === "POST" && url.pathname.endsWith("/agent-turn/steer")) {
-      onAgentTurnSteer(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
+    if (method === "POST" && url.pathname.endsWith("/agent-message")) {
+      onAgentMessage(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         accepted: true,
         ok: true,

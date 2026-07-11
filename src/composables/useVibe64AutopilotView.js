@@ -79,10 +79,9 @@ import {
   useVibe64PassiveComposerSubmission
 } from "@/composables/vibe64-session/composer/useVibe64PassiveComposerSubmission.js";
 import {
-  passiveComposerCanSteer,
+  passiveComposerMessagePayload,
   passiveComposerSteeringMode,
-  passiveComposerShouldShow,
-  passiveComposerSteerPayload
+  passiveComposerShouldShow
 } from "@/lib/vibe64PassiveComposerSteer.js";
 import {
   UI_QUESTION_FIELD_PREFIX,
@@ -176,10 +175,6 @@ const vibe64AutopilotViewProps = {
     default: () => [],
     type: Array
   },
-  agentThinking: {
-    default: false,
-    type: Boolean
-  },
   chatCollapsed: {
     default: false,
     type: Boolean
@@ -204,7 +199,7 @@ const vibe64AutopilotViewProps = {
     default: async () => false,
     type: Function
   },
-  steerAgentTurn: {
+  sendAgentMessage: {
     default: async () => false,
     type: Function
   },
@@ -383,20 +378,31 @@ function useVibe64AutopilotView(props, emit) {
   const openedCodexTerminalAttentionSignature = ref("");
   const sourceEditorOpenRequest = ref(null);
   const optimisticComposerTurn = ref(null);
-  const optimisticComposerSteers = ref([]);
+  const optimisticComposerMessages = ref([]);
   const remoteComposerSubmission = ref(null);
 
   function composerControlTargetSubmissionId() {
+    const handoff = props.session?.composerHandoff;
+    const activeHandoffSubmissionId = (
+      handoff?.pending === true ||
+      activeAgentTurn?.value?.active === true
+    )
+      ? handoff?.submissionId
+      : "";
     return String(
       optimisticComposerTurn.value?.id ||
       remoteComposerSubmission.value?.id ||
-      props.session?.composerHandoff?.submissionId ||
+      activeHandoffSubmissionId ||
+      optimisticComposerMessages.value.find((message) => message?.status === "pending")?.id ||
+      props.session?.composerMessages?.find((message) => message?.state === "accepted")?.id ||
+      handoff?.submissionId ||
       ""
     ).trim();
   }
 
   const {
     activeAgentTurn,
+    agentConversationActive,
     agentHandoffPending,
     agentInteractionLocked,
     agentInterruptVisible,
@@ -410,12 +416,12 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmissionPending,
     requestAgentInterrupt
   } = useVibe64ComposerActivity({
-    agentThinking: () => props.agentThinking,
     composerHandoff: () => props.session?.composerHandoff || null,
     interruptAgentTurn: (reason) => props.interruptAgentTurn({
       afterSubmissionId: composerControlTargetSubmissionId(),
       reason
     }),
+    optimisticComposerMessages,
     optimisticComposerTurn,
     remoteComposerSubmission,
     session: () => props.session
@@ -581,7 +587,6 @@ function useVibe64AutopilotView(props, emit) {
     }
     return sessionDetailState.value.label || "Session controls could not load.";
   });
-  const passiveComposerEditableWhileLocked = computed(() => agentSteeringAvailable.value);
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
       ? "Command needs attention."
@@ -629,9 +634,11 @@ function useVibe64AutopilotView(props, emit) {
     props.active &&
     selectedControl.value &&
     !sessionControlsBlocking.value &&
+    !agentConversationActive.value &&
     !composerInputLocked.value
   ));
   const thinkingVisible = computed(() => Boolean(
+    agentConversationActive.value ||
     agentInteractionLocked.value ||
     running.value ||
     displayRunning.value ||
@@ -702,7 +709,7 @@ function useVibe64AutopilotView(props, emit) {
     const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
     const optimisticTurns = unmatchedOptimisticComposerTurns(turns, [
       ...(optimisticComposerTurn.value ? [optimisticComposerTurn.value] : []),
-      ...optimisticComposerSteers.value
+      ...optimisticComposerMessages.value
     ]);
     if (!optimisticTurns.length) {
       return turns;
@@ -853,15 +860,17 @@ function useVibe64AutopilotView(props, emit) {
         }
       : control;
   }
-  function controlCanSteerAgentTurn(control = {}) {
-    const controlId = String(control?.id || "").trim();
-    const primaryId = String(primaryIntentId.value || "").trim();
+  function controlUsesAssistantMessageOperation(control = {}) {
+    const sourceAction = workflowControlSourceAction(control);
+    return String(control?.id || "").trim() === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID ||
+      control?.dispatchRoute === ACTION_DISPATCH_ROUTES.SESSION_MESSAGE ||
+      sourceAction?.dispatchRoute === ACTION_DISPATCH_ROUTES.SESSION_MESSAGE;
+  }
+  function controlCanSendDuringAgentActivity(control = {}) {
     const inputFields = Array.isArray(control?.inputFields) ? control.inputFields : [];
     return Boolean(
-      agentSteeringAvailable.value &&
-      controlId &&
-      primaryId &&
-      controlId === primaryId &&
+      agentConversationActive.value &&
+      controlUsesAssistantMessageOperation(control) &&
       inputFields.some((field) => (
         field?.kind === "textarea" &&
         !inputFieldIsPrivate(field)
@@ -887,7 +896,7 @@ function useVibe64AutopilotView(props, emit) {
     conversationLog: computed(() => props.conversationLog),
     controls: composerScreenControls,
     controlsRefreshing: sessionControlsRestoring,
-    canSubmitWhileRunning: controlCanSteerAgentTurn,
+    canSubmitWhileRunning: controlCanSendDuringAgentActivity,
     isControlDisabled: controlDisabled,
     onDraftSubmissionRejected: (...args) => composerHandoffState?.markOptimisticComposerTurnFailed(...args),
     onDraftSubmissionStart: (...args) => composerHandoffState?.startOptimisticComposerTurn(...args),
@@ -914,16 +923,12 @@ function useVibe64AutopilotView(props, emit) {
     return String(selectedControlValues.value?.[fieldName] || conversationComposerFallbackDraft.value || "");
   });
   const composerSteerAfterSubmissionId = computed(composerControlTargetSubmissionId);
-  const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
-    agentHandoffPending: agentHandoffPending.value,
-    agentSteeringAvailable: agentSteeringAvailable.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value
-  }));
   const passiveComposerSteeringDraftActive = computed(() => Boolean(
     conversationComposerDraft.value &&
     agentInteractionLocked.value
   ));
   const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
+    agentConversationActive: agentConversationActive.value,
     agentHandoffPending: agentHandoffPending.value,
     agentInteractionLocked: agentInteractionLocked.value,
     agentSteeringAvailable: agentSteeringAvailable.value,
@@ -940,33 +945,10 @@ function useVibe64AutopilotView(props, emit) {
     return "";
   });
   const passiveComposerInputDisabled = computed(() => {
-    if (props.page?.busy && !passiveComposerSteeringModeActive.value) {
-      return true;
-    }
-    if (passiveComposerUnavailableReason.value) {
-      return true;
-    }
-    if (
-      !passiveComposerSteeringModeActive.value &&
-      passiveComposerPrimaryControl.value &&
-      controlDisabled(passiveComposerPrimaryControl.value)
-    ) {
-      return true;
-    }
-    if (!passiveComposerSteeringModeActive.value) {
-      return false;
-    }
-    if (agentInteractionLocked.value) {
-      return !passiveComposerEditableWhileLocked.value;
-    }
-    return false;
+    return Boolean(passiveComposerUnavailableReason.value);
   });
   const passiveComposerCanSubmit = computed(() => Boolean(
-    (
-      passiveComposerSteeringActive.value ||
-      passiveComposerSubmitControl.value
-    ) &&
-    passiveComposerSteerPayload(conversationComposerDraft.value)
+    passiveComposerMessagePayload(conversationComposerDraft.value)
   ));
   const passiveComposerBusy = computed(() => Boolean(
     !passiveComposerSteeringModeActive.value &&
@@ -1056,15 +1038,6 @@ function useVibe64AutopilotView(props, emit) {
       [CONVERSATION_COMPOSER_DRAFT_FIELD]: conversationComposerDraft.value
     };
   });
-  const passiveComposerSubmitControl = computed(() => {
-    if (passiveComposerSteeringActive.value || selectedScreenControlVisible.value) {
-      return null;
-    }
-    const candidates = visibleWorkflowButtonControls(allScreenControls.value)
-      .filter(passiveComposerWorkflowControlCanSubmit)
-      .filter((control) => !controlDisabled(control));
-    return candidates.length === 1 ? candidates[0] : null;
-  });
   const composerDraftSync = useVibe64ComposerDraftSync({
     applyDraft(fields = {}, payload = {}) {
       if (String(payload?.controlId || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID) {
@@ -1101,8 +1074,7 @@ function useVibe64AutopilotView(props, emit) {
     conversationComposerDraft,
     conversationComposerDraftTextFromFields,
     conversationComposerFallbackDraft,
-    newTurnControl: passiveComposerSubmitControl,
-    optimisticComposerSteers,
+    optimisticComposerMessages,
     optimisticComposerTurn,
     optimisticTextFromSubmission,
     payloadUsesConversationComposer,
@@ -1112,8 +1084,7 @@ function useVibe64AutopilotView(props, emit) {
     runWorkflowControl,
     selectedComposerDraftText,
     setConversationComposerDraft,
-    steerAgentTurn: props.steerAgentTurn,
-    steeringActive: passiveComposerSteeringActive
+    sendAgentMessage: props.sendAgentMessage
   });
   const {
     clearLocalComposerSubmissionIfCanonical,
@@ -1121,8 +1092,8 @@ function useVibe64AutopilotView(props, emit) {
     editOptimisticComposerTurn,
     failLocalComposerSubmissionForLifecycleDisconnect,
     markOptimisticComposerTurnFailed,
-    reconcileComposerControlOutcomes,
-    reconcileOptimisticComposerSteers,
+    reconcileComposerMessageOutcomes,
+    reconcileOptimisticComposerMessages,
     resendOptimisticComposerTurn,
     startOptimisticComposerTurn
   } = composerHandoffState;
@@ -1166,13 +1137,6 @@ function useVibe64AutopilotView(props, emit) {
         sourceControl: control
       }))
     );
-  });
-  const passiveComposerPrimaryControl = computed(() => {
-    const controls = allScreenControls.value.filter(passiveComposerWorkflowControlCanSubmit);
-    return controls.find((control) => (
-      primaryIntentId.value &&
-      String(control?.id || "") === String(primaryIntentId.value)
-    )) || (controls.length === 1 ? controls[0] : null);
   });
   const composerUserResponseControlsVisible = computed(() => Boolean(
     selectedScreenControlVisible.value ||
@@ -1755,6 +1719,7 @@ function useVibe64AutopilotView(props, emit) {
     return {
       actionId: id,
       disabledReason: String(action.disabledReason || ""),
+      dispatchRoute: String(action.dispatchRoute || ""),
       enabled: action.enabled === true,
       id,
       label: String(action.label || id),
@@ -1943,10 +1908,12 @@ function useVibe64AutopilotView(props, emit) {
     setActiveDraftText: setActiveComposerDraftText,
     startOptimisticTurn: (input = {}) => startOptimisticComposerTurn({
       ...input,
-      ...(passiveComposerSteeringActive.value
+      ...(
+        String(input?.control?.id || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID ||
+        input?.control?.dispatchRoute === ACTION_DISPATCH_ROUTES.SESSION_MESSAGE
         ? {
             afterSubmissionId: composerSteerAfterSubmissionId.value,
-            steering: true
+            messageDelivery: true
           }
         : {})
     })
@@ -1989,12 +1956,9 @@ function useVibe64AutopilotView(props, emit) {
     fieldName: passiveComposerFieldName,
     logInputChanged: logComposerInputChanged,
     rejectOptimisticTurn: markOptimisticComposerTurnFailed,
-    runWorkflowControl,
+    sendAgentMessage: props.sendAgentMessage,
     setDraft: setConversationComposerDraft,
     startOptimisticTurn: startOptimisticComposerTurn,
-    steerAgentTurn: props.steerAgentTurn,
-    steeringActive: passiveComposerSteeringActive,
-    submitControl: passiveComposerSubmitControl,
     submittedForm: () => screenControlFormRef.value
   });
 
@@ -2094,36 +2058,27 @@ function useVibe64AutopilotView(props, emit) {
     const displayFields = runOptions.displayFields && typeof runOptions.displayFields === "object" && !Array.isArray(runOptions.displayFields)
       ? runOptions.displayFields
       : {};
-    if (
-      String(control?.id || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID &&
-      passiveComposerSteeringActive.value
-    ) {
-      const message = String(fields.conversationRequest || displayFields.conversationRequest || "").trim();
-      if (!message) {
-        return false;
-      }
-      return await props.steerAgentTurn({
-        ...(composerSteerAfterSubmissionId.value
-          ? { afterSubmissionId: composerSteerAfterSubmissionId.value }
-          : {}),
-        composerSubmissionId: runOptions.composerSubmissionId,
-        displayFields,
-        fields,
-        message
-      }) !== false;
-    }
-    if (controlCanSteerAgentTurn(control)) {
-      const message = String(fields.conversationRequest || displayFields.conversationRequest || "").trim();
-      if (!message) {
-        return false;
-      }
-      return await props.steerAgentTurn({
-        displayFields,
-        fields,
-        message
-      }) !== false;
-    }
     const sourceAction = workflowControlSourceAction(control);
+    const usesAssistantMessageOperation = controlUsesAssistantMessageOperation(control);
+    if (usesAssistantMessageOperation) {
+      const message = String(fields.conversationRequest || displayFields.conversationRequest || "").trim();
+      if (!message) {
+        return false;
+      }
+      const afterSubmissionId = composerSteerAfterSubmissionId.value === runOptions.composerSubmissionId
+        ? ""
+        : composerSteerAfterSubmissionId.value;
+      return await props.sendAgentMessage({
+        ...(afterSubmissionId
+          ? { afterSubmissionId }
+          : {}),
+        agentSettings: runOptions.agentSettings,
+        composerSubmissionId: runOptions.composerSubmissionId,
+        displayFields: Object.keys(displayFields).length ? displayFields : fields,
+        fields,
+        message
+      }) !== false;
+    }
     if (!sourceAction) {
       return runPresentedIntent(control, runOptions);
     }
@@ -2149,14 +2104,6 @@ function useVibe64AutopilotView(props, emit) {
 
   function inputFieldIsPrivate(field = {}) {
     return actionInputFieldIsPrivate(field);
-  }
-
-  function passiveComposerWorkflowControlCanSubmit(control = {}) {
-    if (!control || String(control.style || "primary").trim() !== "primary") {
-      return false;
-    }
-    const fields = Array.isArray(control.inputFields) ? control.inputFields : [];
-    return publicTextareaFieldName(fields) === CONVERSATION_COMPOSER_DRAFT_FIELD;
   }
 
   async function retryFromCommandFailure() {
@@ -2262,7 +2209,7 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function controlDisabled(control = {}) {
-    if (controlCanSteerAgentTurn(control)) {
+    if (controlCanSendDuringAgentActivity(control)) {
       return false;
     }
     return Boolean(
@@ -2378,7 +2325,7 @@ function useVibe64AutopilotView(props, emit) {
 
   watch(sessionId, () => {
     optimisticComposerTurn.value = null;
-    optimisticComposerSteers.value = [];
+    optimisticComposerMessages.value = [];
     remoteComposerSubmission.value = null;
     clearComposerPromptRefs();
   });
@@ -2406,14 +2353,14 @@ function useVibe64AutopilotView(props, emit) {
   });
 
   watch(() => props.conversationLog?.turns, (turns) => {
-    reconcileOptimisticComposerSteers(turns);
+    reconcileOptimisticComposerMessages(turns);
   }, {
     deep: true,
     flush: "post"
   });
 
-  watch(() => props.session?.composerHandoff?.controls, (controls) => {
-    reconcileComposerControlOutcomes(controls);
+  watch(() => props.session?.composerMessages, (messages) => {
+    reconcileComposerMessageOutcomes(messages);
   }, {
     deep: true,
     flush: "post",

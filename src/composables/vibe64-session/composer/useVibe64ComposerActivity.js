@@ -1,8 +1,5 @@
 import { computed, ref } from "vue";
 import {
-  agentInteractionLocksControls
-} from "@/lib/vibe64AgentInteractionState.js";
-import {
   optimisticComposerTurnIsLocalPending,
   vibe64ComposerSubmissionStatusState
 } from "@/lib/vibe64ComposerSubmissionState.js";
@@ -14,9 +11,9 @@ import {
 } from "@/composables/vibe64-session/composer/useVibe64ComposerHandoffPresentation.js";
 
 function useVibe64ComposerActivity({
-  agentThinking = false,
   composerHandoff = null,
   interruptAgentTurn = async () => false,
+  optimisticComposerMessages = null,
   optimisticComposerTurn = null,
   remoteComposerSubmission = null,
   session = null
@@ -28,25 +25,46 @@ function useVibe64ComposerActivity({
     const turn = currentSession.value?.agentSession?.turn;
     return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};
   });
-  const agentInteractionLocked = computed(() => agentInteractionLocksControls({
-    agentThinking: Boolean(readRefOrGetterValue(agentThinking))
-  }));
-  const agentSteeringAvailable = computed(() => agentInteractionLocked.value);
   const agentTerminalRunning = computed(() => (
     String(currentSession.value?.agentSession?.terminal?.status || "").trim() === "running"
   ));
   const localComposerSubmissionPending = computed(() => optimisticComposerTurnIsLocalPending(
     readRefOrGetterValue(optimisticComposerTurn)
   ));
+  const composerMessagePending = computed(() => Boolean(
+    (Array.isArray(readRefOrGetterValue(optimisticComposerMessages))
+      ? readRefOrGetterValue(optimisticComposerMessages)
+      : []
+    ).some((message) => String(message?.status || "").trim() === "pending") ||
+    (Array.isArray(currentSession.value?.composerMessages)
+      ? currentSession.value.composerMessages
+      : []
+    ).some((message) => String(message?.state || "").trim() === "accepted")
+  ));
   const remoteComposerSubmissionPending = computed(() => (
     readRefOrGetterValue(remoteComposerSubmission)?.status === "pending"
   ));
   const composerHandoffPresentation = useVibe64ComposerHandoffPresentation(composerHandoff);
-  const agentInterruptVisible = computed(() => Boolean(
+  const agentInteractionLocked = computed(() => Boolean(
     activeAgentTurn.value.active === true ||
     localComposerSubmissionPending.value ||
     remoteComposerSubmissionPending.value ||
     composerHandoffPresentation.value.pending
+  ));
+  const agentConversationActive = computed(() => Boolean(
+    activeAgentTurn.value.active === true ||
+    localComposerSubmissionPending.value ||
+    remoteComposerSubmissionPending.value ||
+    composerHandoffPresentation.value.pending ||
+    composerMessagePending.value
+  ));
+  const agentSteeringAvailable = computed(() => activeAgentTurn.value.active === true);
+  const agentInterruptVisible = computed(() => Boolean(
+    activeAgentTurn.value.active === true ||
+    localComposerSubmissionPending.value ||
+    remoteComposerSubmissionPending.value ||
+    composerHandoffPresentation.value.pending ||
+    composerMessagePending.value
   ));
   const agentInterruptBlocked = computed(() => interruptRequestPending.value);
   const composerSubmissionStatus = computed(() => vibe64ComposerSubmissionStatusState({
@@ -55,7 +73,7 @@ function useVibe64ComposerActivity({
     agentInterruptBlocked: agentInterruptBlocked.value,
     agentInterruptVisible: agentInterruptVisible.value,
     agentTurnActive: activeAgentTurn.value.active === true,
-    localComposerSubmissionPending: localComposerSubmissionPending.value,
+    localComposerSubmissionPending: localComposerSubmissionPending.value || composerMessagePending.value,
     remoteComposerSubmissionPending: remoteComposerSubmissionPending.value
   }));
   const agentHandoffPending = computed(() => composerSubmissionStatus.value.handoffPending);
@@ -76,6 +94,7 @@ function useVibe64ComposerActivity({
 
   return {
     activeAgentTurn,
+    agentConversationActive,
     agentHandoffPending,
     agentInterruptVisible,
     agentInteractionLocked,
@@ -84,6 +103,7 @@ function useVibe64ComposerActivity({
     agentStopVisible,
     agentTerminalRunning,
     composerHandoffPresentation,
+    composerMessagePending,
     composerSubmissionStatus,
     localComposerSubmissionPending,
     remoteComposerSubmissionPending,

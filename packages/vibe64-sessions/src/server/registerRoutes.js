@@ -14,8 +14,8 @@ import {
   ACTION_RUN_SESSION_INTENT
 } from "./actions.js";
 import {
-  agentTurnInterruptInputValidator,
-  agentTurnSteerInputValidator
+  agentMessageInputValidator,
+  agentTurnInterruptInputValidator
 } from "./inputSchemas.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
@@ -102,11 +102,11 @@ function registerRoutes(
     );
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/steer", {
-    body: agentTurnSteerInputValidator,
-    summary: "Steer the active Vibe64 assistant turn."
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-message", {
+    body: agentMessageInputValidator,
+    summary: "Send a message to the Vibe64 assistant."
   }, (request) => {
-    return app.make("feature.vibe64-sessions.service").steerAgentTurn(
+    return app.make("feature.vibe64-sessions.service").sendAgentMessage(
       request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );

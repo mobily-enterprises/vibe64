@@ -333,6 +333,7 @@ function sentenceFromLabel(label = "") {
 function intent(id, {
   actionId = "",
   auditMessage = "",
+  dispatchRoute = "",
   disabledReason = "",
   enabled = true,
   control = null,
@@ -348,12 +349,14 @@ function intent(id, {
   const intentInputPresentation = isPlainObject(input) ? input : null;
   const intentSubmitFields = isPlainObject(submitFields) ? submitFields : null;
   const normalizedAuditMessage = normalizeText(auditMessage);
+  const normalizedDispatchRoute = normalizeText(dispatchRoute);
   const normalizedOperation = normalizeText(operation);
   return {
     actionId: normalizeText(actionId),
     ...(normalizedAuditMessage ? { auditMessage: normalizedAuditMessage } : {}),
     ...(controlPresentation ? { control: controlPresentation } : {}),
     disabledReason: enabled ? "" : normalizeText(disabledReason || "This action is not available right now."),
+    ...(normalizedDispatchRoute ? { dispatchRoute: normalizedDispatchRoute } : {}),
     enabled: enabled === true,
     id,
     ...(intentInputPresentation ? { input: intentInputPresentation } : {}),
@@ -416,6 +419,7 @@ function intentForAction(id, action = {}, options = {}) {
   return intent(id, {
     ...options,
     actionId: action?.id || options.actionId || "",
+    dispatchRoute: action?.dispatchRoute || options.dispatchRoute || "",
     disabledReason: action?.disabledReason || options.disabledReason || "",
     enabled: action?.enabled === true,
     input: options.input,

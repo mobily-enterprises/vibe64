@@ -493,7 +493,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     writeMethod: "POST"
   });
 
-  const steerAgentTurnCommand = useCommand({
+  const sendAgentMessageCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
@@ -501,16 +501,16 @@ function useVibe64SessionRuntimeHost(props, emit) {
       path: vibe64SessionPath(
         readRefOrGetterValue(props.sessionData.sessionsApiPath),
         context?.sessionId,
-        "/agent-turn/steer"
+        "/agent-message"
       )
     }),
     buildCommandPayload: (_payload, { context }) => agentTurnControlPayloadFromContext(context),
-    fallbackRunError: "Assistant turn could not be steered.",
+    fallbackRunError: "Assistant message could not be sent.",
     messages: {
-      error: "Assistant turn could not be steered."
+      error: "Assistant message could not be sent."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.agent-turn.steer",
+    placementSource: "vibe64.sessions.agent-message",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -593,7 +593,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   }
 
-  async function steerAgentTurn(input = {}) {
+  async function sendAgentMessage(input = {}) {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
       return false;
@@ -602,21 +602,21 @@ function useVibe64SessionRuntimeHost(props, emit) {
       const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
         message: String(input || "")
       };
-      const result = await steerAgentTurnCommand.run({
+      const result = await sendAgentMessageCommand.run({
         ...payload,
         sessionId
       });
       await props.sessionData.refreshSessionData().catch(() => null);
-      const steered = Boolean(result && result.ok !== false);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.agentSteer", {
-        sessionId,
-        steered
+      const accepted = Boolean(result && result.ok !== false);
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage", {
+        accepted,
+        sessionId
       });
-      return steered;
+      return accepted;
     } catch (error) {
       await props.sessionData.refreshSessionData().catch(() => null);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.agentSteer.error", {
-        error: String(error?.message || error || "Assistant steer failed."),
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.error", {
+        error: String(error?.message || error || "Assistant message failed."),
         sessionId
       });
       return false;
@@ -745,7 +745,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     selectedAgentTerminalId,
     selection,
     setAutopilotBusy,
-    steerAgentTurn,
+    sendAgentMessage,
     timeline
   };
 }

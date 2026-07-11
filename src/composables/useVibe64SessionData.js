@@ -84,7 +84,7 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-turn-finalizing",
   "codex-app-server-turn-idle",
   "codex-app-server-turn-state",
-  "codex-app-server-turn-steered",
+  "codex-app-server-message-delivered",
   "codex-prompt-injected",
   "codex-context-replaced",
   "agent-terminal-started",
@@ -119,7 +119,7 @@ const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-turn-finalizing",
   "codex-app-server-turn-idle",
   "codex-app-server-turn-state",
-  "codex-app-server-turn-steered",
+  "codex-app-server-message-delivered",
   "codex-context-replaced",
   "codex-prompt-injected",
   "launch-target-started",
@@ -160,19 +160,10 @@ function sessionRecordHasActiveAgentWork(session = null) {
   return Boolean(
     session?.agentSession?.turn?.active ||
     session?.composerHandoff?.pending ||
-    sessionRecordHasActiveAgentRun(session)
+    (Array.isArray(session?.composerMessages) && session.composerMessages.some((message) => (
+      String(message?.state || "").trim() === "accepted"
+    )))
   );
-}
-
-function sessionRecordHasActiveAgentRun(session = null) {
-  return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some((run) => (
-    run?.active === true ||
-    sessionAgentRunStateIsActive(run?.state)
-  ));
-}
-
-function sessionAgentRunStateIsActive(state = "") {
-  return ["active", "finalizing", "starting"].includes(String(state || "").trim());
 }
 
 function sessionRecordMatchesId(session = null, sessionId = "") {

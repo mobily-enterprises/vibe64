@@ -1568,6 +1568,7 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
       "archive_session"
     ]);
     const talkToCodex = session.intents.find((intent) => intent.id === "talk_to_codex");
+    assert.equal(talkToCodex?.dispatchRoute, "session-message");
     assert.equal(talkToCodex?.inputFields[0]?.name, "conversationRequest");
     assert.deepEqual(talkToCodex?.input?.answerChoiceSugar, {
       fieldName: "conversationRequest",

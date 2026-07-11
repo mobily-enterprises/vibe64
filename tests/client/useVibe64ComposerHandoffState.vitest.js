@@ -15,19 +15,19 @@ function handoffStateTestHarness() {
     status: "pending",
     text: "Local message"
   });
-  const optimisticComposerSteers = ref([]);
+  const optimisticComposerMessages = ref([]);
   const remoteComposerSubmission = ref(null);
   const state = useVibe64ComposerHandoffState({
     composerHandoff,
     conversationComposerFallbackDraft: ref(""),
-    optimisticComposerSteers,
+    optimisticComposerMessages,
     optimisticComposerTurn,
     remoteComposerSubmission
   });
   return {
     composerHandoff,
     createdAtMs,
-    optimisticComposerSteers,
+    optimisticComposerMessages,
     optimisticComposerTurn,
     remoteComposerSubmission,
     state
@@ -88,11 +88,11 @@ describe("useVibe64ComposerHandoffState", () => {
   it("matches repeated optimistic text to canonical turns one-for-one", () => {
     const harness = handoffStateTestHarness();
     harness.optimisticComposerTurn.value.text = "Repeat this";
-    harness.optimisticComposerSteers.value = [{
+    harness.optimisticComposerMessages.value = [{
       createdAtMs: harness.createdAtMs + 1,
-      id: "steer-submission",
+      id: "message-submission",
+      messageDelivery: true,
       status: "pending",
-      steering: true,
       text: "Repeat this"
     }];
     const canonicalTurn = {
@@ -102,10 +102,10 @@ describe("useVibe64ComposerHandoffState", () => {
       }
     };
 
-    expect(harness.state.reconcileOptimisticComposerSteers([canonicalTurn])).toBe(false);
-    expect(harness.optimisticComposerSteers.value).toHaveLength(1);
+    expect(harness.state.reconcileOptimisticComposerMessages([canonicalTurn])).toBe(false);
+    expect(harness.optimisticComposerMessages.value).toHaveLength(1);
 
-    expect(harness.state.reconcileOptimisticComposerSteers([
+    expect(harness.state.reconcileOptimisticComposerMessages([
       canonicalTurn,
       {
         user: {
@@ -114,13 +114,13 @@ describe("useVibe64ComposerHandoffState", () => {
         }
       }
     ])).toBe(true);
-    expect(harness.optimisticComposerSteers.value).toEqual([]);
+    expect(harness.optimisticComposerMessages.value).toEqual([]);
   });
 
-  it("keeps a failed steer in chat and resends it through the live turn or a fresh turn", async () => {
+  it("keeps a failed message in chat and always resends the same server operation", async () => {
     const submissionId = "composer:tab:message-2";
     const optimisticComposerTurn = ref(null);
-    const optimisticComposerSteers = ref([
+    const optimisticComposerMessages = ref([
       {
         afterSubmissionId: "composer:tab:message-1",
         control: {
@@ -138,45 +138,38 @@ describe("useVibe64ComposerHandoffState", () => {
           },
           message: "Please answer this too."
         },
+        messageDelivery: true,
         status: "pending",
-        steering: true,
         text: "Please answer this too.",
         values: {
           conversationRequest: "Please answer this too."
         }
       }
     ]);
-    const runWorkflowControl = vi.fn(async () => true);
-    const steerAgentTurn = vi.fn(async () => true);
-    const steeringActive = ref(true);
+    const sendAgentMessage = vi.fn(async () => true);
     const state = useVibe64ComposerHandoffState({
       conversationComposerFallbackDraft: ref(""),
-      newTurnControl: ref({
-        id: "talk_to_codex"
-      }),
-      optimisticComposerSteers,
+      optimisticComposerMessages,
       optimisticComposerTurn,
       remoteComposerSubmission: ref(null),
-      runWorkflowControl,
-      steerAgentTurn,
-      steeringActive
+      sendAgentMessage
     });
 
-    state.reconcileComposerControlOutcomes([
+    state.reconcileComposerMessageOutcomes([
       {
         error: "Codex rejected the steer.",
         id: submissionId,
         state: "failed"
       }
     ]);
-    expect(optimisticComposerSteers.value[0]).toMatchObject({
+    expect(optimisticComposerMessages.value[0]).toMatchObject({
       error: "Codex rejected the steer.",
       id: submissionId,
       status: "failed"
     });
 
     expect(await state.resendOptimisticComposerTurn(submissionId)).toBe(true);
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(sendAgentMessage).toHaveBeenCalledWith({
       afterSubmissionId: "composer:tab:message-1",
       composerSubmissionId: submissionId,
       displayFields: {
@@ -187,68 +180,55 @@ describe("useVibe64ComposerHandoffState", () => {
       },
       message: "Please answer this too."
     });
-    expect(optimisticComposerSteers.value[0].status).toBe("pending");
+    expect(optimisticComposerMessages.value[0].status).toBe("pending");
 
-    state.reconcileComposerControlOutcomes([
+    state.reconcileComposerMessageOutcomes([
       {
         error: "The original turn ended.",
         id: submissionId,
         state: "failed"
       }
     ]);
-    steeringActive.value = false;
-
     expect(await state.resendOptimisticComposerTurn(submissionId)).toBe(true);
-    expect(runWorkflowControl).toHaveBeenCalledWith(
-      {
-        id: "talk_to_codex"
-      },
-      expect.objectContaining({
-        composerSubmissionId: submissionId,
-        message: "Please answer this too."
-      })
-    );
-    expect(optimisticComposerSteers.value).toEqual([]);
-    expect(optimisticComposerTurn.value).toMatchObject({
+    expect(sendAgentMessage).toHaveBeenCalledTimes(2);
+    expect(sendAgentMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      composerSubmissionId: submissionId,
+      message: "Please answer this too."
+    }));
+    expect(optimisticComposerMessages.value[0]).toMatchObject({
       error: "",
       id: submissionId,
       status: "pending",
-      steering: false,
       text: "Please answer this too."
     });
   });
 
-  it("rebuilds a failed steer from the durable server ledger after reload", async () => {
-    const optimisticComposerSteers = ref([]);
-    const steerAgentTurn = vi.fn(async () => true);
+  it("rebuilds a failed message from the durable server ledger after reload", async () => {
+    const optimisticComposerMessages = ref([]);
+    const sendAgentMessage = vi.fn(async () => true);
     const state = useVibe64ComposerHandoffState({
       composerHandoff: ref({
         submissionId: "composer:tab:message-1"
       }),
       conversationComposerFallbackDraft: ref(""),
-      newTurnControl: ref({
-        id: "talk_to_codex"
-      }),
-      optimisticComposerSteers,
+      optimisticComposerMessages,
       optimisticComposerTurn: ref(null),
       remoteComposerSubmission: ref(null),
-      steerAgentTurn,
-      steeringActive: ref(true)
+      sendAgentMessage
     });
 
-    expect(state.reconcileComposerControlOutcomes([
+    expect(state.reconcileComposerMessageOutcomes([
       {
         afterSubmissionId: "composer:tab:message-1",
         displayMessage: "Check the screenshot.",
         error: "The steer could not be delivered.",
         id: "composer:tab:message-2",
-        kind: "steer",
         message: "Check the screenshot.\n\nAttached files:\n- image.png: /runtime/image.png",
         state: "failed",
         submittedAt: "2026-07-10T16:00:00.000Z"
       }
     ])).toBe(true);
-    expect(optimisticComposerSteers.value[0]).toMatchObject({
+    expect(optimisticComposerMessages.value[0]).toMatchObject({
       afterSubmissionId: "composer:tab:message-1",
       createdAt: "2026-07-10T16:00:00.000Z",
       error: "The steer could not be delivered.",
@@ -259,7 +239,7 @@ describe("useVibe64ComposerHandoffState", () => {
     });
 
     expect(await state.resendOptimisticComposerTurn("composer:tab:message-2")).toBe(true);
-    expect(steerAgentTurn).toHaveBeenCalledWith({
+    expect(sendAgentMessage).toHaveBeenCalledWith({
       afterSubmissionId: "composer:tab:message-1",
       composerSubmissionId: "composer:tab:message-2",
       displayFields: {

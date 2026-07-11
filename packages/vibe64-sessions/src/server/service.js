@@ -10,6 +10,9 @@ import {
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
+  VIBE64_ACTION_DISPATCH_ROUTES
+} from "@local/vibe64-core/shared";
+import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -55,6 +58,14 @@ import {
   settleComposerControl,
   transitionComposerHandoff
 } from "./composer/handoffState.js";
+import {
+  COMPOSER_MESSAGE_AGENT_RUN_ID,
+  COMPOSER_MESSAGE_SETTLEMENTS,
+  acceptComposerMessage,
+  pendingComposerMessages,
+  publicComposerMessages,
+  settleComposerMessage
+} from "./composer/messageState.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 3;
 const AGENT_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
@@ -1189,17 +1200,24 @@ async function acceptComposerHandoff(terminalService, runtime, session = {}, {
       session
     };
   }
+  const clientSubmissionId = normalizedInputText(submissionId);
+  const deliveryHandoff = clientSubmissionId
+    ? {
+        ...handoff,
+        clientSubmissionId
+      }
+    : handoff;
   const provider = await describeAgentProvider(terminalService, agentSettings, session);
   await transitionComposerHandoff(runtime, session.sessionId, {
     agentSettings,
-    handoff,
+    handoff: deliveryHandoff,
     providerId: provider.providerId,
     state: COMPOSER_HANDOFF_STATES.ACCEPTED,
     submissionId,
     transportId: provider.transportId
   });
   return {
-    handoff,
+    handoff: deliveryHandoff,
     provider,
     session: await sessionWithLatestRevision(runtime, session)
   };
@@ -1302,6 +1320,21 @@ async function drainComposerControls(terminalService, {
     }
 
     const request = queued[0];
+    if (request.kind === COMPOSER_CONTROL_KINDS.LEGACY_STEER) {
+      await acceptComposerMessage(runtime, sessionId, {
+        afterSubmissionId: request.afterSubmissionId,
+        composerSubmissionId: request.controlRequestId,
+        displayFields: request.displayFields,
+        fields: request.fields,
+        message: request.message,
+        originId: request.originId
+      });
+      await settleComposerControl(runtime, sessionId, request.controlRequestId, {
+        operationOutcome: "migrated_to_message",
+        outcome: "delivered"
+      });
+      continue;
+    }
     let result;
     vibe64SessionDebugLog("server.service.composerControl.delivery.start", {
       afterSubmissionId: request.afterSubmissionId,
@@ -1310,26 +1343,15 @@ async function drainComposerControls(terminalService, {
       sessionId
     });
     try {
-      const operation = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
-        ? terminalService?.interruptAgentTurn
-        : terminalService?.steerAgentTurn;
+      const operation = terminalService?.interruptAgentTurn;
       if (typeof operation !== "function") {
         throw new TypeError(`Assistant ${request.kind} control is not available.`);
       }
-      const controlInput = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
-        ? {
-            controlRequestId: request.controlRequestId,
-            originId: request.originId,
-            reason: request.reason
-          }
-        : {
-            composerSubmissionId: request.controlRequestId,
-            displayFields: request.displayFields,
-            fields: request.fields,
-            message: request.message,
-            originId: request.originId,
-            text: request.message
-          };
+      const controlInput = {
+        controlRequestId: request.controlRequestId,
+        originId: request.originId,
+        reason: request.reason
+      };
       result = await operation.call(terminalService, sessionId, controlInput, {
         runtime,
         session: currentSession
@@ -1404,6 +1426,308 @@ async function drainComposerControls(terminalService, {
       controlRequestId: request.controlRequestId,
       kind: request.kind,
       operationOutcome: normalizedInputText(result?.operationOutcome),
+      sessionId,
+      threadId,
+      turnId
+    });
+  }
+}
+
+async function startComposerMessageTurn(terminalService, coordinator, {
+  request = null,
+  runtime = null,
+  session = null
+} = {}) {
+  const sessionId = normalizedInputText(session?.sessionId);
+  const messageId = normalizedInputText(request?.messageId);
+  const currentSession = await runtime.getSession(sessionId);
+  const currentHandoff = composerHandoffSnapshot(currentSession);
+  if (
+    currentHandoff?.submissionId === messageId &&
+    currentHandoff.state !== COMPOSER_HANDOFF_STATES.FAILED
+  ) {
+    return {
+      awaitingHandoff: currentHandoff.state !== COMPOSER_HANDOFF_STATES.ACTIVE,
+      delivered: currentHandoff.state === COMPOSER_HANDOFF_STATES.ACTIVE,
+      deliveryMode: "new_turn",
+      ok: true,
+      operationOutcome: currentHandoff.state === COMPOSER_HANDOFF_STATES.ACTIVE
+        ? "started_new_turn"
+        : "starting_new_turn",
+      threadId: currentHandoff.threadId,
+      turnId: currentHandoff.turnId
+    };
+  }
+
+  const messageAction = [
+    ...(Array.isArray(currentSession.actions) ? currentSession.actions : []),
+    ...(Array.isArray(currentSession.currentStepDefinition?.actions)
+      ? currentSession.currentStepDefinition.actions
+      : [])
+  ].find((action) => (
+    normalizedInputText(action?.dispatchRoute) === VIBE64_ACTION_DISPATCH_ROUTES.SESSION_MESSAGE
+  ));
+  const messageActionId = normalizedInputText(messageAction?.id);
+  if (!messageActionId) {
+    const error = new Error("The current workflow does not expose an assistant message action.");
+    error.code = "vibe64_agent_message_action_missing";
+    throw error;
+  }
+  let actionSession = await runtime.runAction(
+    sessionId,
+    messageActionId,
+    request.fields
+  );
+  const conversationTurn = await recordConversationMessage(runtime, sessionId, {
+    actionResult: actionSession.actionResult,
+    input: request.displayFields || request.fields
+  });
+  if (conversationTurn) {
+    actionSession = await sessionWithLatestRevision(runtime, actionSession);
+  }
+  const accepted = await acceptComposerHandoff(terminalService, runtime, actionSession, {
+    agentSettings: request.agentSettings,
+    submissionId: messageId
+  });
+  if (!accepted.handoff) {
+    return {
+      delivered: false,
+      error: "The conversation action did not produce an assistant prompt.",
+      ok: false,
+      operationOutcome: "new_turn_prompt_missing",
+      retryable: false
+    };
+  }
+  void coordinator.schedule({
+    agentSettings: request.agentSettings,
+    handoff: accepted.handoff,
+    runtime,
+    session: accepted.session
+  });
+  return {
+    awaitingHandoff: true,
+    delivered: false,
+    deliveryMode: "new_turn",
+    ok: true,
+    operationOutcome: "starting_new_turn",
+    threadId: "",
+    turnId: ""
+  };
+}
+
+async function publishComposerMessageChanged(publishSessionChanged, runtime, sessionId = "", reason = "") {
+  if (typeof publishSessionChanged !== "function") {
+    return;
+  }
+  try {
+    await publishSessionChanged(sessionId, {
+      reason,
+      session: await runtime.getSession(sessionId)
+    });
+  } catch (error) {
+    vibe64SessionDebugLog("server.service.composerMessage.publish.error", {
+      error: vibe64SessionDebugError(error),
+      reason,
+      sessionId
+    });
+  }
+}
+
+async function drainComposerMessages(terminalService, coordinator, publishSessionChanged, {
+  runtime = null,
+  session = null
+} = {}) {
+  const sessionId = normalizedInputText(session?.sessionId);
+  if (!sessionId || typeof runtime?.getSession !== "function") {
+    throw new TypeError("Composer message draining requires a runtime session.");
+  }
+
+  while (true) {
+    const currentSession = await runtime.getSession(sessionId);
+    const request = pendingComposerMessages(currentSession)[0];
+    if (!request) {
+      return null;
+    }
+    const currentHandoff = composerHandoffSnapshot(currentSession);
+    if (currentHandoff?.submissionId === request.messageId) {
+      if (currentHandoff.state === COMPOSER_HANDOFF_STATES.FAILED) {
+        await settleComposerMessage(runtime, sessionId, request.messageId, {
+          error: currentHandoff.error || "The assistant could not start this turn.",
+          operationOutcome: "new_turn_failed",
+          outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED,
+          threadId: currentHandoff.threadId,
+          turnId: currentHandoff.turnId
+        });
+        await publishComposerMessageChanged(
+          publishSessionChanged,
+          runtime,
+          sessionId,
+          "session-agent-message-failed"
+        );
+        continue;
+      }
+      if (currentHandoff.state === COMPOSER_HANDOFF_STATES.ACTIVE) {
+        await settleComposerMessage(runtime, sessionId, request.messageId, {
+          operationOutcome: "started_new_turn",
+          outcome: COMPOSER_MESSAGE_SETTLEMENTS.DELIVERED,
+          threadId: currentHandoff.threadId,
+          turnId: currentHandoff.turnId
+        });
+        await publishComposerMessageChanged(
+          publishSessionChanged,
+          runtime,
+          sessionId,
+          "session-agent-message-delivered"
+        );
+        continue;
+      }
+      return {
+        waitingForHandoff: true
+      };
+    }
+    if (currentHandoff?.pending === true) {
+      return {
+        waitingForHandoff: true
+      };
+    }
+    const startedAtMs = Date.now();
+    vibe64SessionDebugLog("server.service.composerMessage.delivery.start", {
+      afterSubmissionId: request.afterSubmissionId,
+      messageId: request.messageId,
+      sessionId
+    });
+    let result;
+    try {
+      if (typeof terminalService?.sendAgentMessage !== "function") {
+        throw new TypeError("Assistant message delivery is not available.");
+      }
+      result = await terminalService.sendAgentMessage(sessionId, {
+        composerSubmissionId: request.messageId,
+        displayFields: request.displayFields,
+        fields: request.fields,
+        message: request.message,
+        originId: request.originId,
+        text: request.message
+      }, {
+        agentSettings: request.agentSettings,
+        runtime,
+        session: currentSession
+      });
+      if (result?.ok === true && result?.newTurnRequired === true) {
+        await claimWorkflowDriverAndRecordGitCommandActor({
+          input: {
+            agentSettings: request.agentSettings,
+            originId: request.originId
+          },
+          reason: "agent-message-new-turn",
+          runtime,
+          sessionId,
+          terminalService
+        });
+        result = await startComposerMessageTurn(terminalService, coordinator, {
+          request,
+          runtime,
+          session: currentSession
+        });
+      }
+    } catch (error) {
+      result = {
+        error: error?.message || String(error),
+        ok: false,
+        operationOutcome: error?.code || "message_delivery_failed",
+        retryable: normalizedInputText(error?.code) === VIBE64_ACTION_DISABLED_CODE
+      };
+    }
+    if (!isPlainObject(result)) {
+      result = {
+        error: "Assistant message delivery returned no result.",
+        ok: false,
+        operationOutcome: "message_result_missing",
+        retryable: false
+      };
+    }
+    const threadId = normalizedInputText(result?.thread?.id || result?.threadId);
+    const turnId = normalizedInputText(result?.turn?.id || result?.turnId);
+    if (result?.ok === true && result?.awaitingHandoff === true) {
+      vibe64SessionDebugLog("server.service.composerMessage.delivery.awaitingHandoff", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        messageId: request.messageId,
+        operationOutcome: normalizedInputText(result.operationOutcome),
+        sessionId
+      });
+      return {
+        waitingForHandoff: true
+      };
+    }
+    if (result?.ok !== true || result?.delivered !== true) {
+      if (result.retryable === true) {
+        await settleComposerMessage(runtime, sessionId, request.messageId, {
+          error: result.error || "Message delivery is waiting to retry.",
+          operationOutcome: result.operationOutcome,
+          outcome: COMPOSER_MESSAGE_SETTLEMENTS.DEFERRED,
+          threadId,
+          turnId
+        });
+        await publishComposerMessageChanged(
+          publishSessionChanged,
+          runtime,
+          sessionId,
+          "session-agent-message-deferred"
+        );
+        vibe64SessionDebugLog("server.service.composerMessage.delivery.deferred", {
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          error: normalizedInputText(result.error),
+          messageId: request.messageId,
+          operationOutcome: normalizedInputText(result.operationOutcome),
+          sessionId,
+          threadId,
+          turnId
+        });
+        return {
+          retry: true
+        };
+      }
+      await settleComposerMessage(runtime, sessionId, request.messageId, {
+        error: result.error || "Message delivery failed.",
+        operationOutcome: result.operationOutcome,
+        outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED,
+        threadId,
+        turnId
+      });
+      await publishComposerMessageChanged(
+        publishSessionChanged,
+        runtime,
+        sessionId,
+        "session-agent-message-failed"
+      );
+      vibe64SessionDebugLog("server.service.composerMessage.delivery.failed", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: normalizedInputText(result.error),
+        messageId: request.messageId,
+        operationOutcome: normalizedInputText(result.operationOutcome),
+        sessionId,
+        threadId,
+        turnId
+      });
+      continue;
+    }
+    await settleComposerMessage(runtime, sessionId, request.messageId, {
+      operationOutcome: result.operationOutcome,
+      outcome: COMPOSER_MESSAGE_SETTLEMENTS.DELIVERED,
+      threadId,
+      turnId
+    });
+    await publishComposerMessageChanged(
+      publishSessionChanged,
+      runtime,
+      sessionId,
+      "session-agent-message-delivered"
+    );
+    vibe64SessionDebugLog("server.service.composerMessage.delivery.done", {
+      deliveryMode: normalizedInputText(result.deliveryMode),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      messageId: request.messageId,
+      operationOutcome: normalizedInputText(result.operationOutcome),
       sessionId,
       threadId,
       turnId
@@ -1630,6 +1954,7 @@ const PUBLIC_SESSION_RESPONSE_FIELDS = new Set([
   "agentRuns",
   "backgroundTasks",
   "composerHandoff",
+  "composerMessages",
   "config",
   "currentStep",
   "currentStepDefinition",
@@ -1784,6 +2109,7 @@ function publicSessionResponse(session = {}, options = {}) {
   if (composerHandoff) {
     publicSession.composerHandoff = composerHandoff;
   }
+  publicSession.composerMessages = publicComposerMessages(session);
   if (isPlainObject(session.presentation)) {
     publicSession.presentation = publicSessionPresentation(session.presentation, options);
   }
@@ -1798,7 +2124,10 @@ function publicSessionResponse(session = {}, options = {}) {
   }
   if (Array.isArray(session.agentRuns)) {
     publicSession.agentRuns = session.agentRuns
-      .filter((run) => normalizedInputText(run?.id) !== COMPOSER_HANDOFF_AGENT_RUN_ID)
+      .filter((run) => ![
+        COMPOSER_HANDOFF_AGENT_RUN_ID,
+        COMPOSER_MESSAGE_AGENT_RUN_ID
+      ].includes(normalizedInputText(run?.id)))
       .map(publicAgentRun);
   }
   if (Array.isArray(session.backgroundTasks)) {
@@ -2192,6 +2521,7 @@ async function clearSessionClosingForFailedSessionClose(runtime, sessionId = "",
 
 function createService({
   projectService,
+  publishSessionChanged = async () => null,
   setupOptions = {},
   setupServices = {},
   terminalService
@@ -2215,66 +2545,36 @@ function createService({
       }
     ),
     deliver: (input) => deliverAgentPromptHandoff(terminalService, input),
-    drainControls: (input) => drainComposerControls(terminalService, input)
+    drainControls: (input) => drainComposerControls(terminalService, input),
+    drainMessages: (input) => drainComposerMessages(
+      terminalService,
+      composerHandoffCoordinator,
+      publishSessionChanged,
+      input
+    )
   });
 
-  async function queueComposerControl(sessionId = "", input = {}, kind = "") {
+  async function queueComposerInterrupt(sessionId = "", input = {}) {
     const afterSubmissionId = normalizedInputText(input?.afterSubmissionId);
     const controlRequestId = normalizedInputText(
       input?.controlRequestId ||
-      input?.composerSubmissionId ||
-      (kind === COMPOSER_CONTROL_KINDS.INTERRUPT && afterSubmissionId
-        ? `interrupt:${afterSubmissionId}`
-        : "")
+      (afterSubmissionId ? `interrupt:${afterSubmissionId}` : "")
     );
-    if (!controlRequestId) {
+    if (!afterSubmissionId || !controlRequestId) {
       return {
-        code: "vibe64_agent_control_request_required",
-        error: "Queued assistant control requires a request id.",
+        code: "vibe64_agent_control_handoff_missing",
+        error: "No assistant handoff is available for queued interruption.",
         ok: false
       };
     }
-    if (
-      kind === COMPOSER_CONTROL_KINDS.STEER &&
-      !normalizedInputText(input?.message || input?.text)
-    ) {
-      return {
-        code: "vibe64_agent_steer_input_required",
-        error: "Assistant steer input is empty.",
-        ok: false
-      };
-    }
-
     const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
     const session = await runtime.getSession(sessionId);
-    const handoff = composerHandoffSnapshot(session);
-    if (
-      handoff?.pending === true &&
-      handoff.submissionId &&
-      handoff.submissionId !== afterSubmissionId
-    ) {
-      return {
-        code: "vibe64_agent_control_handoff_changed",
-        error: "The assistant handoff changed before this control was accepted.",
-        ok: false
-      };
-    }
-    if (
-      handoff?.submissionId === afterSubmissionId &&
-      handoff.state === COMPOSER_HANDOFF_STATES.FAILED
-    ) {
-      return {
-        code: "vibe64_agent_control_handoff_failed",
-        error: handoff.error || "The assistant handoff failed before this control was accepted.",
-        ok: false
-      };
-    }
 
     const request = await acceptComposerControl(runtime, sessionId, {
       ...input,
       afterSubmissionId,
       controlRequestId,
-      kind
+      kind: COMPOSER_CONTROL_KINDS.INTERRUPT
     });
     void composerHandoffCoordinator.drain({
       runtime,
@@ -2283,9 +2583,6 @@ function createService({
     return {
       accepted: true,
       controlRequestId: request.controlRequestId,
-      ...(kind === COMPOSER_CONTROL_KINDS.STEER
-        ? { composerSubmissionId: request.controlRequestId }
-        : {}),
       ok: true,
       queued: true,
       sessionId
@@ -2302,34 +2599,142 @@ function createService({
           ok: false
         };
       }
-      if (!normalizedInputText(input?.afterSubmissionId)) {
-        return terminalService.interruptAgentTurn(normalizedSessionId, input);
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
+      const session = await runtime.getSession(normalizedSessionId);
+      const queuedMessages = pendingComposerMessages(session);
+      for (const message of queuedMessages) {
+        await settleComposerMessage(runtime, normalizedSessionId, message.messageId, {
+          error: "Message was not sent because the assistant was stopped.",
+          operationOutcome: "cancelled_by_user",
+          outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED
+        });
       }
-      return queueComposerControl(
-        normalizedSessionId,
-        input,
-        COMPOSER_CONTROL_KINDS.INTERRUPT
+      if (queuedMessages.length) {
+        await publishComposerMessageChanged(
+          publishSessionChanged,
+          runtime,
+          normalizedSessionId,
+          "session-agent-message-cancelled"
+        );
+      }
+      const currentSession = await runtime.getSession(normalizedSessionId);
+      const currentHandoff = composerHandoffSnapshot(currentSession);
+      const currentSubmissionId = normalizedInputText(
+        currentHandoff?.state === COMPOSER_HANDOFF_STATES.FAILED
+          ? ""
+          : currentHandoff?.submissionId
       );
+      const requestedSubmissionId = normalizedInputText(input?.afterSubmissionId);
+      const targetSubmissionIds = [...new Set([
+        currentSubmissionId,
+        requestedSubmissionId
+      ].filter(Boolean))];
+      const queuedInterrupts = [];
+      for (const targetSubmissionId of targetSubmissionIds) {
+        queuedInterrupts.push(await queueComposerInterrupt(normalizedSessionId, {
+          ...input,
+          afterSubmissionId: targetSubmissionId,
+          ...(targetSubmissionIds.length > 1 ? { controlRequestId: "" } : {})
+        }));
+      }
+      if (!currentSubmissionId) {
+        const directResult = await terminalService.interruptAgentTurn(normalizedSessionId, input, {
+          runtime,
+          session: currentSession
+        });
+        return queuedInterrupts[0]?.ok === true
+          ? queuedInterrupts[0]
+          : directResult;
+      }
+      return queuedInterrupts[0];
     },
 
-    async steerAgentTurn(sessionId, input = {}) {
+    async sendAgentMessage(sessionId, input = {}) {
       const normalizedSessionId = normalizedInputText(sessionId);
-      const afterSubmissionId = normalizedInputText(input?.afterSubmissionId);
+      const messageId = normalizedInputText(input?.messageId || input?.composerSubmissionId);
+      const message = conversationRequestText(input);
       if (!normalizedSessionId) {
         return {
-          code: "vibe64_agent_steer_session_required",
-          error: "Assistant steering requires a session.",
+          code: "vibe64_agent_message_session_required",
+          error: "Assistant messaging requires a session.",
           ok: false
         };
       }
-      if (!afterSubmissionId) {
-        return terminalService.steerAgentTurn(normalizedSessionId, input);
+      if (!messageId || !message) {
+        return {
+          code: "vibe64_agent_message_input_required",
+          error: "Assistant messages require a message id and text.",
+          ok: false
+        };
       }
-      return queueComposerControl(
-        normalizedSessionId,
-        input,
-        COMPOSER_CONTROL_KINDS.STEER
-      );
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
+      const session = await runtime.getSession(normalizedSessionId);
+      const request = await acceptComposerMessage(runtime, normalizedSessionId, {
+        afterSubmissionId: input?.afterSubmissionId,
+        agentSettings: agentSettingsInput(input),
+        composerSubmissionId: messageId,
+        displayFields: input?.displayFields,
+        fields: {
+          ...objectValue(input?.fields),
+          conversationRequest: message
+        },
+        message,
+        originId: input?.originId
+      });
+      if (request.state === "accepted") {
+        try {
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
+          await describeAgentProvider(terminalService, agentSettingsInput(input), session);
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "agent-message",
+            runtime,
+            sessionId: normalizedSessionId,
+            terminalService
+          });
+        } catch (error) {
+          const failed = await settleComposerMessage(runtime, normalizedSessionId, request.messageId, {
+            error: error?.message || String(error),
+            operationOutcome: error?.code || "message_preparation_failed",
+            outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED
+          });
+          await publishComposerMessageChanged(
+            publishSessionChanged,
+            runtime,
+            normalizedSessionId,
+            "session-agent-message-failed"
+          );
+          vibe64SessionDebugLog("server.service.composerMessage.preparation.failed", {
+            error: vibe64SessionDebugError(error),
+            messageId: request.messageId,
+            operationOutcome: normalizedInputText(error?.code) || "message_preparation_failed",
+            sessionId: normalizedSessionId
+          });
+          return {
+            accepted: true,
+            composerSubmissionId: request.messageId,
+            delivered: false,
+            messageId: request.messageId,
+            ok: true,
+            queued: false,
+            sessionId: normalizedSessionId,
+            state: failed?.state || "failed"
+          };
+        }
+      }
+      void composerHandoffCoordinator.drainMessages({
+        runtime,
+        session: await runtime.getSession(normalizedSessionId)
+      });
+      return {
+        accepted: true,
+        composerSubmissionId: request.messageId,
+        delivered: request.state === "delivered",
+        messageId: request.messageId,
+        ok: true,
+        queued: request.state === "accepted",
+        sessionId: normalizedSessionId
+      };
     },
 
     async readComposerDraft(sessionId, input = {}) {

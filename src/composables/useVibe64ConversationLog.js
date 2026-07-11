@@ -38,7 +38,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
-  "codex-app-server-turn-steered",
+  "codex-app-server-message-delivered",
   "session-action-run",
   "session-intent-run",
   "session-rewound"
@@ -183,7 +183,7 @@ function conversationLogRealtimePatch(payload = {}) {
       "codex-app-server-terminal-assistant-message",
       "codex-app-server-terminal-thinking-message",
       "codex-app-server-terminal-user-message",
-      "codex-app-server-turn-steered"
+      "codex-app-server-message-delivered"
     ].includes(reason) ||
     patch?.type !== "upsert-turn" ||
     !isRecord(patch.turn)

@@ -16,7 +16,7 @@ function passiveComposerAttachmentField(options = {}) {
   return Array.isArray(attachments) ? attachments : [];
 }
 
-function passiveComposerSteerPayload(message = "", options = {}) {
+function passiveComposerMessagePayload(message = "", options = {}) {
   const text = String(message || "").trim();
   if (!text) {
     return null;
@@ -39,18 +39,8 @@ function passiveComposerSteerPayload(message = "", options = {}) {
   };
 }
 
-function passiveComposerCanSteer({
-  agentHandoffPending = false,
-  agentSteeringAvailable = false,
-  selectedScreenControlVisible = false
-} = {}) {
-  return Boolean(
-    (agentHandoffPending || agentSteeringAvailable) &&
-    !selectedScreenControlVisible
-  );
-}
-
 function passiveComposerSteeringMode({
+  agentConversationActive = false,
   agentHandoffPending = false,
   agentInteractionLocked = false,
   agentSteeringAvailable = false,
@@ -59,7 +49,13 @@ function passiveComposerSteeringMode({
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (agentHandoffPending || agentInteractionLocked || agentSteeringAvailable || steeringDraftActive)
+    (
+      agentConversationActive ||
+      agentHandoffPending ||
+      agentInteractionLocked ||
+      agentSteeringAvailable ||
+      steeringDraftActive
+    )
   );
 }
 
@@ -76,8 +72,7 @@ function passiveComposerShouldShow({
 export {
   PASSIVE_COMPOSER_FIELD,
   passiveComposerAttachmentField,
-  passiveComposerCanSteer,
   passiveComposerSteeringMode,
   passiveComposerShouldShow,
-  passiveComposerSteerPayload
+  passiveComposerMessagePayload
 };

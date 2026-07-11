@@ -97,23 +97,33 @@ describe("Vibe64 session runtime host", () => {
     })).toBe(false);
   });
 
-  it("treats an active Codex app-server agent run as visible thinking state", () => {
+  it("uses the provider turn projection as visible assistant activity", () => {
     expect(runtimeHostAgentWorking({
       active: true,
       selectedSession: {
-        agentRuns: [
-          {
-            active: true,
-            id: "codex_app_server",
-            state: "active"
+        agentSession: {
+          turn: {
+            active: true
           }
-        ],
+        },
         sessionId: "session-a"
       }
     })).toBe(true);
 
     expect(runtimeHostAgentWorking({
       active: false,
+      selectedSession: {
+        agentSession: {
+          turn: {
+            active: true
+          }
+        },
+        sessionId: "session-a"
+      }
+    })).toBe(false);
+
+    expect(runtimeHostAgentWorking({
+      active: true,
       selectedSession: {
         agentRuns: [
           {

@@ -441,22 +441,28 @@ describe("useVibe64SessionData selected session record", () => {
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
-  it("treats active agent runs as active assistant work", () => {
+  it("uses provider and durable message truth instead of stale generic agent runs", () => {
     expect(sessionRecordHasActiveAgentWork({
       agentRuns: [
         {
           state: "finalizing"
         }
       ]
+    })).toBe(false);
+    expect(sessionRecordHasActiveAgentWork({
+      agentSession: {
+        turn: {
+          active: true
+        }
+      }
     })).toBe(true);
     expect(sessionRecordHasActiveAgentWork({
-      agentRuns: [
+      composerMessages: [
         {
-          active: false,
-          state: "failed"
+          state: "accepted"
         }
       ]
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("does not mistake a stale workflow wait for active assistant work", () => {
@@ -624,7 +630,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-terminal-thinking-message",
       "codex-app-server-turn-finalizing",
       "codex-app-server-turn-state",
-      "codex-app-server-turn-steered"
+      "codex-app-server-message-delivered"
     ]) {
       expect(sessionListRealtimeShouldRefresh({
         payload: {
@@ -739,7 +745,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-terminal-assistant-message",
       "codex-app-server-terminal-thinking-message",
       "codex-app-server-terminal-user-message",
-      "codex-app-server-turn-steered",
+      "codex-app-server-message-delivered",
       "codex-context-replaced",
       "codex-prompt-injected"
     ]) {
