@@ -7,6 +7,9 @@ import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
+  jskitRuntimeEnv
+} from "@local/vibe64-core/server/jskitRuntimeEnv";
+import {
   vibe64ProjectChangedServiceEvent
 } from "@local/vibe64-core/server/projectRealtimeEvents";
 import { featureActions } from "./actions.js";
@@ -29,17 +32,22 @@ class Vibe64ProjectProvider {
     }
 
     const projectContext = getStudioProjectContext();
+    const env = jskitRuntimeEnv(app);
 
     app.service(
       VIBE64_PROJECT_SERVICE,
       (scope) => {
         void scope;
         return createService({
+          env,
           projectContext
         });
       },
       {
         events: {
+          applyProjectTemplate: [vibe64ProjectChangedServiceEvent({
+            operation: "updated"
+          })],
           createProject: [vibe64ProjectChangedServiceEvent({
             operation: "created"
           })],

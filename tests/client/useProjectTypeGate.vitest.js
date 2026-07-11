@@ -14,6 +14,8 @@ const endpointMocks = vi.hoisted(() => ({
   projectTypeReload: vi.fn(),
   sessionsData: null,
   sessionsReload: vi.fn(),
+  templatesData: null,
+  templatesReload: vi.fn(),
   useEndpointResource: vi.fn()
 }));
 
@@ -71,6 +73,7 @@ describe("useProjectTypeGate", () => {
     endpointMocks.configReload.mockReset();
     endpointMocks.projectTypeReload.mockReset();
     endpointMocks.sessionsReload.mockReset();
+    endpointMocks.templatesReload.mockReset();
     projectScopeMocks.projectSlug = ref("compas-next");
     routeMocks.route = {
       query: {}
@@ -102,6 +105,12 @@ describe("useProjectTypeGate", () => {
         values: {}
       }
     });
+    endpointMocks.templatesData = ref({
+      eligibility: {
+        eligible: false
+      },
+      templates: []
+    });
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockImplementation((options) => {
       endpointMocks.calls.push(options);
@@ -132,10 +141,29 @@ describe("useProjectTypeGate", () => {
           reload: endpointMocks.configReload
         };
       }
+      if (options.requestRecoveryLabel === "Project templates") {
+        return {
+          data: endpointMocks.templatesData,
+          isInitialLoading: ref(false),
+          isLoading: ref(false),
+          loadError: ref(""),
+          reload: endpointMocks.templatesReload
+        };
+      }
       throw new Error(`Unexpected endpoint resource: ${options.requestRecoveryLabel}`);
     });
     commandMocks.run.mockReset();
     commandMocks.useCommand.mockReset();
+    commandMocks.run.mockImplementation(async (options, context) => {
+      const payload = options.buildRawPayload({}, {
+        context
+      });
+      await options.onRunSuccess?.();
+      return {
+        ok: true,
+        payload
+      };
+    });
     commandMocks.useCommand.mockImplementation((options) => ({
       get message() {
         return "";
@@ -143,16 +171,7 @@ describe("useProjectTypeGate", () => {
       get messageType() {
         return "";
       },
-      run: commandMocks.run.mockImplementation(async (context) => {
-        const payload = options.buildRawPayload({}, {
-          context
-        });
-        await options.onRunSuccess?.();
-        return {
-          ok: true,
-          payload
-        };
-      })
+      run: (context) => commandMocks.run(options, context)
     }));
   });
 
@@ -196,13 +215,18 @@ describe("useProjectTypeGate", () => {
       jskit_database_runtime: "postgres"
     });
 
-    expect(commandMocks.run).toHaveBeenCalledWith({
-      projectType: "jskit",
-      sessionId: "",
-      values: {
-        jskit_database_runtime: "postgres"
+    expect(commandMocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placementSource: "vibe64.project-config.save"
+      }),
+      {
+        projectType: "jskit",
+        sessionId: "",
+        values: {
+          jskit_database_runtime: "postgres"
+        }
       }
-    });
+    );
     expect((await commandMocks.run.mock.results.at(-1).value).payload).toEqual({
       projectType: "jskit",
       sessionId: "",
@@ -217,13 +241,18 @@ describe("useProjectTypeGate", () => {
       sessionId: "2026-06-23_06-34-52"
     });
 
-    expect(commandMocks.run).toHaveBeenLastCalledWith({
-      projectType: "",
-      sessionId: "2026-06-23_06-34-52",
-      values: {
-        jskit_database_runtime: "mariadb"
+    expect(commandMocks.run).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        placementSource: "vibe64.project-config.save"
+      }),
+      {
+        projectType: "",
+        sessionId: "2026-06-23_06-34-52",
+        values: {
+          jskit_database_runtime: "mariadb"
+        }
       }
-    });
+    );
     expect(emitted.some((entry) => entry.event === "ready")).toBe(true);
 
     scope.stop();
@@ -254,6 +283,102 @@ describe("useProjectTypeGate", () => {
     expect(projectConfigRequest.readQuery.value).toBeNull();
     expect(projectConfigRequest.queryKey.value).not.toContain("2026-06-23_10-58-14");
     expect(globalThis.window.sessionStorage.setItem).not.toHaveBeenCalled();
+
+    scope.stop();
+  });
+
+  it("offers templates for an eligible empty project and preserves Advanced setup", async () => {
+    endpointMocks.projectTypeData.value = {
+      projectType: {
+        availableApplicationTypes: [],
+        availableProjectTypes: [],
+        projectType: "",
+        ready: false,
+        status: "missing"
+      }
+    };
+    endpointMocks.templatesData.value = {
+      eligibility: {
+        eligible: true
+      },
+      templates: [
+        {
+          id: "jskit-public",
+          name: "Public"
+        },
+        {
+          id: "jskit-database",
+          name: "Database"
+        }
+      ]
+    };
+
+    const scope = effectScope();
+    let gate;
+    scope.run(() => {
+      gate = useProjectTypeGate({
+        emit: () => null
+      });
+    });
+    await nextTick();
+
+    expect(gate.projectTemplateChooserVisible.value).toBe(true);
+    expect(gate.projectTemplates.value.map((template) => template.id)).toEqual([
+      "jskit-public",
+      "jskit-database"
+    ]);
+    expect(gate.canReturnToProjectTemplates.value).toBe(true);
+
+    gate.showAdvancedProjectSetup();
+    expect(gate.projectTemplateChooserVisible.value).toBe(false);
+    gate.showProjectTemplates();
+    expect(gate.projectTemplateChooserVisible.value).toBe(true);
+
+    await gate.applyProjectTemplate("jskit-database");
+    const templateCommandCall = commandMocks.run.mock.calls.find(([options]) => (
+      options.placementSource === "vibe64.project-templates.apply"
+    ));
+    expect(templateCommandCall?.[1]).toEqual({
+      templateId: "jskit-database"
+    });
+    expect(templateCommandCall?.[0].buildCommandOptions({}, {
+      context: templateCommandCall[1]
+    }).path).toMatch(/\/project-templates\/jskit-database\/apply$/u);
+    expect(endpointMocks.projectTypeReload).toHaveBeenCalled();
+    expect(gate.applyingTemplateId.value).toBe("");
+
+    scope.stop();
+  });
+
+  it("goes straight to Advanced setup when an existing project is not eligible", async () => {
+    endpointMocks.projectTypeData.value = {
+      projectType: {
+        projectType: "",
+        ready: false,
+        status: "missing"
+      }
+    };
+    endpointMocks.templatesData.value = {
+      eligibility: {
+        code: "vibe64_project_template_destination_not_empty",
+        eligible: false,
+        message: "This project already contains source."
+      },
+      templates: []
+    };
+
+    const scope = effectScope();
+    let gate;
+    scope.run(() => {
+      gate = useProjectTypeGate({
+        emit: () => null
+      });
+    });
+    await nextTick();
+
+    expect(gate.needsProjectType.value).toBe(true);
+    expect(gate.projectTemplateChooserVisible.value).toBe(false);
+    expect(gate.canReturnToProjectTemplates.value).toBe(false);
 
     scope.stop();
   });

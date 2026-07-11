@@ -229,6 +229,16 @@ test("Vibe64 project service exposes project selection before project-specific s
     assert.equal(afterSelection.projectType.status, "missing");
     assert.equal(afterSelection.projectType.bootstrap, false);
     assert.equal(afterSelection.projectType.path, expectedRecordPath);
+
+    const templates = await service.readProjectTemplates();
+    assert.equal(templates.ok, true);
+    assert.equal(templates.eligibility.eligible, true);
+    assert.deepEqual(templates.templates.map((template) => template.id), [
+      "jskit-public",
+      "jskit-accounts",
+      "jskit-database",
+      "jskit-workspaces"
+    ]);
   });
 });
 

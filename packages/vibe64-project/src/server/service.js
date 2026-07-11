@@ -88,6 +88,11 @@ import {
 import {
   targetSessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  PROJECT_TEMPLATES,
+  applyProjectTemplate as materializeProjectTemplate,
+  readProjectTemplates as readAvailableProjectTemplates
+} from "./projectTemplates.js";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -208,8 +213,10 @@ function projectSelectionSetupMetadata(runtimeProfile = null) {
 function createService({
   adapterServices = () => ({}),
   adapterSettingsComponentHandlers = {},
+  env = process.env,
   projectContext = null,
   projectConfigSavedHooks = [],
+  projectTemplates = PROJECT_TEMPLATES,
   projectRuntimeConfigEnvironmentResolvers = [],
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
@@ -637,6 +644,30 @@ function createService({
       setup: projectSelectionSetupMetadata(studioProjectContext.runtimeProfile),
       targetRoot: projectContextValue.targetRoot
     };
+  }
+
+  async function currentProjectTemplateContext(input = {}) {
+    const selection = await listProjectSelectionState();
+    return {
+      env,
+      input,
+      project: selection.currentProject || null,
+      projectRuntimeRoot: projectRuntimeRoot(),
+      sourceRoot: currentSourceRoot(),
+      targetRoot: currentTargetRoot(),
+      templates: projectTemplates
+    };
+  }
+
+  async function readProjectTemplatesState(input = {}) {
+    return readAvailableProjectTemplates(await currentProjectTemplateContext(input));
+  }
+
+  async function applyProjectTemplateState(templateId = "", input = {}) {
+    return materializeProjectTemplate({
+      ...await currentProjectTemplateContext(input),
+      templateId
+    });
   }
 
   function requireSelectedTargetRoot() {
@@ -2987,6 +3018,10 @@ function createService({
       return createRuntime(options);
     },
 
+    async applyProjectTemplate(templateId = "", input = {}) {
+      return projectResult(() => applyProjectTemplateState(templateId, input));
+    },
+
     runInProjectContext,
 
     async readProjectType(input = {}) {
@@ -2996,6 +3031,10 @@ function createService({
           projectType: await readProjectTypeState(input)
         };
       });
+    },
+
+    async readProjectTemplates(input = {}) {
+      return projectResult(() => readProjectTemplatesState(input));
     },
 
     async readCommittedProjectType(input = {}) {

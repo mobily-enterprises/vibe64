@@ -14,6 +14,7 @@ const VIBE64_ENV_USER_VALUES_API_SUFFIX = "/vibe64/env/user-values";
 const VIBE64_ADAPTER_SETTINGS_API_SUFFIX = "/vibe64/adapter-settings";
 const VIBE64_PROJECT_SELECT_API_SUFFIX = "/vibe64/projects/select";
 const VIBE64_PROJECT_TYPE_API_SUFFIX = "/vibe64/project-type";
+const VIBE64_PROJECT_TEMPLATES_API_SUFFIX = "/vibe64/project-templates";
 const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
 const VIBE64_PROJECT_CHANGED_EVENT = "vibe64.project.changed";
 
@@ -28,6 +29,7 @@ const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const PROJECT_CONFIG_ENDPOINT = `${VIBE64_ENDPOINT}/project-config`;
 const ADAPTER_SETTINGS_ENDPOINT = `${VIBE64_ENDPOINT}/adapter-settings`;
 const PROJECT_TYPE_ENDPOINT = `${VIBE64_ENDPOINT}/project-type`;
+const PROJECT_TEMPLATES_ENDPOINT = `${VIBE64_ENDPOINT}/project-templates`;
 const ENV_ENDPOINT = `${VIBE64_ENDPOINT}/env`;
 const ENV_MATERIALIZE_ENDPOINT = `${ENV_ENDPOINT}/materialize`;
 const ENV_USER_VALUES_ENDPOINT = `${ENV_ENDPOINT}/user-values`;
@@ -39,6 +41,10 @@ const PROJECT_SETUP_STREAM_ENDPOINT = `${PROJECT_SETUP_ENDPOINT}/stream`;
 
 function projectTypeQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "project-type"];
+}
+
+function projectTemplatesQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "project-templates"];
 }
 
 function projectSelectionQueryKey(surfaceId, ownershipFilter, projectSlug) {
@@ -83,6 +89,7 @@ export {
   VIBE64_PROJECT_CHANGED_EVENT,
   VIBE64_PROJECT_SELECT_API_SUFFIX,
   VIBE64_PROJECT_TYPE_API_SUFFIX,
+  VIBE64_PROJECT_TEMPLATES_API_SUFFIX,
   VIBE64_ENV_API_SUFFIX,
   VIBE64_ENV_MATERIALIZE_API_SUFFIX,
   VIBE64_ENV_USER_VALUES_API_SUFFIX,
@@ -90,6 +97,7 @@ export {
   PROJECT_SETUP_ENDPOINT,
   PROJECT_SELECTION_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
+  PROJECT_TEMPLATES_ENDPOINT,
   ENV_ENDPOINT,
   ENV_MATERIALIZE_ENDPOINT,
   ENV_USER_VALUES_ENDPOINT,
@@ -108,6 +116,7 @@ export {
   projectConfigQueryKey,
   projectSelectionQueryKey,
   projectTypeQueryKey,
+  projectTemplatesQueryKey,
   envQueryKey,
   targetProjectQueryKey
 };

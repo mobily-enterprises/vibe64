@@ -7,10 +7,13 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 import {
   PROJECT_CONFIG_ENDPOINT,
+  PROJECT_TEMPLATES_ENDPOINT,
   PROJECT_TYPE_ENDPOINT,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
   VIBE64_PROJECT_CHANGED_EVENT,
+  VIBE64_PROJECT_TEMPLATES_API_SUFFIX,
   projectConfigQueryKey,
+  projectTemplatesQueryKey,
   projectTypeQueryKey
 } from "@/lib/studioGateApi.js";
 import {
@@ -28,8 +31,10 @@ function useProjectTypeGate({
   emit
 } = {}) {
   const savingConfig = ref(false);
+  const applyingTemplateId = ref("");
   const draftApplicationTypeId = ref("");
   const draftProjectTypeId = ref("");
+  const projectSetupMode = ref("templates");
   const projectSlug = useVibe64ProjectSlug();
   const configureProjectValue = computed(() => readRefOrGetterValue(configureProject) === true);
   const projectTypeCacheKey = computed(() => [
@@ -47,6 +52,19 @@ function useProjectTypeGate({
   const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectTypeCacheKey.value) || null);
   const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
   const projectType = computed(() => projectTypeRecord.value?.projectType || {});
+  const projectTemplatesView = useStudioEndpointView({
+    enabled: computed(() => Boolean(projectTypeRecord.value?.projectType) && projectType.value.ready !== true),
+    fallbackLoadError: "Ready-made project templates could not load.",
+    path: PROJECT_TEMPLATES_ENDPOINT,
+    projectSlug,
+    requestRecoveryLabel: "Project templates",
+    queryKeyFactory: projectTemplatesQueryKey
+  });
+  const projectTemplatesRecord = computed(() => projectTemplatesView.record || {});
+  const projectTemplates = computed(() => (
+    Array.isArray(projectTemplatesRecord.value?.templates) ? projectTemplatesRecord.value.templates : []
+  ));
+  const projectTemplateEligibility = computed(() => projectTemplatesRecord.value?.eligibility || {});
   const hasDraftProjectType = computed(() => Boolean(draftProjectTypeId.value));
   const draftProjectConfigQuery = computed(() => {
     const query = {};
@@ -88,6 +106,25 @@ function useProjectTypeGate({
     placementSource: "vibe64.project-config.save",
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "PUT"
+  });
+  const applyProjectTemplateCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_PROJECT_TEMPLATES_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: `${PROJECT_TEMPLATES_ENDPOINT}/${encodeURIComponent(context.templateId || "")}/apply`
+    }),
+    buildRawPayload: () => ({}),
+    fallbackRunError: "The project template could not be applied.",
+    messages: {
+      error: "The project template could not be applied."
+    },
+    onRunSuccess: loadProjectState,
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.project-templates.apply",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
   });
 
   const projectConfigCacheKey = computed(() => {
@@ -132,15 +169,38 @@ function useProjectTypeGate({
       projectConfigLoaded.value &&
       (hasDraftProjectType.value || configureProjectValue.value || projectConfig.value.ready !== true);
   });
+  const projectTemplatesLoaded = computed(() => Array.isArray(projectTemplatesRecord.value?.templates));
+  const projectTemplatesLoading = computed(() => Boolean(
+    projectTemplatesView.isInitialLoading ||
+    projectTemplatesView.isLoading ||
+    (!projectTemplatesLoaded.value && !projectTemplatesView.loadError)
+  ));
+  const projectTemplatesEligible = computed(() => projectTemplateEligibility.value?.eligible === true);
+  const projectTemplateChooserVisible = computed(() => {
+    return needsProjectType.value &&
+      projectSetupMode.value === "templates" &&
+      (projectTemplatesLoading.value || projectTemplatesEligible.value);
+  });
+  const canReturnToProjectTemplates = computed(() => {
+    return needsProjectType.value && projectTemplatesEligible.value;
+  });
   const saveError = computed(() => {
     if (saveProjectConfigCommand.messageType === "error") {
       return String(saveProjectConfigCommand.message || "");
     }
     return "";
   });
+  const applyTemplateError = computed(() => {
+    if (applyProjectTemplateCommand.messageType === "error") {
+      return String(applyProjectTemplateCommand.message || "");
+    }
+    return "";
+  });
   const errorMessage = computed(() => String(
     projectTypeView.loadError ||
     projectConfigView.loadError ||
+    projectTemplatesView.loadError ||
+    applyTemplateError.value ||
     saveError.value ||
     ""
   ));
@@ -182,6 +242,10 @@ function useProjectTypeGate({
     immediate: true
   });
 
+  watch(projectSlug, () => {
+    projectSetupMode.value = "templates";
+  });
+
   watch(errorMessage, (message) => {
     if (message) {
       emit("error", message);
@@ -189,6 +253,9 @@ function useProjectTypeGate({
   });
 
   return {
+    applyProjectTemplate,
+    applyingTemplateId,
+    canReturnToProjectTemplates,
     clearDraftProjectType,
     errorMessage,
     hasDraftProjectType,
@@ -199,10 +266,15 @@ function useProjectTypeGate({
     projectConfigSetupSummary,
     projectReady,
     projectState,
+    projectTemplateChooserVisible,
+    projectTemplates,
+    projectTemplatesLoading,
     projectType,
     saveProjectConfig,
     savingConfig,
-    selectDraftProjectType
+    selectDraftProjectType,
+    showAdvancedProjectSetup,
+    showProjectTemplates
   };
 
   function projectConfigQueryKeyWithDraft(surfaceId, ownershipFilter, slug) {
@@ -225,6 +297,31 @@ function useProjectTypeGate({
     await projectTypeView.refresh();
     if (projectType.value.ready === true) {
       await projectConfigView.refresh();
+    }
+  }
+
+  async function applyProjectTemplate(templateId = "") {
+    const normalizedTemplateId = String(templateId || "").trim();
+    if (!normalizedTemplateId || applyingTemplateId.value) {
+      return;
+    }
+    applyingTemplateId.value = normalizedTemplateId;
+    try {
+      await applyProjectTemplateCommand.run({
+        templateId: normalizedTemplateId
+      });
+    } finally {
+      applyingTemplateId.value = "";
+    }
+  }
+
+  function showAdvancedProjectSetup() {
+    projectSetupMode.value = "advanced";
+  }
+
+  function showProjectTemplates() {
+    if (projectTemplatesEligible.value) {
+      projectSetupMode.value = "templates";
     }
   }
 
@@ -301,6 +398,7 @@ function useStudioEndpointView({
   });
 
   return proxyRefs({
+    isInitialLoading: resource.isInitialLoading,
     isLoading: resource.isLoading,
     loadError: resource.loadError,
     record: resource.data,

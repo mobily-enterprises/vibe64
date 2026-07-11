@@ -12,6 +12,9 @@ import {
   projectEnvReadInputValidator,
   projectEnvUserValuesInputValidator,
   projectSelectInputValidator,
+  projectTemplateApplyInputValidator,
+  projectTemplateParamsValidator,
+  projectTemplatesReadInputValidator,
   projectTypeInputValidator,
   projectTypeReadInputValidator
 } from "./inputSchemas.js";
@@ -65,6 +68,22 @@ function registerRoutes(
     buildInput: routes.requestBody,
     summary: "Select an existing Vibe64 project."
   });
+
+  routes.serviceRoute("GET", "/project-templates", {
+    query: projectTemplatesReadInputValidator,
+    summary: "List ready-made project templates for an empty Vibe64 project."
+  }, (request) => service(app).readProjectTemplates(
+    withVibe64User(request, routes.requestQuery(request))
+  ));
+
+  routes.serviceRoute("POST", "/project-templates/:templateId/apply", {
+    body: projectTemplateApplyInputValidator,
+    params: projectTemplateParamsValidator,
+    summary: "Apply a ready-made project template to an empty Vibe64 project."
+  }, (request) => service(app).applyProjectTemplate(
+    request.params?.templateId,
+    withVibe64User(request, routes.requestBody(request))
+  ));
 
   routes.actionRoute("GET", "/tools", {
     actionId: ACTION_LIST_PROJECT_TOOLS,
