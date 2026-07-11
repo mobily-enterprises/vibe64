@@ -67,6 +67,7 @@ test("Studio Setup Playwright browser check launches the CLI-matched browser rev
   assert.match(commandArgs[2], /expected_chromium/u);
   assert.match(commandArgs[2], /find -H "\$expected_chromium"/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
+  assert.match(commandArgs[2], /vibe64-playwright-launch/u);
   assert.match(commandArgs[2], /--dump-dom/u);
 
   assert.equal(isValidPlaywrightBrowserLaunchOutput(
