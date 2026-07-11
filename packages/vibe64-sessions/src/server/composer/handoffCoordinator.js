@@ -22,6 +22,26 @@ function workflowDriverVibe64User(session = {}) {
   return username ? { username } : null;
 }
 
+async function runComposerSessionExclusive({
+  operationName = "",
+  runtime = null,
+  session = null
+} = {}, operation) {
+  const runSessionExclusive = runtime?.store?.runSessionExclusive;
+  if (typeof runSessionExclusive !== "function") {
+    return {
+      acquired: true,
+      value: await operation()
+    };
+  }
+  return runSessionExclusive.call(
+    runtime.store,
+    session.sessionId,
+    operationName,
+    operation
+  );
+}
+
 function createComposerHandoffCoordinator({
   activate,
   deliver,
@@ -72,14 +92,27 @@ function createComposerHandoffCoordinator({
       return existing;
     }
     return startTask(key, async () => {
-      let result = null;
-      do {
-        repeatedTasks.delete(key);
-        result = await operation({
-          runtime,
-          session
-        });
-      } while (repeatedTasks.delete(key));
+      const exclusive = await runComposerSessionExclusive({
+        operationName: `composer-${kind}-drain`,
+        runtime,
+        session
+      }, async () => {
+        let operationResult = null;
+        do {
+          repeatedTasks.delete(key);
+          operationResult = await operation({
+            runtime,
+            session
+          });
+        } while (repeatedTasks.delete(key));
+        return operationResult;
+      });
+      const result = exclusive.acquired
+        ? exclusive.value
+        : {
+            retry: true,
+            waitingForExclusiveDelivery: true
+          };
       if (result?.retry === true) {
         const attempt = (retryAttempts.get(key) || 0) + 1;
         retryAttempts.set(key, attempt);
@@ -150,27 +183,40 @@ function createComposerHandoffCoordinator({
     }
     const key = taskKey("delivery", sessionId, handoffId);
     return startTask(key, async () => {
-      try {
-        return await deliver({
-          agentSettings,
-          handoff,
-          runtime,
-          session,
-          vibe64User
-        });
-      } finally {
+      const exclusive = await runComposerSessionExclusive({
+        operationName: "composer-handoff-delivery",
+        runtime,
+        session
+      }, async () => {
         try {
-          await drainControlsForSession({
+          return await deliver({
+            agentSettings,
+            handoff,
             runtime,
-            session
+            session,
+            vibe64User
           });
         } finally {
-          await drainMessagesForSession({
-            runtime,
-            session
-          });
+          try {
+            await drainControlsForSession({
+              runtime,
+              session
+            });
+          } finally {
+            await drainMessagesForSession({
+              runtime,
+              session
+            });
+          }
         }
+      });
+      if (!exclusive.acquired) {
+        return {
+          retry: true,
+          waitingForExclusiveDelivery: true
+        };
       }
+      return exclusive.value;
     });
   }
 

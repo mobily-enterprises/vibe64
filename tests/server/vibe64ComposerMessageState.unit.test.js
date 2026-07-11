@@ -130,6 +130,39 @@ test("composer message batches never combine messages owned by different users",
   assert.equal(batch.vibe64User.username, "alice");
 });
 
+test("composer messages retain the authenticated identity needed by background readiness", async () => {
+  const runtime = testRuntime();
+  await acceptComposerMessage(runtime, runtime.session.sessionId, {
+    composerSubmissionId: "message-with-identity",
+    message: "Continue",
+    vibe64User: {
+      displayName: "Alice",
+      github: {
+        avatarUrl: "https://example.test/alice.png",
+        connectedAt: "2026-07-11T05:00:00.000Z",
+        id: 42,
+        login: "alice-github"
+      },
+      home: "/home/alice",
+      role: "owner",
+      username: "alice"
+    }
+  });
+
+  const [message] = pendingComposerMessages(runtime.session);
+  assert.deepEqual(message.vibe64User, {
+    github: {
+      avatarUrl: "https://example.test/alice.png",
+      connectedAt: "2026-07-11T05:00:00.000Z",
+      id: 42,
+      login: "alice-github"
+    },
+    username: "alice"
+  });
+  assert.equal("home" in message.vibe64User, false);
+  assert.equal("role" in message.vibe64User, false);
+});
+
 test("composer message retries preserve identity and choose delivery again", async () => {
   const runtime = testRuntime();
   await acceptComposerMessage(runtime, runtime.session.sessionId, {
@@ -157,6 +190,8 @@ test("composer message retries preserve identity and choose delivery again", asy
   assert.equal(message.state, "accepted");
   assert.equal(message.error, "");
   assert.equal(message.agentSettings.providerId, "future-provider");
+  assert.equal(message.attempts, 0);
+  assert.equal(message.lastAttemptAt, "");
   assert.equal(message.originId, "browser-after-reload");
 
   await settleComposerMessage(runtime, runtime.session.sessionId, "message-1", {
@@ -168,7 +203,7 @@ test("composer message retries preserve identity and choose delivery again", asy
   message = composerMessageRequests(runtime.session)[0];
   assert.equal(message.state, "delivered");
   assert.equal(message.operationOutcome, "started_new_turn");
-  assert.equal(message.attempts, 2);
+  assert.equal(message.attempts, 1);
   assert.equal(message.threadId, "thread-1");
   assert.equal(message.turnId, "turn-2");
 });

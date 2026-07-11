@@ -2500,6 +2500,99 @@ test("assistant message acceptance does not wait for expensive provider handoff 
   assert.equal(responseBeforeDeliveryFinished?.queued, true);
 });
 
+test("assistant message automatic retries terminate as a resendable chat failure", async () => {
+  const sessionId = "session-message-retry-exhausted";
+  const messageId = "retry-exhausted-message";
+  const submittedAt = new Date(Date.now() - 1_000).toISOString();
+  const deferredEvents = Array.from({ length: 7 }, (_, index) => ({
+    at: new Date(Date.parse(submittedAt) + ((index + 1) * 100)).toISOString(),
+    error: "The active provider turn is not ready.",
+    kind: "composer-message-deferred",
+    messageId,
+    operationOutcome: "active_turn_not_ready",
+    retryable: true,
+    threadId: "active-thread",
+    turnId: "active-turn"
+  }));
+  const harness = composerMessageRuntimeHarness({
+    agentRuns: [{
+      active: true,
+      id: "future_provider",
+      provider: "future-provider",
+      providerInterface: "future-transport",
+      providerThreadId: "active-thread",
+      providerTurnId: "active-turn",
+      state: VIBE64_AGENT_RUN_STATE.ACTIVE
+    }, {
+      events: [{
+        at: submittedAt,
+        kind: "composer-message-accepted",
+        request: {
+          message: "Please deliver this.",
+          messageId,
+          submittedAt,
+          vibe64User: {
+            username: "alice"
+          }
+        }
+      }, ...deferredEvents],
+      id: "composer_messages",
+      state: VIBE64_AGENT_RUN_STATE.COMPLETED
+    }],
+    metadata: {
+      workflow_driver_username: "alice"
+    },
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  let deliveryAttempts = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async sendAgentMessage() {
+        deliveryAttempts += 1;
+        return {
+          delivered: false,
+          error: "The active provider turn is not ready.",
+          ok: false,
+          operationOutcome: "active_turn_not_ready",
+          retryable: true,
+          threadId: "active-thread",
+          turnId: "active-turn"
+        };
+      }
+    }
+  });
+
+  const accepted = await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: messageId,
+    message: "Please deliver this.",
+    vibe64User: {
+      username: "alice"
+    }
+  });
+  assert.equal(accepted.accepted, true);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
+    if (message?.state === "failed") {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
+  assert.equal(deliveryAttempts, 1);
+  assert.equal(message.state, "failed");
+  assert.equal(message.operationOutcome, "automatic_retry_exhausted");
+  assert.equal(message.retryable, false);
+  assert.match(message.error, /Resend it/u);
+});
+
 test("messages queued during an active delivery are sent as the next ordered batch", async () => {
   const sessionId = "session-active-message-batch";
   const harness = composerMessageRuntimeHarness({
@@ -2761,6 +2854,110 @@ test("an assistant message starts a new turn when the previous turn finishes bef
         state: "delivered"
       }
     ]
+  );
+});
+
+test("an assistant message restarts the enabled workflow conversation action", async () => {
+  const sessionId = "session-workflow-conversation-action";
+  const harness = composerMessageRuntimeHarness({
+    actions: [
+      {
+        dispatchRoute: "session-action",
+        enabled: true,
+        id: "define_seed_application",
+        recordsConversationTurn: true,
+        type: "prompt"
+      }
+    ],
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  const runActionCalls = [];
+  harness.runtime.runAction = async (_sessionId, actionId, input) => {
+    runActionCalls.push({
+      actionId,
+      input
+    });
+    return harness.updateSession((session) => ({
+      ...session,
+      actionResult: {
+        actionId,
+        agentPromptHandoff: {
+          handoffId: "seed-conversation-handoff",
+          kind: "agent_prompt_handoff",
+          terminalInput: input.conversationRequest
+        },
+        input,
+        status: "prompt_ready"
+      }
+    }));
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async deliverAgentPrompt(_sessionId, _handoff, options = {}) {
+        await options.lifecycle({
+          state: "connecting"
+        });
+        await options.lifecycle({
+          state: "delivered",
+          threadId: "seed-thread",
+          turnId: "seed-turn"
+        });
+        await options.lifecycle({
+          state: "active",
+          threadId: "seed-thread",
+          turnId: "seed-turn"
+        });
+        return {
+          ok: true,
+          thread: {
+            id: "seed-thread"
+          },
+          turn: {
+            active: true,
+            id: "seed-turn"
+          }
+        };
+      },
+      async sendAgentMessage() {
+        return {
+          delivered: false,
+          newTurnRequired: true,
+          ok: true,
+          operationOutcome: "new_turn_required"
+        };
+      }
+    }
+  });
+
+  await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "seed-message",
+    message: "Tell me about the Buddha."
+  });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (publicSessionResponse(harness.currentSession()).composerMessages[0]?.state === "delivered") {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.deepEqual(runActionCalls, [
+    {
+      actionId: "define_seed_application",
+      input: {
+        conversationRequest: "Tell me about the Buddha."
+      }
+    }
+  ]);
+  assert.equal(
+    publicSessionResponse(harness.currentSession()).composerMessages[0]?.state,
+    "delivered"
   );
 });
 

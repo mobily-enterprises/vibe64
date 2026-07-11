@@ -33,7 +33,9 @@ async function withTemporaryRoot(callback) {
     if (tempRoot) {
       await rm(tempRoot, {
         force: true,
-        recursive: true
+        maxRetries: 10,
+        recursive: true,
+        retryDelay: 20
       });
     }
     if (previousRuntimeNamespace == null) {

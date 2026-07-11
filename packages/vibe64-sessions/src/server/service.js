@@ -91,6 +91,9 @@ const COMPOSER_DRAFT_KIND = Object.freeze({
   SUBMISSION_REJECTED: "submission_rejected",
   SUBMISSION_START: "submission_start"
 });
+const COMPOSER_MESSAGE_AUTOMATIC_RETRY_LIMIT = 8;
+const COMPOSER_MESSAGE_AUTOMATIC_RETRY_WINDOW_MS = 30_000;
+const COMPOSER_MESSAGE_RETRY_EXHAUSTED_ERROR = "The assistant stayed unavailable for this message. Resend it to try again.";
 
 function sessionResult(operation, {
   publicResponse = true,
@@ -139,6 +142,15 @@ function timestampMs(value = "") {
 function timestampIsAfter(value = "", referenceMs = null) {
   const timestamp = timestampMs(value);
   return timestamp !== null && referenceMs !== null && timestamp >= referenceMs;
+}
+
+function composerMessageAutomaticRetryExhausted(batch = {}, now = Date.now()) {
+  return (Array.isArray(batch.messages) ? batch.messages : []).some((message) => {
+    const submittedAtMs = timestampMs(message.submittedAt);
+    return Number(message.attempts || 0) + 1 >= COMPOSER_MESSAGE_AUTOMATIC_RETRY_LIMIT || (
+      submittedAtMs !== null && now - submittedAtMs >= COMPOSER_MESSAGE_AUTOMATIC_RETRY_WINDOW_MS
+    );
+  });
 }
 
 function isPlainObject(value) {
@@ -1551,13 +1563,16 @@ async function startComposerMessageTurn(terminalService, coordinator, {
     };
   }
 
-  const messageAction = [
-    ...(Array.isArray(currentSession.actions) ? currentSession.actions : []),
-    ...(Array.isArray(currentSession.currentStepDefinition?.actions)
-      ? currentSession.currentStepDefinition.actions
-      : [])
-  ].find((action) => (
+  const currentActions = Array.isArray(currentSession.actions) ? currentSession.actions : [];
+  const definedActions = Array.isArray(currentSession.currentStepDefinition?.actions)
+    ? currentSession.currentStepDefinition.actions
+    : [];
+  const messageAction = currentActions.find((action) => (
     normalizedInputText(action?.dispatchRoute) === VIBE64_ACTION_DISPATCH_ROUTES.SESSION_MESSAGE
+  )) || definedActions.find((action) => (
+    normalizedInputText(action?.dispatchRoute) === VIBE64_ACTION_DISPATCH_ROUTES.SESSION_MESSAGE
+  )) || currentActions.find((action) => (
+    action?.enabled === true && action?.recordsConversationTurn === true
   ));
   const messageActionId = normalizedInputText(messageAction?.id);
   if (!messageActionId) {
@@ -1820,31 +1835,49 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
     }
     if (result?.ok !== true || result?.delivered !== true) {
       if (result.retryable === true) {
-        await settleComposerMessageRequests(runtime, sessionId, batch.messages, {
-          error: result.error || "Message delivery is waiting to retry.",
-          operationOutcome: result.operationOutcome,
-          outcome: COMPOSER_MESSAGE_SETTLEMENTS.DEFERRED,
-          threadId,
-          turnId
-        });
-        await publishComposerMessageChanged(
-          publishSessionChanged,
-          runtime,
-          sessionId,
-          "session-agent-message-deferred"
-        );
-        vibe64SessionDebugLog("server.service.composerMessage.delivery.deferred", {
+        if (!composerMessageAutomaticRetryExhausted(batch)) {
+          await settleComposerMessageRequests(runtime, sessionId, batch.messages, {
+            error: result.error || "Message delivery is waiting to retry.",
+            operationOutcome: result.operationOutcome,
+            outcome: COMPOSER_MESSAGE_SETTLEMENTS.DEFERRED,
+            threadId,
+            turnId
+          });
+          await publishComposerMessageChanged(
+            publishSessionChanged,
+            runtime,
+            sessionId,
+            "session-agent-message-deferred"
+          );
+          vibe64SessionDebugLog("server.service.composerMessage.delivery.deferred", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: normalizedInputText(result.error),
+            messageCount: batch.messageIds.length,
+            messageIds: batch.messageIds,
+            operationOutcome: normalizedInputText(result.operationOutcome),
+            sessionId,
+            threadId,
+            turnId
+          });
+          return {
+            retry: true
+          };
+        }
+        vibe64SessionDebugLog("server.service.composerMessage.delivery.retryExhausted", {
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          error: normalizedInputText(result.error),
+          lastError: normalizedInputText(result.error),
+          lastOperationOutcome: normalizedInputText(result.operationOutcome),
           messageCount: batch.messageIds.length,
           messageIds: batch.messageIds,
-          operationOutcome: normalizedInputText(result.operationOutcome),
           sessionId,
           threadId,
           turnId
         });
-        return {
-          retry: true
+        result = {
+          ...result,
+          error: COMPOSER_MESSAGE_RETRY_EXHAUSTED_ERROR,
+          operationOutcome: "automatic_retry_exhausted",
+          retryable: false
         };
       }
       await settleComposerMessageRequests(runtime, sessionId, batch.messages, {

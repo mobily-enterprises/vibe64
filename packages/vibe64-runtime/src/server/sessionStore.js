@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
@@ -152,8 +152,13 @@ const ACTIVE_AGENT_RUN_STATES = new Set([
   VIBE64_AGENT_RUN_STATE.FINALIZING,
   VIBE64_AGENT_RUN_STATE.STARTING
 ]);
+const SESSION_LOCK_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const SESSION_LOCK_OWNER_GRACE_MS = 2_000;
+const SESSION_LOCK_POLL_MS = 20;
+const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();
 const sessionMutationContext = new AsyncLocalStorage();
+const sessionExclusiveContext = new AsyncLocalStorage();
 
 function isValidVibe64SessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
@@ -457,10 +462,7 @@ function withRevisionMarker(value, manifest = {}, sessionId = "") {
 
 function enqueueSessionMutation(key, operation) {
   const previous = sessionMutationChains.get(key) || Promise.resolve();
-  const run = () => sessionMutationContext.run({
-    key
-  }, operation);
-  const queued = previous.catch(() => null).then(run);
+  const queued = previous.catch(() => null).then(operation);
   const stored = queued.catch(() => null).finally(() => {
     if (sessionMutationChains.get(key) === stored) {
       sessionMutationChains.delete(key);
@@ -468,6 +470,168 @@ function enqueueSessionMutation(key, operation) {
   });
   sessionMutationChains.set(key, stored);
   return queued;
+}
+
+function createSessionOperationLease() {
+  let resolveIdle = () => null;
+  const idle = new Promise((resolve) => {
+    resolveIdle = resolve;
+  });
+  return {
+    idle,
+    operations: 0,
+    resolveIdle
+  };
+}
+
+function beginSessionOperation(lease) {
+  lease.operations += 1;
+  return {
+    active: true
+  };
+}
+
+function finishSessionOperation(lease, participant) {
+  participant.active = false;
+  lease.operations -= 1;
+  if (lease.operations === 0) {
+    lease.resolveIdle();
+  }
+}
+
+function delay(milliseconds = 0) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function processIsAlive(pid) {
+  const normalizedPid = Number(pid);
+  if (!Number.isSafeInteger(normalizedPid) || normalizedPid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(normalizedPid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+function sessionLockPath(sessionPaths, lockName = "") {
+  const normalizedLockName = normalizeText(lockName);
+  if (!SESSION_LOCK_NAME_PATTERN.test(normalizedLockName)) {
+    throw vibe64Error(`Invalid vibe64 session lock name: ${normalizedLockName || "(empty)"}`, "vibe64_session_lock_name_invalid");
+  }
+  return path.join(
+    sessionPaths.sessionsRoot,
+    ".locks",
+    sessionPaths.sessionId,
+    `${normalizedLockName}.lock`
+  );
+}
+
+async function readSessionLockOwner(lockPath = "") {
+  try {
+    return JSON.parse(await readFile(path.join(lockPath, "owner.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function sessionLockIsAbandoned(lockPath = "") {
+  const owner = await readSessionLockOwner(lockPath);
+  if (owner?.pid) {
+    return !processIsAlive(owner.pid);
+  }
+  try {
+    const lockStat = await stat(lockPath);
+    return Date.now() - lockStat.mtimeMs >= SESSION_LOCK_OWNER_GRACE_MS;
+  } catch (error) {
+    return isMissingPathError(error);
+  }
+}
+
+async function quarantineAbandonedSessionLock(lockPath = "") {
+  if (!await sessionLockIsAbandoned(lockPath)) {
+    return false;
+  }
+  const quarantinePath = `${lockPath}.abandoned.${process.pid}.${randomUUID()}`;
+  try {
+    await rename(lockPath, quarantinePath);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return true;
+    }
+    return false;
+  }
+  await rm(quarantinePath, {
+    force: true,
+    recursive: true
+  });
+  return true;
+}
+
+async function acquireSessionLock(sessionPaths, lockName = "", {
+  waitMs = 0
+} = {}) {
+  const lockPath = sessionLockPath(sessionPaths, lockName);
+  const lockRoot = path.dirname(lockPath);
+  const token = randomUUID();
+  const startedAtMs = Date.now();
+  await mkdir(lockRoot, {
+    recursive: true
+  });
+  while (true) {
+    try {
+      await mkdir(lockPath, {
+        mode: 0o700
+      });
+      try {
+        await writeJsonFile(path.join(lockPath, "owner.json"), {
+          createdAt: new Date().toISOString(),
+          pid: process.pid,
+          token
+        });
+      } catch (error) {
+        await rm(lockPath, {
+          force: true,
+          recursive: true
+        });
+        throw error;
+      }
+      return async () => {
+        const owner = await readSessionLockOwner(lockPath);
+        if (normalizeText(owner?.token) !== token) {
+          return;
+        }
+        const releasedPath = `${lockPath}.released.${process.pid}.${token}`;
+        try {
+          await rename(lockPath, releasedPath);
+        } catch (error) {
+          if (isMissingPathError(error)) {
+            return;
+          }
+          throw error;
+        }
+        await rm(releasedPath, {
+          force: true,
+          recursive: true
+        });
+      };
+    } catch (error) {
+      if (error?.code !== "EEXIST") {
+        throw error;
+      }
+      if (await quarantineAbandonedSessionLock(lockPath)) {
+        continue;
+      }
+      if (Date.now() - startedAtMs >= waitMs) {
+        return null;
+      }
+      await delay(Math.min(SESSION_LOCK_POLL_MS, Math.max(1, waitMs - (Date.now() - startedAtMs))));
+    }
+  }
 }
 
 function normalizePromptContextSnapshot(snapshot = {}) {
@@ -1106,14 +1270,103 @@ function createVibe64SessionStore({
   async function mutateSession(sessionId, operation) {
     const sessionPaths = await ensureActiveSessionRoot(sessionId);
     const key = sessionPaths.sessionRoot;
-    if (sessionMutationContext.getStore()?.key === key) {
-      return operation(sessionPaths);
+    const inheritedContext = sessionMutationContext.getStore();
+    if (inheritedContext?.key === key && inheritedContext.participant?.active === true) {
+      const participant = beginSessionOperation(inheritedContext.lease);
+      try {
+        return await sessionMutationContext.run({
+          key,
+          lease: inheritedContext.lease,
+          participant
+        }, () => operation(sessionPaths));
+      } finally {
+        finishSessionOperation(inheritedContext.lease, participant);
+      }
     }
     return enqueueSessionMutation(key, async () => {
-      const result = await operation(sessionPaths);
-      const manifest = await bumpSessionRevision(sessionPaths);
-      return withRevisionMarker(result, manifest, sessionPaths.sessionId);
+      const release = await acquireSessionLock(sessionPaths, "mutation", {
+        waitMs: SESSION_MUTATION_LOCK_WAIT_MS
+      });
+      if (!release) {
+        throw vibe64Error(
+          `Timed out waiting to update Vibe64 session: ${sessionPaths.sessionId}`,
+          "vibe64_session_mutation_lock_timeout"
+        );
+      }
+      const lease = createSessionOperationLease();
+      const participant = beginSessionOperation(lease);
+      try {
+        let result;
+        try {
+          result = await sessionMutationContext.run({
+            key,
+            lease,
+            participant
+          }, () => operation(sessionPaths));
+        } finally {
+          finishSessionOperation(lease, participant);
+          await lease.idle;
+        }
+        const manifest = await bumpSessionRevision(sessionPaths);
+        return withRevisionMarker(result, manifest, sessionPaths.sessionId);
+      } finally {
+        await release();
+      }
     });
+  }
+
+  async function runSessionExclusive(sessionId, operationName, operation, {
+    waitMs = 0
+  } = {}) {
+    if (typeof operation !== "function") {
+      throw new TypeError("Exclusive Vibe64 session work requires an operation.");
+    }
+    const sessionPaths = await ensureActiveSessionRoot(sessionId);
+    const lockPath = sessionLockPath(sessionPaths, operationName);
+    const activeLocks = sessionExclusiveContext.getStore();
+    const inheritedContext = activeLocks?.get(lockPath);
+    if (inheritedContext?.participant?.active === true) {
+      const participant = beginSessionOperation(inheritedContext.lease);
+      const nestedLocks = new Map(activeLocks);
+      nestedLocks.set(lockPath, {
+        lease: inheritedContext.lease,
+        participant
+      });
+      try {
+        return {
+          acquired: true,
+          value: await sessionExclusiveContext.run(nestedLocks, operation)
+        };
+      } finally {
+        finishSessionOperation(inheritedContext.lease, participant);
+      }
+    }
+    const release = await acquireSessionLock(sessionPaths, operationName, {
+      waitMs
+    });
+    if (!release) {
+      return {
+        acquired: false,
+        value: null
+      };
+    }
+    const lease = createSessionOperationLease();
+    const participant = beginSessionOperation(lease);
+    const nextLocks = new Map(activeLocks || []);
+    nextLocks.set(lockPath, {
+      lease,
+      participant
+    });
+    try {
+      return await sessionExclusiveContext.run(nextLocks, async () => ({
+        acquired: true,
+        value: await operation()
+      }));
+    } finally {
+      finishSessionOperation(lease, participant);
+      await lease.idle;
+      await release();
+    }
   }
 
   async function writeStatus(sessionId, status) {
@@ -2592,6 +2845,7 @@ function createVibe64SessionStore({
     readSessionSummary,
     readStatus,
     readStepState,
+    runSessionExclusive,
     writeArtifact,
     writeAgentRunEvent,
     writeBackgroundTaskEvent,

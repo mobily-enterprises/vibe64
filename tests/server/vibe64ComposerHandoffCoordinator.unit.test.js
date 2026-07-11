@@ -4,6 +4,13 @@ import test from "node:test";
 import {
   createComposerHandoffCoordinator
 } from "../../packages/vibe64-sessions/src/server/composer/handoffCoordinator.js";
+import {
+  createVibe64SessionStore
+} from "@local/vibe64-runtime/server";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 function handoff() {
   return {
@@ -45,6 +52,56 @@ test("composer handoff coordinator starts delivery out of the request stack and 
   assert.equal(deliveries, 1);
   release();
   await first;
+});
+
+test("composer handoff coordinators share one durable delivery claimant", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({
+      projectLocalRoot: projectRuntimeRoot(targetRoot),
+      targetRoot
+    });
+    const session = await store.createSession({
+      sessionId: "shared-coordinator-session"
+    });
+    const runtime = {
+      store
+    };
+    let deliveries = 0;
+    let releaseDelivery = () => null;
+    let markDeliveryStarted = () => null;
+    const deliveryStarted = new Promise((resolve) => {
+      markDeliveryStarted = resolve;
+    });
+    const deliveryGate = new Promise((resolve) => {
+      releaseDelivery = resolve;
+    });
+    const coordinatorOptions = {
+      async activate() {},
+      async deliver() {
+        deliveries += 1;
+        markDeliveryStarted();
+        await deliveryGate;
+      }
+    };
+    const firstCoordinator = createComposerHandoffCoordinator(coordinatorOptions);
+    const secondCoordinator = createComposerHandoffCoordinator(coordinatorOptions);
+    const input = {
+      handoff: handoff(),
+      runtime,
+      session
+    };
+
+    const first = firstCoordinator.schedule(input);
+    await deliveryStarted;
+    const second = secondCoordinator.schedule(input);
+    assert.deepEqual(await second, {
+      retry: true,
+      waitingForExclusiveDelivery: true
+    });
+    assert.equal(deliveries, 1);
+    releaseDelivery();
+    await first;
+  });
 });
 
 test("composer handoff coordinator resumes a persisted accepted handoff", async () => {

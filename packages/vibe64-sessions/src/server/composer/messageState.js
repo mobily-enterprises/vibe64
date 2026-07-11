@@ -38,7 +38,23 @@ function composerMessageVibe64User(source = null) {
     source?.osUsername ||
     source?.name
   );
-  return username ? { username } : null;
+  if (!username) {
+    return null;
+  }
+  const githubLogin = normalizeText(source?.github?.login);
+  return {
+    ...(githubLogin
+      ? {
+          github: {
+            avatarUrl: normalizeText(source.github.avatarUrl),
+            connectedAt: normalizeText(source.github.connectedAt),
+            id: Number.isSafeInteger(Number(source.github.id)) ? Number(source.github.id) : 0,
+            login: githubLogin
+          }
+        }
+      : {}),
+    username
+  };
 }
 
 function composerMessageRequests(source = {}) {
@@ -95,12 +111,15 @@ function composerMessageRequests(source = {}) {
         agentSettings: retryRequest.agentSettings && typeof retryRequest.agentSettings === "object" && !Array.isArray(retryRequest.agentSettings)
           ? retryRequest.agentSettings
           : current.agentSettings,
+        attempts: 0,
         error: "",
+        lastAttemptAt: "",
         operationOutcome: "",
         originId: normalizeText(retryRequest.originId) || current.originId,
         retriedAt: normalizeText(event.at),
         retryable: null,
         state: COMPOSER_MESSAGE_STATES.ACCEPTED,
+        submittedAt: normalizeText(event.at) || current.submittedAt,
         vibe64User: composerMessageVibe64User(retryRequest.vibe64User) || current.vibe64User
       });
     } else if (kind === COMPOSER_MESSAGE_EVENT_KINDS.DEFERRED) {

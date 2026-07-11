@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import {
@@ -18,6 +21,9 @@ import {
   projectRuntimeRoot,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const execFileAsync = promisify(execFile);
+const sessionStoreMutationWorker = new URL("./fixtures/sessionStoreMutationWorker.mjs", import.meta.url).pathname;
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -894,13 +900,15 @@ test("vibe64 session store serializes per-session mutations and bumps revision o
       await storeA.writeMetadataValue("serialized_mutation", "first", "done");
       events.push("first-end");
     });
-    await delay(0);
+    for (let attempt = 0; attempt < 100 && events.length === 0; attempt += 1) {
+      await delay(5);
+    }
     const second = storeB.mutateSession("serialized_mutation", async () => {
       events.push("second-start");
       await storeB.writeMetadataValue("serialized_mutation", "second", "done");
       events.push("second-end");
     });
-    await delay(0);
+    await delay(5);
 
     assert.deepEqual(events, ["first-start"]);
     releaseFirst();
@@ -917,6 +925,174 @@ test("vibe64 session store serializes per-session mutations and bumps revision o
     assert.equal(session.stepRevision, 1);
     assert.equal(session.manifest.stepRevision, 1);
     assert.equal(Boolean(session.updatedAt), true);
+  });
+});
+
+test("vibe64 session mutation boundaries retain detached nested writes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const storeA = createTestSessionStore({
+      targetRoot
+    });
+    const storeB = createTestSessionStore({
+      targetRoot
+    });
+    await storeA.createSession({
+      sessionId: "detached_nested_mutation"
+    });
+    const events = [];
+    let releaseChild = () => null;
+    let markChildStarted = () => null;
+    const childStarted = new Promise((resolve) => {
+      markChildStarted = resolve;
+    });
+    const childGate = new Promise((resolve) => {
+      releaseChild = resolve;
+    });
+    let child = null;
+
+    const outer = storeA.mutateSession("detached_nested_mutation", async () => {
+      child = storeA.mutateSession("detached_nested_mutation", async () => {
+        events.push("child-start");
+        markChildStarted();
+        await childGate;
+        await storeA.writeMetadataValue("detached_nested_mutation", "child", "done");
+        events.push("child-end");
+      });
+      await childStarted;
+    });
+    await childStarted;
+    const competing = storeB.mutateSession("detached_nested_mutation", async () => {
+      events.push("competing-start");
+      await storeB.writeMetadataValue("detached_nested_mutation", "competing", "done");
+    });
+    await delay(20);
+    assert.deepEqual(events, ["child-start"]);
+
+    releaseChild();
+    await Promise.all([outer, child, competing]);
+
+    const session = await storeA.readSession("detached_nested_mutation");
+    assert.deepEqual(events, ["child-start", "child-end", "competing-start"]);
+    assert.equal(session.metadata.child, "done");
+    assert.equal(session.metadata.competing, "done");
+    assert.equal(session.revision, 3);
+  });
+});
+
+test("vibe64 session store serializes mutations across Node processes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "cross_process_mutation"
+    });
+    const projectStateRoot = projectLocalRoot(targetRoot);
+    const firstEnteredPath = path.join(targetRoot, "first-entered");
+    const secondEnteredPath = path.join(targetRoot, "second-entered");
+    const first = execFileAsync(process.execPath, [
+      sessionStoreMutationWorker,
+      projectStateRoot,
+      targetRoot,
+      "cross_process_mutation",
+      "first_process",
+      "300",
+      firstEnteredPath
+    ]);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        await access(firstEnteredPath);
+        break;
+      } catch {
+        await delay(10);
+      }
+    }
+    await assertPathExists(firstEnteredPath);
+
+    const second = execFileAsync(process.execPath, [
+      sessionStoreMutationWorker,
+      projectStateRoot,
+      targetRoot,
+      "cross_process_mutation",
+      "second_process",
+      "0",
+      secondEnteredPath
+    ]);
+    await delay(100);
+    await assertPathMissing(secondEnteredPath);
+
+    await Promise.all([first, second]);
+    await assertPathExists(secondEnteredPath);
+    const session = await store.readSession("cross_process_mutation");
+    assert.equal(session.metadata.first_process, "done");
+    assert.equal(session.metadata.second_process, "done");
+    assert.equal(session.revision, 3);
+  });
+});
+
+test("vibe64 session exclusivity remains held for detached work started inside the lease", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const storeA = createTestSessionStore({
+      targetRoot
+    });
+    const storeB = createTestSessionStore({
+      targetRoot
+    });
+    await storeA.createSession({
+      sessionId: "detached_exclusive_work"
+    });
+    let releaseChild = () => null;
+    let markChildStarted = () => null;
+    const childStarted = new Promise((resolve) => {
+      markChildStarted = resolve;
+    });
+    const childGate = new Promise((resolve) => {
+      releaseChild = resolve;
+    });
+    let child = null;
+
+    const outer = storeA.runSessionExclusive(
+      "detached_exclusive_work",
+      "delivery",
+      async () => {
+        child = storeA.runSessionExclusive(
+          "detached_exclusive_work",
+          "delivery",
+          async () => {
+            markChildStarted();
+            await childGate;
+          }
+        );
+        await childStarted;
+      }
+    );
+    await childStarted;
+
+    assert.deepEqual(
+      await storeB.runSessionExclusive(
+        "detached_exclusive_work",
+        "delivery",
+        async () => "must-not-run"
+      ),
+      {
+        acquired: false,
+        value: null
+      }
+    );
+
+    releaseChild();
+    await Promise.all([outer, child]);
+    assert.deepEqual(
+      await storeB.runSessionExclusive(
+        "detached_exclusive_work",
+        "delivery",
+        async () => "claimed"
+      ),
+      {
+        acquired: true,
+        value: "claimed"
+      }
+    );
   });
 });
 
