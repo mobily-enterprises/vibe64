@@ -40,7 +40,7 @@ function playwrightBrowserLaunchCheckScript() {
     "    exit 1",
     "    ;;",
     "esac",
-    "browser=\"$(find \"$expected_chromium\" -maxdepth 4 -type f -name chrome -print 2>/dev/null | sort | head -n 1 || true)\"",
+    "browser=\"$(find -H \"$expected_chromium\" -maxdepth 4 -type f -name chrome -print 2>/dev/null | sort | head -n 1 || true)\"",
     "if [ -z \"$browser\" ] || [ ! -x \"$browser\" ]; then",
     `  echo "The Playwright Chromium revision expected at $expected_chromium is not installed."`,
     "  exit 1",

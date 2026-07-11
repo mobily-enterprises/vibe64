@@ -276,16 +276,16 @@ await runVibe64Command({
 - [x] Add one exported shell-startup helper for shared tool env so shells do not reimplement the browser path expression.
 - [x] Shared tool env wins over caller request env in `runVibe64Command`.
 - [x] Shared tool env wins over project/runtime config env in `runVibe64Command`/`resolveCommandEnv`.
-- [x] Host/runtime-pack bootstrap owns the Vibe64 browser installation command.
-- [x] Materialize a root-owned, versioned Playwright runtime containing both the CLI and its exact Chromium revision.
+- [x] Host/runtime-pack bootstrap owns Playwright browser materialization.
+- [x] Compose the root-owned, versioned Playwright CLI and browser outputs supplied by the pinned Nix package set.
 - [x] Activate the matching CLI and browser directory together through `/opt/vibe64/runtime-packs/playwright`.
-- [x] Browser installation is performed once by the metal/runtime-pack installer, not once per tenant and not during app/session execution.
-- [x] Install Playwright Chromium into `/opt/vibe64/runtime-packs/playwright/browsers`, not into any user's home directory.
-- [x] Use the shared Node/Playwright runtime pack for browser installation.
-- [x] Run browser installation from the shared Playwright runtime pack, not from arbitrary project `node_modules`.
+- [x] Browser realization is performed once on the metal host, not once per tenant and not during app/session execution.
+- [x] Expose the Nix-owned browser output at `/opt/vibe64/runtime-packs/playwright/browsers`, never in a user's home directory.
+- [x] Keep the CLI and browser closure in one immutable platform runtime rather than running a mutable browser downloader.
 - [x] Prefer a host/runtime-pack installer command over `sudo -u v64d_<tenant> npx playwright install chromium`; tenant users consume the immutable browser runtime instead of populating caches.
 - [x] Tenant daemon users can read and execute the installed browser files without owning or modifying the runtime.
 - [x] Do not use `npx playwright install` from arbitrary project directories for host browser bootstrap.
+- [x] Mount the read-only, immutable Nix store with mmap-capable virtiofs caching; Chromium cannot map runtime data through `io.cache=none`.
 - [x] Install required Chromium system libraries and fonts as part of metal/VM bootstrap.
 - [x] Derive the expected Chromium revision from the installed Playwright CLI and fail if that exact revision is absent.
 - [x] Verify Chromium can actually launch, not only that `executablePath()` returns a path.
