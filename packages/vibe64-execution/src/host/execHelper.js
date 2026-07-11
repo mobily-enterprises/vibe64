@@ -251,12 +251,120 @@ function handleManagedServiceOperation(payload = {}) {
     unitName,
     workingDirectory
   });
+  ensureManagedServiceProcessOwnership({
+    owner,
+    pidFile,
+    unitName
+  });
   installSystemdUnit({
     activation: "start",
     unit,
     unitName,
     unitPath
   });
+}
+
+function ensureManagedServiceProcessOwnership({
+  owner = {},
+  pidFile = "",
+  unitName = ""
+} = {}) {
+  if (!pidFile || !existsSync(pidFile)) {
+    return;
+  }
+  const pidText = String(readFileSync(pidFile, "utf8") || "").trim();
+  if (!/^[1-9][0-9]*$/u.test(pidText)) {
+    throw new Error("Vibe64 managed service PID file is invalid.");
+  }
+  const pid = Number(pidText);
+  if (!Number.isSafeInteger(pid) || pid <= 1) {
+    throw new Error("Vibe64 managed service PID is invalid.");
+  }
+  if (!processIsRunning(pid)) {
+    removeManagedServicePidFile(pidFile, pidText);
+    return;
+  }
+  const processUid = processRealUid(pid);
+  if (processUid === null) {
+    removeManagedServicePidFile(pidFile, pidText);
+    return;
+  }
+  if (processUid !== owner.uid) {
+    throw new Error("Vibe64 managed service PID belongs to another OS user.");
+  }
+  if (processBelongsToSystemdUnit(pid, unitName)) {
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch (error) {
+    if (error?.code === "ESRCH") {
+      removeManagedServicePidFile(pidFile, pidText);
+      return;
+    }
+    throw error;
+  }
+  const deadline = Date.now() + 30_000;
+  const waitSignal = new Int32Array(new SharedArrayBuffer(4));
+  while (processIsRunning(pid) && Date.now() < deadline) {
+    Atomics.wait(waitSignal, 0, 0, 100);
+  }
+  if (processIsRunning(pid)) {
+    throw new Error("Vibe64 managed service process did not stop cleanly during ownership transfer.");
+  }
+  removeManagedServicePidFile(pidFile, pidText);
+}
+
+function removeManagedServicePidFile(pidFile = "", expectedPid = "") {
+  if (existsSync(pidFile) && String(readFileSync(pidFile, "utf8") || "").trim() === expectedPid) {
+    unlinkSync(pidFile);
+  }
+}
+
+function processIsRunning(pid = 0) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === "ESRCH") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function processRealUid(pid = 0) {
+  let status = "";
+  try {
+    status = readFileSync(`/proc/${pid}/status`, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  const match = String(status || "").match(/^Uid:\s+([0-9]+)/mu);
+  const uid = Number(match?.[1]);
+  if (!Number.isSafeInteger(uid)) {
+    throw new Error("Vibe64 managed service process UID is unavailable.");
+  }
+  return uid;
+}
+
+function processBelongsToSystemdUnit(pid = 0, unitName = "") {
+  const suffix = `/${unitName}`;
+  let cgroup = "";
+  try {
+    cgroup = readFileSync(`/proc/${pid}/cgroup`, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+  return String(cgroup || "")
+    .split("\n")
+    .some((line) => line.trim().endsWith(suffix));
 }
 
 function installSystemdUnit({
