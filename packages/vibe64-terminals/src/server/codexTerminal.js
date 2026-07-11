@@ -6619,11 +6619,11 @@ function createCodexTerminalController({
   async function injectPromptIntoCodexAppServer(sessionId, handoff = {}, {
     agentSettings = {},
     lifecycle = null,
+    prepareHandoff = null,
     runtime: providedRuntime = null,
     session: providedSession = null,
     vibe64User = null
   } = {}) {
-    const terminalInput = codexPromptInputFromHandoff(handoff);
     const handoffId = normalizeCodexPromptHandoffId(handoff.handoffId);
     const messageId = normalizeText(handoff.clientSubmissionId);
     let lifecycleState = "";
@@ -6643,7 +6643,7 @@ function createCodexTerminalController({
       }
       lifecycleState = normalizedState;
     }
-    if (!terminalInput) {
+    if (!codexPromptInputFromHandoff(handoff)) {
       return {
         ok: false,
         error: "Codex prompt handoff is empty."
@@ -6782,11 +6782,30 @@ function createCodexTerminalController({
       }
       const refreshMetadata = preparedSession.metadata || {};
       const contextRefresh = codexContextRefreshPending(preparedSession) ? developerInstructions : "";
+      const deliveryHandoff = typeof prepareHandoff === "function"
+        ? await prepareHandoff(handoff) || handoff
+        : handoff;
+      const terminalInput = codexPromptInputFromHandoff(deliveryHandoff);
+      if (!terminalInput) {
+        throw new Error("Codex prompt handoff is empty after delivery preparation.");
+      }
+      vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.prepared", {
+        handoffId,
+        messageCount: Array.isArray(deliveryHandoff.clientSubmissionIds)
+          ? deliveryHandoff.clientSubmissionIds.length
+          : messageId ? 1 : 0,
+        messageId,
+        messageIds: Array.isArray(deliveryHandoff.clientSubmissionIds)
+          ? deliveryHandoff.clientSubmissionIds
+          : [messageId].filter(Boolean),
+        sessionId,
+        threadId: thread.threadId
+      });
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
           agentSettings,
-          clientUserMessageId: normalizeText(handoff.clientSubmissionId),
+          clientUserMessageId: normalizeText(deliveryHandoff.clientSubmissionId),
           contextRefresh,
           prompt: terminalInput,
           provider,
@@ -7631,6 +7650,9 @@ function createCodexTerminalController({
   async function sendCodexAppServerMessage(sessionId, input = {}) {
     const message = codexAppServerMessageText(input);
     const displayMessage = codexAppServerMessageDisplayText(input, message);
+    const displayMessages = (Array.isArray(input?.displayMessages) ? input.displayMessages : [displayMessage])
+      .map((value) => normalizeText(value))
+      .filter(Boolean);
     const messageId = normalizeText(input?.messageId || input?.composerSubmissionId);
     if (!message) {
       return {
@@ -7817,7 +7839,11 @@ function createCodexTerminalController({
         turnId
       };
     }
-    const conversationTurn = await writeCodexAppServerDeliveredUserMessage(runtime, sessionId, displayMessage || message);
+    const conversationTurns = [];
+    for (const text of displayMessages.length ? displayMessages : [displayMessage || message]) {
+      conversationTurns.push(await writeCodexAppServerDeliveredUserMessage(runtime, sessionId, text));
+    }
+    const conversationTurn = conversationTurns.at(-1) || null;
     splitCodexAppServerReasoningTurn(threadId, turnId);
     currentSession = await runtime.getSession(sessionId);
     vibe64SessionDebugLog("server.codexTerminal.appServerMessage.activeTurn.done", {
@@ -7829,6 +7855,7 @@ function createCodexTerminalController({
     });
     return withCodexState({
       conversationTurn,
+      conversationTurns,
       delivered: true,
       deliveryMode: "active_turn",
       newTurnRequired: false,

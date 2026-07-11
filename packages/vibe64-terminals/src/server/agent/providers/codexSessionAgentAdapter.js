@@ -80,6 +80,7 @@ function createCodexSessionAgentAdapter({
       return normalizeCodexSessionResult(await controller.injectCodexPrompt(context.sessionId, handoff, {
         agentSettings: context.agentSettings || {},
         lifecycle: context.lifecycle,
+        prepareHandoff: context.prepareHandoff,
         runtime: context.runtime,
         session: context.session,
         vibe64User: context.vibe64User

@@ -882,6 +882,33 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     }));
   });
 
+  it("never clears a new draft when an earlier message request finishes", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    let resolveMessage;
+    const sendAgentMessage = vi.fn(() => new Promise((resolve) => {
+      resolveMessage = resolve;
+    }));
+    const props = viewProps({
+      sendAgentMessage
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+    view.updatePassiveComposer("conversationRequest", "Message already sent.");
+    const submission = view.submitPassiveComposer();
+    await nextTick();
+
+    view.updatePassiveComposer("conversationRequest", "New draft typed during delivery.");
+    resolveMessage(true);
+    expect(await submission).toBe(true);
+    await nextTick();
+
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("New draft typed during delivery.");
+  });
+
   it("keeps passive send available before the browser observes an active turn", async () => {
     const {
       useVibe64AutopilotView

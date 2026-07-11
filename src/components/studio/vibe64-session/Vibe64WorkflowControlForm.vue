@@ -751,11 +751,15 @@ function clearAttachments() {
   }
 }
 
+function composerTextareaElement() {
+  return formElement.value?.querySelector?.("textarea") || null;
+}
+
 function composerFocusSnapshot() {
   if (typeof document === "undefined") {
     return null;
   }
-  const textarea = formElement.value?.querySelector?.("textarea");
+  const textarea = composerTextareaElement();
   if (!textarea || document.activeElement !== textarea) {
     return null;
   }
@@ -767,7 +771,7 @@ function composerFocusSnapshot() {
 }
 
 function restoreComposerFocus(snapshot = null) {
-  const textarea = formElement.value?.querySelector?.("textarea");
+  const textarea = composerTextareaElement();
   if (!textarea || textarea.disabled || !snapshot) {
     return false;
   }
@@ -788,10 +792,26 @@ function restoreComposerFocus(snapshot = null) {
   return typeof document !== "undefined" && document.activeElement === textarea;
 }
 
+function focusComposer(options = {}) {
+  const textarea = composerTextareaElement();
+  if (!textarea || textarea.disabled) {
+    return false;
+  }
+  textarea.focus({
+    preventScroll: true
+  });
+  if (options.cursor === "end" && typeof textarea.setSelectionRange === "function") {
+    const end = textarea.value.length;
+    textarea.setSelectionRange(end, end);
+  }
+  return typeof document === "undefined" || document.activeElement === textarea;
+}
+
 defineExpose({
   composerMenuGroups,
   clearAttachments,
   composerFocusSnapshot,
+  focusComposer,
   restoreComposerFocus
 });
 </script>

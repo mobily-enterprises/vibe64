@@ -479,10 +479,11 @@ test.describe("Autopilot dumb client contract", () => {
     expect(commandTerminalStarts).toBe(0);
   });
 
-  test("keeps Codex conversation controls non-dispatchable when session readiness is blocked", async ({ page }) => {
+  test("routes blocked workflow conversation input through durable assistant messaging", async ({ page }) => {
     const disabledReason = "Finish AI account setup before using chat.";
     const actionRequests: unknown[] = [];
     const intentRequests: unknown[] = [];
+    const messageRequests: Record<string, unknown>[] = [];
     const disabledIntent = {
       actionId: "agent_conversation",
       disabledReason,
@@ -549,6 +550,9 @@ test.describe("Autopilot dumb client contract", () => {
       },
       onIntent: (body) => {
         intentRequests.push(body);
+      },
+      onAgentMessage: (body = {}) => {
+        messageRequests.push(body);
       }
     });
 
@@ -556,9 +560,15 @@ test.describe("Autopilot dumb client contract", () => {
 
     const composerInput = page.locator(".studio-autopilot-prompt-textarea__input");
     await expect(composerInput).toBeVisible();
-    await expect(composerInput).toBeDisabled();
+    await expect(composerInput).toBeEnabled();
     const submitButton = page.locator(".vibe64-workflow-control-form__inline-submit");
-    await expect(submitButton).toBeDisabled();
+    await composerInput.fill("Wait for account setup, then answer this.");
+    await expect(submitButton).toBeEnabled();
+    await submitButton.click();
+    await expect.poll(() => messageRequests.map((request) => request.message)).toEqual([
+      "Wait for account setup, then answer this."
+    ]);
+    await expect(composerInput).toBeFocused();
     await expectNoAttentionRequired(page);
     await expect.poll(() => actionRequests).toEqual([]);
     await expect.poll(() => intentRequests).toEqual([]);
@@ -2482,6 +2492,81 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
+  test("keeps focus and the next draft while three assistant messages are accepted concurrently", async ({ page }) => {
+    const messageRequests: Record<string, unknown>[] = [];
+    let completedRequests = 0;
+    let releaseFirstRequest: (() => void) | null = null;
+    const firstRequestGate = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+    const session = sessionPayload({
+      agentSession: sessionAgentState({
+        active: false
+      }),
+      intents: [
+        {
+          dispatchRoute: "session-message",
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What do you want to ask Codex?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        }
+      ],
+      presentation: {
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        }
+      }
+    });
+    await mockVibe64Session(page, session, {
+      onAgentMessage: async (body = {}) => {
+        messageRequests.push(body);
+        if (messageRequests.length === 1) {
+          await firstRequestGate;
+        }
+        completedRequests += 1;
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const composer = page.locator(".studio-autopilot__composer");
+    const input = composer.locator(".studio-autopilot-prompt-textarea__input");
+    const send = composer.locator(".vibe64-workflow-control-form__inline-submit");
+    for (const message of ["First message", "Second message", "Third message"]) {
+      await input.fill(message);
+      await send.click();
+      await expect(input).toBeFocused();
+    }
+
+    await expect.poll(() => messageRequests.map((request) => request.message)).toEqual([
+      "First message",
+      "Second message",
+      "Third message"
+    ]);
+    await input.fill("Draft that must survive every response");
+    await expect(input).toBeFocused();
+
+    releaseFirstRequest?.();
+    await expect.poll(() => completedRequests).toBe(3);
+    await expect(input).toHaveValue("Draft that must survive every response");
+    await expect(input).toBeFocused();
+  });
+
   test("restores a failed durable message in chat and resends its exact id", async ({ page }) => {
     const messageRequests: Record<string, unknown>[] = [];
     const session = sessionPayload({
@@ -4234,7 +4319,7 @@ async function mockVibe64Session(
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onAgentTerminalStart?: () => Record<string, unknown> | void;
     onAgentTurnInterrupt?: (body?: Record<string, unknown>) => void;
-    onAgentMessage?: (body?: Record<string, unknown>) => void;
+    onAgentMessage?: (body?: Record<string, unknown>) => unknown | Promise<unknown>;
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
@@ -4281,7 +4366,7 @@ async function mockVibe64Session(
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/agent-message")) {
-      onAgentMessage(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
+      await onAgentMessage(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         accepted: true,
         ok: true,

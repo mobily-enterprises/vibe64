@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
+import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
   useVibe64HeadlessCommandRunner
 } from "@/composables/useVibe64HeadlessCommandRunner.js";
@@ -493,29 +494,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     writeMethod: "POST"
   });
 
-  const sendAgentMessageCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      path: vibe64SessionPath(
-        readRefOrGetterValue(props.sessionData.sessionsApiPath),
-        context?.sessionId,
-        "/agent-message"
-      )
-    }),
-    buildCommandPayload: (_payload, { context }) => agentTurnControlPayloadFromContext(context),
-    fallbackRunError: "Assistant message could not be sent.",
-    messages: {
-      error: "Assistant message could not be sent."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.agent-message",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
-  });
-
   function emitProjectPaneChange(pane = "") {
     emit("project-pane-change", pane);
   }
@@ -602,9 +580,16 @@ function useVibe64SessionRuntimeHost(props, emit) {
       const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
         message: String(input || "")
       };
-      const result = await sendAgentMessageCommand.run({
-        ...payload,
-        sessionId
+      const result = await getUsersWebHttpClient().request(vibe64SessionPath(
+        readRefOrGetterValue(props.sessionData.sessionsApiPath),
+        sessionId,
+        "/agent-message"
+      ), {
+        body: agentTurnControlPayloadFromContext({
+          ...payload,
+          sessionId
+        }),
+        method: "POST"
       });
       await props.sessionData.refreshSessionData().catch(() => null);
       const accepted = Boolean(result && result.ok !== false);

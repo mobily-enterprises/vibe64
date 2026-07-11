@@ -51,6 +51,7 @@ import {
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
   acceptComposerControl,
+  attachComposerHandoffMessages,
   composerHandoffId,
   composerHandoffRun,
   composerHandoffSnapshot,
@@ -62,6 +63,7 @@ import {
   COMPOSER_MESSAGE_AGENT_RUN_ID,
   COMPOSER_MESSAGE_SETTLEMENTS,
   acceptComposerMessage,
+  composerMessageBatch,
   pendingComposerMessages,
   publicComposerMessages,
   settleComposerMessage
@@ -811,6 +813,68 @@ async function recordConversationMessage(runtime, sessionId, {
   return null;
 }
 
+async function recordComposerMessageRequests(runtime, sessionId = "", requests = []) {
+  let latestTurn = null;
+  for (const request of Array.isArray(requests) ? requests : []) {
+    latestTurn = await recordConversationMessage(runtime, sessionId, {
+      input: request.displayFields || request.fields || {
+        conversationRequest: request.message
+      }
+    });
+  }
+  return latestTurn;
+}
+
+async function prepareComposerHandoffForQueuedMessages(runtime, session = {}, handoff = {}) {
+  const sessionId = normalizedInputText(session?.sessionId);
+  const handoffId = composerHandoffId(handoff);
+  if (!sessionId || !handoffId || typeof runtime?.getSession !== "function") {
+    return handoff;
+  }
+  const currentSession = await runtime.getSession(sessionId);
+  const currentHandoff = composerHandoffSnapshot(currentSession);
+  if (!currentHandoff || currentHandoff.id !== handoffId) {
+    return handoff;
+  }
+  const attachedMessageIds = new Set([
+    ...(Array.isArray(handoff.clientSubmissionIds) ? handoff.clientSubmissionIds : []),
+    ...(Array.isArray(currentHandoff.submissionIds) ? currentHandoff.submissionIds : [])
+  ].map((value) => normalizedInputText(value)).filter(Boolean));
+  const additionalMessages = pendingComposerMessages(currentSession)
+    .filter((request) => !attachedMessageIds.has(request.messageId));
+  if (!additionalMessages.length) {
+    return {
+      ...handoff,
+      clientSubmissionIds: [...attachedMessageIds]
+    };
+  }
+  for (const request of additionalMessages) {
+    attachedMessageIds.add(request.messageId);
+  }
+  await recordComposerMessageRequests(runtime, sessionId, additionalMessages);
+  await attachComposerHandoffMessages(runtime, sessionId, handoffId, [...attachedMessageIds]);
+  const additionalText = additionalMessages
+    .map((request) => normalizedInputText(request.message))
+    .filter(Boolean)
+    .join("\n\n");
+  vibe64SessionDebugLog("server.service.composerMessage.delivery.batchAttached", {
+    addedMessageIds: additionalMessages.map((request) => request.messageId),
+    handoffId,
+    messageCount: attachedMessageIds.size,
+    messageIds: [...attachedMessageIds],
+    sessionId
+  });
+  return {
+    ...handoff,
+    clientSubmissionIds: [...attachedMessageIds],
+    terminalInput: [
+      normalizedInputText(handoff.terminalInput || handoff.prompt),
+      "Additional user messages received before this assistant turn started. Treat them as part of the same request, in order:",
+      additionalText
+    ].filter(Boolean).join("\n\n")
+  };
+}
+
 async function sessionWithLatestRevision(runtime, session = {}) {
   if (!session?.sessionId || typeof runtime?.getSession !== "function") {
     return session;
@@ -1191,7 +1255,8 @@ async function describeAgentProvider(terminalService, agentSettings = {}, sessio
 
 async function acceptComposerHandoff(terminalService, runtime, session = {}, {
   agentSettings = {},
-  submissionId = ""
+  submissionId = "",
+  submissionIds = []
 } = {}) {
   const handoff = agentPromptHandoffFromSession(session);
   if (!handoff) {
@@ -1204,7 +1269,11 @@ async function acceptComposerHandoff(terminalService, runtime, session = {}, {
   const deliveryHandoff = clientSubmissionId
     ? {
         ...handoff,
-        clientSubmissionId
+        clientSubmissionId,
+        clientSubmissionIds: [...new Set([
+          clientSubmissionId,
+          ...(Array.isArray(submissionIds) ? submissionIds : [])
+        ].map((value) => normalizedInputText(value)).filter(Boolean))]
       }
     : handoff;
   const provider = await describeAgentProvider(terminalService, agentSettings, session);
@@ -1214,6 +1283,7 @@ async function acceptComposerHandoff(terminalService, runtime, session = {}, {
     providerId: provider.providerId,
     state: COMPOSER_HANDOFF_STATES.ACCEPTED,
     submissionId,
+    submissionIds: deliveryHandoff.clientSubmissionIds,
     transportId: provider.transportId
   });
   return {
@@ -1439,11 +1509,15 @@ async function startComposerMessageTurn(terminalService, coordinator, {
   session = null
 } = {}) {
   const sessionId = normalizedInputText(session?.sessionId);
-  const messageId = normalizedInputText(request?.messageId);
+  const batch = request?.messageIds ? request : composerMessageBatch([request]);
+  const messageId = normalizedInputText(batch?.messageId);
+  if (!batch || !messageId) {
+    throw new TypeError("Starting an assistant turn requires a composer message batch.");
+  }
   const currentSession = await runtime.getSession(sessionId);
   const currentHandoff = composerHandoffSnapshot(currentSession);
   if (
-    currentHandoff?.submissionId === messageId &&
+    batch.messageIds.every((id) => currentHandoff?.submissionIds?.includes(id)) &&
     currentHandoff.state !== COMPOSER_HANDOFF_STATES.FAILED
   ) {
     return {
@@ -1476,18 +1550,16 @@ async function startComposerMessageTurn(terminalService, coordinator, {
   let actionSession = await runtime.runAction(
     sessionId,
     messageActionId,
-    request.fields
+    batch.fields
   );
-  const conversationTurn = await recordConversationMessage(runtime, sessionId, {
-    actionResult: actionSession.actionResult,
-    input: request.displayFields || request.fields
-  });
+  const conversationTurn = await recordComposerMessageRequests(runtime, sessionId, batch.messages);
   if (conversationTurn) {
     actionSession = await sessionWithLatestRevision(runtime, actionSession);
   }
   const accepted = await acceptComposerHandoff(terminalService, runtime, actionSession, {
-    agentSettings: request.agentSettings,
-    submissionId: messageId
+    agentSettings: batch.agentSettings,
+    submissionId: messageId,
+    submissionIds: batch.messageIds
   });
   if (!accepted.handoff) {
     return {
@@ -1499,7 +1571,7 @@ async function startComposerMessageTurn(terminalService, coordinator, {
     };
   }
   void coordinator.schedule({
-    agentSettings: request.agentSettings,
+    agentSettings: batch.agentSettings,
     handoff: accepted.handoff,
     runtime,
     session: accepted.session
@@ -1533,6 +1605,17 @@ async function publishComposerMessageChanged(publishSessionChanged, runtime, ses
   }
 }
 
+async function settleComposerMessageRequests(runtime, sessionId = "", requests = [], settlement = {}) {
+  const settled = [];
+  for (const request of Array.isArray(requests) ? requests : []) {
+    const message = await settleComposerMessage(runtime, sessionId, request.messageId, settlement);
+    if (message) {
+      settled.push(message);
+    }
+  }
+  return settled;
+}
+
 async function drainComposerMessages(terminalService, coordinator, publishSessionChanged, {
   runtime = null,
   session = null
@@ -1544,14 +1627,16 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
 
   while (true) {
     const currentSession = await runtime.getSession(sessionId);
-    const request = pendingComposerMessages(currentSession)[0];
-    if (!request) {
+    const queuedMessages = pendingComposerMessages(currentSession);
+    if (!queuedMessages.length) {
       return null;
     }
     const currentHandoff = composerHandoffSnapshot(currentSession);
-    if (currentHandoff?.submissionId === request.messageId) {
+    const handoffMessageIds = new Set(currentHandoff?.submissionIds || []);
+    const handoffMessages = queuedMessages.filter((request) => handoffMessageIds.has(request.messageId));
+    if (handoffMessages.length) {
       if (currentHandoff.state === COMPOSER_HANDOFF_STATES.FAILED) {
-        await settleComposerMessage(runtime, sessionId, request.messageId, {
+        await settleComposerMessageRequests(runtime, sessionId, handoffMessages, {
           error: currentHandoff.error || "The assistant could not start this turn.",
           operationOutcome: "new_turn_failed",
           outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED,
@@ -1567,7 +1652,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         continue;
       }
       if (currentHandoff.state === COMPOSER_HANDOFF_STATES.ACTIVE) {
-        await settleComposerMessage(runtime, sessionId, request.messageId, {
+        await settleComposerMessageRequests(runtime, sessionId, handoffMessages, {
           operationOutcome: "started_new_turn",
           outcome: COMPOSER_MESSAGE_SETTLEMENTS.DELIVERED,
           threadId: currentHandoff.threadId,
@@ -1590,10 +1675,15 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         waitingForHandoff: true
       };
     }
+    let batch = composerMessageBatch(queuedMessages);
+    if (!batch) {
+      return null;
+    }
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("server.service.composerMessage.delivery.start", {
-      afterSubmissionId: request.afterSubmissionId,
-      messageId: request.messageId,
+      afterSubmissionId: batch.afterSubmissionId,
+      messageCount: batch.messageIds.length,
+      messageIds: batch.messageIds,
       sessionId
     });
     let result;
@@ -1602,22 +1692,29 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         throw new TypeError("Assistant message delivery is not available.");
       }
       result = await terminalService.sendAgentMessage(sessionId, {
-        composerSubmissionId: request.messageId,
-        displayFields: request.displayFields,
-        fields: request.fields,
-        message: request.message,
-        originId: request.originId,
-        text: request.message
+        composerSubmissionId: batch.messageId,
+        composerSubmissionIds: batch.messageIds,
+        displayFields: batch.displayFields,
+        displayMessages: batch.messages.map((request) => normalizedInputText(
+          request.displayFields?.conversationRequest || request.message
+        )),
+        fields: batch.fields,
+        message: batch.message,
+        messages: batch.messages.map((request) => request.message),
+        originId: batch.originId,
+        text: batch.message
       }, {
-        agentSettings: request.agentSettings,
+        agentSettings: batch.agentSettings,
         runtime,
         session: currentSession
       });
       if (result?.ok === true && result?.newTurnRequired === true) {
+        const latestSession = await runtime.getSession(sessionId);
+        batch = composerMessageBatch(pendingComposerMessages(latestSession)) || batch;
         await claimWorkflowDriverAndRecordGitCommandActor({
           input: {
-            agentSettings: request.agentSettings,
-            originId: request.originId
+            agentSettings: batch.agentSettings,
+            originId: batch.originId
           },
           reason: "agent-message-new-turn",
           runtime,
@@ -1625,9 +1722,9 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
           terminalService
         });
         result = await startComposerMessageTurn(terminalService, coordinator, {
-          request,
+          request: batch,
           runtime,
-          session: currentSession
+          session: latestSession
         });
       }
     } catch (error) {
@@ -1651,7 +1748,8 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
     if (result?.ok === true && result?.awaitingHandoff === true) {
       vibe64SessionDebugLog("server.service.composerMessage.delivery.awaitingHandoff", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        messageId: request.messageId,
+        messageCount: batch.messageIds.length,
+        messageIds: batch.messageIds,
         operationOutcome: normalizedInputText(result.operationOutcome),
         sessionId
       });
@@ -1661,7 +1759,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
     }
     if (result?.ok !== true || result?.delivered !== true) {
       if (result.retryable === true) {
-        await settleComposerMessage(runtime, sessionId, request.messageId, {
+        await settleComposerMessageRequests(runtime, sessionId, batch.messages, {
           error: result.error || "Message delivery is waiting to retry.",
           operationOutcome: result.operationOutcome,
           outcome: COMPOSER_MESSAGE_SETTLEMENTS.DEFERRED,
@@ -1677,7 +1775,8 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         vibe64SessionDebugLog("server.service.composerMessage.delivery.deferred", {
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           error: normalizedInputText(result.error),
-          messageId: request.messageId,
+          messageCount: batch.messageIds.length,
+          messageIds: batch.messageIds,
           operationOutcome: normalizedInputText(result.operationOutcome),
           sessionId,
           threadId,
@@ -1687,7 +1786,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
           retry: true
         };
       }
-      await settleComposerMessage(runtime, sessionId, request.messageId, {
+      await settleComposerMessageRequests(runtime, sessionId, batch.messages, {
         error: result.error || "Message delivery failed.",
         operationOutcome: result.operationOutcome,
         outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED,
@@ -1703,7 +1802,8 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
       vibe64SessionDebugLog("server.service.composerMessage.delivery.failed", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: normalizedInputText(result.error),
-        messageId: request.messageId,
+        messageCount: batch.messageIds.length,
+        messageIds: batch.messageIds,
         operationOutcome: normalizedInputText(result.operationOutcome),
         sessionId,
         threadId,
@@ -1711,7 +1811,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
       });
       continue;
     }
-    await settleComposerMessage(runtime, sessionId, request.messageId, {
+    await settleComposerMessageRequests(runtime, sessionId, batch.messages, {
       operationOutcome: result.operationOutcome,
       outcome: COMPOSER_MESSAGE_SETTLEMENTS.DELIVERED,
       threadId,
@@ -1726,7 +1826,8 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
     vibe64SessionDebugLog("server.service.composerMessage.delivery.done", {
       deliveryMode: normalizedInputText(result.deliveryMode),
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      messageId: request.messageId,
+      messageCount: batch.messageIds.length,
+      messageIds: batch.messageIds,
       operationOutcome: normalizedInputText(result.operationOutcome),
       sessionId,
       threadId,
@@ -1766,6 +1867,7 @@ async function deliverAgentPromptHandoff(terminalService, {
         provider,
         event
       ),
+      prepareHandoff: () => prepareComposerHandoffForQueuedMessages(runtime, session, handoff),
       runtime,
       session,
       vibe64User

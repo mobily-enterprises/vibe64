@@ -325,6 +325,10 @@ function composerHandoffSnapshot(source = {}) {
     ? run.connectionReused
     : null;
   const submissionId = normalizeText(run.clientSubmissionId);
+  const submissionIds = [...new Set([
+    submissionId,
+    ...(Array.isArray(run.clientSubmissionIds) ? run.clientSubmissionIds : [])
+  ].map((value) => normalizeText(value)).filter(Boolean))];
   return {
     acceptedAt: normalizeText(run.handoffAcceptedAt),
     activeAt: normalizeText(run.handoffActiveAt),
@@ -363,6 +367,7 @@ function composerHandoffSnapshot(source = {}) {
     schemaVersion: COMPOSER_HANDOFF_SCHEMA_VERSION,
     state,
     submissionId,
+    submissionIds,
     threadId: normalizeText(run.providerThreadId),
     transportId: normalizeText(run.providerInterface),
     turnId: normalizeText(run.providerTurnId),
@@ -464,6 +469,7 @@ async function transitionComposerHandoff(runtime, sessionId = "", {
   stepId = "",
   stepStatus = "",
   submissionId = "",
+  submissionIds = [],
   threadId = "",
   transportId = "",
   turnId = ""
@@ -495,9 +501,15 @@ async function transitionComposerHandoff(runtime, sessionId = "", {
   const updatedAt = new Date().toISOString();
   const accepted = normalizedState === COMPOSER_HANDOFF_STATES.ACCEPTED;
   const normalizedError = normalizeText(error);
+  const normalizedSubmissionId = normalizeText(submissionId);
+  const normalizedSubmissionIds = [...new Set([
+    normalizedSubmissionId,
+    ...(Array.isArray(submissionIds) ? submissionIds : [])
+  ].map((value) => normalizeText(value)).filter(Boolean))];
   const patch = {
     ...(accepted ? {
-      clientSubmissionId: normalizeText(submissionId),
+      clientSubmissionId: normalizedSubmissionId,
+      clientSubmissionIds: normalizedSubmissionIds,
       connectionReused: null,
       error: "",
       providerThreadId: normalizeText(threadId),
@@ -535,6 +547,52 @@ async function transitionComposerHandoff(runtime, sessionId = "", {
   return composerHandoffSnapshot(run);
 }
 
+async function attachComposerHandoffMessages(runtime, sessionId = "", handoffId = "", messageIds = []) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedHandoffId = normalizeText(handoffId);
+  if (
+    !normalizedSessionId ||
+    !normalizedHandoffId ||
+    typeof runtime?.getSession !== "function" ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function"
+  ) {
+    throw new TypeError("Composer handoff message attachment requires a session, handoff, and runtime store.");
+  }
+  const session = await runtime.getSession(normalizedSessionId);
+  const run = composerHandoffRun(session) || {};
+  const handoff = composerHandoffSnapshot(run);
+  if (!handoff || handoff.id !== normalizedHandoffId || handoff.state === COMPOSER_HANDOFF_STATES.FAILED) {
+    return handoff;
+  }
+  const submissionIds = [...new Set([
+    ...handoff.submissionIds,
+    ...(Array.isArray(messageIds) ? messageIds : [])
+  ].map((value) => normalizeText(value)).filter(Boolean))];
+  if (
+    submissionIds.length === handoff.submissionIds.length &&
+    submissionIds.every((value, index) => value === handoff.submissionIds[index])
+  ) {
+    return handoff;
+  }
+  const updatedAt = new Date().toISOString();
+  const persistedRun = await runtime.store.writeAgentRunEvent(
+    normalizedSessionId,
+    COMPOSER_HANDOFF_AGENT_RUN_ID,
+    {
+      event: {
+        kind: "composer-handoff-messages-attached",
+        messageIds: submissionIds,
+        state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING
+      },
+      patch: {
+        clientSubmissionIds: submissionIds,
+        updatedAt
+      }
+    }
+  );
+  return composerHandoffSnapshot(persistedRun);
+}
+
 export {
   COMPOSER_CONTROL_KINDS,
   COMPOSER_CONTROL_SETTLEMENTS,
@@ -542,6 +600,7 @@ export {
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
   acceptComposerControl,
+  attachComposerHandoffMessages,
   composerControlRequests,
   composerHandoffId,
   composerHandoffRun,

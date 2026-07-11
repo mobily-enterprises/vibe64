@@ -22,6 +22,7 @@ function deferred() {
 
 test("session agent manager routes the canonical API through the selected product provider", async () => {
   const calls = [];
+  const prepareHandoff = async (handoff) => handoff;
   const manager = createSessionAgentManager({
     adapters: [{
       id: "codex",
@@ -43,11 +44,13 @@ test("session agent manager routes the canonical API through the selected produc
   }, {
     agentSettings: {
       providerId: "codex"
-    }
+    },
+    prepareHandoff
   });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].context.providerId, "codex");
+  assert.equal(calls[0].context.prepareHandoff, prepareHandoff);
   assert.equal(calls[0].context.transportId, "codex_app_server");
   assert.equal(result.providerId, "codex");
   assert.equal(result.transportId, "codex_app_server");

@@ -385,7 +385,7 @@
           @composer-menu-item="activateComposerMenuItem"
           @composer-menu-item-text="insertComposerMenuItemText"
           @interrupt="requestAgentInterrupt"
-          @submit="submitComposerControl"
+          @submit="submitComposerControlAndFocus"
           @update-agent-setting="updateAgentSetting"
           @update-value="updateComposerControlValue"
         />
@@ -828,6 +828,27 @@ const timelineControlElement = ref(null);
 const chatBodyElement = ref(null);
 const chatBottomElement = ref(null);
 let pendingComposerFocus = null;
+
+function focusBottomComposer() {
+  pendingComposerFocus = {
+    direction: "none",
+    end: 0,
+    start: 0
+  };
+  void nextTick(() => {
+    if (screenControlFormRef.value?.focusComposer?.({
+      cursor: "end"
+    })) {
+      pendingComposerFocus = null;
+    }
+  });
+}
+
+function submitComposerControlAndFocus(options = {}) {
+  const submission = submitComposerControl(options);
+  focusBottomComposer();
+  return submission;
+}
 
 onBeforeUpdate(() => {
   pendingComposerFocus = screenControlFormRef.value?.composerFocusSnapshot?.() || pendingComposerFocus;

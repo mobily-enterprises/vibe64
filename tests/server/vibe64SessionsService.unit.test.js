@@ -2156,13 +2156,22 @@ test("session composer messages let a stale Stop cancel delivery and interrupt t
     {
       input: {
         composerSubmissionId: "follow-up-submission",
+        composerSubmissionIds: [
+          "follow-up-submission"
+        ],
         displayFields: {
           conversationRequest: "Also inspect the tests."
         },
+        displayMessages: [
+          "Also inspect the tests."
+        ],
         fields: {
           conversationRequest: "Also inspect the tests."
         },
         message: "Also inspect the tests.",
+        messages: [
+          "Also inspect the tests."
+        ],
         originId: "test-origin",
         text: "Also inspect the tests."
       },
@@ -2208,7 +2217,7 @@ test("session composer messages let a stale Stop cancel delivery and interrupt t
   ]);
 });
 
-test("rapid assistant messages start one new turn and deliver the follow-up after activation", async () => {
+test("rapid assistant messages are delivered together when the new turn is not ready yet", async () => {
   let currentSession = {
     actions: [
       {
@@ -2230,6 +2239,7 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
     releaseDelivery = resolve;
   });
   const sendCalls = [];
+  const deliveredHandoffs = [];
   let runActionCalls = 0;
   const handoff = {
     handoffId: "rapid-message-handoff",
@@ -2297,9 +2307,10 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async deliverAgentPrompt(_sessionId, _handoff, options = {}) {
+      async deliverAgentPrompt(_sessionId, pendingHandoff, options = {}) {
         markDeliveryStarted();
         await deliveryGate;
+        deliveredHandoffs.push(await options.prepareHandoff(pendingHandoff));
         await options.lifecycle({
           state: "connecting"
         });
@@ -2357,9 +2368,16 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
     message: "Actually, make the protagonist a girl.",
     originId: "test-origin"
   });
+  const third = await service.sendAgentMessage(currentSession.sessionId, {
+    afterSubmissionId: "rapid-message-1",
+    composerSubmissionId: "rapid-message-3",
+    message: "Add a mysterious sound beneath the floorboards.",
+    originId: "test-origin"
+  });
 
   assert.equal(first.accepted, true);
   assert.equal(second.accepted, true);
+  assert.equal(third.accepted, true);
   await deliveryStarted;
   assert.equal(runActionCalls, 1);
   assert.deepEqual(sendCalls, [
@@ -2369,7 +2387,7 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
   releaseDelivery();
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const messages = publicSessionResponse(currentSession).composerMessages;
-    if (messages.length === 2 && messages.every((message) => message.state === "delivered")) {
+    if (messages.length === 3 && messages.every((message) => message.state === "delivered")) {
       break;
     }
     await new Promise((resolve) => setImmediate(resolve));
@@ -2377,9 +2395,15 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
 
   assert.equal(runActionCalls, 1);
   assert.deepEqual(sendCalls, [
-    "Tell me a short story about a boy.",
-    "Actually, make the protagonist a girl."
+    "Tell me a short story about a boy."
   ]);
+  assert.deepEqual(deliveredHandoffs[0].clientSubmissionIds, [
+    "rapid-message-1",
+    "rapid-message-2",
+    "rapid-message-3"
+  ]);
+  assert.match(deliveredHandoffs[0].terminalInput, /Actually, make the protagonist a girl\./u);
+  assert.match(deliveredHandoffs[0].terminalInput, /Add a mysterious sound beneath the floorboards\./u);
   assert.deepEqual(
     publicSessionResponse(currentSession).composerMessages.map((message) => ({
       id: message.id,
@@ -2394,10 +2418,93 @@ test("rapid assistant messages start one new turn and deliver the follow-up afte
       },
       {
         id: "rapid-message-2",
-        operationOutcome: "delivered_to_active_turn",
+        operationOutcome: "started_new_turn",
+        state: "delivered"
+      },
+      {
+        id: "rapid-message-3",
+        operationOutcome: "started_new_turn",
         state: "delivered"
       }
     ]
+  );
+});
+
+test("messages queued during an active delivery are sent as the next ordered batch", async () => {
+  const sessionId = "session-active-message-batch";
+  const harness = composerMessageRuntimeHarness({
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  let releaseFirstDelivery;
+  let markFirstDeliveryStarted;
+  const firstDeliveryStarted = new Promise((resolve) => {
+    markFirstDeliveryStarted = resolve;
+  });
+  const firstDeliveryGate = new Promise((resolve) => {
+    releaseFirstDelivery = resolve;
+  });
+  const deliveredInputs = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async sendAgentMessage(_sessionId, input) {
+        deliveredInputs.push(input);
+        if (deliveredInputs.length === 1) {
+          markFirstDeliveryStarted();
+          await firstDeliveryGate;
+        }
+        return {
+          delivered: true,
+          deliveryMode: "active_turn",
+          ok: true,
+          operationOutcome: "delivered_to_active_turn",
+          threadId: "active-thread",
+          turnId: "active-turn"
+        };
+      }
+    }
+  });
+
+  await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "active-message-1",
+    message: "First"
+  });
+  await firstDeliveryStarted;
+  await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "active-message-2",
+    message: "Second"
+  });
+  await service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "active-message-3",
+    message: "Third"
+  });
+  releaseFirstDelivery();
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const messages = publicSessionResponse(harness.currentSession()).composerMessages;
+    if (messages.length === 3 && messages.every((message) => message.state === "delivered")) {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.deepEqual(deliveredInputs.map((input) => input.message), [
+    "First",
+    "Second\n\nThird"
+  ]);
+  assert.deepEqual(deliveredInputs[1].composerSubmissionIds, [
+    "active-message-2",
+    "active-message-3"
+  ]);
+  assert.deepEqual(
+    publicSessionResponse(harness.currentSession()).composerMessages.map((message) => message.state),
+    ["delivered", "delivered", "delivered"]
   );
 });
 

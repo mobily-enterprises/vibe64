@@ -137,6 +137,35 @@ function pendingComposerMessages(source = {}) {
     .filter((request) => request.state === COMPOSER_MESSAGE_STATES.ACCEPTED);
 }
 
+function composerMessageBatch(requests = []) {
+  const messages = (Array.isArray(requests) ? requests : [])
+    .filter((request) => request?.state === COMPOSER_MESSAGE_STATES.ACCEPTED && normalizeText(request.message));
+  const first = messages[0];
+  if (!first) {
+    return null;
+  }
+  const message = messages.map((request) => normalizeText(request.message)).join("\n\n");
+  const displayMessage = messages.map((request) => normalizeText(
+    request.displayFields?.conversationRequest ||
+    request.displayFields?.message ||
+    request.message
+  )).join("\n\n");
+  return {
+    ...first,
+    displayFields: {
+      ...first.displayFields,
+      conversationRequest: displayMessage
+    },
+    fields: {
+      ...first.fields,
+      conversationRequest: message
+    },
+    message,
+    messageIds: messages.map((request) => request.messageId),
+    messages
+  };
+}
+
 async function writeComposerMessageEvent(runtime, sessionId = "", event = {}) {
   return runtime.store.writeAgentRunEvent(
     sessionId,
@@ -282,6 +311,7 @@ export {
   COMPOSER_MESSAGE_SETTLEMENTS,
   COMPOSER_MESSAGE_STATES,
   acceptComposerMessage,
+  composerMessageBatch,
   composerMessageRequests,
   pendingComposerMessages,
   publicComposerMessages,

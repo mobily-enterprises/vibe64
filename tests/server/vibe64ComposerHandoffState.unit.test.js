@@ -6,6 +6,7 @@ import {
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
   acceptComposerControl,
+  attachComposerHandoffMessages,
   composerControlRequests,
   composerHandoffSnapshot,
   composerPromptHandoffForState,
@@ -87,6 +88,18 @@ test("composer handoff state persists accepted, connecting, delivered, and activ
   assert.equal(accepted.state, "accepted");
   assert.equal(accepted.pending, true);
   assert.equal(accepted.submissionId, "optimistic-composer-1");
+  assert.deepEqual(accepted.submissionIds, ["optimistic-composer-1"]);
+
+  const batched = await attachComposerHandoffMessages(
+    runtime,
+    runtime.session.sessionId,
+    accepted.id,
+    ["optimistic-composer-1", "optimistic-composer-2"]
+  );
+  assert.deepEqual(batched.submissionIds, [
+    "optimistic-composer-1",
+    "optimistic-composer-2"
+  ]);
 
   const connecting = await transitionComposerHandoff(runtime, runtime.session.sessionId, {
     connectionReused: false,

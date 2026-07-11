@@ -143,6 +143,9 @@ function createSessionAgentManager({
     const context = {
       agentSettings: operationOptions.agentSettings,
       lifecycle: typeof operationOptions.lifecycle === "function" ? operationOptions.lifecycle : null,
+      prepareHandoff: typeof operationOptions.prepareHandoff === "function"
+        ? operationOptions.prepareHandoff
+        : null,
       providerId: adapter.id,
       runtime: operationOptions.runtime || null,
       session: operationOptions.session || null,
