@@ -1785,6 +1785,26 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
       if (result?.ok === true && result?.newTurnRequired === true) {
         let latestSession = await runtime.getSession(sessionId);
         batch = composerMessageBatch(pendingComposerMessages(latestSession)) || batch;
+        if (composerHandoffSnapshot(latestSession)?.pending === true) {
+          return {
+            waitingForHandoff: true
+          };
+        }
+        if (
+          sessionAwaitsAgentResult(latestSession) &&
+          typeof runtime?.returnControlFromAgentWait === "function"
+        ) {
+          const waitingStepStatus = normalizedInputText(latestSession.stepMachine?.status);
+          latestSession = await runtime.returnControlFromAgentWait(sessionId, {
+            inputPrompt: "What would you like to do next?",
+            message: "The assistant is no longer running for this turn, so Vibe64 returned control to you."
+          });
+          vibe64SessionDebugLog("server.service.composerMessage.delivery.agentWaitRecovered", {
+            fromStepStatus: waitingStepStatus,
+            sessionId,
+            toStepStatus: normalizedInputText(latestSession.stepMachine?.status)
+          });
+        }
         const ownershipStartedAtMs = Date.now();
         const driver = await claimSessionWorkflowDriver(runtime, sessionId, {
           originId: batch.originId,

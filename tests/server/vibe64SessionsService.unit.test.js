@@ -3,6 +3,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  Vibe64SessionRuntime,
   VIBE64_AGENT_RUN_STATE,
   VIBE64_CONNECTION_PURPOSE_SESSION,
   VIBE64_SESSION_STATUS,
@@ -3030,6 +3031,122 @@ test("an assistant message restarts the enabled workflow conversation action", a
     publicSessionResponse(harness.currentSession()).composerMessages[0]?.state,
     "delivered"
   );
+});
+
+test("an assistant message recovers stale agent wait before starting a new workflow turn", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "session-stale-agent-wait-message";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        seedRequired: true
+      }
+    });
+    await runtime.createSession({
+      initialStep: "seed_application_defined",
+      metadata: sourceMetadata(targetRoot, sessionId),
+      sessionId,
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+    });
+    await runtime.runAction(sessionId, "define_seed_application", {
+      conversationRequest: "Bro?"
+    });
+    const waitingSession = await runtime.getSession(sessionId);
+    assert.equal(waitingSession.stepMachine.status, "awaiting_agent_result");
+    assert.equal(waitingSession.actions[0].id, "define_seed_application");
+    assert.equal(waitingSession.actions[0].enabled, false);
+
+    const deliveryOrder = [];
+    const returnControlFromAgentWait = runtime.returnControlFromAgentWait.bind(runtime);
+    runtime.returnControlFromAgentWait = async (...args) => {
+      deliveryOrder.push("return-control");
+      return returnControlFromAgentWait(...args);
+    };
+    const runAction = runtime.runAction.bind(runtime);
+    runtime.runAction = async (...args) => {
+      deliveryOrder.push("run-action");
+      const sessionBeforeAction = await runtime.getSession(sessionId);
+      assert.equal(sessionBeforeAction.stepMachine.status, "waiting_for_input");
+      return runAction(...args);
+    };
+    const service = createService({
+      projectService: {
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      setupServices: readySetupServices(),
+      terminalService: {
+        async deliverAgentPrompt(_sessionId, _handoff, options = {}) {
+          deliveryOrder.push("deliver-prompt");
+          await options.lifecycle({
+            state: "connecting"
+          });
+          await options.lifecycle({
+            state: "delivered",
+            threadId: "recovered-thread",
+            turnId: "recovered-turn"
+          });
+          await options.lifecycle({
+            state: "active",
+            threadId: "recovered-thread",
+            turnId: "recovered-turn"
+          });
+          return {
+            ok: true,
+            thread: {
+              id: "recovered-thread"
+            },
+            turn: {
+              active: true,
+              id: "recovered-turn"
+            }
+          };
+        },
+        async sendAgentMessage() {
+          deliveryOrder.push("provider-message");
+          return {
+            delivered: false,
+            newTurnRequired: true,
+            ok: true,
+            operationOutcome: "new_turn_required"
+          };
+        }
+      }
+    });
+
+    await service.sendAgentMessage(sessionId, {
+      composerSubmissionId: "stale-wait-message",
+      message: "Give me the story of the Buddha."
+    });
+    let recoveredSession = null;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      recoveredSession = await runtime.getSession(sessionId);
+      const message = publicSessionResponse(recoveredSession).composerMessages.find(
+        (candidate) => candidate.id === "stale-wait-message"
+      );
+      if (message?.state === "delivered") {
+        break;
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const message = publicSessionResponse(recoveredSession).composerMessages.find(
+      (candidate) => candidate.id === "stale-wait-message"
+    );
+    assert.deepEqual(deliveryOrder, [
+      "provider-message",
+      "return-control",
+      "run-action",
+      "deliver-prompt"
+    ]);
+    assert.equal(message?.state, "delivered", JSON.stringify(message));
+    assert.equal(recoveredSession.actionResults.at(-1)?.actionId, "define_seed_application");
+    assert.equal(
+      recoveredSession.actionResults.at(-1)?.input?.conversationRequest,
+      "Give me the story of the Buddha."
+    );
+  });
 });
 
 test("session user message action observes an active Codex turn instead of starting another", async () => {
