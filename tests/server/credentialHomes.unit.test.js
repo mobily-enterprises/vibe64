@@ -68,7 +68,7 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.env.XDG_CONFIG_HOME, "/home/v64d_tenant/.config");
   assert.equal(context.env.VIBE64_CODEX_ATTACHMENTS_ROOT, "/run/vibe64/codex");
   assert.equal(context.env[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/var/cache/vibe64/playwright");
+  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(context.terminalEnv.DB_HOST, "127.0.0.1");
   assert.equal(context.terminalProcessEnv.DB_NAME, "tenant_app");
   assert.equal(context.terminalEnv.MYSQL_HOST, "127.0.0.1");
@@ -78,21 +78,22 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.terminalProcessEnv.VIBE64_MYSQL_USER, "vibe64_dev_app");
   assert.equal(context.terminalProcessEnv.HOME, "/home/v64d_tenant");
   assert.equal(context.terminalProcessEnv[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/var/cache/vibe64/playwright");
+  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.ok(context.runtimes.includes("mariadb"));
   assert.ok(context.providerOptions.runtimes.includes("mariadb"));
   assert.ok(context.terminalProcessEnv.PATH.split(":").includes(runtimePackBinPaths("mariadb")[0]));
   assert.equal(context.providerOptions.env.HOME, "/home/v64d_tenant");
   assert.equal(context.providerOptions.env[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
-  assert.equal(context.providerOptions.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/var/cache/vibe64/playwright");
+  assert.equal(context.providerOptions.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(context.providerOptions.systemRoot, "/var/lib/vibe64/tenant/system");
   assert.equal(context.providerOptions.toolHomeSource, "/home/v64d_tenant");
 });
 
-test("Codex runtime context derives Playwright browsers path from shared cache root", () => {
+test("Codex runtime context derives Playwright browsers path from the runtime-pack root", () => {
   const context = codexRuntimeContext({
     env: {
       PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong",
+      VIBE64_RUNTIME_PACK_ROOT: "/srv/vibe64-runtimes",
       VIBE64_SHARED_CACHE_ROOT: "/srv/vibe64-cache"
     },
     home: "/home/v64d_tenant",
@@ -103,8 +104,8 @@ test("Codex runtime context derives Playwright browsers path from shared cache r
   });
 
   assert.equal(context.ok, true);
-  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-cache/playwright");
-  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-cache/playwright");
+  assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-runtimes/playwright/browsers");
+  assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-runtimes/playwright/browsers");
 });
 
 test("Codex runtime context rejects missing required system root", () => {

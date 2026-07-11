@@ -355,7 +355,7 @@ Shared tool env is always present:
 ```js
 {
   VIBE64_SHARED_CACHE_ROOT: "/var/cache/vibe64",
-  PLAYWRIGHT_BROWSERS_PATH: "/var/cache/vibe64/playwright"
+  PLAYWRIGHT_BROWSERS_PATH: "/opt/vibe64/runtime-packs/playwright/browsers"
 }
 ```
 
@@ -693,7 +693,7 @@ Do not manually assemble these in feature code:
 - `DB_*` aliases
 - Git author/committer identity
 - GitHub credential helpers
-- Playwright browser cache path
+- version-matched Playwright browser runtime path
 
 Those are gateway concerns.
 

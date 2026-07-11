@@ -756,7 +756,7 @@ test("launch terminal start evaluates function env with the allocated terminal i
 
       assert.equal(payload.DB_HOST, "127.0.0.1");
       assert.equal(payload.MYSQL_HOST, "127.0.0.1");
-      assert.equal(payload.PLAYWRIGHT_BROWSERS_PATH, "/var/cache/vibe64/playwright");
+      assert.equal(payload.PLAYWRIGHT_BROWSERS_PATH, "/opt/vibe64/runtime-packs/playwright/browsers");
       assert.equal(payload.PROJECT_ENV, "project");
       assert.equal(payload.RUNTIME_ENV, "runtime");
       assert.equal(payload.SPEC_ENV, "spec");
@@ -9850,7 +9850,7 @@ test("Codex runtime context applies gateway shared tool cache policy", async () 
   assert.equal(codexContext.terminalEnv.VIBE64_SHARED_CACHE_ROOT, undefined);
   assert.equal(codexContext.terminalEnv.PLAYWRIGHT_BROWSERS_PATH, undefined);
   assert.equal(codexContext.terminalProcessEnv.VIBE64_SHARED_CACHE_ROOT, "/var/cache/vibe64");
-  assert.equal(codexContext.terminalProcessEnv.PLAYWRIGHT_BROWSERS_PATH, "/var/cache/vibe64/playwright");
+  assert.equal(codexContext.terminalProcessEnv.PLAYWRIGHT_BROWSERS_PATH, "/opt/vibe64/runtime-packs/playwright/browsers");
 });
 
 test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MariaDB", async () => {
@@ -10113,7 +10113,7 @@ test("Vibe64 command terminal process receives native database client env and sh
         .find((candidate) => candidate.includes(marker)) || "";
       const payload = JSON.parse(line.slice(line.indexOf(marker) + marker.length));
       assert.deepEqual(payload, {
-        browsers: "/var/cache/vibe64/playwright",
+        browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
         dbHost: "127.0.0.1",
         dbName: "command_terminal_db",
         mysqlDatabase: "command_terminal_db",

@@ -120,7 +120,7 @@ await runVibe64Command({
 - [x] Shared tool cache env is resolved once and applied consistently.
 - [x] Every Vibe64-launched command gets `VIBE64_SHARED_CACHE_ROOT`.
 - [x] Every Vibe64-launched command gets `PLAYWRIGHT_BROWSERS_PATH`.
-- [x] Playwright browsers live in shared cache, not per-user `~/.cache`.
+- [x] Playwright browsers live with the versioned Playwright runtime pack, not in per-user or per-tenant caches.
 - [x] Helper execution receives normalized execution payloads only.
 
 ## Phase 0: Guardrails
@@ -216,7 +216,7 @@ await runVibe64Command({
 - [x] Ensure command env includes `VIBE64_SHARED_CACHE_ROOT`.
 - [x] Ensure command env includes `PLAYWRIGHT_BROWSERS_PATH`.
 - [x] Default `VIBE64_SHARED_CACHE_ROOT` to `/var/cache/vibe64`.
-- [x] Default `PLAYWRIGHT_BROWSERS_PATH` to `/var/cache/vibe64/playwright`.
+- [x] Default `PLAYWRIGHT_BROWSERS_PATH` to `/opt/vibe64/runtime-packs/playwright/browsers`.
 - [x] Ensure command env includes `GIT_AUTHOR_NAME` when a command can create commits.
 - [x] Ensure command env includes `GIT_AUTHOR_EMAIL` when a command can create commits.
 - [x] Ensure command env includes `GIT_COMMITTER_NAME` when a command can create commits.
@@ -260,12 +260,12 @@ await runVibe64Command({
 - [x] Remove setup doctor blockers that require manual Git identity for non-GitHub/local-only repositories.
 - [x] Keep setup doctor blockers for GitHub authentication when a workflow requires remote fetch, push, issue, PR, or merge actions.
 
-## Shared Tool Cache And Browser Policy
+## Shared Tool Cache And Browser Runtime Policy
 
 - [x] Treat shared tool cache paths as execution environment, not as terminal-specific shell startup.
 - [x] Define one exported shared tool env resolver in `vibe64-execution`, conceptually:
   - [x] `VIBE64_SHARED_CACHE_ROOT=${VIBE64_SHARED_CACHE_ROOT:-/var/cache/vibe64}`
-  - [x] `PLAYWRIGHT_BROWSERS_PATH=$VIBE64_SHARED_CACHE_ROOT/playwright`
+  - [x] `PLAYWRIGHT_BROWSERS_PATH=${VIBE64_RUNTIME_PACK_ROOT:-/opt/vibe64/runtime-packs}/playwright/browsers`
 - [x] Keep the shared tool env resolver in `vibe64-execution`, not in `studio-terminal-core`, so terminal, Codex, setup doctor, adapter, preview, and future deployment code all depend on the same execution package.
 - [x] Route process env through `runVibe64Command`/`resolveCommandEnv`, not through terminal compatibility helpers.
 - [x] Route all terminal, Codex, preview, adapter, setup doctor, verifier, and workflow command env through this resolver.
@@ -277,17 +277,17 @@ await runVibe64Command({
 - [x] Shared tool env wins over caller request env in `runVibe64Command`.
 - [x] Shared tool env wins over project/runtime config env in `runVibe64Command`/`resolveCommandEnv`.
 - [x] Host/runtime-pack bootstrap owns the Vibe64 browser installation command.
-- [x] Install/create `/var/cache/vibe64/playwright` as root-owned and `vibe64` group-writable with setgid permissions.
-- [x] Use an install command equivalent to `install -d -o root -g vibe64 -m 2775 /var/cache/vibe64/playwright`.
+- [x] Materialize a root-owned, versioned Playwright runtime containing both the CLI and its exact Chromium revision.
+- [x] Activate the matching CLI and browser directory together through `/opt/vibe64/runtime-packs/playwright`.
 - [x] Browser installation is performed once by the metal/runtime-pack installer, not once per tenant and not during app/session execution.
-- [x] Install Playwright Chromium into `/var/cache/vibe64/playwright`, not into any user's home directory.
+- [x] Install Playwright Chromium into `/opt/vibe64/runtime-packs/playwright/browsers`, not into any user's home directory.
 - [x] Use the shared Node/Playwright runtime pack for browser installation.
 - [x] Run browser installation from the shared Playwright runtime pack, not from arbitrary project `node_modules`.
-- [x] Prefer a host/runtime-pack installer command over `sudo -u v64d_<tenant> npx playwright install chromium`; tenant users should consume the browser cache, not populate it.
-- [x] Tenant daemon users can read and execute the installed browser files without taking ownership of the shared cache.
+- [x] Prefer a host/runtime-pack installer command over `sudo -u v64d_<tenant> npx playwright install chromium`; tenant users consume the immutable browser runtime instead of populating caches.
+- [x] Tenant daemon users can read and execute the installed browser files without owning or modifying the runtime.
 - [x] Do not use `npx playwright install` from arbitrary project directories for host browser bootstrap.
 - [x] Install required Chromium system libraries and fonts as part of metal/VM bootstrap.
-- [x] Verify browser install with `PLAYWRIGHT_BROWSERS_PATH=/var/cache/vibe64/playwright node -e 'const { chromium } = require("playwright"); console.log(chromium.executablePath())'`.
+- [x] Derive the expected Chromium revision from the installed Playwright CLI and fail if that exact revision is absent.
 - [x] Verify Chromium can actually launch, not only that `executablePath()` returns a path.
 - [x] Verify the launcher path and launch smoke through the same shared Node/Playwright runtime pack used by Vibe64 commands.
 - [x] Setup doctor fails if `PLAYWRIGHT_BROWSERS_PATH` is missing.
@@ -318,7 +318,7 @@ await runVibe64Command({
 - [x] Ensure runtime-pack wrappers do not reorder Vibe64 shim paths.
 - [x] Add tests for `node`, `npm`, `git`, `gh`, `mysql`, and `npx` PATH resolution.
 - [x] Add tests for Playwright package resolution.
-- [x] Add tests for shared Playwright browser cache resolution.
+- [x] Add tests for shared Playwright browser runtime resolution.
 - [x] Gateway owns `NPM_CONFIG_PREFIX` and inserts `$NPM_CONFIG_PREFIX/bin` into PATH after gateway shims and runtime packs.
 
 ## Phase 6: Engines
@@ -379,7 +379,7 @@ await runVibe64Command({
 - [x] Ensure Codex terminal sees shared Playwright browser env.
 - [x] Add test that Codex terminal `env` includes DB env.
 - [x] Add test that Codex terminal `env` includes fallback Git identity for local/non-GitHub projects.
-- [x] Add test that Codex terminal `env` includes `PLAYWRIGHT_BROWSERS_PATH=/var/cache/vibe64/playwright`.
+- [x] Add test that Codex terminal `env` includes `PLAYWRIGHT_BROWSERS_PATH=/opt/vibe64/runtime-packs/playwright/browsers`.
 - [x] Add test that Codex terminal `HOME` matches final uid.
 
 ## Phase 10: Migrate Codex App-Server
@@ -395,7 +395,7 @@ await runVibe64Command({
 - [x] Ensure app-server receives shared Playwright browser env.
 - [x] Add test that Codex app-server `git ls-remote` uses the gateway.
 - [x] Add test that Codex app-server `git commit` does not prompt for identity on non-GitHub projects.
-- [x] Add test that Codex app-server Playwright launch uses shared browser cache.
+- [x] Add test that Codex app-server Playwright launch uses the shared browser runtime.
 - [x] Add test that app-server is restarted when env fingerprint changes.
 - [x] Add test that app-server is restarted when execution context changes.
 - [x] Add test that detached Codex app-server-style commands receive fallback Git identity and shared Playwright browser env.
@@ -452,7 +452,7 @@ await runVibe64Command({
 - [x] Migrate setup doctor plugin terminal actions to `runVibe64Command({ mode: "pty", purpose: "setup" })`.
 - [x] Migrate setup doctor Git repair terminals to `runVibe64Command({ mode: "pty", purpose: "setup" })`.
 - [x] Migrate setup doctor Git identity checks to the gateway identity policy.
-- [x] Migrate setup doctor Playwright/browser checks to shared tool cache policy.
+- [x] Migrate setup doctor Playwright/browser checks to shared runtime policy.
 - [x] Migrate account/user helper invocations where appropriate.
 - [x] Move host-user helper execution implementation into `vibe64-execution`.
 - [x] Move managed source permission helper repair into `vibe64-execution`.
@@ -501,7 +501,7 @@ Live tenant acceptance remains intentionally unchecked until the public and onli
 - [ ] Non-GitHub project commit works without manual `git config`.
 - [ ] GitHub project local commit works without manual `git config`.
 - [ ] GitHub project push still requires GitHub auth.
-- [ ] `env | sort` from Codex includes `PLAYWRIGHT_BROWSERS_PATH=/var/cache/vibe64/playwright`.
+- [ ] `env | sort` from Codex includes `PLAYWRIGHT_BROWSERS_PATH=/opt/vibe64/runtime-packs/playwright/browsers`.
 - [ ] Playwright Chromium launches from Codex.
 - [ ] Playwright Chromium launches from command terminal.
 - [ ] Playwright Chromium launches from setup doctor/verifier context.
@@ -543,7 +543,7 @@ Live tenant acceptance remains intentionally unchecked until the public and onli
 - [x] GitHub auth readiness is separate from Git local commit identity readiness.
 - [x] Runtime PATH is consistent across command paths.
 - [x] Shared tool cache env is consistent across command paths.
-- [x] Playwright browser cache is host-installed, shared, and not per-user.
+- [x] The Playwright browser runtime is host-installed, version-matched, shared, and immutable to tenants.
 - [x] Setup doctor detects missing or broken shared Chromium immediately.
 - [x] The Codex Git/GH shim is transport only.
 - [x] Static tests prevent reintroducing the old layered execution paths.

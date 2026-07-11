@@ -111,7 +111,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(result.ok, true, result.output);
   const env = JSON.parse(result.stdout);
   assert.equal(env.shared, "/var/cache/vibe64");
-  assert.equal(env.browsers, "/var/cache/vibe64/playwright");
+  assert.equal(env.browsers, "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(env.npmPrefix, path.join(currentUser.homedir, ".local"));
   const pathParts = env.path.split(":");
   assert.equal(pathParts[0], "/opt/vibe64/runtime-packs/managed-bin");
@@ -122,7 +122,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
-test("execution gateway gives Codex commands native database client env, fallback git identity, shared browser cache, and actor HOME", async () => {
+test("execution gateway gives Codex commands native database client env, fallback git identity, shared browser runtime, and actor HOME", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
     actor: "app",
@@ -165,7 +165,7 @@ test("execution gateway gives Codex commands native database client env, fallbac
   assert.deepEqual(JSON.parse(result.stdout), {
     author: "merc via Vibe64",
     authorEmail: "merc@sas.users.vibe64.invalid",
-    browsers: "/var/cache/vibe64/playwright",
+    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
     committer: "Vibe64",
     committerEmail: "vibe64@sas.users.vibe64.invalid",
     dbHost: "127.0.0.1",
@@ -178,7 +178,7 @@ test("execution gateway gives Codex commands native database client env, fallbac
   });
 });
 
-test("execution gateway gives Codex PTY terminals the same DB, Git identity, browser cache, and HOME env", async () => {
+test("execution gateway gives Codex PTY terminals the same DB, Git identity, browser runtime, and HOME env", async () => {
   const currentUser = os.userInfo();
   const namespace = `gateway-codex-env-${Date.now()}`;
   const result = await runVibe64Command({
@@ -224,7 +224,7 @@ test("execution gateway gives Codex PTY terminals the same DB, Git identity, bro
     assert.deepEqual(JSON.parse(match[1]), {
       author: "merc via Vibe64",
       authorEmail: "merc@sas.users.vibe64.invalid",
-      browsers: "/var/cache/vibe64/playwright",
+      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
       dbHost: "127.0.0.1",
       dbName: "sas_compas_next",
       home: currentUser.homedir,
@@ -238,7 +238,7 @@ test("execution gateway gives Codex PTY terminals the same DB, Git identity, bro
   }
 });
 
-test("execution gateway gives detached Codex app-server commands shared browser cache and fallback identity", async () => {
+test("execution gateway gives detached Codex app-server commands the shared browser runtime and fallback identity", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "v64-detached-codex-env-"));
   try {
     const outputPath = path.join(tempDir, "env.json");
@@ -282,7 +282,7 @@ test("execution gateway gives detached Codex app-server commands shared browser 
     assert.deepEqual(JSON.parse(await waitForFile(outputPath)), {
       author: "merc via Vibe64",
       authorEmail: "merc@sas.users.vibe64.invalid",
-      browsers: "/var/cache/vibe64/playwright",
+      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
       committer: "Vibe64",
       committerEmail: "vibe64@sas.users.vibe64.invalid"
     });
@@ -309,7 +309,7 @@ test("execution gateway does not let request env override shared tool cache poli
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
-    browsers: "/var/cache/vibe64/playwright",
+    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
     shared: "/var/cache/vibe64"
   });
 });
@@ -396,7 +396,7 @@ test("execution gateway bars same-user detached real-user commands in managed wo
   }
 });
 
-test("execution gateway gives terminal and Codex the same shared Playwright cache env", async () => {
+test("execution gateway gives terminal and Codex the same shared Playwright runtime env", async () => {
   const command = process.execPath;
   const args = [
     "-e",
@@ -415,7 +415,7 @@ test("execution gateway gives terminal and Codex the same shared Playwright cach
 
   assert.equal(terminal.ok, true, terminal.output);
   assert.equal(codex.ok, true, codex.output);
-  assert.equal(terminal.stdout.trim(), "/var/cache/vibe64/playwright");
+  assert.equal(terminal.stdout.trim(), "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(codex.stdout.trim(), terminal.stdout.trim());
 });
 
@@ -645,7 +645,7 @@ test("execution gateway gives deployment commands production DB env, Git identit
   const env = JSON.parse(result.stdout);
   assert.equal(env.author, `${currentUser.username} via Vibe64`);
   assert.equal(env.authorEmail, `${currentUser.username}@sas.users.vibe64.invalid`);
-  assert.equal(env.browsers, "/var/cache/vibe64/playwright");
+  assert.equal(env.browsers, "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(env.db, "prod_sas_app");
   assert.equal(env.gitPrompt, "0");
   assert.equal(env.home, currentUser.homedir);
@@ -812,7 +812,7 @@ test("execution gateway resolves project and runtime config env records centrall
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
-    browsers: "/var/cache/vibe64/playwright",
+    browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
     db: "sas_compas_next",
     manifest: "/workspace/vibe64.project.json",
     mysql: "sas_compas_next",
@@ -1595,8 +1595,8 @@ test("execution gateway pty mode starts a terminal session with gateway env", as
 
   assert.equal(result.ok, true, result.error);
   assert.match(result.id, /./u);
-  const snapshot = await waitForTerminalOutput(result.id, namespace, "/var/cache/vibe64/playwright");
-  assert.match(snapshot.output, /\/var\/cache\/vibe64\/playwright/u);
+  const snapshot = await waitForTerminalOutput(result.id, namespace, "/opt/vibe64/runtime-packs/playwright/browsers");
+  assert.match(snapshot.output, /\/opt\/vibe64\/runtime-packs\/playwright\/browsers/u);
   await closeTerminalSession(result.id, {
     namespace
   });
@@ -1621,7 +1621,7 @@ test("execution gateway pty mode preserves terminal argument factories", async (
     assert.equal(result.ok, true, result.output);
     const snapshot = await waitForTerminalOutput(result.id, namespace, `terminal:${result.id}`);
     assert.match(snapshot.output, new RegExp(`terminal:${result.id}`, "u"));
-    assert.match(snapshot.output, /playwright:\/var\/cache\/vibe64\/playwright/u);
+    assert.match(snapshot.output, /playwright:\/opt\/vibe64\/runtime-packs\/playwright\/browsers/u);
   } finally {
     if (result.id) {
       await closeTerminalSession(result.id, {
@@ -1664,7 +1664,7 @@ test("execution gateway pty mode preserves terminal env factories under gateway 
       .split(/\r?\n/u)
       .find((candidate) => candidate.includes("DYNAMIC_TERMINAL_ID") || candidate.includes("dynamic")) || "{}";
     assert.deepEqual(JSON.parse(line), {
-      browsers: "/var/cache/vibe64/playwright",
+      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
       dynamic: result.id
     });
     assert.deepEqual(envInputs, [

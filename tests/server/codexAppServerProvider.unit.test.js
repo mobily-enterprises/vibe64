@@ -777,7 +777,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     });
     assert.equal(envProbe.ok, true, envProbe.output);
     assert.deepEqual(JSON.parse(envProbe.stdout), {
-      browsers: "/var/cache/vibe64/playwright",
+      browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
       dbHost: "127.0.0.1",
       dbName: "codex_app_server_db",
       mysqlDatabase: "codex_app_server_db",

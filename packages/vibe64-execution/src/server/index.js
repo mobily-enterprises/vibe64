@@ -105,9 +105,10 @@ export {
   uniqueStrings
 } from "./normalize.js";
 export {
-  DEFAULT_PLAYWRIGHT_CACHE_NAME,
   DEFAULT_VIBE64_SHARED_CACHE_ROOT,
+  PLAYWRIGHT_BROWSERS_DIR_NAME,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
+  PLAYWRIGHT_RUNTIME_PACK_NAME,
   VIBE64_SHARED_CACHE_ROOT_ENV,
   resolvePlaywrightBrowsersPath,
   resolveVibe64SharedCacheRoot,
@@ -126,13 +127,8 @@ export {
 } from "./runtime/runtimePacks.js";
 export {
   isValidPlaywrightBrowserLaunchOutput,
-  PLAYWRIGHT_CHROMIUM_SYSTEM_PACKAGES,
-  playwrightBrowserInstallCommandArgs,
-  playwrightBrowserInstallScript,
   playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
-  playwrightExecutableCheckScript,
   summarizePlaywrightBrowserLaunchOutput,
-  playwrightSystemDependencyInstallScript,
   playwrightRuntimeEnv
 } from "./runtime/browserRuntime.js";

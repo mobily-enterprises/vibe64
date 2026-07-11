@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import {
   closeTerminalSession,
   readTerminalSession,
@@ -76,19 +74,6 @@ function resolveStudioRoot(studioRoot) {
   return resolveStudioAppRoot({
     explicitRoot: studioRoot
   });
-}
-
-function isValidPlaywrightOutput(output = "") {
-  const lines = String(output || "")
-    .trim()
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const [versionLine, browserPath] = lines;
-  return /^Version\s+\d+\./u.test(versionLine || "") &&
-    Boolean(browserPath) &&
-    path.isAbsolute(browserPath) &&
-    /(?:^|\/)(?:chrome|chrome-headless-shell)$/u.test(browserPath);
 }
 
 async function checkHostCommand({
@@ -423,7 +408,6 @@ export {
   createStudioHostCommandDoctorPlugin,
   isStudioSetupReady,
   isValidPlaywrightBrowserLaunchOutput,
-  isValidPlaywrightOutput,
   playwrightBrowserLaunchCommandArgs,
   createService
 };

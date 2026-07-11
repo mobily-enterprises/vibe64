@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
+  mkdirSync,
   mkdtempSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,7 +18,6 @@ import {
   createService,
   isValidPlaywrightBrowserLaunchOutput,
   isStudioSetupReady,
-  isValidPlaywrightOutput,
   playwrightBrowserLaunchCommandArgs,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
@@ -52,45 +54,30 @@ test("Studio Setup readiness requires every required check to pass", () => {
   ]), true);
 });
 
-test("Studio Setup Playwright check accepts the shared browser cache path", () => {
-  assert.equal(isValidPlaywrightOutput([
-    "Version 1.60.0",
-    "/var/cache/vibe64/playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
-  ].join("\n")), true);
-
-  assert.equal(isValidPlaywrightOutput([
-    "Version 1.60.0",
-    "/var/cache/vibe64/playwright/chromium-1223/chrome-linux64/chrome"
-  ].join("\n")), true);
-
-  assert.equal(isValidPlaywrightOutput([
-    "Version 1.60.0",
-    "/var/cache/vibe64/playwright/chromium-1223/chrome-linux64/README"
-  ].join("\n")), false);
-});
-
-test("Studio Setup Playwright browser check launches a discovered browser", () => {
+test("Studio Setup Playwright browser check launches the CLI-matched browser revision", () => {
   const commandArgs = playwrightBrowserLaunchCommandArgs();
-  assert.deepEqual(commandArgs.slice(0, 2), ["bash", "-lc"]);
+  assert.deepEqual(commandArgs.slice(0, 2), ["bash", "-c"]);
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH/u);
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH is required/u);
   assert.match(commandArgs[2], /must not resolve under \/home/u);
   assert.doesNotMatch(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
   assert.doesNotMatch(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
   assert.doesNotMatch(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
+  assert.match(commandArgs[2], /playwright install --dry-run chromium/u);
+  assert.match(commandArgs[2], /expected_chromium/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
   assert.match(commandArgs[2], /--dump-dom/u);
 
   assert.equal(isValidPlaywrightBrowserLaunchOutput(
-    "Playwright browser launched: /var/cache/vibe64/playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
+    "Playwright browser launched: /opt/vibe64/runtime-packs/playwright/browsers/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
   ), true);
   assert.equal(isValidPlaywrightBrowserLaunchOutput([
     "libnss3.so => not found",
-    "Playwright browser launched: /var/cache/vibe64/playwright/chromium-1223/chrome-linux64/chrome"
+    "Playwright browser launched: /opt/vibe64/runtime-packs/playwright/browsers/chromium-1223/chrome-linux64/chrome"
   ].join("\n")), false);
 });
 
-test("Studio Setup Playwright browser check fails missing or invalid shared cache", () => {
+test("Studio Setup Playwright browser check fails missing or invalid shared runtime", () => {
   const commandArgs = playwrightBrowserLaunchCommandArgs();
   const run = (env = {}) => spawnSync(commandArgs[0], commandArgs.slice(1), {
     encoding: "utf8",
@@ -110,22 +97,33 @@ test("Studio Setup Playwright browser check fails missing or invalid shared cach
   assert.notEqual(homePath.status, 0);
   assert.match(`${homePath.stdout}${homePath.stderr}`, /must not resolve under \/home/u);
 
-  const emptyCache = mkdtempSync(path.join(tmpdir(), "vibe64-empty-playwright-"));
+  const emptyRuntime = mkdtempSync(path.join(tmpdir(), "vibe64-empty-playwright-"));
   try {
+    const fakeBin = path.join(emptyRuntime, "bin");
+    const fakePlaywright = path.join(fakeBin, "playwright");
+    mkdirSync(fakeBin);
+    writeFileSync(fakePlaywright, [
+      "#!/usr/bin/env bash",
+      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
+      ""
+    ].join("\n"));
+    chmodSync(fakePlaywright, 0o755);
     const empty = run({
-      PLAYWRIGHT_BROWSERS_PATH: emptyCache
+      HOME: emptyRuntime,
+      PATH: `${fakeBin}:/usr/bin:/bin`,
+      PLAYWRIGHT_BROWSERS_PATH: emptyRuntime
     });
     assert.notEqual(empty.status, 0);
-    assert.match(`${empty.stdout}${empty.stderr}`, /No Playwright Chromium browser was found below/u);
+    assert.match(`${empty.stdout}${empty.stderr}`, /Chromium revision expected at .*chromium-9876 is not installed/u);
   } finally {
-    rmSync(emptyCache, {
+    rmSync(emptyRuntime, {
       force: true,
       recursive: true
     });
   }
 });
 
-test("Studio Setup doctor commands use the gateway shared Playwright cache env", async () => {
+test("Studio Setup doctor commands use the gateway shared Playwright runtime env", async () => {
   const result = await runDoctorGatewayCommand(process.execPath, [
     "-e",
     "console.log(process.env.PLAYWRIGHT_BROWSERS_PATH)"
@@ -134,7 +132,7 @@ test("Studio Setup doctor commands use the gateway shared Playwright cache env",
   });
 
   assert.equal(result.ok, true, result.output);
-  assert.equal(result.stdout.trim(), "/var/cache/vibe64/playwright");
+  assert.equal(result.stdout.trim(), "/opt/vibe64/runtime-packs/playwright/browsers");
 });
 
 test("Studio Setup host checks shared runtime-pack tools without requiring tenant Nix access", () => {

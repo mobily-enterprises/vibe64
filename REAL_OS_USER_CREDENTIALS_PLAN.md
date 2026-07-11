@@ -470,8 +470,9 @@ Managed Git / local Git without GitHub
 
 Shared caches are allowed, but they are not homes and not credential sources.
 
-Use `/var/cache/vibe64` as the shared cache root. Use explicit cache env vars
-and mounts, for example:
+Use `/var/cache/vibe64` as the shared package cache root. Playwright browsers
+are a versioned platform runtime rather than a writable cache. Use explicit
+environment variables and mounts, for example:
 
 ```text
 NPM_CONFIG_CACHE=/var/cache/vibe64/npm
@@ -481,7 +482,7 @@ COMPOSER_CACHE_DIR=/var/cache/vibe64/composer
 PIP_CACHE_DIR=/var/cache/vibe64/pip
 UV_CACHE_DIR=/var/cache/vibe64/uv
 GEM_SPEC_CACHE=/var/cache/vibe64/gem/specs
-PLAYWRIGHT_BROWSERS_PATH=/var/cache/vibe64/playwright
+PLAYWRIGHT_BROWSERS_PATH=/opt/vibe64/runtime-packs/playwright/browsers
 ```
 
 Do not set:
@@ -494,8 +495,9 @@ GNUPGHOME=/var/cache/vibe64/...
 
 Tool auth/config still comes from the selected real OS user home.
 
-Cache directories should be owned by the shared `vibe64` group with setgid
-permissions so Vibe64 users can share artifacts without sharing credentials.
+Writable cache directories should be owned by the shared `vibe64` group with
+setgid permissions. The Playwright runtime remains root-owned and read-only to
+tenant users.
 
 ## State Root And Repository Root
 
