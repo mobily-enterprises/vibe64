@@ -923,17 +923,9 @@ function useVibe64AutopilotView(props, emit) {
     return String(selectedControlValues.value?.[fieldName] || conversationComposerFallbackDraft.value || "");
   });
   const composerSteerAfterSubmissionId = computed(composerControlTargetSubmissionId);
-  const passiveComposerSteeringDraftActive = computed(() => Boolean(
-    conversationComposerDraft.value &&
-    agentInteractionLocked.value
-  ));
   const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
-    agentConversationActive: agentConversationActive.value,
-    agentHandoffPending: agentHandoffPending.value,
-    agentInteractionLocked: agentInteractionLocked.value,
     agentSteeringAvailable: agentSteeringAvailable.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value,
-    steeringDraftActive: passiveComposerSteeringDraftActive.value
+    selectedScreenControlVisible: selectedScreenControlVisible.value
   }));
   const passiveComposerUnavailableReason = computed(() => {
     if (passiveComposerSteeringModeActive.value) {

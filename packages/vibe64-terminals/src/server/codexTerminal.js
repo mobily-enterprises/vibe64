@@ -117,7 +117,8 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 import {
-  recordSessionGitCommandActor
+  recordSessionGitCommandActor,
+  sessionGitCommandActorFromMetadata
 } from "./sessionGitCommandActor.js";
 import {
   prepareAgentPreviewCommand
@@ -1898,6 +1899,31 @@ function createCodexTerminalController({
     const providerKey = codexAppServerProviderKey(sessionId, providerOptions);
     const provider = codexAppServerProviders.get(providerKey);
     return provider?.isAvailable?.() === true;
+  }
+
+  function availableManagedCodexAppServerProvider(sessionId = "", {
+    targetRoot = "",
+    workdir = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedTargetRoot = normalizeText(targetRoot);
+    const normalizedWorkdir = normalizeText(workdir);
+    for (const [providerKey, managed] of codexAppServerManagedSessions.entries()) {
+      const fields = codexAppServerProviderKeyFields(providerKey);
+      if (
+        fields.sessionId !== normalizedSessionId ||
+        (normalizedTargetRoot && fields.targetRoot !== normalizedTargetRoot) ||
+        (normalizedWorkdir && fields.workdir !== normalizedWorkdir) ||
+        normalizeText(managed?.sessionId) !== normalizedSessionId
+      ) {
+        continue;
+      }
+      const provider = codexAppServerProviders.get(providerKey);
+      if (provider?.isAvailable?.() === true) {
+        return provider;
+      }
+    }
+    return null;
   }
 
   async function ensureCodexAppServerDaemonForSession(sessionId = "", options = {}) {
@@ -7647,7 +7673,9 @@ function createCodexTerminalController({
     };
   }
 
-  async function sendCodexAppServerMessage(sessionId, input = {}) {
+  async function sendCodexAppServerMessage(sessionId, input = {}, {
+    turnOwnership = null
+  } = {}) {
     const message = codexAppServerMessageText(input);
     const displayMessage = codexAppServerMessageDisplayText(input, message);
     const displayMessages = (Array.isArray(input?.displayMessages) ? input.displayMessages : [displayMessage])
@@ -7690,15 +7718,35 @@ function createCodexTerminalController({
         reason: "thread_missing"
       });
     }
-    const provider = await ensureCodexAppServerDaemonForSession(
-      sessionId,
-      await codexAppServerRuntimeOptionsForSession(currentSession, {
-        runtime,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      })
+    const ownershipMatchesTrackedTurn = Boolean(
+      turnOwnership &&
+      normalizeText(turnOwnership.threadId) === threadId &&
+      normalizeText(turnOwnership.turnId) === normalizeText(turn.turnId)
     );
+    let provider = ownershipMatchesTrackedTurn
+      ? availableManagedCodexAppServerProvider(sessionId, {
+          targetRoot,
+          workdir
+        })
+      : null;
+    if (provider) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerMessage.providerReused", {
+        messageId,
+        sessionId,
+        threadId,
+        turnId: normalizeText(turn.turnId)
+      });
+    } else {
+      provider = await ensureCodexAppServerDaemonForSession(
+        sessionId,
+        await codexAppServerRuntimeOptionsForSession(currentSession, {
+          runtime,
+          targetRoot,
+          toolHomeSource,
+          workdir
+        })
+      );
+    }
     await reconcileCodexAppServerThreadStatus(sessionId, provider, threadId, {
       source: "message_delivery"
     });
@@ -7732,22 +7780,55 @@ function createCodexTerminalController({
         turnId
       }, currentSession);
     }
-    const driverResult = await claimSessionWorkflowDriver(runtime, sessionId, {
-      originId: input?.originId || "",
-      reason: "agent-message",
-      vibe64User
-    });
-    const driverSession = driverResult.session || currentSession;
-    const actorMetadata = await recordSessionGitCommandActor({
-      env,
-      reason: "agent-message",
-      runtime,
-      session: driverSession,
-      targetRoot,
-      threadId,
-      vibe64User,
-      workdir
-    });
+    const ownershipMatchesTurn = Boolean(
+      turnOwnership &&
+      normalizeText(turnOwnership.threadId) === threadId &&
+      normalizeText(turnOwnership.turnId) === turnId
+    );
+    if (ownershipMatchesTurn && turnOwnership.reusable !== true) {
+      return withCodexState({
+        code: "vibe64_agent_turn_owner_conflict",
+        delivered: false,
+        error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
+        ok: false,
+        operationOutcome: "active_turn_owned_by_another_user",
+        refreshRecommended: true,
+        retryable: true,
+        threadId,
+        turnId
+      }, currentSession);
+    }
+    let actorMetadata = ownershipMatchesTurn && turnOwnership.reusable === true
+      ? sessionGitCommandActorFromMetadata(currentSession)
+      : null;
+    if (actorMetadata?.ok !== true) {
+      let driverSession = currentSession;
+      if (!(ownershipMatchesTurn && turnOwnership.reusable === true)) {
+        const driverResult = await claimSessionWorkflowDriver(runtime, sessionId, {
+          originId: input?.originId || "",
+          reason: "agent-message",
+          vibe64User
+        });
+        driverSession = driverResult.session || currentSession;
+      }
+      actorMetadata = await recordSessionGitCommandActor({
+        env,
+        reason: "agent-message",
+        runtime,
+        session: driverSession,
+        targetRoot,
+        threadId,
+        vibe64User,
+        workdir
+      });
+    } else {
+      vibe64SessionDebugLog("server.codexTerminal.appServerMessage.turnOwnershipReused", {
+        messageId,
+        sessionId,
+        threadId,
+        turnId
+      });
+    }
     if (actorMetadata?.ok === false) {
       return {
         code: actorMetadata.code || CODEX_AGENT_TURN_STEER_FAILED_CODE,
@@ -8079,12 +8160,12 @@ function createCodexTerminalController({
       });
     },
 
-    async sendMessage(sessionId, input = {}) {
+    async sendMessage(sessionId, input = {}, options = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
-        return sendCodexAppServerMessage(sessionId, input);
+        return sendCodexAppServerMessage(sessionId, input, options);
       });
     },
 

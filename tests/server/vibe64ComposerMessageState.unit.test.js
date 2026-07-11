@@ -108,6 +108,28 @@ test("composer message batches preserve each durable message while combining pro
   );
 });
 
+test("composer message batches never combine messages owned by different users", async () => {
+  const runtime = testRuntime();
+  for (const [messageId, message, username] of [
+    ["alice-1", "First from Alice", "alice"],
+    ["bob-1", "Then from Bob", "bob"],
+    ["alice-2", "Alice again", "alice"]
+  ]) {
+    await acceptComposerMessage(runtime, runtime.session.sessionId, {
+      composerSubmissionId: messageId,
+      message,
+      vibe64User: {
+        username
+      }
+    });
+  }
+
+  const batch = composerMessageBatch(pendingComposerMessages(runtime.session));
+  assert.deepEqual(batch.messageIds, ["alice-1"]);
+  assert.equal(batch.message, "First from Alice");
+  assert.equal(batch.vibe64User.username, "alice");
+});
+
 test("composer message retries preserve identity and choose delivery again", async () => {
   const runtime = testRuntime();
   await acceptComposerMessage(runtime, runtime.session.sessionId, {

@@ -441,6 +441,13 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
+        reason: "session-agent-message-delivered",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
         reason: "codex-prompt-injected",
         sessionId: "session-1"
       }
@@ -783,6 +790,21 @@ describe("useVibe64ConversationLog", () => {
     })?.conversationLog).toEqual([
       ...originalPayload.conversationLog,
       appendedTurn
+    ]);
+
+    const earlierTurn = {
+      turnId: "000000",
+      user: {
+        role: "user",
+        text: "Earlier message."
+      }
+    };
+    expect(applyConversationLogPatch(originalPayload, {
+      turn: earlierTurn,
+      type: "upsert-turn"
+    })?.conversationLog).toEqual([
+      earlierTurn,
+      ...originalPayload.conversationLog
     ]);
   });
 

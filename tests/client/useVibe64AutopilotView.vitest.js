@@ -111,14 +111,14 @@ describe("Vibe64 passive composer presentation state", () => {
     })).toBe(true);
   });
 
-  it("keeps an unsent steer draft visible during transient turn metadata gaps", () => {
+  it("does not call queued input a steer during transient turn metadata gaps", () => {
     const steeringMode = passiveComposerSteeringMode({
       agentSteeringAvailable: false,
       selectedScreenControlVisible: false,
       steeringDraftActive: true
     });
 
-    expect(steeringMode).toBe(true);
+    expect(steeringMode).toBe(false);
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
       selectedScreenControlVisible: false,
@@ -128,7 +128,7 @@ describe("Vibe64 passive composer presentation state", () => {
     })).toBe(true);
   });
 
-  it("enters passive steer mode while assistant turn metadata refreshes", () => {
+  it("does not infer steer mode from local interaction state", () => {
     const steeringMode = passiveComposerSteeringMode({
       agentInteractionLocked: true,
       agentSteeringAvailable: false,
@@ -136,7 +136,7 @@ describe("Vibe64 passive composer presentation state", () => {
       steeringDraftActive: false
     });
 
-    expect(steeringMode).toBe(true);
+    expect(steeringMode).toBe(false);
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
       selectedScreenControlVisible: false,

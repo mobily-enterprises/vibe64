@@ -646,7 +646,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nFull deslop prompt.");
   });
 
-  it("switches to steering immediately and accepts a follow-up before handoff acknowledgement", async () => {
+  it("keeps Send cosmetic until the AI layer becomes steerable and accepts a queued follow-up", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -702,7 +702,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     expect(view.selectedScreenControlVisible.value).toBe(false);
     expect(view.passiveComposerVisible.value).toBe(true);
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
+    expect(view.passiveComposerFields.value[0].label).toBe("Message");
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
 
@@ -788,7 +788,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const submissionId = view.chatTurns.value.at(-1)?.optimistic?.id;
     expect(submissionId).toMatch(/^composer:/u);
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
+    expect(view.passiveComposerFields.value[0].label).toBe("Message");
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlInterruptVisible.value).toBe(true);
 
@@ -839,6 +839,18 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.thinkingLabel.value).toBe("Sending to assistant...");
     expect(view.chatTurns.value.at(-1)?.optimistic?.status).toBe("pending");
+
+    props.session.composerMessages = props.session.composerMessages.map((message) => ({
+      ...message,
+      state: "delivered"
+    }));
+    await nextTick();
+
+    expect(view.thinkingLabel.value).toBe("");
+    expect(view.chatTurns.value.slice(-2).map((turn) => turn.optimistic?.status)).toEqual([
+      "delivered",
+      "delivered"
+    ]);
   });
 
   it("submits a passive steer with only the typed composer text", async () => {

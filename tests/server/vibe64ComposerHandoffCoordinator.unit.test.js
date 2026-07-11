@@ -50,13 +50,15 @@ test("composer handoff coordinator starts delivery out of the request stack and 
 test("composer handoff coordinator resumes a persisted accepted handoff", async () => {
   let deliveredHandoff = null;
   let deliveredSettings = null;
+  let deliveredVibe64User = null;
   const coordinator = createComposerHandoffCoordinator({
     async activate() {
       throw new Error("must not activate");
     },
-    async deliver({ agentSettings, handoff: currentHandoff }) {
+    async deliver({ agentSettings, handoff: currentHandoff, vibe64User }) {
       deliveredHandoff = currentHandoff;
       deliveredSettings = agentSettings;
+      deliveredVibe64User = vibe64User;
     }
   });
   const persistedHandoff = handoff();
@@ -80,6 +82,9 @@ test("composer handoff coordinator resumes a persisted accepted handoff", async 
       provider: "codex",
       state: "starting"
     }],
+    metadata: {
+      workflow_driver_username: "alice"
+    },
     sessionId: "session-1"
   };
 
@@ -91,6 +96,9 @@ test("composer handoff coordinator resumes a persisted accepted handoff", async 
   await task;
   assert.equal(deliveredHandoff.handoffId, persistedHandoff.handoffId);
   assert.equal(deliveredSettings.providerId, "codex");
+  assert.deepEqual(deliveredVibe64User, {
+    username: "alice"
+  });
 });
 
 test("composer handoff coordinator activates a delivered handoff without redelivering it", async () => {

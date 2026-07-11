@@ -2492,7 +2492,7 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
-  test("keeps focus and the next draft while three assistant messages are accepted concurrently", async ({ page }) => {
+  test("keeps focus and the next draft while accepting three assistant messages in submission order", async ({ page }) => {
     const messageRequests: Record<string, unknown>[] = [];
     let completedRequests = 0;
     let releaseFirstRequest: (() => void) | null = null;
@@ -2547,22 +2547,33 @@ test.describe("Autopilot dumb client contract", () => {
     const composer = page.locator(".studio-autopilot__composer");
     const input = composer.locator(".studio-autopilot-prompt-textarea__input");
     const send = composer.locator(".vibe64-workflow-control-form__inline-submit");
-    for (const message of ["First message", "Second message", "Third message"]) {
+    await input.fill("First message");
+    await send.click();
+    await expect(input).toBeFocused();
+    await expect.poll(() => messageRequests.map((request) => request.message)).toEqual([
+      "First message"
+    ]);
+
+    for (const message of ["Second message", "Third message"]) {
       await input.fill(message);
       await send.click();
       await expect(input).toBeFocused();
     }
 
-    await expect.poll(() => messageRequests.map((request) => request.message)).toEqual([
-      "First message",
-      "Second message",
-      "Third message"
+    await page.waitForTimeout(100);
+    expect(messageRequests.map((request) => request.message)).toEqual([
+      "First message"
     ]);
     await input.fill("Draft that must survive every response");
     await expect(input).toBeFocused();
 
     releaseFirstRequest?.();
     await expect.poll(() => completedRequests).toBe(3);
+    expect(messageRequests.map((request) => request.message)).toEqual([
+      "First message",
+      "Second message",
+      "Third message"
+    ]);
     await expect(input).toHaveValue("Draft that must survive every response");
     await expect(input).toBeFocused();
   });

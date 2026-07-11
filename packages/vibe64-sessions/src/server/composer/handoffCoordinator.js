@@ -17,6 +17,11 @@ function positiveDelayMs(value = 0, fallback = 0) {
   return Number.isFinite(delay) && delay > 0 ? delay : fallback;
 }
 
+function workflowDriverVibe64User(session = {}) {
+  const username = normalizeText(session?.metadata?.workflow_driver_username);
+  return username ? { username } : null;
+}
+
 function createComposerHandoffCoordinator({
   activate,
   deliver,
@@ -220,7 +225,8 @@ function createComposerHandoffCoordinator({
           }
         : handoff,
       runtime,
-      session
+      session,
+      vibe64User: workflowDriverVibe64User(session)
     });
   }
 

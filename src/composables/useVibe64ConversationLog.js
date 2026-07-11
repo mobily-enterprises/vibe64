@@ -39,6 +39,9 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
   "codex-app-server-message-delivered",
+  "session-agent-message-cancelled",
+  "session-agent-message-delivered",
+  "session-agent-message-failed",
   "session-action-run",
   "session-intent-run",
   "session-rewound"
@@ -220,9 +223,16 @@ function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
     return null;
   }
   const existingIndex = turns.findIndex((turn) => String(turn?.turnId || "").trim() === turnId);
-  const nextTurns = existingIndex >= 0
+  const nextTurns = (existingIndex >= 0
     ? turns.map((turn, index) => index === existingIndex ? patch.turn : turn)
-    : [...turns, patch.turn];
+    : [...turns, patch.turn]
+  ).sort((left, right) => String(left?.turnId || "").localeCompare(
+    String(right?.turnId || ""),
+    undefined,
+    {
+      numeric: true
+    }
+  ));
   const limit = Number.parseInt(String(options.limit || ""), 10);
   const limitedTurns = Number.isFinite(limit) && limit > 0
     ? nextTurns.slice(-limit)

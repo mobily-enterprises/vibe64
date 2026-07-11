@@ -57,6 +57,40 @@ test("session agent manager routes the canonical API through the selected produc
   assert.equal(result.thread.id, "thread-1");
 });
 
+test("session agent manager gives every provider the active turn ownership contract", async () => {
+  let receivedContext = null;
+  const turnOwnership = {
+    reusable: true,
+    threadId: "thread-1",
+    turnId: "turn-1",
+    username: "alice"
+  };
+  const manager = createSessionAgentManager({
+    adapters: [{
+      id: "future-provider",
+      transportId: "future-transport",
+      async sendMessage(context) {
+        receivedContext = context;
+        return {
+          delivered: true,
+          ok: true
+        };
+      }
+    }]
+  });
+
+  await manager.sendMessage("session-1", {
+    message: "Continue"
+  }, {
+    agentSettings: {
+      providerId: "future-provider"
+    },
+    turnOwnership
+  });
+
+  assert.deepEqual(receivedContext.turnOwnership, turnOwnership);
+});
+
 test("session agent manager coalesces duplicate handoff deliveries", async () => {
   const gate = deferred();
   let deliveryCount = 0;

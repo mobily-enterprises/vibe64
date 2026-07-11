@@ -40,22 +40,12 @@ function passiveComposerMessagePayload(message = "", options = {}) {
 }
 
 function passiveComposerSteeringMode({
-  agentConversationActive = false,
-  agentHandoffPending = false,
-  agentInteractionLocked = false,
   agentSteeringAvailable = false,
-  selectedScreenControlVisible = false,
-  steeringDraftActive = false
+  selectedScreenControlVisible = false
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (
-      agentConversationActive ||
-      agentHandoffPending ||
-      agentInteractionLocked ||
-      agentSteeringAvailable ||
-      steeringDraftActive
-    )
+    agentSteeringAvailable
   );
 }
 

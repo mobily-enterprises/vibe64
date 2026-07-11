@@ -7020,6 +7020,48 @@ test("Vibe64 Codex app-server messages use the active turn and record the Git ac
     assert.equal(session.metadata.session_git_command_actor_user_key, "local");
     assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
 
+    const workflowDriverUpdatedAt = session.metadata.workflow_driver_updated_at;
+    const gitActorUpdatedAt = session.metadata.session_git_command_actor_updated_at;
+    const roundOwner = session.metadata.workflow_driver_username;
+    const reusedOwnershipResult = await controller.sendMessage(sessionId, {
+      originId: "tab:test-reloaded",
+      message: "Reuse this round's established owner.",
+      vibe64User: {
+        username: roundOwner
+      }
+    }, {
+      turnOwnership: {
+        reusable: true,
+        threadId,
+        turnId,
+        username: roundOwner
+      }
+    });
+    assert.equal(reusedOwnershipResult.ok, true);
+    session = await runtime.getSession(sessionId);
+    assert.equal(session.metadata.workflow_driver_updated_at, workflowDriverUpdatedAt);
+    assert.equal(session.metadata.session_git_command_actor_updated_at, gitActorUpdatedAt);
+
+    const steerCountBeforeConflict = steerCalls.length;
+    const conflictingOwnerResult = await controller.sendMessage(sessionId, {
+      originId: "tab:another-user",
+      message: "Do not take over another user's round.",
+      vibe64User: {
+        username: "another-user"
+      }
+    }, {
+      turnOwnership: {
+        reusable: false,
+        threadId,
+        turnId,
+        username: roundOwner
+      }
+    });
+    assert.equal(conflictingOwnerResult.ok, false);
+    assert.equal(conflictingOwnerResult.operationOutcome, "active_turn_owned_by_another_user");
+    assert.equal(conflictingOwnerResult.retryable, true);
+    assert.equal(steerCalls.length, steerCountBeforeConflict);
+
     const gitPromptResult = await controller.sendMessage(sessionId, {
       originId: "tab:test",
       message: "Please commit and push the current changes now."

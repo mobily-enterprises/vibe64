@@ -32,6 +32,15 @@ function composerMessageRun(source = {}) {
     .find((run) => normalizeText(run?.id) === COMPOSER_MESSAGE_AGENT_RUN_ID) || null;
 }
 
+function composerMessageVibe64User(source = null) {
+  const username = normalizeText(
+    source?.username ||
+    source?.osUsername ||
+    source?.name
+  );
+  return username ? { username } : null;
+}
+
 function composerMessageRequests(source = {}) {
   const run = composerMessageRun(source);
   const requests = new Map();
@@ -68,7 +77,8 @@ function composerMessageRequests(source = {}) {
         state: COMPOSER_MESSAGE_STATES.ACCEPTED,
         submittedAt: normalizeText(event.at || request.submittedAt),
         threadId: "",
-        turnId: ""
+        turnId: "",
+        vibe64User: composerMessageVibe64User(request.vibe64User)
       });
       continue;
     }
@@ -90,7 +100,8 @@ function composerMessageRequests(source = {}) {
         originId: normalizeText(retryRequest.originId) || current.originId,
         retriedAt: normalizeText(event.at),
         retryable: null,
-        state: COMPOSER_MESSAGE_STATES.ACCEPTED
+        state: COMPOSER_MESSAGE_STATES.ACCEPTED,
+        vibe64User: composerMessageVibe64User(retryRequest.vibe64User) || current.vibe64User
       });
     } else if (kind === COMPOSER_MESSAGE_EVENT_KINDS.DEFERRED) {
       requests.set(messageId, {
@@ -138,11 +149,19 @@ function pendingComposerMessages(source = {}) {
 }
 
 function composerMessageBatch(requests = []) {
-  const messages = (Array.isArray(requests) ? requests : [])
+  const pending = (Array.isArray(requests) ? requests : [])
     .filter((request) => request?.state === COMPOSER_MESSAGE_STATES.ACCEPTED && normalizeText(request.message));
-  const first = messages[0];
+  const first = pending[0];
   if (!first) {
     return null;
+  }
+  const ownerUsername = normalizeText(first.vibe64User?.username);
+  const messages = [];
+  for (const request of pending) {
+    if (normalizeText(request.vibe64User?.username) !== ownerUsername) {
+      break;
+    }
+    messages.push(request);
   }
   const message = messages.map((request) => normalizeText(request.message)).join("\n\n");
   const displayMessage = messages.map((request) => normalizeText(
@@ -199,7 +218,8 @@ async function acceptComposerMessage(runtime, sessionId = "", input = {}) {
     message: normalizeText(input?.message || input?.text),
     messageId: normalizeText(input?.messageId || input?.composerSubmissionId),
     originId: normalizeText(input?.originId),
-    submittedAt: new Date().toISOString()
+    submittedAt: new Date().toISOString(),
+    vibe64User: composerMessageVibe64User(input?.vibe64User)
   };
   if (
     !normalizedSessionId ||
@@ -223,7 +243,8 @@ async function acceptComposerMessage(runtime, sessionId = "", input = {}) {
       messageId: request.messageId,
       request: {
         agentSettings: request.agentSettings,
-        originId: request.originId
+        originId: request.originId,
+        vibe64User: request.vibe64User
       }
     });
     return composerMessageRequests(run)

@@ -203,6 +203,62 @@ describe("useVibe64ComposerHandoffState", () => {
     });
   });
 
+  it("settles only the delivered optimistic message while its canonical chat turn catches up", () => {
+    const optimisticComposerMessages = ref([
+      {
+        createdAtMs: Date.now(),
+        id: "composer:tab:message-1",
+        messageDelivery: true,
+        status: "pending",
+        text: "First message"
+      },
+      {
+        createdAtMs: Date.now(),
+        id: "composer:tab:message-2",
+        messageDelivery: true,
+        status: "pending",
+        text: "Second message"
+      }
+    ]);
+    const state = useVibe64ComposerHandoffState({
+      conversationComposerFallbackDraft: ref(""),
+      optimisticComposerMessages,
+      optimisticComposerTurn: ref(null),
+      remoteComposerSubmission: ref(null)
+    });
+
+    expect(state.reconcileComposerMessageOutcomes([
+      {
+        id: "composer:tab:message-1",
+        state: "delivered"
+      }
+    ])).toBe(true);
+    expect(optimisticComposerMessages.value).toEqual([
+      expect.objectContaining({
+        id: "composer:tab:message-1",
+        status: "delivered"
+      }),
+      expect.objectContaining({
+        id: "composer:tab:message-2",
+        status: "pending"
+      })
+    ]);
+
+    expect(state.reconcileOptimisticComposerMessages([{
+      turnId: "000001",
+      user: {
+        at: new Date().toISOString(),
+        text: "First message"
+      }
+    }])).toBe(true);
+    expect(optimisticComposerMessages.value).toEqual([
+      expect.objectContaining({
+        id: "composer:tab:message-2",
+        status: "pending"
+      })
+    ]);
+  });
+
   it("rebuilds a failed message from the durable server ledger after reload", async () => {
     const optimisticComposerMessages = ref([]);
     const sendAgentMessage = vi.fn(async () => true);

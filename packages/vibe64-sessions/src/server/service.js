@@ -963,6 +963,24 @@ function sessionHasActiveAgentRun(session = {}) {
   ));
 }
 
+function activeAgentTurnOwnership(session = {}, vibe64User = null) {
+  const activeRun = (Array.isArray(session.agentRuns) ? session.agentRuns : []).find((run) => (
+    (run?.active === true || vibe64AgentRunStateIsActive(run?.state)) &&
+    normalizedInputText(run?.providerTurnId)
+  ));
+  const ownerUsername = normalizedInputText(session?.metadata?.workflow_driver_username);
+  const requesterUsername = normalizedInputText(vibe64User?.username);
+  if (!activeRun || !ownerUsername || !requesterUsername) {
+    return null;
+  }
+  return {
+    reusable: ownerUsername === requesterUsername,
+    threadId: normalizedInputText(activeRun.providerThreadId),
+    turnId: normalizedInputText(activeRun.providerTurnId),
+    username: ownerUsername
+  };
+}
+
 function sessionHasActiveAgentWork(session = {}) {
   return sessionHasActiveAgentRun(session) ||
     composerHandoffSnapshot(session)?.pending === true ||
@@ -1547,6 +1565,7 @@ async function startComposerMessageTurn(terminalService, coordinator, {
     error.code = "vibe64_agent_message_action_missing";
     throw error;
   }
+  const actionStartedAtMs = Date.now();
   let actionSession = await runtime.runAction(
     sessionId,
     messageActionId,
@@ -1570,11 +1589,19 @@ async function startComposerMessageTurn(terminalService, coordinator, {
       retryable: false
     };
   }
+  vibe64SessionDebugLog("server.service.composerMessage.delivery.newTurnReady", {
+    durationMs: vibe64SessionDebugDurationMs(actionStartedAtMs),
+    handoffId: composerHandoffId(accepted.handoff),
+    messageCount: batch.messageIds.length,
+    messageIds: batch.messageIds,
+    sessionId
+  });
   void coordinator.schedule({
     agentSettings: batch.agentSettings,
     handoff: accepted.handoff,
     runtime,
-    session: accepted.session
+    session: accepted.session,
+    vibe64User: batch.vibe64User
   });
   return {
     awaitingHandoff: true,
@@ -1617,6 +1644,7 @@ async function settleComposerMessageRequests(runtime, sessionId = "", requests =
 }
 
 async function drainComposerMessages(terminalService, coordinator, publishSessionChanged, {
+  assertDeliveryReady = async () => null,
   runtime = null,
   session = null
 } = {}) {
@@ -1684,13 +1712,30 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
       afterSubmissionId: batch.afterSubmissionId,
       messageCount: batch.messageIds.length,
       messageIds: batch.messageIds,
+      queueAgeMs: Math.max(0, Date.now() - (Date.parse(batch.submittedAt) || Date.now())),
       sessionId
     });
     let result;
     try {
+      const turnOwnership = activeAgentTurnOwnership(currentSession, batch.vibe64User);
+      const readinessStartedAtMs = Date.now();
+      await assertDeliveryReady({
+        batch,
+        session: currentSession,
+        sessionId,
+        turnOwnership
+      });
+      vibe64SessionDebugLog("server.service.composerMessage.delivery.readiness", {
+        durationMs: vibe64SessionDebugDurationMs(readinessStartedAtMs),
+        messageCount: batch.messageIds.length,
+        messageIds: batch.messageIds,
+        reused: turnOwnership?.reusable === true,
+        sessionId
+      });
       if (typeof terminalService?.sendAgentMessage !== "function") {
         throw new TypeError("Assistant message delivery is not available.");
       }
+      const providerStartedAtMs = Date.now();
       result = await terminalService.sendAgentMessage(sessionId, {
         composerSubmissionId: batch.messageId,
         composerSubmissionIds: batch.messageIds,
@@ -1702,24 +1747,40 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         message: batch.message,
         messages: batch.messages.map((request) => request.message),
         originId: batch.originId,
-        text: batch.message
+        text: batch.message,
+        ...(batch.vibe64User ? { vibe64User: batch.vibe64User } : {})
       }, {
         agentSettings: batch.agentSettings,
         runtime,
-        session: currentSession
+        session: currentSession,
+        turnOwnership,
+        vibe64User: batch.vibe64User
+      });
+      vibe64SessionDebugLog("server.service.composerMessage.delivery.providerState", {
+        delivered: result?.delivered === true,
+        durationMs: vibe64SessionDebugDurationMs(providerStartedAtMs),
+        messageCount: batch.messageIds.length,
+        messageIds: batch.messageIds,
+        newTurnRequired: result?.newTurnRequired === true,
+        operationOutcome: normalizedInputText(result?.operationOutcome),
+        sessionId
       });
       if (result?.ok === true && result?.newTurnRequired === true) {
-        const latestSession = await runtime.getSession(sessionId);
+        let latestSession = await runtime.getSession(sessionId);
         batch = composerMessageBatch(pendingComposerMessages(latestSession)) || batch;
-        await claimWorkflowDriverAndRecordGitCommandActor({
-          input: {
-            agentSettings: batch.agentSettings,
-            originId: batch.originId
-          },
+        const ownershipStartedAtMs = Date.now();
+        const driver = await claimSessionWorkflowDriver(runtime, sessionId, {
+          originId: batch.originId,
           reason: "agent-message-new-turn",
-          runtime,
-          sessionId,
-          terminalService
+          vibe64User: batch.vibe64User
+        });
+        latestSession = driver?.session || latestSession;
+        vibe64SessionDebugLog("server.service.composerMessage.delivery.workflowDriverReady", {
+          durationMs: vibe64SessionDebugDurationMs(ownershipStartedAtMs),
+          messageCount: batch.messageIds.length,
+          messageIds: batch.messageIds,
+          originId: batch.originId,
+          sessionId
         });
         result = await startComposerMessageTurn(terminalService, coordinator, {
           request: batch,
@@ -2652,7 +2713,20 @@ function createService({
       terminalService,
       composerHandoffCoordinator,
       publishSessionChanged,
-      input
+      {
+        ...input,
+        assertDeliveryReady: ({ batch, turnOwnership }) => {
+          if (turnOwnership?.reusable === true) {
+            return null;
+          }
+          return assertVibe64SessionReady(
+            setupServices,
+            readinessOptions({
+              vibe64User: batch.vibe64User
+            }, normalizedSetupOptions)
+          );
+        }
+      }
     )
   });
 
@@ -2752,6 +2826,7 @@ function createService({
     },
 
     async sendAgentMessage(sessionId, input = {}) {
+      const startedAtMs = Date.now();
       const normalizedSessionId = normalizedInputText(sessionId);
       const messageId = normalizedInputText(input?.messageId || input?.composerSubmissionId);
       const message = conversationRequestText(input);
@@ -2770,7 +2845,6 @@ function createService({
         };
       }
       const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
-      const session = await runtime.getSession(normalizedSessionId);
       const request = await acceptComposerMessage(runtime, normalizedSessionId, {
         afterSubmissionId: input?.afterSubmissionId,
         agentSettings: agentSettingsInput(input),
@@ -2781,52 +2855,20 @@ function createService({
           conversationRequest: message
         },
         message,
-        originId: input?.originId
+        originId: input?.originId,
+        vibe64User: input?.vibe64User
       });
-      if (request.state === "accepted") {
-        try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
-          await describeAgentProvider(terminalService, agentSettingsInput(input), session);
-          await claimWorkflowDriverAndRecordGitCommandActor({
-            input,
-            reason: "agent-message",
-            runtime,
-            sessionId: normalizedSessionId,
-            terminalService
-          });
-        } catch (error) {
-          const failed = await settleComposerMessage(runtime, normalizedSessionId, request.messageId, {
-            error: error?.message || String(error),
-            operationOutcome: error?.code || "message_preparation_failed",
-            outcome: COMPOSER_MESSAGE_SETTLEMENTS.FAILED
-          });
-          await publishComposerMessageChanged(
-            publishSessionChanged,
-            runtime,
-            normalizedSessionId,
-            "session-agent-message-failed"
-          );
-          vibe64SessionDebugLog("server.service.composerMessage.preparation.failed", {
-            error: vibe64SessionDebugError(error),
-            messageId: request.messageId,
-            operationOutcome: normalizedInputText(error?.code) || "message_preparation_failed",
-            sessionId: normalizedSessionId
-          });
-          return {
-            accepted: true,
-            composerSubmissionId: request.messageId,
-            delivered: false,
-            messageId: request.messageId,
-            ok: true,
-            queued: false,
-            sessionId: normalizedSessionId,
-            state: failed?.state || "failed"
-          };
-        }
-      }
       void composerHandoffCoordinator.drainMessages({
         runtime,
         session: await runtime.getSession(normalizedSessionId)
+      });
+      vibe64SessionDebugLog("server.service.composerMessage.accepted", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        messageId: request.messageId,
+        originId: request.originId,
+        sessionId: normalizedSessionId,
+        state: request.state,
+        submittedAt: request.submittedAt
       });
       return {
         accepted: true,

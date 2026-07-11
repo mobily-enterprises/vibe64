@@ -1887,7 +1887,7 @@ test("assistant message preparation failures remain durable and resendable", asy
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async describeAgentProvider() {
+      async sendAgentMessage() {
         throw providerError;
       }
     }
@@ -1904,10 +1904,16 @@ test("assistant message preparation failures remain durable and resendable", asy
     delivered: false,
     messageId: "durable-message-1",
     ok: true,
-    queued: false,
-    sessionId: "session-message-preparation-failure",
-    state: "failed"
+    queued: true,
+    sessionId: "session-message-preparation-failure"
   });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
+    if (message?.state === "failed") {
+      break;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   const [message] = publicSessionResponse(harness.currentSession()).composerMessages;
   assert.equal(message.id, "durable-message-1");
   assert.equal(message.message, "Do not lose this message.");
@@ -2244,7 +2250,7 @@ test("rapid assistant messages are delivered together when the new turn is not r
   const handoff = {
     handoffId: "rapid-message-handoff",
     kind: "agent_prompt_handoff",
-    terminalInput: "First message prompt"
+    terminalInput: ""
   };
   const runtime = {
     async getSession() {
@@ -2252,6 +2258,7 @@ test("rapid assistant messages are delivered together when the new turn is not r
     },
     async runAction(sessionId, actionId, input) {
       runActionCalls += 1;
+      handoff.terminalInput = input.conversationRequest;
       currentSession = {
         ...currentSession,
         actionResult: {
@@ -2430,9 +2437,84 @@ test("rapid assistant messages are delivered together when the new turn is not r
   );
 });
 
+test("assistant message acceptance does not wait for expensive provider handoff preparation", async () => {
+  const sessionId = "session-immediate-message-acceptance";
+  const harness = composerMessageRuntimeHarness({
+    sessionId,
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  });
+  let markDeliveryStarted;
+  let releaseDelivery;
+  const deliveryStarted = new Promise((resolve) => {
+    markDeliveryStarted = resolve;
+  });
+  const deliveryGate = new Promise((resolve) => {
+    releaseDelivery = resolve;
+  });
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return harness.runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async sendAgentMessage(_sessionId, input) {
+        assert.equal(input.originId, "tab-alice");
+        assert.deepEqual(input.vibe64User, {
+          username: "alice"
+        });
+        markDeliveryStarted();
+        await deliveryGate;
+        return {
+          delivered: true,
+          deliveryMode: "active_turn",
+          ok: true,
+          operationOutcome: "delivered_to_active_turn",
+          threadId: "active-thread",
+          turnId: "active-turn"
+        };
+      }
+    }
+  });
+  let response = null;
+  const acceptance = service.sendAgentMessage(sessionId, {
+    composerSubmissionId: "immediate-message-1",
+    message: "Accept this before preparing the provider.",
+    originId: "tab-alice",
+    vibe64User: {
+      username: "alice"
+    }
+  }).then((result) => {
+    response = result;
+    return result;
+  });
+
+  await deliveryStarted;
+  await Promise.resolve();
+  const responseBeforeDeliveryFinished = response;
+  releaseDelivery();
+  await acceptance;
+
+  assert.equal(responseBeforeDeliveryFinished?.accepted, true);
+  assert.equal(responseBeforeDeliveryFinished?.queued, true);
+});
+
 test("messages queued during an active delivery are sent as the next ordered batch", async () => {
   const sessionId = "session-active-message-batch";
   const harness = composerMessageRuntimeHarness({
+    agentRuns: [{
+      active: true,
+      id: "future_provider",
+      provider: "future-provider",
+      providerInterface: "future-transport",
+      providerThreadId: "active-thread",
+      providerTurnId: "active-turn",
+      state: VIBE64_AGENT_RUN_STATE.ACTIVE
+    }],
+    metadata: {
+      workflow_driver_username: "alice"
+    },
     sessionId,
     status: VIBE64_SESSION_STATUS.ACTIVE
   });
@@ -2445,16 +2527,31 @@ test("messages queued during an active delivery are sent as the next ordered bat
     releaseFirstDelivery = resolve;
   });
   const deliveredInputs = [];
+  const deliveredOptions = [];
+  let readinessChecks = 0;
+  const readyService = {
+    async getStatus() {
+      readinessChecks += 1;
+      return {
+        ready: true
+      };
+    }
+  };
   const service = createService({
     projectService: {
       async createRuntime() {
         return harness.runtime;
       }
     },
-    setupServices: readySetupServices(),
+    setupServices: {
+      connectionSetupService: readyService,
+      projectSetupService: readyService,
+      studioSetupService: readyService
+    },
     terminalService: {
-      async sendAgentMessage(_sessionId, input) {
+      async sendAgentMessage(_sessionId, input, options) {
         deliveredInputs.push(input);
+        deliveredOptions.push(options);
         if (deliveredInputs.length === 1) {
           markFirstDeliveryStarted();
           await firstDeliveryGate;
@@ -2473,16 +2570,25 @@ test("messages queued during an active delivery are sent as the next ordered bat
 
   await service.sendAgentMessage(sessionId, {
     composerSubmissionId: "active-message-1",
-    message: "First"
+    message: "First",
+    vibe64User: {
+      username: "alice"
+    }
   });
   await firstDeliveryStarted;
   await service.sendAgentMessage(sessionId, {
     composerSubmissionId: "active-message-2",
-    message: "Second"
+    message: "Second",
+    vibe64User: {
+      username: "alice"
+    }
   });
   await service.sendAgentMessage(sessionId, {
     composerSubmissionId: "active-message-3",
-    message: "Third"
+    message: "Third",
+    vibe64User: {
+      username: "alice"
+    }
   });
   releaseFirstDelivery();
 
@@ -2502,6 +2608,18 @@ test("messages queued during an active delivery are sent as the next ordered bat
     "active-message-2",
     "active-message-3"
   ]);
+  assert.deepEqual(deliveredOptions.map((options) => options.turnOwnership), [{
+    reusable: true,
+    threadId: "active-thread",
+    turnId: "active-turn",
+    username: "alice"
+  }, {
+    reusable: true,
+    threadId: "active-thread",
+    turnId: "active-turn",
+    username: "alice"
+  }]);
+  assert.equal(readinessChecks, 0);
   assert.deepEqual(
     publicSessionResponse(harness.currentSession()).composerMessages.map((message) => message.state),
     ["delivered", "delivered", "delivered"]

@@ -122,7 +122,9 @@ function createCodexSessionAgentAdapter({
       return controller.startTerminal(context.sessionId, input);
     },
     async sendMessage(context, input = {}) {
-      return normalizeCodexSessionResult(await controller.sendMessage(context.sessionId, input));
+      return normalizeCodexSessionResult(await controller.sendMessage(context.sessionId, input, {
+        turnOwnership: context.turnOwnership
+      }));
     },
     async streamDetachedChatTurn(context, input = {}) {
       return controller.streamDetachedChatTurn(context.sessionId, input);

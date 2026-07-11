@@ -397,6 +397,25 @@ function useVibe64ComposerHandoffState({
       const optimistic = optimisticComposerTurn.value?.id === submissionId
         ? optimisticComposerTurn.value
         : optimisticComposerMessages.value[messageIndex];
+      const state = String(delivery?.state || "").trim();
+      if (state === "delivered") {
+        if (optimistic && optimistic.status !== "delivered") {
+          const delivered = {
+            ...optimistic,
+            error: "",
+            status: "delivered"
+          };
+          if (messageIndex >= 0) {
+            optimisticComposerMessages.value = optimisticComposerMessages.value.map((turn, index) => (
+              index === messageIndex ? delivered : turn
+            ));
+          } else {
+            optimisticComposerTurn.value = delivered;
+          }
+          changed = true;
+        }
+        continue;
+      }
       if (!optimistic) {
         const recovered = optimisticComposerMessageFromDelivery(delivery, {
           fallbackAfterSubmissionId: readRefOrGetterValue(composerHandoff)?.submissionId
@@ -410,7 +429,6 @@ function useVibe64ComposerHandoffState({
         }
         continue;
       }
-      const state = String(delivery?.state || "").trim();
       if (state === "failed" && optimistic.status !== "failed") {
         const failed = {
           ...optimistic,

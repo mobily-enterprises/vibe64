@@ -151,6 +151,7 @@ function createSessionAgentManager({
       session: operationOptions.session || null,
       sessionId: normalizeText(sessionId),
       transportId: adapter.transportId,
+      turnOwnership: operationOptions.turnOwnership || null,
       vibe64User: operationOptions.vibe64User || null
     };
     const run = async () => agentOperationResult(

@@ -51,6 +51,7 @@ import {
   vibe64RealtimeOriginPayload
 } from "@/lib/vibe64BrowserTabOrigin.js";
 
+const AGENT_MESSAGE_ACCEPT_TIMEOUT_MS = 10_000;
 const LAUNCH_CONTROLS_STABILITY_DELAY_MS = 1000;
 
 function runtimeCapabilitiesState({
@@ -427,6 +428,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const activeCodexTerminalState = computed(() => null);
   const codexTerminalListenWhenHidden = computed(() => false);
   const launchControlsStable = ref(false);
+  let agentMessageRequestSequence = 0;
+  let agentMessageRequestTail = Promise.resolve();
   let launchControlsStableTimer = 0;
   const capabilitiesState = computed(() => runtimeCapabilitiesState({
     data: readRefOrGetterValue(props.sessionData.capabilities),
@@ -571,41 +574,59 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   }
 
-  async function sendAgentMessage(input = {}) {
+  function sendAgentMessage(input = {}) {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
-      return false;
+      return Promise.resolve(false);
     }
-    try {
-      const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
-        message: String(input || "")
-      };
-      const result = await getUsersWebHttpClient().request(vibe64SessionPath(
-        readRefOrGetterValue(props.sessionData.sessionsApiPath),
-        sessionId,
-        "/agent-message"
-      ), {
-        body: agentTurnControlPayloadFromContext({
-          ...payload,
+    const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
+      message: String(input || "")
+    };
+    const body = agentTurnControlPayloadFromContext({
+      ...payload,
+      sessionId
+    });
+    const path = vibe64SessionPath(
+      readRefOrGetterValue(props.sessionData.sessionsApiPath),
+      sessionId,
+      "/agent-message"
+    );
+    agentMessageRequestSequence += 1;
+    const sequence = agentMessageRequestSequence;
+    vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.queued", {
+      messageId: String(body.composerSubmissionId || ""),
+      sequence,
+      sessionId
+    });
+    const request = agentMessageRequestTail.then(async () => {
+      try {
+        const result = await getUsersWebHttpClient().request(path, {
+          body,
+          method: "POST",
+          signal: AbortSignal.timeout(AGENT_MESSAGE_ACCEPT_TIMEOUT_MS)
+        });
+        void props.sessionData.refreshSessionData().catch(() => null);
+        const accepted = Boolean(result && result.ok !== false);
+        vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage", {
+          accepted,
+          messageId: String(body.composerSubmissionId || ""),
+          sequence,
           sessionId
-        }),
-        method: "POST"
-      });
-      await props.sessionData.refreshSessionData().catch(() => null);
-      const accepted = Boolean(result && result.ok !== false);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage", {
-        accepted,
-        sessionId
-      });
-      return accepted;
-    } catch (error) {
-      await props.sessionData.refreshSessionData().catch(() => null);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.error", {
-        error: String(error?.message || error || "Assistant message failed."),
-        sessionId
-      });
-      return false;
-    }
+        });
+        return accepted;
+      } catch (error) {
+        void props.sessionData.refreshSessionData().catch(() => null);
+        vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.error", {
+          error: String(error?.message || error || "Assistant message failed."),
+          messageId: String(body.composerSubmissionId || ""),
+          sequence,
+          sessionId
+        });
+        return false;
+      }
+    });
+    agentMessageRequestTail = request.then(() => undefined, () => undefined);
+    return request;
   }
 
   onMounted(() => {
