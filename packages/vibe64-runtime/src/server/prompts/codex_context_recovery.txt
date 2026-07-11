@@ -21,7 +21,7 @@ The provider-side transcript for the previous thread is missing. The persisted V
 
 Use this conversation as context for future routed Vibe64 turns. If details are missing, work them out from the repository files, session artifacts, git state, and code changes in the session source. Do not assume the provider transcript is complete.
 
-Do not inspect files, run commands, modify files, or emit a Vibe64 workflow result envelope for this recovery briefing.
+Do not inspect files, run commands, modify files, or emit a Vibe64 workflow result for this recovery briefing.
 
 Reply exactly:
 Vibe64 Codex context restored.

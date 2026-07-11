@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CODEX_APP_SERVER_WORKFLOW_RESULT_TOOL_NAME,
+  CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT,
   codexAppServerIdentityMetadata,
   codexAppServerPromptWithContextRefresh,
+  codexAppServerThreadStartSettings,
   codexAppServerThreadSettings,
   codexAppServerTurnPrompt,
   codexAppServerTurnSettings,
@@ -160,18 +163,19 @@ test("codex app-server bridge sends the user prompt unchanged", () => {
   );
 });
 
-test("codex app-server bridge can prepend a hidden context refresh", () => {
+test("codex app-server bridge keeps the user input before a hidden context refresh", () => {
   const prompt = codexAppServerPromptWithContextRefresh({
     contextRefresh: "Vibe64 session briefing\nJSKIT: use generators.",
     prompt: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Continue.",
     promptLabel: "Real Vibe64 routed turn"
   });
 
-  assert.match(prompt, /^VIBE64_CONTEXT_REFRESH:/u);
+  assert.match(prompt, /^Vibe64 interactive conversation turn:/u);
   assert.match(prompt, /This section is developer\/session context, not a user request\./u);
   assert.match(prompt, /--- BEGIN FRESH VIBE64 SESSION BRIEFING ---\nVibe64 session briefing\nJSKIT: use generators\./u);
-  assert.match(prompt, /Real Vibe64 routed turn:\n--- BEGIN VIBE64 INPUT ---\nVibe64 interactive conversation turn:/u);
+  assert.match(prompt, /Real Vibe64 routed turn context refresh:\nVIBE64_CONTEXT_REFRESH:/u);
   assert.match(prompt, /conversationRequest: Continue\./u);
+  assert.ok(prompt.indexOf("conversationRequest: Continue.") < prompt.indexOf("VIBE64_CONTEXT_REFRESH:"));
 });
 
 test("codex app-server bridge records the host CLI resume command for the same thread", () => {
@@ -182,6 +186,7 @@ test("codex app-server bridge records the host CLI resume command for the same t
   });
 
   assert.equal(metadata.agent_identity_conversation_id, "019e865d-8108-7740-912b-42ece83a5c73");
+  assert.equal(metadata.agent_workflow_result_transport, CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT);
   assert.equal(
     metadata.agent_resume_command,
     `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
@@ -224,10 +229,12 @@ test("codex app-server bridge starts a missing session thread and stores identit
   assert.equal(providerCalls.length, 1);
   assert.equal(providerCalls[0].method, "startThread");
   assert.equal(providerCalls[0].params.cwd, "/repo/worktree");
+  assert.equal(providerCalls[0].params.dynamicTools[0].name, CODEX_APP_SERVER_WORKFLOW_RESULT_TOOL_NAME);
   assert.equal(metadataValue(runtime, "agent_identity_provider"), "codex");
   assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-started");
   assert.equal(metadataValue(runtime, "agent_transport_kind"), "unix");
   assert.equal(metadataValue(runtime, "agent_transport_socket_path"), "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
+  assert.equal(metadataValue(runtime, "agent_workflow_result_transport"), CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT);
 });
 
 test("codex app-server bridge resumes an existing session thread", async () => {
@@ -259,6 +266,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
         agent_identity_provider: "codex",
         agent_identity_status: "ready",
         agent_identity_workdir: "/repo/worktree",
+        agent_workflow_result_transport: CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT,
         agent_transport_id: "codex_app_server"
       },
       sessionId: "session-1"
@@ -282,7 +290,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
   ]);
 });
 
-test("codex app-server bridge replaces stale missing-rollout session threads with a recovery briefing", async () => {
+test("codex app-server bridge replaces unreadable session threads after an invalid resume request", async () => {
   const runtime = fakeRuntime({
     conversationLog: [
       {
@@ -315,7 +323,20 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
         params,
         threadId
       });
-      throw new Error(`no rollout found for thread id ${threadId}`);
+      throw Object.assign(new Error("invalid request"), {
+        code: -32600,
+        method: "thread/resume"
+      });
+    },
+    async readThread(threadId) {
+      providerCalls.push({
+        method: "readThread",
+        threadId
+      });
+      throw Object.assign(new Error("invalid request"), {
+        code: -32600,
+        method: "thread/read"
+      });
     },
     async startThread(params) {
       providerCalls.push({
@@ -338,6 +359,7 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
         agent_identity_provider: "codex",
         agent_identity_status: "ready",
         agent_identity_workdir: "/repo/worktree",
+        agent_workflow_result_transport: CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT,
         agent_transport_id: "codex_app_server"
       },
       sessionId: "session-1"
@@ -347,28 +369,98 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
 
   assert.equal(result.threadId, "thread-replacement");
   assert.equal(result.replacedThreadId, "thread-stale");
-  assert.match(result.replacedThreadError?.message || "", /no rollout found for thread id thread-stale/u);
+  assert.equal(result.replacedThreadError?.code, -32600);
   assert.deepEqual(providerCalls.map((call) => call.method), [
     "resumeThread",
+    "readThread",
     "startThread",
     "sendTurn"
   ]);
   assert.equal(providerCalls[0].threadId, "thread-stale");
   assert.equal(providerCalls[0].params.developerInstructions, "Vibe64 briefing");
-  assert.equal(providerCalls[1].params.cwd, "/repo/worktree");
-  assert.equal(providerCalls[2].threadId, "thread-replacement");
-  assert.match(providerCalls[2].input, /VIBE64_CONTEXT_RECOVERY/u);
-  assert.match(providerCalls[2].input, /Previous provider thread:\nthread-stale/u);
-  assert.match(providerCalls[2].input, /Fresh provider thread:\nthread-replacement/u);
-  assert.match(providerCalls[2].input, /Can we talk about archive scope\?/u);
-  assert.match(providerCalls[2].input, /Checked the issue draft/u);
-  assert.match(providerCalls[2].input, /Use the archive branch/u);
+  assert.equal(providerCalls[2].params.cwd, "/repo/worktree");
+  assert.equal(providerCalls[3].threadId, "thread-replacement");
+  assert.match(providerCalls[3].input, /VIBE64_CONTEXT_RECOVERY/u);
+  assert.match(providerCalls[3].input, /Previous provider thread:\nthread-stale/u);
+  assert.match(providerCalls[3].input, /Fresh provider thread:\nthread-replacement/u);
+  assert.match(providerCalls[3].input, /Can we talk about archive scope\?/u);
+  assert.match(providerCalls[3].input, /Checked the issue draft/u);
+  assert.match(providerCalls[3].input, /Use the archive branch/u);
   assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-replacement");
   assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_id"), "thread-stale");
-  assert.match(
-    metadataValue(runtime, "codex_app_server_replaced_thread_error"),
-    /no rollout found for thread id thread-stale/u
+  assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_error"), "invalid request");
+});
+
+test("codex app-server bridge preserves a readable thread after an invalid resume request", async () => {
+  const runtime = fakeRuntime();
+  const providerCalls = [];
+  const provider = {
+    ...contextTurnProviderParts(providerCalls),
+    async ensureRuntime() {
+      return appServerRuntime();
+    },
+    async resumeThread(threadId) {
+      providerCalls.push({
+        method: "resumeThread",
+        threadId
+      });
+      throw Object.assign(new Error("invalid request"), {
+        code: -32600,
+        method: "thread/resume"
+      });
+    },
+    async readThread(threadId) {
+      providerCalls.push({
+        method: "readThread",
+        threadId
+      });
+      return {
+        id: threadId,
+        raw: {
+          id: threadId,
+          turns: []
+        }
+      };
+    },
+    async startThread() {
+      providerCalls.push({
+        method: "startThread"
+      });
+      return {
+        id: "thread-replacement"
+      };
+    }
+  };
+
+  await assert.rejects(
+    () => ensureCodexAppServerThreadForSession({
+      provider,
+      runtime,
+      session: {
+        metadata: {
+          agent_identity_conversation_id: "thread-readable",
+          agent_identity_provider: "codex",
+          agent_identity_status: "ready",
+          agent_identity_workdir: "/repo/worktree",
+          agent_workflow_result_transport: CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT,
+          agent_transport_id: "codex_app_server"
+        },
+        sessionId: "session-1"
+      },
+      workdir: "/repo/worktree"
+    }),
+    (error) => error?.code === -32600 && error?.method === "thread/resume"
   );
+  assert.deepEqual(providerCalls, [
+    {
+      method: "resumeThread",
+      threadId: "thread-readable"
+    },
+    {
+      method: "readThread",
+      threadId: "thread-readable"
+    }
+  ]);
 });
 
 test("codex app-server bridge does not replace transport resume failures", async () => {
@@ -406,6 +498,7 @@ test("codex app-server bridge does not replace transport resume failures", async
           agent_identity_provider: "codex",
           agent_identity_status: "ready",
           agent_identity_workdir: "/repo/worktree",
+          agent_workflow_result_transport: CODEX_APP_SERVER_WORKFLOW_RESULT_TRANSPORT,
           agent_transport_id: "codex_app_server"
         },
         sessionId: "session-1"
@@ -499,6 +592,20 @@ test("codex app-server bridge sends turns with app-server text input only", asyn
   assert.deepEqual(providerCalls[0].params.sandboxPolicy, {
     type: "dangerFullAccess"
   });
+  assert.equal(providerCalls[0].params.outputSchema, undefined);
+});
+
+test("codex app-server bridge advertises workflow results as a thread tool, not a turn output schema", () => {
+  const settings = codexAppServerThreadStartSettings({
+    cwd: "/repo/worktree"
+  });
+  const tool = settings.dynamicTools[0];
+
+  assert.equal(tool.name, CODEX_APP_SERVER_WORKFLOW_RESULT_TOOL_NAME);
+  assert.equal(tool.type, "function");
+  assert.deepEqual(tool.inputSchema.properties.kind.enum, ["ready", "waiting_for_input"]);
+  assert.deepEqual(tool.inputSchema.required, ["kind", "stepId", "stepStatus", "fields", "inputFields", "message"]);
+  assert.match(tool.description, /never print the arguments as JSON/u);
 });
 
 test("codex app-server bridge sends context refresh inside the next turn input", async () => {
@@ -525,9 +632,9 @@ test("codex app-server bridge sends context refresh inside the next turn input",
   });
 
   assert.equal(result.turn.id, "turn-1");
-  assert.match(result.input, /^VIBE64_CONTEXT_REFRESH:/u);
+  assert.match(result.input, /^Do the work\./u);
   assert.match(result.input, /JSKIT: use generators\./u);
-  assert.match(result.input, /Real Vibe64 routed turn:/u);
-  assert.match(result.input, /--- BEGIN VIBE64 INPUT ---\nDo the work\.\n--- END VIBE64 INPUT ---/u);
+  assert.match(result.input, /Real Vibe64 routed turn context refresh:/u);
+  assert.ok(result.input.indexOf("Do the work.") < result.input.indexOf("VIBE64_CONTEXT_REFRESH:"));
   assert.equal(providerCalls[0].input, result.input);
 });

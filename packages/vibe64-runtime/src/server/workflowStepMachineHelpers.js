@@ -15,7 +15,8 @@ import {
   WORK_WORD_ARTIFACT
 } from "./workflowArtifacts.js";
 import {
-  agentTurnResultInstruction
+  agentTurnResultContract,
+  plainAgentTurnResultContract
 } from "./agentTurnResults.js";
 import {
   normalizeWorkflowInputFields
@@ -160,6 +161,16 @@ function normalizeMachineInput(input = {}) {
     stepStatus: normalizeText(source.stepStatus),
     text: normalizeText(source.text)
   };
+}
+
+function inputResponseText(input = {}) {
+  return normalizeText(
+    input.conversationText ||
+    input.text ||
+    input.fields?.response ||
+    input.fields?.conversationRequest ||
+    input.message
+  );
 }
 
 function waitingInputStateDetails(input = {}, details = {}) {
@@ -342,32 +353,38 @@ function promptActionWaitingForInputPayload({
   };
 }
 
-function currentStepAgentResultInstruction({
+function currentStepAgentResultContract({
   doneFields = {},
   doneMeaning = "The step is complete.",
+  optionalDoneFields = [],
   waitingForInputMeaning = "You need more information from the user.",
   stepId = "{{session.currentStep}}",
   stepStatus = "{{session.stepMachine.status}}"
 } = {}) {
-  return [
-    agentTurnResultInstruction({
-      doneFields,
-      doneMeaning,
-      readyPayload: promptActionDonePayload({
-        kind: STEP_INPUT_KIND.READY,
-        stepId,
-        stepStatus,
-        fields: doneFields
-      }),
-      waitingForInputMeaning,
-      waitingPayload: promptActionWaitingForInputPayload({
-        stepId,
-        stepStatus
-      })
+  const contract = agentTurnResultContract({
+    doneFields,
+    doneMeaning,
+    optionalDoneFields,
+    readyPayload: promptActionDonePayload({
+      kind: STEP_INPUT_KIND.READY,
+      stepId,
+      stepStatus,
+      fields: doneFields
     }),
-    "",
-    ...questionPromptInstructionBullets()
-  ].join("\n");
+    waitingForInputMeaning,
+    waitingPayload: promptActionWaitingForInputPayload({
+      stepId,
+      stepStatus
+    })
+  });
+  return {
+    ...contract,
+    instruction: [
+      contract.instruction,
+      "",
+      ...questionPromptInstructionBullets()
+    ].join("\n")
+  };
 }
 
 function promptActionIsReadyForDone(input = {}) {
@@ -472,9 +489,7 @@ function promptStepWaitingView(context = {}, machine = {}, state = {}, message =
 
 function chatWithAiPromptInstructionOptions({
   decidedBy = "user",
-  doneFields = {
-    response: "Concise Markdown response describing what changed, checks run, and any blockers"
-  },
+  doneFields = {},
   doneMeaning = "",
   enoughWhen = "",
   waitingForInputMeaning = "You need a user answer before you can complete this conversation turn."
@@ -560,8 +575,13 @@ function createChatWithAiMachine({
       });
     },
 
-    promptInstruction() {
-      return currentStepAgentResultInstruction(chatWithAiPromptInstructionOptions(completionPolicy));
+    agentResultContract() {
+      if (normalizeText(completionPolicy?.decidedBy || "user") === "user") {
+        return plainAgentTurnResultContract({
+          instruction: questionPromptInstructionBullets().join("\n")
+        });
+      }
+      return currentStepAgentResultContract(chatWithAiPromptInstructionOptions(completionPolicy));
     }
   };
 }
@@ -578,6 +598,7 @@ function optionalActionsView(context = {}, state = {}, actionConfig = null) {
 // Shared lifecycle for steps that collect or receive draft artifact fields,
 // show those fields for user confirmation, then optionally wait for a command.
 function createEditableArtifactReviewMachine({
+  agentResultContract = null,
   command = null,
   completionMessage = "Draft submitted for review.",
   done,
@@ -602,7 +623,6 @@ function createEditableArtifactReviewMachine({
   onDoneActions = null,
   onWaitingActions = null,
   promptActionId = "",
-  promptInstruction = null,
   readValues,
   saveValues,
   stepId = "",
@@ -768,7 +788,7 @@ function createEditableArtifactReviewMachine({
           }
           if (input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
             await writeState(context, this, machineState(normalizeUserResponseResumeStatus(state, input), {
-              response: input.text || input.fields.response,
+              response: inputResponseText(input),
               source: input.source
             }));
             return;
@@ -837,7 +857,7 @@ function createEditableArtifactReviewMachine({
         : "";
     },
 
-    ...(typeof promptInstruction === "function" ? { promptInstruction } : {})
+    ...(typeof agentResultContract === "function" ? { agentResultContract } : {})
   };
 }
 
@@ -872,7 +892,7 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
       }
       if (promptActionIsReadyForDone(input)) {
         if (responseArtifact) {
-          await writePromptResponseArtifact(context, responseArtifact, input.fields.response || input.text);
+          await writePromptResponseArtifact(context, responseArtifact, inputResponseText(input));
         }
         await writeSessionLabelFromInput(context, input);
         await writeCurrentWorkFromInput(context, input);
@@ -943,7 +963,7 @@ async function submitCommandFailureInput(context = {}, machine = {}) {
     case STEP_STATUS.FAILED:
       if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
         await writeState(context, machine, machineState(STEP_STATUS.READY, {
-          response: input.text || input.fields.response,
+          response: inputResponseText(input),
           source: input.source
         }));
         return;
@@ -1073,9 +1093,10 @@ export {
   commandSucceeded,
   createChatWithAiMachine,
   createEditableArtifactReviewMachine,
-  currentStepAgentResultInstruction,
+  currentStepAgentResultContract,
   disableAction,
   handleStandardPromptInput,
+  inputResponseText,
   machineState,
   markCommandActionStarted,
   markPromptActionStarted,

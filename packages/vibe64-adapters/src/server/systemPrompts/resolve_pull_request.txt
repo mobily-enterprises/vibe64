@@ -4,7 +4,7 @@ Goal:
 - Inspect the current repository state and draft the pull request title and body.
 - Do not create the pull request.
 - Do not write Vibe64 artifacts directly.
-- Submit the result only by following the Vibe64 agent result contract appended to this prompt.
+- Submit the workflow fields only through the Vibe64 workflow-result control requested by this prompt.
 
 Body guidance:
 - Summarize the user-visible change.
@@ -13,4 +13,4 @@ Body guidance:
 - If this session stacks on `source_pr_url`, mention that relationship in the pull request body.
 - Mention blockers or risks only when they matter to the reviewer.
 
-After the Vibe64 agent result envelope, stop.
+After the normal response, stop.

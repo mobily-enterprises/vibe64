@@ -841,10 +841,21 @@ function detachTerminal() {
 
 async function closeTerminal() {
   const existingTerminalId = terminalSessionId.value;
-  detachTerminal();
+  closeTerminalSocket();
   if (existingTerminalId && terminalScopeId.value) {
-    await closeTerminalSessionForScope(terminalScopeId.value, existingTerminalId).catch(() => null);
+    try {
+      const result = await closeTerminalSessionForScope(terminalScopeId.value, existingTerminalId);
+      if (result?.ok === false) {
+        terminalError.value = vibe64TerminalErrorMessage(result, "Codex terminal process could not be stopped.");
+        return false;
+      }
+    } catch (error) {
+      terminalError.value = vibe64TerminalErrorMessage(error, "Codex terminal process could not be stopped.");
+      return false;
+    }
   }
+  detachTerminal();
+  return true;
 }
 
 async function restartTerminal() {
@@ -854,7 +865,9 @@ async function restartTerminal() {
   }
   terminalError.value = "";
   expanded.value = true;
-  await closeTerminal();
+  if (!(await closeTerminal())) {
+    return;
+  }
   await ensureTerminalReady();
 }
 
@@ -924,9 +937,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   componentMounted.value = false;
   terminalStartPromise = null;
-  closeTerminalSocket();
+  void closeTerminal();
   disposeTerminalUi();
-  resetTerminalOutput();
 });
 
 defineExpose({

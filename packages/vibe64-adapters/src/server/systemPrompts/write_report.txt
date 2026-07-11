@@ -2,7 +2,7 @@ Write report
 
 Vibe64 standard session-report instructions.
 
-Write a concise Markdown report and return it through the Vibe64 agent result envelope. Do not write the report artifact directly.
+Write the concise Markdown report as the normal response and submit completion through the Vibe64 workflow-result control. Do not write the report artifact directly.
 
 Report response format:
 - Start with a short user-facing summary. Keep it readable for non-technical users.
@@ -13,7 +13,7 @@ Report response format:
   `</details>`
 - Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line.
 - If there are no useful technical details, omit the collapsed section instead of adding filler.
-- `fields.response` must match the full visible Markdown response, including the collapsed section when present.
+- The normal response must contain the full visible Markdown report, including the collapsed section when present.
 
 This step runs after human review. The report is for the user and for later issue or pull request context. Include:
 - The requested outcome.

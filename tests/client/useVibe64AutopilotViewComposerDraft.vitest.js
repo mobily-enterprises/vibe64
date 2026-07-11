@@ -347,6 +347,32 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerControlValues.value.conversationRequest).toBe("Keep this draft.");
   });
 
+  it("keeps the conversation draft when interrupt recovery replaces the current control", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updateComposerControlValue("conversationRequest", "Draft survives Stop.");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Draft survives Stop.");
+
+    props.session.presentation.intents = [];
+    props.session.agentSession = agentSessionState({
+      active: false
+    });
+    await nextTick();
+
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Draft survives Stop.");
+
+    props.session.presentation.intents = [conversationControl()];
+    await nextTick();
+
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Draft survives Stop.");
+  });
+
   it("keeps the ready primary composer submit target after local selection state clears", async () => {
     const {
       useVibe64AutopilotView

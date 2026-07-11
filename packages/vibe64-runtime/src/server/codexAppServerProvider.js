@@ -57,6 +57,7 @@ const CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS = 2000;
 const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
+const CODEX_APP_SERVER_INVALID_REQUEST_CODE = -32600;
 const CODEX_AUTH_PREFLIGHT_TIMEOUT_MS = 15000;
 const CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES = 4096;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
@@ -93,6 +94,13 @@ function normalizePositiveInteger(value, fallback) {
 
 function hasOwn(object = {}, property = "") {
   return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+function codexAppServerRequestIsInvalid(error = null, method = "") {
+  const expectedMethod = normalizeAgentText(method);
+  const actualMethod = normalizeAgentText(error?.method);
+  return Number(error?.code) === CODEX_APP_SERVER_INVALID_REQUEST_CODE &&
+    (!expectedMethod || !actualMethod || actualMethod === expectedMethod);
 }
 
 function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
@@ -1130,6 +1138,7 @@ class CodexAppServerJsonRpcClient {
     this.nextRequestId = 1;
     this.notificationSubscribers = new Set();
     this.pendingRequests = new Map();
+    this.requestHandler = null;
     this.connected = false;
     this.socket = null;
   }
@@ -1222,6 +1231,10 @@ class CodexAppServerJsonRpcClient {
     };
   }
 
+  setRequestHandler(callback) {
+    this.requestHandler = typeof callback === "function" ? callback : null;
+  }
+
   notify(method, params) {
     this.send({
       method,
@@ -1265,6 +1278,10 @@ class CodexAppServerJsonRpcClient {
     } catch {
       return;
     }
+    if (Object.hasOwn(message, "id") && message.method) {
+      void this.handleServerRequest(message);
+      return;
+    }
     if (Object.hasOwn(message, "id")) {
       const pending = this.pendingRequests.get(message.id);
       if (!pending) {
@@ -1285,6 +1302,37 @@ class CodexAppServerJsonRpcClient {
     }
     for (const subscriber of this.notificationSubscribers) {
       subscriber(message);
+    }
+  }
+
+  async handleServerRequest(message = {}) {
+    try {
+      if (!this.requestHandler) {
+        const error = new Error(`Codex app-server client does not handle server request: ${message.method || "(missing method)"}`);
+        error.code = -32601;
+        throw error;
+      }
+      const result = await this.requestHandler({
+        id: message.id,
+        method: message.method,
+        params: message.params
+      });
+      this.send({
+        id: message.id,
+        result
+      });
+    } catch (error) {
+      try {
+        this.send({
+          error: {
+            code: Number.isSafeInteger(error?.code) ? error.code : -32000,
+            message: normalizeAgentText(error?.message) || "Codex app-server client request failed."
+          },
+          id: message.id
+        });
+      } catch {
+        // The app-server connection closed before the response could be delivered.
+      }
     }
   }
 
@@ -1369,6 +1417,7 @@ class CodexAppServerAgentProvider {
     this.connectionGeneration = 0;
     this.runtime = null;
     this.runtimePromise = null;
+    this.serverRequestHandler = null;
   }
 
   async ensureRuntime() {
@@ -1503,6 +1552,7 @@ class CodexAppServerAgentProvider {
       requestTimeoutMs: this.options.requestTimeoutMs,
       WebSocketImpl: this.options.WebSocketImpl
     });
+    client.setRequestHandler(this.serverRequestHandler);
     let initializeResult = null;
     try {
       await client.connect();
@@ -1576,6 +1626,18 @@ class CodexAppServerAgentProvider {
     return this.client.subscribe(callback);
   }
 
+  setServerRequestHandler(callback) {
+    const handler = typeof callback === "function" ? callback : null;
+    this.serverRequestHandler = handler;
+    this.client?.setRequestHandler?.(handler);
+    return () => {
+      if (this.serverRequestHandler === handler) {
+        this.serverRequestHandler = null;
+        this.client?.setRequestHandler?.(null);
+      }
+    };
+  }
+
   async startThread(params = {}) {
     const client = await this.activeClient();
     const response = await this.runRequest(
@@ -1615,6 +1677,7 @@ class CodexAppServerAgentProvider {
     const client = await this.activeClient();
     const response = await this.runRequest(
       () => client.request("thread/read", {
+        includeTurns: true,
         threadId: normalizeAgentText(threadId)
       }),
       "codex-app-server-thread-read"
@@ -1759,6 +1822,7 @@ function createCodexAppServerAgentProvider(options = {}) {
 }
 
 export {
+  CODEX_APP_SERVER_INVALID_REQUEST_CODE,
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_TRANSPORT,
@@ -1767,6 +1831,7 @@ export {
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexAppServerMetadataIsLive,
+  codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,

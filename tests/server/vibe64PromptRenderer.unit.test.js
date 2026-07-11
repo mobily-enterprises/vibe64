@@ -588,11 +588,10 @@ test("agent conversation prompt keeps simple conversation out of project preflig
   });
 
   assert.match(rendered.prompt, /do not read repository files, list directories, or inspect artifacts first/u);
-  assert.match(rendered.prompt, /finish every routed user-visible response with the Vibe64 agent result envelope/u);
-  assert.match(rendered.prompt, /Write the normal user-facing response first/u);
-  assert.match(rendered.prompt, /Keep the normal response text and the envelope `fields\.response` equivalent/u);
-  assert.match(rendered.prompt, /include `sessionLabel` in the Vibe64 agent result envelope `fields`/u);
-  assert.match(rendered.prompt, /Do not ask a separate naming question/u);
+  assert.match(rendered.prompt, /Write one normal user-facing response/u);
+  assert.match(rendered.prompt, /Do not append Vibe64 transport markers, JSON metadata, or a duplicate copy/u);
+  assert.doesNotMatch(rendered.prompt, /VIBE64_AGENT_RESULT/u);
+  assert.doesNotMatch(rendered.prompt, /result envelope/u);
   assert.doesNotMatch(rendered.prompt, /This is an interactive conversation step/u);
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
 });
@@ -802,8 +801,10 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /Do not commit or rewrite runtime-local Vibe64 state/u);
   assert.match(briefing, /Generated code index path: \.vibe64\/code-index\.md/u);
   assert.match(briefing, /Vibe64 agent result routing:/u);
-  assert.match(briefing, /VIBE64_AGENT_RESULT_BEGIN/u);
-  assert.match(briefing, /Write normal user-facing Markdown first/u);
+  assert.match(briefing, /Ordinary interactive conversation turns use the normal assistant response/u);
+  assert.match(briefing, /provide a Vibe64 workflow-result control/u);
+  assert.match(briefing, /Never print workflow-result arguments, JSON, or transport metadata/u);
+  assert.doesNotMatch(briefing, /VIBE64_AGENT_RESULT_BEGIN/u);
   assert.match(briefing, /does not include `VIBE64_ROUTED_TURN`/u);
   assert.match(briefing, /Direct terminal input does not advance Vibe64 workflow state/u);
 });

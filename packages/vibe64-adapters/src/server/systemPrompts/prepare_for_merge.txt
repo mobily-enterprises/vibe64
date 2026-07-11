@@ -12,6 +12,6 @@ Check the PR state, identify merge blockers, resolve blockers that can be fixed 
 
 Also confirm the recorded base branch and GitHub remote can be fetched after the PR merge so future sessions start from the updated remote state. Do not check out, pull, or mutate a shared checkout; Vibe64 sessions use isolated session clones and the shared cache is not a user working tree.
 
-When you complete this step, include `fields.mergePreparationSummary` in the Vibe64 agent result envelope. If no extra merge-preparation work was needed after pull request creation, set it to an empty string. If you changed files, created commits, adjusted repository state, fixed merge blockers, or performed any other extra work after pull request creation, set it to a concise Markdown summary of that work.
+When you complete this step, include `fields.mergePreparationSummary` in the Vibe64 workflow-result control. If no extra merge-preparation work was needed after pull request creation, set it to an empty string. If you changed files, created commits, adjusted repository state, fixed merge blockers, or performed any other extra work after pull request creation, set it to a concise Markdown summary of that work.
 
 Report whether the PR is ready to merge, whether the Git cache can be refreshed after merge, and what remains blocked.

@@ -19,6 +19,7 @@ import {
   CodexAppServerAgentProvider,
   CodexAppServerJsonRpcClient,
   codexAppServerEndpointForTarget,
+  codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
@@ -1291,6 +1292,22 @@ test("codex turn input uses the app-server text input shape", () => {
   ]);
 });
 
+test("codex provider classifies invalid requests by JSON-RPC code and method", () => {
+  assert.equal(codexAppServerRequestIsInvalid({
+    code: -32600,
+    method: "turn/steer"
+  }, "turn/steer"), true);
+  assert.equal(codexAppServerRequestIsInvalid({
+    code: -32600,
+    message: "localized provider message",
+    method: "turn/interrupt"
+  }, "turn/steer"), false);
+  assert.equal(codexAppServerRequestIsInvalid({
+    code: -32603,
+    method: "turn/steer"
+  }, "turn/steer"), false);
+});
+
 test("codex provider steers the active app-server turn with the expected turn id", async () => {
   const requests = [];
   const provider = new CodexAppServerAgentProvider({});
@@ -1321,6 +1338,39 @@ test("codex provider steers the active app-server turn with the expected turn id
             type: "text"
           }
         ],
+        threadId: "thread-1"
+      }
+    }
+  ]);
+});
+
+test("codex provider reads full thread turns for response recovery", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push({
+        method,
+        params
+      });
+      return {
+        thread: {
+          id: "thread-1",
+          turns: []
+        }
+      };
+    }
+  });
+
+  const result = await provider.readThread("thread-1");
+
+  assert.equal(result.id, "thread-1");
+  assert.deepEqual(result.raw.turns, []);
+  assert.deepEqual(requests, [
+    {
+      method: "thread/read",
+      params: {
+        includeTurns: true,
         threadId: "thread-1"
       }
     }
@@ -1484,6 +1534,38 @@ test("codex JSON-RPC client sends initialize and turn/start over WebSocket", asy
       threadId: "thread-1"
     }
   });
+  client.setRequestHandler(async (request) => {
+    assert.equal(request.method, "item/tool/call");
+    assert.equal(request.params.callId, "colliding-call");
+    return {
+      contentItems: [{
+        text: "accepted",
+        type: "inputText"
+      }],
+      success: true
+    };
+  });
+  socket.emit("message", {
+    data: JSON.stringify({
+      id: 2,
+      method: "item/tool/call",
+      params: {
+        arguments: {},
+        callId: "colliding-call"
+      }
+    })
+  });
+  await delay(0);
+  assert.deepEqual(socket.sent.at(-1), {
+    id: 2,
+    result: {
+      contentItems: [{
+        text: "accepted",
+        type: "inputText"
+      }],
+      success: true
+    }
+  });
   socket.emit("message", {
     data: JSON.stringify({
       id: 2,
@@ -1520,6 +1602,46 @@ test("codex JSON-RPC client sends initialize and turn/start over WebSocket", asy
     });
     assert.equal(error.method, "turn/steer");
     return true;
+  });
+
+  client.setRequestHandler(async (request) => {
+    assert.equal(request.method, "item/tool/call");
+    assert.deepEqual(request.params, {
+      arguments: {
+        kind: "waiting_for_input"
+      },
+      callId: "call-1"
+    });
+    return {
+      contentItems: [{
+        text: "accepted",
+        type: "inputText"
+      }],
+      success: true
+    };
+  });
+  socket.emit("message", {
+    data: JSON.stringify({
+      id: "server-request-1",
+      method: "item/tool/call",
+      params: {
+        arguments: {
+          kind: "waiting_for_input"
+        },
+        callId: "call-1"
+      }
+    })
+  });
+  await delay(0);
+  assert.deepEqual(socket.sent.at(-1), {
+    id: "server-request-1",
+    result: {
+      contentItems: [{
+        text: "accepted",
+        type: "inputText"
+      }],
+      success: true
+    }
   });
 
   client.close();

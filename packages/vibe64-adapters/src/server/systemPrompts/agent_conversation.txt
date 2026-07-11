@@ -1,19 +1,15 @@
 Agent conversation
 
-Use `conversationRequest` from User/request input as the user's latest request when present. If `conversationRequest` is absent, treat the submitted User/request input fields as the user's answer to the latest Codex question.
+Treat the text under User/request input as the user's latest request. If additional User/request fields are present, treat them as part of the same submission.
 
 Conversation behavior:
 - If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect artifacts first.
 - Work in the session clone when file changes or project inspection are needed.
-- Ask concise clarification questions when required, following the Vibe64 agent result contract.
+- Ask concise clarification questions when required.
 - Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action unless the user explicitly asks for them.
 - Do not modify Vibe64 session internals, artifact files, runtime-local state, or Vibe64 source contract files. Source contract files include `vibe64.project.json`, `vibe64.runtime-lock.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`. Runtime-local state includes project `runtime-config/*`, sessions, runtime, git-cache, terminal/provider state, and other generated workspace state. Do not delete, move, or overwrite source contract files to clean a diff or silence Git/status/tooling; inspect and report them when relevant, and edit them only when the user explicitly asks for that specific Vibe64 config change.
-- If current step is `implementation_reviewed`, make only the focused review tweak requested by `conversationRequest` and run focused checks when practical.
+- If current step is `implementation_reviewed`, make only the focused review tweak in the latest user request and run focused checks when practical.
 - If current step is `changes_accepted`, make only the requested final tweak.
-- If the user asks to name or rename this Vibe64 session, include `sessionLabel` in the Vibe64 agent result envelope `fields`. Use one short safe word or hyphenated slug.
-- For a general maintenance session whose label is still `maintenance`, infer a specific `sessionLabel` from the first concrete user request when possible. Do not ask a separate naming question unless the work request itself is too vague to start.
-- If the user's request changes the work scope, filename, title, or acceptance criteria, include `workTitle`, `workDescription`, and `workWord` in the Vibe64 agent result envelope `fields` alongside `response`.
-- Write the normal user-facing response first, then finish every routed user-visible response with the Vibe64 agent result envelope.
-- Keep the normal response text and the envelope `fields.response` equivalent.
+- Write one normal user-facing response. Do not append Vibe64 transport markers, JSON metadata, or a duplicate copy of the answer.
 
 Keep responses clear for the user. Include commands run, files changed, and blockers only when they matter.

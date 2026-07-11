@@ -20,8 +20,9 @@ import {
   commandFailureInteraction,
   commandStepView,
   commandSucceeded,
-  currentStepAgentResultInstruction,
+  currentStepAgentResultContract,
   disableAction,
+  inputResponseText,
   machineState,
   markCommandActionStarted,
   metadataExists,
@@ -907,7 +908,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
           await writeState(context, this, machineState(STEP_STATUS.READY, {
-            response: input.text || input.fields.response,
+            response: inputResponseText(input),
             source: input.source
           }));
           return;
@@ -1028,7 +1029,7 @@ const dependenciesInstalledMachine = {
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED || input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
           await writeState(context, this, machineState(STEP_STATUS.READY, {
-            response: input.text || input.fields.response,
+            response: inputResponseText(input),
             source: input.source
           }));
           return;
@@ -1330,13 +1331,13 @@ const createAndMergePullRequestMachine = {
               ? machineState(STEP_STATUS.CONFIRM_FILES, {
                   message: input.message,
                   phase: pullRequestPhase.REVIEW_DRAFT,
-                  response: input.text || input.fields.response,
+                  response: inputResponseText(input),
                   source: input.source
                 })
               : machineState(STEP_STATUS.READY, {
                   message: input.message,
                   phase: pullRequestPhase.DRAFTING,
-                  response: input.text || input.fields.response,
+                  response: inputResponseText(input),
                   source: input.source
                 }));
             return;
@@ -1344,14 +1345,14 @@ const createAndMergePullRequestMachine = {
           if (state.phase === pullRequestPhase.SYNCING_MAIN) {
             await writeState(context, this, machineState(STEP_STATUS.READY, {
               phase: pullRequestPhase.SYNC_READY,
-              response: input.text || input.fields.response,
+              response: inputResponseText(input),
               source: input.source
             }));
             return;
           }
           await writeState(context, this, machineState(STEP_STATUS.READY, {
             phase: state.phase || pullRequestPhase.MERGE_READY,
-            response: input.text || input.fields.response,
+            response: inputResponseText(input),
             source: input.source
           }));
           return;
@@ -1490,16 +1491,17 @@ const createAndMergePullRequestMachine = {
     return "Pull request draft submitted for review.";
   },
 
-  promptInstruction({ action = {} } = {}) {
+  agentResultContract({ action = {} } = {}) {
     return normalizeText(action.id) === "prepare_for_merge"
-      ? currentStepAgentResultInstruction({
+      ? currentStepAgentResultContract({
           doneFields: {
             mergePreparationSummary: "Markdown summary of extra merge-preparation work performed after pull request creation. Leave empty when no extra work was needed."
           },
           doneMeaning: "The pull request is ready for the merge command and the Git cache can be refreshed afterward.",
+          optionalDoneFields: ["mergePreparationSummary"],
           waitingForInputMeaning: "The merge preparation found a blocker that needs user input."
         })
-      : currentStepAgentResultInstruction({
+      : currentStepAgentResultContract({
           doneFields: {
             body: "Markdown pull request body",
             title: "Pull request title"

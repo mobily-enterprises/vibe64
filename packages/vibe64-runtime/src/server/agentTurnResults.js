@@ -1,21 +1,18 @@
-const AGENT_TURN_RESULT_SCHEMA = "vibe64.agent.turn_result.v1";
-const AGENT_TURN_RESULT_BEGIN = "VIBE64_AGENT_RESULT_BEGIN";
-const AGENT_TURN_RESULT_END = "VIBE64_AGENT_RESULT_END";
+import {
+  isPlainObject,
+  normalizeText
+} from "@local/vibe64-core/server/core";
+import {
+  normalizeWorkflowInputFields
+} from "./workflowInputFields.js";
 
-function normalizeText(value = "") {
-  return String(value ?? "").trim();
-}
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
-
-function stableJson(value) {
-  return JSON.stringify(value, null, 2);
-}
+const AGENT_TURN_RESULT_MODE = Object.freeze({
+  PLAIN: "plain",
+  STRUCTURED: "structured"
+});
 
 function agentTurnPayloadInstruction(title = "", payload = {}) {
-  const lines = [`- ${title} payload fields:`];
+  const lines = [`- ${title} fields:`];
   for (const [name, value] of Object.entries(isPlainObject(payload) ? payload : {})) {
     if (name === "fields" && isPlainObject(value)) {
       for (const [fieldName, fieldValue] of Object.entries(value)) {
@@ -28,155 +25,158 @@ function agentTurnPayloadInstruction(title = "", payload = {}) {
   return lines;
 }
 
-function agentTurnResultEnvelopeExample(payload = {}) {
-  return [
-    AGENT_TURN_RESULT_BEGIN,
-    stableJson({
-      schema: AGENT_TURN_RESULT_SCHEMA,
-      ...payload
-    }),
-    AGENT_TURN_RESULT_END
-  ].join("\n");
-}
-
-function agentTurnResultInstruction({
+function agentTurnResultContract({
   doneFields = {},
   doneMeaning = "The step is complete.",
+  optionalDoneFields = [],
   readyPayload = {},
   waitingForInputMeaning = "You need more information from the user.",
   waitingPayload = {}
 } = {}) {
   const ready = isPlainObject(readyPayload) ? readyPayload : {};
   const waiting = isPlainObject(waitingPayload) ? waitingPayload : {};
-  return [
-    "Vibe64 agent result contract:",
-    "- Do not write Vibe64 workflow artifacts directly for this step.",
-    "- Write the normal user-facing response first so it is readable in the terminal.",
-    "- Finish the turn with exactly one Vibe64 result envelope after the user-facing response.",
-    "- Vibe64 reads the envelope from the provider transcript and advances workflow state server-side.",
-    "- When the ready payload includes `fields.response`, keep the visible response text and `fields.response` equivalent.",
-    "- The envelope must be plain text with these markers on their own lines:",
-    agentTurnResultEnvelopeExample({
-      fields: doneFields,
-      kind: "ready",
-      stepId: ready.stepId || "{{session.currentStep}}",
-      stepStatus: ready.stepStatus || "{{session.stepMachine.status}}"
-    }),
-    "- Build the JSON object from the relevant payload fields below.",
-    ...agentTurnPayloadInstruction("Ready", ready),
-    "- Include any additional `fields` explicitly requested by this prompt.",
-    `- Meaning of ready: ${doneMeaning}`,
-    "",
-    "- If you need user input before this step can continue, use the waiting payload instead.",
-    ...agentTurnPayloadInstruction("Waiting", waiting),
-    `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
-    "- Optional waiting `inputFields`: include this array only when the answer needs structured fields instead of the default message box.",
-    "- Every input field object must include a non-empty `name` property. Do not use `id`; Vibe64 rejects input fields without `name`.",
-    "- Input field shape: `{ \"name\": \"fieldName\", \"label\": \"Field label\", \"kind\": \"text\" }`. Supported `kind` values are `text`, `textarea`, and `password`.",
-    "- For one small fixed-choice answer, keep the question as normal visible text and add a `Possible answers:` block with bullet choices like `- Button label: exact answer text to submit`. Do not use `inputFields` for simple answer choices.",
-    "- To ask for credentials, API keys, tokens, or other secrets, include an input field such as `{ \"name\": \"apiKey\", \"label\": \"API key\", \"kind\": \"password\", \"privacy\": \"private\" }`; ask for the value in the visible question but never include private values in later prompt text.",
-    "- Before the envelope, write the same question or blocker in normal response text so users can read it directly.",
-    "- Keep the visible question text and the envelope `message` equivalent.",
-    "",
-    "After the envelope, stop. Do not write workflow artifacts directly for this step."
-  ].join("\n");
-}
-
-function envelopeBounds(text = "") {
-  const source = String(text ?? "");
-  const beginIndex = source.lastIndexOf(AGENT_TURN_RESULT_BEGIN);
-  if (beginIndex < 0) {
-    return null;
-  }
-  const jsonStart = beginIndex + AGENT_TURN_RESULT_BEGIN.length;
-  const endIndex = source.indexOf(AGENT_TURN_RESULT_END, jsonStart);
-  if (endIndex < 0) {
-    return null;
-  }
+  const fields = isPlainObject(doneFields) ? doneFields : {};
+  const optionalFields = (Array.isArray(optionalDoneFields) ? optionalDoneFields : [])
+    .map((name) => normalizeText(name))
+    .filter((name) => name && Object.hasOwn(fields, name));
+  const stepId = normalizeText(ready.stepId || waiting.stepId || "{{session.currentStep}}");
+  const stepStatus = normalizeText(ready.stepStatus || waiting.stepStatus || "{{session.stepMachine.status}}");
   return {
-    beginIndex,
-    endIndex,
-    json: source.slice(jsonStart, endIndex).trim(),
-    source
+    fields,
+    instruction: [
+      "Vibe64 workflow result:",
+      "- Reply to the user normally. Do not print JSON, transport metadata, or a duplicate answer.",
+      "- Before the final response, submit the current workflow outcome through the provider's Vibe64 workflow-result control.",
+      ...agentTurnPayloadInstruction("Ready", {
+        ...ready,
+        fields
+      }),
+      `- Meaning of ready: ${doneMeaning}`,
+      "",
+      ...agentTurnPayloadInstruction("Waiting", waiting),
+      `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
+      "- For waiting_for_input, keep `message` identical to the user-facing question in the normal response.",
+      "- Use `inputFields` only for structured text, textarea, or password values. Every item needs `name`, `label`, `kind`, `privacy`, and `required`.",
+      "- For a small fixed choice, ask in Markdown and list the exact choices; do not create inputFields.",
+      "- Do not write Vibe64 workflow artifacts directly."
+    ].join("\n"),
+    mode: AGENT_TURN_RESULT_MODE.STRUCTURED,
+    optionalFields,
+    stepId,
+    stepStatus
   };
 }
 
-function stripAgentTurnResultEnvelope(text = "") {
-  let visibleText = String(text ?? "");
-  while (true) {
-    const bounds = envelopeBounds(visibleText);
-    if (!bounds) {
-      return visibleText.trim();
-    }
-    visibleText = [
-      bounds.source.slice(0, bounds.beginIndex).trim(),
-      bounds.source.slice(bounds.endIndex + AGENT_TURN_RESULT_END.length).trim()
-    ].filter(Boolean).join("\n\n");
-  }
+function plainAgentTurnResultContract({
+  instruction = ""
+} = {}) {
+  return {
+    fields: {},
+    instruction: normalizeText(instruction),
+    mode: AGENT_TURN_RESULT_MODE.PLAIN,
+    optionalFields: [],
+    stepId: "",
+    stepStatus: ""
+  };
 }
 
-function parseAgentTurnResultEnvelope(text = "", {
+function normalizedAgentTurnResult(result = {}, {
   source = "agent"
 } = {}) {
-  const bounds = envelopeBounds(text);
-  if (!bounds) {
+  if (!isPlainObject(result)) {
     return {
-      ok: false,
-      error: "Missing Vibe64 agent result envelope."
+      error: "Vibe64 workflow result must be an object.",
+      ok: false
     };
   }
-  let parsed = null;
+  let inputFields = [];
   try {
-    parsed = JSON.parse(bounds.json);
+    inputFields = normalizeWorkflowInputFields(result.inputFields, {
+      duplicateCode: "vibe64_duplicate_agent_workflow_input_field",
+      missingNameCode: "vibe64_agent_workflow_input_field_name_missing",
+      ownerLabel: "Vibe64 agent workflow result"
+    });
   } catch (error) {
     return {
-      ok: false,
-      error: `Invalid Vibe64 agent result JSON: ${error.message}`
+      error: normalizeText(error?.message) || "Vibe64 workflow result contains invalid input fields.",
+      ok: false
     };
   }
-  if (!isPlainObject(parsed)) {
-    return {
-      ok: false,
-      error: "Vibe64 agent result envelope must contain one JSON object."
-    };
-  }
-  if (parsed.schema !== AGENT_TURN_RESULT_SCHEMA) {
-    return {
-      ok: false,
-      error: `Unsupported Vibe64 agent result schema: ${normalizeText(parsed.schema) || "(missing)"}`
-    };
-  }
-  const kind = normalizeText(parsed.kind);
   const input = {
-    fields: isPlainObject(parsed.fields) ? parsed.fields : {},
-    inputFields: Array.isArray(parsed.inputFields) ? parsed.inputFields : [],
-    kind,
-    message: normalizeText(parsed.message),
+    fields: Object.fromEntries(Object.entries(isPlainObject(result.fields) ? result.fields : {}).map(([name, value]) => [
+      normalizeText(name),
+      normalizeText(value)
+    ]).filter(([name]) => Boolean(name))),
+    inputFields,
+    kind: normalizeText(result.kind),
+    message: normalizeText(result.message),
     source: normalizeText(source) || "agent",
-    stepId: normalizeText(parsed.stepId),
-    stepStatus: normalizeText(parsed.stepStatus),
-    text: normalizeText(parsed.text)
+    stepId: normalizeText(result.stepId),
+    stepStatus: normalizeText(result.stepStatus),
+    text: normalizeText(result.text)
   };
   if (!input.kind || !input.stepId || !input.stepStatus) {
     return {
-      ok: false,
-      error: "Vibe64 agent result envelope requires kind, stepId, and stepStatus."
+      error: "Vibe64 agent result requires kind, stepId, and stepStatus.",
+      ok: false
     };
   }
   return {
-    envelope: parsed,
     input,
-    ok: true,
-    visibleText: stripAgentTurnResultEnvelope(text)
+    ok: true
   };
 }
 
+function validateAgentTurnResult(result = {}, contract = null, {
+  source = "agent"
+} = {}) {
+  const normalized = normalizedAgentTurnResult(result, {
+    source
+  });
+  if (!normalized.ok) {
+    return normalized;
+  }
+  const input = normalized.input;
+  if (!isPlainObject(contract) || contract.mode !== AGENT_TURN_RESULT_MODE.STRUCTURED) {
+    return {
+      error: "The current Vibe64 turn does not accept a structured workflow result.",
+      ok: false
+    };
+  }
+  if (input.stepId !== normalizeText(contract.stepId) || input.stepStatus !== normalizeText(contract.stepStatus)) {
+    return {
+      error: `Vibe64 workflow result targets ${input.stepId}:${input.stepStatus}, but the active turn expects ${normalizeText(contract.stepId)}:${normalizeText(contract.stepStatus)}.`,
+      ok: false
+    };
+  }
+  if (input.kind === "waiting_for_input") {
+    return input.message
+      ? normalized
+      : {
+          error: "A waiting Vibe64 workflow result requires a user-facing message.",
+          ok: false
+        };
+  }
+  if (input.kind !== "ready") {
+    return {
+      error: `Unsupported Vibe64 workflow result kind: ${input.kind || "(missing)"}.`,
+      ok: false
+    };
+  }
+  const missingFields = Object.keys(isPlainObject(contract.fields) ? contract.fields : {})
+    .filter((name) => !(Array.isArray(contract.optionalFields) ? contract.optionalFields : []).includes(name))
+    .filter((name) => !normalizeText(input.fields[name]));
+  return missingFields.length === 0
+    ? normalized
+    : {
+        error: `A ready Vibe64 workflow result requires non-empty fields: ${missingFields.join(", ")}.`,
+        ok: false
+      };
+}
+
 export {
-  AGENT_TURN_RESULT_BEGIN,
-  AGENT_TURN_RESULT_END,
-  AGENT_TURN_RESULT_SCHEMA,
-  agentTurnResultEnvelopeExample,
-  agentTurnResultInstruction,
-  parseAgentTurnResultEnvelope,
-  stripAgentTurnResultEnvelope
+  AGENT_TURN_RESULT_MODE,
+  agentTurnResultContract,
+  plainAgentTurnResultContract,
+  validateAgentTurnResult
 };

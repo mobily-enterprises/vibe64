@@ -18,11 +18,6 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  AGENT_TURN_RESULT_BEGIN,
-  AGENT_TURN_RESULT_END,
-  AGENT_TURN_RESULT_SCHEMA
-} from "@local/vibe64-runtime/server/agentTurnResults";
-import {
   TargetAdapter,
   adapterProjectFacts
 } from "@local/vibe64-adapters/server";
@@ -313,7 +308,9 @@ test("Vibe64 Codex app-server event classifier recognizes task completion final 
     method: "codex/event",
     params: {
       event: {
+        id: "task-complete-event-1",
         payload: {
+          id: "task-complete-payload-1",
           last_agent_message: "Task complete final result.",
           turn_id: "turn-1"
         },
@@ -329,6 +326,24 @@ test("Vibe64 Codex app-server event classifier recognizes task completion final 
     threadId: "thread-1",
     turnId: "turn-1"
   });
+
+  assert.equal(classifyCodexAppServerEvent({
+    method: "codex/event",
+    params: {
+      event: {
+        id: "response-item-event-1",
+        payload: {
+          id: "assistant-item-1",
+          phase: "final_answer",
+          text: "Response item final result.",
+          type: "agentMessage"
+        },
+        type: "response_item"
+      },
+      threadId: "thread-1",
+      turnId: "turn-1"
+    }
+  }).itemId, "");
 
   assert.deepEqual(classifyCodexAppServerEvent({
     method: "task_complete",
@@ -361,7 +376,9 @@ async function noopCodexAuthPreflight() {
 
 function codexAppServerAgentRun({
   error = "",
+  events = [],
   finishedAt = "",
+  inputSource = "",
   providerStatus = "inProgress",
   providerThreadId = "",
   providerTurnId = "",
@@ -369,14 +386,16 @@ function codexAppServerAgentRun({
   state = VIBE64_AGENT_RUN_STATE.ACTIVE,
   stepId = "",
   stepStatus = "",
-  updatedAt = ""
+  updatedAt = "",
+  workflowResultContract = null
 } = {}) {
   return {
     active: vibe64AgentRunStateIsActive(state),
     error,
-    events: [],
+    events,
     finishedAt,
     id: CODEX_APP_SERVER_AGENT_RUN_ID,
+    ...(inputSource ? { inputSource } : {}),
     provider: "codex",
     providerInterface: "app-server",
     providerStatus,
@@ -386,7 +405,8 @@ function codexAppServerAgentRun({
     stepId,
     stepStatus,
     updatedAt,
-    state
+    state,
+    ...(workflowResultContract ? { workflowResultContract } : {})
   };
 }
 
@@ -2361,6 +2381,7 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
@@ -2433,6 +2454,133 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
   });
 });
 
+test("Vibe64 Codex visible terminal stays off until requested and its close kills the process", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "visible-terminal-explicit-lifecycle";
+    const threadId = "00000000-0000-4000-8000-000000000218";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const namespace = codexTerminalNamespace(sessionId);
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_id: "codex_app_server",
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const appServerRuntime = {
+      endpoint: `unix://${path.join(targetRoot, "app-server.sock")}`,
+      runtimeDir: path.join(targetRoot, "app-server"),
+      socketPath: path.join(targetRoot, "app-server.sock"),
+      transport: "unix"
+    };
+    const terminalRequests = [];
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        connectionGeneration: 1,
+        async ensureAvailable() {
+          return true;
+        },
+        async ensureRuntime() {
+          return appServerRuntime;
+        },
+        async readThreadStatus() {
+          return {
+            raw: {
+              status: {
+                type: "idle"
+              }
+            }
+          };
+        },
+        async resumeThread(id) {
+          return {
+            id
+          };
+        },
+        setServerRequestHandler() {
+          return () => {};
+        },
+        subscribe() {
+          return () => {};
+        }
+      }),
+      codexToolHomeRequired: true,
+      codexToolHomeSource: homedir(),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      runCommand(request = {}) {
+        terminalRequests.push(request);
+        return startTerminalSession({
+          args: [
+            "-e",
+            "process.stdin.resume(); setInterval(() => {}, 1000);"
+          ],
+          command: process.execPath,
+          commandPreview: request.terminal.commandPreview,
+          cwd: request.cwd,
+          detachedIdleTimeoutMs: request.terminal.detachedIdleTimeoutMs,
+          metadata: request.terminal.metadata,
+          namespace: request.terminal.namespace,
+          onClose: request.terminal.onClose,
+          reuseRunning: request.terminal.reuseRunning
+        });
+      }
+    });
+
+    const idleState = await controller.terminalState(sessionId);
+
+    assert.equal(idleState.ok, true);
+    assert.equal(terminalRequests.length, 0);
+    assert.equal(countRunningTerminalSessions({
+      namespacePrefix: namespace
+    }), 0);
+
+    const started = await controller.startTerminal(sessionId, {
+      originId: "tab:test"
+    });
+
+    assert.equal(started.ok, true, JSON.stringify(started, null, 2));
+    assert.equal(terminalRequests.length, 1);
+    assert.equal(terminalRequests[0].terminal.detachedIdleTimeoutMs, 5_000);
+    assert.equal(countRunningTerminalSessions({
+      namespacePrefix: namespace
+    }), 1);
+
+    const closed = await controller.closeTerminal(sessionId, started.id);
+
+    assert.deepEqual(closed, {
+      closed: true,
+      ok: true
+    });
+    assert.equal(countRunningTerminalSessions({
+      namespacePrefix: namespace
+    }), 0);
+  });
+});
+
 test("Vibe64 Codex visible terminal attaches to an active tracked turn without readiness recovery", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-active-turn-attach";
@@ -2449,6 +2597,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
@@ -3459,6 +3608,7 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
@@ -3527,7 +3677,17 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
             },
             async resumeThread(resumedThreadId) {
               providerCalls.resumeThread.push(resumedThreadId);
-              throw new Error(`thread ${resumedThreadId} not found`);
+              throw Object.assign(new Error("invalid request"), {
+                code: -32600,
+                method: "thread/resume"
+              });
+            },
+            async readThread(readThreadId) {
+              assert.equal(readThreadId, threadId);
+              throw Object.assign(new Error("invalid request"), {
+                code: -32600,
+                method: "thread/read"
+              });
             },
             async sendTurn(sentThreadId, input) {
               providerCalls.sendTurn.push({
@@ -3598,6 +3758,7 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
@@ -3724,6 +3885,7 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
     await runtime.createSession({
       initialStep: "maintenance_conversation",
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
@@ -4363,6 +4525,91 @@ test("Vibe64 Codex terminal close does not have a stale process fallback when me
   });
 });
 
+test("Vibe64 Codex polling cannot complete a claimed turn before its provider turn id arrives", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_identity_pending";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          inputSource: "workflow",
+          providerStatus: "starting",
+          providerThreadId: "thread-1",
+          providerTurnId: "",
+          state: VIBE64_AGENT_RUN_STATE.STARTING,
+          updatedAt: new Date().toISOString()
+        })
+      ],
+      currentStep: "seed_application_defined",
+      metadata: {
+        agent_transport_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        agent_transport_runtime_dir: runtimeDir,
+        agent_transport_socket_path: path.join(runtimeDir, "app-server.sock"),
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "awaiting_agent_result"
+      },
+      targetRoot
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    let readThreadStatusCalls = 0;
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerProviderFactory: () => ({
+        async readThreadStatus() {
+          readThreadStatusCalls += 1;
+          return {
+            raw: {
+              status: "completed"
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+    const run = codexAppServerAgentRunSnapshot(session);
+
+    assert.equal(state.ok, true);
+    assert.equal(readThreadStatusCalls, 1);
+    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.STARTING);
+    assert.equal(run.providerStatus, "starting");
+    assert.equal(run.providerTurnId, "");
+    assert.equal(run.error, "");
+    assert.equal(state.codexAgentTurn.active, true);
+    assert.equal(state.codexAgentTurn.state, "starting");
+  });
+});
+
 test("Vibe64 Codex terminal state reconciles stale active app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_reconcile";
@@ -4554,7 +4801,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
   });
 });
 
-test("Vibe64 Codex terminal state recovers stale finalizing app-server turns from the provider transcript", async () => {
+test("Vibe64 Codex terminal recovery preserves distinct app-server item ids even when text overlaps", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_recovered";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -4565,33 +4812,47 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
     await mkdir(worktree, {
       recursive: true
     });
-    const assistantText = [
-      "Recovered provider transcript result.",
-      "",
-      AGENT_TURN_RESULT_BEGIN,
-      JSON.stringify({
-        fields: {
-          response: "Recovered provider transcript result."
-        },
-        kind: "ready",
-        schema: AGENT_TURN_RESULT_SCHEMA,
-        stepId: "implementation_reviewed",
-        stepStatus: "awaiting_agent_result"
-      }),
-      AGENT_TURN_RESULT_END
-    ].join("\n");
+    const assistantText = "What should the app do?";
+    const workflowResult = {
+      fields: {},
+      inputFields: [],
+      kind: "waiting_for_input",
+      message: "What should the app do?",
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
+    const workflowResultContract = {
+      fields: {
+        body: "App definition.",
+        title: "Work title.",
+        word: "Session word."
+      },
+      mode: "structured",
+      optionalFields: [],
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
     const session = {
       agentRuns: [
         codexAppServerAgentRun({
+          events: [{
+            callId: "workflow-result-1",
+            kind: "codex-app-server-workflow-result-accepted",
+            providerThreadId: threadId,
+            providerTurnId: turnId,
+            workflowResult
+          }],
+          inputSource: "workflow",
           providerStatus: "completed",
           providerThreadId: threadId,
           providerTurnId: turnId,
           state: "finalizing",
-          updatedAt: "2000-01-01T00:00:00.000Z"
+          updatedAt: "2000-01-01T00:00:00.000Z",
+          workflowResultContract
         })
       ],
       completedSteps: ["source_created"],
-      currentStep: "implementation_reviewed",
+      currentStep: "seed_application_defined",
       currentStepDefinition: {
         autopilot: {
           kind: "agent_conversation"
@@ -4631,6 +4892,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
         }
       }
     };
+    const readThreadCalls = [];
     const resumeThreadCalls = [];
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
@@ -4648,6 +4910,12 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
             threadId: resumedThreadId
           });
           return {
+            id: resumedThreadId
+          };
+        },
+        async readThread(readThreadId) {
+          readThreadCalls.push(readThreadId);
+          return {
             raw: {
               turns: [
                 {
@@ -4661,7 +4929,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
                     },
                     {
                       id: "assistant-message-2",
-                      text: "Late recovered steering answer.",
+                      text: `${assistantText} You're welcome.`,
                       type: "agentMessage"
                     }
                   ],
@@ -4691,16 +4959,15 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
         threadId
       }
     ]);
+    assert.deepEqual(readThreadCalls, [threadId]);
     assert.deepEqual(session.lastStepInput, {
-      conversationText: "Recovered provider transcript result.\n\nLate recovered steering answer.",
-      fields: {
-        response: "Recovered provider transcript result."
-      },
+      conversationText: "What should the app do?\n\nWhat should the app do? You're welcome.",
+      fields: {},
       inputFields: [],
-      kind: "ready",
-      message: "",
+      kind: "waiting_for_input",
+      message: "What should the app do?",
       source: "codex",
-      stepId: "implementation_reviewed",
+      stepId: "seed_application_defined",
       stepStatus: "awaiting_agent_result",
       text: ""
     });
@@ -4725,14 +4992,23 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
       recursive: true
     });
     const assistantText = "Done. I adjusted the jobs screen and ran the focused checks.";
+    const workflowResultContract = {
+      fields: {},
+      mode: "plain",
+      optionalFields: [],
+      stepId: "",
+      stepStatus: ""
+    };
     const session = {
       agentRuns: [
         codexAppServerAgentRun({
+          inputSource: "workflow",
           providerStatus: "completed",
           providerThreadId: threadId,
           providerTurnId: turnId,
           state: "finalizing",
-          updatedAt: "2000-01-01T00:00:00.000Z"
+          updatedAt: "2000-01-01T00:00:00.000Z",
+          workflowResultContract
         })
       ],
       completedSteps: ["source_created"],
@@ -4784,6 +5060,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
         }
       }
     };
+    const readThreadCalls = [];
     const resumeThreadCalls = [];
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
@@ -4800,6 +5077,12 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
             params,
             threadId: resumedThreadId
           });
+          return {
+            id: resumedThreadId
+          };
+        },
+        async readThread(readThreadId) {
+          readThreadCalls.push(readThreadId);
           return {
             raw: {
               turns: [
@@ -4839,10 +5122,10 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
         threadId
       }
     ]);
+    assert.deepEqual(readThreadCalls, [threadId]);
     assert.deepEqual(session.lastStepInput, {
-      fields: {
-        response: assistantText
-      },
+      conversationText: assistantText,
+      fields: {},
       kind: "ready",
       source: "codex",
       stepId: "maintenance_conversation",
@@ -4869,34 +5152,49 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
     await mkdir(worktree, {
       recursive: true
     });
-    const assistantText = [
-      "For login, JSKIT uses Supabase here.",
-      "",
-      AGENT_TURN_RESULT_BEGIN,
-      JSON.stringify({
-        inputFields: [
-          {
-            id: "supabase_project_url",
-            kind: "text",
-            label: "Project URL"
-          }
-        ],
-        kind: "waiting_for_input",
-        message: "For login, JSKIT uses Supabase here.",
-        schema: AGENT_TURN_RESULT_SCHEMA,
-        stepId: "seed_application_defined",
-        stepStatus: "awaiting_agent_result"
-      }),
-      AGENT_TURN_RESULT_END
-    ].join("\n");
+    const assistantText = "For login, JSKIT uses Supabase here.";
+    const workflowResult = {
+      fields: {},
+      inputFields: [
+        {
+          id: "supabase_project_url",
+          kind: "text",
+          label: "Project URL"
+        }
+      ],
+      kind: "waiting_for_input",
+      message: "For login, JSKIT uses Supabase here.",
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
+    const workflowResultContract = {
+      fields: {
+        body: "App definition.",
+        title: "Work title.",
+        word: "Session word."
+      },
+      mode: "structured",
+      optionalFields: [],
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
     const session = {
       agentRuns: [
         codexAppServerAgentRun({
+          events: [{
+            callId: "workflow-result-1",
+            kind: "codex-app-server-workflow-result-accepted",
+            providerThreadId: threadId,
+            providerTurnId: turnId,
+            workflowResult
+          }],
+          inputSource: "workflow",
           providerStatus: "completed",
           providerThreadId: threadId,
           providerTurnId: turnId,
           state: "finalizing",
-          updatedAt: "2000-01-01T00:00:00.000Z"
+          updatedAt: "2000-01-01T00:00:00.000Z",
+          workflowResultContract
         })
       ],
       completedSteps: ["source_created"],
@@ -4943,6 +5241,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
         }
       }
     };
+    const readThreadCalls = [];
     const resumeThreadCalls = [];
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
@@ -4959,6 +5258,12 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
             params,
             threadId: resumedThreadId
           });
+          return {
+            id: resumedThreadId
+          };
+        },
+        async readThread(readThreadId) {
+          readThreadCalls.push(readThreadId);
           return {
             raw: {
               turns: [
@@ -4999,15 +5304,14 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
         threadId
       }
     ]);
+    assert.deepEqual(readThreadCalls, [threadId]);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
-    assert.match(agentRunError, /returned an assistant result, but Vibe64 could not process it/u);
-    assert.match(agentRunError, /Vibe64 waiting input field is missing a name/u);
-    assert.match(agentRunError, /Input field descriptors must include `name`; `id` is not accepted/u);
+    assert.equal(agentRunError, "");
+    assert.match(session.returnedControl?.message || "", /Vibe64 agent workflow result field is missing a name/u);
     assert.doesNotMatch(agentRunError, /did not receive the assistant result text/u);
     assert.equal(session.stepMachine.status, "waiting_for_input");
-    assert.equal(session.returnedControl?.message, agentRunError);
-    assert.equal(session.returnedControl?.inputPrompt, agentRunError);
+    assert.match(session.returnedControl?.inputPrompt || "", /Retry the step/u);
     assert.equal(state.codexAgentTurn.active, false);
     assert.equal(state.codexAgentTurn.state, "idle");
   });
@@ -5133,7 +5437,30 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     await mkdir(worktree, {
       recursive: true
     });
+    const plainResultContract = {
+      fields: {},
+      mode: "plain",
+      optionalFields: [],
+      stepId: "",
+      stepStatus: ""
+    };
+    const structuredResultContract = {
+      fields: {
+        body: "App definition.",
+        title: "Work title.",
+        word: "Session word."
+      },
+      mode: "structured",
+      optionalFields: [],
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
     const session = {
+      actionResult: {
+        agentPromptHandoff: {
+          resultContract: plainResultContract
+        }
+      },
       actionAttempts: [],
       artifactsRoot: path.join(sessionRoot, "artifacts"),
       completedSteps: ["source_created"],
@@ -5148,6 +5475,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         }
       },
       metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
         agent_identity_conversation_id: "stale-codex-thread",
         agent_identity_provider: "codex",
         agent_identity_status: "ready",
@@ -5384,7 +5712,10 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     };
     const providerFactoryOptions = [];
     const providerSubscribers = [];
+    let providerRequestHandler = null;
+    let earlyWorkflowResultResponse = null;
     let appServerPromptTurnCount = 0;
+    const providerThreadItems = new Map();
     const provider = {
       close() {
         providerCalls.close += 1;
@@ -5421,7 +5752,28 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             id: threadId
           };
         }
-        throw new Error(`no rollout found for thread id ${threadId}`);
+        throw Object.assign(new Error("invalid request"), {
+          code: -32600,
+          method: "thread/resume"
+        });
+      },
+      async readThread(threadId) {
+        if (threadId === "stale-codex-thread") {
+          throw Object.assign(new Error("invalid request"), {
+            code: -32600,
+            method: "thread/read"
+          });
+        }
+        return {
+          raw: {
+            id: threadId,
+            turns: [...providerThreadItems.entries()].map(([id, items]) => ({
+              id,
+              items,
+              status: "completed"
+            }))
+          }
+        };
       },
       async sendTurn(threadId, input, params) {
         const bootstrapTurn = /VIBE64_SESSION_BOOTSTRAP/u.test(input);
@@ -5434,18 +5786,40 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           params,
           threadId
         });
-        return {
-          id: bootstrapTurn
+        const turnId = bootstrapTurn
             ? "codex-bootstrap-turn-1"
             : recoveryTurn
               ? "codex-context-recovery-turn-1"
-              : `codex-app-server-turn-${appServerPromptTurnCount}`,
+              : `codex-app-server-turn-${appServerPromptTurnCount}`;
+        if (!bootstrapTurn && !recoveryTurn) {
+          earlyWorkflowResultResponse = await providerRequestHandler({
+            id: "server-request-before-turn-start-returned",
+            method: "item/tool/call",
+            params: {
+              arguments: {
+                fields: {},
+                inputFields: [],
+                kind: "waiting_for_input",
+                message: "What should the app do?",
+                stepId: "seed_application_defined",
+                stepStatus: "awaiting_agent_result"
+              },
+              callId: "workflow-call-before-turn-start-returned",
+              threadId,
+              tool: "vibe64_submit_workflow_result",
+              turnId
+            }
+          });
+        }
+        return {
+          id: turnId,
           status: bootstrapTurn || recoveryTurn ? "completed" : "inProgress"
         };
       },
-      async steerTurn(threadId, turnId, input) {
+      async steerTurn(threadId, turnId, input, params = {}) {
         providerCalls.steerTurn.push({
           input,
+          params,
           threadId,
           turnId
         });
@@ -5466,6 +5840,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           const index = providerSubscribers.indexOf(callback);
           if (index >= 0) {
             providerSubscribers.splice(index, 1);
+          }
+        };
+      },
+      setServerRequestHandler(callback) {
+        providerRequestHandler = typeof callback === "function" ? callback : null;
+        return () => {
+          if (providerRequestHandler === callback) {
+            providerRequestHandler = null;
           }
         };
       }
@@ -5518,12 +5900,28 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     });
 
     const result = await controller.injectCodexPrompt(sessionId, {
+      clientSubmissionId: "composer:unit:initial-prompt",
       handoffId: "000001-maintenance_conversation.json:agent_conversation",
       kind: "agent_prompt_handoff",
+      resultContract: structuredResultContract,
       terminalInput: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Verify app-server prompt delivery."
     });
 
     assert.equal(result.ok, true);
+    assert.equal(earlyWorkflowResultResponse?.success, true);
+    assert.deepEqual(
+      codexAppServerAgentRunSnapshot(session).workflowResultContract,
+      structuredResultContract
+    );
+    assert.equal(
+      codexAppServerAgentRunSnapshot(session).events.filter((event) => (
+        event.kind === "codex-app-server-workflow-result-accepted"
+      )).length,
+      1
+    );
+    codexAppServerAgentRunSnapshot(session).events = codexAppServerAgentRunSnapshot(session).events.filter((event) => (
+      event.kind !== "codex-app-server-workflow-result-accepted"
+    ));
     assert.equal(result.turnId, "codex-app-server-turn-1");
     assert.equal(result.codexAgentTurn.active, true);
     assert.equal(providerCalls.ensureAvailable, 1);
@@ -5553,8 +5951,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.startThread[0].cwd, worktree);
     assert.equal(providerCalls.startThread[0].model, "gpt-5.6-sol");
     assert.equal(providerCalls.startThread[0].sandbox, "danger-full-access");
+    assert.equal(providerCalls.startThread[0].dynamicTools[0].name, "vibe64_submit_workflow_result");
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
-    assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result contract/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result routing/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /workflow-result control/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /ordinary Markdown/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Live progress instruction/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /`git` and `gh` are available/u);
     const recoveryTurnCall = providerCalls.sendTurn[0];
@@ -5571,7 +5972,35 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.deepEqual(promptTurnCall.params.sandboxPolicy, {
       type: "dangerFullAccess"
     });
+    assert.equal(promptTurnCall.params.outputSchema, undefined);
     assert.match(promptTurnCall.input, /Verify app-server prompt delivery/u);
+    assert.equal(promptTurnCall.params.clientUserMessageId, "composer:unit:initial-prompt");
+    assert.deepEqual(
+      codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds,
+      [promptTurnCall.params.clientUserMessageId]
+    );
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          clientId: promptTurnCall.params.clientUserMessageId,
+          content: [{
+            text: promptTurnCall.input,
+            type: "text"
+          }],
+          id: "workflow-prompt-user-message",
+          type: "userMessage"
+        },
+        threadId: promptTurnCall.threadId,
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(
+      conversationLog.some((turn) => turn.user?.text === promptTurnCall.input),
+      false
+    );
+    assert.deepEqual(codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds, []);
     assert.equal(session.metadata.agent_identity_provider, "codex");
     assert.equal(session.metadata.agent_identity_status, "ready");
     assert.equal(
@@ -5580,6 +6009,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(session.metadata.agent_identity_workdir, worktree);
     assert.equal(session.metadata.agent_identity_resume_strategy, "provider-native");
+    assert.equal(session.metadata.agent_workflow_result_transport, "dynamic_tool_v1");
     assert.equal(session.metadata.agent_transport_endpoint, `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`);
     assert.equal(session.metadata.agent_transport_kind, "unix");
     assert.equal(
@@ -5618,6 +6048,86 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex-app-server-turn-active"
     ]);
     assert.equal(providerSubscribers.length, 1);
+    assert.equal(typeof providerRequestHandler, "function");
+    const workflowToolRequest = {
+      id: "server-request-1",
+      method: "item/tool/call",
+      params: {
+        callId: "workflow-call-1",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        tool: "vibe64_submit_workflow_result",
+        turnId: "codex-app-server-turn-1"
+      }
+    };
+    const rejectedWorkflowResult = await providerRequestHandler({
+      ...workflowToolRequest,
+      params: {
+        ...workflowToolRequest.params,
+        arguments: {
+          fields: {
+            body: "",
+            title: "",
+            word: ""
+          },
+          inputFields: [],
+          kind: "ready",
+          message: "",
+          stepId: "seed_application_defined",
+          stepStatus: "awaiting_agent_result"
+        }
+      }
+    });
+    assert.equal(rejectedWorkflowResult.success, false);
+    assert.match(rejectedWorkflowResult.contentItems[0].text, /requires non-empty fields/u);
+    const waitingWorkflowArguments = {
+      fields: {},
+      inputFields: [],
+      kind: "waiting_for_input",
+      message: "What should the app do?",
+      stepId: "seed_application_defined",
+      stepStatus: "awaiting_agent_result"
+    };
+    const acceptedWorkflowResult = await providerRequestHandler({
+      ...workflowToolRequest,
+      params: {
+        ...workflowToolRequest.params,
+        arguments: waitingWorkflowArguments
+      }
+    });
+    assert.equal(acceptedWorkflowResult.success, true);
+    const duplicateWorkflowResult = await providerRequestHandler({
+      ...workflowToolRequest,
+      params: {
+        ...workflowToolRequest.params,
+        arguments: waitingWorkflowArguments
+      }
+    });
+    assert.equal(duplicateWorkflowResult.success, true);
+    const conflictingWorkflowResult = await providerRequestHandler({
+      ...workflowToolRequest,
+      params: {
+        ...workflowToolRequest.params,
+        arguments: waitingWorkflowArguments,
+        callId: "workflow-call-2"
+      }
+    });
+    assert.equal(conflictingWorkflowResult.success, false);
+    assert.match(conflictingWorkflowResult.contentItems[0].text, /already accepted/u);
+    const agentRun = codexAppServerAgentRunSnapshot(session);
+    const workflowResultEvents = agentRun.events.filter((event) => (
+      event.kind === "codex-app-server-workflow-result-accepted"
+    ));
+    assert.equal(workflowResultEvents.length, 1);
+    assert.equal(workflowResultEvents[0].callId, "workflow-call-1");
+    assert.deepEqual(workflowResultEvents[0].workflowResult, {
+      ...waitingWorkflowArguments,
+      source: "codex",
+      text: ""
+    });
+    agentRun.events = agentRun.events.filter((event) => (
+      event.kind !== "codex-app-server-workflow-result-accepted"
+    ));
+    agentRun.workflowResultContract = plainResultContract;
     const duplicateResult = await controller.injectCodexPrompt(sessionId, {
       handoffId: "000001-maintenance_conversation.json:agent_conversation:duplicate",
       kind: "agent_prompt_handoff",
@@ -5727,6 +6237,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(userSteerCall.threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(userSteerCall.turnId, "codex-app-server-turn-1");
     assert.equal(userSteerCall.input, "What are you up to?");
+    assert.match(userSteerCall.params.clientUserMessageId, /^vibe64:/u);
+    assert.deepEqual(
+      codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds,
+      [userSteerCall.params.clientUserMessageId]
+    );
     assert.equal(session.metadata.codex_context_refresh_pending, "yes");
     assert.equal((await runtime.store.readConversationLog()).at(-1)?.user?.text, "What are you up to?");
     const publishCountBeforeSteerUserMirror = publishSessionEvents.length;
@@ -5734,6 +6249,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       method: "item/completed",
       params: {
         item: {
+          clientId: userSteerCall.params.clientUserMessageId,
           content: [
             {
               text: userSteerCall.input,
@@ -5750,6 +6266,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     await delay(5);
     assert.equal(publishSessionEvents.length, publishCountBeforeSteerUserMirror);
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), false);
+    assert.deepEqual(codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds, []);
     assert.equal(
       (await runtime.store.readConversationLog())
         .map((turn) => turn.user?.text)
@@ -5884,6 +6401,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "I am checking the generated app.",
       "Inspecting remaining CSS."
     ]);
+    const publishCountBeforeAnonymousProgress = publishSessionEvents.length;
     providerSubscribers[0]({
       method: "codex/event",
       params: {
@@ -5900,12 +6418,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress + 3);
-    assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
-    assert.equal(
-      publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.at(-1)?.text,
-      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
-    );
+    assert.equal(publishSessionEvents.length, publishCountBeforeAnonymousProgress);
     const publishCountAfterAssistantProgress = publishSessionEvents.length;
     providerSubscribers[0]({
       method: "item/completed",
@@ -5932,21 +6445,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         item: {
           content: [
             {
-              text: [
-                "Here are the questions.",
-                AGENT_TURN_RESULT_BEGIN,
-                JSON.stringify({
-                  kind: "waiting_for_input",
-                  schema: AGENT_TURN_RESULT_SCHEMA,
-                  stepId: "seed_application_defined",
-                  stepStatus: "awaiting_agent_result"
-                }, null, 2),
-                AGENT_TURN_RESULT_END
-              ].join("\n"),
+              text: "Here are the questions.\nThis second line keeps the message out of live progress.",
               type: "text"
             }
           ],
-          id: "assistant-progress-envelope",
+          id: "assistant-progress-structured-result",
           type: "assistantMessage"
         },
         threadId: "00000000-0000-4000-8000-000000000004",
@@ -5956,6 +6459,39 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     await delay(5);
     assert.equal(publishSessionEvents.length, publishCountAfterAssistantProgress);
     assert.equal(publishSessionReasons.includes("codex-app-server-live-progress"), true);
+    const transcriptAssistantText = "The app-server turn is complete.";
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            id: "internal-response-item-1",
+            phase: "final_answer",
+            text: transcriptAssistantText,
+            type: "agentMessage"
+          },
+          type: "response_item"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), []);
+    providerThreadItems.set("codex-app-server-turn-1", [
+      {
+        id: "canonical-assistant-final-1",
+        phase: "final_answer",
+        text: transcriptAssistantText,
+        type: "agentMessage"
+      },
+      {
+        id: "canonical-assistant-final-2",
+        phase: "final_answer",
+        text: "QUACK!",
+        type: "agentMessage"
+      }
+    ]);
     providerSubscribers[0]({
       method: "turn/completed",
       params: {
@@ -5964,118 +6500,73 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
-    await delay(5);
-    assert.equal(codexAppServerAgentRunSnapshot(session).state, "finalizing");
-    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
-    assert.equal(session.stepMachine.status, "awaiting_agent_result");
-    session.stepMachine = {
-      from: "awaiting_agent_result",
-      source: "system_recovery",
-      status: "waiting_for_input"
-    };
-    const transcriptAssistantText = [
-      "The app-server turn is complete.",
-      "",
-      "This visible prose should be preserved in chat.",
-      AGENT_TURN_RESULT_BEGIN,
-      JSON.stringify({
-        fields: {
-          response: "The app-server turn is complete."
-        },
-        kind: "ready",
-        schema: AGENT_TURN_RESULT_SCHEMA,
-        stepId: "maintenance_conversation",
-        stepStatus: "awaiting_agent_result"
-      }),
-      AGENT_TURN_RESULT_END
-    ].join("\n");
+    await waitForCondition(
+      () => session.stepMachine.status === "done",
+      "Timed out waiting for the canonical assistant response bundle."
+    );
     providerSubscribers[0]({
-      method: "codex/event",
+      method: "item/completed",
       params: {
-        event: {
-          payload: {
-            message: transcriptAssistantText,
-            phase: "final_answer",
-            type: "agent_message"
-          },
-          type: "event_msg"
+        item: {
+          content: [{
+            text: transcriptAssistantText,
+            type: "text"
+          }],
+          id: "assistant-final-1",
+          phase: "final_answer",
+          type: "assistantMessage"
         },
         threadId: "00000000-0000-4000-8000-000000000004",
         turnId: "codex-app-server-turn-1"
       }
     });
     providerSubscribers[0]({
-      method: "codex/event",
+      method: "item/completed",
       params: {
-        event: {
-          payload: {
-            message: "QUACK!",
-            phase: "final_answer",
-            type: "agent_message"
-          },
-          type: "event_msg"
+        item: {
+          content: [{
+            text: "QUACK!",
+            type: "text"
+          }],
+          id: "assistant-final-2",
+          phase: "final_answer",
+          type: "assistantMessage"
         },
         threadId: "00000000-0000-4000-8000-000000000004",
         turnId: "codex-app-server-turn-1"
       }
     });
     providerSubscribers[0]({
-      method: "codex/event",
+      method: "item/completed",
       params: {
-        event: {
-          payload: {
-            content: [
-              {
-                text: transcriptAssistantText,
-                type: "output_text"
-              }
-            ],
-            phase: "final_answer",
-            role: "assistant",
-            type: "message"
-          },
-          type: "response_item"
+        item: {
+          content: [{
+            text: transcriptAssistantText,
+            type: "text"
+          }],
+          id: "assistant-final-1",
+          phase: "final_answer",
+          type: "assistantMessage"
         },
         threadId: "00000000-0000-4000-8000-000000000004",
         turnId: "codex-app-server-turn-1"
       }
     });
-    providerSubscribers[0]({
-      method: "codex/event",
-      params: {
-        event: {
-          payload: {
-            last_agent_message: transcriptAssistantText,
-            turn_id: "codex-app-server-turn-1"
-          },
-          type: "task_complete"
-        },
-        threadId: "00000000-0000-4000-8000-000000000004"
-      }
-    });
-    await waitForCondition(async () => (
-      (await runtime.store.readConversationLog())
-        .some((turn) => turn.assistant?.text?.endsWith("QUACK!"))
-    ), "Timed out waiting for the complete assistant response bundle.");
+    await delay(10);
     assert.deepEqual(session.lastStepInput, {
-      fields: {
-        response: "The app-server turn is complete."
-      },
-      conversationText: "The app-server turn is complete.\n\nThis visible prose should be preserved in chat.",
-      inputFields: [],
+      conversationText: "The app-server turn is complete.\n\nQUACK!",
+      fields: {},
       kind: "ready",
-      message: "",
       source: "codex",
       stepId: "maintenance_conversation",
-      stepStatus: "awaiting_agent_result",
-      text: ""
+      stepStatus: "awaiting_agent_result"
     });
     assert.equal(session.stepMachine.status, "done");
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
-      "The app-server turn is complete.\n\nThis visible prose should be preserved in chat.\n\nQUACK!"
+      "The app-server turn is complete.\n\nQUACK!"
     ]);
     assert.equal(
       publishSessionEvents.some((event) => (
@@ -6089,8 +6580,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "Checked the app-server prompt delivery result.",
       "Preparing to verify UI layouts",
       "I am checking the generated app.",
-      "Inspecting remaining CSS.",
-      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
+      "Inspecting remaining CSS."
     ]);
     const publishReasonBeforeTerminalTurn = publishSessionReasons.at(-1);
     providerSubscribers[0]({
@@ -6148,8 +6638,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "Checked the app-server prompt delivery result.",
       "Preparing to verify UI layouts",
       "I am checking the generated app.",
-      "Inspecting remaining CSS.",
-      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
+      "Inspecting remaining CSS."
     ]);
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-turn-active");
     providerSubscribers[0]({
@@ -6428,9 +6917,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    const conversationAfterRoutedTerminalMessage = await runtime.store.readConversationLog();
+    const conversationAfterPromptLikeTerminalMessage = await runtime.store.readConversationLog();
     assert.equal(
-      conversationAfterRoutedTerminalMessage
+      conversationAfterPromptLikeTerminalMessage
         .map((turn) => turn.user?.text)
         .filter(Boolean)
         .filter((text) => text === "This was typed directly into the Codex terminal.")
@@ -6438,12 +6927,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       1
     );
     assert.equal(
-      conversationAfterRoutedTerminalMessage
+      conversationAfterPromptLikeTerminalMessage
         .map((turn) => turn.user?.text)
         .filter(Boolean)
         .some((text) => text.includes("Already in Vibe64 chat.")),
-      false
+      true
     );
+    providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        status: "completed",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "routed-turn-1"
+      }
+    });
+    await delay(10);
     providerSubscribers[0]({
       method: "thread/status/changed",
       params: {
@@ -7255,7 +7753,10 @@ test("Vibe64 Codex app-server message delivery converts a completed steer race i
         },
         async steerTurn() {
           steerCalls += 1;
-          throw new Error("No active turn to steer");
+          throw Object.assign(new Error("invalid request"), {
+            code: -32600,
+            method: "turn/steer"
+          });
         }
       }),
       projectService: {
@@ -7564,6 +8065,101 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
     assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+  });
+});
+
+test("Vibe64 Codex app-server interrupt race trusts idle provider state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_interrupt_completed_race";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const threadId = "00000000-0000-4000-8000-000000000220";
+    const turnId = "codex-app-server-turn-interrupt-race";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      interruptTurn: 0,
+      readThreadStatus: 0
+    };
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {},
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async interruptTurn() {
+          providerCalls.interruptTurn += 1;
+          throw Object.assign(new Error("invalid request"), {
+            code: -32600,
+            method: "turn/interrupt"
+          });
+        },
+        async readThreadStatus(readThreadId) {
+          providerCalls.readThreadStatus += 1;
+          assert.equal(readThreadId, threadId);
+          return {
+            raw: {
+              status: {
+                activeFlags: [],
+                type: "idle"
+              }
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.interrupted, false);
+    assert.equal(result.operationOutcome, "already_idle");
+    assert.equal(providerCalls.interruptTurn, 1);
+    assert.equal(providerCalls.readThreadStatus, 1);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "finalizing");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
   });
 });
 
@@ -8087,13 +8683,15 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
     assert.deepEqual(codexAppServerAgentRunSnapshot(session).events.map((event) => event.kind), [
       "codex-app-server-turn-claimed",
       "codex-app-server-turn-active",
+      "codex-app-server-user-message-owned",
       "codex-app-server-turn-active",
       "codex-app-server-turn-idle"
     ]);
+    assert.deepEqual(codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds, []);
   });
 });
 
-test("Vibe64 Codex app-server logs duplicate stale assistant results only once", async () => {
+test("Vibe64 Codex app-server ignores transient assistant items after interruption", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_duplicate_stale_result";
     const worktree = testSessionSourcePath(targetRoot, sessionId);
@@ -8200,58 +8798,40 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
     });
 
     assert.equal(interrupted.ok, true);
-    const staleLogs = [];
-    const originalInfo = console.info;
-    const previousSessionDebug = process.env.VIBE64_SESSION_DEBUG;
-    process.env.VIBE64_SESSION_DEBUG = "1";
-    console.info = (...args) => {
-      const line = args.map((part) => String(part)).join(" ");
-      if (line.includes("server.codexTerminal.appServerAgentResult.stale")) {
-        staleLogs.push(line);
-      }
-      return originalInfo.apply(console, args);
-    };
-    try {
-      for (let index = 0; index < 5; index += 1) {
-        for (const subscriber of providerSubscribers) {
-          subscriber({
-            method: "item/completed",
-            params: {
-              item: {
-                content: [
-                  {
-                    text: "Late assistant result after interruption.",
-                    type: "text"
-                  }
-                ],
-                id: `assistant-message-${index}`,
-                phase: "final_answer",
-                type: "assistantMessage"
-              },
-              threadId,
-              turnId
-            }
-          });
-        }
-      }
-      await waitForCondition(
-        () => staleLogs.length === 1,
-        "Timed out waiting for stale Codex app-server assistant result log."
-      );
-    } finally {
-      console.info = originalInfo;
-      if (previousSessionDebug == null) {
-        delete process.env.VIBE64_SESSION_DEBUG;
-      } else {
-        process.env.VIBE64_SESSION_DEBUG = previousSessionDebug;
+    for (let index = 0; index < 5; index += 1) {
+      for (const subscriber of providerSubscribers) {
+        subscriber({
+          method: "item/completed",
+          params: {
+            item: {
+              content: [
+                {
+                  text: "Late assistant result after interruption.",
+                  type: "text"
+                }
+              ],
+              id: `assistant-message-${index}`,
+              phase: "final_answer",
+              type: "assistantMessage"
+            },
+            threadId,
+            turnId
+          }
+        });
       }
     }
+    await delay(20);
 
-    assert.equal(staleLogs.length, 1);
     const session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "interrupted");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
     assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
+    assert.equal(
+      (await runtime.store.readConversationLog(sessionId)).some((turn) => (
+        turn.assistant?.text === "Late assistant result after interruption."
+      )),
+      false
+    );
     await controller.closeAllForSession(sessionId);
   });
 });
@@ -8394,9 +8974,11 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
     assert.deepEqual(codexAppServerAgentRunSnapshot(session).events.map((event) => event.kind), [
       "codex-app-server-turn-claimed",
       "codex-app-server-turn-active",
+      "codex-app-server-user-message-owned",
       "codex-app-server-turn-active",
       "codex-app-server-turn-idle"
     ]);
+    assert.deepEqual(codexAppServerAgentRunSnapshot(session).pendingUserMessageClientIds, []);
   });
 });
 

@@ -41,6 +41,7 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  currentStepAgentResultContract,
   currentStepInputConversationText,
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
@@ -106,7 +107,7 @@ test("current step conversation text keeps a last-resort completion fallback", (
   }, {
     conversationText: "Visible assistant prose.",
     kind: "waiting_for_input",
-    message: "Question-only envelope message.",
+    message: "Question-only structured result message.",
     source: "codex",
     stepId: "known_step",
     stepStatus: "awaiting_agent_result"
@@ -3379,17 +3380,28 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /User\/request input:\n- scope: unit test/u);
     assert.match(afterAction.actionResult.prompt, /Run the Vibe64 prompt action: Make a plan/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /"scope": "unit test"/u);
-    assert.match(afterAction.actionResult.prompt, /Vibe64 agent result contract:/u);
-    assert.match(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
-    assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
+    assert.match(afterAction.actionResult.prompt, /Vibe64 workflow result:/u);
+    assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
+    assert.ok(afterAction.actionResult.prompt.includes("Ready fields:\n  - kind: ready"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
     assert.match(afterAction.actionResult.prompt, /fields\.proposedPlan/u);
     assert.match(afterAction.actionResult.prompt, /fields\.technicalPlan/u);
     assert.match(afterAction.actionResult.prompt, /<summary>Technical plan<\/summary>/u);
-    assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
+    assert.match(afterAction.actionResult.prompt, /Do not write Vibe64 workflow artifacts directly/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AUTOPILOT_DONE/u);
     assert.equal(afterAction.actionResult.agentPromptHandoff.kind, "agent_prompt_handoff");
     assert.equal(Object.hasOwn(afterAction.actionResult.agentPromptHandoff, "codex"), false);
+    assert.deepEqual(afterAction.actionResult.agentPromptHandoff.resultContract, {
+      fields: {
+        proposedPlan: "Short user-facing Markdown summary of the proposed implementation plan.",
+        technicalPlan: "Detailed ordered technical implementation plan that Codex should execute after the user accepts."
+      },
+      mode: "structured",
+      optionalFields: [],
+      stepId: "plan_and_execute",
+      stepStatus: "awaiting_agent_result"
+    });
+    assert.equal(Object.hasOwn(afterAction.actionResult.agentPromptHandoff.resultContract, "outputSchema"), false);
     assert.match(afterAction.actionResult.agentPromptHandoff.handoffId, /:make_plan$/u);
     assert.equal(afterAction.actionResult.agentPromptHandoff.prompt, afterAction.actionResult.prompt);
     assert.equal(afterAction.actionResult.agentPromptHandoff.terminalInput, afterAction.actionResult.prompt);
@@ -3490,17 +3502,17 @@ test("vibe64 pull request resolution prompt uses the agent result contract", asy
     assert.equal(afterAction.currentStep, "create_and_merge_pull_request");
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "resolve_pull_request");
-    assert.match(afterAction.actionResult.prompt, /Vibe64 agent result contract/u);
-    assert.match(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
-    assert.ok(afterAction.actionResult.prompt.includes("Ready payload fields:\n  - kind: ready"));
+    assert.match(afterAction.actionResult.prompt, /Vibe64 workflow result/u);
+    assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AGENT_RESULT_BEGIN/u);
+    assert.ok(afterAction.actionResult.prompt.includes("Ready fields:\n  - kind: ready"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepId: create_and_merge_pull_request"));
     assert.ok(afterAction.actionResult.prompt.includes("  - stepStatus: awaiting_agent_result"));
-    assert.ok(afterAction.actionResult.prompt.includes("Waiting payload fields:\n  - kind: waiting_for_input"));
-    assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
+    assert.ok(afterAction.actionResult.prompt.includes("Waiting fields:\n  - kind: waiting_for_input"));
+    assert.match(afterAction.actionResult.prompt, /Do not write Vibe64 workflow artifacts directly/u);
     assert.match(afterAction.actionResult.prompt, /state changed/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /ask the user to reload the current step/u);
-    assert.match(afterAction.actionResult.prompt, /write the same question or blocker in normal response text/u);
-    assert.match(afterAction.actionResult.prompt, /Keep the visible question text and the envelope `message` equivalent/u);
+    assert.match(afterAction.actionResult.prompt, /keep `message` identical to the user-facing question/u);
+    assert.match(afterAction.actionResult.prompt, /keep its `message` identical to the visible question text/u);
     assert.ok(afterAction.actionResult.prompt.includes(questionBatchLimitInstruction()));
     assert.match(afterAction.actionResult.prompt, /format each question on its own line as `\[1\] Question text`/u);
   });
@@ -3536,7 +3548,13 @@ test("editable artifact review steps preserve user-origin and prompt-origin draf
     assert.equal(draftingIssue.stepMachine.status, "awaiting_agent_result");
     assert.equal(draftingIssue.actionResult.status, "prompt_ready");
     assert.equal(draftingIssue.actionResult.promptId, "draft_issue");
-    assert.match(draftingIssue.actionResult.prompt, /Vibe64 agent result contract/u);
+    assert.match(draftingIssue.actionResult.prompt, /^User\/request input:\nAdd saved reports\./u);
+    assert.ok(
+      draftingIssue.actionResult.prompt.indexOf("Add saved reports.") <
+      draftingIssue.actionResult.prompt.indexOf("Vibe64 workflow context:")
+    );
+    assert.doesNotMatch(draftingIssue.actionResult.prompt, /conversationRequest:/u);
+    assert.match(draftingIssue.actionResult.prompt, /Vibe64 workflow result/u);
     assert.ok(draftingIssue.actionResult.prompt.includes("fields.title: Concise work title."));
     assert.ok(draftingIssue.actionResult.prompt.includes("fields.word: Short Vibe64 session label/word derived from the work title."));
 
@@ -4016,19 +4034,12 @@ test("vibe64 existing issue action imports issue artifacts and session word", as
     await writeFile(
       ghPath,
       [
-        "#!/usr/bin/env node",
-        "const args = process.argv.slice(2);",
-        "if (!args.some((arg) => arg.includes('body'))) {",
-        "  process.stderr.write('body field missing');",
-        "  process.exit(1);",
-        "}",
-        "process.stdout.write(JSON.stringify({",
-        "  body: 'Body line\\nSecond line',",
-        "  number: 12,",
-        "  state: 'OPEN',",
-        "  title: 'Add saved reports',",
-        "  url: 'https://github.com/example/project/issues/12'",
-        "}));"
+        "#!/bin/sh",
+        "case \"$*\" in",
+        "  *body*) ;;",
+        "  *) printf '%s' 'body field missing' >&2; exit 1 ;;",
+        "esac",
+        "printf '%s' '{\"body\":\"Body line\\nSecond line\",\"number\":12,\"state\":\"OPEN\",\"title\":\"Add saved reports\",\"url\":\"https://github.com/example/project/issues/12\"}'"
       ].join("\n"),
       "utf8"
     );
@@ -4081,39 +4092,12 @@ test("vibe64 existing PR action selects only same-repository open PRs as stacked
     await writeFile(
       ghPath,
       [
-        "#!/usr/bin/env node",
-        "const args = process.argv.slice(2);",
-        "const number = args[2];",
-        "const common = {",
-        "  baseRefName: 'main',",
-        "  headRefName: 'feature-base',",
-        "  headRefOid: 'abc123',",
-        "  headRepository: { nameWithOwner: 'example/project' },",
-        "  headRepositoryOwner: { login: 'example' },",
-        "  maintainerCanModify: true,",
-        "  state: 'OPEN',",
-        "  title: 'Upstream feature'",
-        "};",
-        "if (number === '77') {",
-        "  process.stdout.write(JSON.stringify({",
-        "    ...common,",
-        "    isCrossRepository: false,",
-        "    number: 77,",
-        "    url: 'https://github.com/example/project/pull/77'",
-        "  }));",
-        "  process.exit(0);",
-        "}",
-        "if (number === '88') {",
-        "  process.stdout.write(JSON.stringify({",
-        "    ...common,",
-        "    isCrossRepository: true,",
-        "    number: 88,",
-        "    url: 'https://github.com/example/project/pull/88'",
-        "  }));",
-        "  process.exit(0);",
-        "}",
-        "process.stderr.write('unexpected gh args: ' + args.join(' '));",
-        "process.exit(1);"
+        "#!/bin/sh",
+        "case \"$3\" in",
+        "  77) printf '%s' '{\"baseRefName\":\"main\",\"headRefName\":\"feature-base\",\"headRefOid\":\"abc123\",\"headRepository\":{\"nameWithOwner\":\"example/project\"},\"headRepositoryOwner\":{\"login\":\"example\"},\"maintainerCanModify\":true,\"state\":\"OPEN\",\"title\":\"Upstream feature\",\"isCrossRepository\":false,\"number\":77,\"url\":\"https://github.com/example/project/pull/77\"}' ;;",
+        "  88) printf '%s' '{\"baseRefName\":\"main\",\"headRefName\":\"feature-base\",\"headRefOid\":\"abc123\",\"headRepository\":{\"nameWithOwner\":\"example/project\"},\"headRepositoryOwner\":{\"login\":\"example\"},\"maintainerCanModify\":true,\"state\":\"OPEN\",\"title\":\"Upstream feature\",\"isCrossRepository\":true,\"number\":88,\"url\":\"https://github.com/example/project/pull/88\"}' ;;",
+        "  *) printf '%s' \"unexpected gh args: $*\" >&2; exit 1 ;;",
+        "esac"
       ].join("\n"),
       "utf8"
     );
@@ -4210,7 +4194,8 @@ test("vibe64 runtime prompt handoff shows the action input outside hidden termin
     assert.equal(afterAction.actionResult.recordsConversationTurn, true);
     assert.equal(afterAction.actionResult.agentPromptHandoff.terminalInput, afterAction.actionResult.prompt);
     assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
-    assert.match(afterAction.actionResult.agentPromptHandoff.prompt, /User\/request input:\n- conversationRequest: Explain this codebase\./u);
+    assert.match(afterAction.actionResult.agentPromptHandoff.prompt, /^User\/request input:\nExplain this codebase\./u);
+    assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.prompt, /conversationRequest:/u);
     assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.prompt, /"conversationRequest": "Explain this codebase\."/u);
     assert.equal((await runtime.getSession("agent_prompt_visible_input")).currentStep, "maintenance_conversation");
   });
@@ -4267,7 +4252,9 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /VIBE64_ROUTED_TURN: yes/u);
     assert.doesNotMatch(prompt, /Vibe64 workflow context:/u);
     assert.match(prompt, /Session briefing: Use the Vibe64 session briefing already provided/u);
-    assert.match(prompt, /User\/request input:\n- conversationRequest: This is the first prompt/u);
+    assert.match(prompt, /^User\/request input:\nThis is the first prompt/u);
+    assert.ok(prompt.indexOf("This is the first prompt") < prompt.indexOf("Vibe64 interactive conversation turn:"));
+    assert.doesNotMatch(prompt, /conversationRequest:/u);
     assert.match(prompt, /Current dynamic workflow facts:/u);
     assert.match(prompt, /- launch_target_agent_href: http:\/\/vibe64-launch-agent:4103\/home/u);
     assert.match(prompt, /- launch_target_open_href: http:\/\/127\.0\.0\.1:4103\/home/u);
@@ -4282,8 +4269,16 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.doesNotMatch(prompt, /launch_target_restart_baseline/u);
     assert.doesNotMatch(prompt, /launch_target_terminal_id/u);
     assert.doesNotMatch(prompt, /worktree path:/u);
-    assert.match(prompt, /Finish this routed workflow turn with the Vibe64 agent result envelope/u);
-    assert.match(prompt, /A terminal-only answer is incomplete for routed workflow turns/u);
+    assert.match(prompt, /Answer this interactive conversation normally/u);
+    assert.match(prompt, /successful app-server turn completion as completion of this conversation turn/u);
+    assert.doesNotMatch(prompt, /VIBE64_AGENT_RESULT/u);
+    assert.deepEqual(afterAction.actionResult.agentPromptHandoff.resultContract, {
+      fields: {},
+      mode: "plain",
+      optionalFields: [],
+      stepId: "",
+      stepStatus: ""
+    });
     assert.match(prompt, /Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`/u);
   });
 });
@@ -4482,7 +4477,7 @@ test("vibe64 runtime offers a normal conversation escape from structured waiting
 
     assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
     assert.equal(afterAnswer.actionResult.status, "prompt_ready");
-    assert.match(afterAnswer.actionResult.prompt, /User\/request input:\n- conversationRequest: Use normal git and gh commands instead\./u);
+    assert.match(afterAnswer.actionResult.prompt, /^User\/request input:\nUse normal git and gh commands instead\./u);
     assert.doesNotMatch(afterAnswer.actionResult.prompt, /githubToken/u);
   });
 });
@@ -4577,7 +4572,7 @@ test("vibe64 plan execution recovery derives missing phase from plan-ready metad
     });
     await runtime.store.writeStepState("agent_control_missing_phase", "plan_and_execute", {
       from: "awaiting_agent_result",
-      message: "The agent response did not include the Vibe64 result envelope. Retry the step.",
+      message: "The agent response did not include the required structured result. Retry the step.",
       schemaVersion: 1,
       source: "system_recovery",
       status: "waiting_for_input"
@@ -4687,15 +4682,19 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
   }, {}, {
     runtime: coreWorkflowStepMachineRuntime
   });
+  const userDecidedContract = currentStepAgentResultContract({
+    currentStep: "maintenance_conversation",
+    stepMachine: {
+      status: "ready"
+    }
+  }, {}, {
+    runtime: coreWorkflowStepMachineRuntime
+  });
 
-  assert.match(
-    userDecidedInstruction,
-    /The current Codex conversation turn is complete\. The user decides whether to ask another question or continue\./u
-  );
-  assert.ok(userDecidedInstruction.includes(
-    "Waiting payload fields:\n  - kind: waiting_for_input\n  - stepId: maintenance_conversation\n  - stepStatus: ready\n  - message: The question or blocker for the user"
-  ));
-  assert.doesNotMatch(userDecidedInstruction, /"stepStatus": "ready",\n-/u);
+  assert.equal(userDecidedContract.mode, "plain");
+  assert.equal(userDecidedContract.outputSchema, undefined);
+  assert.doesNotMatch(userDecidedInstruction, /structured turn result/u);
+  assert.doesNotMatch(userDecidedInstruction, /VIBE64_AGENT_RESULT/u);
   assert.match(
     aiDecidedInstruction,
     /You decide this AI discussion turn is complete only when: the requested focused tweak has either been made/u
@@ -5372,7 +5371,7 @@ test("vibe64 report knowledge recovery exposes a phase-specific retry intent", a
     assert.equal(retried.stepMachine.phase, "knowledge");
     assert.equal(retried.actionResult.actionId, "update_project_knowledge");
     assert.equal(retried.actionResult.status, "prompt_ready");
-    assert.match(retried.actionResult.prompt, /User\/request input:\n- conversationRequest: Update knowledge\./u);
+    assert.match(retried.actionResult.prompt, /^User\/request input:\nUpdate knowledge\./u);
   });
 });
 

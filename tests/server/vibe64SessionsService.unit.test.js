@@ -4825,6 +4825,153 @@ test("session inspect keeps agent wait after prompt handoff before Codex turn is
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
 });
 
+test("session inspect cannot use an older completed Codex turn to finish a newer prompt handoff", async () => {
+  let returnControlCalls = 0;
+  const currentHandoffId = "000002-define_seed_application.json:define_seed_application";
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              actionResults: [
+                {
+                  actionId: "define_seed_application",
+                  agentPromptHandoff: {
+                    handoffId: currentHandoffId,
+                    kind: "agent_prompt_handoff"
+                  },
+                  status: "prompt_ready",
+                  stepId: "seed_application_defined"
+                }
+              ],
+              agentRuns: [
+                {
+                  active: false,
+                  handoffId: "000001-define_seed_application.json:define_seed_application",
+                  id: "codex_app_server",
+                  providerThreadId: "codex-thread",
+                  providerTurnId: "older-turn",
+                  state: "completed"
+                }
+              ],
+              currentStep: "seed_application_defined",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                promptActionId: "define_seed_application",
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async agentSessionState(sessionId) {
+        return {
+          ok: true,
+          sessionId,
+          turn: {
+            active: false,
+            id: "older-turn",
+            state: "idle",
+            status: "completed",
+            threadId: "codex-thread"
+          }
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-newer-prompt-handoff", {
+    includeRuntimeEnrichment: true
+  });
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session inspect reports a missing result once the completed Codex turn belongs to the current handoff", async () => {
+  let returnControlCalls = 0;
+  const handoffId = "000002-define_seed_application.json:define_seed_application";
+  const session = {
+    actionResults: [
+      {
+        actionId: "define_seed_application",
+        agentPromptHandoff: {
+          handoffId,
+          kind: "agent_prompt_handoff"
+        },
+        status: "prompt_ready",
+        stepId: "seed_application_defined"
+      }
+    ],
+    agentRuns: [
+      {
+        active: false,
+        handoffId,
+        id: "codex_app_server",
+        providerThreadId: "codex-thread",
+        providerTurnId: "current-turn",
+        state: "completed"
+      }
+    ],
+    currentStep: "seed_application_defined",
+    sessionId: "session-completed-current-prompt-handoff",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      promptActionId: "define_seed_application",
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async returnControlFromAgentWait(_sessionId, input = {}) {
+            returnControlCalls += 1;
+            session.returnControlInput = input;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async agentSessionState(sessionId) {
+        return {
+          ok: true,
+          sessionId,
+          turn: {
+            active: false,
+            id: "current-turn",
+            state: "idle",
+            status: "completed",
+            threadId: "codex-thread"
+          }
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession(session.sessionId, {
+    includeRuntimeEnrichment: true
+  });
+
+  assert.equal(returnControlCalls, 1);
+  assert.equal(inspected.stepMachine.status, "waiting_for_input");
+  assert.match(inspected.returnControlInput.message, /did not receive its result text/u);
+});
+
 test("session inspect returns control when prompt handoff fails after the agent wait starts", async () => {
   let returnControlCalls = 0;
   const session = {

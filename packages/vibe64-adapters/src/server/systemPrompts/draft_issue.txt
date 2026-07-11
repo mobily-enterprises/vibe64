@@ -15,6 +15,6 @@ If User/request input contains feedback about an existing draft, read the curren
 - work.md
 - work_word
 
-If the request is too vague to define useful work, ask for the missing information through the Vibe64 agent result envelope instead of guessing.
+If the request is too vague to define useful work, submit `waiting_for_input` through the Vibe64 workflow-result control and ask the question normally instead of guessing.
 
-When you have enough information, return the proposed title, body, and word through the Vibe64 agent result envelope. Do not write Vibe64 workflow artifacts directly.
+When you have enough information, submit the proposed title, body, and word through the Vibe64 workflow-result control and explain the proposal normally. Do not write Vibe64 workflow artifacts directly.

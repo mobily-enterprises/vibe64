@@ -5,6 +5,7 @@ import {
 import {
   STEP_STATUS,
   assertInputMatchesCurrentState,
+  inputResponseText,
   machineState,
   normalizeMachineInput,
   readState,
@@ -17,29 +18,52 @@ function workflowStepMachine(runtime = null, stepId = "") {
     : null;
 }
 
-function currentStepPromptInputInstruction(session = {}, action = {}, {
+function currentStepResultContractValue(value, session = {}) {
+  if (typeof value === "string") {
+    return value
+      .replaceAll("{{session.currentStep}}", normalizeText(session.currentStep))
+      .replaceAll("{{session.stepMachine.status}}", normalizeText(session.stepMachine?.status));
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => currentStepResultContractValue(item, session));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, item]) => [name, currentStepResultContractValue(item, session)])
+    );
+  }
+  return value;
+}
+
+function currentStepAgentResultContract(session = {}, action = {}, {
   runtime = null
 } = {}) {
   const machine = workflowStepMachine(runtime, session.currentStep);
-  if (!machine || typeof machine.promptInstruction !== "function") {
-    return "";
+  if (!machine) {
+    return null;
   }
-  return machine.promptInstruction({
-    action,
-    session
-  })
-    .replaceAll("{{session.currentStep}}", normalizeText(session.currentStep))
-    .replaceAll("{{session.stepMachine.status}}", normalizeText(session.stepMachine?.status));
+  const contract = typeof machine.agentResultContract === "function"
+    ? machine.agentResultContract({
+        action,
+        session
+      })
+    : null;
+  return contract && typeof contract === "object"
+    ? currentStepResultContractValue(contract, session)
+    : null;
+}
+
+function currentStepPromptInputInstruction(session = {}, action = {}, {
+  runtime = null
+} = {}) {
+  return normalizeText(currentStepAgentResultContract(session, action, {
+    runtime
+  })?.instruction);
 }
 
 function currentStepInputConversationText(runtime = null, session = {}, input = {}) {
   const normalizedInput = normalizeMachineInput(input);
-  const directText = normalizeText(
-    normalizedInput.conversationText ||
-    normalizedInput.fields.response ||
-    normalizedInput.text ||
-    normalizedInput.message
-  );
+  const directText = inputResponseText(normalizedInput);
   if (directText) {
     return directText;
   }
@@ -247,6 +271,7 @@ async function recordStepMachineActionFinished(runtime, session = {}, actionId =
 export {
   STEP_STATUS,
   applyStepMachineView,
+  currentStepAgentResultContract,
   currentStepInputConversationText,
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,

@@ -5,9 +5,6 @@ import {
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
-import {
-  agentTurnResultEnvelopeExample
-} from "./agentTurnResults.js";
 
 const DEFAULT_TERMINAL_FAILURE_TAIL_LINES = 200;
 
@@ -73,6 +70,8 @@ function terminalFailureFixPrompt({
     optionalContextLine("Subject", subject),
     optionalContextLine("Action id", actionId),
     optionalContextLine("Launch target id", launchTargetId),
+    optionalContextLine("Current step", currentStep),
+    optionalContextLine("Step status", stepStatus),
     optionalContextLine("Status", terminalStatus),
     optionalContextLine("Exit code", exitCode),
     optionalContextLine("Error", closeError),
@@ -84,22 +83,8 @@ function terminalFailureFixPrompt({
     "A terminal script failed in Vibe64. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current session source.",
     "If the failure contains `[ui:verification]` and asks for `.jskit/verification/ui.json`, this means changed JSKIT UI files need a matching UI verification receipt. Do not patch around it. Run the required `npx jskit app verify-ui --command \"<playwright command>\" --feature \"<label>\" --auth-mode <mode>` workflow, confirm the receipt was updated, then report that the original verifier should be retried.",
     "",
-    "When you believe the failed command should be retried, finish with this Vibe64 agent result envelope:",
-    agentTurnResultEnvelopeExample({
-      kind: "consider_resolved",
-      stepId: currentStep || "{{session.currentStep}}",
-      stepStatus: stepStatus || "{{session.stepMachine.status}}",
-      text: "Briefly describe what you fixed or why retrying is now reasonable."
-    }),
-    "",
-    "If you need user input before the command can be retried, finish with this Vibe64 agent result envelope:",
-    agentTurnResultEnvelopeExample({
-      kind: "waiting_for_input",
-      stepId: currentStep || "{{session.currentStep}}",
-      stepStatus: stepStatus || "{{session.stepMachine.status}}",
-      message: "The question or blocker for the user"
-    }),
-    "Before the waiting_for_input envelope, write the same question or blocker in normal response text so Inspect users can read it directly in the terminal.",
+    "Report completion or a blocker through the local Vibe64 Fix Codex callback instructions appended to this prompt, then write one normal user-facing final response.",
+    "If user input is required, ask the question clearly in that response and report the job as blocked through the callback.",
     ...questionPromptInstructions(),
     "",
     "Terminal context:",

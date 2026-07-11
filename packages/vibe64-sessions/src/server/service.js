@@ -1042,13 +1042,24 @@ function promptActionStillNeedsStartupProtection(session = {}, agentState = {}) 
   if (!sessionHasPromptActionInFlight(session)) {
     return false;
   }
-  if (
-    composerHandoffFailedAfterAgentWait(session) ||
-    agentStateHasCompletedTrackedTurn(agentState)
-  ) {
+  if (composerHandoffFailedAfterAgentWait(session)) {
     return false;
   }
-  return true;
+  if (!agentStateHasCompletedTrackedTurn(agentState)) {
+    return true;
+  }
+
+  const actionId = normalizedInputText(session?.stepMachine?.promptActionId);
+  const handoffId = normalizedInputText(
+    acceptedPromptActionResult(session, actionId)?.agentPromptHandoff?.handoffId
+  );
+  if (!handoffId) {
+    return true;
+  }
+  return !(Array.isArray(session.agentRuns) ? session.agentRuns : []).some((run) => (
+    normalizedInputText(run?.handoffId) === handoffId &&
+    !vibe64AgentRunStateIsActive(run?.state)
+  ));
 }
 
 async function latestSessionForAgentWaitRecovery(runtime, session = {}) {
@@ -1560,6 +1571,17 @@ async function startComposerMessageTurn(terminalService, coordinator, {
       operationOutcome: currentHandoff.state === COMPOSER_HANDOFF_STATES.ACTIVE
         ? "started_new_turn"
         : "starting_new_turn",
+      threadId: currentHandoff.threadId,
+      turnId: currentHandoff.turnId
+    };
+  }
+  if (currentHandoff?.pending === true) {
+    return {
+      awaitingHandoff: true,
+      delivered: false,
+      deliveryMode: "new_turn",
+      ok: true,
+      operationOutcome: "waiting_for_current_handoff",
       threadId: currentHandoff.threadId,
       turnId: currentHandoff.turnId
     };

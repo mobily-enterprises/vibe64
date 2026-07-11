@@ -328,17 +328,14 @@ function promptSessionBriefingReference() {
   ].join("\n");
 }
 
-function agentResultEnvelopeBriefing() {
+function agentResultRoutingBriefing() {
   return [
     "Vibe64 agent result routing:",
     "- Vibe64 owns workflow state. Do not write Vibe64 workflow artifacts directly.",
-    "- Routed workflow prompts include a Vibe64 agent result contract.",
-    "- Write normal user-facing Markdown first, then finish routed workflow turns with the requested `VIBE64_AGENT_RESULT_BEGIN` / `VIBE64_AGENT_RESULT_END` envelope.",
-    "- Vibe64 reads the provider transcript, validates the envelope, persists the assistant response, and advances workflow state server-side.",
-    "- When a routed turn includes `fields.response`, keep the visible Markdown and `fields.response` equivalent.",
-    "- Include `kind`, `stepId`, and `stepStatus` exactly for the current workflow state listed in the prompt.",
-    "- Use `fields` for structured form values, `message` for questions to the user, and `text` for plain user responses.",
-    "- In interactive Vibe64 conversation steps, the envelope is required; terminal-visible text alone is incomplete.",
+    "- Ordinary interactive conversation turns use the normal assistant response; do not add transport markers or duplicate the answer.",
+    "- Workflow turns that need structured fields provide a Vibe64 workflow-result control. Submit those fields through that control before replying normally.",
+    "- Keep every visible assistant response as ordinary Markdown. Never print workflow-result arguments, JSON, or transport metadata in the response.",
+    "- Use `fields` in the control for workflow values, `message` for required user questions, and `inputFields` only for structured text, textarea, or password input.",
     "- If the current state does not match the prompt, report that the Vibe64 state changed instead of guessing.",
     "",
     "Direct terminal input:",
@@ -595,7 +592,7 @@ function promptSessionBriefing(contextInput = {}) {
     "Code index policy:",
     codeIndexPolicy,
     "",
-    agentResultEnvelopeBriefing()
+    agentResultRoutingBriefing()
   ].join("\n").trim();
 }
 
@@ -630,7 +627,7 @@ function promptTemplateTokens(contextInput) {
     "prompt.managedServicePolicy": referenceStaticContext
       ? "Use the managed service policy from the Vibe64 session briefing."
       : MANAGED_SERVICE_POLICY,
-    "prompt.agentResultEnvelopeBriefing": agentResultEnvelopeBriefing(),
+    "prompt.agentResultRoutingBriefing": agentResultRoutingBriefing(),
     "prompt.workProfile": promptWorkProfile(context),
     "prompt.workProfilePreamble": promptWorkProfilePreamble(context),
     "input.json": stableJson(context.input),

@@ -47,9 +47,10 @@ import {
   artifactText,
   commandFailureInteraction,
   commandSucceeded,
-  currentStepAgentResultInstruction,
+  currentStepAgentResultContract,
   disableAction,
   handleStandardPromptInput,
+  inputResponseText,
   machineState,
   markPromptActionStarted,
   metadataExists,
@@ -973,10 +974,6 @@ function enableActions(session = {}, overridesById = {}) {
   });
 }
 
-function inputResponseText(input = {}) {
-  return normalizeText(input.text || input.fields?.response || input.fields?.conversationRequest);
-}
-
 function planFieldText(input = {}, ...fieldNames) {
   const fields = input.fields || {};
   return fieldNames
@@ -1017,34 +1014,36 @@ async function handlePlanPromptInput(context = {}, machine = {}) {
   return handleStandardPromptInput(context, machine);
 }
 
-function planPresentationInstruction({
+function planPresentationContract({
   doneMeaning = "",
   planKind = "implementation",
   waitingForInputMeaning = ""
 } = {}) {
-  return [
-    currentStepAgentResultInstruction({
+  const contract = currentStepAgentResultContract({
       doneFields: {
         proposedPlan: `Short user-facing Markdown summary of the proposed ${planKind} plan.`,
-        response: "Full Markdown chat response: Proposed plan plus a collapsed Technical plan section.",
         technicalPlan: `Detailed ordered technical ${planKind} plan that Codex should execute after the user accepts.`
       },
       doneMeaning,
       waitingForInputMeaning
-    }),
-    "",
-    "Plan response format:",
-    "- The visible response must start with `## Proposed plan` and contain a short plain-language summary or 3-6 bullets.",
-    "- Then include the detailed plan in one collapsed section exactly shaped as:",
-    "  `<details>`",
-    "  `<summary>Technical plan</summary>`",
-    "  detailed ordered technical plan",
-    "  `</details>`",
-    "- Do not ask the user to edit the plan directly. The user can accept it or ask for changes.",
-    "- `fields.response` must match the full visible Markdown response.",
-    "- `fields.proposedPlan` must contain only the simple user-facing plan.",
-    "- `fields.technicalPlan` must contain only the detailed technical plan used for execution."
-  ].join("\n");
+    });
+  return {
+    ...contract,
+    instruction: [
+      contract.instruction,
+      "",
+      "Plan response format:",
+      "- The normal response must start with `## Proposed plan` and contain a short plain-language summary or 3-6 bullets.",
+      "- Then include the detailed plan in one collapsed section exactly shaped as:",
+      "  `<details>`",
+      "  `<summary>Technical plan</summary>`",
+      "  detailed ordered technical plan",
+      "  `</details>`",
+      "- Do not ask the user to edit the plan directly. The user can accept it or ask for changes.",
+      "- `fields.proposedPlan` must contain only the simple user-facing plan.",
+      "- `fields.technicalPlan` must contain only the detailed technical plan used for execution."
+    ].join("\n")
+  };
 }
 
 function conversationSection(label = "", value = "") {
@@ -1247,9 +1246,8 @@ function seedDefinitionConversationInteraction(state = {}) {
   });
 }
 
-function seedDefinitionPromptInstruction() {
-  return [
-    currentStepAgentResultInstruction({
+function seedDefinitionAgentResultContract() {
+  const contract = currentStepAgentResultContract({
       doneFields: {
         body: "Markdown seed proposal for read-only user review. Start with a short plain-language proposal. If technical details are useful, put them after the simple proposal in the exact collapsed details shape described below.",
         title: "Concise seed title.",
@@ -1257,18 +1255,23 @@ function seedDefinitionPromptInstruction() {
       },
       doneMeaning: "You have enough information to propose the seed title, seed description, and Vibe64 session label for user review.",
       waitingForInputMeaning: "You need more information from the user before drafting the seed description."
-    }),
-    "",
-    "Seed review format:",
-    "- The seed review is display-only. Do not tell the user to edit it directly.",
-    "- Keep the first part simple and user-facing.",
-    "- Include advanced or implementation detail only when useful, inside one collapsed section exactly shaped as:",
-    "  `<details>`",
-    "  `<summary>Technical details</summary>`",
-    "  advanced seed details",
-    "  `</details>`",
-    "- Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line."
-  ].join("\n");
+    });
+  return {
+    ...contract,
+    instruction: [
+      contract.instruction,
+      "",
+      "Seed review format:",
+      "- The seed review is display-only. Do not tell the user to edit it directly.",
+      "- Keep the first part simple and user-facing.",
+      "- Include advanced or implementation detail only when useful, inside one collapsed section exactly shaped as:",
+      "  `<details>`",
+      "  `<summary>Technical details</summary>`",
+      "  advanced seed details",
+      "  `</details>`",
+      "- Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line."
+    ].join("\n")
+  };
 }
 
 const workDefinitionPhase = Object.freeze({
@@ -1626,8 +1629,8 @@ const workDefinitionMachine = {
       : "Issue draft submitted for review.";
   },
 
-  promptInstruction() {
-    return currentStepAgentResultInstruction({
+  agentResultContract() {
+    return currentStepAgentResultContract({
       doneFields: {
         body: "Markdown work description with the requested change, context, and acceptance criteria.",
         title: "Concise work title.",
@@ -1682,8 +1685,8 @@ const makePlanMachine = {
     return markPromptActionStarted(context, this, "make_plan");
   },
 
-  promptInstruction() {
-    return planPresentationInstruction({
+  agentResultContract() {
+    return planPresentationContract({
       doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
       planKind: "implementation",
       waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
@@ -1707,8 +1710,8 @@ const seedPlanMadeMachine = {
       : "";
   },
 
-  promptInstruction() {
-    return planPresentationInstruction({
+  agentResultContract() {
+    return planPresentationContract({
       doneMeaning: "The seed implementation plan has been written in the Codex response and is ready for execution.",
       planKind: "seed implementation",
       waitingForInputMeaning: "You cannot make a useful seed plan without a user decision or clarification."
@@ -1754,8 +1757,8 @@ const executePlanMachine = {
     return markPromptActionStarted(context, this, "execute_plan");
   },
 
-  promptInstruction() {
-    return currentStepAgentResultInstruction({
+  agentResultContract() {
+    return currentStepAgentResultContract({
       doneMeaning: "The implementation work is complete enough to continue to review.",
       waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
     });
@@ -1961,13 +1964,13 @@ const planAndExecuteMachine = {
     });
   },
 
-  promptInstruction({ action = {} } = {}) {
+  agentResultContract({ action = {} } = {}) {
     return normalizeText(action.id) === "execute_plan"
-      ? currentStepAgentResultInstruction({
+      ? currentStepAgentResultContract({
           doneMeaning: "The implementation work is complete enough to continue to review.",
           waitingForInputMeaning: "You cannot continue implementation without a user decision or missing project detail."
         })
-      : planPresentationInstruction({
+      : planPresentationContract({
           doneMeaning: "The implementation plan has been written in the Codex response and is ready for execution.",
           planKind: "implementation",
           waitingForInputMeaning: "You cannot make a useful plan without a user decision or clarification."
@@ -1991,8 +1994,8 @@ const seedPlanExecutedMachine = {
       : "";
   },
 
-  promptInstruction() {
-    return currentStepAgentResultInstruction({
+  agentResultContract() {
+    return currentStepAgentResultContract({
       doneMeaning: "The seed implementation work is complete enough to continue.",
       waitingForInputMeaning: "You cannot continue seeding without a user decision or missing project detail."
     });
@@ -2015,8 +2018,8 @@ const deepUiCheckMachine = {
       : "";
   },
 
-  promptInstruction() {
-    return currentStepAgentResultInstruction({
+  agentResultContract() {
+    return currentStepAgentResultContract({
       doneMeaning: "The deep UI check has been completed or intentionally found no required fix.",
       waitingForInputMeaning: "You cannot complete the UI check without a user decision."
     });
@@ -2239,8 +2242,8 @@ const reviewAndValidateMachine = {
     }
   },
 
-  promptInstruction() {
-    return currentStepAgentResultInstruction({
+  agentResultContract() {
+    return currentStepAgentResultContract({
       doneMeaning: "The review/deslop loop has completed and only acceptable low-risk findings remain.",
       waitingForInputMeaning: "You cannot complete review/deslop without a user decision."
     });
@@ -2362,7 +2365,7 @@ const reportAndKnowledgeUpdatedMachine = {
           }));
           return;
         }
-        await writePromptResponseArtifact(context, REPORT_ARTIFACT, input.fields.response || input.text);
+        await writePromptResponseArtifact(context, REPORT_ARTIFACT, inputResponseText(input));
         await writeState(context, this, machineState(STEP_STATUS.READY, {
           message: input.message,
           phase: reportAndKnowledgePhase.KNOWLEDGE,
@@ -2406,16 +2409,13 @@ const reportAndKnowledgeUpdatedMachine = {
     }));
   },
 
-  promptInstruction({ action = {} } = {}) {
+  agentResultContract({ action = {} } = {}) {
     return normalizeText(action.id) === "update_project_knowledge"
-      ? currentStepAgentResultInstruction({
+      ? currentStepAgentResultContract({
           doneMeaning: "Project knowledge has been updated or there is no adapter-supported project knowledge to update.",
           waitingForInputMeaning: "You cannot update project knowledge without a user decision."
         })
-      : currentStepAgentResultInstruction({
-          doneFields: {
-            response: "Markdown session report"
-          },
+      : currentStepAgentResultContract({
           doneMeaning: "The report text is complete and should be saved by Studio as the session report.",
           waitingForInputMeaning: "You cannot write the report without a user decision or missing context."
         });
@@ -2443,7 +2443,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
         }
       }),
       promptActionId: draftSeedApplicationActionId,
-      promptInstruction: seedDefinitionPromptInstruction,
+      agentResultContract: seedDefinitionAgentResultContract,
       readValues: readWorkDefinitionFieldValues,
       saveValues: writeWorkDefinitionFieldValues,
       unsupportedDoneMessage: "The seed definition step cannot accept input right now.",

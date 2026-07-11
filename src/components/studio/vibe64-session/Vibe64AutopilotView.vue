@@ -323,7 +323,7 @@
             size="small"
             type="button"
             variant="tonal"
-            @click="requestAgentInterrupt"
+            @click="requestAgentInterruptAndFocus"
           >
             Stop assistant
           </v-btn>
@@ -385,7 +385,7 @@
           @cancel="clearSelectedControl"
           @composer-menu-item="activateComposerMenuItem"
           @composer-menu-item-text="insertComposerMenuItemText"
-          @interrupt="requestAgentInterrupt"
+          @interrupt="requestAgentInterruptAndFocus"
           @submit="submitComposerControlAndFocus"
           @update-agent-setting="updateAgentSetting"
           @update-value="updateComposerControlValue"
@@ -850,6 +850,12 @@ function submitComposerControlAndFocus(options = {}) {
   const submission = submitComposerControl(options);
   focusBottomComposer();
   return submission;
+}
+
+function requestAgentInterruptAndFocus(reason = "user_interrupt") {
+  const interruption = requestAgentInterrupt(reason);
+  focusBottomComposer();
+  return interruption;
 }
 
 function cancelOptimisticComposerTurnAndFocus(submissionId = "") {

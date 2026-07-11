@@ -49,6 +49,7 @@ import {
 import { WorkflowMachine } from "./workflowMachine.js";
 import {
   applyStepMachineView,
+  currentStepAgentResultContract,
   currentStepInputConversationText,
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
@@ -354,10 +355,24 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
 }
 
 function buildAgentPromptHandoff(renderedPrompt) {
+  const resultContract = isPlainObject(renderedPrompt.resultContract)
+    ? {
+        fields: isPlainObject(renderedPrompt.resultContract.fields)
+          ? renderedPrompt.resultContract.fields
+          : {},
+        mode: normalizeText(renderedPrompt.resultContract.mode),
+        optionalFields: Array.isArray(renderedPrompt.resultContract.optionalFields)
+          ? renderedPrompt.resultContract.optionalFields.map((name) => normalizeText(name)).filter(Boolean)
+          : [],
+        stepId: normalizeText(renderedPrompt.resultContract.stepId),
+        stepStatus: normalizeText(renderedPrompt.resultContract.stepStatus)
+      }
+    : null;
   return {
     kind: "agent_prompt_handoff",
     prompt: renderedPrompt.prompt,
     promptId: renderedPrompt.promptId,
+    ...(resultContract?.mode ? { resultContract } : {}),
     terminalInput: renderedPrompt.prompt
   };
 }
@@ -542,6 +557,28 @@ function promptContextSection(title = "", value = {}) {
   ].join("\n");
 }
 
+function promptConversationInput(input = {}) {
+  const conversationRequest = normalizeText(input?.conversationRequest);
+  if (!conversationRequest) {
+    return promptContextSection("User/request input", input);
+  }
+  const additionalInput = Object.fromEntries(
+    sortedObjectEntries(input)
+      .filter(([name]) => name !== "conversationRequest")
+  );
+  return [
+    [
+      "User/request input:",
+      conversationRequest
+    ].join("\n"),
+    Object.keys(additionalInput).length > 0
+      ? promptContextSection("Additional user/request fields", additionalInput)
+      : ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 const HIDDEN_WORKFLOW_METADATA_PREFIXES = Object.freeze([
   "codex_",
   "terminal_"
@@ -702,15 +739,24 @@ function promptWithWorkflowContext({
   includeSessionPaths = true,
   input = {},
   prompt = "",
-  session = {}
+  session = {},
+  sessionBriefingIncluded = false
 } = {}) {
+  const userRequestLeadsPrompt = Boolean(normalizeText(input?.conversationRequest));
   return [
+    userRequestLeadsPrompt ? promptConversationInput(input) : "",
     promptWorkflowContext({
       action,
       includeSessionPaths,
       session
     }),
-    promptContextSection("User/request input", input),
+    sessionBriefingIncluded && userRequestLeadsPrompt
+      ? promptSessionBriefing({
+          config: session.config,
+          session
+        })
+      : "",
+    userRequestLeadsPrompt ? "" : promptContextSection("User/request input", input),
     promptContextSection("Relevant workflow facts", promptWorkflowFacts(session.metadata)),
     promptLaunchTargetContext(session.metadata),
     "Missing information policy:\n" + missingInformationPolicyInstruction(),
@@ -752,6 +798,7 @@ function promptWithConversationTurnContext({
   const promptId = normalizeText(action.promptId || action.id);
   const workflowFacts = promptConversationWorkflowFacts(session.metadata);
   return [
+    promptConversationInput(input),
     [
       "Vibe64 interactive conversation turn:",
       "VIBE64_ROUTED_TURN: yes",
@@ -764,17 +811,19 @@ function promptWithConversationTurnContext({
       workflowContextLine("session status", session.status)
     ].filter(Boolean).join("\n"),
     sessionBriefingIncluded
-      ? ""
+      ? promptSessionBriefing({
+          config: session.config,
+          session
+        })
       : "Session briefing: Use the Vibe64 session briefing already provided for static setup facts, fixed paths, adapter contracts, managed services, Git command policy, project config, and missing-information policy.",
-    promptContextSection("User/request input", input),
     Object.keys(workflowFacts).length > 0
       ? promptContextSection("Current dynamic workflow facts", workflowFacts)
       : "",
     promptLaunchTargetContext(session.metadata),
     [
       "Response routing:",
-      "- Finish this routed workflow turn with the Vibe64 agent result envelope described in the completion contract.",
-      "- A terminal-only answer is incomplete for routed workflow turns.",
+      "- Answer this interactive conversation normally. Do not add Vibe64 transport markers or duplicate the response as JSON.",
+      "- Vibe64 treats successful app-server turn completion as completion of this conversation turn.",
       "- If the current state no longer matches this prompt, say that Vibe64 state changed and stop.",
       "- Direct terminal input routing: if a later user prompt does not include `VIBE64_ROUTED_TURN`, answer normally. Direct terminal input does not advance Vibe64 workflow state unless Vibe64 explicitly routes the turn."
     ].join("\n"),
@@ -807,13 +856,16 @@ function promptWithSessionBriefing({
 
 function promptWithCurrentStepInputContract({
   action = {},
+  resultContract = null,
   prompt = "",
   runtime = null,
   session = {}
 } = {}) {
-  const stepInputInstruction = currentStepPromptInputInstruction(session, action, {
-    runtime
-  });
+  const stepInputInstruction = normalizeText(
+    resultContract?.instruction || currentStepPromptInputInstruction(session, action, {
+      runtime
+    })
+  );
   return [
     String(prompt || "").trim(),
     stepInputInstruction
@@ -1450,7 +1502,9 @@ class Vibe64SessionRuntime {
       session: actionPromptSession,
       store: this.store
     });
-    const promptWithActionContext = agentConversationAction(action)
+    const isAgentConversation = agentConversationAction(action);
+    const userRequestLeadsPrompt = Boolean(normalizeText(promptInput?.conversationRequest));
+    const promptWithActionContext = isAgentConversation
       ? promptWithConversationTurnContext({
           action,
           input: promptInput,
@@ -1463,15 +1517,22 @@ class Vibe64SessionRuntime {
           includeSessionPaths: !sessionBriefingIncluded,
           input: promptInput,
           prompt: renderedPrompt.prompt,
-          session: promptSession
+          session: promptSession,
+          sessionBriefingIncluded
         });
-    const promptWithBriefing = promptWithSessionBriefing({
-      prompt: promptWithActionContext,
-      session: promptSession,
-      sessionBriefingIncluded
+    const promptWithBriefing = isAgentConversation || userRequestLeadsPrompt
+      ? promptWithActionContext
+      : promptWithSessionBriefing({
+          prompt: promptWithActionContext,
+          session: promptSession,
+          sessionBriefingIncluded
+        });
+    const resultContract = currentStepAgentResultContract(promptSession, action, {
+      runtime: this
     });
     const prompt = promptWithCurrentStepInputContract({
       action,
+      resultContract,
       prompt: promptWithBriefing,
       runtime: this,
       session: promptSession
@@ -1480,6 +1541,7 @@ class Vibe64SessionRuntime {
       agentPromptHandoff: buildAgentPromptHandoff({
         ...renderedPrompt,
         prompt,
+        resultContract,
         visiblePrompt: visiblePromptForPromptAction(action, input)
       }),
       prompt,

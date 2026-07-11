@@ -46,11 +46,9 @@ test("terminal failure fix requests are built from server session state", () => 
 
   assert.equal(request.ok, true);
   assert.equal(request.outputTail, "older\nlatest failure");
-  assert.match(request.prompt, /"kind": "consider_resolved"/u);
-  assert.match(request.prompt, /"stepId": "review_and_validate"/u);
-  assert.match(request.prompt, /"stepStatus": "waiting_for_input"/u);
-  assert.match(request.prompt, /"kind": "waiting_for_input"/u);
-  assert.match(request.prompt, /write the same question or blocker in normal response text/u);
+  assert.match(request.prompt, /local Vibe64 Fix Codex callback instructions/u);
+  assert.match(request.prompt, /report the job as blocked through the callback/u);
+  assert.doesNotMatch(request.prompt, /VIBE64_AGENT_RESULT/u);
   assert.match(request.prompt, /\[ui:verification\]/u);
   assert.match(request.prompt, /npx jskit app verify-ui --command/u);
   assert.match(request.prompt, /\.jskit\/verification\/ui\.json/u);
@@ -58,6 +56,8 @@ test("terminal failure fix requests are built from server session state", () => 
   assert.match(request.prompt, /format each question on its own line as `\[1\] Question text`/u);
   assert.match(request.prompt, /- Session: session-1/u);
   assert.match(request.prompt, /- Subject: Build app/u);
+  assert.match(request.prompt, /- Current step: review_and_validate/u);
+  assert.match(request.prompt, /- Step status: waiting_for_input/u);
   assert.match(request.prompt, /- Attempted command: bash -lc 'npm run build'/u);
   assert.match(request.prompt, /- Command: npm run build/u);
   assert.match(request.prompt, /This looked stuck before I stopped it\./u);

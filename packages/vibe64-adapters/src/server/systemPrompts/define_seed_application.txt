@@ -21,7 +21,7 @@ Seed root contract:
 - Do not describe or accept a nested app directory under the session source. Later Vibe64 commands run from the session source root.
 
 Seed question style:
-- If the request is too vague to define useful seed work, ask for the missing setup choices through the Vibe64 agent result envelope instead of guessing.
+- If the request is too vague to define useful seed work, submit `waiting_for_input` through the Vibe64 workflow-result control and ask the question normally instead of guessing.
 - Ask one simple question at a time unless two very small follow-up choices must be answered together.
 - Write questions for a normal app owner, not for a framework maintainer.
 - Ask about visible app behavior and practical consequences. Do not make the user choose from framework module names, package names, config keys, secret names, or runtime jargon.
@@ -41,4 +41,4 @@ Examples of acceptable seed questions:
 - "Should this also be prepared as a phone app? This decides whether I prepare mobile app tooling."
 - "For now, should I use safe local test values for anything external? This lets the app run locally without real passwords or payment keys."
 
-When you have enough information, return the proposed title, body, and word through the Vibe64 agent result envelope. Do not write Vibe64 workflow artifacts directly.
+When you have enough information, submit the proposed title, body, and word through the Vibe64 workflow-result control and explain the proposal normally. Do not write Vibe64 workflow artifacts directly.

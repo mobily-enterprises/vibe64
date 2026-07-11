@@ -5,7 +5,7 @@ function questionBatchLimitInstruction() {
 }
 
 function numberedQuestionFormatInstruction() {
-  return "When asking more than one question, format each question on its own line as `[1] Question text`, `[2] Question text`, and so on. Use the same numbered question text in the result envelope `message`.";
+  return "When asking more than one question, format each question on its own line as `[1] Question text`, `[2] Question text`, and so on. When the turn uses the Vibe64 workflow-result control, keep its `message` identical to the visible question text.";
 }
 
 function questionPromptInstructions() {
