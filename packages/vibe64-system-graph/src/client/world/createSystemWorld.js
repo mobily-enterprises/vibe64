@@ -20,7 +20,6 @@ const SIDE_COLORS = Object.freeze({
   shared: 0x9d7bff,
   unknown: 0x6f7b8f
 });
-const LARGE_FILE_COLOR = 0xff5d23;
 const SELECTED_FILE_COLOR = 0x75f3ff;
 
 function sideColor(side = "unknown") {
@@ -35,6 +34,22 @@ function hashedColor(value = "", {
   return new THREE.Color().setHSL(hue, saturation, lightness).getHex();
 }
 
+function campusSurfaceColor(campusId = "") {
+  return hashedColor(campusId || "repository", { lightness: 0.24, saturation: 0.54 });
+}
+
+function directorySurfaceColor(directoryPath = "", hierarchyDepth = 1) {
+  const color = hashedColor(directoryPath || "Project root", {
+    lightness: hierarchyDepth === 1 ? 0.54 : 0.47,
+    saturation: 0.5
+  });
+  return new THREE.Color(color).offsetHSL(
+    0,
+    -0.08,
+    -0.2 + Math.min(0.1, (hierarchyDepth - 1) * 0.025)
+  ).getHex();
+}
+
 function fileColor(file = {}, colorMode = "folders") {
   if (colorMode === "runtime") {
     return sideColor(file.executionSide);
@@ -43,7 +58,9 @@ function fileColor(file = {}, colorMode = "folders") {
     const identity = file.subsystemId || file.packageId;
     return identity ? hashedColor(identity, { lightness: 0.5, saturation: 0.68 }) : 0x69758a;
   }
-  return hashedColor(file.district || "Project root");
+  return file.directoryDepth > 0
+    ? directorySurfaceColor(file.directoryPath, file.directoryDepth)
+    : campusSurfaceColor(file.campusId);
 }
 
 function fileBuildingHeight(lines = 0, largest = 0) {
@@ -496,7 +513,7 @@ function createSystemWorld({
   controls.maxDistance = 12_000;
   controls.minPolarAngle = Math.PI * 0.02;
   controls.maxPolarAngle = Math.PI * 0.98;
-  controls.mouseButtons.left = CameraControls.ACTION.TRUCK;
+  controls.mouseButtons.left = CameraControls.ACTION.NONE;
   controls.mouseButtons.middle = CameraControls.ACTION.TRUCK;
   controls.mouseButtons.right = CameraControls.ACTION.ROTATE;
   controls.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
@@ -522,6 +539,7 @@ function createSystemWorld({
   let colorMode = "folders";
   let directoryTerraceInstances = null;
   let dirty = true;
+  let grabState = null;
   let lastFrame = performance.now();
   let pointerDown = null;
   let roofInstances = null;
@@ -582,7 +600,7 @@ function createSystemWorld({
       position: new THREE.Vector3(0, 48, -layout.bounds.depth / 2 - 35)
     });
     for (const campus of layout.campuses) {
-      const color = hashedColor(campus.id, { lightness: 0.24, saturation: 0.54 });
+      const color = campusSurfaceColor(campus.id);
       const floor = new THREE.Mesh(
         new THREE.BoxGeometry(campus.width + 24, 28, campus.depth + 24),
         new THREE.MeshBasicMaterial({ color })
@@ -620,16 +638,10 @@ function createSystemWorld({
     const fenceSegments = [];
     const terraceEntries = [];
     directories.forEach((directory, directoryIndex) => {
-      const hueKey = directory.district || directory.path;
-      const color = hashedColor(hueKey, {
-        lightness: directory.hierarchyDepth === 1 ? 0.54 : 0.47,
-        saturation: 0.5
-      });
-      const terraceColor = new THREE.Color(color).offsetHSL(
-        0,
-        -0.08,
-        -0.2 + Math.min(0.1, (directory.hierarchyDepth - 1) * 0.025)
-      );
+      const terraceColor = new THREE.Color(directorySurfaceColor(
+        directory.path,
+        directory.hierarchyDepth
+      ));
       terraceEntries.push({
         color: terraceColor,
         directoryPath: directory.path,
@@ -640,9 +652,7 @@ function createSystemWorld({
         ],
         scale: [directory.width, DIRECTORY_ELEVATION_STEP, directory.depth]
       });
-      const fenceColor = new THREE.Color(color).multiplyScalar(
-        Math.max(0.62, 1 - (directory.hierarchyDepth - 1) * 0.07)
-      );
+      const fenceColor = terraceColor.clone().offsetHSL(0, 0.04, 0.16);
       const curbThickness = directory.hierarchyDepth === 1
         ? 5.2
         : Math.max(2.8, 4.4 - directory.hierarchyDepth * 0.35);
@@ -737,12 +747,6 @@ function createSystemWorld({
       return;
     }
     const largest = Math.max(1, Number(layout.lineStats.largest) || 1);
-    const labelledFileIds = new Set(
-      [...layout.files]
-        .sort((left, right) => (Number(right.lines) || 0) - (Number(left.lines) || 0))
-        .slice(0, 8)
-        .map((file) => file.id)
-    );
     const buildingMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       vertexColors: true
@@ -771,8 +775,7 @@ function createSystemWorld({
 
     layout.files.forEach((file, index) => {
       const height = fileBuildingHeight(file.lines, largest);
-      const isLarge = isVisuallyLargeFile(file.lines, largest);
-      const baseColor = isLarge ? LARGE_FILE_COLOR : fileColor(file, colorMode);
+      const baseColor = fileColor(file, colorMode);
       const elevation = Number(file.elevation) || 0;
       transform.position.set(file.x, elevation + height / 2 + 1, file.z);
       transform.scale.set(file.cityWidth, height, file.cityDepth);
@@ -820,19 +823,10 @@ function createSystemWorld({
         file,
         height,
         index,
-        isLarge,
         roofColor
       };
       fileObjects.set(file.id, record);
       fileLabelBuildings.push({ elevation, file, height });
-      if (labelledFileIds.has(file.id)) {
-        addLabel(worldRoot, `${fileName(file)}\n${Number(file.lines || 0).toLocaleString()} LOC`, {
-          color: isLarge ? 0xffc3aa : 0xe8f5ff,
-          fontSize: isLarge ? 13 : 10,
-          maxWidth: Math.max(90, Math.min(220, file.cityWidth * 3.2)),
-          position: new THREE.Vector3(file.x, elevation + height + 21, file.z)
-        });
-      }
     });
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute("position", new THREE.Float32BufferAttribute(edgePositions, 3));
@@ -870,16 +864,26 @@ function createSystemWorld({
       );
       const insideCampus = selectedCampusId == null || record.file.campusId === selectedCampusId;
       const contextActive = Boolean(selectedFileId || selectedDirectoryPath != null || selectedCampusId != null);
-      const baseColor = record.isLarge ? LARGE_FILE_COLOR : fileColor(record.file, colorMode);
+      const baseColor = fileColor(record.file, colorMode);
       record.baseColor = baseColor;
-      const dimmed = contextActive && !selected && !neighbor && (!insideDirectory || !insideCampus);
+      const inSelectedScope = (
+        selectedDirectoryPath != null && insideDirectory
+      ) || (
+        selectedCampusId != null && insideCampus
+      );
+      const relevant = selected || neighbor || inSelectedScope;
+      const dimmed = contextActive && !relevant;
       const buildingColor = new THREE.Color(selected ? SELECTED_FILE_COLOR : baseColor);
       if (neighbor && !selected) {
         buildingColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.48);
+      } else if (inSelectedScope) {
+        buildingColor.offsetHSL(0, 0.06, 0.12);
       } else if (dimmed) {
-        buildingColor.multiplyScalar(0.28);
+        buildingColor.setHex(0x303640);
       }
-      const roofColor = buildingColor.clone().offsetHSL(0, -0.06, selected ? 0.2 : 0.12);
+      const roofColor = dimmed
+        ? new THREE.Color(0x474e59)
+        : buildingColor.clone().offsetHSL(0, -0.06, selected ? 0.2 : 0.12);
       buildingInstances?.setColorAt(record.index, buildingColor);
       roofInstances?.setColorAt(record.index, roofColor);
     }
@@ -1138,10 +1142,15 @@ function createSystemWorld({
     dirty = false;
   }
 
-  function pickedIntersection(event) {
+  function pointerNdc(event, target = pointer) {
     const bounds = canvas.getBoundingClientRect();
-    pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-    pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+    target.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    target.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+    return target;
+  }
+
+  function pickedIntersection(event) {
+    pointerNdc(event);
     raycaster.setFromCamera(pointer, camera);
     return raycaster.intersectObjects(pickables, false)[0] || null;
   }
@@ -1150,7 +1159,48 @@ function createSystemWorld({
     if (document.activeElement !== canvas) {
       canvas.focus({ preventScroll: true });
     }
-    pointerDown = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
+    if (event.button !== 0) {
+      pointerDown = null;
+      return;
+    }
+    pointerDown = { x: event.clientX, y: event.clientY };
+    const target = controls.getTarget(new THREE.Vector3());
+    const anchor = pickedIntersection(event)?.point?.clone() || target.clone();
+    camera.updateMatrixWorld(true);
+    const dragCamera = camera.clone();
+    dragCamera.updateMatrixWorld(true);
+    grabState = {
+      anchor,
+      camera: dragCamera,
+      delta: new THREE.Vector3(),
+      depth: anchor.clone().project(dragCamera).z,
+      pointer: new THREE.Vector3(),
+      pointerId: event.pointerId,
+      position: camera.position.clone(),
+      target
+    };
+    canvas.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event) {
+    if (!grabState || event.pointerId !== grabState.pointerId) {
+      return;
+    }
+    pointerNdc(event, grabState.pointer);
+    grabState.pointer.z = grabState.depth;
+    grabState.pointer.unproject(grabState.camera);
+    grabState.delta.subVectors(grabState.anchor, grabState.pointer);
+    controls.setLookAt(
+      grabState.position.x + grabState.delta.x,
+      grabState.position.y + grabState.delta.y,
+      grabState.position.z + grabState.delta.z,
+      grabState.target.x + grabState.delta.x,
+      grabState.target.y + grabState.delta.y,
+      grabState.target.z + grabState.delta.z,
+      false
+    );
+    event.preventDefault();
+    markDirty();
   }
 
   function handleKeyDown(event) {
@@ -1231,11 +1281,13 @@ function createSystemWorld({
       controls.infinityDolly = event.deltaY < 0;
     }
     if (rotate) {
+      grabState = null;
       pointerDown = null;
     }
   }
 
   function handlePointerUp(event) {
+    grabState = null;
     if (!pointerDown || Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 6) {
       pointerDown = null;
       return;
@@ -1276,8 +1328,16 @@ function createSystemWorld({
     onClearSelection();
   }
 
+  function handlePointerCancel() {
+    grabState = null;
+    pointerDown = null;
+  }
+
   canvas.addEventListener("pointerdown", handlePointerDown);
+  canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerup", handlePointerUp);
+  canvas.addEventListener("pointercancel", handlePointerCancel);
+  canvas.addEventListener("lostpointercapture", handlePointerCancel);
   canvas.addEventListener("wheel", handleWheelMode, { capture: true, passive: true });
   canvas.addEventListener("keydown", handleKeyDown);
 
@@ -1292,7 +1352,10 @@ function createSystemWorld({
     clearSelection,
     dispose() {
       canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointercancel", handlePointerCancel);
+      canvas.removeEventListener("lostpointercapture", handlePointerCancel);
       canvas.removeEventListener("wheel", handleWheelMode, true);
       canvas.removeEventListener("keydown", handleKeyDown);
       clearWorld();

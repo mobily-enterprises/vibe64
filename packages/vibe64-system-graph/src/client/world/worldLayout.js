@@ -245,6 +245,7 @@ function layoutCampus(campus, {
       cityDepth: Math.max(5, node.y1 - node.y0 - 4),
       cityWidth: Math.max(5, node.x1 - node.x0 - 4),
       directoryDepth: node.parent?.depth || 0,
+      directoryPath: node.parent?.data.path || rootPath,
       district: relativeSegments.length > 1 ? relativeSegments[0] : campus.title,
       elevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
       x: offsetX + (node.x0 + node.x1) / 2 - centerX,

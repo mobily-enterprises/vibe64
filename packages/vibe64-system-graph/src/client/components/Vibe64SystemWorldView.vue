@@ -17,7 +17,7 @@
           :active="colorMode === 'folders'"
           :prepend-icon="mdiFolderOutline"
           size="x-small"
-          title="Color by the first directory inside each campus"
+          title="Color each building like its containing directory terrace"
           type="button"
           variant="text"
           @click="setColorMode('folders')"
@@ -296,7 +296,7 @@
         <div class="system-world__eyebrow">YOUR CURRENT SESSION</div>
         <strong>The repository is the city.</strong>
         <span>Adapter-defined trees become separate campuses. Nested folders step upward as named terraced precincts, and every file remains a real LOC-sized building.</span>
-        <span>In Folders mode, colour identifies the first folder inside a campus. Descendants keep that colour family; orange always marks an exceptionally large file.</span>
+        <span>In Folders mode, every building inherits the exact colour of its containing directory terrace. Physical size alone reveals exceptionally large files.</span>
       </aside>
 
       <div v-if="overview" class="system-world__controls-hint" aria-label="File city controls">
@@ -310,7 +310,6 @@
         <span><i class="system-world__legend-fence" /> Low curb = folder edge</span>
         <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
         <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
-        <span><i class="system-world__legend-large" /> Orange = very large file</span>
         <span>{{ colorLegend }}</span>
       </div>
     </div>
@@ -359,7 +358,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "023";
+const rendererRevision = "025";
 
 const props = defineProps({
   active: {
@@ -502,7 +501,7 @@ const statusLabel = computed(() => {
   return String(systemStatus.value.status || "loading").replaceAll("_", " ");
 });
 const colorLegend = computed(() => ({
-  folders: "Color = first folder within campus",
+  folders: "Color = containing directory terrace",
   runtime: "Color = client / server / shared",
   subsystems: "Color = subsystem ownership"
 }[colorMode.value]));
@@ -1143,7 +1142,6 @@ onBeforeUnmount(() => {
 .system-world__legend-fence { border: 1px solid #79cfff; }
 .system-world__legend-depth { background: linear-gradient(135deg, #28455e 50%, #62bde8 50%); border-bottom: 2px solid #91e3ff; }
 .system-world__legend-building { background: #6b8be8; }
-.system-world__legend-large { background: var(--city-orange); box-shadow: 0 0 0.5rem var(--city-orange); }
 
 @media (max-width: 1120px) {
   .system-world__toolbar { grid-template-columns: 1fr auto; }
