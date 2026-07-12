@@ -2,6 +2,7 @@ import {
   mdiCogOutline,
   mdiFileCompare,
   mdiFileCodeOutline,
+  mdiGraphOutline,
   mdiInformationOutline,
   mdiPlayBoxMultipleOutline,
   mdiRobotOutline
@@ -27,6 +28,14 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     order: 200,
     routeSegment: "files",
     title: "Browse, edit, and explain session source files"
+  },
+  {
+    icon: mdiGraphOutline,
+    id: "system",
+    label: "System",
+    order: 250,
+    routeSegment: "system",
+    title: "Explore the active session as a live visual system"
   },
   {
     icon: mdiCogOutline,

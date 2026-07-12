@@ -1,0 +1,28 @@
+{
+  "name": "@local/vibe64-system-graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client/index.js",
+    "./server": "./src/server/index.js",
+    "./server/registerRoutes": "./src/server/registerRoutes.js",
+    "./server/service": "./src/server/service.js",
+    "./shared": "./src/shared/index.js"
+  },
+  "dependencies": {
+    "@jskit-ai/users-web": "0.x",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-execution": "0.1.0",
+    "@local/vibe64-project": "0.1.0",
+    "@mdi/js": "^7.4.47",
+    "@vue/compiler-sfc": "^3.5.34",
+    "camera-controls": "^3.1.2",
+    "d3-hierarchy": "^3.1.2",
+    "three": "^0.185.1",
+    "troika-three-text": "^0.52.4",
+    "ts-morph": "^28.0.0",
+    "vue": "^3.5.13"
+  }
+}

@@ -584,7 +584,7 @@ function promptSessionBriefing(contextInput = {}) {
     stableJson(briefingProjectConfig(context.config)),
     "",
     "Vibe64 control-file policy:",
-    "Committed source contract files are `vibe64.project.json`, `vibe64.runtime-lock.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.",
+    "Committed source contract files are `vibe64.project.json`, `vibe64.runtime-lock.json`, `vibe64.system.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.",
     "Runtime-local Vibe64 state includes project `runtime-config/*`, sessions, runtime, git-cache, terminal/provider state, and other generated workspace state.",
     "Do not delete, move, or overwrite committed source contract files to clean a diff or silence Git/status/tooling. Inspect and report them when relevant. Edit them only when the user explicitly asks for that specific Vibe64 config change or the current Vibe64 workflow prompt explicitly instructs you to update that artifact.",
     "Do not commit or rewrite runtime-local Vibe64 state unless the current workflow explicitly instructs you to inspect or report that runtime state.",
