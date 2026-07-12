@@ -196,7 +196,7 @@
               : 'JSKIT gives this source tree its own land parcel. Its raised terraces are the real directories below that root.' }}
           </p>
           <p v-else>
-            This is directory level {{ selectedDirectory.hierarchyDepth }}. Its raised terrace shows nesting depth, its low curb traces the directory boundary, and every building inside it is a real file.
+            This is directory level {{ selectedDirectory.hierarchyDepth }}. Its raised terrace and labelled perimeter show nesting and ownership, and every building inside it is a real file.
           </p>
           <div v-if="selectedDirectory.subsystems.length" class="system-world__section">
             <strong>System ownership found here</strong>
@@ -307,7 +307,6 @@
 
       <div v-if="overview" class="system-world__legend" aria-label="File city visual legend">
         <span><i class="system-world__legend-campus" /> Land parcel = campus</span>
-        <span><i class="system-world__legend-fence" /> Low curb = folder edge</span>
         <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
         <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
         <span>{{ colorLegend }}</span>
@@ -358,7 +357,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "025";
+const rendererRevision = "028";
 
 const props = defineProps({
   active: {
@@ -1139,7 +1138,6 @@ onBeforeUnmount(() => {
 .system-world__legend span { align-items: center; display: flex; gap: 0.25rem; white-space: nowrap; }
 .system-world__legend i { display: inline-block; height: 0.48rem; width: 0.48rem; }
 .system-world__legend-campus { background: #183856; border: 1px solid #75dfff; }
-.system-world__legend-fence { border: 1px solid #79cfff; }
 .system-world__legend-depth { background: linear-gradient(135deg, #28455e 50%, #62bde8 50%); border-bottom: 2px solid #91e3ff; }
 .system-world__legend-building { background: #6b8be8; }
 

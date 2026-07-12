@@ -21,6 +21,11 @@ const SIDE_COLORS = Object.freeze({
   unknown: 0x6f7b8f
 });
 const SELECTED_FILE_COLOR = 0x75f3ff;
+const DIMMED_BUILDING_COLOR = 0x303640;
+const DIMMED_ROOF_COLOR = 0x474e59;
+const DIMMED_TERRACE_COLOR = 0x252b33;
+const DIMMED_CAMPUS_COLOR = 0x1c222a;
+const DIMMED_EDGE_COLOR = 0x4a535f;
 
 function sideColor(side = "unknown") {
   return SIDE_COLORS[side] || SIDE_COLORS.unknown;
@@ -192,7 +197,7 @@ function appendAtlasQuad(positions, uvs, corners, region) {
   }
 }
 
-function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
+function createDirectorySurfaceLabels(directories = [], maxAnisotropy = 1) {
   if (directories.length === 0) {
     return null;
   }
@@ -210,6 +215,8 @@ function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
 
   for (const directory of directories) {
     const region = regions.get(directory.name);
+    const halfWidth = directory.width / 2;
+    const halfDepth = directory.depth / 2;
     const front = directory.z + directory.depth / 2 + 1;
     const back = directory.z - directory.depth / 2 - 1;
     const right = directory.x + directory.width / 2 + 1;
@@ -248,6 +255,40 @@ function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
       [left, verticalY0, verticalZ1],
       [left, verticalY1, verticalZ1],
       [left, verticalY1, verticalZ0]
+    ], region);
+
+    const topY = directory.elevation + 0.65;
+    const topInset = 2;
+    const horizontalTopDepth = Math.max(2, Math.min(horizontal.height, halfDepth - topInset));
+    const verticalTopDepth = Math.max(2, Math.min(vertical.height, halfWidth - topInset));
+    const frontTop = directory.z + halfDepth - horizontalTopDepth / 2 - topInset;
+    const backTop = directory.z - halfDepth + horizontalTopDepth / 2 + topInset;
+    const rightTop = directory.x + halfWidth - verticalTopDepth / 2 - topInset;
+    const leftTop = directory.x - halfWidth + verticalTopDepth / 2 + topInset;
+
+    appendAtlasQuad(positions, uvs, [
+      [horizontalX0, topY, frontTop + horizontalTopDepth / 2],
+      [horizontalX1, topY, frontTop + horizontalTopDepth / 2],
+      [horizontalX1, topY, frontTop - horizontalTopDepth / 2],
+      [horizontalX0, topY, frontTop - horizontalTopDepth / 2]
+    ], region);
+    appendAtlasQuad(positions, uvs, [
+      [horizontalX1, topY, backTop - horizontalTopDepth / 2],
+      [horizontalX0, topY, backTop - horizontalTopDepth / 2],
+      [horizontalX0, topY, backTop + horizontalTopDepth / 2],
+      [horizontalX1, topY, backTop + horizontalTopDepth / 2]
+    ], region);
+    appendAtlasQuad(positions, uvs, [
+      [rightTop + verticalTopDepth / 2, topY, verticalZ1],
+      [rightTop + verticalTopDepth / 2, topY, verticalZ0],
+      [rightTop - verticalTopDepth / 2, topY, verticalZ0],
+      [rightTop - verticalTopDepth / 2, topY, verticalZ1]
+    ], region);
+    appendAtlasQuad(positions, uvs, [
+      [leftTop - verticalTopDepth / 2, topY, verticalZ0],
+      [leftTop - verticalTopDepth / 2, topY, verticalZ1],
+      [leftTop + verticalTopDepth / 2, topY, verticalZ1],
+      [leftTop + verticalTopDepth / 2, topY, verticalZ0]
     ], region);
   }
 
@@ -433,47 +474,6 @@ function curveLine(from, to, {
   return line;
 }
 
-function rectangleFenceGeometry(directory = {}) {
-  const positions = [];
-  const halfWidth = directory.width / 2;
-  const halfDepth = directory.depth / 2;
-  const left = directory.x - halfWidth;
-  const right = directory.x + halfWidth;
-  const front = directory.z - halfDepth;
-  const back = directory.z + halfDepth;
-  const baseY = Number(directory.elevation) || 0;
-  const wallHeight = Math.max(8, Number(directory.wallHeight) || 8);
-  const railHeights = [baseY + wallHeight * 0.46, baseY + wallHeight];
-
-  function segment(x1, y1, z1, x2, y2, z2) {
-    positions.push(x1, y1, z1, x2, y2, z2);
-  }
-
-  for (const y of railHeights) {
-    segment(left, y, front, right, y, front);
-    segment(right, y, front, right, y, back);
-    segment(right, y, back, left, y, back);
-    segment(left, y, back, left, y, front);
-  }
-
-  const horizontalPosts = Math.min(24, Math.max(2, Math.ceil(directory.width / 34)));
-  const verticalPosts = Math.min(24, Math.max(2, Math.ceil(directory.depth / 34)));
-  for (let index = 0; index <= horizontalPosts; index += 1) {
-    const x = left + directory.width * (index / horizontalPosts);
-    segment(x, baseY, front, x, baseY + wallHeight, front);
-    segment(x, baseY, back, x, baseY + wallHeight, back);
-  }
-  for (let index = 1; index < verticalPosts; index += 1) {
-    const z = front + directory.depth * (index / verticalPosts);
-    segment(left, baseY, z, left, baseY + wallHeight, z);
-    segment(right, baseY, z, right, baseY + wallHeight, z);
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  return geometry;
-}
-
 function createSystemWorld({
   canvas,
   onClearSelection = () => {},
@@ -543,7 +543,6 @@ function createSystemWorld({
   let lastFrame = performance.now();
   let pointerDown = null;
   let roofInstances = null;
-  let selectionFence = null;
   let selectedCampusId = null;
   let selectedDirectoryPath = null;
   let selectedFileId = "";
@@ -576,7 +575,6 @@ function createSystemWorld({
     buildingInstances = null;
     directoryTerraceInstances = null;
     roofInstances = null;
-    selectionFence = null;
     selectedCampusId = null;
     markDirty();
   }
@@ -635,7 +633,6 @@ function createSystemWorld({
     const directories = [...layout.directories].sort((left, right) => (
       left.hierarchyDepth - right.hierarchyDepth || left.path.localeCompare(right.path)
     ));
-    const fenceSegments = [];
     const terraceEntries = [];
     directories.forEach((directory, directoryIndex) => {
       const terraceColor = new THREE.Color(directorySurfaceColor(
@@ -652,36 +649,6 @@ function createSystemWorld({
         ],
         scale: [directory.width, DIRECTORY_ELEVATION_STEP, directory.depth]
       });
-      const fenceColor = terraceColor.clone().offsetHSL(0, 0.04, 0.16);
-      const curbThickness = directory.hierarchyDepth === 1
-        ? 5.2
-        : Math.max(2.8, 4.4 - directory.hierarchyDepth * 0.35);
-      const curbHeight = directory.wallHeight;
-      const curbY = directory.elevation + curbHeight / 2;
-      const halfWidth = directory.width / 2;
-      const halfDepth = directory.depth / 2;
-      fenceSegments.push(
-        {
-          color: fenceColor,
-          position: [directory.x, curbY, directory.z - halfDepth],
-          scale: [directory.width, curbHeight, curbThickness]
-        },
-        {
-          color: fenceColor,
-          position: [directory.x, curbY, directory.z + halfDepth],
-          scale: [directory.width, curbHeight, curbThickness]
-        },
-        {
-          color: fenceColor,
-          position: [directory.x - halfWidth, curbY, directory.z],
-          scale: [curbThickness, curbHeight, directory.depth]
-        },
-        {
-          color: fenceColor,
-          position: [directory.x + halfWidth, curbY, directory.z],
-          scale: [curbThickness, curbHeight, directory.depth]
-        }
-      );
       directoryObjects.set(directory.path, {
         baseColor: terraceColor.getHex(),
         directory,
@@ -715,30 +682,12 @@ function createSystemWorld({
       pickables.push(directoryTerraceInstances);
     }
 
-    if (fenceSegments.length > 0) {
-      const fenceInstances = new THREE.InstancedMesh(
-        boxGeometryWithFaceShading(),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }),
-        fenceSegments.length
-      );
-      fenceInstances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-      const transform = new THREE.Object3D();
-      fenceSegments.forEach((segment, index) => {
-        transform.position.set(...segment.position);
-        transform.scale.set(...segment.scale);
-        transform.updateMatrix();
-        fenceInstances.setMatrixAt(index, transform.matrix);
-        fenceInstances.setColorAt(index, segment.color);
-      });
-      fenceInstances.instanceColor.needsUpdate = true;
-      worldRoot.add(fenceInstances);
-    }
-    const wallLabels = createDirectoryWallLabels(
+    const surfaceLabels = createDirectorySurfaceLabels(
       directories,
       renderer.capabilities.getMaxAnisotropy()
     );
-    if (wallLabels) {
-      worldRoot.add(wallLabels);
+    if (surfaceLabels) {
+      worldRoot.add(surfaceLabels);
     }
   }
 
@@ -856,6 +805,24 @@ function createSystemWorld({
   }
 
   function applySelectionStyles() {
+    const contextActive = Boolean(selectedFileId || selectedDirectoryPath != null || selectedCampusId != null);
+    const relevantCampusIds = new Set();
+    const relevantDirectoryPaths = new Set();
+
+    function includeDirectoryAncestry(directoryPath = "") {
+      let currentPath = String(directoryPath || "");
+      while (currentPath) {
+        if (directoryObjects.has(currentPath)) {
+          relevantDirectoryPaths.add(currentPath);
+        }
+        const separatorIndex = currentPath.lastIndexOf("/");
+        if (separatorIndex < 0) {
+          break;
+        }
+        currentPath = currentPath.slice(0, separatorIndex);
+      }
+    }
+
     for (const [fileId, record] of fileObjects) {
       const selected = fileId === selectedFileId;
       const neighbor = neighborFileIds.has(fileId);
@@ -863,7 +830,6 @@ function createSystemWorld({
         record.file.path === selectedDirectoryPath || record.file.path.startsWith(`${selectedDirectoryPath}/`)
       );
       const insideCampus = selectedCampusId == null || record.file.campusId === selectedCampusId;
-      const contextActive = Boolean(selectedFileId || selectedDirectoryPath != null || selectedCampusId != null);
       const baseColor = fileColor(record.file, colorMode);
       record.baseColor = baseColor;
       const inSelectedScope = (
@@ -873,16 +839,20 @@ function createSystemWorld({
       );
       const relevant = selected || neighbor || inSelectedScope;
       const dimmed = contextActive && !relevant;
+      if (relevant) {
+        relevantCampusIds.add(record.file.campusId);
+        includeDirectoryAncestry(record.file.directoryPath);
+      }
       const buildingColor = new THREE.Color(selected ? SELECTED_FILE_COLOR : baseColor);
       if (neighbor && !selected) {
         buildingColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.48);
       } else if (inSelectedScope) {
         buildingColor.offsetHSL(0, 0.06, 0.12);
       } else if (dimmed) {
-        buildingColor.setHex(0x303640);
+        buildingColor.setHex(DIMMED_BUILDING_COLOR);
       }
       const roofColor = dimmed
-        ? new THREE.Color(0x474e59)
+        ? new THREE.Color(DIMMED_ROOF_COLOR)
         : buildingColor.clone().offsetHSL(0, -0.06, selected ? 0.2 : 0.12);
       buildingInstances?.setColorAt(record.index, buildingColor);
       roofInstances?.setColorAt(record.index, roofColor);
@@ -896,34 +866,27 @@ function createSystemWorld({
 
     for (const [campusId, record] of campusObjects) {
       const selected = selectedCampusId === campusId;
+      const relevant = !contextActive || relevantCampusIds.has(campusId);
       record.floor.material.color.setHex(
         selected
           ? new THREE.Color(record.baseColor).offsetHSL(0, 0.08, 0.12).getHex()
-          : record.baseColor
+          : relevant
+            ? record.baseColor
+            : DIMMED_CAMPUS_COLOR
       );
-      record.rim.material.color.setHex(selected ? SELECTED_FILE_COLOR : record.rimColor);
+      record.rim.material.color.setHex(
+        selected ? SELECTED_FILE_COLOR : relevant ? record.rimColor : DIMMED_EDGE_COLOR
+      );
     }
 
-    if (selectionFence) {
-      worldRoot.remove(selectionFence);
-      disposeObject(selectionFence);
-      selectionFence = null;
-    }
     for (const [directoryPath, record] of directoryObjects) {
       const selected = selectedDirectoryPath === directoryPath;
-      const terraceColor = new THREE.Color(record.baseColor);
+      const relevant = !contextActive || relevantDirectoryPaths.has(directoryPath);
+      const terraceColor = new THREE.Color(relevant ? record.baseColor : DIMMED_TERRACE_COLOR);
       if (selected) {
         terraceColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.55);
       }
       directoryTerraceInstances?.setColorAt(record.index, terraceColor);
-      if (selected) {
-        selectionFence = new THREE.LineSegments(
-          rectangleFenceGeometry(record.directory),
-          new THREE.LineBasicMaterial({ color: SELECTED_FILE_COLOR })
-        );
-        selectionFence.renderOrder = 5;
-        worldRoot.add(selectionFence);
-      }
     }
     if (directoryTerraceInstances?.instanceColor) {
       directoryTerraceInstances.instanceColor.needsUpdate = true;
