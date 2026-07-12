@@ -6,6 +6,7 @@ import {
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemSky,
   stableHash
 } from "./worldLayout.js";
 
@@ -26,6 +27,12 @@ const DIMMED_ROOF_COLOR = 0x474e59;
 const DIMMED_TERRACE_COLOR = 0x252b33;
 const DIMMED_CAMPUS_COLOR = 0x1c222a;
 const DIMMED_EDGE_COLOR = 0x4a535f;
+const SUBSYSTEM_TETHER_COLORS = Object.freeze({
+  owns: 0x59e3ff,
+  implements: 0x70e8ad,
+  supports: 0xb49aff,
+  configures: 0xffc86b
+});
 
 function sideColor(side = "unknown") {
   return SIDE_COLORS[side] || SIDE_COLORS.unknown;
@@ -474,12 +481,27 @@ function curveLine(from, to, {
   return line;
 }
 
+function subsystemTether(from, to, relation = "supports") {
+  const midpoint = from.clone().lerp(to, 0.5);
+  midpoint.y = from.y * 0.56 + to.y * 0.44;
+  const curve = new THREE.QuadraticBezierCurve3(from, midpoint, to);
+  return new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(curve.getPoints(28)),
+    new THREE.LineBasicMaterial({
+      color: SUBSYSTEM_TETHER_COLORS[relation] || SUBSYSTEM_TETHER_COLORS.supports,
+      opacity: 0.88,
+      transparent: true
+    })
+  );
+}
+
 function createSystemWorld({
   canvas,
   onClearSelection = () => {},
   onSelectDirectory = () => {},
   onSelectFile = () => {},
   onSelectPrecinct = () => {},
+  onSelectSubsystem = () => {},
   reducedMotion = false
 } = {}) {
   if (!canvas) {
@@ -522,21 +544,25 @@ function createSystemWorld({
   controls.setLookAt(0, 980, 1_150, 0, 0, 0, false);
 
   const worldRoot = new THREE.Group();
+  const subsystemRoot = new THREE.Group();
   const contextRoot = new THREE.Group();
   scene.add(worldRoot);
+  scene.add(subsystemRoot);
   scene.add(contextRoot);
 
   const pickables = [];
   const campusObjects = new Map();
   const fileObjects = new Map();
   const directoryObjects = new Map();
+  const subsystemObjects = new Map();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let active = true;
   let buildingEdgeLines = null;
   let buildingInstances = null;
   let cityLayout = null;
-  let colorMode = "folders";
+  let subsystemLayout = null;
+  let viewMode = "folders";
   let directoryTerraceInstances = null;
   let dirty = true;
   let grabState = null;
@@ -546,6 +572,7 @@ function createSystemWorld({
   let selectedCampusId = null;
   let selectedDirectoryPath = null;
   let selectedFileId = "";
+  let selectedSubsystemId = "";
   let neighborFileIds = new Set();
   let wheelGestureAction = CameraControls.ACTION.DOLLY;
   let wheelGestureAt = -Infinity;
@@ -563,19 +590,23 @@ function createSystemWorld({
 
   function clearWorld() {
     clearGroup(worldRoot);
+    clearGroup(subsystemRoot);
     clearGroup(contextRoot);
     pickables.splice(0);
     campusObjects.clear();
     fileObjects.clear();
     directoryObjects.clear();
+    subsystemObjects.clear();
     selectedDirectoryPath = null;
     selectedFileId = "";
+    selectedSubsystemId = "";
     neighborFileIds = new Set();
     buildingEdgeLines = null;
     buildingInstances = null;
     directoryTerraceInstances = null;
     roofInstances = null;
     selectedCampusId = null;
+    subsystemLayout = null;
     markDirty();
   }
 
@@ -724,7 +755,7 @@ function createSystemWorld({
 
     layout.files.forEach((file, index) => {
       const height = fileBuildingHeight(file.lines, largest);
-      const baseColor = fileColor(file, colorMode);
+      const baseColor = fileColor(file, viewMode);
       const elevation = Number(file.elevation) || 0;
       transform.position.set(file.x, elevation + height / 2 + 1, file.z);
       transform.scale.set(file.cityWidth, height, file.cityDepth);
@@ -804,10 +835,85 @@ function createSystemWorld({
     pickables.push(buildingInstances);
   }
 
+  function addSubsystemSky(overview, layout) {
+    subsystemLayout = layoutSubsystemSky(layout, overview.subsystems || []);
+    if (subsystemLayout.subsystems.length === 0) {
+      subsystemRoot.visible = false;
+      return;
+    }
+    addLabel(subsystemRoot, "SUBSYSTEM SKY · WHY THE CODE EXISTS", {
+      color: 0xc8f4ff,
+      fontSize: 24,
+      maxWidth: 620,
+      position: new THREE.Vector3(0, subsystemLayout.elevation + 36, -layout.bounds.depth / 2 - 60)
+    });
+    for (const subsystem of subsystemLayout.subsystems) {
+      const baseColor = hashedColor(subsystem.id, { lightness: 0.48, saturation: 0.62 });
+      const group = new THREE.Group();
+      group.position.set(subsystem.x, subsystem.y, subsystem.z);
+      const island = new THREE.Mesh(
+        new THREE.CylinderGeometry(subsystem.radius, subsystem.radius * 0.9, 12, 40),
+        new THREE.MeshBasicMaterial({
+          color: baseColor,
+          opacity: 0.8,
+          transparent: true
+        })
+      );
+      island.userData.kind = "subsystem";
+      island.userData.subsystemId = subsystem.id;
+      group.add(island);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(subsystem.radius * 0.78, subsystem.radius * 1.04, 48),
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(baseColor).offsetHSL(0, -0.04, 0.2),
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+          transparent: true
+        })
+      );
+      ring.position.y = 7;
+      ring.rotation.x = -Math.PI / 2;
+      group.add(ring);
+      const fileLabel = `${subsystem.fileCount} ${subsystem.fileCount === 1 ? "file" : "files"}`;
+      const capabilityLabel = `${subsystem.capabilities.length} ${subsystem.capabilities.length === 1 ? "capability" : "capabilities"}`;
+      addLabel(group, `${subsystem.title}\n${fileLabel} · ${capabilityLabel}`, {
+        color: 0xffffff,
+        fontSize: Math.max(13, Math.min(20, subsystem.radius * 0.18)),
+        maxWidth: subsystem.radius * 1.65,
+        position: new THREE.Vector3(0, 22, 0)
+      });
+      subsystemRoot.add(group);
+      pickables.push(island);
+
+      const tethers = subsystem.targets.map((target) => {
+        const from = new THREE.Vector3(subsystem.x, subsystem.y - 6, subsystem.z);
+        const to = target.fileId
+          ? buildingTop(target.fileId) || new THREE.Vector3(target.x, target.elevation + 2, target.z)
+          : new THREE.Vector3(target.x, target.elevation + 2, target.z);
+        const line = subsystemTether(from, to, target.relation);
+        line.visible = false;
+        subsystemRoot.add(line);
+        return line;
+      });
+      subsystemObjects.set(subsystem.id, {
+        baseColor,
+        group,
+        island,
+        ring,
+        subsystem,
+        tethers
+      });
+    }
+    subsystemRoot.visible = viewMode === "subsystems";
+  }
+
   function applySelectionStyles() {
-    const contextActive = Boolean(selectedFileId || selectedDirectoryPath != null || selectedCampusId != null);
+    const contextActive = Boolean(
+      selectedFileId || selectedSubsystemId || selectedDirectoryPath != null || selectedCampusId != null
+    );
     const relevantCampusIds = new Set();
     const relevantDirectoryPaths = new Set();
+    const relevantSubsystemIds = new Set();
 
     function includeDirectoryAncestry(directoryPath = "") {
       let currentPath = String(directoryPath || "");
@@ -830,18 +936,23 @@ function createSystemWorld({
         record.file.path === selectedDirectoryPath || record.file.path.startsWith(`${selectedDirectoryPath}/`)
       );
       const insideCampus = selectedCampusId == null || record.file.campusId === selectedCampusId;
-      const baseColor = fileColor(record.file, colorMode);
+      const baseColor = fileColor(record.file, viewMode);
       record.baseColor = baseColor;
       const inSelectedScope = (
         selectedDirectoryPath != null && insideDirectory
       ) || (
         selectedCampusId != null && insideCampus
+      ) || (
+        selectedSubsystemId && (record.file.subsystemIds || []).includes(selectedSubsystemId)
       );
       const relevant = selected || neighbor || inSelectedScope;
       const dimmed = contextActive && !relevant;
       if (relevant) {
         relevantCampusIds.add(record.file.campusId);
         includeDirectoryAncestry(record.file.directoryPath);
+        for (const subsystemId of record.file.subsystemIds || []) {
+          relevantSubsystemIds.add(subsystemId);
+        }
       }
       const buildingColor = new THREE.Color(selected ? SELECTED_FILE_COLOR : baseColor);
       if (neighbor && !selected) {
@@ -891,11 +1002,39 @@ function createSystemWorld({
     if (directoryTerraceInstances?.instanceColor) {
       directoryTerraceInstances.instanceColor.needsUpdate = true;
     }
+
+    for (const [subsystemId, record] of subsystemObjects) {
+      const selected = selectedSubsystemId === subsystemId;
+      const relevant = !contextActive || (
+        selectedSubsystemId ? selected : relevantSubsystemIds.has(subsystemId)
+      );
+      record.island.material.color.setHex(
+        selected
+          ? SELECTED_FILE_COLOR
+          : relevant
+            ? record.baseColor
+            : DIMMED_BUILDING_COLOR
+      );
+      record.island.material.opacity = selected ? 0.98 : relevant ? 0.8 : 0.34;
+      record.ring.material.color.setHex(
+        selected
+          ? 0xd9fbff
+          : relevant
+            ? new THREE.Color(record.baseColor).offsetHSL(0, -0.04, 0.2).getHex()
+            : DIMMED_EDGE_COLOR
+      );
+      record.ring.material.opacity = selected ? 1 : relevant ? 0.9 : 0.28;
+      record.group.scale.setScalar(selected ? 1.12 : 1);
+      for (const tether of record.tethers) {
+        tether.visible = subsystemRoot.visible && selected;
+      }
+    }
     markDirty();
   }
 
   function selectFile(fileId = "") {
     selectedFileId = String(fileId || "");
+    selectedSubsystemId = "";
     selectedCampusId = null;
     selectedDirectoryPath = null;
     applySelectionStyles();
@@ -903,6 +1042,7 @@ function createSystemWorld({
 
   function selectDirectory(directoryPath = null) {
     selectedCampusId = null;
+    selectedSubsystemId = "";
     selectedDirectoryPath = directoryPath == null ? null : String(directoryPath);
     selectedFileId = "";
     clearContext();
@@ -911,6 +1051,16 @@ function createSystemWorld({
 
   function selectPrecinct(campusId = null) {
     selectedCampusId = campusId == null ? null : String(campusId);
+    selectedSubsystemId = "";
+    selectedDirectoryPath = null;
+    selectedFileId = "";
+    clearContext();
+    applySelectionStyles();
+  }
+
+  function selectSubsystem(subsystemId = "") {
+    selectedSubsystemId = String(subsystemId || "");
+    selectedCampusId = null;
     selectedDirectoryPath = null;
     selectedFileId = "";
     clearContext();
@@ -921,6 +1071,7 @@ function createSystemWorld({
     selectedCampusId = null;
     selectedDirectoryPath = null;
     selectedFileId = "";
+    selectedSubsystemId = "";
     clearContext();
     applySelectionStyles();
   }
@@ -939,6 +1090,7 @@ function createSystemWorld({
   function setFileContext(constellation = {}) {
     clearContext();
     selectedFileId = constellation.selectedFile?.id || "";
+    selectedSubsystemId = "";
     selectedCampusId = null;
     selectedDirectoryPath = null;
     neighborFileIds = new Set([selectedFileId]);
@@ -968,6 +1120,7 @@ function createSystemWorld({
     addGround(cityLayout);
     addDirectoryPrecincts(cityLayout);
     addFileBuildings(cityLayout);
+    addSubsystemSky(overview, cityLayout);
     markDirty();
     await fitWorld(false);
   }
@@ -1039,7 +1192,82 @@ function createSystemWorld({
     return true;
   }
 
+  function focusSubsystem(subsystemId = "") {
+    const record = subsystemObjects.get(String(subsystemId || ""));
+    if (!record) {
+      return false;
+    }
+    const distance = Math.max(260, record.subsystem.radius * 4.8);
+    controls.setLookAt(
+      record.subsystem.x + distance * 0.28,
+      record.subsystem.y + distance * 0.72,
+      record.subsystem.z + distance * 0.74,
+      record.subsystem.x,
+      record.subsystem.y,
+      record.subsystem.z,
+      !reducedMotion
+    );
+    markDirty();
+    return true;
+  }
+
+  function focusSubsystemGround(subsystemId = "") {
+    const targets = subsystemObjects.get(String(subsystemId || ""))?.subsystem.targets || [];
+    if (targets.length === 0) {
+      return false;
+    }
+    const minX = Math.min(...targets.map((target) => target.x - (Number(target.width) || 0) / 2));
+    const maxX = Math.max(...targets.map((target) => target.x + (Number(target.width) || 0) / 2));
+    const minZ = Math.min(...targets.map((target) => target.z - (Number(target.depth) || 0) / 2));
+    const maxZ = Math.max(...targets.map((target) => target.z + (Number(target.depth) || 0) / 2));
+    const targetY = Math.max(...targets.map((target) => (
+      target.fileId ? buildingTop(target.fileId)?.y || target.elevation : target.elevation
+    )));
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const span = Math.max(440, maxX - minX, maxZ - minZ, targetY * 0.7);
+    controls.setLookAt(
+      centerX + span * 0.28,
+      targetY + span * 0.76,
+      centerZ + span * 0.78,
+      centerX,
+      Math.max(0, targetY * 0.38),
+      centerZ,
+      !reducedMotion
+    );
+    markDirty();
+    return true;
+  }
+
+  function focusSubsystemLayer() {
+    const records = subsystemLayout?.subsystems || [];
+    if (records.length === 0) {
+      return false;
+    }
+    const minX = Math.min(...records.map((record) => record.x - record.radius));
+    const maxX = Math.max(...records.map((record) => record.x + record.radius));
+    const minZ = Math.min(...records.map((record) => record.z - record.radius));
+    const maxZ = Math.max(...records.map((record) => record.z + record.radius));
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const span = Math.max(520, maxX - minX, maxZ - minZ);
+    controls.setLookAt(
+      centerX + span * 0.16,
+      subsystemLayout.elevation + span * 0.62,
+      centerZ + span * 0.76,
+      centerX,
+      subsystemLayout.elevation,
+      centerZ,
+      !reducedMotion
+    );
+    markDirty();
+    return true;
+  }
+
   async function fitWorld(smooth = true) {
+    if (viewMode === "subsystems" && focusSubsystemLayer()) {
+      return;
+    }
     if (worldRoot.children.length === 0) {
       return;
     }
@@ -1054,10 +1282,11 @@ function createSystemWorld({
 
   function setView(view = "perspective") {
     const span = Math.max(cityLayout?.bounds.width || 1_420, cityLayout?.bounds.depth || 980);
+    const targetY = viewMode === "subsystems" ? subsystemLayout?.elevation || 0 : 0;
     if (view === "top") {
-      controls.setLookAt(0, span * 1.12, 0.01, 0, 0, 0, !reducedMotion);
+      controls.setLookAt(0, targetY + span * 1.12, 0.01, 0, targetY, 0, !reducedMotion);
     } else {
-      controls.setLookAt(0, span * 0.72, span * 0.86, 0, 0, 0, !reducedMotion);
+      controls.setLookAt(0, targetY + span * 0.72, span * 0.86, 0, targetY, 0, !reducedMotion);
     }
     markDirty();
   }
@@ -1071,9 +1300,16 @@ function createSystemWorld({
     markDirty();
   }
 
-  function setColorMode(nextMode = "folders") {
-    colorMode = ["folders", "subsystems", "runtime"].includes(nextMode) ? nextMode : "folders";
+  function setViewMode(nextMode = "folders") {
+    const previousMode = viewMode;
+    viewMode = ["folders", "subsystems", "runtime"].includes(nextMode) ? nextMode : "folders";
+    subsystemRoot.visible = viewMode === "subsystems";
     applySelectionStyles();
+    if (viewMode === "subsystems") {
+      focusSubsystemLayer();
+    } else if (previousMode === "subsystems" && !focusSubsystemGround(selectedSubsystemId)) {
+      void fitWorld();
+    }
   }
 
   function resize(width, height) {
@@ -1086,11 +1322,13 @@ function createSystemWorld({
   }
 
   function updateBillboards() {
-    worldRoot.traverse((object) => {
-      if (object.userData.billboard) {
-        object.quaternion.copy(camera.quaternion);
-      }
-    });
+    for (const root of [worldRoot, subsystemRoot]) {
+      root.traverse((object) => {
+        if (object.userData.billboard) {
+          object.quaternion.copy(camera.quaternion);
+        }
+      });
+    }
   }
 
   function frame(now = performance.now()) {
@@ -1115,7 +1353,10 @@ function createSystemWorld({
   function pickedIntersection(event) {
     pointerNdc(event);
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObjects(pickables, false)[0] || null;
+    const activePickables = subsystemRoot.visible
+      ? pickables
+      : pickables.filter((object) => object.userData.kind !== "subsystem");
+    return raycaster.intersectObjects(activePickables, false)[0] || null;
   }
 
   function handlePointerDown(event) {
@@ -1258,6 +1499,16 @@ function createSystemWorld({
     pointerDown = null;
     const intersection = pickedIntersection(event);
     const object = intersection?.object;
+    if (object?.userData.kind === "subsystem") {
+      const subsystemId = object.userData.subsystemId;
+      const record = subsystemObjects.get(subsystemId);
+      if (!record) {
+        return;
+      }
+      selectSubsystem(subsystemId);
+      onSelectSubsystem(record.subsystem);
+      return;
+    }
     if (object?.userData.kind === "file-buildings") {
       const fileId = object.userData.fileIds[intersection.instanceId];
       const record = fileObjects.get(fileId);
@@ -1329,6 +1580,8 @@ function createSystemWorld({
     focusDirectory,
     focusFile,
     focusPrecinct,
+    focusSubsystem,
+    focusSubsystemLayer,
     frame,
     markDirty,
     resize,
@@ -1352,11 +1605,12 @@ function createSystemWorld({
     selectDirectory,
     selectFile,
     selectPrecinct,
+    selectSubsystem,
     setActive(value) {
       active = value === true;
       markDirty();
     },
-    setColorMode,
+    setViewMode,
     setFileContext,
     setOverview,
     setView

@@ -11,36 +11,38 @@
         </div>
       </div>
 
-      <div class="system-world__color-switch" aria-label="Color buildings by">
-        <span>Color by</span>
+      <div class="system-world__mode-switch" aria-label="Choose File City view">
+        <span>View</span>
         <v-btn
-          :active="colorMode === 'folders'"
+          :active="viewMode === 'folders'"
           :prepend-icon="mdiFolderOutline"
           size="x-small"
-          title="Color each building like its containing directory terrace"
+          title="Explore the physical file and directory city"
           type="button"
           variant="text"
-          @click="setColorMode('folders')"
+          @click="setViewMode('folders')"
         >
           Folders
         </v-btn>
         <v-btn
-          :active="colorMode === 'subsystems'"
+          :active="viewMode === 'subsystems'"
           :prepend-icon="mdiLayersTripleOutline"
           size="x-small"
+          title="Visit the semantic subsystem layer above the files"
           type="button"
           variant="text"
-          @click="setColorMode('subsystems')"
+          @click="setViewMode('subsystems')"
         >
           Subsystems
         </v-btn>
         <v-btn
-          :active="colorMode === 'runtime'"
+          :active="viewMode === 'runtime'"
           :prepend-icon="mdiCodeBraces"
           size="x-small"
+          title="Color the physical city by client, server, and shared runtime"
           type="button"
           variant="text"
-          @click="setColorMode('runtime')"
+          @click="setViewMode('runtime')"
         >
           Runtime
         </v-btn>
@@ -50,7 +52,7 @@
         <v-btn
           :icon="mdiCrosshairsGps"
           size="x-small"
-          title="Fit the whole city"
+          title="Fit the current layer"
           type="button"
           variant="text"
           @click="fitWorld"
@@ -89,7 +91,7 @@
     <div class="system-world__stage">
       <canvas
         ref="canvasElement"
-        aria-label="Interactive 3D file city. Left-drag or use arrow keys to move; begin a two-finger gesture vertically, use W and S, plus and minus, or Control-Up and Control-Down to move forward and back; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building to inspect its file."
+        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; begin a two-finger gesture vertically, use W and S, plus and minus, or Control-Up and Control-Down to move forward and back; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it."
         class="system-world__canvas"
         tabindex="0"
       />
@@ -162,7 +164,31 @@
         </button>
       </div>
 
-      <nav v-if="campuses.length" class="system-world__navigator" aria-label="File city campuses">
+      <nav
+        v-if="viewMode === 'subsystems' && subsystems.length"
+        class="system-world__navigator"
+        aria-label="File City subsystems"
+      >
+        <header>
+          <span>Subsystems</span>
+          <strong>{{ subsystems.length }}</strong>
+        </header>
+        <button
+          v-for="subsystem in subsystems"
+          :key="subsystem.id"
+          :class="{ 'system-world__navigator-button--active': selectedSubsystem?.id === subsystem.id }"
+          type="button"
+          @click="inspectSubsystem(subsystem, { focus: true })"
+        >
+          <v-icon :icon="mdiLayersTripleOutline" size="13" />
+          <span>
+            <strong>{{ subsystem.title }}</strong>
+            <small>{{ formatCount(subsystem.fileCount, 'file') }} · {{ formatCount(subsystem.capabilities.length, 'capability', 'capabilities') }}</small>
+          </span>
+        </button>
+      </nav>
+
+      <nav v-else-if="campuses.length" class="system-world__navigator" aria-label="File city campuses">
         <header>
           <span>Campuses</span>
           <strong>{{ campuses.length }}</strong>
@@ -175,12 +201,72 @@
           @click="selectCampus(campus)"
         >
           <v-icon :icon="mdiFolderOutline" size="13" />
-          <span><strong>{{ campus.name }}</strong><small>{{ campus.fileCount }} files · {{ formatLines(campus.lines) }} LOC</small></span>
+          <span><strong>{{ campus.name }}</strong><small>{{ formatCount(campus.fileCount, 'file') }} · {{ formatLines(campus.lines) }} LOC</small></span>
         </button>
       </nav>
 
-      <aside v-if="selectedDirectory || selectedFile" class="system-world__inspector" aria-live="polite">
-        <template v-if="selectedDirectory">
+      <aside v-if="selectedSubsystem || selectedDirectory || selectedFile" class="system-world__inspector" aria-live="polite">
+        <template v-if="selectedSubsystem">
+          <div class="system-world__eyebrow">SUBSYSTEM · {{ selectedSubsystem.origin }}</div>
+          <h2>{{ selectedSubsystem.title }}</h2>
+          <p>{{ selectedSubsystem.description || 'This subsystem has structural ownership, but its purpose still needs a human-readable explanation.' }}</p>
+          <div class="system-world__chips">
+            <span>{{ selectedSubsystem.executionSide }}</span>
+            <span>{{ selectedSubsystem.status }}</span>
+            <span>{{ selectedSubsystem.authoredBy }}</span>
+          </div>
+          <div class="system-world__metrics">
+            <span><strong>{{ selectedSubsystem.fileCount.toLocaleString() }}</strong> files</span>
+            <span><strong>{{ formatLines(selectedSubsystem.lines) }}</strong> lines</span>
+            <span><strong>{{ selectedSubsystem.anchors.length }}</strong> anchors</span>
+            <span><strong>{{ selectedSubsystem.capabilities.length }}</strong> capabilities</span>
+          </div>
+          <div v-if="selectedSubsystem.anchors.length" class="system-world__section">
+            <strong>Code below this cloud</strong>
+            <ul>
+              <li v-for="anchor in selectedSubsystem.anchors" :key="`${anchor.kind}:${anchor.path}:${anchor.relation}`">
+                <strong>{{ anchor.relation }} · {{ anchor.path }}</strong>
+                <span>{{ anchor.kind }} · {{ anchor.origin }}</span>
+              </li>
+            </ul>
+          </div>
+          <div v-if="selectedSubsystem.capabilities.length" class="system-world__section">
+            <strong>What it provides or needs</strong>
+            <ul>
+              <li v-for="capability in selectedSubsystem.capabilities" :key="capability.id">
+                <strong>{{ capability.title }}</strong>
+                <span>{{ capability.direction }} {{ capability.kind }}<template v-if="capability.value && capability.value !== capability.title"> · {{ capability.value }}</template></span>
+              </li>
+            </ul>
+          </div>
+          <p v-if="selectedSubsystem.unmatchedAnchorCount" class="system-world__large-file-warning">
+            {{ selectedSubsystem.unmatchedAnchorCount }} declared anchor{{ selectedSubsystem.unmatchedAnchorCount === 1 ? '' : 's' }} no longer match the current tree.
+          </p>
+          <div class="system-world__inspector-actions">
+            <v-btn
+              :disabled="!askChatAvailable"
+              :prepend-icon="mdiMessageOutline"
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="askAboutSelection"
+            >
+              Ask about this subsystem
+            </v-btn>
+            <v-btn
+              :disabled="!askChatAvailable"
+              :prepend-icon="mdiLayersTripleOutline"
+              size="small"
+              type="button"
+              variant="text"
+              @click="discoverSubsystems"
+            >
+              Discover more
+            </v-btn>
+          </div>
+        </template>
+
+        <template v-else-if="selectedDirectory">
           <div class="system-world__eyebrow">{{ selectedDirectory.kind === 'campus' ? (selectedDirectory.implicit ? 'MAIN CAMPUS' : 'JSKIT CAMPUS') : 'DIRECTORY PRECINCT' }}</div>
           <h2>{{ selectedDirectory.name }}</h2>
           <p class="system-world__path">{{ selectedDirectory.path || (selectedDirectory.kind === 'campus' ? 'Unclaimed project tree' : 'Project root') }}</p>
@@ -293,10 +379,28 @@
       </aside>
 
       <aside v-else-if="overview" class="system-world__orientation">
-        <div class="system-world__eyebrow">YOUR CURRENT SESSION</div>
-        <strong>The repository is the city.</strong>
-        <span>Adapter-defined trees become separate campuses. Nested folders step upward as named terraced precincts, and every file remains a real LOC-sized building.</span>
-        <span>In Folders mode, every building inherits the exact colour of its containing directory terrace. Physical size alone reveals exceptionally large files.</span>
+        <template v-if="viewMode === 'subsystems'">
+          <div class="system-world__eyebrow">SEMANTIC SKY</div>
+          <strong>The clouds explain why the city exists.</strong>
+          <span>Each cloud is a subsystem. Its anchors connect meaning to the real files and directories below; select one to expose those connections.</span>
+          <span>JSKIT supplies facts it can prove mechanically. Codex can propose the purpose and boundaries that require interpretation, and those proposals remain visible as inferred metadata.</span>
+          <v-btn
+            :disabled="!askChatAvailable"
+            :prepend-icon="mdiLayersTripleOutline"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="discoverSubsystems"
+          >
+            Discover subsystems with Codex
+          </v-btn>
+        </template>
+        <template v-else>
+          <div class="system-world__eyebrow">YOUR CURRENT SESSION</div>
+          <strong>The repository is the city.</strong>
+          <span>Adapter-defined trees become separate campuses. Nested folders step upward as named terraced precincts, and every file remains a real LOC-sized building.</span>
+          <span>In Folders view, every building inherits the exact colour of its containing directory terrace. Physical size alone reveals exceptionally large files.</span>
+        </template>
       </aside>
 
       <div v-if="overview" class="system-world__controls-hint" aria-label="File city controls">
@@ -309,7 +413,7 @@
         <span><i class="system-world__legend-campus" /> Land parcel = campus</span>
         <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
         <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
-        <span>{{ colorLegend }}</span>
+        <span>{{ viewLegend }}</span>
       </div>
     </div>
   </section>
@@ -357,7 +461,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "028";
+const rendererRevision = "029";
 
 const props = defineProps({
   active: {
@@ -389,8 +493,9 @@ const emit = defineEmits([
 
 const activeFileId = ref("");
 const canvasElement = ref(null);
-const colorMode = ref("folders");
 const selectedDirectory = ref(null);
+const selectedSubsystemId = ref("");
+const viewMode = ref("folders");
 const worldError = ref("");
 const worldView = ref("perspective");
 let animationFrame = 0;
@@ -417,6 +522,10 @@ const {
 });
 
 const campuses = computed(() => overview.value ? topLevelPrecincts(overview.value) : []);
+const subsystems = computed(() => overview.value?.subsystems || []);
+const selectedSubsystem = computed(() => (
+  subsystems.value.find((subsystem) => subsystem.id === selectedSubsystemId.value) || null
+));
 const selectedFile = computed(() => (
   activeFileId.value && fileConstellation.value?.selectedFile?.id === activeFileId.value
     ? fileConstellation.value.selectedFile
@@ -499,11 +608,11 @@ const statusLabel = computed(() => {
   }
   return String(systemStatus.value.status || "loading").replaceAll("_", " ");
 });
-const colorLegend = computed(() => ({
+const viewLegend = computed(() => ({
   folders: "Color = containing directory terrace",
   runtime: "Color = client / server / shared",
-  subsystems: "Color = subsystem ownership"
-}[colorMode.value]));
+  subsystems: "Cloud = subsystem · lines = code anchors"
+}[viewMode.value]));
 
 function fileName(file = {}) {
   return String(file?.path || "File").split("/").pop();
@@ -511,6 +620,11 @@ function fileName(file = {}) {
 
 function formatLines(value = 0) {
   return Math.max(0, Number(value) || 0).toLocaleString();
+}
+
+function formatCount(value = 0, singular = "item", plural = `${singular}s`) {
+  const count = Math.max(0, Number(value) || 0);
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
 }
 
 function renderFrame(time) {
@@ -546,6 +660,7 @@ async function handleFilePick(selection) {
     return;
   }
   selectedDirectory.value = null;
+  selectedSubsystemId.value = "";
   activeFileId.value = selection.fileId;
   const response = await selectFile(selection.fileKey);
   const constellation = response?.constellation || fileConstellation.value;
@@ -556,17 +671,26 @@ async function handleFilePick(selection) {
 
 function handleDirectoryPick(directory) {
   activeFileId.value = "";
+  selectedSubsystemId.value = "";
   selectedDirectory.value = directory;
 }
 
 function handlePrecinctPick(campus) {
   activeFileId.value = "";
+  selectedSubsystemId.value = "";
   selectedDirectory.value = campus;
+}
+
+function handleSubsystemPick(subsystem) {
+  activeFileId.value = "";
+  selectedDirectory.value = null;
+  selectedSubsystemId.value = subsystem.id;
 }
 
 function handleClearSelection() {
   activeFileId.value = "";
   selectedDirectory.value = null;
+  selectedSubsystemId.value = "";
 }
 
 async function createWorld() {
@@ -581,6 +705,7 @@ async function createWorld() {
       onSelectDirectory: handleDirectoryPick,
       onSelectFile: (selection) => void handleFilePick(selection),
       onSelectPrecinct: handlePrecinctPick,
+      onSelectSubsystem: handleSubsystemPick,
       reducedMotion
     });
     resizeObserver = new ResizeObserver(resizeWorld);
@@ -589,7 +714,7 @@ async function createWorld() {
     startRenderLoop();
     if (overview.value) {
       await world.setOverview(overview.value);
-      world.setColorMode(colorMode.value);
+      world.setViewMode(viewMode.value);
     }
     if (props.restoreRequest) {
       await applyRestoreRequest(props.restoreRequest);
@@ -610,7 +735,7 @@ async function applyOverview(nextOverview) {
     if (generation !== overviewGeneration) {
       return;
     }
-    world.setColorMode(colorMode.value);
+    world.setViewMode(viewMode.value);
     if (fileConstellation.value && activeFileId.value) {
       world.setFileContext(fileConstellation.value);
     } else if (selectedDirectory.value) {
@@ -619,6 +744,8 @@ async function applyOverview(nextOverview) {
       } else {
         world.selectDirectory(selectedDirectory.value.path);
       }
+    } else if (selectedSubsystem.value) {
+      world.selectSubsystem(selectedSubsystem.value.id);
     }
     if (previousView.position) {
       world.restoreView(previousView);
@@ -630,9 +757,23 @@ async function applyOverview(nextOverview) {
 
 function selectCampus(campus) {
   activeFileId.value = "";
+  selectedSubsystemId.value = "";
   selectedDirectory.value = campus;
   world?.selectPrecinct(campus.id);
   world?.focusPrecinct(campus.id);
+}
+
+function inspectSubsystem(subsystem, { focus = false } = {}) {
+  if (!subsystem?.id) {
+    return;
+  }
+  activeFileId.value = "";
+  selectedDirectory.value = null;
+  selectedSubsystemId.value = subsystem.id;
+  world?.selectSubsystem(subsystem.id);
+  if (focus) {
+    world?.focusSubsystem(subsystem.id);
+  }
 }
 
 function inspectFile(file, { focus = false } = {}) {
@@ -698,9 +839,9 @@ function endViewRotation(event) {
   viewRotationPointer = null;
 }
 
-function setColorMode(mode) {
-  colorMode.value = mode;
-  world?.setColorMode(mode);
+function setViewMode(mode) {
+  viewMode.value = mode;
+  world?.setViewMode(mode);
 }
 
 function updateSystem() {
@@ -710,11 +851,12 @@ function updateSystem() {
 function sourceNavigationContext() {
   return {
     camera: world?.captureView() || null,
-    colorMode: colorMode.value,
     mode: "city",
     selectedCampusId: selectedDirectory.value?.kind === "campus" ? selectedDirectory.value.id : "",
     selectedDirectoryPath: selectedDirectory.value?.kind === "campus" ? null : selectedDirectory.value?.path ?? null,
     selectedFileKey: selectedFile.value?.key || "",
+    selectedSubsystemId: selectedSubsystem.value?.id || "",
+    viewMode: viewMode.value,
     view: worldView.value
   };
 }
@@ -731,6 +873,20 @@ function openSelectedFile() {
 }
 
 function selectionPrompt() {
+  if (selectedSubsystem.value) {
+    return [
+      "I am looking at this subsystem in Vibe64 File City:",
+      `- Subsystem: ${selectedSubsystem.value.title} (${selectedSubsystem.value.id})`,
+      `- Meaning: ${selectedSubsystem.value.description || "not described yet"}`,
+      `- Provenance: ${selectedSubsystem.value.origin}; status: ${selectedSubsystem.value.status}; authored by: ${selectedSubsystem.value.authoredBy}`,
+      `- Execution side: ${selectedSubsystem.value.executionSide}`,
+      `- Current size: ${selectedSubsystem.value.fileCount} files, ${selectedSubsystem.value.lines} lines`,
+      `- Anchors: ${selectedSubsystem.value.anchors.map((anchor) => `${anchor.relation} ${anchor.kind} ${anchor.path}`).join("; ")}`,
+      `- Capabilities: ${selectedSubsystem.value.capabilities.map((capability) => `${capability.direction} ${capability.kind} ${capability.value || capability.title}`).join("; ") || "none recorded"}`,
+      "",
+      "Please explain this subsystem in plain language and assess whether its boundary, name, purpose, and capabilities match the source evidence. Do not change source code. If metadata should change, propose the exact checked-in vibe64.system.json declaration first."
+    ].join("\n");
+  }
   if (selectedDirectory.value) {
     const campusSelected = selectedDirectory.value.kind === "campus";
     return [
@@ -765,12 +921,32 @@ function askAboutSelection() {
   });
 }
 
+function subsystemDiscoveryPrompt() {
+  return [
+    "Please discover meaningful subsystems in this current Vibe64 session.",
+    "",
+    "Work from source evidence and the existing adapter-derived subsystem facts. A subsystem is a coherent responsibility that may own, implement, support, or configure one or more real files or directories. Look especially for responsibilities that cross directory boundaries, and do not merely restate every folder.",
+    "",
+    "Do not change application source code. Update only the declarations array in the checked-in vibe64.system.json current-state document, preserving adapter-derived tables. For each Codex-authored declaration use kind: subsystem, authoredBy: codex, origin: inferred, and status: proposed. Include a stable id, plain-language title and description, executionSide, evidence-backed anchors, and flexible capabilities.",
+    "",
+    "Anchors must use kind file or directory; relation owns, implements, supports, or configures; a project-relative path; origin inferred; and evidenceIds when available. Capabilities must include a stable id, open-ended kind, direction provides or requires, title, and evidence such as value, description, or sourcePath. Do not assign the exact same owns anchor to two subsystems. Prefer the smallest coherent boundaries.",
+    "",
+    "When finished, summarize what you proposed and why. I will use Refresh map in File City to reconcile the visual world."
+  ].join("\n");
+}
+
+function discoverSubsystems() {
+  emit("ask-in-chat", {
+    prompt: subsystemDiscoveryPrompt().slice(0, 5000)
+  });
+}
+
 async function applyRestoreRequest(request) {
   if (!request || !world || !overview.value) {
     return;
   }
-  if (request.colorMode) {
-    setColorMode(request.colorMode);
+  if (request.viewMode || request.colorMode) {
+    setViewMode(request.viewMode || request.colorMode);
   }
   if (request.selectedFileKey) {
     const response = await selectFile(request.selectedFileKey);
@@ -787,6 +963,14 @@ async function applyRestoreRequest(request) {
       activeFileId.value = "";
       world.selectPrecinct(campus.id);
     }
+  } else if (request.selectedSubsystemId) {
+    const subsystem = subsystems.value.find((entry) => entry.id === request.selectedSubsystemId);
+    if (subsystem) {
+      selectedSubsystemId.value = subsystem.id;
+      selectedDirectory.value = null;
+      activeFileId.value = "";
+      world.selectSubsystem(subsystem.id);
+    }
   }
   worldView.value = request.view || "perspective";
   if (!world.restoreView(request.camera || {})) {
@@ -798,6 +982,8 @@ async function applyRestoreRequest(request) {
       } else {
         world.focusDirectory(selectedDirectory.value.path);
       }
+    } else if (selectedSubsystem.value) {
+      world.focusSubsystem(selectedSubsystem.value.id);
     }
   }
 }
@@ -864,7 +1050,7 @@ onBeforeUnmount(() => {
 
 .system-world__identity,
 .system-world__view-actions,
-.system-world__color-switch {
+.system-world__mode-switch {
   align-items: center;
   display: flex;
 }
@@ -885,14 +1071,14 @@ onBeforeUnmount(() => {
   width: 2rem;
 }
 
-.system-world__color-switch {
+.system-world__mode-switch {
   background: rgba(123, 148, 191, 0.09);
   border: 1px solid rgba(140, 169, 221, 0.12);
   border-radius: 0.7rem;
   padding: 0.1rem;
 }
 
-.system-world__color-switch > span {
+.system-world__mode-switch > span {
   color: rgba(214, 227, 250, 0.48);
   font-size: 0.56rem;
   padding: 0 0.35rem;
@@ -1143,12 +1329,12 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1120px) {
   .system-world__toolbar { grid-template-columns: 1fr auto; }
-  .system-world__color-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .system-world__mode-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .system-world__legend { display: none; }
 }
 
 @media (max-width: 760px) {
-  .system-world__color-switch > span { display: none; }
+  .system-world__mode-switch > span { display: none; }
   .system-world__inspector { width: min(20rem, 52%); }
   .system-world__navigator { display: none; }
   .system-world__controls-hint span:last-child { display: none; }

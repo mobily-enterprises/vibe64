@@ -4,6 +4,8 @@ import {
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemSky,
+  SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 } from "../../packages/vibe64-system-graph/src/client/world/worldLayout.js";
 
@@ -122,5 +124,46 @@ describe("File City layout", () => {
     expect(isVisuallyLargeFile(1611, 5000)).toBe(true);
     expect(isVisuallyLargeFile(520, 700)).toBe(true);
     expect(isVisuallyLargeFile(420, 700)).toBe(false);
+  });
+
+  it("places deterministic subsystem islands above their physical anchors without overlap", () => {
+    const city = layoutFileCity({
+      files: [
+        file("src/pages/index.vue", 120),
+        file("src/pages/projects/[slug].vue", 80),
+        file("packages/terminal/src/server/service.js", 500)
+      ]
+    });
+    const subsystems = [
+      {
+        id: "subsystem:web-site",
+        title: "Web site app",
+        lines: 200,
+        fileCount: 2,
+        capabilities: [{ id: "web-page:/" }],
+        anchors: [{ kind: "directory", path: "src/pages", relation: "owns" }]
+      },
+      {
+        id: "subsystem:terminal",
+        title: "Terminal",
+        lines: 500,
+        fileCount: 1,
+        capabilities: [],
+        anchors: [{ kind: "file", path: "packages/terminal/src/server/service.js", relation: "implements" }]
+      }
+    ];
+    const first = layoutSubsystemSky(city, subsystems);
+    const second = layoutSubsystemSky(city, subsystems);
+
+    expect(second).toEqual(first);
+    expect(first.elevation).toBe(SUBSYSTEM_SKY_ELEVATION);
+    expect(first.subsystems.every((subsystem) => subsystem.y === SUBSYSTEM_SKY_ELEVATION)).toBe(true);
+    expect(first.subsystems.find((subsystem) => subsystem.id === "subsystem:web-site").targets).toEqual([
+      expect.objectContaining({ kind: "directory", path: "src/pages", relation: "owns" })
+    ]);
+    const [left, right] = first.subsystems;
+    expect(Math.hypot(left.x - right.x, left.z - right.z)).toBeGreaterThanOrEqual(
+      left.radius + right.radius + 34
+    );
   });
 });

@@ -63,7 +63,8 @@ const selectedFile = {
   lines: 1_800,
   packageId: "@local/terminal",
   path: "packages/terminal/src/server/largeTerminalService.js",
-  subsystemId: serverSubsystem.id
+  subsystemId: serverSubsystem.id,
+  subsystemIds: [serverSubsystem.id]
 };
 
 test("System renders the current repository as a LOC-scaled file city", async ({ page }) => {
@@ -159,6 +160,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
         roles: [],
         subsystemDescription: serverSubsystem.description,
         subsystemId: serverSubsystem.id,
+        subsystemIds: [serverSubsystem.id],
         subsystemTitle: serverSubsystem.title
       },
       {
@@ -176,6 +178,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
         roles: [],
         subsystemDescription: serverSubsystem.description,
         subsystemId: serverSubsystem.id,
+        subsystemIds: [serverSubsystem.id],
         subsystemTitle: serverSubsystem.title
       },
       {
@@ -193,6 +196,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
         roles: [],
         subsystemDescription: clientSubsystem.description,
         subsystemId: clientSubsystem.id,
+        subsystemIds: [clientSubsystem.id],
         subsystemTitle: clientSubsystem.title
       }
     ],
@@ -230,6 +234,66 @@ test("System renders the current repository as a LOC-scaled file city", async ({
         to: "operation:start-terminal",
         toKey: "operation-key",
         value: ""
+      }
+    ],
+    subsystems: [
+      {
+        authoredBy: "adapter",
+        anchors: [{
+          evidenceIds: [],
+          kind: "directory",
+          origin: "derived",
+          path: "src/client",
+          relation: "owns"
+        }],
+        capabilities: [],
+        description: clientSubsystem.description,
+        executionSide: "client",
+        fileCount: 1,
+        id: clientSubsystem.id,
+        key: clientSubsystem.key,
+        lines: 100,
+        meaningOrigin: "derived",
+        origin: "derived",
+        packageId: "@local/shell",
+        parentId: "system:fixture",
+        status: "current",
+        title: clientSubsystem.title,
+        unmatchedAnchorCount: 0
+      },
+      {
+        authoredBy: "adapter",
+        anchors: [{
+          evidenceIds: [],
+          kind: "directory",
+          origin: "derived",
+          path: "packages/terminal",
+          relation: "owns"
+        }],
+        capabilities: [{
+          description: "Starts a terminal.",
+          direction: "provides",
+          evidenceIds: [],
+          id: "terminal-api",
+          kind: "api-operation",
+          origin: "derived",
+          sourcePath: "packages/terminal/src/server/largeTerminalService.js",
+          title: "Start a terminal",
+          value: "POST /sessions/:sessionId/terminal"
+        }],
+        description: serverSubsystem.description,
+        executionSide: "server",
+        fileCount: 2,
+        id: serverSubsystem.id,
+        key: serverSubsystem.key,
+        lines: 1_840,
+        meaningOrigin: "derived",
+        origin: "derived",
+        packageId: "@local/terminal",
+        parentId: "system:fixture",
+        status: "current",
+        title: serverSubsystem.title,
+        unmatchedAnchorCount: 0
       }
     ]
   };
@@ -338,13 +402,24 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByRole("button", { name: "New session" })).toBeVisible({ timeout: 15_000 });
   await page.goto(`${DASHBOARD_PATH}/system`);
 
-  await expect(page.getByText("File City", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/File City · 029/u)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Folders" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subsystems" })).toBeVisible();
-  await expect(page.getByText("Drag to move", { exact: true })).toBeVisible();
-  await expect(page.getByText("Scroll to zoom", { exact: true })).toBeVisible();
+  await expect(page.getByText("Drag / arrows to move", { exact: true })).toBeVisible();
+  await expect(page.getByText("2-finger ↕ / W S forward–back", { exact: true })).toBeVisible();
   await expect(page.locator("canvas[aria-label^='Interactive 3D file city']")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "File city campuses" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Subsystems" }).click();
+  await expect(page.getByRole("navigation", { name: "File City subsystems" })).toBeVisible();
+  await page.getByRole("button", { name: /^Terminal 2 files/u }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Terminal" })).toBeVisible();
+  await expect(page.getByText("Start a terminal", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Discover more" }).click();
+  await expect(page.getByRole("textbox")).toHaveValue(
+    /discover meaningful subsystems/iu
+  );
+  await page.getByRole("button", { name: "Folders" }).click();
 
   await page.getByRole("button", { name: /^Packages/u }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Packages" })).toBeVisible();

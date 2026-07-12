@@ -1,3 +1,9 @@
+import {
+  SUBSYSTEM_ANCHOR_KINDS,
+  SUBSYSTEM_ANCHOR_RELATIONS,
+  SUBSYSTEM_CAPABILITY_DIRECTIONS
+} from "../shared/subsystemContract.js";
+
 const SYSTEM_DOCUMENT_SCHEMA_VERSION = 1;
 
 const ENTITY_KINDS = Object.freeze(["system", "subsystem", "component", "interface", "operation"]);
@@ -127,7 +133,28 @@ function encodeEntityMetadata(metadata = {}, stringIndex) {
     metadata.inputKnown === true ? 1 : 0,
     metadata.outputKnown === true ? 1 : 0,
     stringIndex(metadata.descriptorPath),
-    (metadata.executionSides || []).map((side) => enumCode(EXECUTION_SIDES, side))
+    (metadata.executionSides || []).map((side) => enumCode(EXECUTION_SIDES, side)),
+    (metadata.anchors || []).map((anchor) => [
+      enumCode(SUBSYSTEM_ANCHOR_KINDS, anchor.kind),
+      stringIndex(anchor.path),
+      enumCode(SUBSYSTEM_ANCHOR_RELATIONS, anchor.relation),
+      enumCode(ORIGINS, anchor.origin),
+      (anchor.evidenceIds || []).map(stringIndex)
+    ]),
+    (metadata.capabilities || []).map((capability) => [
+      stringIndex(capability.id),
+      stringIndex(capability.kind),
+      enumCode(SUBSYSTEM_CAPABILITY_DIRECTIONS, capability.direction),
+      stringIndex(capability.title),
+      stringIndex(capability.value),
+      stringIndex(capability.description),
+      enumCode(ORIGINS, capability.origin),
+      stringIndex(capability.sourcePath),
+      (capability.evidenceIds || []).map(stringIndex)
+    ]),
+    enumCode(ORIGINS, metadata.meaningOrigin),
+    stringIndex(metadata.status),
+    stringIndex(metadata.authoredBy)
   ];
 }
 
@@ -142,7 +169,28 @@ function decodeEntityMetadata(metadata = [], stringValue) {
     inputKnown: metadata[6] === 1,
     outputKnown: metadata[7] === 1,
     descriptorPath: stringValue(metadata[8]),
-    executionSides: (metadata[9] || []).map((code) => enumValue(EXECUTION_SIDES, code, "unknown"))
+    executionSides: (metadata[9] || []).map((code) => enumValue(EXECUTION_SIDES, code, "unknown")),
+    anchors: (metadata[10] || []).map((anchor) => ({
+      kind: enumValue(SUBSYSTEM_ANCHOR_KINDS, anchor[0], "directory"),
+      path: stringValue(anchor[1]),
+      relation: enumValue(SUBSYSTEM_ANCHOR_RELATIONS, anchor[2], "owns"),
+      origin: enumValue(ORIGINS, anchor[3], "derived"),
+      evidenceIds: (anchor[4] || []).map(stringValue).filter(Boolean)
+    })),
+    capabilities: (metadata[11] || []).map((capability) => ({
+      id: stringValue(capability[0]),
+      kind: stringValue(capability[1]),
+      direction: enumValue(SUBSYSTEM_CAPABILITY_DIRECTIONS, capability[2], "provides"),
+      title: stringValue(capability[3]),
+      value: stringValue(capability[4]),
+      description: stringValue(capability[5]),
+      origin: enumValue(ORIGINS, capability[6], "derived"),
+      sourcePath: stringValue(capability[7]),
+      evidenceIds: (capability[8] || []).map(stringValue).filter(Boolean)
+    })),
+    meaningOrigin: enumValue(ORIGINS, metadata[12], "derived"),
+    status: stringValue(metadata[13]) || "current",
+    authoredBy: stringValue(metadata[14])
   };
 }
 

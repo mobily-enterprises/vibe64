@@ -1,3 +1,8 @@
+import {
+  assertExclusiveSubsystemOwnership,
+  normalizeSubsystemDefinition
+} from "../../shared/subsystemContract.js";
+
 const SYSTEM_ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 
 function assertSystemAdapterId(value) {
@@ -74,6 +79,23 @@ function assertNormalizedSystemModel(model = {}, adapterId = "") {
       throw new TypeError(`System adapter model ${tableName} must be an array.`);
     }
   }
+  const subsystemDefinitions = model.entities
+    .filter((entity) => entity.kind === "subsystem")
+    .map((entity) => normalizeSubsystemDefinition({
+      id: entity.id,
+      title: entity.title,
+      description: entity.description,
+      parentId: entity.parentId,
+      packageId: entity.metadata?.packageId,
+      executionSide: entity.executionSide,
+      origin: entity.origin === "inferred" || entity.origin === "declared" ? entity.origin : "derived",
+      meaningOrigin: entity.metadata?.meaningOrigin,
+      status: entity.metadata?.status,
+      authoredBy: entity.metadata?.authoredBy,
+      anchors: entity.metadata?.anchors,
+      capabilities: entity.metadata?.capabilities
+    }));
+  assertExclusiveSubsystemOwnership(subsystemDefinitions);
   return model;
 }
 

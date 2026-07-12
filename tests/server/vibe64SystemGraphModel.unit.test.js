@@ -9,7 +9,8 @@ import {
 import { applySystemFindings } from "../../packages/vibe64-system-graph/src/server/findings.js";
 import {
   entityDetails,
-  fileConstellation
+  fileConstellation,
+  systemOverview
 } from "../../packages/vibe64-system-graph/src/server/modelProjections.js";
 import {
   compileJskitSystemModel
@@ -199,10 +200,10 @@ function compiledModel(options = {}) {
 test("model compiler creates the client plug to server socket to provider path", () => {
   const model = compiledModel();
   assert.deepEqual(
-    model.adapter.fileCity.campuses.map((campus) => ({ id: campus.id, roots: campus.roots })),
+    model.adapter.fileCity.campuses.map((campus) => ({ id: campus.id, roots: campus.roots, title: campus.title })),
     [
-      { id: "application", roots: ["src"] },
-      { id: "packages", roots: ["packages"] }
+      { id: "application", roots: ["src"], title: "Application (client side)" },
+      { id: "packages", roots: ["packages"], title: "Packages" }
     ]
   );
   const operation = model.entities.find((entity) => entity.kind === "operation");
@@ -222,6 +223,24 @@ test("model compiler creates the client plug to server socket to provider path",
   const largestFile = model.files.find((file) => file.path.endsWith("largeTerminalService.js"));
   assert.equal(largestFile.lines, 1400);
   assert.ok(largestFile.implementedEntityIds.length === 0);
+
+  const terminalSubsystem = model.entities.find((entity) => (
+    entity.id === "jskit:subsystem:package:@local/terminal"
+  ));
+  assert.deepEqual(terminalSubsystem.metadata.anchors.map(({ kind, path, relation, origin }) => ({
+    kind,
+    path,
+    relation,
+    origin
+  })), [{
+    kind: "directory",
+    path: "packages/terminal",
+    relation: "owns",
+    origin: "derived"
+  }]);
+  assert.ok(terminalSubsystem.metadata.capabilities.some((capability) => (
+    capability.kind === "api-operation" && capability.value === "POST /sessions/:sessionId/terminal"
+  )));
 });
 
 test("compact document round-trips deterministically with one current snapshot", () => {
@@ -255,6 +274,105 @@ test("compact document round-trips deterministically with one current snapshot",
   assert.deepEqual(decoded.entities, model.entities);
   assert.deepEqual(decoded.relationships, model.relationships);
   assert.deepEqual(decoded.findings, model.findings);
+  assert.ok(decoded.entities.some((entity) => (
+    entity.kind === "subsystem" &&
+    entity.metadata.anchors.length > 0 &&
+    entity.metadata.capabilities.length > 0
+  )));
+});
+
+test("JSKIT derives the web-site subsystem and its file-backed URLs mechanically", () => {
+  const extraction = extractionFixture();
+  extraction.files.push(
+    fileFact({ executionSide: "unknown", lines: 40, path: "src/pages/index.vue" }),
+    fileFact({ executionSide: "unknown", lines: 55, path: "src/pages/projects/[slug].vue" })
+  );
+  const model = compileJskitSystemModel(extraction);
+  const website = model.entities.find((entity) => entity.id === "jskit:subsystem:directory:src/pages");
+
+  assert.equal(website.title, "Web site app");
+  assert.equal(website.executionSide, "client");
+  assert.deepEqual(website.metadata.anchors.map(({ kind, path, relation, origin }) => ({
+    kind,
+    path,
+    relation,
+    origin
+  })), [{
+    kind: "directory",
+    path: "src/pages",
+    relation: "owns",
+    origin: "derived"
+  }]);
+  assert.deepEqual(
+    website.metadata.capabilities.map((capability) => capability.value),
+    ["/", "/projects/:slug"]
+  );
+
+  const overview = systemOverview(model);
+  assert.deepEqual(
+    overview.files
+      .filter((entry) => entry.path.startsWith("src/pages/"))
+      .map((entry) => entry.subsystemTitle),
+    ["Web site app", "Web site app"]
+  );
+  assert.equal(overview.subsystems.find((subsystem) => subsystem.id === website.id).fileCount, 2);
+});
+
+test("a more specific inferred subsystem owns nested code without erasing adapter facts", () => {
+  const extraction = extractionFixture();
+  extraction.files.push(fileFact({
+    executionSide: "server",
+    lines: 80,
+    packageId: "@local/terminal",
+    path: "packages/terminal/src/server/session/sessionQueue.js"
+  }));
+  const model = compileJskitSystemModel(extraction, {
+    declarations: [{
+      kind: "subsystem",
+      id: "codex:subsystem:terminal-session",
+      title: "Terminal session lifecycle",
+      description: "Coordinates terminal session work.",
+      authoredBy: "codex",
+      executionSide: "server",
+      anchors: [{
+        kind: "directory",
+        path: "packages/terminal/src/server/session",
+        relation: "owns"
+      }],
+      capabilities: [{
+        id: "terminal-session-lifecycle",
+        kind: "workflow",
+        direction: "provides",
+        title: "Terminal session lifecycle"
+      }]
+    }]
+  });
+  const inferred = model.entities.find((entity) => entity.id === "codex:subsystem:terminal-session");
+  const packageSubsystem = model.entities.find((entity) => entity.id === "jskit:subsystem:package:@local/terminal");
+  const nestedFile = systemOverview(model).files.find((entry) => entry.path.endsWith("sessionQueue.js"));
+
+  assert.equal(inferred.origin, "inferred");
+  assert.equal(inferred.metadata.status, "proposed");
+  assert.equal(inferred.metadata.authoredBy, "codex");
+  assert.equal(nestedFile.subsystemId, inferred.id);
+  assert.deepEqual(nestedFile.subsystemIds.sort(), [inferred.id, packageSubsystem.id].sort());
+  assert.ok(packageSubsystem.metadata.capabilities.some((capability) => capability.kind === "api-operation"));
+});
+
+test("two subsystems cannot claim the same physical ownership anchor", () => {
+  assert.throws(() => compileJskitSystemModel(extractionFixture(), {
+    declarations: [{
+      kind: "subsystem",
+      id: "codex:subsystem:duplicate-terminal-owner",
+      title: "Duplicate terminal owner",
+      authoredBy: "codex",
+      anchors: [{
+        kind: "directory",
+        path: "packages/terminal",
+        relation: "owns"
+      }]
+    }]
+  }), /ownership conflict.*packages\/terminal/iu);
 });
 
 test("subsystem details lead into the largest relevant file and preserve subsystem context", () => {

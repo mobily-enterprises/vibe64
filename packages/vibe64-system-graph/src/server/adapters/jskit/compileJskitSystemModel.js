@@ -4,15 +4,23 @@ import path from "node:path";
 import {
   JSKIT_FACTS_SCHEMA
 } from "./extractJskitFacts.js";
+import {
+  assertExclusiveSubsystemOwnership,
+  mergeSubsystemAnchors,
+  mergeSubsystemCapabilities,
+  normalizeSubsystemCapability,
+  normalizeSubsystemDefinition
+} from "../../../shared/subsystemContract.js";
 
-const JSKIT_SYSTEM_ADAPTER_VERSION = 2;
+const JSKIT_SYSTEM_ADAPTER_VERSION = 3;
 const JSKIT_FILE_CITY_CAMPUSES = Object.freeze([
   Object.freeze({
-    description: "The main application source tree.",
+    description: "The client-side application source tree.",
+    executionSide: "client",
     id: "application",
     remainder: false,
     roots: ["src"],
-    title: "Application"
+    title: "Application (client side)"
   }),
   Object.freeze({
     description: "The local JSKIT package ecosystem.",
@@ -99,6 +107,9 @@ function enrichExecutionSides(files = []) {
     if (file.calls.some((call) => call.name === "actionRoute" || call.name === "serviceRoute") || file.routes.length > 0) {
       seed(file.path, "server");
     }
+    if (file.path.startsWith("src/")) {
+      seed(file.path, "client");
+    }
   }
 
   while (queue.length > 0) {
@@ -171,6 +182,11 @@ function addEntity(entities, entity) {
       outputKnown: false,
       descriptorPath: "",
       executionSides: [],
+      anchors: [],
+      capabilities: [],
+      meaningOrigin: "derived",
+      status: "current",
+      authoredBy: "adapter",
       ...(entity.metadata || {})
     }
   };
@@ -218,10 +234,90 @@ function primaryExecutionSide(sides = []) {
   return sides[0] || "unknown";
 }
 
+function semanticMetadata(definition, defaultOrigin = "derived") {
+  const normalized = normalizeSubsystemDefinition(definition, { defaultOrigin });
+  return {
+    anchors: normalized.anchors,
+    capabilities: normalized.capabilities,
+    meaningOrigin: normalized.meaningOrigin,
+    status: normalized.status,
+    authoredBy: normalized.authoredBy
+  };
+}
+
+function packageSubsystemCapabilities(packageEntry, evidenceIds = []) {
+  const descriptorPath = packageEntry.descriptorPath || "";
+  return [
+    ...(packageEntry.capabilities?.provides || []).map((capability) => ({
+      id: `jskit:capability:provides:${packageEntry.packageId}:${capability}`,
+      kind: "feature",
+      direction: "provides",
+      title: humanize(capability),
+      value: capability,
+      origin: "derived",
+      sourcePath: descriptorPath,
+      evidenceIds
+    })),
+    ...(packageEntry.capabilities?.requires || []).map((capability) => ({
+      id: `jskit:capability:requires:${packageEntry.packageId}:${capability}`,
+      kind: "feature",
+      direction: "requires",
+      title: humanize(capability),
+      value: capability,
+      origin: "derived",
+      sourcePath: descriptorPath,
+      evidenceIds
+    })),
+    ...(packageEntry.providers || []).map((provider) => ({
+      id: `jskit:capability:provider:${provider.id}`,
+      kind: "provider",
+      direction: "provides",
+      title: humanize(provider.exportName || path.posix.basename(provider.entrypoint)),
+      value: provider.entrypoint,
+      description: `${provider.side} runtime provider`,
+      origin: "derived",
+      sourcePath: provider.entrypoint,
+      evidenceIds
+    }))
+  ];
+}
+
+function addSubsystemCapability(entities, subsystemId, capability) {
+  const subsystem = entities.get(subsystemId);
+  if (!subsystem || subsystem.kind !== "subsystem") {
+    return;
+  }
+  const normalized = normalizeSubsystemCapability(capability, { defaultOrigin: "derived" });
+  subsystem.metadata.capabilities = mergeSubsystemCapabilities(
+    subsystem.metadata.capabilities || [],
+    [normalized]
+  );
+}
+
 function compilePackages({ extraction, files, systemId, entities, relationships, evidence }) {
   const packagesById = new Map();
   for (const packageEntry of extraction.packages || []) {
     const executionSides = packageExecutionSides(packageEntry, files);
+    const packageEvidenceIds = descriptorEvidence(packageEntry, evidence);
+    const packageRoot = normalizePath(
+      packageEntry.relativeDir || path.posix.dirname(packageEntry.descriptorPath)
+    );
+    const semantics = semanticMetadata({
+      id: packageEntry.id,
+      title: packageTitle(packageEntry.packageId),
+      description: packageEntry.description,
+      packageId: packageEntry.packageId,
+      executionSide: primaryExecutionSide(executionSides),
+      origin: "derived",
+      anchors: [{
+        kind: "directory",
+        path: packageRoot,
+        relation: "owns",
+        origin: "derived",
+        evidenceIds: packageEvidenceIds
+      }],
+      capabilities: packageSubsystemCapabilities(packageEntry, packageEvidenceIds)
+    });
     const entity = addEntity(entities, {
       id: packageEntry.id,
       kind: "subsystem",
@@ -232,7 +328,8 @@ function compilePackages({ extraction, files, systemId, entities, relationships,
       metadata: {
         packageId: packageEntry.packageId,
         descriptorPath: packageEntry.descriptorPath,
-        executionSides
+        executionSides,
+        ...semantics
       }
     });
     packagesById.set(packageEntry.packageId, {
@@ -246,7 +343,7 @@ function compilePackages({ extraction, files, systemId, entities, relationships,
       from: systemId,
       to: entity.id,
       packageId: packageEntry.packageId,
-      evidenceIds: descriptorEvidence(packageEntry, evidence)
+      evidenceIds: packageEvidenceIds
     });
   }
 
@@ -412,6 +509,17 @@ function compileOperations({ files, packagesById, entities, relationships, evide
           line: route.line
         });
       }
+      addSubsystemCapability(entities, packageEntry.entityId, {
+        id: `jskit:capability:api-operation:${operationId}`,
+        kind: "api-operation",
+        direction: "provides",
+        title: operationTitle(route),
+        value: `${route.method} ${route.path}`,
+        description: route.summary,
+        origin: "derived",
+        sourcePath: file.path,
+        evidenceIds: [routeEvidenceId]
+      });
 
       const serverProviders = (packageEntry.providers || []).filter((provider) => provider.side === "server");
       if (serverProviders.length === 1) {
@@ -506,31 +614,192 @@ function compileConsumers({ files, packagesById, systemId, entities, relationshi
   }
 }
 
+function pageRoutePath(filePath = "") {
+  const relativePath = normalizePath(filePath)
+    .replace(/^src\/pages\//u, "")
+    .replace(/\.[^.]+$/u, "");
+  const segments = relativePath.split("/").filter(Boolean);
+  if (segments.at(-1) === "index") {
+    segments.pop();
+  }
+  const routeSegments = segments.map((segment) => {
+    const catchAll = segment.match(/^\[\.\.\.([^\]]+)\]$/u);
+    if (catchAll) {
+      return `*${catchAll[1]}`;
+    }
+    const optional = segment.match(/^\[\[([^\]]+)\]\]$/u);
+    if (optional) {
+      return `:${optional[1]}?`;
+    }
+    const dynamic = segment.match(/^\[([^\]]+)\]$/u);
+    return dynamic ? `:${dynamic[1]}` : segment;
+  });
+  return `/${routeSegments.join("/")}`;
+}
+
+function compilePageSubsystem({ files, systemId, entities, relationships, evidence }) {
+  const pageFiles = files.filter((file) => (
+    file.path.startsWith("src/pages/") && /\.(?:js|jsx|ts|tsx|vue)$/u.test(file.path)
+  ));
+  if (pageFiles.length === 0) {
+    return null;
+  }
+  const subsystemId = "jskit:subsystem:directory:src/pages";
+  const evidenceIdByPagePath = new Map();
+  const capabilities = pageFiles.map((file) => {
+    const routePath = pageRoutePath(file.path);
+    const evidenceId = sourceEvidence(file.path, 1, "web-page", evidence);
+    evidenceIdByPagePath.set(file.path, evidenceId);
+    return {
+      id: `jskit:capability:web-page:${routePath}`,
+      kind: "web-page",
+      direction: "provides",
+      title: routePath,
+      value: routePath,
+      description: "Client-side file route",
+      origin: "derived",
+      sourcePath: file.path,
+      evidenceIds: [evidenceId]
+    };
+  });
+  const semantics = semanticMetadata({
+    id: subsystemId,
+    title: "Web site app",
+    description: "Owns the client-side web pages and URLs generated from src/pages.",
+    executionSide: "client",
+    origin: "derived",
+    anchors: [{
+      kind: "directory",
+      path: "src/pages",
+      relation: "owns",
+      origin: "derived",
+      evidenceIds: capabilities.flatMap((capability) => capability.evidenceIds)
+    }],
+    capabilities
+  });
+  addEntity(entities, {
+    id: subsystemId,
+    kind: "subsystem",
+    title: "Web site app",
+    description: "Owns the client-side web pages and URLs generated from src/pages.",
+    executionSide: "client",
+    parentId: systemId,
+    metadata: {
+      path: "src/pages",
+      sourcePath: "src/pages",
+      executionSides: ["client"],
+      ...semantics
+    }
+  });
+  addRelationship(relationships, {
+    id: stableId("relationship", "contains", systemId, subsystemId),
+    kind: "contains",
+    from: systemId,
+    to: subsystemId,
+    evidenceIds: capabilities.flatMap((capability) => capability.evidenceIds)
+  });
+  for (const file of pageFiles) {
+    const evidenceId = evidenceIdByPagePath.get(file.path) || "";
+    addRelationship(relationships, {
+      id: stableId("relationship", "implemented_by", subsystemId, file.path),
+      kind: "implemented_by",
+      from: subsystemId,
+      to: `file:${file.path}`,
+      evidenceIds: evidenceId ? [evidenceId] : []
+    });
+  }
+  return subsystemId;
+}
+
 function compileDeclarations({ declarations, entities, relationships, systemId }) {
-  for (const declaration of declarations) {
-    if (declaration?.kind !== "subsystem" || !declaration.id) {
+  const normalizedDeclarations = (declarations || [])
+    .filter((declaration) => declaration?.kind === "subsystem" && declaration.id)
+    .map((declaration) => {
+      const authoredByCodex = String(declaration.authoredBy || "").toLowerCase() === "codex";
+      const origin = declaration.origin === "inferred" || authoredByCodex ? "inferred" : "declared";
+      return {
+        declaration,
+        normalized: normalizeSubsystemDefinition({
+          ...declaration,
+          origin,
+          meaningOrigin: declaration.meaningOrigin || origin,
+          parentId: declaration.parentId || systemId
+        }, {
+          defaultOrigin: origin,
+          requireAnchors: !entities.has(String(declaration.id))
+        })
+      };
+    });
+
+  for (const { declaration, normalized } of normalizedDeclarations) {
+    const existing = entities.get(normalized.id);
+    if (existing && existing.kind !== "subsystem") {
+      throw new TypeError(`Subsystem declaration ${normalized.id} conflicts with an existing ${existing.kind} entity.`);
+    }
+    if (existing) {
+      if (Object.hasOwn(declaration, "title")) {
+        existing.title = normalized.title;
+      }
+      if (Object.hasOwn(declaration, "description")) {
+        existing.description = normalized.description;
+      }
+      if (Object.hasOwn(declaration, "executionSide")) {
+        existing.executionSide = normalized.executionSide;
+        existing.metadata.executionSides = [normalized.executionSide];
+      }
+      existing.metadata.anchors = mergeSubsystemAnchors(
+        existing.metadata.anchors || [],
+        normalized.anchors
+      );
+      existing.metadata.capabilities = mergeSubsystemCapabilities(
+        existing.metadata.capabilities || [],
+        normalized.capabilities
+      );
+      existing.metadata.meaningOrigin = normalized.meaningOrigin;
+      existing.metadata.status = normalized.status;
+      existing.metadata.authoredBy = normalized.authoredBy;
       continue;
     }
-    const entity = addEntity(entities, {
-      id: String(declaration.id),
+
+    addEntity(entities, {
+      id: normalized.id,
       kind: "subsystem",
-      origin: "declared",
-      title: String(declaration.title || declaration.id),
-      description: String(declaration.description || ""),
-      parentId: String(declaration.parentId || systemId),
-      executionSide: String(declaration.executionSide || "unknown"),
+      origin: normalized.origin,
+      title: normalized.title,
+      description: normalized.description,
+      parentId: normalized.parentId || systemId,
+      executionSide: normalized.executionSide,
       metadata: {
-        executionSides: [String(declaration.executionSide || "unknown")]
+        packageId: normalized.packageId,
+        executionSides: [normalized.executionSide],
+        anchors: normalized.anchors,
+        capabilities: normalized.capabilities,
+        meaningOrigin: normalized.meaningOrigin,
+        status: normalized.status,
+        authoredBy: normalized.authoredBy
       }
     });
+  }
+
+  for (const { normalized } of normalizedDeclarations) {
+    const entity = entities.get(normalized.id);
+    if (!entity || entity.parentId === entity.id || !entities.has(entity.parentId)) {
+      throw new TypeError(`Subsystem ${normalized.id} has an invalid parent: ${entity?.parentId || "(missing)"}.`);
+    }
     addRelationship(relationships, {
       id: stableId("relationship", "contains", entity.parentId, entity.id),
       kind: "contains",
-      origin: "declared",
+      origin: normalized.origin,
       from: entity.parentId,
       to: entity.id
     });
   }
+
+  assertExclusiveSubsystemOwnership(
+    [...entities.values()]
+      .filter((entity) => entity.kind === "subsystem")
+      .map((entity) => ({ id: entity.id, anchors: entity.metadata.anchors || [] }))
+  );
 }
 
 function compileFiles(extractionFiles = []) {
@@ -579,6 +848,10 @@ function refreshCoverage(model) {
     packages: model.entities.filter((entity) => (
       entity.kind === "subsystem" && entity.metadata.packageId
     )).length,
+    subsystems: model.entities.filter((entity) => entity.kind === "subsystem").length,
+    subsystemCapabilities: model.entities
+      .filter((entity) => entity.kind === "subsystem")
+      .reduce((total, entity) => total + (entity.metadata.capabilities || []).length, 0),
     unresolved: model.diagnostics.length + model.relationships.filter((relationship) => (
       relationship.kind === "consumes" && !relationship.to
     )).length
@@ -621,6 +894,13 @@ function compileJskitSystemModel(extraction = {}, {
     entities,
     evidence,
     extraction,
+    files,
+    relationships,
+    systemId
+  });
+  compilePageSubsystem({
+    entities,
+    evidence,
     files,
     relationships,
     systemId

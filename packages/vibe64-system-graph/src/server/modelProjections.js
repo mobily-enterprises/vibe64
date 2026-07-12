@@ -3,9 +3,105 @@ import path from "node:path";
 import {
   encodeSystemKey
 } from "./systemKeys.js";
+import {
+  subsystemAnchorMatchesFile,
+  subsystemAnchorSpecificity,
+  subsystemOriginPriority
+} from "../shared/subsystemContract.js";
 
 function stableSort(values = [], selector = (value) => value) {
   return [...values].sort((left, right) => String(selector(left)).localeCompare(String(selector(right))));
+}
+
+function subsystemDefinitions(model = {}) {
+  return stableSort(
+    (model.entities || []).filter((entity) => entity.kind === "subsystem"),
+    (entity) => entity.id
+  ).map((entity) => {
+    const metadata = entity.metadata || {};
+    const fallbackPackageRoot = metadata.descriptorPath
+      ? path.posix.dirname(metadata.descriptorPath)
+      : "";
+    const anchors = metadata.anchors?.length
+      ? metadata.anchors
+      : fallbackPackageRoot && fallbackPackageRoot !== "."
+        ? [{
+            kind: "directory",
+            path: fallbackPackageRoot,
+            relation: "owns",
+            origin: entity.origin || "derived",
+            evidenceIds: []
+          }]
+        : [];
+    return {
+      authoredBy: metadata.authoredBy || (entity.origin === "inferred" ? "codex" : entity.origin === "declared" ? "user" : "adapter"),
+      anchors: stableSort(anchors, (anchor) => `${anchor.path}:${anchor.relation}:${anchor.kind}`),
+      capabilities: stableSort(metadata.capabilities || [], (capability) => capability.id),
+      description: entity.description || "",
+      executionSide: entity.executionSide || "unknown",
+      id: entity.id,
+      key: encodeSystemKey(entity.id),
+      meaningOrigin: metadata.meaningOrigin || entity.origin || "derived",
+      origin: entity.origin || "derived",
+      packageId: metadata.packageId || "",
+      parentId: entity.parentId || "",
+      status: metadata.status || (entity.origin === "inferred" ? "proposed" : entity.origin === "declared" ? "accepted" : "current"),
+      title: entity.title || entity.id
+    };
+  });
+}
+
+function subsystemAssignments(files = [], definitions = []) {
+  const assignments = new Map();
+  const metrics = new Map(definitions.map((definition) => [definition.id, {
+    files: 0,
+    lines: 0,
+    matchedAnchors: new Set()
+  }]));
+
+  for (const file of files) {
+    const matches = [];
+    for (const definition of definitions) {
+      for (const anchor of definition.anchors) {
+        if (!subsystemAnchorMatchesFile(anchor, file.path)) {
+          continue;
+        }
+        matches.push({ anchor, definition });
+        const metric = metrics.get(definition.id);
+        metric.matchedAnchors.add(`${anchor.kind}:${anchor.path}:${anchor.relation}`);
+      }
+    }
+    const subsystemIds = [...new Set(matches.map((match) => match.definition.id))].sort();
+    for (const subsystemId of subsystemIds) {
+      const metric = metrics.get(subsystemId);
+      metric.files += 1;
+      metric.lines += Math.max(0, Number(file.lines) || 0);
+    }
+    const owners = matches
+      .filter((match) => match.anchor.relation === "owns")
+      .sort((left, right) => (
+        subsystemAnchorSpecificity(right.anchor) - subsystemAnchorSpecificity(left.anchor) ||
+        subsystemOriginPriority(right.anchor.origin) - subsystemOriginPriority(left.anchor.origin) ||
+        left.definition.id.localeCompare(right.definition.id)
+      ));
+    const primary = owners[0] || null;
+    const conflictingOwnerIds = primary
+      ? owners
+          .filter((owner) => (
+            owner.definition.id !== primary.definition.id &&
+            subsystemAnchorSpecificity(owner.anchor) === subsystemAnchorSpecificity(primary.anchor) &&
+            subsystemOriginPriority(owner.anchor.origin) === subsystemOriginPriority(primary.anchor.origin)
+          ))
+          .map((owner) => owner.definition.id)
+      : [];
+    assignments.set(file.id, {
+      conflictingOwnerIds,
+      primarySubsystem: primary?.definition || null,
+      primaryAnchor: primary?.anchor || null,
+      subsystemIds
+    });
+  }
+  return { assignments, metrics };
 }
 
 function entityProjection(entity = {}) {
@@ -23,20 +119,26 @@ function relationshipProjection(relationship = {}) {
   };
 }
 
-function fileProjection(file = {}, subsystemId = "") {
+function fileProjection(file = {}, assignment = {}) {
+  const primarySubsystem = assignment.primarySubsystem || null;
   return {
     ...file,
     directory: path.posix.dirname(file.path) === "." ? "" : path.posix.dirname(file.path),
     key: encodeSystemKey(file.id),
-    subsystemId
+    ownershipConflictIds: assignment.conflictingOwnerIds || [],
+    ownershipOrigin: assignment.primaryAnchor?.origin || "",
+    subsystemId: primarySubsystem?.id || "",
+    subsystemIds: assignment.subsystemIds || [],
+    subsystemTitle: primarySubsystem?.title || ""
   };
 }
 
 function fileCityProjection(file = {}, {
   entitiesById = new Map(),
   importedByCount = 0,
-  subsystem = null
+  assignment = {}
 } = {}) {
+  const subsystem = assignment.primarySubsystem || null;
   const roles = (file.implementedEntityIds || [])
     .map((entityId) => entitiesById.get(entityId))
     .filter(Boolean)
@@ -61,20 +163,16 @@ function fileCityProjection(file = {}, {
     roles,
     subsystemDescription: subsystem?.description || "",
     subsystemId: subsystem?.id || "",
+    subsystemIds: assignment.subsystemIds || [],
+    ownershipConflictIds: assignment.conflictingOwnerIds || [],
+    ownershipOrigin: assignment.primaryAnchor?.origin || "",
     subsystemTitle: subsystem?.title || ""
   };
 }
 
-function subsystemIdsByPackage(model = {}) {
-  return new Map(
-    (model.entities || [])
-      .filter((entity) => entity.kind === "subsystem" && entity.metadata?.packageId)
-      .map((entity) => [entity.metadata.packageId, entity.id])
-  );
-}
-
 function systemOverview(model = {}) {
-  const subsystemByPackage = subsystemIdsByPackage(model);
+  const definitions = subsystemDefinitions(model);
+  const { assignments, metrics } = subsystemAssignments(model.files || [], definitions);
   const entitiesById = new Map((model.entities || []).map((entity) => [entity.id, entity]));
   const importedByPath = new Map();
   for (const file of model.files || []) {
@@ -87,7 +185,7 @@ function systemOverview(model = {}) {
   }
   const fileMassBySubsystem = new Map();
   for (const file of model.files || []) {
-    const subsystemId = subsystemByPackage.get(file.packageId) || "";
+    const subsystemId = assignments.get(file.id)?.primarySubsystem?.id || "";
     if (!subsystemId) {
       continue;
     }
@@ -108,11 +206,10 @@ function systemOverview(model = {}) {
     diagnostics: model.diagnostics,
     entities: stableSort(model.entities || [], (entity) => entity.id).map(entityProjection),
     files: stableSort(model.files || [], (file) => file.path).map((file) => {
-      const subsystemId = subsystemByPackage.get(file.packageId) || "";
       return fileCityProjection(file, {
+        assignment: assignments.get(file.id),
         entitiesById,
-        importedByCount: importedByPath.get(file.path) || 0,
-        subsystem: entitiesById.get(subsystemId) || null
+        importedByCount: importedByPath.get(file.path) || 0
       });
     }),
     fileMass: stableSort(fileMassBySubsystem.values(), (record) => record.subsystemId),
@@ -122,7 +219,16 @@ function systemOverview(model = {}) {
     relationships: stableSort(
       (model.relationships || []).filter((relationship) => relationship.kind !== "implemented_by"),
       (relationship) => relationship.id
-    ).map(relationshipProjection)
+    ).map(relationshipProjection),
+    subsystems: definitions.map((definition) => {
+      const metric = metrics.get(definition.id) || { files: 0, lines: 0, matchedAnchors: new Set() };
+      return {
+        ...definition,
+        fileCount: metric.files,
+        lines: metric.lines,
+        unmatchedAnchorCount: Math.max(0, definition.anchors.length - metric.matchedAnchors.size)
+      };
+    })
   };
 }
 
@@ -131,6 +237,7 @@ function entityDetails(model = {}, entityId = "") {
   if (!entity) {
     return null;
   }
+  const { assignments } = subsystemAssignments(model.files || [], subsystemDefinitions(model));
   const relationships = (model.relationships || []).filter((relationship) => (
     relationship.from === entityId || relationship.to === entityId
   ));
@@ -150,8 +257,10 @@ function entityDetails(model = {}, entityId = "") {
       }
     }
   }
+  const entityAnchors = entity.kind === "subsystem" ? entity.metadata?.anchors || [] : [];
   const implementedFiles = (model.files || []).filter((file) => (
     (entity.kind === "subsystem" && entity.metadata?.packageId === file.packageId) ||
+    entityAnchors.some((anchor) => subsystemAnchorMatchesFile(anchor, file.path)) ||
     (file.implementedEntityIds || []).some((implementedId) => descendantIds.has(implementedId)) ||
     entity.metadata?.sourcePath === file.path
   ));
@@ -165,7 +274,7 @@ function entityDetails(model = {}, entityId = "") {
       .sort((left, right) => (
         (Number(right.lines) || 0) - (Number(left.lines) || 0) || left.path.localeCompare(right.path)
       ))
-      .map((file) => fileProjection(file)),
+      .map((file) => fileProjection(file, assignments.get(file.id))),
     findings: stableSort(
       (model.findings || []).filter((finding) => finding.entityIds.includes(entityId)),
       (finding) => finding.id
@@ -220,7 +329,8 @@ function fileConstellation(model = {}, fileId = "") {
     return null;
   }
   const filesByPath = new Map(files.map((file) => [file.path, file]));
-  const subsystemByPackage = subsystemIdsByPackage(model);
+  const definitions = subsystemDefinitions(model);
+  const { assignments } = subsystemAssignments(files, definitions);
   const neighborIds = new Set([selected.id]);
   const edges = [];
 
@@ -260,8 +370,9 @@ function fileConstellation(model = {}, fileId = "") {
   const visibleFiles = stableSort(
     files.filter((file) => neighborIds.has(file.id)),
     (file) => file.id
-  ).map((file) => fileProjection(file, subsystemByPackage.get(file.packageId) || ""));
+  ).map((file) => fileProjection(file, assignments.get(file.id)));
   const selectedProjection = visibleFiles.find((file) => file.id === selected.id);
+  const selectedSubsystemIds = new Set(selectedProjection.subsystemIds || []);
   return {
     directoryAncestry: directoryAncestry(selected.path),
     documentLineStats: fileLineStats(files),
@@ -270,7 +381,7 @@ function fileConstellation(model = {}, fileId = "") {
     )),
     entities: stableSort(
       (model.entities || []).filter((entity) => (
-        entity.id === selectedProjection.subsystemId || selected.implementedEntityIds.includes(entity.id)
+        selectedSubsystemIds.has(entity.id) || selected.implementedEntityIds.includes(entity.id)
       )),
       (entity) => entity.id
     ).map(entityProjection),

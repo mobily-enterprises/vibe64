@@ -5,6 +5,7 @@ import {
 } from "d3-hierarchy";
 
 const DIRECTORY_ELEVATION_STEP = 40;
+const SUBSYSTEM_SKY_ELEVATION = 720;
 
 function stableHash(value = "") {
   let hash = 2166136261;
@@ -311,11 +312,95 @@ function topLevelPrecincts(overview = {}) {
   return layoutFileCity(overview).campuses;
 }
 
+function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
+  const directoriesByPath = new Map((cityLayout.directories || []).map((directory) => [directory.path, directory]));
+  const filesByPath = new Map((cityLayout.files || []).map((file) => [file.path, file]));
+  const placed = [];
+
+  function targetForAnchor(anchor) {
+    const target = anchor.kind === "file"
+      ? filesByPath.get(anchor.path)
+      : directoriesByPath.get(anchor.path);
+    return target
+      ? {
+          campusId: target.campusId,
+          elevation: target.elevation,
+          fileId: anchor.kind === "file" ? target.id : "",
+          depth: anchor.kind === "file" ? target.cityDepth : target.depth,
+          kind: anchor.kind,
+          path: anchor.path,
+          relation: anchor.relation,
+          width: anchor.kind === "file" ? target.cityWidth : target.width,
+          x: target.x,
+          z: target.z
+        }
+      : null;
+  }
+
+  function freePosition(record) {
+    const minimumGap = 34;
+    const baseAngle = (stableHash(record.id) % 360) * (Math.PI / 180);
+    for (let attempt = 0; attempt < 96; attempt += 1) {
+      const ring = attempt === 0 ? 0 : Math.ceil(attempt / 12);
+      const angle = baseAngle + attempt * 2.399963229728653;
+      const distance = ring * (record.radius * 0.82 + 54);
+      const candidate = {
+        x: record.anchorX + Math.cos(angle) * distance,
+        z: record.anchorZ + Math.sin(angle) * distance
+      };
+      const overlaps = placed.some((other) => (
+        Math.hypot(candidate.x - other.x, candidate.z - other.z) < record.radius + other.radius + minimumGap
+      ));
+      if (!overlaps) {
+        return candidate;
+      }
+    }
+    return {
+      x: record.anchorX + placed.length * (record.radius * 2 + minimumGap),
+      z: record.anchorZ
+    };
+  }
+
+  const records = stableSort(subsystems, (subsystem) => subsystem.id).map((subsystem) => {
+    const targets = (subsystem.anchors || []).map(targetForAnchor).filter(Boolean);
+    const anchorX = targets.length > 0
+      ? targets.reduce((sum, target) => sum + target.x, 0) / targets.length
+      : 0;
+    const anchorZ = targets.length > 0
+      ? targets.reduce((sum, target) => sum + target.z, 0) / targets.length
+      : 0;
+    const radius = Math.max(
+      54,
+      Math.min(112, 48 + Math.log2(Math.max(1, Number(subsystem.lines) || 0) + 1) * 4)
+    );
+    const record = {
+      ...subsystem,
+      anchorX,
+      anchorZ,
+      radius,
+      targets,
+      y: SUBSYSTEM_SKY_ELEVATION
+    };
+    const position = freePosition(record);
+    record.x = position.x;
+    record.z = position.z;
+    placed.push(record);
+    return record;
+  });
+
+  return {
+    elevation: SUBSYSTEM_SKY_ELEVATION,
+    subsystems: records
+  };
+}
+
 export {
   cityLineStats,
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemSky,
   stableHash,
+  SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 };
