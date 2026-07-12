@@ -192,11 +192,11 @@
           </div>
           <p v-if="selectedDirectory.kind === 'campus'">
             {{ selectedDirectory.implicit
-              ? 'This is everything not claimed by an adapter-defined campus. Its internal fences are still real directories.'
-              : 'JSKIT gives this source tree its own land parcel. Its internal fences are the real directories below that root.' }}
+              ? 'This is everything not claimed by an adapter-defined campus. Its raised terraces still represent the real directories.'
+              : 'JSKIT gives this source tree its own land parcel. Its raised terraces are the real directories below that root.' }}
           </p>
           <p v-else>
-            This is directory level {{ selectedDirectory.hierarchyDepth }}. Its raised terrace shows nesting depth, its wall is the directory boundary, and every building inside it is a real file.
+            This is directory level {{ selectedDirectory.hierarchyDepth }}. Its raised terrace shows nesting depth, its low curb traces the directory boundary, and every building inside it is a real file.
           </p>
           <div v-if="selectedDirectory.subsystems.length" class="system-world__section">
             <strong>System ownership found here</strong>
@@ -307,7 +307,7 @@
 
       <div v-if="overview" class="system-world__legend" aria-label="File city visual legend">
         <span><i class="system-world__legend-campus" /> Land parcel = campus</span>
-        <span><i class="system-world__legend-fence" /> Fence = folder</span>
+        <span><i class="system-world__legend-fence" /> Low curb = folder edge</span>
         <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
         <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
         <span><i class="system-world__legend-large" /> Orange = very large file</span>
@@ -359,7 +359,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "021";
+const rendererRevision = "023";
 
 const props = defineProps({
   active: {

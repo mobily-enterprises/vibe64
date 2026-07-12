@@ -208,7 +208,7 @@ function layoutCampus(campus, {
     .tile(treemapSquarify.ratio(1.25))
     .size([campusWidth, campusDepth])
     .paddingOuter((node) => node.depth === 0 ? 38 : 8)
-    .paddingInner(9)
+    .paddingInner(18)
     .paddingTop((node) => node.children ? Math.min(34, 15 + node.depth * 5) : 0)
     .round(true)(root);
 
@@ -228,7 +228,7 @@ function layoutCampus(campus, {
         hierarchyDepth: node.depth,
         name: node.data.name,
         path: node.data.path,
-        wallHeight: Math.max(8, 14 - (node.depth - 1) * 1.5),
+        wallHeight: Math.max(3.5, 6 - (node.depth - 1) * 0.6),
         width: Math.max(8, node.x1 - node.x0),
         x: offsetX + (node.x0 + node.x1) / 2 - centerX,
         z: (node.y0 + node.y1) / 2 - centerZ
@@ -273,8 +273,8 @@ function layoutCampus(campus, {
 }
 
 function layoutFileCity(overview = {}, {
-  depth = 980,
-  width = 3_400
+  depth = 1_180,
+  width = 3_800
 } = {}) {
   const files = overview.files || [];
   const campuses = fileCampuses(overview);

@@ -76,19 +76,22 @@ function nextPowerOfTwo(value) {
   return 2 ** Math.ceil(Math.log2(Math.max(1, value)));
 }
 
-function createDirectoryLabelAtlas(directories = [], maxAnisotropy = 1) {
-  const names = [...new Set(directories.map((directory) => directory.name))]
+function createLabelAtlas(namesInput = [], maxAnisotropy = 1, {
+  cellHeight = 64,
+  cellWidth = 256,
+  drawLabel = () => {},
+  font = "700 24px ui-monospace, SFMono-Regular, Menlo, monospace"
+} = {}) {
+  const names = [...new Set(namesInput.map((name) => String(name || "")).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right));
-  const cellWidth = 256;
-  const cellHeight = 64;
-  const columns = Math.max(1, Math.min(8, Math.ceil(Math.sqrt(names.length))));
+  const columns = Math.max(1, Math.ceil(Math.sqrt(names.length * cellHeight / cellWidth)));
   const rows = Math.max(1, Math.ceil(names.length / columns));
   const canvas = document.createElement("canvas");
   canvas.width = nextPowerOfTwo(columns * cellWidth);
   canvas.height = nextPowerOfTwo(rows * cellHeight);
   const context = canvas.getContext("2d");
   const regions = new Map();
-  context.font = "700 24px ui-monospace, SFMono-Regular, Menlo, monospace";
+  context.font = font;
   context.textAlign = "center";
   context.textBaseline = "middle";
 
@@ -97,13 +100,7 @@ function createDirectoryLabelAtlas(directories = [], maxAnisotropy = 1) {
     const row = Math.floor(index / columns);
     const x = column * cellWidth;
     const y = row * cellHeight;
-    context.fillStyle = "rgba(4, 9, 18, 0.86)";
-    context.fillRect(x + 2, y + 2, cellWidth - 4, cellHeight - 4);
-    context.strokeStyle = "rgba(151, 213, 239, 0.72)";
-    context.lineWidth = 2;
-    context.strokeRect(x + 3, y + 3, cellWidth - 6, cellHeight - 6);
-    context.fillStyle = "#f5f8ff";
-    context.fillText(name, x + cellWidth / 2, y + cellHeight / 2, cellWidth - 24);
+    drawLabel({ cellHeight, cellWidth, context, name, x, y });
     regions.set(name, {
       u0: x / canvas.width,
       u1: (x + cellWidth) / canvas.width,
@@ -120,6 +117,64 @@ function createDirectoryLabelAtlas(directories = [], maxAnisotropy = 1) {
   return { regions, texture };
 }
 
+function createDirectoryLabelAtlas(directories = [], maxAnisotropy = 1) {
+  return createLabelAtlas(
+    directories.map((directory) => directory.name),
+    maxAnisotropy,
+    {
+      drawLabel({ cellHeight, cellWidth, context, name, x, y }) {
+        context.fillStyle = "rgba(4, 9, 18, 0.86)";
+        context.fillRect(x + 2, y + 2, cellWidth - 4, cellHeight - 4);
+        context.strokeStyle = "rgba(151, 213, 239, 0.72)";
+        context.lineWidth = 2;
+        context.strokeRect(x + 3, y + 3, cellWidth - 6, cellHeight - 6);
+        context.fillStyle = "#f5f8ff";
+        context.fillText(name, x + cellWidth / 2, y + cellHeight / 2, cellWidth - 24);
+      }
+    }
+  );
+}
+
+function fileName(file = {}) {
+  return String(file.path || "").split("/").filter(Boolean).pop() || "unnamed file";
+}
+
+function createFileLabelAtlas(buildings = [], maxAnisotropy = 1) {
+  return createLabelAtlas(
+    buildings.map(({ file }) => fileName(file)),
+    maxAnisotropy,
+    {
+      cellHeight: 32,
+      cellWidth: 160,
+      drawLabel({ cellHeight, cellWidth, context, name, x, y }) {
+        const centerX = x + cellWidth / 2;
+        const centerY = y + cellHeight / 2;
+        context.lineJoin = "round";
+        context.lineWidth = 5;
+        context.strokeStyle = "rgba(3, 7, 13, 0.96)";
+        context.strokeText(name, centerX, centerY, cellWidth - 12);
+        context.fillStyle = "#f8fbff";
+        context.fillText(name, centerX, centerY, cellWidth - 12);
+      },
+      font: "700 16px ui-monospace, SFMono-Regular, Menlo, monospace"
+    }
+  );
+}
+
+function appendAtlasQuad(positions, uvs, corners, region) {
+  const indices = [0, 1, 2, 0, 2, 3];
+  const textureCoordinates = [
+    [region.u0, region.v0],
+    [region.u1, region.v0],
+    [region.u1, region.v1],
+    [region.u0, region.v1]
+  ];
+  for (const index of indices) {
+    positions.push(...corners[index]);
+    uvs.push(...textureCoordinates[index]);
+  }
+}
+
 function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
   if (directories.length === 0) {
     return null;
@@ -127,20 +182,6 @@ function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
   const { regions, texture } = createDirectoryLabelAtlas(directories, maxAnisotropy);
   const positions = [];
   const uvs = [];
-
-  function addQuad(corners, region) {
-    const indices = [0, 1, 2, 0, 2, 3];
-    const textureCoordinates = [
-      [region.u0, region.v0],
-      [region.u1, region.v0],
-      [region.u1, region.v1],
-      [region.u0, region.v1]
-    ];
-    for (const index of indices) {
-      positions.push(...corners[index]);
-      uvs.push(...textureCoordinates[index]);
-    }
-  }
 
   function plaqueDimensions(availableWidth, name) {
     const width = Math.max(5, Math.min(availableWidth - 3, Math.max(30, name.length * 8 + 18)));
@@ -167,25 +208,25 @@ function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
     const verticalZ0 = directory.z - vertical.width / 2;
     const verticalZ1 = directory.z + vertical.width / 2;
 
-    addQuad([
+    appendAtlasQuad(positions, uvs, [
       [horizontalX0, horizontalY0, front],
       [horizontalX1, horizontalY0, front],
       [horizontalX1, horizontalY1, front],
       [horizontalX0, horizontalY1, front]
     ], region);
-    addQuad([
+    appendAtlasQuad(positions, uvs, [
       [horizontalX1, horizontalY0, back],
       [horizontalX0, horizontalY0, back],
       [horizontalX0, horizontalY1, back],
       [horizontalX1, horizontalY1, back]
     ], region);
-    addQuad([
+    appendAtlasQuad(positions, uvs, [
       [right, verticalY0, verticalZ1],
       [right, verticalY0, verticalZ0],
       [right, verticalY1, verticalZ0],
       [right, verticalY1, verticalZ1]
     ], region);
-    addQuad([
+    appendAtlasQuad(positions, uvs, [
       [left, verticalY0, verticalZ0],
       [left, verticalY0, verticalZ1],
       [left, verticalY1, verticalZ1],
@@ -208,6 +249,100 @@ function createDirectoryWallLabels(directories = [], maxAnisotropy = 1) {
     })
   );
   labels.renderOrder = 4;
+  labels.userData.disposables = [texture];
+  return labels;
+}
+
+function createFileSurfaceLabels(buildings = [], maxAnisotropy = 1) {
+  if (buildings.length === 0) {
+    return null;
+  }
+  const { regions, texture } = createFileLabelAtlas(buildings, maxAnisotropy);
+  const positions = [];
+  const uvs = [];
+
+  for (const { elevation, file, height } of buildings) {
+    const region = regions.get(fileName(file));
+    const roofHeight = Math.max(1.2, Math.min(3, height * 0.025));
+    const roofWidth = Math.max(3, file.cityWidth * 0.86);
+    const roofDepth = Math.max(3, file.cityDepth * 0.86);
+    const roofY = elevation + height + 1.6 + roofHeight / 2 + 0.15;
+
+    if (roofWidth >= roofDepth) {
+      const labelWidth = Math.max(2, roofWidth * 0.88);
+      const labelDepth = Math.max(0.9, Math.min(roofDepth * 0.7, labelWidth * 0.2));
+      appendAtlasQuad(positions, uvs, [
+        [file.x - labelWidth / 2, roofY, file.z + labelDepth / 2],
+        [file.x + labelWidth / 2, roofY, file.z + labelDepth / 2],
+        [file.x + labelWidth / 2, roofY, file.z - labelDepth / 2],
+        [file.x - labelWidth / 2, roofY, file.z - labelDepth / 2]
+      ], region);
+    } else {
+      const labelDepth = Math.max(2, roofDepth * 0.88);
+      const labelWidth = Math.max(0.9, Math.min(roofWidth * 0.7, labelDepth * 0.2));
+      appendAtlasQuad(positions, uvs, [
+        [file.x - labelWidth / 2, roofY, file.z - labelDepth / 2],
+        [file.x - labelWidth / 2, roofY, file.z + labelDepth / 2],
+        [file.x + labelWidth / 2, roofY, file.z + labelDepth / 2],
+        [file.x + labelWidth / 2, roofY, file.z - labelDepth / 2]
+      ], region);
+    }
+
+    const labelHeight = Math.max(3, height * 0.78);
+    const y0 = elevation + 1 + (height - labelHeight) / 2;
+    const y1 = y0 + labelHeight;
+    const front = file.z + file.cityDepth / 2 + 0.42;
+    const back = file.z - file.cityDepth / 2 - 0.42;
+    const frontWidth = Math.max(1.1, Math.min(file.cityWidth * 0.7, labelHeight * 0.2));
+    const frontX0 = file.x - frontWidth / 2;
+    const frontX1 = file.x + frontWidth / 2;
+    appendAtlasQuad(positions, uvs, [
+      [frontX1, y0, front],
+      [frontX1, y1, front],
+      [frontX0, y1, front],
+      [frontX0, y0, front]
+    ], region);
+    appendAtlasQuad(positions, uvs, [
+      [frontX0, y0, back],
+      [frontX0, y1, back],
+      [frontX1, y1, back],
+      [frontX1, y0, back]
+    ], region);
+
+    const right = file.x + file.cityWidth / 2 + 0.42;
+    const left = file.x - file.cityWidth / 2 - 0.42;
+    const sideDepth = Math.max(1.1, Math.min(file.cityDepth * 0.7, labelHeight * 0.2));
+    const sideZ0 = file.z - sideDepth / 2;
+    const sideZ1 = file.z + sideDepth / 2;
+    appendAtlasQuad(positions, uvs, [
+      [right, y0, sideZ0],
+      [right, y1, sideZ0],
+      [right, y1, sideZ1],
+      [right, y0, sideZ1]
+    ], region);
+    appendAtlasQuad(positions, uvs, [
+      [left, y0, sideZ1],
+      [left, y1, sideZ1],
+      [left, y1, sideZ0],
+      [left, y0, sideZ0]
+    ], region);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  const labels = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      alphaTest: 0.12,
+      depthWrite: false,
+      map: texture,
+      side: THREE.DoubleSide,
+      transparent: true
+    })
+  );
+  labels.renderOrder = 3;
   labels.userData.disposables = [texture];
   return labels;
 }
@@ -349,7 +484,7 @@ function createSystemWorld({
   const camera = new THREE.PerspectiveCamera(42, 1, 1, 16_000);
   camera.position.set(0, 980, 1_150);
   const controls = new CameraControls(camera, canvas);
-  controls.dollyToCursor = true;
+  controls.dollyToCursor = false;
   controls.infinityDolly = false;
   controls.draggingSmoothTime = 0;
   controls.smoothTime = reducedMotion ? 0 : 0.18;
@@ -631,6 +766,7 @@ function createSystemWorld({
     buildingInstances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     roofInstances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const edgePositions = [];
+    const fileLabelBuildings = [];
     const transform = new THREE.Object3D();
 
     layout.files.forEach((file, index) => {
@@ -688,8 +824,9 @@ function createSystemWorld({
         roofColor
       };
       fileObjects.set(file.id, record);
+      fileLabelBuildings.push({ elevation, file, height });
       if (labelledFileIds.has(file.id)) {
-        addLabel(worldRoot, `${file.path.split("/").pop()}\n${Number(file.lines || 0).toLocaleString()} LOC`, {
+        addLabel(worldRoot, `${fileName(file)}\n${Number(file.lines || 0).toLocaleString()} LOC`, {
           color: isLarge ? 0xffc3aa : 0xe8f5ff,
           fontSize: isLarge ? 13 : 10,
           maxWidth: Math.max(90, Math.min(220, file.cityWidth * 3.2)),
@@ -714,6 +851,13 @@ function createSystemWorld({
     roofInstances.computeBoundingBox();
     roofInstances.computeBoundingSphere();
     worldRoot.add(buildingInstances, roofInstances, buildingEdgeLines);
+    const surfaceLabels = createFileSurfaceLabels(
+      fileLabelBuildings,
+      renderer.capabilities.getMaxAnisotropy()
+    );
+    if (surfaceLabels) {
+      worldRoot.add(surfaceLabels);
+    }
     pickables.push(buildingInstances);
   }
 
