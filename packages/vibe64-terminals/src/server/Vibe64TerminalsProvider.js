@@ -19,8 +19,20 @@ import {
 import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
+import {
+  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_USER_DOMAIN_ENV
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
+const LIVE_PREVIEW_ROUTING_ENV_KEYS = Object.freeze([
+  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_USER_DOMAIN_ENV
+]);
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
   "closeAgentTerminal",
   "closeCommandTerminal",
@@ -41,6 +53,19 @@ const TERMINAL_SESSION_MUTATION_EVENT_REASONS = Object.freeze({
   startLaunchTargetTerminal: "launch-target-started",
   stopLaunchTargetTerminal: "launch-target-stopped"
 });
+
+function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
+  const env = {
+    ...(runtimeEnv && typeof runtimeEnv === "object" && !Array.isArray(runtimeEnv) ? runtimeEnv : {})
+  };
+  for (const key of LIVE_PREVIEW_ROUTING_ENV_KEYS) {
+    const value = String(liveEnv?.[key] || "").trim();
+    if (value) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
 
 class Vibe64TerminalsProvider {
   static id = "feature.vibe64-terminals";
@@ -64,17 +89,15 @@ class Vibe64TerminalsProvider {
     ) {
       throw new Error("Vibe64TerminalsProvider requires application service()/actions().");
     }
-    const appProviderEnv = {
-      ...jskitRuntimeEnv(app)
-    };
+    const appProviderEnv = terminalsProviderEnv(jskitRuntimeEnv(app));
 
     app.service(
       VIBE64_TERMINALS_SERVICE,
       (scope) => {
-        const providerEnv = {
+        const providerEnv = terminalsProviderEnv({
           ...appProviderEnv,
           ...jskitRuntimeEnv(scope, appProviderEnv)
-        };
+        });
         const domainEvents = typeof scope.has === "function" && scope.has("domainEvents")
           ? scope.make("domainEvents")
           : null;
@@ -185,4 +208,7 @@ class Vibe64TerminalsProvider {
   }
 }
 
-export { Vibe64TerminalsProvider };
+export {
+  Vibe64TerminalsProvider,
+  terminalsProviderEnv
+};

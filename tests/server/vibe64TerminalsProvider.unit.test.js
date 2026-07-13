@@ -8,8 +8,15 @@ import {
   VIBE64_SERVICE_DATA_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  Vibe64TerminalsProvider
+  Vibe64TerminalsProvider,
+  terminalsProviderEnv
 } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
+import {
+  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_USER_DOMAIN_ENV
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-terminals-provider-"));
@@ -70,6 +77,27 @@ function createProviderApp({
     services
   };
 }
+
+test("terminals provider overlays only live preview routing values", () => {
+  assert.deepEqual(terminalsProviderEnv({
+    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "stale.example.test",
+    KEEP_ME: "runtime",
+    SECRET_VALUE: "runtime-secret"
+  }, {
+    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
+    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
+    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
+    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
+    SECRET_VALUE: "live-secret"
+  }), {
+    [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
+    [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
+    [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
+    [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
+    KEEP_ME: "runtime",
+    SECRET_VALUE: "runtime-secret"
+  });
+});
 
 async function startGlobalCodexWithRegisteredService({
   app,
