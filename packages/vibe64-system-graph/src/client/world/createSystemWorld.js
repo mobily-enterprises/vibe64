@@ -33,6 +33,22 @@ const SUBSYSTEM_TETHER_COLORS = Object.freeze({
   supports: 0xb49aff,
   configures: 0xffc86b
 });
+const SUBSYSTEM_DEPENDENCY_COLORS = Object.freeze({
+  external: 0xc69cff,
+  incoming: 0x70e8ad,
+  outgoing: 0xffc86b
+});
+const BOX_EDGE_PAIRS = Object.freeze([
+  [0, 1], [1, 2], [2, 3], [3, 0],
+  [4, 5], [5, 6], [6, 7], [7, 4],
+  [0, 4], [1, 5], [2, 6], [3, 7]
+]);
+
+function appendBoxEdges(positions, corners) {
+  for (const [from, to] of BOX_EDGE_PAIRS) {
+    positions.push(...corners[from], ...corners[to]);
+  }
+}
 
 function sideColor(side = "unknown") {
   return SIDE_COLORS[side] || SIDE_COLORS.unknown;
@@ -495,6 +511,103 @@ function subsystemTether(from, to, relation = "supports") {
   );
 }
 
+function dependencyEvidenceTether(from, to, color) {
+  const midpoint = from.clone().lerp(to, 0.5);
+  midpoint.y = from.y * 0.58 + to.y * 0.42;
+  return new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(
+      new THREE.QuadraticBezierCurve3(from, midpoint, to).getPoints(24)
+    ),
+    new THREE.LineBasicMaterial({
+      color,
+      opacity: 0.5,
+      transparent: true
+    })
+  );
+}
+
+function fileDependencyConnector(from, to, color, weight = 1) {
+  const midpoint = from.clone().lerp(to, 0.5);
+  midpoint.y = Math.max(from.y, to.y) + 18 + Math.min(70, from.distanceTo(to) * 0.08);
+  const curve = new THREE.QuadraticBezierCurve3(from, midpoint, to);
+  const points = curve.getPoints(24);
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    depthTest: false,
+    depthWrite: false,
+    opacity: 0.94,
+    transparent: true
+  });
+  const tube = new THREE.Mesh(
+    new THREE.TubeGeometry(
+      curve,
+      24,
+      0.9 + Math.min(0.75, Math.log2(Math.max(1, weight) + 1) * 0.2),
+      6,
+      false
+    ),
+    material
+  );
+  tube.renderOrder = 7;
+  const arrowSize = 3 + Math.min(2.5, Math.log2(Math.max(1, weight) + 1) * 0.75);
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(arrowSize, arrowSize * 2.5, 7),
+    new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })
+  );
+  const direction = points.at(-1).clone().sub(points.at(-2)).normalize();
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.position.copy(points.at(-1)).addScaledVector(direction, -arrowSize * 0.8);
+  arrow.renderOrder = 7;
+  const sourceMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(arrowSize * 0.58, 8, 6),
+    new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })
+  );
+  sourceMarker.position.copy(points[0]);
+  sourceMarker.renderOrder = 7;
+  const group = new THREE.Group();
+  group.add(tube, arrow, sourceMarker);
+  return group;
+}
+
+function subsystemDependencyConnector(from, to, weight = 1) {
+  const middle = from.clone().lerp(to, 0.5);
+  middle.y += 34 + Math.min(72, Math.log2(Math.max(1, weight) + 1) * 13);
+  const curve = new THREE.QuadraticBezierCurve3(from, middle, to);
+  const points = curve.getPoints(32);
+  const lineMaterial = new THREE.LineBasicMaterial({
+    color: SUBSYSTEM_DEPENDENCY_COLORS.outgoing,
+    opacity: 0.94,
+    transparent: true
+  });
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points),
+    lineMaterial
+  );
+  const arrowSize = 4 + Math.min(5, Math.log2(Math.max(1, weight) + 1));
+  const arrowMaterial = new THREE.MeshBasicMaterial({
+    color: SUBSYSTEM_DEPENDENCY_COLORS.outgoing
+  });
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(arrowSize, arrowSize * 2.4, 8),
+    arrowMaterial
+  );
+  const direction = points.at(-1).clone().sub(points.at(-2)).normalize();
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.position.copy(points.at(-1)).addScaledVector(direction, -arrowSize * 0.85);
+  const object = new THREE.Group();
+  object.add(line, arrow);
+  object.visible = false;
+  return {
+    arrowMaterial,
+    lineMaterial,
+    object,
+    setColor(color) {
+      lineMaterial.color.setHex(color);
+      arrowMaterial.color.setHex(color);
+    }
+  };
+}
+
 function createSystemWorld({
   canvas,
   onClearSelection = () => {},
@@ -546,12 +659,16 @@ function createSystemWorld({
   const worldRoot = new THREE.Group();
   const subsystemRoot = new THREE.Group();
   const contextRoot = new THREE.Group();
+  const subsystemOwnershipRoot = new THREE.Group();
   scene.add(worldRoot);
   scene.add(subsystemRoot);
   scene.add(contextRoot);
+  scene.add(subsystemOwnershipRoot);
 
   const pickables = [];
   const campusObjects = new Map();
+  const dependencyObjects = [];
+  const externalSatelliteObjects = [];
   const fileObjects = new Map();
   const directoryObjects = new Map();
   const subsystemObjects = new Map();
@@ -564,7 +681,10 @@ function createSystemWorld({
   let subsystemLayout = null;
   let viewMode = "folders";
   let directoryTerraceInstances = null;
+  let dependencyEvidenceFileIds = new Set();
+  let dependencyEvidenceRoot = null;
   let dirty = true;
+  let externalContextRoot = null;
   let grabState = null;
   let lastFrame = performance.now();
   let pointerDown = null;
@@ -573,6 +693,8 @@ function createSystemWorld({
   let selectedDirectoryPath = null;
   let selectedFileId = "";
   let selectedSubsystemId = "";
+  let subsystemConnectionsVisible = false;
+  let subsystemLibrariesVisible = false;
   let neighborFileIds = new Set();
   let wheelGestureAction = CameraControls.ACTION.DOLLY;
   let wheelGestureAt = -Infinity;
@@ -592,8 +714,11 @@ function createSystemWorld({
     clearGroup(worldRoot);
     clearGroup(subsystemRoot);
     clearGroup(contextRoot);
+    clearGroup(subsystemOwnershipRoot);
     pickables.splice(0);
     campusObjects.clear();
+    dependencyObjects.splice(0);
+    externalSatelliteObjects.splice(0);
     fileObjects.clear();
     directoryObjects.clear();
     subsystemObjects.clear();
@@ -604,6 +729,9 @@ function createSystemWorld({
     buildingEdgeLines = null;
     buildingInstances = null;
     directoryTerraceInstances = null;
+    dependencyEvidenceFileIds = new Set();
+    dependencyEvidenceRoot = null;
+    externalContextRoot = null;
     roofInstances = null;
     selectedCampusId = null;
     subsystemLayout = null;
@@ -790,13 +918,7 @@ function createSystemWorld({
         [file.x + halfWidth, edgeTop, file.z + halfDepth],
         [file.x - halfWidth, edgeTop, file.z + halfDepth]
       ];
-      [
-        [0, 1], [1, 2], [2, 3], [3, 0],
-        [4, 5], [5, 6], [6, 7], [7, 4],
-        [0, 4], [1, 5], [2, 6], [3, 7]
-      ].forEach(([from, to]) => {
-        edgePositions.push(...corners[from], ...corners[to]);
-      });
+      appendBoxEdges(edgePositions, corners);
 
       const record = {
         baseColor,
@@ -855,6 +977,7 @@ function createSystemWorld({
         new THREE.CylinderGeometry(subsystem.radius, subsystem.radius * 0.9, 12, 40),
         new THREE.MeshBasicMaterial({
           color: baseColor,
+          depthWrite: false,
           opacity: 0.8,
           transparent: true
         })
@@ -866,6 +989,7 @@ function createSystemWorld({
         new THREE.RingGeometry(subsystem.radius * 0.78, subsystem.radius * 1.04, 48),
         new THREE.MeshBasicMaterial({
           color: new THREE.Color(baseColor).offsetHSL(0, -0.04, 0.2),
+          depthWrite: false,
           opacity: 0.9,
           side: THREE.DoubleSide,
           transparent: true
@@ -876,11 +1000,13 @@ function createSystemWorld({
       group.add(ring);
       const fileLabel = `${subsystem.fileCount} ${subsystem.fileCount === 1 ? "file" : "files"}`;
       const capabilityLabel = `${subsystem.capabilities.length} ${subsystem.capabilities.length === 1 ? "capability" : "capabilities"}`;
-      addLabel(group, `${subsystem.title}\n${fileLabel} · ${capabilityLabel}`, {
+      const dependencies = subsystem.dependencies || { external: [], incoming: [], outgoing: [] };
+      const dependencyLabel = `uses ${dependencies.outgoing.length} · used by ${dependencies.incoming.length} · external ${dependencies.external.length}`;
+      const label = addLabel(group, `${subsystem.title}\n${fileLabel} · ${capabilityLabel}\n${dependencyLabel}`, {
         color: 0xffffff,
-        fontSize: Math.max(13, Math.min(20, subsystem.radius * 0.18)),
+        fontSize: Math.max(12, Math.min(18, subsystem.radius * 0.16)),
         maxWidth: subsystem.radius * 1.65,
-        position: new THREE.Vector3(0, 22, 0)
+        position: new THREE.Vector3(0, 25, 0)
       });
       subsystemRoot.add(group);
       pickables.push(island);
@@ -899,12 +1025,220 @@ function createSystemWorld({
         baseColor,
         group,
         island,
+        label,
         ring,
         subsystem,
         tethers
       });
     }
+    for (const dependency of subsystemLayout.dependencyEdges) {
+      const fromRecord = subsystemObjects.get(dependency.fromSubsystemId);
+      const toRecord = subsystemObjects.get(dependency.toSubsystemId);
+      if (!fromRecord || !toRecord) {
+        continue;
+      }
+      const direction = new THREE.Vector3(
+        toRecord.subsystem.x - fromRecord.subsystem.x,
+        0,
+        toRecord.subsystem.z - fromRecord.subsystem.z
+      ).normalize();
+      const from = new THREE.Vector3(
+        fromRecord.subsystem.x,
+        fromRecord.subsystem.y + 8,
+        fromRecord.subsystem.z
+      ).addScaledVector(direction, fromRecord.subsystem.radius * 0.82);
+      const to = new THREE.Vector3(
+        toRecord.subsystem.x,
+        toRecord.subsystem.y + 8,
+        toRecord.subsystem.z
+      ).addScaledVector(direction, -toRecord.subsystem.radius * 0.88);
+      const connector = subsystemDependencyConnector(from, to, dependency.importCount);
+      subsystemRoot.add(connector.object);
+      dependencyObjects.push({
+        ...dependency,
+        connector
+      });
+    }
+    externalContextRoot = new THREE.Group();
+    dependencyEvidenceRoot = new THREE.Group();
+    subsystemRoot.add(dependencyEvidenceRoot, externalContextRoot);
     subsystemRoot.visible = viewMode === "subsystems";
+  }
+
+  function clearDependencyEvidence() {
+    if (dependencyEvidenceRoot) {
+      clearGroup(dependencyEvidenceRoot);
+    }
+    dependencyEvidenceFileIds = new Set();
+  }
+
+  function showSubsystemOwnership(subsystemId = "") {
+    clearGroup(subsystemOwnershipRoot);
+    if (!subsystemId) {
+      return;
+    }
+    const positions = [];
+    for (const record of fileObjects.values()) {
+      if (!(record.file.subsystemIds || []).includes(subsystemId)) {
+        continue;
+      }
+      const halfWidth = record.file.cityWidth / 2 + 0.8;
+      const halfDepth = record.file.cityDepth / 2 + 0.8;
+      const edgeBottom = (Number(record.file.elevation) || 0) + 0.5;
+      const edgeTop = edgeBottom + record.height + 2.2;
+      appendBoxEdges(positions, [
+        [record.file.x - halfWidth, edgeBottom, record.file.z - halfDepth],
+        [record.file.x + halfWidth, edgeBottom, record.file.z - halfDepth],
+        [record.file.x + halfWidth, edgeBottom, record.file.z + halfDepth],
+        [record.file.x - halfWidth, edgeBottom, record.file.z + halfDepth],
+        [record.file.x - halfWidth, edgeTop, record.file.z - halfDepth],
+        [record.file.x + halfWidth, edgeTop, record.file.z - halfDepth],
+        [record.file.x + halfWidth, edgeTop, record.file.z + halfDepth],
+        [record.file.x - halfWidth, edgeTop, record.file.z + halfDepth]
+      ]);
+    }
+    if (positions.length === 0) {
+      return;
+    }
+    const outline = new THREE.LineSegments(
+      new THREE.BufferGeometry().setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(positions, 3)
+      ),
+      new THREE.LineBasicMaterial({
+        color: SELECTED_FILE_COLOR,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0.95,
+        transparent: true
+      })
+    );
+    outline.renderOrder = 8;
+    subsystemOwnershipRoot.add(outline);
+  }
+
+  function clearExternalSatellites() {
+    if (externalContextRoot) {
+      clearGroup(externalContextRoot);
+    }
+    externalSatelliteObjects.splice(0);
+  }
+
+  function showExternalSatellites(subsystemId = "") {
+    clearExternalSatellites();
+    if (!externalContextRoot || !subsystemId || !subsystemLibrariesVisible) {
+      return;
+    }
+    for (const satellite of subsystemLayout?.externalSatellites || []) {
+      if (satellite.ownerSubsystemId !== subsystemId) {
+        continue;
+      }
+      const ownerRecord = subsystemObjects.get(satellite.ownerSubsystemId);
+      if (!ownerRecord) {
+        continue;
+      }
+      const color = SUBSYSTEM_DEPENDENCY_COLORS.external;
+      const group = new THREE.Group();
+      group.position.set(satellite.x, satellite.y, satellite.z);
+      const body = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(satellite.radius, 0),
+        new THREE.MeshBasicMaterial({ color, opacity: 0.92, transparent: true })
+      );
+      group.add(body);
+      const importLabel = `${satellite.importCount} ${satellite.importCount === 1 ? "import" : "imports"}`;
+      const label = addLabel(group, `${satellite.title}\n${importLabel}`, {
+        color: 0xf7f1ff,
+        fontSize: Math.max(9, satellite.radius * 0.62),
+        maxWidth: 130,
+        position: new THREE.Vector3(0, satellite.radius + 13, 0)
+      });
+      const fromCenter = new THREE.Vector3(
+        ownerRecord.subsystem.x,
+        ownerRecord.subsystem.y + 10,
+        ownerRecord.subsystem.z
+      );
+      const toCenter = new THREE.Vector3(satellite.x, satellite.y, satellite.z);
+      const direction = toCenter.clone().sub(fromCenter).normalize();
+      const from = fromCenter.clone().addScaledVector(direction, ownerRecord.subsystem.radius * 0.82);
+      const to = toCenter.clone().addScaledVector(direction, -satellite.radius * 0.9);
+      const connector = subsystemDependencyConnector(from, to, satellite.importCount);
+      connector.setColor(color);
+      externalContextRoot.add(connector.object, group);
+      externalSatelliteObjects.push({
+        body,
+        connector,
+        group,
+        label,
+        satellite
+      });
+    }
+  }
+
+  function showDependencyEvidence(subsystemId = "") {
+    clearDependencyEvidence();
+    if (!dependencyEvidenceRoot || !subsystemId) {
+      return;
+    }
+
+    const evidenceFileIds = new Set();
+    const addEvidence = (from, sourceFileIds, color) => {
+      for (const fileId of new Set(sourceFileIds || [])) {
+        const to = buildingTop(fileId);
+        if (!to) {
+          continue;
+        }
+        dependencyEvidenceRoot.add(dependencyEvidenceTether(from, to, color));
+        evidenceFileIds.add(fileId);
+      }
+    };
+    const renderedFileConnections = new Set();
+    const addFileConnections = (connections, color) => {
+      for (const connection of connections || []) {
+        const key = `${connection.fromFileId}\u0000${connection.toFileId}`;
+        if (renderedFileConnections.has(key)) {
+          continue;
+        }
+        const from = buildingTop(connection.fromFileId);
+        const to = buildingTop(connection.toFileId);
+        if (!from || !to) {
+          continue;
+        }
+        renderedFileConnections.add(key);
+        evidenceFileIds.add(connection.fromFileId);
+        evidenceFileIds.add(connection.toFileId);
+        dependencyEvidenceRoot.add(fileDependencyConnector(
+          from,
+          to,
+          color,
+          connection.importCount
+        ));
+      }
+    };
+
+    if (subsystemConnectionsVisible) {
+      for (const dependency of dependencyObjects) {
+        if (dependency.fromSubsystemId === subsystemId) {
+          addFileConnections(dependency.fileConnections, SUBSYSTEM_DEPENDENCY_COLORS.outgoing);
+          continue;
+        }
+        if (dependency.toSubsystemId !== subsystemId) {
+          continue;
+        }
+        addFileConnections(dependency.fileConnections, SUBSYSTEM_DEPENDENCY_COLORS.incoming);
+      }
+    }
+
+    if (subsystemLibrariesVisible) {
+      for (const record of externalSatelliteObjects) {
+        const { satellite } = record;
+        addEvidence(
+          new THREE.Vector3(satellite.x, satellite.y - satellite.radius, satellite.z),
+          satellite.sourceFileIds,
+          SUBSYSTEM_DEPENDENCY_COLORS.external
+        );
+      }
+    }
+    dependencyEvidenceFileIds = evidenceFileIds;
   }
 
   function applySelectionStyles() {
@@ -912,14 +1246,40 @@ function createSystemWorld({
       selectedFileId || selectedSubsystemId || selectedDirectoryPath != null || selectedCampusId != null
     );
     const relevantCampusIds = new Set();
+    const dependencySubsystemIds = new Set(selectedSubsystemId ? [selectedSubsystemId] : []);
     const relevantDirectoryPaths = new Set();
+    const selectedSubsystemDirectoryPaths = new Set();
     const relevantSubsystemIds = new Set();
 
-    function includeDirectoryAncestry(directoryPath = "") {
+    for (const dependency of dependencyObjects) {
+      const outgoing = dependency.fromSubsystemId === selectedSubsystemId;
+      const incoming = dependency.toSubsystemId === selectedSubsystemId;
+      const visible = subsystemRoot.visible && subsystemConnectionsVisible && Boolean(selectedSubsystemId) && (
+        outgoing || incoming
+      );
+      dependency.connector.object.visible = visible;
+      if (!visible) {
+        continue;
+      }
+      dependencySubsystemIds.add(dependency.fromSubsystemId);
+      dependencySubsystemIds.add(dependency.toSubsystemId);
+      dependency.connector.setColor(
+        outgoing ? SUBSYSTEM_DEPENDENCY_COLORS.outgoing : SUBSYSTEM_DEPENDENCY_COLORS.incoming
+      );
+    }
+    for (const satellite of externalSatelliteObjects) {
+      const visible = subsystemRoot.visible && subsystemLibrariesVisible && (
+        satellite.satellite.ownerSubsystemId === selectedSubsystemId
+      );
+      satellite.group.visible = visible;
+      satellite.connector.object.visible = visible;
+    }
+
+    function includeDirectoryAncestry(directoryPath = "", targetPaths = relevantDirectoryPaths) {
       let currentPath = String(directoryPath || "");
       while (currentPath) {
         if (directoryObjects.has(currentPath)) {
-          relevantDirectoryPaths.add(currentPath);
+          targetPaths.add(currentPath);
         }
         const separatorIndex = currentPath.lastIndexOf("/");
         if (separatorIndex < 0) {
@@ -938,14 +1298,15 @@ function createSystemWorld({
       const insideCampus = selectedCampusId == null || record.file.campusId === selectedCampusId;
       const baseColor = fileColor(record.file, viewMode);
       record.baseColor = baseColor;
+      const inSelectedSubsystem = Boolean(
+        selectedSubsystemId && (record.file.subsystemIds || []).includes(selectedSubsystemId)
+      );
       const inSelectedScope = (
         selectedDirectoryPath != null && insideDirectory
       ) || (
         selectedCampusId != null && insideCampus
-      ) || (
-        selectedSubsystemId && (record.file.subsystemIds || []).includes(selectedSubsystemId)
-      );
-      const relevant = selected || neighbor || inSelectedScope;
+      ) || inSelectedSubsystem;
+      const relevant = selected || neighbor || dependencyEvidenceFileIds.has(fileId) || inSelectedScope;
       const dimmed = contextActive && !relevant;
       if (relevant) {
         relevantCampusIds.add(record.file.campusId);
@@ -954,8 +1315,13 @@ function createSystemWorld({
           relevantSubsystemIds.add(subsystemId);
         }
       }
+      if (inSelectedSubsystem) {
+        includeDirectoryAncestry(record.file.directoryPath, selectedSubsystemDirectoryPaths);
+      }
       const buildingColor = new THREE.Color(selected ? SELECTED_FILE_COLOR : baseColor);
-      if (neighbor && !selected) {
+      if (inSelectedSubsystem && !selected) {
+        buildingColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.78);
+      } else if (neighbor && !selected) {
         buildingColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.48);
       } else if (inSelectedScope) {
         buildingColor.offsetHSL(0, 0.06, 0.12);
@@ -964,7 +1330,7 @@ function createSystemWorld({
       }
       const roofColor = dimmed
         ? new THREE.Color(DIMMED_ROOF_COLOR)
-        : buildingColor.clone().offsetHSL(0, -0.06, selected ? 0.2 : 0.12);
+        : buildingColor.clone().offsetHSL(0, -0.06, selected || inSelectedSubsystem ? 0.2 : 0.12);
       buildingInstances?.setColorAt(record.index, buildingColor);
       roofInstances?.setColorAt(record.index, roofColor);
     }
@@ -992,9 +1358,10 @@ function createSystemWorld({
 
     for (const [directoryPath, record] of directoryObjects) {
       const selected = selectedDirectoryPath === directoryPath;
+      const insideSelectedSubsystem = selectedSubsystemDirectoryPaths.has(directoryPath);
       const relevant = !contextActive || relevantDirectoryPaths.has(directoryPath);
       const terraceColor = new THREE.Color(relevant ? record.baseColor : DIMMED_TERRACE_COLOR);
-      if (selected) {
+      if (selected || insideSelectedSubsystem) {
         terraceColor.lerp(new THREE.Color(SELECTED_FILE_COLOR), 0.55);
       }
       directoryTerraceInstances?.setColorAt(record.index, terraceColor);
@@ -1006,7 +1373,7 @@ function createSystemWorld({
     for (const [subsystemId, record] of subsystemObjects) {
       const selected = selectedSubsystemId === subsystemId;
       const relevant = !contextActive || (
-        selectedSubsystemId ? selected : relevantSubsystemIds.has(subsystemId)
+        selectedSubsystemId ? dependencySubsystemIds.has(subsystemId) : relevantSubsystemIds.has(subsystemId)
       );
       record.island.material.color.setHex(
         selected
@@ -1015,7 +1382,7 @@ function createSystemWorld({
             ? record.baseColor
             : DIMMED_BUILDING_COLOR
       );
-      record.island.material.opacity = selected ? 0.98 : relevant ? 0.8 : 0.34;
+      record.island.material.opacity = selected ? 0.82 : relevant ? 0.68 : 0.25;
       record.ring.material.color.setHex(
         selected
           ? 0xd9fbff
@@ -1023,8 +1390,9 @@ function createSystemWorld({
             ? new THREE.Color(record.baseColor).offsetHSL(0, -0.04, 0.2).getHex()
             : DIMMED_EDGE_COLOR
       );
-      record.ring.material.opacity = selected ? 1 : relevant ? 0.9 : 0.28;
-      record.group.scale.setScalar(selected ? 1.12 : 1);
+      record.ring.material.opacity = selected ? 0.9 : relevant ? 0.76 : 0.22;
+      record.group.scale.setScalar(selected ? 1.04 : relevant && selectedSubsystemId ? 1.02 : 1);
+      record.label.fillOpacity = !contextActive ? 1 : selected ? 1 : relevant ? 0.88 : 0.22;
       for (const tether of record.tethers) {
         tether.visible = subsystemRoot.visible && selected;
       }
@@ -1037,6 +1405,9 @@ function createSystemWorld({
     selectedSubsystemId = "";
     selectedCampusId = null;
     selectedDirectoryPath = null;
+    showSubsystemOwnership("");
+    showExternalSatellites("");
+    showDependencyEvidence("");
     applySelectionStyles();
   }
 
@@ -1046,6 +1417,9 @@ function createSystemWorld({
     selectedDirectoryPath = directoryPath == null ? null : String(directoryPath);
     selectedFileId = "";
     clearContext();
+    showSubsystemOwnership("");
+    showExternalSatellites("");
+    showDependencyEvidence("");
     applySelectionStyles();
   }
 
@@ -1055,6 +1429,9 @@ function createSystemWorld({
     selectedDirectoryPath = null;
     selectedFileId = "";
     clearContext();
+    showSubsystemOwnership("");
+    showExternalSatellites("");
+    showDependencyEvidence("");
     applySelectionStyles();
   }
 
@@ -1064,6 +1441,17 @@ function createSystemWorld({
     selectedDirectoryPath = null;
     selectedFileId = "";
     clearContext();
+    showSubsystemOwnership(selectedSubsystemId);
+    showExternalSatellites(selectedSubsystemId);
+    showDependencyEvidence(selectedSubsystemId);
+    applySelectionStyles();
+  }
+
+  function setSubsystemLayers({ connections = false, libraries = false } = {}) {
+    subsystemConnectionsVisible = connections === true;
+    subsystemLibrariesVisible = libraries === true;
+    showExternalSatellites(selectedSubsystemId);
+    showDependencyEvidence(selectedSubsystemId);
     applySelectionStyles();
   }
 
@@ -1073,6 +1461,9 @@ function createSystemWorld({
     selectedFileId = "";
     selectedSubsystemId = "";
     clearContext();
+    showSubsystemOwnership("");
+    showExternalSatellites("");
+    showDependencyEvidence("");
     applySelectionStyles();
   }
 
@@ -1094,6 +1485,9 @@ function createSystemWorld({
     selectedCampusId = null;
     selectedDirectoryPath = null;
     neighborFileIds = new Set([selectedFileId]);
+    showSubsystemOwnership("");
+    showExternalSatellites("");
+    showDependencyEvidence("");
     for (const edge of constellation.edges || []) {
       const from = buildingTop(edge.fromFileId);
       const to = buildingTop(edge.toFileId);
@@ -1197,14 +1591,89 @@ function createSystemWorld({
     if (!record) {
       return false;
     }
-    const distance = Math.max(260, record.subsystem.radius * 4.8);
+    const neighborhood = new Map([[record.subsystem.id, record.subsystem]]);
+    if (subsystemConnectionsVisible) {
+      for (const dependency of dependencyObjects) {
+        if (dependency.fromSubsystemId === record.subsystem.id) {
+          const target = subsystemObjects.get(dependency.toSubsystemId)?.subsystem;
+          if (target) {
+            neighborhood.set(target.id, target);
+          }
+        } else if (dependency.toSubsystemId === record.subsystem.id) {
+          const source = subsystemObjects.get(dependency.fromSubsystemId)?.subsystem;
+          if (source) {
+            neighborhood.set(source.id, source);
+          }
+        }
+      }
+    }
+    const satellites = subsystemLibrariesVisible
+      ? (subsystemLayout?.externalSatellites || []).filter((satellite) => (
+        satellite.ownerSubsystemId === record.subsystem.id
+      ))
+      : [];
+    const points = [
+      ...neighborhood.values(),
+      ...satellites
+    ];
+    const minX = Math.min(...points.map((point) => point.x - point.radius));
+    const maxX = Math.max(...points.map((point) => point.x + point.radius));
+    const minZ = Math.min(...points.map((point) => point.z - point.radius));
+    const maxZ = Math.max(...points.map((point) => point.z + point.radius));
+    const minY = Math.min(...points.map((point) => point.y - point.radius));
+    const maxY = Math.max(...points.map((point) => point.y + point.radius));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const span = Math.max(540, maxX - minX, maxZ - minZ, (maxY - minY) * 2.4);
     controls.setLookAt(
-      record.subsystem.x + distance * 0.28,
-      record.subsystem.y + distance * 0.72,
-      record.subsystem.z + distance * 0.74,
-      record.subsystem.x,
-      record.subsystem.y,
-      record.subsystem.z,
+      centerX + span * 0.18,
+      maxY + span * 0.58,
+      centerZ + span * 0.76,
+      centerX,
+      centerY,
+      centerZ,
+      !reducedMotion
+    );
+    markDirty();
+    return true;
+  }
+
+  function focusSubsystemDependency(fromSubsystemId = "", toSubsystemId = "") {
+    const dependency = dependencyObjects.find((entry) => (
+      entry.fromSubsystemId === fromSubsystemId && entry.toSubsystemId === toSubsystemId
+    ));
+    const fileRecords = new Map();
+    for (const connection of dependency?.fileConnections || []) {
+      for (const fileId of [connection.fromFileId, connection.toFileId]) {
+        const record = fileObjects.get(fileId);
+        if (record) {
+          fileRecords.set(fileId, record);
+        }
+      }
+    }
+    if (fileRecords.size === 0) {
+      return false;
+    }
+    const records = [...fileRecords.values()];
+    const minX = Math.min(...records.map((record) => record.file.x - record.file.cityWidth / 2));
+    const maxX = Math.max(...records.map((record) => record.file.x + record.file.cityWidth / 2));
+    const minZ = Math.min(...records.map((record) => record.file.z - record.file.cityDepth / 2));
+    const maxZ = Math.max(...records.map((record) => record.file.z + record.file.cityDepth / 2));
+    const minY = Math.min(...records.map((record) => Number(record.file.elevation) || 0));
+    const maxY = Math.max(...records.map((record) => (
+      (Number(record.file.elevation) || 0) + record.height
+    )));
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const span = Math.max(220, maxX - minX, maxZ - minZ, (maxY - minY) * 1.6);
+    controls.setLookAt(
+      centerX + span * 0.22,
+      maxY + span * 0.78,
+      centerZ + span * 0.78,
+      centerX,
+      minY + (maxY - minY) * 0.38,
+      centerZ,
       !reducedMotion
     );
     markDirty();
@@ -1306,7 +1775,9 @@ function createSystemWorld({
     subsystemRoot.visible = viewMode === "subsystems";
     applySelectionStyles();
     if (viewMode === "subsystems") {
-      focusSubsystemLayer();
+      if (!focusSubsystem(selectedSubsystemId)) {
+        focusSubsystemLayer();
+      }
     } else if (previousMode === "subsystems" && !focusSubsystemGround(selectedSubsystemId)) {
       void fitWorld();
     }
@@ -1581,6 +2052,7 @@ function createSystemWorld({
     focusFile,
     focusPrecinct,
     focusSubsystem,
+    focusSubsystemDependency,
     focusSubsystemLayer,
     frame,
     markDirty,
@@ -1610,6 +2082,7 @@ function createSystemWorld({
       active = value === true;
       markDirty();
     },
+    setSubsystemLayers,
     setViewMode,
     setFileContext,
     setOverview,

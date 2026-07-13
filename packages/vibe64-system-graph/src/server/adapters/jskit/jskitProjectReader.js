@@ -211,6 +211,7 @@ async function readJskitPackage(appRoot, entry) {
   }
   return {
     packageId,
+    packageExports: packageJson.exports ?? {},
     version: String(descriptor.version || packageJson.version || "").trim(),
     descriptor: {
       ...ensureObject(descriptor),

@@ -561,16 +561,8 @@ function packageOwner(relativePath, packageRoots = []) {
   ))?.packageId || "";
 }
 
-function candidateModulePaths(fromPath, specifier) {
-  const normalizedSpecifier = String(specifier || "").trim().replace(/\\/gu, "/");
-  let base = "";
-  if (normalizedSpecifier.startsWith("@/")) {
-    base = normalizePosixPath(`src/${normalizedSpecifier.slice(2)}`);
-  } else if (/^\/(?:config|packages|scripts|server|src)\//u.test(normalizedSpecifier)) {
-    base = normalizePosixPath(normalizedSpecifier.slice(1));
-  } else if (normalizedSpecifier.startsWith(".")) {
-    base = normalizePosixPath(path.posix.normalize(path.posix.join(path.posix.dirname(fromPath), normalizedSpecifier)));
-  }
+function candidateCodePaths(basePath = "") {
+  const base = normalizePosixPath(basePath);
   if (!base) {
     return [];
   }
@@ -591,7 +583,97 @@ function candidateModulePaths(fromPath, specifier) {
   return [...candidates];
 }
 
-function resolveImportRecord({ file, record, filesByPath, localPackageIds }) {
+function candidateModulePaths(fromPath, specifier) {
+  const normalizedSpecifier = String(specifier || "").trim().replace(/\\/gu, "/");
+  if (normalizedSpecifier.startsWith("@/")) {
+    return candidateCodePaths(`src/${normalizedSpecifier.slice(2)}`);
+  }
+  if (/^\/(?:config|packages|scripts|server|src)\//u.test(normalizedSpecifier)) {
+    return candidateCodePaths(normalizedSpecifier.slice(1));
+  }
+  if (normalizedSpecifier.startsWith(".")) {
+    return candidateCodePaths(path.posix.normalize(
+      path.posix.join(path.posix.dirname(fromPath), normalizedSpecifier)
+    ));
+  }
+  return [];
+}
+
+function conditionalExportTargets(value) {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(conditionalExportTargets);
+  }
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  return Object.values(value).flatMap(conditionalExportTargets);
+}
+
+function packageExportTargets(packageEntry, specifier) {
+  const exportMap = packageEntry?.packageExports;
+  const packageId = String(packageEntry?.packageId || "");
+  if (!packageId || !specifier.startsWith(packageId)) {
+    return [];
+  }
+  const suffix = specifier.slice(packageId.length);
+  if (suffix && !suffix.startsWith("/")) {
+    return [];
+  }
+  const exportKey = suffix ? `.${suffix}` : ".";
+  if (typeof exportMap === "string" || Array.isArray(exportMap)) {
+    return exportKey === "." ? conditionalExportTargets(exportMap) : [];
+  }
+  if (!exportMap || typeof exportMap !== "object") {
+    return [];
+  }
+  if (Object.hasOwn(exportMap, exportKey)) {
+    return conditionalExportTargets(exportMap[exportKey]);
+  }
+  if (exportKey === "." && !Object.keys(exportMap).some((key) => key.startsWith("."))) {
+    return conditionalExportTargets(exportMap);
+  }
+  const wildcardMatches = Object.entries(exportMap)
+    .filter(([key]) => key.includes("*"))
+    .map(([key, value]) => {
+      const [prefix, suffixPattern = ""] = key.split("*");
+      return exportKey.startsWith(prefix) && exportKey.endsWith(suffixPattern)
+        ? {
+            key,
+            match: exportKey.slice(prefix.length, exportKey.length - suffixPattern.length),
+            value
+          }
+        : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.key.length - left.key.length);
+  const match = wildcardMatches[0];
+  return match
+    ? conditionalExportTargets(match.value).map((target) => target.replaceAll("*", match.match))
+    : [];
+}
+
+function resolvePackageTargetFile({ filesByPath, packageEntry, specifier }) {
+  for (const target of packageExportTargets(packageEntry, specifier)) {
+    if (!target.startsWith("./")) {
+      continue;
+    }
+    const targetBase = normalizePosixPath(path.posix.join(packageEntry.relativeDir, target.slice(2)));
+    if (targetBase !== packageEntry.relativeDir && !targetBase.startsWith(`${packageEntry.relativeDir}/`)) {
+      continue;
+    }
+    for (const candidate of candidateCodePaths(targetBase)) {
+      if (filesByPath.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return "";
+}
+
+function resolveImportRecord({ file, record, filesByPath, localPackages }) {
   const specifier = String(record.specifier || "");
   for (const candidate of candidateModulePaths(file.path, specifier)) {
     const target = filesByPath.get(candidate);
@@ -620,10 +702,14 @@ function resolveImportRecord({ file, record, filesByPath, localPackageIds }) {
 
   if (!specifier.startsWith(".") && !specifier.startsWith("@/") && !specifier.startsWith("/")) {
     const targetPackageId = packageIdFromSpecifier(specifier);
+    const packageEntry = localPackages.get(targetPackageId);
+    const targetFile = packageEntry
+      ? resolvePackageTargetFile({ filesByPath, packageEntry, specifier })
+      : "";
     return {
       ...record,
-      classification: localPackageIds.has(targetPackageId) ? "package-specifier" : "external-package",
-      targetFile: "",
+      classification: packageEntry ? targetFile ? "cross-package" : "package-specifier" : "external-package",
+      targetFile,
       targetPackageId
     };
   }
@@ -785,13 +871,13 @@ async function inspectSystemSource({ targetRoot, packageRoots = [] }) {
   };
 }
 
-function resolveImports(files, localPackageIds) {
+function resolveImports(files, localPackages) {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   for (const file of files) {
     file.imports = file.rawImports.map((record) => resolveImportRecord({
       file,
       filesByPath,
-      localPackageIds,
+      localPackages,
       record
     }));
     delete file.rawImports;
@@ -898,13 +984,17 @@ async function extractJskitFacts({ targetRoot, scopes = [] }) {
   const packages = packageRecords(packageRegistry);
   const packageRoots = stableSort(packages.map((entry) => ({
     packageId: entry.packageId,
+    packageExports: packageRegistry.get(entry.packageId)?.packageExports ?? {},
     relativeDir: entry.relativeDir
   })), (entry) => `${String(entry.relativeDir.length).padStart(8, "0")}:${entry.relativeDir}`).reverse();
   const source = await inspectSystemSource({
     packageRoots,
     targetRoot
   });
-  const filesByPath = resolveImports(source.files, new Set(packages.map((entry) => entry.packageId)));
+  const filesByPath = resolveImports(
+    source.files,
+    new Map(packageRoots.map((entry) => [entry.packageId, entry]))
+  );
   applyExecutionSides({
     diagnostics: source.diagnostics,
     filesByPath,

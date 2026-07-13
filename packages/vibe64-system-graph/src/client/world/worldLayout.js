@@ -387,9 +387,51 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
     placed.push(record);
     return record;
   });
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  const dependencyEdges = [];
+  const externalSatellites = [];
+  for (const record of records) {
+    for (const dependency of record.dependencies?.outgoing || []) {
+      if (!recordsById.has(dependency.subsystemId)) {
+        continue;
+      }
+      dependencyEdges.push({
+        ...dependency,
+        fromSubsystemId: record.id,
+        id: `${record.id}->${dependency.subsystemId}`,
+        toSubsystemId: dependency.subsystemId
+      });
+    }
+    const externalDependencies = stableSort(
+      record.dependencies?.external || [],
+      (dependency) => `${dependency.kind}:${dependency.packageId}`
+    );
+    externalDependencies.forEach((dependency, index) => {
+      const ring = Math.floor(index / 8);
+      const ringOffset = ring * 8;
+      const ringSize = Math.min(8, externalDependencies.length - ringOffset);
+      const positionInRing = index - ringOffset;
+      const angle = (
+        (stableHash(record.id) % 360) * (Math.PI / 180) +
+        positionInRing * ((Math.PI * 2) / ringSize)
+      );
+      const distance = record.radius + 125 + ring * 85;
+      externalSatellites.push({
+        ...dependency,
+        id: `external:${record.id}:${dependency.kind}:${dependency.packageId}`,
+        ownerSubsystemId: record.id,
+        radius: Math.max(14, Math.min(24, 13 + Math.log2(Math.max(1, dependency.importCount) + 1) * 2.4)),
+        x: record.x + Math.cos(angle) * distance,
+        y: record.y + 96 + ring * 36,
+        z: record.z + Math.sin(angle) * distance
+      });
+    });
+  }
 
   return {
+    dependencyEdges,
     elevation: SUBSYSTEM_SKY_ELEVATION,
+    externalSatellites,
     subsystems: records
   };
 }

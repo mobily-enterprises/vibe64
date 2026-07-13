@@ -141,6 +141,25 @@ describe("File City layout", () => {
         lines: 200,
         fileCount: 2,
         capabilities: [{ id: "web-page:/" }],
+        dependencies: {
+          external: [{
+            fileCount: 2,
+            importCount: 3,
+            kind: "package",
+            packageId: "vue",
+            sourceFileIds: ["file:src/pages/index.vue"],
+            title: "vue"
+          }],
+          incoming: [],
+          outgoing: [{
+            declared: true,
+            fileCount: 1,
+            importCount: 2,
+            sourceFileIds: ["file:src/pages/index.vue"],
+            subsystemId: "subsystem:terminal",
+            title: "Terminal"
+          }]
+        },
         anchors: [{ kind: "directory", path: "src/pages", relation: "owns" }]
       },
       {
@@ -160,6 +179,22 @@ describe("File City layout", () => {
     expect(first.subsystems.every((subsystem) => subsystem.y === SUBSYSTEM_SKY_ELEVATION)).toBe(true);
     expect(first.subsystems.find((subsystem) => subsystem.id === "subsystem:web-site").targets).toEqual([
       expect.objectContaining({ kind: "directory", path: "src/pages", relation: "owns" })
+    ]);
+    expect(first.dependencyEdges).toEqual([
+      expect.objectContaining({
+        fromSubsystemId: "subsystem:web-site",
+        importCount: 2,
+        sourceFileIds: ["file:src/pages/index.vue"],
+        toSubsystemId: "subsystem:terminal"
+      })
+    ]);
+    expect(first.externalSatellites).toEqual([
+      expect.objectContaining({
+        kind: "package",
+        ownerSubsystemId: "subsystem:web-site",
+        packageId: "vue",
+        sourceFileIds: ["file:src/pages/index.vue"]
+      })
     ]);
     const [left, right] = first.subsystems;
     expect(Math.hypot(left.x - right.x, left.z - right.z)).toBeGreaterThanOrEqual(

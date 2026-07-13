@@ -96,6 +96,32 @@
         tabindex="0"
       />
 
+      <div
+        v-if="viewMode === 'subsystems'"
+        class="system-world__layer-controls"
+        aria-label="Optional subsystem context"
+      >
+        <span>Show</span>
+        <button
+          :aria-pressed="showSubsystemConnections"
+          :class="{ 'system-world__layer-control--active': showSubsystemConnections }"
+          title="Show subsystem dependency arrows and their importing files"
+          type="button"
+          @click="toggleSubsystemLayer('connections')"
+        >
+          Connections
+        </button>
+        <button
+          :aria-pressed="showSubsystemLibraries"
+          :class="{ 'system-world__layer-control--active': showSubsystemLibraries }"
+          title="Show imported npm packages and their importing files"
+          type="button"
+          @click="toggleSubsystemLayer('libraries')"
+        >
+          Libraries
+        </button>
+      </div>
+
       <div v-if="loading && !overview" class="system-world__state-card" role="status">
         <span class="system-world__state-orbit" aria-hidden="true" />
         <strong>Building the current file city…</strong>
@@ -183,7 +209,7 @@
           <v-icon :icon="mdiLayersTripleOutline" size="13" />
           <span>
             <strong>{{ subsystem.title }}</strong>
-            <small>{{ formatCount(subsystem.fileCount, 'file') }} · {{ formatCount(subsystem.capabilities.length, 'capability', 'capabilities') }}</small>
+            <small>{{ formatCount(subsystem.fileCount, 'file') }} · {{ dependencySummary(subsystem.dependencies) }}</small>
           </span>
         </button>
       </nav>
@@ -220,6 +246,48 @@
             <span><strong>{{ formatLines(selectedSubsystem.lines) }}</strong> lines</span>
             <span><strong>{{ selectedSubsystem.anchors.length }}</strong> anchors</span>
             <span><strong>{{ selectedSubsystem.capabilities.length }}</strong> capabilities</span>
+            <span><strong>{{ selectedSubsystemDependencies.outgoing.length }}</strong> uses</span>
+            <span><strong>{{ selectedSubsystemDependencies.incoming.length }}</strong> used by</span>
+            <span><strong>{{ selectedSubsystemDependencies.external.length }}</strong> external</span>
+          </div>
+          <div v-if="selectedSubsystemDependencies.outgoing.length" class="system-world__section">
+            <strong>Uses other subsystems</strong>
+            <div class="system-world__relationships">
+              <button
+                v-for="dependency in selectedSubsystemDependencies.outgoing"
+                :key="dependency.subsystemId"
+                title="Focus the concrete file imports for this relationship"
+                type="button"
+                @click="focusSubsystemDependency(dependency, 'outgoing')"
+              >
+                <span>uses →</span>
+                <strong>{{ dependency.title }} · {{ dependencyEvidenceLabel(dependency) }}</strong>
+              </button>
+            </div>
+          </div>
+          <div v-if="selectedSubsystemDependencies.incoming.length" class="system-world__section">
+            <strong>Used by other subsystems</strong>
+            <div class="system-world__relationships">
+              <button
+                v-for="dependency in selectedSubsystemDependencies.incoming"
+                :key="dependency.subsystemId"
+                title="Focus the concrete file imports for this relationship"
+                type="button"
+                @click="focusSubsystemDependency(dependency, 'incoming')"
+              >
+                <span>← used by</span>
+                <strong>{{ dependency.title }} · {{ dependencyEvidenceLabel(dependency) }}</strong>
+              </button>
+            </div>
+          </div>
+          <div v-if="selectedSubsystemDependencies.external.length" class="system-world__section">
+            <strong>External packages</strong>
+            <ul>
+              <li v-for="dependency in selectedSubsystemDependencies.external" :key="`${dependency.kind}:${dependency.packageId}`">
+                <strong>{{ dependency.title }}</strong>
+                <span>npm package · {{ dependencyEvidenceLabel(dependency) }}</span>
+              </li>
+            </ul>
           </div>
           <div v-if="selectedSubsystem.anchors.length" class="system-world__section">
             <strong>Code below this cloud</strong>
@@ -382,7 +450,7 @@
         <template v-if="viewMode === 'subsystems'">
           <div class="system-world__eyebrow">SEMANTIC SKY</div>
           <strong>The clouds explain why the city exists.</strong>
-          <span>Each cloud is a subsystem. Its anchors connect meaning to the real files and directories below; select one to expose those connections.</span>
+          <span>Selecting a cloud always illuminates the files and directory terraces it owns. Connections and Libraries are optional context layers.</span>
           <span>JSKIT supplies facts it can prove mechanically. Codex can propose the purpose and boundaries that require interpretation, and those proposals remain visible as inferred metadata.</span>
           <v-btn
             :disabled="!askChatAvailable"
@@ -410,10 +478,21 @@
       </div>
 
       <div v-if="overview" class="system-world__legend" aria-label="File city visual legend">
-        <span><i class="system-world__legend-campus" /> Land parcel = campus</span>
-        <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
-        <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
-        <span>{{ viewLegend }}</span>
+        <template v-if="viewMode === 'subsystems'">
+          <span><i class="system-world__legend-cloud" /> Cloud = subsystem</span>
+          <span><i class="system-world__legend-owned" /> Cyan = owned code</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-outgoing" /> Amber arrow = uses</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-incoming" /> Green arrow = used by</span>
+          <span v-if="showSubsystemLibraries"><i class="system-world__legend-external" /> Satellite = npm package</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-evidence" /> Thin arrows = file imports</span>
+          <span v-if="showSubsystemLibraries"><i class="system-world__legend-library-evidence" /> Purple drops = library imports</span>
+        </template>
+        <template v-else>
+          <span><i class="system-world__legend-campus" /> Land parcel = campus</span>
+          <span><i class="system-world__legend-depth" /> Higher terrace = deeper folder</span>
+          <span><i class="system-world__legend-building" /> Footprint + height = LOC</span>
+          <span>{{ viewLegend }}</span>
+        </template>
       </div>
     </div>
   </section>
@@ -461,7 +540,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "029";
+const rendererRevision = "034";
 
 const props = defineProps({
   active: {
@@ -495,6 +574,8 @@ const activeFileId = ref("");
 const canvasElement = ref(null);
 const selectedDirectory = ref(null);
 const selectedSubsystemId = ref("");
+const showSubsystemConnections = ref(false);
+const showSubsystemLibraries = ref(false);
 const viewMode = ref("folders");
 const worldError = ref("");
 const worldView = ref("perspective");
@@ -525,6 +606,9 @@ const campuses = computed(() => overview.value ? topLevelPrecincts(overview.valu
 const subsystems = computed(() => overview.value?.subsystems || []);
 const selectedSubsystem = computed(() => (
   subsystems.value.find((subsystem) => subsystem.id === selectedSubsystemId.value) || null
+));
+const selectedSubsystemDependencies = computed(() => (
+  selectedSubsystem.value?.dependencies || { external: [], incoming: [], outgoing: [] }
 ));
 const selectedFile = computed(() => (
   activeFileId.value && fileConstellation.value?.selectedFile?.id === activeFileId.value
@@ -627,6 +711,22 @@ function formatCount(value = 0, singular = "item", plural = `${singular}s`) {
   return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
 }
 
+function dependencySummary(dependencies = {}) {
+  const outgoing = dependencies?.outgoing?.length || 0;
+  const incoming = dependencies?.incoming?.length || 0;
+  const external = dependencies?.external?.length || 0;
+  return `uses ${outgoing} · used by ${incoming} · external ${external}`;
+}
+
+function dependencyEvidenceLabel(dependency = {}) {
+  const imports = Math.max(0, Number(dependency.importCount) || 0);
+  const files = Math.max(0, Number(dependency.fileCount) || 0);
+  if (imports > 0) {
+    return `${formatCount(imports, "import")} from ${formatCount(files, "file")}`;
+  }
+  return dependency.declared ? "declared dependency" : "dependency";
+}
+
 function renderFrame(time) {
   animationFrame = 0;
   world?.frame(time);
@@ -714,6 +814,10 @@ async function createWorld() {
     startRenderLoop();
     if (overview.value) {
       await world.setOverview(overview.value);
+      world.setSubsystemLayers({
+        connections: showSubsystemConnections.value,
+        libraries: showSubsystemLibraries.value
+      });
       world.setViewMode(viewMode.value);
     }
     if (props.restoreRequest) {
@@ -735,6 +839,10 @@ async function applyOverview(nextOverview) {
     if (generation !== overviewGeneration) {
       return;
     }
+    world.setSubsystemLayers({
+      connections: showSubsystemConnections.value,
+      libraries: showSubsystemLibraries.value
+    });
     world.setViewMode(viewMode.value);
     if (fileConstellation.value && activeFileId.value) {
       world.setFileContext(fileConstellation.value);
@@ -774,6 +882,22 @@ function inspectSubsystem(subsystem, { focus = false } = {}) {
   if (focus) {
     world?.focusSubsystem(subsystem.id);
   }
+}
+
+function focusSubsystemDependency(dependency, direction) {
+  if (!selectedSubsystem.value || !dependency?.subsystemId) {
+    return;
+  }
+  showSubsystemConnections.value = true;
+  world?.setSubsystemLayers({
+    connections: true,
+    libraries: showSubsystemLibraries.value
+  });
+  const outgoing = direction === "outgoing";
+  world?.focusSubsystemDependency(
+    outgoing ? selectedSubsystem.value.id : dependency.subsystemId,
+    outgoing ? dependency.subsystemId : selectedSubsystem.value.id
+  );
 }
 
 function inspectFile(file, { focus = false } = {}) {
@@ -844,6 +968,18 @@ function setViewMode(mode) {
   world?.setViewMode(mode);
 }
 
+function toggleSubsystemLayer(layer) {
+  if (layer === "connections") {
+    showSubsystemConnections.value = !showSubsystemConnections.value;
+  } else if (layer === "libraries") {
+    showSubsystemLibraries.value = !showSubsystemLibraries.value;
+  }
+  world?.setSubsystemLayers({
+    connections: showSubsystemConnections.value,
+    libraries: showSubsystemLibraries.value
+  });
+}
+
 function updateSystem() {
   void startUpdate();
 }
@@ -856,6 +992,8 @@ function sourceNavigationContext() {
     selectedDirectoryPath: selectedDirectory.value?.kind === "campus" ? null : selectedDirectory.value?.path ?? null,
     selectedFileKey: selectedFile.value?.key || "",
     selectedSubsystemId: selectedSubsystem.value?.id || "",
+    subsystemConnectionsVisible: showSubsystemConnections.value,
+    subsystemLibrariesVisible: showSubsystemLibraries.value,
     viewMode: viewMode.value,
     view: worldView.value
   };
@@ -883,6 +1021,9 @@ function selectionPrompt() {
       `- Current size: ${selectedSubsystem.value.fileCount} files, ${selectedSubsystem.value.lines} lines`,
       `- Anchors: ${selectedSubsystem.value.anchors.map((anchor) => `${anchor.relation} ${anchor.kind} ${anchor.path}`).join("; ")}`,
       `- Capabilities: ${selectedSubsystem.value.capabilities.map((capability) => `${capability.direction} ${capability.kind} ${capability.value || capability.title}`).join("; ") || "none recorded"}`,
+      `- Uses subsystems: ${selectedSubsystemDependencies.value.outgoing.map((dependency) => dependency.title).join(", ") || "none"}`,
+      `- Used by subsystems: ${selectedSubsystemDependencies.value.incoming.map((dependency) => dependency.title).join(", ") || "none"}`,
+      `- External npm packages: ${selectedSubsystemDependencies.value.external.map((dependency) => dependency.title).join(", ") || "none"}`,
       "",
       "Please explain this subsystem in plain language and assess whether its boundary, name, purpose, and capabilities match the source evidence. Do not change source code. If metadata should change, propose the exact checked-in vibe64.system.json declaration first."
     ].join("\n");
@@ -948,6 +1089,12 @@ async function applyRestoreRequest(request) {
   if (request.viewMode || request.colorMode) {
     setViewMode(request.viewMode || request.colorMode);
   }
+  showSubsystemConnections.value = request.subsystemConnectionsVisible === true;
+  showSubsystemLibraries.value = request.subsystemLibrariesVisible === true;
+  world.setSubsystemLayers({
+    connections: showSubsystemConnections.value,
+    libraries: showSubsystemLibraries.value
+  });
   if (request.selectedFileKey) {
     const response = await selectFile(request.selectedFileKey);
     const constellation = response?.constellation || fileConstellation.value;
@@ -1087,6 +1234,12 @@ onBeforeUnmount(() => {
 
 .system-world__view-actions { gap: 0.1rem; justify-content: flex-end; }
 .system-world__stage { isolation: isolate; min-height: 0; overflow: hidden; position: relative; }
+.system-world__layer-controls { align-items: center; backdrop-filter: blur(14px); background: rgba(7, 13, 27, 0.9); border: 1px solid rgba(132, 164, 219, 0.2); border-radius: 0.55rem; display: flex; gap: 0.2rem; left: 50%; padding: 0.18rem; position: absolute; top: 0.65rem; transform: translateX(-50%); z-index: 10; }
+.system-world__layer-controls > span { color: rgba(218, 232, 255, 0.44); font-size: 0.48rem; padding: 0 0.28rem; text-transform: uppercase; }
+.system-world__layer-controls > button { background: rgba(123, 148, 191, 0.08); border: 1px solid transparent; border-radius: 0.38rem; color: rgba(218, 232, 255, 0.66); cursor: pointer; font: inherit; font-size: 0.52rem; padding: 0.3rem 0.48rem; }
+.system-world__layer-controls > button:hover,
+.system-world__layer-controls > button:focus-visible { background: rgba(93, 188, 238, 0.14); color: #fff; }
+.system-world__layer-controls > button.system-world__layer-control--active { background: rgba(83, 205, 241, 0.2); border-color: rgba(103, 223, 255, 0.42); color: #fff; }
 
 .system-world__canvas {
   background:
@@ -1326,6 +1479,13 @@ onBeforeUnmount(() => {
 .system-world__legend-campus { background: #183856; border: 1px solid #75dfff; }
 .system-world__legend-depth { background: linear-gradient(135deg, #28455e 50%, #62bde8 50%); border-bottom: 2px solid #91e3ff; }
 .system-world__legend-building { background: #6b8be8; }
+.system-world__legend-cloud { background: #55cde5; border: 1px solid #d9fbff; border-radius: 50%; }
+.system-world__legend-owned { background: #75f3ff; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-outgoing { background: #ffc86b; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-incoming { background: #70e8ad; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-external { background: #c69cff; transform: rotate(45deg) scale(0.72); }
+.system-world__legend-evidence { background: linear-gradient(90deg, #ffc86b 0 50%, #70e8ad 50%); height: 0.08rem !important; width: 0.8rem !important; }
+.system-world__legend-library-evidence { background: #c69cff; height: 0.08rem !important; width: 0.8rem !important; }
 
 @media (max-width: 1120px) {
   .system-world__toolbar { grid-template-columns: 1fr auto; }

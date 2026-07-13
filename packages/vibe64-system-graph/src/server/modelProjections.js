@@ -104,6 +104,154 @@ function subsystemAssignments(files = [], definitions = []) {
   return { assignments, metrics };
 }
 
+function subsystemDependencyGraph(model = {}, definitions = [], assignments = new Map()) {
+  const definitionsById = new Map(definitions.map((definition) => [definition.id, definition]));
+  const packageSubsystems = new Map();
+  for (const definition of definitions) {
+    if (!definition.packageId) {
+      continue;
+    }
+    const existing = packageSubsystems.get(definition.packageId);
+    if (!existing || (definition.origin === "derived" && existing.origin !== "derived")) {
+      packageSubsystems.set(definition.packageId, definition);
+    }
+  }
+  const filesByPath = new Map((model.files || []).map((file) => [file.path, file]));
+  const edges = new Map();
+  const externalDependencies = new Map();
+
+  function edgeRecord(fromSubsystemId, toSubsystemId) {
+    const key = `${fromSubsystemId}\u0000${toSubsystemId}`;
+    if (!edges.has(key)) {
+      edges.set(key, {
+        classifications: new Set(),
+        declared: false,
+        fileConnections: new Map(),
+        fromSubsystemId,
+        importCount: 0,
+        sourceFileIds: new Set(),
+        toSubsystemId
+      });
+    }
+    return edges.get(key);
+  }
+
+  function externalRecord(subsystemId, packageId, kind = "package") {
+    const key = `${subsystemId}\u0000${packageId}`;
+    if (!externalDependencies.has(key)) {
+      externalDependencies.set(key, {
+        importCount: 0,
+        kind,
+        packageId,
+        sourceFileIds: new Set(),
+        subsystemId
+      });
+    }
+    return externalDependencies.get(key);
+  }
+
+  for (const file of model.files || []) {
+    const fromSubsystemId = assignments.get(file.id)?.primarySubsystem?.id || "";
+    if (!fromSubsystemId) {
+      continue;
+    }
+    for (const importRecord of file.imports || []) {
+      const targetFile = importRecord.targetFile ? filesByPath.get(importRecord.targetFile) : null;
+      const toSubsystemId = (
+        targetFile ? assignments.get(targetFile.id)?.primarySubsystem?.id : ""
+      ) || packageSubsystems.get(importRecord.targetPackageId)?.id || "";
+      if (toSubsystemId && toSubsystemId !== fromSubsystemId) {
+        const edge = edgeRecord(fromSubsystemId, toSubsystemId);
+        edge.importCount += 1;
+        edge.sourceFileIds.add(file.id);
+        edge.classifications.add(importRecord.classification);
+        if (targetFile) {
+          const connectionKey = `${file.id}\u0000${targetFile.id}`;
+          const connection = edge.fileConnections.get(connectionKey) || {
+            fromFileId: file.id,
+            importCount: 0,
+            toFileId: targetFile.id
+          };
+          connection.importCount += 1;
+          edge.fileConnections.set(connectionKey, connection);
+        }
+        continue;
+      }
+      if (importRecord.classification !== "external-package" || !importRecord.targetPackageId) {
+        continue;
+      }
+      if (importRecord.targetPackageId.startsWith("node:")) {
+        continue;
+      }
+      const external = externalRecord(fromSubsystemId, importRecord.targetPackageId);
+      external.importCount += 1;
+      external.sourceFileIds.add(file.id);
+    }
+  }
+
+  for (const relationship of model.relationships || []) {
+    if (relationship.kind !== "depends_on" || !definitionsById.has(relationship.from)) {
+      continue;
+    }
+    if (definitionsById.has(relationship.to) && relationship.to !== relationship.from) {
+      edgeRecord(relationship.from, relationship.to).declared = true;
+      continue;
+    }
+  }
+
+  const dependenciesBySubsystem = new Map(definitions.map((definition) => [definition.id, {
+    external: [],
+    incoming: [],
+    outgoing: []
+  }]));
+  for (const edge of edges.values()) {
+    const from = definitionsById.get(edge.fromSubsystemId);
+    const to = definitionsById.get(edge.toSubsystemId);
+    if (!from || !to) {
+      continue;
+    }
+    const summary = {
+      classifications: [...edge.classifications].sort(),
+      declared: edge.declared,
+      fileCount: edge.sourceFileIds.size,
+      fileConnections: stableSort(edge.fileConnections.values(), (connection) => (
+        `${connection.fromFileId}:${connection.toFileId}`
+      )),
+      importCount: edge.importCount,
+      sourceFileIds: [...edge.sourceFileIds].sort()
+    };
+    dependenciesBySubsystem.get(from.id).outgoing.push({
+      ...summary,
+      subsystemId: to.id,
+      title: to.title
+    });
+    dependenciesBySubsystem.get(to.id).incoming.push({
+      ...summary,
+      subsystemId: from.id,
+      title: from.title
+    });
+  }
+  for (const external of externalDependencies.values()) {
+    if (!dependenciesBySubsystem.has(external.subsystemId)) {
+      continue;
+    }
+    dependenciesBySubsystem.get(external.subsystemId).external.push({
+      fileCount: external.sourceFileIds.size,
+      importCount: external.importCount,
+      kind: external.kind,
+      packageId: external.packageId,
+      sourceFileIds: [...external.sourceFileIds].sort(),
+      title: external.packageId
+    });
+  }
+  for (const dependencies of dependenciesBySubsystem.values()) {
+    dependencies.outgoing = stableSort(dependencies.outgoing, (dependency) => dependency.title);
+    dependencies.incoming = stableSort(dependencies.incoming, (dependency) => dependency.title);
+    dependencies.external = stableSort(dependencies.external, (dependency) => `${dependency.kind}:${dependency.title}`);
+  }
+  return dependenciesBySubsystem;
+}
+
 function entityProjection(entity = {}) {
   return {
     ...entity,
@@ -173,6 +321,7 @@ function fileCityProjection(file = {}, {
 function systemOverview(model = {}) {
   const definitions = subsystemDefinitions(model);
   const { assignments, metrics } = subsystemAssignments(model.files || [], definitions);
+  const dependenciesBySubsystem = subsystemDependencyGraph(model, definitions, assignments);
   const entitiesById = new Map((model.entities || []).map((entity) => [entity.id, entity]));
   const importedByPath = new Map();
   for (const file of model.files || []) {
@@ -224,6 +373,7 @@ function systemOverview(model = {}) {
       const metric = metrics.get(definition.id) || { files: 0, lines: 0, matchedAnchors: new Set() };
       return {
         ...definition,
+        dependencies: dependenciesBySubsystem.get(definition.id),
         fileCount: metric.files,
         lines: metric.lines,
         unmatchedAnchorCount: Math.max(0, definition.anchors.length - metric.matchedAnchors.size)

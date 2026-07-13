@@ -21,6 +21,7 @@ async function writeJson(filePath, value) {
 async function writeLocalPackage(appRoot, {
   dependsOn = [],
   name,
+  packageExports = null,
   runtime,
   sourceFiles = {}
 }) {
@@ -28,6 +29,7 @@ async function writeLocalPackage(appRoot, {
   const packageId = `@local/${name}`;
   await mkdir(packageRoot, { recursive: true });
   await writeJson(path.join(packageRoot, "package.json"), {
+    ...(packageExports ? { exports: packageExports } : {}),
     name: packageId,
     version: "0.1.0",
     type: "module"
@@ -100,6 +102,7 @@ async function createFixtureProject() {
         ""
       ].join("\n"),
       "src/server/AlphaProvider.js": [
+        "import { BetaProvider } from '@local/beta/server/BetaProvider';",
         "import { sharedValue } from '../shared/common.js';",
         "export class AlphaProvider {",
         "  register(app) { app.get('/api/alpha/:id', async () => sharedValue); }",
@@ -111,6 +114,9 @@ async function createFixtureProject() {
   });
   await writeLocalPackage(root, {
     name: "beta",
+    packageExports: {
+      "./server/*": "./src/server/*.js"
+    },
     runtime: {
       server: {
         providers: [{
@@ -155,6 +161,19 @@ test("Vibe64-owned JSKIT adapter extracts deterministic facts without executing 
       [["GET", "/api/alpha/:id"]]
     );
     assert.equal(first.relationships[0].kind, "depends_on");
+    assert.deepEqual(
+      first.files
+        .find((file) => file.path.endsWith("AlphaProvider.js"))
+        .imports.find((entry) => entry.specifier === "@local/beta/server/BetaProvider"),
+      {
+        classification: "cross-package",
+        kind: "import",
+        line: 1,
+        specifier: "@local/beta/server/BetaProvider",
+        targetFile: "packages/beta/src/server/BetaProvider.js",
+        targetPackageId: "@local/beta"
+      }
+    );
     assert.equal(first.files.find((file) => file.path === "src/unowned.js").executionSide, "unknown");
 
     const scoped = await extractJskitFacts({

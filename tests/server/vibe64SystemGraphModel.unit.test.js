@@ -359,6 +359,78 @@ test("a more specific inferred subsystem owns nested code without erasing adapte
   assert.ok(packageSubsystem.metadata.capabilities.some((capability) => capability.kind === "api-operation"));
 });
 
+test("subsystem projections aggregate declared, imported, and external dependencies", () => {
+  const extraction = extractionFixture();
+  extraction.files[0].imports.push({
+    classification: "cross-package",
+    kind: "import",
+    line: 3,
+    specifier: "@local/terminal/server",
+    targetFile: "packages/terminal/src/server/TerminalProvider.js",
+    targetPackageId: "@local/terminal"
+  });
+  extraction.files.at(-1).imports.push(
+    {
+      classification: "external-package",
+      kind: "import",
+      line: 1,
+      specifier: "node:crypto",
+      targetFile: "",
+      targetPackageId: "node:crypto"
+    },
+    {
+      classification: "external-package",
+      kind: "import",
+      line: 2,
+      specifier: "ws",
+      targetFile: "",
+      targetPackageId: "ws"
+    }
+  );
+  const overview = systemOverview(compileJskitSystemModel(extraction));
+  const client = overview.subsystems.find((subsystem) => subsystem.packageId === "@local/client-shell");
+  const terminal = overview.subsystems.find((subsystem) => subsystem.packageId === "@local/terminal");
+
+  assert.deepEqual(client.dependencies.outgoing, [{
+    classifications: ["cross-package"],
+    declared: true,
+    fileCount: 1,
+    fileConnections: [{
+      fromFileId: "file:packages/client-shell/src/client/ClientProvider.js",
+      importCount: 1,
+      toFileId: "file:packages/terminal/src/server/TerminalProvider.js"
+    }],
+    importCount: 1,
+    sourceFileIds: ["file:packages/client-shell/src/client/ClientProvider.js"],
+    subsystemId: terminal.id,
+    title: terminal.title
+  }]);
+  assert.deepEqual(terminal.dependencies.incoming, [{
+    classifications: ["cross-package"],
+    declared: true,
+    fileCount: 1,
+    fileConnections: [{
+      fromFileId: "file:packages/client-shell/src/client/ClientProvider.js",
+      importCount: 1,
+      toFileId: "file:packages/terminal/src/server/TerminalProvider.js"
+    }],
+    importCount: 1,
+    sourceFileIds: ["file:packages/client-shell/src/client/ClientProvider.js"],
+    subsystemId: client.id,
+    title: client.title
+  }]);
+  assert.deepEqual(terminal.dependencies.external, [
+    {
+      fileCount: 1,
+      importCount: 1,
+      kind: "package",
+      packageId: "ws",
+      sourceFileIds: ["file:packages/terminal/src/server/TerminalProvider.js"],
+      title: "ws"
+    }
+  ]);
+});
+
 test("two subsystems cannot claim the same physical ownership anchor", () => {
   assert.throws(() => compileJskitSystemModel(extractionFixture(), {
     declarations: [{

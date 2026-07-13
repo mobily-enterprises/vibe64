@@ -247,6 +247,24 @@ test("System renders the current repository as a LOC-scaled file city", async ({
           relation: "owns"
         }],
         capabilities: [],
+        dependencies: {
+          external: [],
+          incoming: [],
+          outgoing: [{
+            classifications: ["package-specifier"],
+            declared: true,
+            fileCount: 1,
+            fileConnections: [{
+              fromFileId: "file:app",
+              importCount: 1,
+              toFileId: selectedFile.id
+            }],
+            importCount: 1,
+            sourceFileIds: ["file:app"],
+            subsystemId: serverSubsystem.id,
+            title: serverSubsystem.title
+          }]
+        },
         description: clientSubsystem.description,
         executionSide: "client",
         fileCount: 1,
@@ -282,6 +300,31 @@ test("System renders the current repository as a LOC-scaled file city", async ({
           value: "POST /sessions/:sessionId/terminal"
         }],
         description: serverSubsystem.description,
+        dependencies: {
+          external: [{
+            fileCount: 1,
+            importCount: 1,
+            kind: "package",
+            packageId: "ws",
+            sourceFileIds: [selectedFile.id],
+            title: "ws"
+          }],
+          incoming: [{
+            classifications: ["package-specifier"],
+            declared: true,
+            fileCount: 1,
+            fileConnections: [{
+              fromFileId: "file:app",
+              importCount: 1,
+              toFileId: selectedFile.id
+            }],
+            importCount: 1,
+            sourceFileIds: ["file:app"],
+            subsystemId: clientSubsystem.id,
+            title: clientSubsystem.title
+          }],
+          outgoing: []
+        },
         executionSide: "server",
         fileCount: 2,
         id: serverSubsystem.id,
@@ -402,7 +445,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByRole("button", { name: "New session" })).toBeVisible({ timeout: 15_000 });
   await page.goto(`${DASHBOARD_PATH}/system`);
 
-  await expect(page.getByText(/File City · 029/u)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/File City · 034/u)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Folders" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subsystems" })).toBeVisible();
   await expect(page.getByText("Drag / arrows to move", { exact: true })).toBeVisible();
@@ -411,10 +454,22 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByRole("navigation", { name: "File city campuses" })).toBeVisible();
 
   await page.getByRole("button", { name: "Subsystems" }).click();
+  const connectionsLayer = page.getByRole("button", { exact: true, name: "Connections" });
+  const librariesLayer = page.getByRole("button", { exact: true, name: "Libraries" });
+  await expect(connectionsLayer).toHaveAttribute("aria-pressed", "false");
+  await expect(librariesLayer).toHaveAttribute("aria-pressed", "false");
+  await connectionsLayer.click();
+  await librariesLayer.click();
+  await expect(connectionsLayer).toHaveAttribute("aria-pressed", "true");
+  await expect(librariesLayer).toHaveAttribute("aria-pressed", "true");
+  await connectionsLayer.click();
+  await librariesLayer.click();
   await expect(page.getByRole("navigation", { name: "File City subsystems" })).toBeVisible();
   await page.getByRole("button", { name: /^Terminal 2 files/u }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Terminal" })).toBeVisible();
   await expect(page.getByText("Start a terminal", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /used by.*Shell.*1 import from 1 file/iu })).toBeVisible();
+  await expect(page.getByText("ws", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Discover more" }).click();
   await expect(page.getByRole("textbox")).toHaveValue(
     /discover meaningful subsystems/iu
