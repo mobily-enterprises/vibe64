@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, readdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -107,6 +108,37 @@ test("vibe64 session store creates inspectable session state under the runtime r
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
+  });
+});
+
+test("artifact readiness does not read large artifacts into memory", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    const sessionId = "large_artifact_readiness";
+    const largeArtifact = "x".repeat((64 * 1024) + 1);
+
+    await store.createSession({
+      sessionId
+    });
+    await store.writeArtifact(sessionId, "large.bin", largeArtifact);
+
+    const sessionPaths = resolveTestSessionPaths({
+      sessionId,
+      targetRoot
+    });
+    const fileStat = await stat(path.join(sessionPaths.artifactsRoot, "large.bin"));
+    const expectedFingerprint = createHash("sha256")
+      .update(`metadata:${fileStat.size}:${fileStat.mtimeMs}:${fileStat.ctimeMs}`)
+      .digest("hex");
+    const session = await store.readSession(sessionId);
+
+    assert.deepEqual(session.artifactReadiness["large.bin"], {
+      exists: true,
+      fingerprint: expectedFingerprint,
+      nonEmpty: true
+    });
   });
 });
 

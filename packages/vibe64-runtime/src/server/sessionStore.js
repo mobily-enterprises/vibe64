@@ -94,6 +94,7 @@ const CLOSED_SESSION_INDEX_METADATA_NAMES = Object.freeze([
 ]);
 const CLOSED_SESSION_ARCHIVE_TIMEOUT_MS = 60_000;
 const COMMAND_BUFFER_BYTES = 50 * 1024 * 1024;
+const ARTIFACT_READINESS_CONTENT_HASH_BYTES = 64 * 1024;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const ACTION_ATTEMPT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
 const AGENT_RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
@@ -167,6 +168,15 @@ function isValidVibe64SessionId(sessionId) {
 
 function artifactFingerprint(text = "") {
   return createHash("sha256").update(String(text || "")).digest("hex");
+}
+
+function artifactMetadataFingerprint(fileStat) {
+  return artifactFingerprint([
+    "metadata",
+    fileStat.size,
+    fileStat.mtimeMs,
+    fileStat.ctimeMs
+  ].join(":"));
 }
 
 function isSafeStepId(stepId) {
@@ -1518,7 +1528,30 @@ function createVibe64SessionStore({
   async function readArtifactReadinessFromPaths(sessionPaths) {
     const names = await sortedArtifactPaths(sessionPaths.artifactsRoot);
     const entries = await Promise.all(names.map(async (name) => {
-      const text = await readTextIfExists(artifactFilePath(sessionPaths, name));
+      const filePath = artifactFilePath(sessionPaths, name);
+      let fileStat;
+      try {
+        fileStat = await stat(filePath);
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return null;
+        }
+        throw error;
+      }
+      if (!fileStat.isFile()) {
+        return null;
+      }
+      if (fileStat.size > ARTIFACT_READINESS_CONTENT_HASH_BYTES) {
+        return [
+          name,
+          {
+            exists: true,
+            fingerprint: artifactMetadataFingerprint(fileStat),
+            nonEmpty: fileStat.size > 0
+          }
+        ];
+      }
+      const text = await readTextIfExists(filePath);
       return [
         name,
         {
@@ -1528,7 +1561,7 @@ function createVibe64SessionStore({
         }
       ];
     }));
-    return Object.fromEntries(entries);
+    return Object.fromEntries(entries.filter(Boolean));
   }
 
   async function artifactExists(sessionId, relativePath) {
