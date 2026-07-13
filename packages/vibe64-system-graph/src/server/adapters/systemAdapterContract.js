@@ -4,6 +4,8 @@ import {
 } from "../../shared/subsystemContract.js";
 import {
   FILE_CITY_PLACEMENT_ROLES,
+  FILE_CITY_ROUTE_SEGMENT_KINDS,
+  FILE_CITY_ROUTE_URL_EFFECTS,
   isSafeFileCityPath,
   normalizeFileCityPath
 } from "../../shared/fileCityContract.js";
@@ -124,6 +126,28 @@ function assertFileCityTopology(adapter = {}, files = []) {
     }
     if (!String(group?.title || "").trim()) {
       throw new TypeError(`System adapter File City group ${id} requires a title.`);
+    }
+    if (group?.kind === "route") {
+      const routePath = String(group?.routePath || "").trim();
+      const routeSegment = String(group?.routeSegment || "").trim();
+      const segmentKind = String(group?.segmentKind || "");
+      const urlEffect = String(group?.urlEffect || "");
+      if (!routePath.startsWith("/") || routePath.length > 4_096) {
+        throw new TypeError(`System adapter File City route group ${id} requires an absolute routePath.`);
+      }
+      if (routeSegment.length > 1_024) {
+        throw new TypeError(`System adapter File City route group ${id} has an invalid routeSegment.`);
+      }
+      if (!FILE_CITY_ROUTE_SEGMENT_KINDS.includes(segmentKind)) {
+        throw new TypeError(
+          `System adapter File City route group ${id} has invalid segmentKind ${segmentKind || "(empty)"}.`
+        );
+      }
+      if (!FILE_CITY_ROUTE_URL_EFFECTS.includes(urlEffect)) {
+        throw new TypeError(
+          `System adapter File City route group ${id} has invalid urlEffect ${urlEffect || "(empty)"}.`
+        );
+      }
     }
     groupsById.set(id, group);
     groupIdByPath.set(groupPath, id);

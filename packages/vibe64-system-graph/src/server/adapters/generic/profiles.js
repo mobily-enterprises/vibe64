@@ -87,7 +87,7 @@ const GENERIC_SYSTEM_ADAPTER_PROFILES = Object.freeze({
     excludedPaths: Object.freeze([]),
     label: "C++",
     specialFiles: Object.freeze(["CMakeLists.txt"]),
-    version: 1
+    version: 2
   }),
   laravel: Object.freeze({
     adapterId: "laravel",
@@ -142,7 +142,7 @@ const GENERIC_SYSTEM_ADAPTER_PROFILES = Object.freeze({
     excludedPaths: Object.freeze(["bootstrap/cache", "storage"]),
     label: "Laravel",
     specialFiles: Object.freeze([]),
-    version: 1
+    version: 2
   }),
   nextjs: Object.freeze({
     adapterId: "nextjs",
@@ -151,7 +151,7 @@ const GENERIC_SYSTEM_ADAPTER_PROFILES = Object.freeze({
     excludedPaths: Object.freeze([]),
     label: "Next.js",
     specialFiles: Object.freeze([]),
-    version: 1
+    version: 2
   }),
   "node-web": Object.freeze({
     adapterId: "node-web",
@@ -196,7 +196,7 @@ const GENERIC_SYSTEM_ADAPTER_PROFILES = Object.freeze({
     excludedPaths: Object.freeze([]),
     label: "Generic Node web app",
     specialFiles: Object.freeze([]),
-    version: 1
+    version: 2
   }),
   vinext: Object.freeze({
     adapterId: "vinext",
@@ -214,7 +214,7 @@ const GENERIC_SYSTEM_ADAPTER_PROFILES = Object.freeze({
     excludedPaths: Object.freeze([]),
     label: "Vinext",
     specialFiles: Object.freeze([]),
-    version: 1
+    version: 2
   })
 });
 

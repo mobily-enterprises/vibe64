@@ -517,8 +517,15 @@
         </template>
 
         <template v-else-if="selectedDirectory">
-          <div class="system-world__eyebrow">{{ selectedDirectory.kind === 'campus' ? (selectedDirectory.implicit ? 'MAIN CAMPUS' : 'JSKIT CAMPUS') : 'DIRECTORY PRECINCT' }}</div>
+          <div class="system-world__eyebrow">{{ selectedDirectory.kind === 'campus'
+            ? (selectedDirectory.implicit ? 'MAIN CAMPUS' : 'ADAPTER CAMPUS')
+            : selectedDirectory.semanticGroupKind === 'route'
+              ? 'ROUTE COMPOUND'
+              : 'DIRECTORY PRECINCT' }}</div>
           <h2>{{ selectedDirectory.name }}</h2>
+          <p v-if="selectedDirectory.routePath" class="system-world__path">
+            Runtime path: {{ selectedDirectory.routePath }} · {{ selectedDirectory.routeSegmentKind }}
+          </p>
           <p class="system-world__path">{{ selectedDirectory.path || (selectedDirectory.kind === 'campus' ? 'Unclaimed project tree' : 'Project root') }}</p>
           <div class="system-world__metrics">
             <span><strong>{{ selectedDirectory.fileCount.toLocaleString() }}</strong> files</span>
@@ -529,7 +536,10 @@
           <p v-if="selectedDirectory.kind === 'campus'">
             {{ selectedDirectory.implicit
               ? 'This is everything not claimed by an adapter-defined campus. Its raised terraces still represent the real directories.'
-              : 'JSKIT gives this source tree its own land parcel. Its raised terraces are the real directories below that root.' }}
+              : 'The active framework adapter gives this source tree its own land parcel. Its raised terraces are the real directories below that root.' }}
+          </p>
+          <p v-else-if="selectedDirectory.semanticGroupKind === 'route'">
+            The adapter identified this as a filesystem route. Its shell is kept compact so the ordinary File City can expose its nested child routes while building height still preserves physical LOC.
           </p>
           <p v-else>
             This is directory level {{ selectedDirectory.hierarchyDepth }}. Its raised terrace and labelled perimeter show nesting and ownership, and every building inside it is a real file.
@@ -571,7 +581,12 @@
           <div class="system-world__chips">
             <span>{{ selectedFile.executionSide || 'unknown' }}</span>
             <span>{{ selectedFileSubsystem }}</span>
+            <span v-if="selectedFileRoute">{{ selectedFileRoute.placement.role }}</span>
+            <span v-if="selectedFileRoute">{{ selectedFileRoute.placement.frameworkRole }}</span>
           </div>
+          <p v-if="selectedFileRoute" class="system-world__path">
+            Route: {{ selectedFileRoute.group.routePath }}
+          </p>
           <div class="system-world__metrics">
             <span><strong>{{ selectedFile.lines.toLocaleString() }}</strong> lines</span>
             <span><strong>{{ selectedFile.imports.length }}</strong> imports</span>
@@ -649,7 +664,7 @@
           <div class="system-world__eyebrow">YOUR CURRENT SESSION</div>
           <strong>The repository is the city.</strong>
           <span>Adapter-defined trees become separate campuses. Nested folders step upward as named terraced precincts, and every file remains a real LOC-sized building.</span>
-          <span>In Folders view, every building inherits the exact colour of its containing directory terrace. Physical size alone reveals exceptionally large files.</span>
+          <span>Filesystem-route shells automatically reserve a compact edge of their existing terrace so child routes remain visible. Route terraces and buildings use only their local segment names; their nesting carries the complete path.</span>
         </template>
       </aside>
 
@@ -730,7 +745,7 @@ import {
 } from "../world/worldViewHistory.js";
 import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "051";
+const rendererRevision = "055";
 
 const props = defineProps({
   active: {
@@ -829,6 +844,14 @@ const selectedSubsystemRelationshipSections = computed(() => ([
 const cityFilesById = computed(() => new Map(
   (overview.value?.files || []).map((file) => [file.id, file])
 ));
+const routeGroupsById = computed(() => new Map(
+  (overview.value?.adapter?.fileCity?.groups || [])
+    .filter((group) => group.kind === "route")
+    .map((group) => [group.id, group])
+));
+const routePlacementsByFileId = computed(() => new Map(
+  (overview.value?.adapter?.fileCity?.placements || []).map((placement) => [placement.fileId, placement])
+));
 const selectedSubsystemConnectionFiles = computed(() => (
   (selectedSubsystemConnection.value?.consumerFileIds || [])
     .map((fileId) => cityFilesById.value.get(fileId))
@@ -867,6 +890,11 @@ const selectedFile = computed(() => (
     ? fileConstellation.value.selectedFile
     : null
 ));
+const selectedFileRoute = computed(() => {
+  const placement = routePlacementsByFileId.value.get(selectedFile.value?.id);
+  const group = routeGroupsById.value.get(placement?.groupId);
+  return placement && group ? { group, placement } : null;
+});
 const selectedCityFile = computed(() => (
   (overview.value?.files || []).find((file) => file.id === activeFileId.value) || selectedFile.value || null
 ));
@@ -1346,14 +1374,15 @@ function endViewRotation(event) {
 }
 
 function setViewMode(mode, { recordHistory = true } = {}) {
-  if (mode === viewMode.value) {
+  const nextMode = ["folders", "subsystems", "runtime"].includes(mode) ? mode : "folders";
+  if (nextMode === viewMode.value) {
     return;
   }
   if (recordHistory) {
     recordWorldNavigation();
   }
-  viewMode.value = mode;
-  world?.setViewMode(mode);
+  viewMode.value = nextMode;
+  world?.setViewMode(nextMode);
 }
 
 function toggleSubsystemLayer(layer) {

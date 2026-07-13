@@ -67,15 +67,118 @@ function directoryPaths(files = []) {
   return directories;
 }
 
-function routeTitle(rootPath = "", groupPath = "") {
+function routeSegmentDetails(segment = "", { root = false } = {}) {
+  const sourceSegment = String(segment || "").trim();
+  if (root || !sourceSegment || sourceSegment === "__root") {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "root",
+      urlEffect: "root",
+      urlSegment: ""
+    };
+  }
+  if (sourceSegment === "index" || sourceSegment === "_index") {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "index",
+      urlEffect: "transparent",
+      urlSegment: ""
+    };
+  }
+  if (sourceSegment.startsWith("@")) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "parallel",
+      urlEffect: "parallel",
+      urlSegment: ""
+    };
+  }
+  const intercepted = sourceSegment.match(/^(?:\(\.\)|\(\.\.\)|\(\.\.\.\))+(.*)$/u);
+  if (intercepted) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "intercepted",
+      urlEffect: "intercepted",
+      urlSegment: intercepted[1] || sourceSegment
+    };
+  }
+  const optionalCatchAll = sourceSegment.match(/^\[\[\.\.\.([^\]]+)\]\]$/u);
+  if (optionalCatchAll) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "optional-catch-all",
+      urlEffect: "segment",
+      urlSegment: `*${optionalCatchAll[1]}?`
+    };
+  }
+  const catchAll = sourceSegment.match(/^\[\.\.\.([^\]]+)\]$/u);
+  if (catchAll) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "catch-all",
+      urlEffect: "segment",
+      urlSegment: `*${catchAll[1]}`
+    };
+  }
+  const optionalBracket = sourceSegment.match(/^\[\[([^\]]+)\]\]$/u);
+  const optionalDollar = sourceSegment.match(/^\(\$([^\)]+)\)$/u);
+  if (optionalBracket || optionalDollar) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "optional",
+      urlEffect: "segment",
+      urlSegment: `:${(optionalBracket || optionalDollar)[1]}?`
+    };
+  }
+  const dynamicBracket = sourceSegment.match(/^\[([^\]]+)\]$/u);
+  const dynamicDollar = sourceSegment.match(/^\$([^$].*)$/u);
+  if (sourceSegment === "$" || dynamicBracket || dynamicDollar) {
+    const parameter = dynamicBracket?.[1] || dynamicDollar?.[1] || "";
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: sourceSegment === "$" ? "catch-all" : "dynamic",
+      urlEffect: "segment",
+      urlSegment: sourceSegment === "$" ? "*" : `:${parameter}`
+    };
+  }
+  if (/^\(.+\)$/u.test(sourceSegment) || /^_[^_]/u.test(sourceSegment)) {
+    return {
+      routeSegment: sourceSegment,
+      segmentKind: "pathless",
+      urlEffect: "transparent",
+      urlSegment: ""
+    };
+  }
+  return {
+    routeSegment: sourceSegment,
+    segmentKind: "static",
+    urlEffect: "segment",
+    urlSegment: sourceSegment.replace(/_$/u, "")
+  };
+}
+
+function routeGroupDetails(rootPath = "", groupPath = "") {
   const root = normalizeFileCityPath(rootPath);
   const group = normalizeFileCityPath(groupPath);
   const relative = pathInside(root, group) ? group.slice(root.length).replace(/^\//u, "") : group;
-  const segments = relative
-    .split("/")
-    .filter(Boolean)
-    .filter((segment) => !/^\(.+\)$/u.test(segment) && !segment.startsWith("@"));
-  return `/${segments.join("/")}`;
+  const sourceSegments = relative.split("/").filter(Boolean);
+  const segmentDetails = sourceSegments.map((segment) => routeSegmentDetails(segment));
+  const routePath = `/${segmentDetails.map((segment) => segment.urlSegment).filter(Boolean).join("/")}`;
+  const leaf = segmentDetails.at(-1) || routeSegmentDetails("", { root: true });
+  const title = ["parallel", "transparent"].includes(leaf.urlEffect) && leaf.routeSegment
+    ? `${routePath} · ${leaf.routeSegment}`
+    : routePath;
+  return {
+    routePath,
+    routeSegment: leaf.routeSegment,
+    segmentKind: leaf.segmentKind,
+    title,
+    urlEffect: leaf.urlEffect
+  };
+}
+
+function routeTitle(rootPath = "", groupPath = "") {
+  return routeGroupDetails(rootPath, groupPath).title;
 }
 
 function groupTitle(groupPath = "") {
@@ -88,7 +191,8 @@ function createTopologyCollector(adapterId = "") {
 
   function ensureGroup(groupPath, {
     kind = "semantic-container",
-    title = ""
+    title = "",
+    ...metadata
   } = {}) {
     const normalizedPath = normalizeFileCityPath(groupPath);
     const existing = groupsByPath.get(normalizedPath);
@@ -101,7 +205,8 @@ function createTopologyCollector(adapterId = "") {
       origin: "derived",
       parentId: "",
       path: normalizedPath,
-      title: String(title || groupTitle(normalizedPath))
+      title: String(title || groupTitle(normalizedPath)),
+      ...metadata
     };
     groupsByPath.set(normalizedPath, group);
     return group;
@@ -150,9 +255,29 @@ function createTopologyCollector(adapterId = "") {
   }
 
   return {
+    ensureGroup,
     finish,
     place
   };
+}
+
+function ensureRouteHierarchy(collector, rootPath = "", groupPath = "") {
+  const root = normalizeFileCityPath(rootPath);
+  const group = normalizeFileCityPath(groupPath);
+  if (!pathInside(root, group)) {
+    return;
+  }
+  const relativeSegments = group.slice(root.length).replace(/^\//u, "").split("/").filter(Boolean);
+  const hierarchyPaths = [root];
+  for (let index = 1; index <= relativeSegments.length; index += 1) {
+    hierarchyPaths.push([root, ...relativeSegments.slice(0, index)].filter(Boolean).join("/"));
+  }
+  for (const hierarchyPath of hierarchyPaths) {
+    collector.ensureGroup(hierarchyPath, {
+      kind: "route",
+      ...routeGroupDetails(root, hierarchyPath)
+    });
+  }
 }
 
 function activeFileCityCampuses(campuses = [], files = []) {
@@ -178,13 +303,18 @@ function addCompanionRouteTopology(collector, files, {
     const stem = fileStem(file.path);
     const companionPath = normalizeFileCityPath(`${physicalParent}/${stem}`);
     const hasCompanionDirectory = stem !== "index" && knownDirectories.has(companionPath);
-    const visualParentPath = hasCompanionDirectory ? companionPath : physicalParent;
-    const privateBoundary = stem === "_app" || stem === "_document" || stem === "_middleware";
+    const privateBoundary = ["_app", "_document", "_error", "_middleware"].includes(stem);
+    const visualParentPath = hasCompanionDirectory
+      ? companionPath
+      : stem === "index" || privateBoundary
+        ? physicalParent
+        : companionPath;
     const role = hasCompanionDirectory || privateBoundary
       ? "boundary"
       : stem === "index" || !stem.startsWith("_")
         ? "primary"
         : "supporting";
+    ensureRouteHierarchy(collector, root, visualParentPath);
     collector.place(file, visualParentPath, {
       frameworkRole: hasCompanionDirectory
         ? "route-shell"
@@ -206,11 +336,13 @@ function addNextAppRouterTopology(collector, files, roots = []) {
     ["template", ["boundary", "route-template"]],
     ["page", ["primary", "route-page"]],
     ["route", ["primary", "route-handler"]],
-    ["default", ["primary", "parallel-route-default"]],
+    ["default", ["supporting", "parallel-route-default"]],
     ["loading", ["supporting", "loading-state"]],
     ["error", ["supporting", "error-boundary"]],
+    ["forbidden", ["supporting", "forbidden-state"]],
     ["global-error", ["supporting", "global-error-boundary"]],
-    ["not-found", ["supporting", "not-found-state"]]
+    ["not-found", ["supporting", "not-found-state"]],
+    ["unauthorized", ["supporting", "unauthorized-state"]]
   ]);
   for (const file of stableSort(files, (entry) => entry.path)) {
     const root = roots.find((candidate) => pathInside(candidate, file.path));
@@ -219,11 +351,139 @@ function addNextAppRouterTopology(collector, files, roots = []) {
       continue;
     }
     const groupPath = parentDirectory(file.path);
+    ensureRouteHierarchy(collector, root, groupPath);
     collector.place(file, groupPath, {
       frameworkRole: role[1],
       kind: "route",
       role: role[0],
       title: routeTitle(root, groupPath)
+    });
+  }
+}
+
+function addSvelteKitTopology(collector, files, roots = []) {
+  for (const file of stableSort(files, (entry) => entry.path)) {
+    const root = roots.find((candidate) => pathInside(candidate, file.path));
+    const stem = fileStem(file.path);
+    if (!root || !stem.startsWith("+") || !hasExtension(file.path, WEB_ROUTE_EXTENSIONS)) {
+      continue;
+    }
+    const groupPath = parentDirectory(file.path);
+    let frameworkRole = "route-support";
+    let role = "supporting";
+    if (stem.startsWith("+layout")) {
+      frameworkRole = "route-layout";
+      role = "boundary";
+    } else if (stem.startsWith("+page")) {
+      frameworkRole = "route-page";
+      role = "primary";
+    } else if (stem === "+server") {
+      frameworkRole = "route-handler";
+      role = "primary";
+    } else if (stem === "+error") {
+      frameworkRole = "error-boundary";
+    } else {
+      continue;
+    }
+    ensureRouteHierarchy(collector, root, groupPath);
+    collector.place(file, groupPath, {
+      frameworkRole,
+      kind: "route",
+      role,
+      title: routeTitle(root, groupPath)
+    });
+  }
+}
+
+function tokenizedRouteCandidate(file, rootPath, {
+  folderFilesAreRoutes = true
+} = {}) {
+  const root = normalizeFileCityPath(rootPath);
+  const filePath = normalizeFileCityPath(file.path);
+  if (!pathInside(root, filePath) || !hasExtension(filePath, WEB_ROUTE_EXTENSIONS)) {
+    return null;
+  }
+  const relativePath = filePath.slice(root.length).replace(/^\//u, "");
+  const relativeParts = relativePath.split("/").filter(Boolean);
+  const stem = fileStem(filePath);
+  if (!stem || stem.startsWith("+") || (
+    relativeParts.length > 1 && !folderFilesAreRoutes && stem !== "route"
+  )) {
+    return null;
+  }
+  const directorySegments = relativeParts.slice(0, -1).flatMap((segment) => segment.split(".").filter(Boolean));
+  const routeSegments = stem === "route"
+    ? directorySegments
+    : [...directorySegments, ...stem.split(".").filter(Boolean)];
+  const terminal = routeSegments.at(-1) || "";
+  const index = terminal === "index" || terminal === "_index";
+  const rootRoute = terminal === "__root";
+  if (index || rootRoute) {
+    routeSegments.pop();
+  }
+  return {
+    file,
+    groupPath: [root, ...routeSegments].filter(Boolean).join("/"),
+    index,
+    rootRoute
+  };
+}
+
+function addTokenizedFileRouterTopology(collector, files, {
+  folderFilesAreRoutes = true,
+  root
+} = {}) {
+  const candidates = stableSort(files, (entry) => entry.path)
+    .map((file) => tokenizedRouteCandidate(file, root, { folderFilesAreRoutes }))
+    .filter(Boolean);
+  const groupPaths = new Set(candidates.map((candidate) => candidate.groupPath));
+  for (const candidate of candidates) {
+    const hasChildren = [...groupPaths].some((groupPath) => (
+      groupPath !== candidate.groupPath && groupPath.startsWith(`${candidate.groupPath}/`)
+    ));
+    const role = candidate.rootRoute || hasChildren ? "boundary" : "primary";
+    ensureRouteHierarchy(collector, root, candidate.groupPath);
+    collector.place(candidate.file, candidate.groupPath, {
+      frameworkRole: candidate.rootRoute
+        ? "root-layout"
+        : candidate.index
+          ? "route-index"
+          : role === "boundary"
+            ? "route-shell"
+            : "route-page",
+      kind: "route",
+      role: candidate.index ? "primary" : role,
+      title: routeTitle(root, candidate.groupPath)
+    });
+  }
+}
+
+function addRemixTopology(collector, files) {
+  const root = "app/routes";
+  const rootFile = stableSort(files, (entry) => entry.path).find((file) => (
+    parentDirectory(file.path) === "app" && fileStem(file.path) === "root" &&
+    hasExtension(file.path, WEB_ROUTE_EXTENSIONS)
+  ));
+  if (rootFile) {
+    ensureRouteHierarchy(collector, root, root);
+    collector.place(rootFile, root, {
+      frameworkRole: "root-layout",
+      kind: "route",
+      role: "boundary",
+      title: "/"
+    });
+  }
+  addTokenizedFileRouterTopology(collector, files, {
+    folderFilesAreRoutes: false,
+    root
+  });
+}
+
+function addTanStackRouterTopology(collector, files, roots = []) {
+  for (const root of roots) {
+    addTokenizedFileRouterTopology(collector, files, {
+      folderFilesAreRoutes: true,
+      root
     });
   }
 }
@@ -237,7 +497,7 @@ function addLaravelTopology(collector, files) {
     if (pathInside("routes", filePath)) {
       role = "primary";
       frameworkRole = "route-registration";
-      kind = "route";
+      kind = "route-registration";
     } else if (pathInside("app/Http/Middleware", filePath)) {
       role = "boundary";
       frameworkRole = "http-middleware";
@@ -281,8 +541,36 @@ function addLaravelTopology(collector, files) {
 }
 
 function addNodeWebTopology(collector, files) {
+  const svelteRoots = ["src/routes"].filter((root) => files.some((file) => (
+    pathInside(root, file.path) && fileName(file.path).startsWith("+")
+  )));
+  const tanStackRoots = ["src/routes", "routes"].filter((root) => files.some((file) => (
+    parentDirectory(file.path) === root && fileStem(file.path) === "__root"
+  )));
+  const hasRemixRoutes = files.some((file) => pathInside("app/routes", file.path)) &&
+    files.some((file) => parentDirectory(file.path) === "app" && fileStem(file.path) === "root");
+
+  addSvelteKitTopology(collector, files, svelteRoots);
+  if (hasRemixRoutes) {
+    addRemixTopology(collector, files);
+  }
+  addTanStackRouterTopology(collector, files, tanStackRoots);
+
+  const specializedRoots = new Set([
+    ...svelteRoots,
+    ...tanStackRoots,
+    ...(hasRemixRoutes ? ["app/routes"] : [])
+  ]);
   addCompanionRouteTopology(collector, files, {
-    roots: ["src/pages", "pages", "src/routes", "routes", "src/views", "views"]
+    roots: [
+      "app/pages",
+      "src/pages",
+      "pages",
+      "src/routes",
+      "routes",
+      "src/views",
+      "views"
+    ].filter((root) => !specializedRoots.has(root))
   });
   for (const file of stableSort(files, (entry) => entry.path)) {
     const filePath = normalizeFileCityPath(file.path);

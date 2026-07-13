@@ -2,7 +2,15 @@
 
 Active-session architecture browser for Vibe64. The package owns the checked-in current-state `vibe64.system.json` contract, Vibe64-owned System adapters, deterministic findings and projections, session-authorized APIs, and the interactive System client.
 
-The first release registers only the JSKIT System adapter. Laravel, Next.js, and other project types remain explicitly unsupported until Vibe64 ships dedicated adapters for their conventions.
+JSKIT provides the richest System analysis. Conservative structural adapters also cover C++, Laravel, Next.js, generic Node web applications, and Vinext without claiming import or operation facts they cannot prove.
+
+## File City topology contract
+
+Adapters may attach semantic groups and file placements to their physical campuses. The renderer owns every visual rule; adapters provide stable paths, route paths, segment semantics, and the generic `boundary`, `primary`, or `supporting` role of a file. They never provide coordinates, colours, view modes, or framework-specific geometry.
+
+File City has no separate routing mode. When an adapter proves that a file is the shell for a filesystem-route directory, the normal treemap automatically places that file inside the route group and limits its footprint to a compact boundary band. Descendant routes retain the rest of the existing directory terrace instead of being crushed by a large shell file. Files without child routes keep the ordinary LOC-weighted layout, and building height always remains LOC-based. Route terraces show only their local segment (`/settings`) and route buildings show only their local stem (`index`); following the nested boxes reveals the complete path. Full route paths remain separate from physical source paths in the inspector so pathless groups, parallel routes, intercepted routes, and flat filename conventions do not pretend that URL structure and disk structure are identical.
+
+The initial route normalizers cover JSKIT pages, Next.js and Vinext App/Pages routers, Nuxt/Astro-style page trees, SvelteKit, Remix, and TanStack Router conventions. Laravel route-registration files and C++ modules keep their own semantic grouping but do not request route-shell construction, because their directory trees do not define runtime URLs.
 
 ## Subsystem ownership contract
 

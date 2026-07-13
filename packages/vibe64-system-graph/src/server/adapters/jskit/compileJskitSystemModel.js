@@ -18,7 +18,7 @@ import {
   buildSemanticFileCity
 } from "../semanticFileCity.js";
 
-const JSKIT_SYSTEM_ADAPTER_VERSION = 4;
+const JSKIT_SYSTEM_ADAPTER_VERSION = 5;
 const JSKIT_FILE_CITY_CAMPUSES = Object.freeze([
   Object.freeze({
     description: "The client-side application source tree.",

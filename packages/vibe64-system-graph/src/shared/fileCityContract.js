@@ -4,6 +4,27 @@ const FILE_CITY_PLACEMENT_ROLES = Object.freeze([
   "supporting"
 ]);
 
+const FILE_CITY_ROUTE_SEGMENT_KINDS = Object.freeze([
+  "catch-all",
+  "dynamic",
+  "index",
+  "intercepted",
+  "optional",
+  "optional-catch-all",
+  "parallel",
+  "pathless",
+  "root",
+  "static"
+]);
+
+const FILE_CITY_ROUTE_URL_EFFECTS = Object.freeze([
+  "intercepted",
+  "parallel",
+  "root",
+  "segment",
+  "transparent"
+]);
+
 function normalizeFileCityPath(value = "") {
   return String(value || "")
     .trim()
@@ -31,6 +52,8 @@ function fileCityPathInside(rootPath = "", candidatePath = "") {
 
 export {
   FILE_CITY_PLACEMENT_ROLES,
+  FILE_CITY_ROUTE_SEGMENT_KINDS,
+  FILE_CITY_ROUTE_URL_EFFECTS,
   fileCityPathInside,
   isSafeFileCityPath,
   normalizeFileCityPath

@@ -37,6 +37,16 @@ function physicalDirectoryPath(filePath = "") {
   return separator < 0 ? "" : normalized.slice(0, separator);
 }
 
+function fileCityGroupLabel(group = null, fallback = "") {
+  if (group?.kind !== "route") {
+    return fallback;
+  }
+  if (group.segmentKind === "root" || !group.routeSegment) {
+    return "/";
+  }
+  return `/${group.routeSegment}`;
+}
+
 function normalizedFileCityTopology(overview = {}) {
   const groups = Array.isArray(overview.adapter?.fileCity?.groups)
     ? overview.adapter.fileCity.groups
@@ -45,6 +55,7 @@ function normalizedFileCityTopology(overview = {}) {
     ? overview.adapter.fileCity.placements
     : [];
   return {
+    groupsById: new Map(groups.map((group) => [String(group.id || ""), group])),
     groupsByPath: new Map(groups.map((group) => [normalizeFileCityPath(group.path), group])),
     placementsByFileId: new Map(placements.map((placement) => [String(placement.fileId || ""), placement]))
   };
@@ -84,13 +95,14 @@ function createDirectory(name, directoryPath) {
 
 function fileCityTree(files = [], {
   rootPath = "",
-  topology = { groupsByPath: new Map(), placementsByFileId: new Map() }
+  topology = { groupsById: new Map(), groupsByPath: new Map(), placementsByFileId: new Map() }
 } = {}) {
   const root = createDirectory("project", rootPath);
   for (const file of stableSort(files, (entry) => entry.path)) {
     const filePath = String(file.path || "");
     const physicalParentPath = physicalDirectoryPath(filePath);
     const placement = topology.placementsByFileId.get(String(file.id || "")) || null;
+    const semanticGroup = topology.groupsById.get(String(placement?.groupId || "")) || null;
     const requestedParentPath = normalizeFileCityPath(placement?.visualParentPath);
     const visualParentPath = requestedParentPath && fileCityPathInside(rootPath, requestedParentPath)
       ? requestedParentPath
@@ -114,6 +126,7 @@ function fileCityTree(files = [], {
       file,
       physicalParentPath,
       placement,
+      semanticGroup,
       visualParentPath
     });
   }
@@ -132,8 +145,10 @@ function fileCityTree(files = [], {
           name: entry.file.path.split("/").pop(),
           path: entry.file.path,
           physicalParentPath: entry.physicalParentPath,
+          routePath: entry.semanticGroup?.routePath || "",
           semanticFrameworkRole: entry.placement?.frameworkRole || "",
           semanticGroupId: entry.placement?.groupId || "",
+          semanticGroupKind: entry.semanticGroup?.kind || "",
           semanticRole: entry.placement?.role || "",
           type: "file",
           visualParentPath: entry.visualParentPath,
@@ -368,7 +383,10 @@ function semanticFileCityTile(parent, x0, y0, x1, y1) {
     defaultFileCityTile(parent, x0, y0, x1, y1);
     return;
   }
-  const boundaryY1 = y0 + (y1 - y0) * (boundaryValue / totalValue);
+  const boundaryShare = parent.data?.semanticGroup?.kind === "route"
+    ? (y1 - y0 >= 80 ? 0.18 : 0.24)
+    : boundaryValue / totalValue;
+  const boundaryY1 = y0 + (y1 - y0) * boundaryShare;
   layoutHorizontalBand(boundary, x0, y0, x1, boundaryY1);
   const originalChildren = parent.children;
   const originalValue = parent.value;
@@ -418,9 +436,13 @@ function layoutCampus(campus, {
         elevation: node.depth * DIRECTORY_ELEVATION_STEP,
         generatedElevation: node.depth * DIRECTORY_ELEVATION_STEP,
         hierarchyDepth: node.depth,
-        name: node.data.name,
+        name: fileCityGroupLabel(semanticGroup, node.data.name),
         parentPath: node.parent?.depth > 0 ? node.parent.data.path : "",
         path: node.data.path,
+        routePath: semanticGroup?.routePath || "",
+        routeSegment: semanticGroup?.routeSegment || "",
+        routeSegmentKind: semanticGroup?.segmentKind || "",
+        routeUrlEffect: semanticGroup?.urlEffect || "",
         semanticGroupId: semanticGroup?.id || "",
         semanticGroupKind: semanticGroup?.kind || "",
         semanticGroupTitle: semanticGroup?.title || "",
@@ -445,8 +467,10 @@ function layoutCampus(campus, {
       elevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
       generatedElevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
       physicalDirectoryPath: node.data.physicalParentPath || physicalDirectoryPath(file.path),
+      routePath: node.data.routePath || "",
       semanticFrameworkRole: node.data.semanticFrameworkRole || "",
       semanticGroupId: node.data.semanticGroupId || "",
+      semanticGroupKind: node.data.semanticGroupKind || "",
       semanticRole: node.data.semanticRole || "",
       visualDirectoryPath: node.data.visualParentPath || node.parent?.data.path || rootPath,
       x: offsetX + (node.x0 + node.x1) / 2 - centerX,

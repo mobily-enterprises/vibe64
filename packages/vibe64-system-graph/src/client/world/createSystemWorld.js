@@ -195,9 +195,18 @@ function fileName(file = {}) {
   return String(file.path || "").split("/").filter(Boolean).pop() || "unnamed file";
 }
 
+function fileBuildingLabel(file = {}) {
+  const name = fileName(file);
+  if (file.semanticGroupKind !== "route") {
+    return name;
+  }
+  const extensionIndex = name.lastIndexOf(".");
+  return extensionIndex > 0 ? name.slice(0, extensionIndex) : name;
+}
+
 function createFileLabelAtlas(buildings = [], maxAnisotropy = 1) {
   return createLabelAtlas(
-    buildings.map(({ file }) => fileName(file)),
+    buildings.map(({ file }) => fileBuildingLabel(file)),
     maxAnisotropy,
     {
       cellHeight: 32,
@@ -354,7 +363,7 @@ function createFileSurfaceLabels(buildings = [], maxAnisotropy = 1) {
   const uvs = [];
 
   for (const { elevation, file, height } of buildings) {
-    const region = regions.get(fileName(file));
+    const region = regions.get(fileBuildingLabel(file));
     const roofHeight = Math.max(1.2, Math.min(3, height * 0.025));
     const roofWidth = Math.max(3, file.cityWidth * 0.86);
     const roofDepth = Math.max(3, file.cityDepth * 0.86);
