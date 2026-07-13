@@ -2,6 +2,9 @@ import {
   createJskitSystemAdapter
 } from "./jskit/JskitSystemAdapter.js";
 import {
+  createGenericSystemAdapters
+} from "./generic/GenericSystemAdapter.js";
+import {
   assertSystemAdapterId
 } from "./systemAdapterContract.js";
 
@@ -14,7 +17,7 @@ class UnsupportedSystemAdapterError extends Error {
 }
 
 function createSystemAdapterRegistry({
-  adapters = [createJskitSystemAdapter()]
+  adapters = [createJskitSystemAdapter(), ...createGenericSystemAdapters()]
 } = {}) {
   const adaptersById = new Map();
   for (const adapter of adapters) {

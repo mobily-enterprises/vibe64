@@ -14,8 +14,11 @@ import {
 import {
   normalizeSystemConnection
 } from "../../../shared/systemConnectionContract.js";
+import {
+  buildSemanticFileCity
+} from "../semanticFileCity.js";
 
-const JSKIT_SYSTEM_ADAPTER_VERSION = 3;
+const JSKIT_SYSTEM_ADAPTER_VERSION = 4;
 const JSKIT_FILE_CITY_CAMPUSES = Object.freeze([
   Object.freeze({
     description: "The client-side application source tree.",
@@ -1078,9 +1081,11 @@ function compileJskitSystemModel(extraction = {}, {
 
   const model = {
     adapter: {
-      fileCity: {
-        campuses: JSKIT_FILE_CITY_CAMPUSES
-      },
+      fileCity: buildSemanticFileCity({
+        adapterId: "jskit",
+        campuses: JSKIT_FILE_CITY_CAMPUSES,
+        files
+      }),
       id: "jskit",
       version: JSKIT_SYSTEM_ADAPTER_VERSION
     },
@@ -1199,12 +1204,20 @@ function mergeScopedSystemModel(previousModel = {}, scopedModel = {}, scopes = [
     ...(previousModel.diagnostics || []).filter((diagnostic) => !scopeSet.has(pathPackage.get(diagnostic.path))),
     ...(scopedModel.diagnostics || [])
   ];
+  const mergedFiles = stableSort(filesById.values(), (file) => file.id);
   const model = {
     ...previousModel,
-    adapter: scopedModel.adapter,
+    adapter: {
+      ...scopedModel.adapter,
+      fileCity: buildSemanticFileCity({
+        adapterId: "jskit",
+        campuses: JSKIT_FILE_CITY_CAMPUSES,
+        files: mergedFiles
+      })
+    },
     input: scopedModel.input,
     declarations: previousModel.declarations || [],
-    files: stableSort(filesById.values(), (file) => file.id),
+    files: mergedFiles,
     entities: stableSort(entitiesById.values(), (entity) => entity.id),
     relationships: stableSort(relationshipsById.values(), (relationship) => relationship.id),
     connections: stableSort(connectionsById.values(), (connection) => connection.id),

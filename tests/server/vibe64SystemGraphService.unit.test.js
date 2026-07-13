@@ -196,13 +196,13 @@ test("vibe64.system.json is a portable root source-contract file", () => {
 test("System status is explicitly unsupported when Vibe64 has no System adapter", async () => {
   await withTempRoot(async (root) => {
     const service = createService({
-      projectService: projectServiceFor(root, "laravel"),
+      projectService: projectServiceFor(root, "python"),
       snapshotReader: async () => constantSnapshot()
     });
     const status = await service.readStatus({ sessionId: "session-1" });
     assert.equal(status.ok, true);
     assert.equal(status.status, "unsupported");
-    assert.equal(status.adapterId, "laravel");
+    assert.equal(status.adapterId, "python");
   });
 });
 

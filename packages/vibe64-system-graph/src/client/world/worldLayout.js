@@ -6,6 +6,10 @@ import {
 import {
   SUBSYSTEM_DEPTH_MAX
 } from "../../shared/subsystemPresentationContract.js";
+import {
+  fileCityPathInside,
+  normalizeFileCityPath
+} from "../../shared/fileCityContract.js";
 
 const DIRECTORY_ELEVATION_STEP = 40;
 const FILE_BUILDING_HEIGHT_MAX = 322;
@@ -25,6 +29,25 @@ function stableHash(value = "") {
 
 function stableSort(values = [], selector = (value) => value) {
   return [...values].sort((left, right) => String(selector(left)).localeCompare(String(selector(right))));
+}
+
+function physicalDirectoryPath(filePath = "") {
+  const normalized = normalizeFileCityPath(filePath);
+  const separator = normalized.lastIndexOf("/");
+  return separator < 0 ? "" : normalized.slice(0, separator);
+}
+
+function normalizedFileCityTopology(overview = {}) {
+  const groups = Array.isArray(overview.adapter?.fileCity?.groups)
+    ? overview.adapter.fileCity.groups
+    : [];
+  const placements = Array.isArray(overview.adapter?.fileCity?.placements)
+    ? overview.adapter.fileCity.placements
+    : [];
+  return {
+    groupsByPath: new Map(groups.map((group) => [normalizeFileCityPath(group.path), group])),
+    placementsByFileId: new Map(placements.map((placement) => [String(placement.fileId || ""), placement]))
+  };
 }
 
 function isVisuallyLargeFile(lines = 0, largestDocumentLines = 0) {
@@ -59,13 +82,23 @@ function createDirectory(name, directoryPath) {
   };
 }
 
-function fileCityTree(files = [], { rootPath = "" } = {}) {
+function fileCityTree(files = [], {
+  rootPath = "",
+  topology = { groupsByPath: new Map(), placementsByFileId: new Map() }
+} = {}) {
   const root = createDirectory("project", rootPath);
   for (const file of stableSort(files, (entry) => entry.path)) {
     const filePath = String(file.path || "");
-    const relativePath = rootPath && filePath.startsWith(`${rootPath}/`)
-      ? filePath.slice(rootPath.length + 1)
-      : filePath;
+    const physicalParentPath = physicalDirectoryPath(filePath);
+    const placement = topology.placementsByFileId.get(String(file.id || "")) || null;
+    const requestedParentPath = normalizeFileCityPath(placement?.visualParentPath);
+    const visualParentPath = requestedParentPath && fileCityPathInside(rootPath, requestedParentPath)
+      ? requestedParentPath
+      : physicalParentPath;
+    const visualFilePath = [visualParentPath, filePath.split("/").pop()].filter(Boolean).join("/");
+    const relativePath = rootPath && visualFilePath.startsWith(`${rootPath}/`)
+      ? visualFilePath.slice(rootPath.length + 1)
+      : visualFilePath;
     const segments = relativePath.split("/").filter(Boolean);
     let directory = root;
     for (const segment of segments.slice(0, -1)) {
@@ -77,22 +110,34 @@ function fileCityTree(files = [], { rootPath = "" } = {}) {
       }
       directory = directory.children.get(segment);
     }
-    directory.files.push(file);
+    directory.files.push({
+      file,
+      physicalParentPath,
+      placement,
+      visualParentPath
+    });
   }
 
   function plainDirectory(directory) {
+    const semanticGroup = topology.groupsByPath.get(directory.path) || null;
     return {
       name: directory.name,
       path: directory.path,
+      semanticGroup,
       type: directory.type,
       children: [
         ...stableSort(directory.children.values(), (entry) => entry.name).map(plainDirectory),
-        ...stableSort(directory.files, (entry) => entry.path).map((file) => ({
-          file,
-          name: file.path.split("/").pop(),
-          path: file.path,
+        ...stableSort(directory.files, (entry) => entry.file.path).map((entry) => ({
+          file: entry.file,
+          name: entry.file.path.split("/").pop(),
+          path: entry.file.path,
+          physicalParentPath: entry.physicalParentPath,
+          semanticFrameworkRole: entry.placement?.frameworkRole || "",
+          semanticGroupId: entry.placement?.groupId || "",
+          semanticRole: entry.placement?.role || "",
           type: "file",
-          weight: Math.max(8, Number(file.lines) || 0)
+          visualParentPath: entry.visualParentPath,
+          weight: Math.max(8, Number(entry.file.lines) || 0)
         }))
       ]
     };
@@ -288,20 +333,67 @@ function layoutSubsystemStrata(layouts = [], lineStats = {}) {
   });
 }
 
+const defaultFileCityTile = treemapSquarify.ratio(1.25);
+
+function layoutHorizontalBand(children = [], x0, y0, x1, y1) {
+  const total = children.reduce((sum, child) => sum + Math.max(0, Number(child.value) || 0), 0) || children.length || 1;
+  let cursorX = x0;
+  children.forEach((child, index) => {
+    const share = Math.max(0, Number(child.value) || 0) || 1;
+    const nextX = index === children.length - 1
+      ? x1
+      : cursorX + (x1 - x0) * (share / total);
+    child.x0 = cursorX;
+    child.x1 = nextX;
+    child.y0 = y0;
+    child.y1 = y1;
+    cursorX = nextX;
+  });
+}
+
+function semanticFileCityTile(parent, x0, y0, x1, y1) {
+  const children = parent.children || [];
+  const boundary = children.filter((child) => (
+    child.data?.type === "file" && child.data?.semanticRole === "boundary"
+  ));
+  const remainder = children.filter((child) => !boundary.includes(child));
+  if (boundary.length === 0 || remainder.length === 0) {
+    defaultFileCityTile(parent, x0, y0, x1, y1);
+    return;
+  }
+  const boundaryValue = boundary.reduce((sum, child) => sum + Math.max(0, Number(child.value) || 0), 0);
+  const remainderValue = remainder.reduce((sum, child) => sum + Math.max(0, Number(child.value) || 0), 0);
+  const totalValue = boundaryValue + remainderValue;
+  if (boundaryValue <= 0 || remainderValue <= 0 || totalValue <= 0) {
+    defaultFileCityTile(parent, x0, y0, x1, y1);
+    return;
+  }
+  const boundaryY1 = y0 + (y1 - y0) * (boundaryValue / totalValue);
+  layoutHorizontalBand(boundary, x0, y0, x1, boundaryY1);
+  const originalChildren = parent.children;
+  const originalValue = parent.value;
+  parent.children = remainder;
+  parent.value = remainderValue;
+  defaultFileCityTile(parent, x0, boundaryY1, x1, y1);
+  parent.children = originalChildren;
+  parent.value = originalValue;
+}
+
 function layoutCampus(campus, {
   campusDepth,
   campusWidth,
-  offsetX
+  offsetX,
+  topology
 } = {}) {
   const rootPath = campus.roots.length === 1 ? campus.roots[0] : "";
-  const root = hierarchy(fileCityTree(campus.files, { rootPath }))
+  const root = hierarchy(fileCityTree(campus.files, { rootPath, topology }))
     .sum((node) => node.type === "file" ? node.weight : 0)
     .sort((left, right) => (
       (right.value || 0) - (left.value || 0) || left.data.path.localeCompare(right.data.path)
     ));
 
   treemap()
-    .tile(treemapSquarify.ratio(1.25))
+    .tile(semanticFileCityTile)
     .size([campusWidth, campusDepth])
     .paddingLeft((node) => node.depth === 0 ? 38 : 26)
     .paddingRight((node) => node.depth === 0 ? 38 : 26)
@@ -316,6 +408,7 @@ function layoutCampus(campus, {
     .filter((node) => node.children && node.depth > 0)
     .map((node) => {
       const relativePath = pathBelowCampusRoot(node.data.path, rootPath);
+      const semanticGroup = node.data.semanticGroup || null;
       return {
         ...directoryDetails(node),
         campusId: campus.id,
@@ -328,6 +421,9 @@ function layoutCampus(campus, {
         name: node.data.name,
         parentPath: node.parent?.depth > 0 ? node.parent.data.path : "",
         path: node.data.path,
+        semanticGroupId: semanticGroup?.id || "",
+        semanticGroupKind: semanticGroup?.kind || "",
+        semanticGroupTitle: semanticGroup?.title || "",
         width: Math.max(8, node.x1 - node.x0),
         x: offsetX + (node.x0 + node.x1) / 2 - centerX,
         z: (node.y0 + node.y1) / 2 - centerZ
@@ -348,6 +444,11 @@ function layoutCampus(campus, {
       district: relativeSegments.length > 1 ? relativeSegments[0] : campus.title,
       elevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
       generatedElevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
+      physicalDirectoryPath: node.data.physicalParentPath || physicalDirectoryPath(file.path),
+      semanticFrameworkRole: node.data.semanticFrameworkRole || "",
+      semanticGroupId: node.data.semanticGroupId || "",
+      semanticRole: node.data.semanticRole || "",
+      visualDirectoryPath: node.data.visualParentPath || node.parent?.data.path || rootPath,
       x: offsetX + (node.x0 + node.x1) / 2 - centerX,
       z: (node.y0 + node.y1) / 2 - centerZ
     };
@@ -432,6 +533,7 @@ function layoutFileCity(overview = {}, {
 } = {}) {
   const files = overview.files || [];
   const campuses = fileCampuses(overview);
+  const topology = normalizedFileCityTopology(overview);
   const lineStats = overview.lineStats || cityLineStats(files);
   const gap = campuses.length > 1 ? 72 : 0;
   const widths = campusWidths(campuses, width, gap);
@@ -447,7 +549,8 @@ function layoutFileCity(overview = {}, {
     return layoutCampus(campus, {
       campusDepth,
       campusWidth,
-      offsetX
+      offsetX,
+      topology
     });
   });
   const subsystemStrata = applySubsystemDepth(layouts, overview.subsystems || [], lineStats);
