@@ -72,7 +72,10 @@
         class="vibe64-source-explanation__message"
         :class="[
           `vibe64-source-explanation__message--${message.role}`,
-          { 'vibe64-source-explanation__message--thinking': message.status === 'thinking' }
+          {
+            'vibe64-source-explanation__message--failed': message.status === 'failed',
+            'vibe64-source-explanation__message--thinking': message.status === 'thinking'
+          }
         ]"
       >
         <strong>{{ message.role === "user" ? "You" : "Vibe64" }}</strong>
@@ -99,6 +102,12 @@
           </div>
         </div>
         <LongTextPreviewBlocks
+          v-else-if="message.status === 'failed' && message.text"
+          class="vibe64-source-explanation__failure-detail"
+          :blocks="message.blocks"
+          @link-click="handleExplanationLinkClick"
+        />
+        <LongTextPreviewBlocks
           v-else-if="message.text"
           :blocks="message.blocks"
           @link-click="handleExplanationLinkClick"
@@ -116,24 +125,53 @@
       />
     </section>
 
-    <v-alert
-      v-if="followupDisabledReason"
-      class="vibe64-source-explanation__followup-alert"
-      density="compact"
-      type="info"
-      variant="tonal"
+    <section
+      v-if="!followupAvailable"
+      class="vibe64-source-explanation__recovery"
+      aria-label="Explanation controls"
     >
-      {{ followupDisabledReason }}
-    </v-alert>
+      <p>
+        {{ busy ? "Waiting for the explanation…" : "No explanation was produced. Adjust the settings if needed, then retry." }}
+      </p>
+      <div class="vibe64-source-explanation__recovery-actions">
+        <Vibe64AgentSettingsMenu
+          :agent-settings="agentSettings"
+          :disabled="busy"
+          @update-setting="updateAgentSetting"
+        />
+        <v-btn
+          v-if="busy"
+          color="error"
+          :icon="mdiStop"
+          size="small"
+          title="Stop explanation"
+          type="button"
+          variant="tonal"
+          @click="emit('stop')"
+        />
+        <v-btn
+          v-else
+          color="primary"
+          :prepend-icon="mdiRefresh"
+          size="small"
+          type="button"
+          variant="flat"
+          @click="emit('retry')"
+        >
+          Retry explanation
+        </v-btn>
+      </div>
+    </section>
 
     <form
+      v-else
       class="vibe64-source-explanation__followup"
       @submit.prevent="submitFollowup"
     >
       <Vibe64AutopilotPromptTextarea
         :attachments-enabled="false"
         :auto-grow="true"
-        :disabled="Boolean(followupDisabledReason)"
+        :disabled="busy"
         label="Ask about this explanation"
         :model-value="followup"
         placeholder="Ask a follow-up"
@@ -145,7 +183,7 @@
           <div class="vibe64-source-explanation__followup-footer">
             <Vibe64AgentSettingsMenu
               :agent-settings="agentSettings"
-              :disabled="Boolean(followupDisabledReason)"
+              :disabled="busy"
               @update-setting="updateAgentSetting"
             />
             <v-btn
@@ -161,7 +199,7 @@
             />
             <v-btn
               color="primary"
-              :disabled="!followup.trim() || busy || Boolean(followupDisabledReason)"
+              :disabled="!followup.trim() || busy"
               :icon="mdiSend"
               size="small"
               title="Send follow-up"
@@ -180,6 +218,7 @@ import { computed, ref, watch } from "vue";
 import {
   mdiChevronRight,
   mdiClose,
+  mdiRefresh,
   mdiSend,
   mdiStop
 } from "@mdi/js";
@@ -227,17 +266,13 @@ const emit = defineEmits([
   "close",
   "open-range",
   "open-source-link",
+  "retry",
   "send-followup",
   "stop",
   "update-agent-setting",
   "update:followup"
 ]);
 
-const followupDisabledReason = computed(() => (
-  props.explanation?.agentThreadId
-    ? ""
-    : "Regenerate this explanation to enable follow-up chat."
-));
 const threadElement = ref(null);
 const threadBottomElement = ref(null);
 const followingLatest = ref(true);
@@ -260,6 +295,14 @@ const chatMessages = computed(() => (
     preserveParagraphLineBreaks: message.role === "user"
   })
 })));
+const followupAvailable = computed(() => Boolean(
+  props.explanation?.agentThreadId && (
+    String(props.explanation?.body || "").trim() ||
+    chatMessages.value.some((message) => (
+      message.role === "assistant" && message.status === "complete" && message.text
+    ))
+  )
+));
 const thinking = computed(() => chatMessages.value.some((message) => message.status === "thinking"));
 const sourceRange = computed(() => props.explanation?.sourceRange || {});
 const sourceRangeFullLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
@@ -334,7 +377,7 @@ function sourceRangeDisplayLabel(range = {}, {
 }
 
 function submitFollowup() {
-  if (!props.followup.trim() || props.busy || followupDisabledReason.value) {
+  if (!props.followup.trim() || props.busy || !followupAvailable.value) {
     return;
   }
   emit("send-followup");
@@ -402,7 +445,7 @@ watch(threadScrollKey, (value, previous) => {
     "header"
     "stale"
     "thread"
-    "followup-alert"
+    "recovery"
     "followup";
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   height: 100%;
@@ -557,6 +600,17 @@ watch(threadScrollKey, (value, previous) => {
   padding-inline: 0.1rem;
 }
 
+.vibe64-source-explanation__message--failed {
+  background: rgba(var(--v-theme-error), 0.08);
+  border: 1px solid rgba(var(--v-theme-error), 0.24);
+  padding: 0.46rem 0.58rem;
+}
+
+.vibe64-source-explanation__failure-detail :deep(.studio-long-text-review__paragraph),
+.vibe64-source-explanation__failure-detail :deep(.studio-long-text-review__list li) {
+  color: rgb(var(--v-theme-error));
+}
+
 .vibe64-source-explanation__followup {
   align-self: end;
   grid-area: followup;
@@ -564,8 +618,28 @@ watch(threadScrollKey, (value, previous) => {
   width: 100%;
 }
 
-.vibe64-source-explanation__followup-alert {
-  grid-area: followup-alert;
+.vibe64-source-explanation__recovery {
+  background: rgba(var(--v-theme-error), 0.06);
+  border: 1px solid rgba(var(--v-theme-error), 0.2);
+  border-radius: 9px;
+  display: grid;
+  gap: 0.45rem;
+  grid-area: recovery;
+  padding: 0.55rem;
+}
+
+.vibe64-source-explanation__recovery p {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.vibe64-source-explanation__recovery-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {

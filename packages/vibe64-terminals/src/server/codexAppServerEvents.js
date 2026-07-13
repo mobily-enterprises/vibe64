@@ -145,17 +145,44 @@ function codexAppServerNotificationTurnStatus(notification = {}) {
   return turnStatus || codexAppServerStatusFromValue(params.status);
 }
 
-function codexAppServerErrorText(value = null) {
+function codexAppServerErrorText(value = null, seen = new Set()) {
   if (!value) {
     return "";
   }
   if (typeof value === "string") {
-    return normalizeText(value);
+    const text = normalizeText(value);
+    if (text.startsWith("{") || text.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(text);
+        const parsedText = codexAppServerErrorText(parsed, seen);
+        if (parsedText) {
+          return parsedText;
+        }
+      } catch {
+        // Keep non-JSON provider details as their original user-facing text.
+      }
+    }
+    return text;
   }
   if (!isPlainObject(value)) {
     return "";
   }
-  return normalizeText(value.message || value.error || value.reason || value.code);
+  if (seen.has(value)) {
+    return "";
+  }
+  seen.add(value);
+  const messages = [
+    codexAppServerErrorText(value.message, seen),
+    codexAppServerErrorText(value.error, seen),
+    codexAppServerErrorText(value.additionalDetails || value.additional_details, seen),
+    codexAppServerErrorText(value.details || value.detail, seen),
+    codexAppServerErrorText(value.reason, seen),
+    codexAppServerErrorText(value.codexErrorInfo || value.codex_error_info, seen)
+  ].filter(Boolean);
+  if (!messages.length) {
+    return normalizeText(value.code);
+  }
+  return [...new Set(messages)].join(" ");
 }
 
 function codexAppServerNotificationError(notification = {}) {
@@ -295,6 +322,14 @@ function classifyCodexAppServerEvent(notification = {}) {
     threadId: codexAppServerNotificationThreadId(notification),
     turnId: codexAppServerNotificationTurnId(notification)
   };
+
+  if (method === "error") {
+    return {
+      ...base,
+      kind: "provider_error",
+      text: codexAppServerNotificationError(notification)
+    };
+  }
 
   if (method === "item/reasoning/summaryPartAdded" || method === "item/reasoning/summaryTextDelta") {
     return {

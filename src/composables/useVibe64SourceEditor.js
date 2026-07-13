@@ -249,6 +249,7 @@ function normalizeExplanation(value = null) {
     body: String(value.body || ""),
     createdAt: String(value.createdAt || ""),
     engine: String(value.engine || ""),
+    error: String(value.error || ""),
     followups,
     id,
     messages: normalizeExplanationMessages(value.messages, {
@@ -518,6 +519,7 @@ function localSourceExplanation({
     body: "",
     createdAt,
     engine: "agent-chat",
+    error: "",
     followups: [],
     id: explanationId,
     messages: [
@@ -580,6 +582,7 @@ function appendSourceEditorExplanationMessages(explanation = null, messages = []
 }
 
 function useVibe64SourceEditor({
+  navigateReferencedSource = null,
   openSyncState = null,
   projectSlug,
   readCurrentText = null,
@@ -616,6 +619,7 @@ function useVibe64SourceEditor({
   const creatingFile = ref(false);
   const loadingTree = ref(false);
   const loadingFile = ref(false);
+  const loadingPath = ref("");
   const saving = ref(false);
   const loadedVersion = ref(0);
   const cursorRequest = ref(null);
@@ -645,6 +649,9 @@ function useVibe64SourceEditor({
   const statusLabel = computed(() => {
     if (saveError.value) {
       return saveError.value;
+    }
+    if (loadingFile.value) {
+      return "Opening...";
     }
     if (saving.value) {
       return "Saving...";
@@ -895,14 +902,18 @@ function useVibe64SourceEditor({
     if (!normalizedPath || !canLoad.value) {
       return;
     }
-    if (dirty.value) {
-      await saveNow();
-    }
     const requestId = fileRequestId + 1;
     fileRequestId = requestId;
     loadError.value = "";
     saveError.value = "";
     loadingFile.value = true;
+    loadingPath.value = normalizedPath;
+    if (dirty.value) {
+      await saveNow();
+    }
+    if (requestId !== fileRequestId) {
+      return;
+    }
     try {
       const response = await sourceEditorRequest(vibe64SourceEditorFilePath(
         currentSessionsApiPath.value,
@@ -939,6 +950,7 @@ function useVibe64SourceEditor({
     } finally {
       if (requestId === fileRequestId) {
         loadingFile.value = false;
+        loadingPath.value = "";
       }
     }
   }
@@ -1216,6 +1228,20 @@ function useVibe64SourceEditor({
       if (!resolved.resolved || !resolved.path) {
         return false;
       }
+      if (typeof navigateReferencedSource === "function") {
+        try {
+          const handled = await navigateReferencedSource({
+            fromPath: normalizedFromPath,
+            path: resolved.path,
+            target: normalizedTarget
+          });
+          if (handled === true) {
+            return true;
+          }
+        } catch {
+          // Fall back to the normal in-editor file switch.
+        }
+      }
       await openFile(resolved.path);
       return true;
     } catch {
@@ -1279,10 +1305,17 @@ function useVibe64SourceEditor({
     if (!lastAssistant?.id) {
       return;
     }
-    activeExplanation.value = sourceEditorExplanationWithMessage(explanation, lastAssistant.id, {
+    const nextExplanation = sourceEditorExplanationWithMessage(explanation, lastAssistant.id, {
       status,
       text: text || lastAssistant.text
     });
+    activeExplanation.value = status === "failed"
+      ? {
+          ...nextExplanation,
+          error: text || nextExplanation?.error || "Source explanation failed.",
+          status: "failed"
+        }
+      : nextExplanation;
   }
 
   function applyExplanationStreamEvent(event = {}, requestId = explanationRequestId) {
@@ -1296,6 +1329,16 @@ function useVibe64SourceEditor({
       throw new Error(message);
     }
     const eventExplanation = normalizeExplanation(event.explanation);
+    if (event.type === "source-explanation.failed") {
+      const message = resolveResponseErrorMessage(event, "Source explanation failed.");
+      explanationError.value = message;
+      if (eventExplanation) {
+        activeExplanation.value = eventExplanation;
+      } else {
+        markActiveExplanationMessage("failed", message);
+      }
+      return;
+    }
     if (event.type === "source-explanation.started" || event.type === "source-explanation.followup.started") {
       if (eventExplanation) {
         activeExplanation.value = eventExplanation;
@@ -1322,6 +1365,9 @@ function useVibe64SourceEditor({
     }
     if (event.type === "source-explanation.finished" && eventExplanation) {
       activeExplanation.value = eventExplanation;
+      if (eventExplanation.status !== "failed") {
+        explanationError.value = "";
+      }
     }
   }
 
@@ -1339,7 +1385,9 @@ function useVibe64SourceEditor({
     });
   }
 
-  async function explainSelection(range = {}) {
+  async function explainSelection(range = {}, {
+    agentSettings: requestedAgentSettings = null
+  } = {}) {
     if (!selectedPath.value || !canLoad.value || explanationBusy.value) {
       return;
     }
@@ -1350,7 +1398,9 @@ function useVibe64SourceEditor({
     const explanationId = sourceEditorClientId("exp");
     const userMessageId = sourceEditorClientId("msg");
     const assistantMessageId = sourceEditorClientId("msg");
-    explanationAgentSettings.value = defaultVibe64SourceExplanationAgentSettings();
+    explanationAgentSettings.value = requestedAgentSettings
+      ? normalizeVibe64AgentSettings(requestedAgentSettings)
+      : defaultVibe64SourceExplanationAgentSettings();
     const agentSettings = normalizeVibe64AgentSettings(explanationAgentSettings.value);
     const previousExplanation = activeExplanation.value;
     activeExplanation.value = localSourceExplanation({
@@ -1402,6 +1452,27 @@ function useVibe64SourceEditor({
     }
   }
 
+  async function retryExplanation() {
+    const explanation = activeExplanation.value;
+    const range = explanation?.sourceRange || {};
+    const explanationPath = normalizeEditorPath(range.path);
+    if (!explanationPath || explanationBusy.value) {
+      return;
+    }
+    if (selectedPath.value !== explanationPath) {
+      await openFile(explanationPath);
+      if (selectedPath.value !== explanationPath) {
+        return;
+      }
+    }
+    await explainSelection({
+      ...range,
+      force: true
+    }, {
+      agentSettings: explanationAgentSettings.value
+    });
+  }
+
   async function stopExplanation() {
     const explanation = activeExplanation.value;
     if (!explanation?.id) {
@@ -1411,6 +1482,7 @@ function useVibe64SourceEditor({
     const controller = explanationAbortController;
     explanationAbortController = null;
     explanationBusy.value = false;
+    explanationError.value = "";
     markActiveExplanationMessage("stopped", "Stopped.");
     controller?.abort?.();
     if (!canLoad.value) {
@@ -1475,6 +1547,7 @@ function useVibe64SourceEditor({
 
   function closeExplanation() {
     clearExplanationStream();
+    explanationError.value = "";
     void disposeActiveExplanation();
   }
 
@@ -1495,8 +1568,15 @@ function useVibe64SourceEditor({
 
   async function sendExplanationFollowup() {
     const message = explanationFollowup.value.trim();
-    const explanationId = activeExplanation.value?.id || "";
-    if (!message || !explanationId || !canLoad.value || explanationBusy.value) {
+    const explanation = activeExplanation.value;
+    const explanationId = explanation?.id || "";
+    if (
+      !message ||
+      !explanationId ||
+      !explanation?.agentThreadId ||
+      !canLoad.value ||
+      explanationBusy.value
+    ) {
       return;
     }
     const requestId = explanationRequestId + 1;
@@ -1722,6 +1802,7 @@ function useVibe64SourceEditor({
     loadDirectory,
     loadMoreDirectory,
     loadingFile,
+    loadingPath,
     loadingTree,
     openFile,
     openFileMatch,
@@ -1732,6 +1813,7 @@ function useVibe64SourceEditor({
     policy,
     preexpandedDirectoryPaths,
     refresh: loadTree,
+    retryExplanation,
     revealedDirectoryPaths,
     saveError,
     saveNow,

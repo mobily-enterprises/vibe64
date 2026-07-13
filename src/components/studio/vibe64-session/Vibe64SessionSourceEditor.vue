@@ -1,6 +1,7 @@
 <template>
   <section
     class="vibe64-source-editor"
+    :class="{ 'vibe64-source-editor--code-focus': codeFocusMode }"
     aria-label="Session source editor"
   >
     <header
@@ -11,7 +12,7 @@
           :icon="mdiFileCodeOutline"
           size="19"
         />
-        <h2 :title="editor.selectedPath.value || 'Choose a source file'">
+        <h2 :title="editor.loadingPath.value || editor.selectedPath.value || 'Choose a source file'">
           {{ selectedFileName }}
         </h2>
       </div>
@@ -79,6 +80,7 @@
     </header>
 
     <div
+      v-if="!codeFocusMode"
       class="vibe64-source-editor__tools"
     >
       <div class="vibe64-source-editor__tool">
@@ -156,9 +158,13 @@
 
     <div
       class="vibe64-source-editor__body"
-      :class="{ 'vibe64-source-editor__body--file-list-collapsed': fileListCollapsed }"
+      :class="{
+        'vibe64-source-editor__body--code-focus': codeFocusMode,
+        'vibe64-source-editor__body--file-list-collapsed': fileListCollapsed && !codeFocusMode
+      }"
     >
       <aside
+        v-if="!codeFocusMode"
         class="vibe64-source-editor__sidebar"
         :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed }"
       >
@@ -313,7 +319,7 @@
           Select a file to edit.
         </div>
         <div
-          v-if="editor.explanationError.value"
+          v-if="editor.explanationError.value && !editor.activeExplanation.value"
           class="vibe64-source-editor__banner vibe64-source-editor__banner--error"
         >
           {{ editor.explanationError.value }}
@@ -328,8 +334,25 @@
           <div
             ref="editorElement"
             class="vibe64-source-editor__codemirror"
-            :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value }"
+            :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value || editor.loadingFile.value }"
           />
+          <div
+            v-if="editor.loadingFile.value"
+            aria-live="polite"
+            class="vibe64-source-editor__file-loading"
+            role="status"
+          >
+            <v-progress-circular
+              color="primary"
+              indeterminate
+              size="30"
+              width="3"
+            />
+            <div>
+              <strong>Opening {{ selectedFileName }}</strong>
+              <span>Loading the requested source file…</span>
+            </div>
+          </div>
           <div
             v-if="editor.activeExplanation.value"
             class="vibe64-source-editor__explanation-dock"
@@ -346,6 +369,7 @@
               @collapse="collapseExplanation"
               @open-range="openExplanationRange"
               @open-source-link="openExplanationSourceLink"
+              @retry="editor.retryExplanation"
               @send-followup="editor.sendExplanationFollowup"
               @stop="editor.stopExplanation"
               @update-agent-setting="editor.updateExplanationAgentSetting"
@@ -499,6 +523,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  codeFocusMode: {
+    default: false,
+    type: Boolean
+  },
   openRequest: {
     default: null,
     type: Object
@@ -522,6 +550,14 @@ const props = defineProps({
   askCodexAvailable: {
     default: false,
     type: Boolean
+  },
+  navigateReferencedSource: {
+    default: null,
+    type: Function
+  },
+  sourcePathClickWithoutModifier: {
+    default: false,
+    type: Boolean
   }
 });
 const emit = defineEmits(["ask-codex-about-file"]);
@@ -530,6 +566,7 @@ const editorElement = ref(null);
 let editorView = null;
 let resettingEditor = false;
 const editor = useVibe64SourceEditor({
+  navigateReferencedSource: (navigation) => props.navigateReferencedSource?.(navigation),
   openSyncState: () => props.openSyncState,
   projectSlug: () => props.projectSlug,
   readCurrentText: () => editorView?.state.doc.toString() ?? "",
@@ -561,7 +598,7 @@ const editorPerformanceSetup = [
 ];
 const sourcePathClickExtension = EditorView.domEventHandlers({
   click(event, view) {
-    if (!sourcePathModifierPressed(event) || event.button !== 0) {
+    if (!sourcePathNavigationGesture(event) || event.button !== 0) {
       return false;
     }
     const sourcePath = sourcePathReferenceAtEvent(view, event);
@@ -582,7 +619,7 @@ const sourcePathClickExtension = EditorView.domEventHandlers({
   },
   mousemove(event, view) {
     setSourcePathHoverState(view, Boolean(
-      sourcePathModifierPressed(event) &&
+      sourcePathNavigationGesture(event) &&
       sourcePathReferenceAtEvent(view, event)
     ));
     return false;
@@ -602,7 +639,9 @@ const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
 const fastOpenPanelVisible = computed(() => Boolean(editor.fileQuery.value));
 const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || editor.searchResults.value.length > 0);
 const selectedFileName = computed(() => (
-  editor.selectedPath.value ? basename(editor.selectedPath.value) : "Choose a source file"
+  editor.loadingPath.value || editor.selectedPath.value
+    ? basename(editor.loadingPath.value || editor.selectedPath.value)
+    : "Choose a source file"
 ));
 const newFileDirectoryLabel = computed(() => (
   newFileDirectory.value
@@ -831,6 +870,10 @@ function htmlSourceLanguage(options = {}) {
 
 function sourcePathModifierPressed(event = {}) {
   return event.ctrlKey || event.metaKey;
+}
+
+function sourcePathNavigationGesture(event = {}) {
+  return props.sourcePathClickWithoutModifier || sourcePathModifierPressed(event);
 }
 
 function setSourcePathHoverState(view, active = false) {
@@ -1528,6 +1571,7 @@ onBeforeUnmount(() => {
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .vibe64-source-editor__workspace--with-explanation {
@@ -1571,6 +1615,33 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__codemirror--hidden {
   display: none;
+}
+
+.vibe64-source-editor__file-loading {
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(var(--v-theme-primary), 0.1), transparent 44%),
+    rgb(var(--v-theme-surface));
+  display: flex;
+  gap: 0.8rem;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  z-index: 4;
+}
+
+.vibe64-source-editor__file-loading > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.vibe64-source-editor__file-loading strong {
+  font-size: 0.82rem;
+}
+
+.vibe64-source-editor__file-loading span {
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  font-size: 0.72rem;
 }
 
 .vibe64-source-editor__notice,
@@ -1630,5 +1701,14 @@ onBeforeUnmount(() => {
   .vibe64-source-editor__workspace--explanation-collapsed {
     grid-template-rows: minmax(0, 1fr) 2.65rem;
   }
+}
+
+.vibe64-source-editor--code-focus {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.vibe64-source-editor__body--code-focus {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 </style>

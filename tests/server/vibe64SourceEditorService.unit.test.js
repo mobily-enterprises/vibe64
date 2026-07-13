@@ -842,6 +842,71 @@ test("source editor streams explanation chat events through the agent service", 
   }
 });
 
+test("source editor preserves failed explanation details for recovery", async () => {
+  const events = [];
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      async streamDetachedAgentChatTurn(_sessionId, _input = {}, options = {}) {
+        options.onEvent({
+          threadId: "agent-thread-failed",
+          type: "thread"
+        });
+        options.onEvent({
+          status: "failed",
+          threadId: "agent-thread-failed",
+          turnId: "agent-turn-failed",
+          type: "turn"
+        });
+        return {
+          code: "invalid_value",
+          error: "Invalid value: 'max'. Use 'medium'.",
+          ok: false,
+          statusCode: 400,
+          threadId: "agent-thread-failed",
+          turnId: "agent-turn-failed"
+        };
+      }
+    }
+  });
+  try {
+    await fixture.service.streamExplanation({
+      assistantMessageId: "msg_assistant_failed",
+      endColumn: 20,
+      endLine: 1,
+      explanationId: "exp_failed",
+      path: "src/app.js",
+      scope: "selection",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1,
+      userMessageId: "msg_user_failed"
+    }, {
+      emit(event) {
+        events.push(event);
+      },
+      isClosed() {
+        return false;
+      }
+    });
+
+    const failed = events.find((event) => event.type === "source-explanation.failed");
+    const terminalError = events.find((event) => event.type === "source-explanation.error");
+    assert.equal(failed.error, "Invalid value: 'max'. Use 'medium'.");
+    assert.equal(failed.explanation.error, "Invalid value: 'max'. Use 'medium'.");
+    assert.equal(failed.explanation.status, "failed");
+    assert.equal(failed.explanation.agentThreadId, "agent-thread-failed");
+    assert.equal(failed.explanation.agentTurnId, "agent-turn-failed");
+    assert.equal(failed.explanation.messages.at(-1).status, "failed");
+    assert.equal(failed.explanation.messages.at(-1).text, "Invalid value: 'max'. Use 'medium'.");
+    assert.equal(terminalError.error, "Invalid value: 'max'. Use 'medium'.");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("source editor cleans abandoned explanation chats from its disk cleanup ledger", async () => {
   const deletedThreads = [];
   let streamCount = 0;

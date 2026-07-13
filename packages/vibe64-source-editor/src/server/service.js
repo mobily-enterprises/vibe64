@@ -1681,6 +1681,7 @@ function normalizeSourceEditorExplanation(value = {}) {
     body: String(source.body || ""),
     createdAt: normalizeText(source.createdAt),
     engine: normalizeText(source.engine || (source.agentThreadId ? "agent-chat" : "")),
+    error: String(source.error || ""),
     followups: normalizeSourceEditorFollowups(source.followups),
     id: normalizeSourceEditorExplanationId(source.id),
     messages: normalizeSourceEditorMessages(source.messages),
@@ -2219,7 +2220,7 @@ function sourceEditorAgentStreamHandlers({
       ...patch
     };
     setExplanation(next);
-    void remember(patch);
+    void remember(patch).catch(() => null);
     return next;
   };
 
@@ -2250,7 +2251,7 @@ function sourceEditorAgentStreamHandlers({
       setExplanation(next);
       void remember({
         messages: next.messages
-      });
+      }).catch(() => null);
       emitEvent("source-explanation.message", {
         messageId: assistantMessageId,
         role: "assistant",
@@ -2259,6 +2260,140 @@ function sourceEditorAgentStreamHandlers({
       });
     }
   };
+}
+
+function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, {
+  assistantMessageId = "",
+  emit = null,
+  explanationChats = null,
+  isClosed = null
+} = {}) {
+  let explanation = initialExplanation;
+  let writeQueue = Promise.resolve(explanation);
+  const currentExplanation = () => explanation;
+  const setExplanation = (value) => {
+    explanation = value;
+  };
+  const remember = (patch = {}) => {
+    const write = async () => {
+      const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
+        explanationChats
+      });
+      if (stopped) {
+        explanation = stopped;
+        return explanation;
+      }
+      explanation = await writeSourceEditorExplanation(context, {
+        ...explanation,
+        ...patch
+      }, {
+        explanationChats
+      });
+      return explanation;
+    };
+    writeQueue = writeQueue.then(write, write);
+    return writeQueue;
+  };
+  const emitEvent = (type, payload = {}) => {
+    emitSourceEditorExplanationEvent(emit, isClosed, type, {
+      explanation,
+      ...payload
+    });
+  };
+  const finish = async (body = "", patch = {}) => {
+    explanation = sourceEditorExplanationWithMessage(explanation, assistantMessageId, {
+      status: "complete",
+      text: body
+    });
+    explanation = await remember({
+      body,
+      error: "",
+      messages: explanation.messages,
+      status: "ready",
+      ...patch
+    });
+    explanation = await withSourceEditorExplanationFreshness(context, explanation);
+    emitEvent("source-explanation.finished", {
+      explanation
+    });
+    return explanation;
+  };
+
+  return {
+    currentExplanation,
+    emitEvent,
+    finish,
+    remember,
+    setExplanation,
+    streamHandlers: sourceEditorAgentStreamHandlers({
+      assistantMessageId,
+      currentExplanation,
+      emitEvent,
+      remember,
+      setExplanation
+    })
+  };
+}
+
+async function runTrackedSourceEditorAgentTurn(context = {}, {
+  assistantMessageId = "",
+  currentExplanation = () => ({}),
+  emitEvent = () => {},
+  explanationChats = null,
+  fallbackError = "Source explanation failed.",
+  remember = async () => ({}),
+  run = async () => ({})
+} = {}) {
+  const finishStoppedExplanation = async () => {
+    const stopped = await readStoppedSourceEditorExplanation(context, currentExplanation().id, {
+      explanationChats
+    });
+    if (!stopped) {
+      return null;
+    }
+    const explanation = await withSourceEditorExplanationFreshness(context, stopped);
+    emitEvent("source-explanation.finished", {
+      explanation
+    });
+    return explanation;
+  };
+
+  try {
+    const result = await run();
+    const stoppedExplanation = await finishStoppedExplanation();
+    return stoppedExplanation
+      ? { explanation: stoppedExplanation, stopped: true }
+      : { result, stopped: false };
+  } catch (error) {
+    const stoppedExplanation = await finishStoppedExplanation();
+    if (stoppedExplanation) {
+      return {
+        explanation: stoppedExplanation,
+        stopped: true
+      };
+    }
+    const failure = sourceEditorErrorResponse(error);
+    const message = normalizeText(failure.error) || fallbackError;
+    const failedExplanation = sourceEditorExplanationWithMessage(
+      currentExplanation(),
+      assistantMessageId,
+      {
+        status: "failed",
+        text: message
+      }
+    );
+    await remember({
+      error: message,
+      messages: failedExplanation.messages,
+      status: "failed"
+    });
+    emitEvent("source-explanation.failed", {
+      code: failure.code,
+      error: message,
+      statusCode: failure.statusCode
+    });
+    throw error;
+  }
 }
 
 async function streamSourceEditorExplanation(context = {}, input = {}, {
@@ -2275,7 +2410,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
   const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
   const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
-  let explanation = await writeSourceEditorExplanation(context, {
+  const explanation = await writeSourceEditorExplanation(context, {
     agentThreadId: "",
     agentSettings,
     agentTurnId: "",
@@ -2303,79 +2438,42 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
     explanationChats
   });
 
-  const remember = async (patch = {}) => {
-    const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
-      explanationChats
-    });
-    if (stopped) {
-      explanation = stopped;
-      return explanation;
-    }
-    explanation = await writeSourceEditorExplanation(context, {
-      ...explanation,
-      ...patch
-    }, {
-      explanationChats
-    });
-    return explanation;
-  };
-  const emitEvent = (type, payload = {}) => {
-    emitSourceEditorExplanationEvent(emit, isClosed, type, {
-      explanation,
-      ...payload
-    });
-  };
-  const streamHandlers = sourceEditorAgentStreamHandlers({
+  const stream = createSourceEditorExplanationStreamState(context, explanation, {
     assistantMessageId,
-    currentExplanation: () => explanation,
-    emitEvent,
-    remember,
-    setExplanation(value) {
-      explanation = value;
-    }
+    emit,
+    explanationChats,
+    isClosed
   });
 
-  emitEvent("source-explanation.started", {
+  stream.emitEvent("source-explanation.started", {
     assistantMessageId,
     userMessageId
   });
 
-  const result = await streamSourceEditorAgentTurn(context, {
-    agentSettings,
-    prompt: sourceEditorExplanationPrompt(explanationInput),
-    promptLabel: "Source code explanation",
-    terminalService,
-    ...streamHandlers
+  const trackedTurn = await runTrackedSourceEditorAgentTurn(context, {
+    assistantMessageId,
+    currentExplanation: stream.currentExplanation,
+    emitEvent: stream.emitEvent,
+    explanationChats,
+    remember: stream.remember,
+    run: () => streamSourceEditorAgentTurn(context, {
+      agentSettings,
+      prompt: sourceEditorExplanationPrompt(explanationInput),
+      promptLabel: "Source code explanation",
+      terminalService,
+      ...stream.streamHandlers
+    })
   });
-
-  const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
-    explanationChats
-  });
-  if (stopped) {
-    explanation = await withSourceEditorExplanationFreshness(context, stopped);
-    emitEvent("source-explanation.finished", {
-      explanation
-    });
-    return explanation;
+  if (trackedTurn.stopped) {
+    return trackedTurn.explanation;
   }
+  const result = trackedTurn.result;
 
-  explanation = sourceEditorExplanationWithMessage(explanation, assistantMessageId, {
-    status: "complete",
-    text: result.text
+  return stream.finish(result.text, {
+    agentThreadId: result.threadId || stream.currentExplanation().agentThreadId,
+    agentTurnId: result.turnId || stream.currentExplanation().agentTurnId,
+    summary: sourceEditorExplanationSummary(result.text)
   });
-  explanation = await remember({
-    agentThreadId: result.threadId || explanation.agentThreadId,
-    agentTurnId: result.turnId || explanation.agentTurnId,
-    body: result.text,
-    messages: explanation.messages,
-    summary: sourceEditorExplanationSummary(result.text),
-    status: "ready"
-  });
-  explanation = await withSourceEditorExplanationFreshness(context, explanation);
-  emitEvent("source-explanation.finished", {
-    explanation
-  });
-  return explanation;
 }
 
 function sourceEditorExplanationPrompt({
@@ -2521,7 +2619,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   const createdAt = new Date().toISOString();
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
   const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
-  let explanation = await writeSourceEditorExplanation(context, {
+  const explanation = await writeSourceEditorExplanation(context, {
     ...baseExplanation,
     agentSettings,
     messages: [
@@ -2534,73 +2632,46 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
         status: "thinking"
       })
     ],
+    error: "",
     ownerOriginId: baseExplanation.ownerOriginId || input.originId,
     status: "running"
   }, {
     explanationChats
   });
 
-  const remember = async (patch = {}) => {
-    const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
-      explanationChats
-    });
-    if (stopped) {
-      explanation = stopped;
-      return explanation;
-    }
-    explanation = await writeSourceEditorExplanation(context, {
-      ...explanation,
-      ...patch
-    }, {
-      explanationChats
-    });
-    return explanation;
-  };
-  const emitEvent = (type, payload = {}) => {
-    emitSourceEditorExplanationEvent(emit, isClosed, type, {
-      explanation,
-      ...payload
-    });
-  };
-  const streamHandlers = sourceEditorAgentStreamHandlers({
+  const stream = createSourceEditorExplanationStreamState(context, explanation, {
     assistantMessageId,
-    currentExplanation: () => explanation,
-    emitEvent,
-    remember,
-    setExplanation(value) {
-      explanation = value;
-    }
+    emit,
+    explanationChats,
+    isClosed
   });
 
-  emitEvent("source-explanation.followup.started", {
+  stream.emitEvent("source-explanation.followup.started", {
     assistantMessageId,
     userMessageId
   });
 
-  const result = await streamSourceEditorAgentTurn(context, {
-    agentSettings,
-    prompt: sourceEditorExplanationFollowupPrompt(baseExplanation, message),
-    promptLabel: "Source code explanation follow-up",
-    terminalService,
-    threadId: agentThreadId,
-    ...streamHandlers
+  const trackedTurn = await runTrackedSourceEditorAgentTurn(context, {
+    assistantMessageId,
+    currentExplanation: stream.currentExplanation,
+    emitEvent: stream.emitEvent,
+    explanationChats,
+    fallbackError: "Source explanation follow-up failed.",
+    remember: stream.remember,
+    run: () => streamSourceEditorAgentTurn(context, {
+      agentSettings,
+      prompt: sourceEditorExplanationFollowupPrompt(baseExplanation, message),
+      promptLabel: "Source code explanation follow-up",
+      terminalService,
+      threadId: agentThreadId,
+      ...stream.streamHandlers
+    })
   });
-
-  const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
-    explanationChats
-  });
-  if (stopped) {
-    explanation = await withSourceEditorExplanationFreshness(context, stopped);
-    emitEvent("source-explanation.finished", {
-      explanation
-    });
-    return explanation;
+  if (trackedTurn.stopped) {
+    return trackedTurn.explanation;
   }
+  const result = trackedTurn.result;
 
-  explanation = sourceEditorExplanationWithMessage(explanation, assistantMessageId, {
-    status: "complete",
-    text: result.text
-  });
   const nextFollowups = [
     ...baseExplanation.followups,
     {
@@ -2616,21 +2687,13 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
       text: result.text
     }
   ];
-  explanation = await remember({
-    agentThreadId: result.threadId || explanation.agentThreadId,
-    agentTurnId: result.turnId || explanation.agentTurnId,
-    body: result.text,
+  return stream.finish(result.text, {
+    agentThreadId: result.threadId || stream.currentExplanation().agentThreadId,
+    agentTurnId: result.turnId || stream.currentExplanation().agentTurnId,
     followups: nextFollowups,
-    messages: explanation.messages,
-    model: effectiveAgentSettings.model || explanation.model,
-    summary: sourceEditorExplanationSummary(result.text),
-    status: "ready"
+    model: effectiveAgentSettings.model || stream.currentExplanation().model,
+    summary: sourceEditorExplanationSummary(result.text)
   });
-  explanation = await withSourceEditorExplanationFreshness(context, explanation);
-  emitEvent("source-explanation.finished", {
-    explanation
-  });
-  return explanation;
 }
 
 async function stopSourceEditorExplanation(context = {}, explanationId = "", {

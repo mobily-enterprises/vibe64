@@ -106,6 +106,7 @@ function realtimeForEvent(event) {
 
 async function createLoadedEditor({
   currentText,
+  navigateReferencedSource = null,
   projectSlug = "beepollen",
   sessionId = "session-1"
 } = {}) {
@@ -114,6 +115,7 @@ async function createLoadedEditor({
   } = await import("../../src/composables/useVibe64SourceEditor.js");
   mocks.requestResults.push(treeResponse());
   const editor = useVibe64SourceEditor({
+    navigateReferencedSource,
     projectSlug: ref(projectSlug),
     readCurrentText: () => currentText.value,
     sessionId: ref(sessionId),
@@ -171,6 +173,64 @@ describe("useVibe64SourceEditor", () => {
     ]);
     expect(editor.savedHash.value).toBe("hash-2");
     expect(editor.dirty.value).toBe(false);
+  });
+
+  it("allows an immersive surface to intercept a resolved source reference", async () => {
+    const currentText = ref("");
+    const navigateReferencedSource = vi.fn(async () => true);
+    const editor = await createLoadedEditor({
+      currentText,
+      navigateReferencedSource
+    });
+    const requestCount = mocks.requestCalls.length;
+    mocks.requestResults.push({
+      path: "src/other.js",
+      resolved: true,
+      target: "./other.js"
+    });
+
+    await expect(editor.openReferencedSourcePath({
+      fromPath: "src/app.js",
+      target: "./other.js"
+    })).resolves.toBe(true);
+
+    expect(navigateReferencedSource).toHaveBeenCalledWith({
+      fromPath: "src/app.js",
+      path: "src/other.js",
+      target: "./other.js"
+    });
+    expect(mocks.requestCalls).toHaveLength(requestCount + 1);
+    expect(editor.selectedPath.value).toBe("src/app.js");
+  });
+
+  it("exposes the requested path while a different file is loading", async () => {
+    const currentText = ref("");
+    const editor = await createLoadedEditor({ currentText });
+    let resolveFile;
+    mocks.requestResults.push(new Promise((resolve) => {
+      resolveFile = resolve;
+    }));
+
+    const opening = editor.openFile("src/other.js");
+    await flushPromises();
+
+    expect(editor.loadingFile.value).toBe(true);
+    expect(editor.loadingPath.value).toBe("src/other.js");
+    expect(editor.selectedPath.value).toBe("src/app.js");
+    expect(editor.text.value).toBe("console.log('one');\n");
+    expect(editor.statusLabel.value).toBe("Opening...");
+
+    resolveFile(fileResponse({
+      hash: "other-hash",
+      path: "src/other.js",
+      text: "console.log('other');\n"
+    }));
+    await opening;
+
+    expect(editor.loadingFile.value).toBe(false);
+    expect(editor.loadingPath.value).toBe("");
+    expect(editor.selectedPath.value).toBe("src/other.js");
+    expect(editor.text.value).toBe("console.log('other');\n");
   });
 
   it("creates a new source file and opens it", async () => {

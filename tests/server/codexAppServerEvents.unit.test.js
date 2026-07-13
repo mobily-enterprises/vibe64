@@ -3,8 +3,43 @@ import test from "node:test";
 
 import {
   classifyCodexAppServerEvent,
-  codexAppServerContextRefreshReason
+  codexAppServerContextRefreshReason,
+  codexAppServerErrorText
 } from "../../packages/vibe64-terminals/src/server/codexAppServerEvents.js";
+
+test("Codex app-server errors retain structured provider details", () => {
+  const notification = {
+    method: "error",
+    params: {
+      error: {
+        additionalDetails: JSON.stringify({
+          error: {
+            code: "invalid_value",
+            message: "Invalid value: 'max'. Use 'medium'."
+          },
+          status: 400,
+          type: "error"
+        }),
+        message: "Codex app-server turn failed."
+      },
+      threadId: "thread-1",
+      turnId: "turn-1",
+      willRetry: false
+    }
+  };
+  assert.equal(
+    codexAppServerErrorText(notification.params.error),
+    "Codex app-server turn failed. Invalid value: 'max'. Use 'medium'."
+  );
+  assert.deepEqual(classifyCodexAppServerEvent(notification), {
+    itemId: "",
+    kind: "provider_error",
+    source: "error",
+    text: "Codex app-server turn failed. Invalid value: 'max'. Use 'medium'.",
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+});
 
 test("Codex app-server event classifier keeps final answers explicit", () => {
   assert.deepEqual(classifyCodexAppServerEvent({

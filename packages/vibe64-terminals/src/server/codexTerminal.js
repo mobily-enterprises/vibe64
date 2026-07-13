@@ -49,6 +49,7 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
+  effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
@@ -180,6 +181,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
 const CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH = 320;
 const CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS = 180_000;
+const CODEX_APP_SERVER_DETACHED_FAILURE_DETAIL_GRACE_MS = 500;
 const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
@@ -224,6 +226,31 @@ function codexAppTerminalOwnerMetadata(toolHome = {}) {
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);
+}
+
+function codexDetachedChatTurnError(error, {
+  agentSettings = {},
+  status = ""
+} = {}) {
+  const settings = effectiveVibe64AgentExecutionSettings(agentSettings);
+  const terminalStatus = ["failed", "interrupted"].includes(normalizeText(status))
+    ? normalizeText(status)
+    : "";
+  const requestDetails = [
+    settings.model ? `model ${settings.model}` : "",
+    settings.request.reasoning !== false && settings.thinking
+      ? `reasoning effort ${settings.thinking}`
+      : "",
+    terminalStatus ? `turn status ${terminalStatus}` : ""
+  ].filter(Boolean);
+  const message = errorMessage(error, "Codex app-server turn failed.");
+  const contextualMessage = requestDetails.length && !message.includes("Request details:")
+    ? `${message}\n\nRequest details: ${requestDetails.join("; ")}.`
+    : message;
+  const contextualError = new Error(contextualMessage);
+  contextualError.code = error?.code;
+  contextualError.statusCode = error?.statusCode;
+  return contextualError;
 }
 
 function codexAgentSettingsFromSession(session = {}) {
@@ -6646,6 +6673,7 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     let targetTurnId = "";
     let finalText = "";
+    let failureDetailTimeout = null;
     let settled = false;
     let timeout = null;
     let unsubscribe = null;
@@ -6657,6 +6685,8 @@ function createCodexTerminalController({
     function cleanup() {
       clearTimeout(timeout);
       timeout = null;
+      clearTimeout(failureDetailTimeout);
+      failureDetailTimeout = null;
       unsubscribe?.();
       unsubscribe = null;
     }
@@ -6690,14 +6720,33 @@ function createCodexTerminalController({
       });
     }
 
-    async function finalTextFromThread() {
+    async function resultFromThread() {
       if (!normalizedThreadId || !targetTurnId || typeof provider?.readThread !== "function") {
-        return "";
+        return {
+          status: "",
+          statusType: "",
+          text: ""
+        };
       }
       const thread = await provider.readThread(normalizedThreadId);
-      return codexAppServerProviderThreadAssistantSegments(thread, targetTurnId)
-        .map((segment) => segment.text)
-        .join("\n\n");
+      const rawStatus = thread.raw?.status || thread.response?.thread?.status;
+      return {
+        status: codexAppServerStatusFromValue(rawStatus),
+        statusType: normalizeText(typeof rawStatus === "string" ? rawStatus : rawStatus?.type),
+        text: codexAppServerProviderThreadAssistantSegments(thread, targetTurnId)
+          .map((segment) => segment.text)
+          .join("\n\n")
+      };
+    }
+
+    function failAfterDetailGrace(error) {
+      if (settled || failureDetailTimeout) {
+        return;
+      }
+      failureDetailTimeout = setTimeout(() => {
+        failureDetailTimeout = null;
+        fail(error);
+      }, CODEX_APP_SERVER_DETACHED_FAILURE_DETAIL_GRACE_MS);
     }
 
     async function finishFromCompletion(status = "completed") {
@@ -6706,10 +6755,17 @@ function createCodexTerminalController({
           pendingCompletionStatus = normalizeText(status) || "completed";
           return;
         }
-        const authoritativeText = await finalTextFromThread().catch(() => "");
-        finalText = authoritativeText || finalText;
+        const authoritative = await resultFromThread().catch(() => ({
+          status: "",
+          statusType: "",
+          text: ""
+        }));
+        finalText = authoritative.text || finalText;
         if (!finalText) {
-          fail(new Error("Codex app-server completed without a final assistant response."));
+          const systemError = authoritative.statusType === "systemError" || authoritative.status === "failed";
+          failAfterDetailGrace(new Error(systemError
+            ? "Codex app-server thread entered a system error before producing an assistant response."
+            : "Codex app-server completed without producing an assistant response."));
           return;
         }
         finish({
@@ -6739,10 +6795,13 @@ function createCodexTerminalController({
       failNow(error) {
         fail(error);
       },
+      failAfterDetailGrace(error) {
+        failAfterDetailGrace(error);
+      },
       setTurnId(turnId = "") {
         targetTurnId = normalizeText(turnId);
         if (pendingFailure) {
-          fail(pendingFailure);
+          failAfterDetailGrace(pendingFailure);
           return;
         }
         if (pendingCompletionStatus) {
@@ -6768,6 +6827,19 @@ function createCodexTerminalController({
                 }
                 const classification = classifyCodexAppServerEvent(notification);
                 emitWatcherEvent(classification);
+                if (
+                  classification.kind === "provider_error" &&
+                  classification.text &&
+                  codexAppServerNotificationParams(notification).willRetry !== true
+                ) {
+                  const error = new Error(classification.text);
+                  if (!targetTurnId) {
+                    pendingFailure = error;
+                    return;
+                  }
+                  fail(error);
+                  return;
+                }
                 if (classification.kind === "final_assistant_result" && classification.text) {
                   finalText = classification.text;
                 }
@@ -6782,7 +6854,7 @@ function createCodexTerminalController({
                     pendingFailure = error;
                     return;
                   }
-                  fail(error);
+                  failAfterDetailGrace(error);
                   return;
                 }
                 if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
@@ -6892,6 +6964,23 @@ function createCodexTerminalController({
           : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
       });
       const waitForResult = watcher.wait();
+      const throwWatcherFailure = async (fallbackError, status = "", {
+        waitForDetail = false
+      } = {}) => {
+        if (waitForDetail) {
+          watcher.failAfterDetailGrace(fallbackError);
+        } else {
+          watcher.failNow(fallbackError);
+        }
+        const error = await waitForResult.then(
+          () => fallbackError,
+          (watcherError) => watcherError
+        );
+        throw codexDetachedChatTurnError(error, {
+          agentSettings,
+          status
+        });
+      };
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
@@ -6903,9 +6992,7 @@ function createCodexTerminalController({
           workdir
         });
       } catch (error) {
-        watcher.failNow(error);
-        await waitForResult.catch(() => null);
-        throw error;
+        await throwWatcherFailure(error);
       }
       const turnId = normalizeText(delivery.turn?.id);
       const status = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
@@ -6917,15 +7004,28 @@ function createCodexTerminalController({
         type: "turn"
       });
       if (codexAppServerTurnStatusIsProviderFailure(status)) {
-        const error = new Error(`Codex app-server turn ${status}.`);
-        watcher.failNow(error);
-        await waitForResult.catch(() => null);
-        throw error;
+        const providerError = codexAppServerErrorText(
+          delivery.turn?.raw?.error ||
+          delivery.turn?.response?.turn?.error ||
+          delivery.turn?.error
+        );
+        const error = new Error(providerError || `Codex app-server turn ${status}.`);
+        await throwWatcherFailure(error, status, {
+          waitForDetail: true
+        });
       }
       if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
         await watcher.completeNow(status);
       }
-      const result = await waitForResult;
+      let result = null;
+      try {
+        result = await waitForResult;
+      } catch (error) {
+        throw codexDetachedChatTurnError(error, {
+          agentSettings,
+          status
+        });
+      }
       emitDetachedEvent({
         status: result.status || "completed",
         text: result.text,
