@@ -1032,6 +1032,7 @@ function useVibe64AutopilotController({
     commandPreview,
     commandResult,
     commandRunning,
+    commandTerminal: commandRunner.terminal || null,
     failure: visibleFailure,
     nextOperation,
     nextOperationKey,

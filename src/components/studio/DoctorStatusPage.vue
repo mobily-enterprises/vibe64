@@ -175,30 +175,57 @@
       @run="executeConfirmedRepair"
     />
 
-    <DoctorTerminalDialog
-      v-model="terminalDialogOpen"
+    <Vibe64Terminal
+      :collapsible="false"
       :command-preview="terminalCommandPreview"
-      :command-details="terminalCommandDetails"
-      :copy-status="terminalCopyStatus"
-      :error="terminalError"
-      :selected-text="terminalSelectedText"
-      :session-id="terminalSessionId"
-      :set-host="setTerminalHost"
+      :error="terminalError || terminalCloseError"
+      height="min(44vh, 20rem)"
+      presentation="dialog"
+      show-copy
       :status="terminalStatus"
-      :terminal-url="terminalUrl"
+      :terminal="terminal"
       :title="terminalTitle"
+      :visible="terminalDialogOpen"
       @close="closeTerminal"
-      @copy-selection="copyTerminalSelection"
-      @copy-url="copyTerminalUrl"
-      @send-ctrl-c="sendCtrlC"
-    />
+      @copy="terminalTextCopied"
+    >
+      <template #actions-before>
+        <v-btn
+          v-if="terminalUrl"
+          size="small"
+          variant="tonal"
+          @click="copyTerminalUrl"
+        >
+          Copy URL
+        </v-btn>
+      </template>
+
+      <template v-if="terminalCommandDetails" #before-terminal>
+        <details class="doctor-status__terminal-details">
+          <summary>Command details</summary>
+          <pre>{{ terminalCommandDetails }}</pre>
+        </details>
+      </template>
+
+      <template #footer="{ commandPreview, status }">
+        <span class="doctor-status__terminal-command">
+          {{ commandPreview || "No command running." }}
+        </span>
+        <span v-if="terminalCopyStatus" class="text-caption text-medium-emphasis">
+          {{ terminalCopyStatus }}
+        </span>
+        <v-chip v-if="status" size="x-small" variant="tonal">
+          {{ status }}
+        </v-chip>
+      </template>
+    </Vibe64Terminal>
   </section>
 </template>
 
 <script setup>
 import DoctorCheckList from "@/components/studio/doctor/DoctorCheckList.vue";
 import DoctorRepairDialog from "@/components/studio/doctor/DoctorRepairDialog.vue";
-import DoctorTerminalDialog from "@/components/studio/doctor/DoctorTerminalDialog.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import {
   doctorStatusPageEmits,
   useDoctorStatusPage,
@@ -222,7 +249,6 @@ const {
   confirmRepairAction,
   confirmRepairCommandPreview,
   confirmRepairFields,
-  copyTerminalSelection,
   copyTerminalUrl,
   detailsAreVisible,
   detailsOpen,
@@ -251,22 +277,21 @@ const {
   repairRequiresInput,
   repairRunning,
   runRepair,
-  sendCtrlC,
-  setTerminalHost,
   showAutomaticRepairNotice,
   showContinue,
   showQuietStatus,
   statusRefreshEnabled,
   summary,
   summaryIcon,
+  terminal,
+  terminalCloseError,
   terminalCommandDetails,
   terminalCommandPreview,
   terminalCopyStatus,
   terminalDialogOpen,
   terminalError,
-  terminalSelectedText,
-  terminalSessionId,
   terminalStatus,
+  terminalTextCopied,
   terminalTitle,
   terminalUrl,
   toggleDetails,
@@ -296,6 +321,26 @@ const {
 .studio-screen__lede,
 .doctor-status__command {
   overflow-wrap: anywhere;
+}
+
+.doctor-status__terminal-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doctor-status__terminal-details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.doctor-status__terminal-details pre {
+  margin: 0.5rem 0 0;
+  max-height: 10rem;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 .studio-screen__header > :first-child {

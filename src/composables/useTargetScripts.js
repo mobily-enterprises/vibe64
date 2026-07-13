@@ -3,7 +3,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
-import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
+import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -13,6 +13,7 @@ import {
 import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
+import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
   TARGET_SCRIPT_TERMINAL_API_SUFFIX,
   TARGET_SCRIPTS_API_SUFFIX,
@@ -28,7 +29,6 @@ function useTargetScripts({
   const projectSlug = useVibe64ProjectSlug();
   const starBusyId = ref("");
   const runBusyId = ref("");
-  const terminalVisible = ref(false);
   const currentTerminalScriptId = ref("");
   const currentTerminalScriptLabel = ref("");
   const selectedSession = computed(() => unref(session) || null);
@@ -65,11 +65,24 @@ function useTargetScripts({
     requestRecoveryLabel: "Target scripts"
   });
 
-  const terminal = useStudioTerminal({
-    webSocketUrl(terminalSessionId) {
-      return targetScriptTerminalWebSocketUrl(terminalSessionId);
-    }
+  const terminal = useVibe64Terminal({
+    driver: createWebSocketTerminalDriver({
+      webSocketUrl: targetScriptTerminalWebSocketUrl
+    }),
+    initiallyVisible: false,
+    policies: [{
+      actions: ["show", "expand"],
+      id: "show-target-script-error",
+      on: "error"
+    }, {
+      actions: ["show", "expand"],
+      id: "show-target-script-failure",
+      on: "exit",
+      when: (event) => event.exitCode !== 0
+    }],
+    presentation: "fullscreen"
   });
+  const terminalVisible = terminal.terminalVisible;
 
   const saveStarredCommand = useCommand({
     access: "never",
@@ -294,9 +307,6 @@ function useTargetScripts({
       await closeRunningTerminalOnly();
       terminal.resetTerminalSessionState();
       terminal.resetTerminalDisplay();
-      if (!(await terminal.setupTerminalUi())) {
-        throw new Error("Terminal view is not ready yet.");
-      }
       const session = await startTerminalCommand.run({
         scriptId
       });
@@ -360,11 +370,11 @@ function useTargetScripts({
     terminalCommandPreview: terminal.terminalCommandPreview,
     terminalError: terminal.terminalError,
     terminalExited: terminal.terminalExited,
-    terminalHost: terminal.terminalHost,
     terminalSessionId: terminal.terminalSessionId,
     terminalStarting: terminal.terminalStarting,
     terminalStatus: terminal.terminalStatus,
     terminalVisible,
+    terminal,
     toggleStar,
     visibleScripts
   };

@@ -367,6 +367,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     output: computed(() => headlessCommandMatchesSelectedSession.value ? autopilotCommandRunner.output.value : ""),
     running: computed(() => headlessCommandMatchesSelectedSession.value && autopilotCommandRunner.running.value),
     status: computed(() => headlessCommandMatchesSelectedSession.value ? autopilotCommandRunner.status.value : ""),
+    terminal: autopilotCommandRunner.terminal,
     terminalSessionId: computed(() => headlessCommandMatchesSelectedSession.value
       ? String(autopilotCommandRunner.lastResult.value?.terminalSessionId || "")
       : ""),

@@ -160,93 +160,26 @@
       </section>
     </div>
 
-    <v-dialog
-      v-if="terminalVisible"
-      v-model="terminalVisible"
-      aria-label="Target script terminal"
-      eager
-      fullscreen
-      persistent
-      transition="dialog-bottom-transition"
-    >
-      <v-card class="target-script-terminal">
-        <v-toolbar
-          border
-          class="target-script-terminal__toolbar"
-          color="surface"
-          density="comfortable"
-        >
-          <v-btn
-            :icon="mdiClose"
-            aria-label="Close target script terminal"
-            title="Close target script terminal"
-            variant="text"
-            @click="closeTerminal()"
-          />
-          <v-toolbar-title class="target-script-terminal__toolbar-title">
-            <span class="target-script-terminal__title">
-              {{ currentTerminalScriptLabel || "Target script" }}
-            </span>
-            <span class="target-script-terminal__subtitle">
-              {{ terminalCommandPreview || "Ready." }}
-            </span>
-          </v-toolbar-title>
-          <v-spacer />
-          <div class="target-script-terminal__actions">
-            <v-btn
-              v-if="canRetry"
-              :loading="terminalStarting"
-              color="primary"
-              size="small"
-              variant="flat"
-              @click="retryTerminal()"
-            >
-              Retry
-            </v-btn>
-            <v-btn
-              :disabled="!terminalSessionId || terminalExited"
-              size="small"
-              variant="text"
-              @click="sendCtrlC"
-            >
-              Ctrl-C
-            </v-btn>
-          </div>
-        </v-toolbar>
-
-        <v-card-text class="target-script-terminal__body">
-          <div class="target-script-terminal__stage">
-            <StudioErrorNotice
-              v-if="terminalError"
-              title="Target script terminal needs attention"
-              :error="terminalError"
-              compact
-              overlay
-            />
-
-            <div ref="terminalHost" class="target-script-terminal__host" />
-          </div>
-
-          <div class="target-script-terminal__footer">
-            <span>{{ terminalCommandPreview || "Ready." }}</span>
-            <v-chip
-              v-if="terminalStatus"
-              size="x-small"
-              variant="tonal"
-            >
-              {{ terminalStatus }}
-            </v-chip>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <Vibe64Terminal
+      :collapsible="false"
+      error-title="Target script terminal needs attention"
+      fill
+      :retryable="canRetry"
+      :show-copy="true"
+      :subtitle="terminalCommandPreview || 'Ready.'"
+      :terminal="terminal"
+      :title="currentTerminalScriptLabel || 'Target script'"
+      presentation="fullscreen"
+      :visible="terminalVisible"
+      @close="closeTerminal"
+      @retry="retryTerminal"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from "vue";
 import {
-  mdiClose,
   mdiPlay,
   mdiRefresh,
   mdiRestore,
@@ -254,6 +187,7 @@ import {
   mdiStarOutline
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import {
   useTargetScripts
 } from "@/composables/useTargetScripts.js";
@@ -293,15 +227,9 @@ const {
   runBusyId,
   runScript,
   scriptSections,
-  sendCtrlC,
   starBusy,
+  terminal,
   terminalCommandPreview,
-  terminalError,
-  terminalExited,
-  terminalHost,
-  terminalSessionId,
-  terminalStarting,
-  terminalStatus,
   terminalVisible,
   toggleStar,
   visibleScripts
@@ -446,104 +374,9 @@ const {
   font-weight: 700;
 }
 
-.target-script-terminal {
-  display: flex;
-  height: 100vh;
-  min-height: 0;
-  min-width: 0;
-}
-
-.target-script-terminal__toolbar {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.target-script-terminal__toolbar-title {
-  display: grid;
-  gap: 0.05rem;
-  min-width: 0;
-}
-
-.target-script-terminal__title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1.2;
-  min-width: 0;
-}
-
-.target-script-terminal__subtitle,
-.target-script-terminal__footer {
-  color: rgb(var(--v-theme-on-surface-variant));
-  font-size: 0.75rem;
-}
-
-.target-script-terminal__subtitle,
-.target-script-terminal__footer span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.target-script-terminal__actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.target-script-terminal__body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  padding: 0.75rem;
-}
-
-.target-script-terminal__stage {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  position: relative;
-}
-
-.target-script-terminal__host {
-  background: #101216;
-  border: 2px solid rgba(var(--v-theme-outline), 0.38);
-  border-radius: 6px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0.35rem;
-}
-
-.target-script-terminal__footer {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.75rem;
-  justify-content: space-between;
-  margin-top: 0.5rem;
-  min-width: 0;
-}
-
 @media (max-width: 760px) {
-  .target-script-terminal__footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .target-scripts-panel__toolbar,
-  .target-script-terminal__actions {
+  .target-scripts-panel__toolbar {
     justify-content: flex-start;
-  }
-
-  .target-script-terminal__body {
-    padding: 0.5rem;
   }
 }
 

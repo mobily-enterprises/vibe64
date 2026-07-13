@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
@@ -26,13 +26,14 @@ import {
   isClosedVibe64Session
 } from "@/lib/vibe64SessionViewModel.js";
 import {
-  useStudioTerminal
-} from "@/composables/useStudioTerminal.js";
+  useVibe64Terminal
+} from "@/composables/useVibe64Terminal.js";
 import {
   readLocalStorageJson,
   stableLocalStorageKeyPart,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
   vibe64RealtimeOriginPayload,
   vibe64RealtimePayloadFromCurrentTab
@@ -674,10 +675,12 @@ function useVibe64LaunchControls({
     selectedSession.value || {},
     projectSlug.value
   ));
-  const terminal = useStudioTerminal({
-    webSocketUrl(terminalId) {
-      return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
-    }
+  const terminal = useVibe64Terminal({
+    driver: createWebSocketTerminalDriver({
+      webSocketUrl(terminalId) {
+        return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
+      }
+    })
   });
   const {
     applyTerminalSession,
@@ -688,12 +691,10 @@ function useVibe64LaunchControls({
     resetTerminalDisplay,
     resetTerminalSessionState,
     sendCtrlC,
-    setupTerminalUi,
     terminalCommandPreview,
     terminalError,
     terminalExited,
     terminalExitCode,
-    terminalHost,
     terminalMetadata,
     terminalOutput,
     terminalSessionId,
@@ -1100,15 +1101,11 @@ function useVibe64LaunchControls({
 
   async function expandTerminal() {
     terminalExpanded.value = true;
-    await nextTick();
-    if (await setupTerminalUi()) {
-      await connectLaunchTerminal();
-    }
+    await connectLaunchTerminal();
   }
 
   function minimizeTerminal() {
     terminalExpanded.value = false;
-    disposeTerminalDisplay();
     void connectLaunchTerminal();
   }
 
@@ -1316,17 +1313,6 @@ function useVibe64LaunchControls({
     return openLaunchBrowserTarget(action, selectedSession.value, null, projectSlug.value);
   }
 
-  function setTerminalHost(element) {
-    terminalHost.value = element;
-    if (!element) {
-      return;
-    }
-    if (terminalExpanded.value) {
-      void setupTerminalUi();
-      void connectLaunchTerminal();
-    }
-  }
-
   watch(activeTerminal, (nextTerminal) => {
     if (!nextTerminal?.id) {
       clearStaleLaunchTerminal();
@@ -1351,18 +1337,6 @@ function useVibe64LaunchControls({
     }
     clearStaleLaunchTerminal();
     void refresh();
-  });
-
-  watch(terminalExpanded, async (expanded) => {
-    if (expanded) {
-      await nextTick();
-      if (await setupTerminalUi()) {
-        await connectLaunchTerminal();
-      }
-    } else {
-      disposeTerminalDisplay();
-      void connectLaunchTerminal();
-    }
   });
 
   watch(terminalDisplayed, (displayed) => {
@@ -1603,8 +1577,8 @@ function useVibe64LaunchControls({
     run,
     savePreviewInput,
     sendCtrlC,
-    setTerminalHost,
     stopTerminal,
+    terminal,
     terminalCanClose,
     terminalCanCopyLog,
     terminalCanRestart,
@@ -1617,7 +1591,6 @@ function useVibe64LaunchControls({
     terminalExpanded,
     terminalExited,
     terminalExitCode,
-    terminalHost,
     terminalIndicatorLabel,
     terminalIndicatorState,
     terminalIsRunning,

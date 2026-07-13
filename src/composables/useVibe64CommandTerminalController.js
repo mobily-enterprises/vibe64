@@ -5,7 +5,7 @@ import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
+import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import {
   useVibe64TerminalFailureFixCommand
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
@@ -13,6 +13,7 @@ import {
   resolveWebSocketUrl,
   scopedDevelopmentApiUrl
 } from "@/lib/studioUrls.js";
+import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
   vibe64CommandTerminalWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
@@ -373,21 +374,23 @@ function useVibe64CommandTerminalController(props, emit) {
     writeMethod: "POST"
   });
 
-  const terminal = useStudioTerminal({
+  const terminal = useVibe64Terminal({
+    driver: createWebSocketTerminalDriver({
+      webSocketUrl(terminalId) {
+        if (serviceTerminal.value) {
+          return resolveWebSocketUrl(`${serviceTerminalPath(serviceTerminalApiPath.value, terminalId)}/ws`);
+        }
+        if (launchTerminal.value) {
+          return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
+        }
+        if (projectToolTerminal.value) {
+          return vibe64ProjectToolTerminalWebSocketUrl(actionId.value, terminalId);
+        }
+        return vibe64CommandTerminalWebSocketUrl(sessionId.value, terminalId);
+      }
+    }),
     onSessionUpdate: handleTerminalSessionUpdate,
-    onStatusUpdate: handleTerminalStatusUpdate,
-    webSocketUrl(terminalId) {
-      if (serviceTerminal.value) {
-        return resolveWebSocketUrl(`${serviceTerminalPath(serviceTerminalApiPath.value, terminalId)}/ws`);
-      }
-      if (launchTerminal.value) {
-        return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
-      }
-      if (projectToolTerminal.value) {
-        return vibe64ProjectToolTerminalWebSocketUrl(actionId.value, terminalId);
-      }
-      return vibe64CommandTerminalWebSocketUrl(sessionId.value, terminalId);
-    }
+    onStatusUpdate: handleTerminalStatusUpdate
   });
 
   const {
@@ -399,12 +402,10 @@ function useVibe64CommandTerminalController(props, emit) {
     resetTerminalDisplay,
     resetTerminalSessionState,
     sendCtrlC,
-    setupTerminalUi,
     terminalCommandPreview,
     terminalError,
     terminalExited,
     terminalExitCode,
-    terminalHost,
     terminalMetadata,
     terminalOutput,
     terminalSessionId,
@@ -565,14 +566,6 @@ function useVibe64CommandTerminalController(props, emit) {
     }
 
     try {
-      if (!terminalHost.value) {
-        return false;
-      }
-      if (!(await setupTerminalUi())) {
-        terminalError.value = "Terminal view is not ready yet.";
-        return false;
-      }
-
       terminalClosedByUser.value = false;
       const initialTerminalSessionId = String(props.initialTerminalSessionId || "").trim();
       const startApiPaths = rememberTerminalApiPaths(currentTerminalApiPaths({
@@ -653,7 +646,6 @@ function useVibe64CommandTerminalController(props, emit) {
     if (
       !pendingStartRequestKey ||
       pendingStartRequestKey === handledStartRequestKey ||
-      !terminalHost.value ||
       !canStartTerminal.value
     ) {
       return;
@@ -774,9 +766,6 @@ function useVibe64CommandTerminalController(props, emit) {
 
   function toggleExpanded() {
     setExpanded(!expanded.value);
-    if (expanded.value) {
-      void setupTerminalUi();
-    }
   }
 
   async function focusTerminal() {
@@ -814,15 +803,6 @@ function useVibe64CommandTerminalController(props, emit) {
     void closePromise.catch(reportTerminalCloseFailure);
   });
 
-  watch(terminalHost, (host) => {
-    if (host) {
-      void setupTerminalUi();
-      void startPendingRequest();
-    }
-  }, {
-    flush: "post"
-  });
-
   onBeforeUnmount(() => {
     if (terminalShouldCloseOnUnmount({
       closeOnUnmount: props.closeOnUnmount
@@ -848,10 +828,10 @@ function useVibe64CommandTerminalController(props, emit) {
     requestAiFix,
     sendCtrlC,
     startTerminal,
+    terminal,
     terminalCommandPreview,
     terminalError,
     terminalExited,
-    terminalHost,
     terminalSessionId,
     terminalStarting,
     terminalStatus,

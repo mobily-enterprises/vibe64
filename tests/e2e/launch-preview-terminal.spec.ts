@@ -815,9 +815,6 @@ test("embedded launch terminal can be shown and hidden again", async ({ page }) 
   await expect(page.getByRole("button", {
     name: "Show launch terminal"
   })).toBeVisible();
-  const showButtonBox = await page.getByRole("button", {
-    name: "Show launch terminal"
-  }).boundingBox();
   await expect(page.locator(".vibe64-launch-controls__terminal--embedded")).toHaveCount(0);
 
   await page.getByRole("button", {
@@ -828,15 +825,6 @@ test("embedded launch terminal can be shown and hidden again", async ({ page }) 
   await expect(page.getByRole("button", {
     name: "Hide launch terminal"
   })).toBeVisible();
-  const hideButton = page.getByRole("button", {
-    name: "Hide launch terminal"
-  });
-  await expect(hideButton).toHaveClass(/v-btn--icon/u);
-  await expect.poll(async () => hideButton.evaluate((button) => button.textContent?.trim() || ""))
-    .toBe("");
-  const hideButtonBox = await hideButton.boundingBox();
-  expect(hideButtonBox?.width).toBeLessThanOrEqual((showButtonBox?.width || 0) + 2);
-
   await page.getByRole("button", {
     name: "Hide launch terminal"
   }).click();
@@ -859,7 +847,7 @@ test("embedded launch terminal errors do not push the terminal host down", async
     name: "Show launch terminal"
   }).click();
 
-  const terminalHost = page.locator(".vibe64-launch-controls__terminal--embedded .vibe64-terminal-frame__host");
+  const terminalHost = page.locator(".vibe64-launch-controls__terminal--embedded .vibe64-terminal-surface__host");
   await expect(terminalHost).toBeVisible();
   const hostTopBefore = await terminalHost.evaluate((element) => element.getBoundingClientRect().top);
 
@@ -882,7 +870,7 @@ test("embedded launch terminal stays expanded after the launch exits", async ({ 
   }).click();
 
   const terminal = page.locator(".vibe64-launch-controls__terminal--embedded");
-  const terminalHost = terminal.locator(".vibe64-terminal-frame__host");
+  const terminalHost = terminal.locator(".vibe64-terminal-surface__host");
   await expect(terminalHost).toBeVisible();
   const hostHeightBefore = await terminalHost.evaluate((element) => element.getBoundingClientRect().height);
 

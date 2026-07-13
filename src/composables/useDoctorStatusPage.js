@@ -145,10 +145,9 @@ function useDoctorStatusPage(props, emit) {
 
   const {
     closeTerminal,
-    copyTerminalSelection,
     copyTerminalUrl,
     openTerminal,
-    sendCtrlC,
+    terminal,
     terminalCloseError,
     terminalCommandDetails,
     terminalCommandPreview,
@@ -156,11 +155,9 @@ function useDoctorStatusPage(props, emit) {
     terminalDialogOpen,
     terminalError,
     terminalExitCode,
-    terminalHost,
     terminalOutput,
-    terminalSelectedText,
-    terminalSessionId,
     terminalStatus,
+    terminalTextCopied,
     terminalTitle,
     terminalUrl
   } = useDoctorTerminal({
@@ -441,15 +438,11 @@ function useDoctorStatusPage(props, emit) {
     return doctorSummaryIcon(quietSummary.value.state);
   });
 
-  function setTerminalHost(element) {
-    terminalHost.value = element;
-  }
-
   function toggleDetails() {
     detailsOpen.value = !detailsOpen.value;
   }
 
-    return {
+  return {
     actionInFlight,
     actionsDisabledNotice,
     automaticRepairError,
@@ -463,7 +456,6 @@ function useDoctorStatusPage(props, emit) {
     confirmRepairAction,
     confirmRepairCommandPreview,
     confirmRepairFields,
-    copyTerminalSelection,
     copyTerminalUrl,
     detailsAreVisible,
     detailsOpen,
@@ -492,22 +484,21 @@ function useDoctorStatusPage(props, emit) {
     repairRequiresInput,
     repairRunning,
     runRepair,
-    sendCtrlC,
-    setTerminalHost,
     showAutomaticRepairNotice,
     showContinue,
     showQuietStatus,
     statusRefreshEnabled,
     summary,
     summaryIcon,
+    terminal,
     terminalCommandDetails,
     terminalCommandPreview,
     terminalCopyStatus,
     terminalDialogOpen,
     terminalError,
-    terminalSelectedText,
-    terminalSessionId,
+    terminalCloseError,
     terminalStatus,
+    terminalTextCopied,
     terminalTitle,
     terminalUrl,
     toggleDetails,

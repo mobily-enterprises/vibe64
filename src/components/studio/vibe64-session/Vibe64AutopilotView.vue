@@ -417,16 +417,30 @@
     <section class="studio-autopilot__project-panel" aria-label="Project">
       <section class="studio-autopilot__preview-panel">
         <div
-          v-if="commandSpyVisible"
+          v-if="commandSpyVisible && commandTerminal"
           class="studio-autopilot__command-spy"
           :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
         >
-          <div class="studio-autopilot__command-spy-header">
-            <div class="studio-autopilot__command-spy-title">
-              <v-icon :icon="mdiConsoleLine" size="18" />
-              <span>{{ commandOverlayTitle }}</span>
-            </div>
-            <div class="studio-autopilot__command-spy-actions">
+          <Vibe64Terminal
+            :command-preview="commandPreview"
+            :error="commandTerminalError"
+            :expanded="commandSpyExpanded"
+            :fill="commandSpyExpanded"
+            :height="commandSpyExpanded ? '100%' : '0'"
+            :output="commandTerminalText"
+            :retryable="commandTerminalFailed"
+            :show-close="false"
+            :show-copy="true"
+            :show-interrupt="false"
+            :status="commandStatus || (commandTerminalFailed ? 'failed' : '')"
+            :subtitle="commandTerminalFailed ? commandFailureSummary : commandTerminalSummary"
+            :terminal="commandTerminal"
+            :title="commandOverlayTitle"
+            :visible="commandSpyVisible"
+            @retry="retryFromCommandFailure"
+            @update:expanded="commandSpyExpanded = $event"
+          >
+            <template #actions-before>
               <v-btn
                 v-if="commandRunning"
                 :prepend-icon="mdiStopCircleOutline"
@@ -439,16 +453,6 @@
               </v-btn>
               <v-btn
                 v-if="commandTerminalFailed"
-                :prepend-icon="mdiRefresh"
-                size="small"
-                type="button"
-                variant="tonal"
-                @click="retryFromCommandFailure"
-              >
-                Retry
-              </v-btn>
-              <v-btn
-                v-if="commandTerminalFailed"
                 :prepend-icon="mdiRobotOutline"
                 size="small"
                 type="button"
@@ -457,38 +461,8 @@
               >
                 Fix
               </v-btn>
-              <v-btn
-                :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
-                size="small"
-                :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
-                type="button"
-                variant="text"
-                @click="commandSpyExpanded = !commandSpyExpanded"
-              />
-            </div>
-          </div>
-          <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
-            {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
-          </p>
-          <Vibe64HeadlessCommandOutput
-            v-else
-            class="studio-autopilot__command-terminal-output"
-            :action-id="commandResult?.actionId || ''"
-            :action-label="commandResult?.actionLabel || ''"
-            :attempted-command="commandResult?.attemptedCommand || ''"
-            :command-preview="commandPreview"
-            compact
-            :error="commandTerminalError"
-            :exit-code="commandResult?.exitCode ?? null"
-            :failed="commandTerminalFailed"
-            :output="commandTerminalText"
-            :running="commandRunning"
-            :session-id="sessionId"
-            :status="commandStatus"
-            :terminal-session-id="commandResult?.terminalSessionId || ''"
-            title="Autopilot command"
-            @fix-requested="openFixCodexDialog"
-          />
+            </template>
+          </Vibe64Terminal>
         </div>
 
         <Vibe64DashboardShell
@@ -660,7 +634,7 @@ import { nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
-import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe64HeadlessCommandOutput.vue";
+import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
 import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
@@ -705,13 +679,13 @@ const {
   commandFailureSummary,
   commandOverlayTitle,
   commandPreview,
-  commandResult,
   commandRunning,
   commandSpyExpanded,
   commandSpyVisible,
   commandStatus,
   commandTerminalError,
   commandTerminalFailed,
+  commandTerminal,
   commandTerminalSummary,
   commandTerminalText,
   composerControlAgentControlsVisible,
@@ -750,16 +724,12 @@ const {
   fixTerminal,
   insertComposerMenuItemText,
   mdiArrowLeft,
-  mdiChevronDown,
-  mdiChevronUp,
   mdiClose,
-  mdiConsoleLine,
   mdiGithub,
   mdiRefresh,
   mdiRobotOutline,
   mdiStopCircleOutline,
   navigationBusy,
-  openFixCodexDialog,
   openSourceEditorFile,
   projectSlug,
   recoverStuckStep,
@@ -1131,8 +1101,7 @@ watch([
 }
 
 .studio-autopilot__status-actions :deep(.v-btn),
-.studio-autopilot__actions :deep(.v-btn),
-.studio-autopilot__command-spy-actions :deep(.v-btn:not(.v-btn--icon)) {
+.studio-autopilot__actions :deep(.v-btn) {
   background: var(--studio-control-bg, #fff) !important;
   border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
   border-radius: var(--studio-control-radius, 7px);
@@ -1144,8 +1113,7 @@ watch([
 }
 
 .studio-autopilot__status-actions :deep(.v-btn:hover),
-.studio-autopilot__actions :deep(.v-btn:hover),
-.studio-autopilot__command-spy-actions :deep(.v-btn:not(.v-btn--icon):hover) {
+.studio-autopilot__actions :deep(.v-btn:hover) {
   background: var(--studio-control-rest-bg, #f7f7f8) !important;
 }
 
@@ -1413,12 +1381,7 @@ watch([
 }
 
 .studio-autopilot__command-spy {
-  background: rgba(var(--v-theme-surface), 0.96);
-  border: 1px solid rgba(var(--v-theme-primary), 0.18);
-  border-radius: 12px;
-  box-shadow: 0 0.5rem 1.4rem rgba(15, 23, 42, 0.12);
   left: 0.75rem;
-  padding: 0.55rem 0.65rem;
   position: absolute;
   right: 0.75rem;
   top: 0.75rem;
@@ -1427,51 +1390,10 @@ watch([
 
 .studio-autopilot__command-spy--expanded {
   bottom: 0.75rem;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
 }
 
-.studio-autopilot__command-spy-header {
-  align-items: center;
-  display: flex;
-  gap: 0.65rem;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.studio-autopilot__command-spy-title,
-.studio-autopilot__command-spy-actions {
-  align-items: center;
-  display: flex;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.studio-autopilot__command-spy-title {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 720;
-}
-
-.studio-autopilot__command-spy-summary {
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.82rem;
-  line-height: 1.3;
-  margin: 0.35rem 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-autopilot__command-terminal-output {
+.studio-autopilot__command-spy :deep(.vibe64-terminal-surface) {
   height: 100%;
-  margin-top: 0.5rem;
-  min-height: 0;
-  text-align: left;
-}
-
-.studio-autopilot__command-terminal-output :deep(.studio-headless-command-output__text) {
-  border: 0;
-  border-radius: 10px;
   min-height: 0;
 }
 

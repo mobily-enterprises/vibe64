@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref, unref, watch } from "vue";
 import { useAccountAuthSessions } from "./useAccountAuthSessions.js";
-import { useStudioTerminal } from "/src/composables/useStudioTerminal.js";
+import { useVibe64Terminal } from "/src/composables/useVibe64Terminal.js";
+import { createWebSocketTerminalDriver } from "/src/lib/vibe64TerminalDriver.js";
 import {
   accountAuthTerminalWebSocketUrl
 } from "../lib/accountsGateApi.js";
@@ -36,9 +37,11 @@ function useProviderAccountsSetup(props) {
   const codexAuthStepsBySessionId = reactive({});
   const authTerminalAttentionOpenedSessionIds = new Set();
   const authTerminalSessionId = ref("");
-  const authTerminal = useStudioTerminal({
-    resizeReportDelayMs: 120,
-    webSocketUrl: accountAuthTerminalWebSocketUrl
+  const authTerminal = useVibe64Terminal({
+    driver: createWebSocketTerminalDriver({
+      webSocketUrl: accountAuthTerminalWebSocketUrl
+    }),
+    resizeReportDelayMs: 120
   });
   const authTerminalSession = computed(() => {
     if (!authTerminalSessionId.value) {
@@ -273,10 +276,6 @@ function useProviderAccountsSetup(props) {
     return Boolean(session?.id && authTerminalSessionId.value === session.id);
   }
 
-  function setAuthTerminalHost(element) {
-    authTerminal.terminalHost.value = element;
-  }
-
   async function toggleAuthTerminal(session = {}) {
     if (!session?.id) {
       return;
@@ -293,10 +292,10 @@ function useProviderAccountsSetup(props) {
       return;
     }
     authTerminalSessionId.value = session.id;
-    authTerminal.applyTerminalSession(session);
-    await authTerminal.setupTerminalUi();
-    await authTerminal.connectTerminalSocket();
-    await authTerminal.focusTerminal();
+    await authTerminal.attachTerminal(session, {
+      ownership: "attached",
+      show: true
+    });
   }
 
   async function openAuthTerminalForAttention(session = {}) {
@@ -313,7 +312,8 @@ function useProviderAccountsSetup(props) {
 
   function closeAuthTerminal() {
     authTerminalSessionId.value = "";
-    authTerminal.disposeTerminalUi();
+    authTerminal.hideTerminal({ manual: true });
+    authTerminal.disposeTerminalDisplay();
   }
 
   function cleanAuthOutput(output = "") {
@@ -480,7 +480,6 @@ function useProviderAccountsSetup(props) {
     primaryAuthLabel,
     requiresGitIdentity,
     sessionStatusMessage,
-    setAuthTerminalHost,
     setCodexAuthStep,
     startAccountApiKeyAuth,
     startAccountAuth,
