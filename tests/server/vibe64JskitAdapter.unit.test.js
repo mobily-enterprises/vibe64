@@ -774,6 +774,7 @@ test("jskit launch targets expose app and built app actions", async () => {
       },
       {
         defaultDisplay: "minimized",
+        defaultPreview: true,
         id: "dev",
         label: "Run app",
         previewOptions: [
@@ -832,6 +833,7 @@ test("jskit launch targets expose explicit Vibe64 Online child launch options", 
     assert.deepEqual(launchTargets, [
       {
         defaultDisplay: "minimized",
+        defaultPreview: true,
         id: "online",
         label: "Run Vibe64 Online",
         previewOptions: [
@@ -1007,6 +1009,7 @@ test("jskit launch targets wait for dependency installation", async () => {
       {
         available: false,
         defaultDisplay: "minimized",
+        defaultPreview: true,
         disabledReason: "Install dependencies before running the app.",
         id: "dev",
         label: "Run app",
@@ -1024,6 +1027,39 @@ test("jskit launch targets wait for dependency installation", async () => {
 
     assert.equal(spec.ok, false);
     assert.equal(spec.message, "Install dependencies before running the app.");
+  });
+});
+
+test("jskit launch targets accept dependencies installed by the agent", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+    await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
+
+    const session = {
+      metadata: {
+        source_path: targetRoot
+      },
+      sessionId: "jskit_launch_after_agent_install",
+      targetRoot
+    };
+    const launchTargets = await listJskitLaunchTargets({
+      session
+    });
+
+    assert.equal(launchTargets.find((target) => target.id === "dev")?.available, undefined);
+
+    const spec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
   });
 });
 

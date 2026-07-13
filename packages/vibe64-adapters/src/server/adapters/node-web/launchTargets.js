@@ -20,6 +20,7 @@ import {
 
 function launchTarget(id, label) {
   return launchTargetWithStartupArgsOption({
+    ...(id === "dev" ? { defaultPreview: true } : {}),
     id,
     label
   });

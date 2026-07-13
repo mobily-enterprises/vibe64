@@ -23,6 +23,7 @@ import {
 
 function laravelLaunchTarget(id, label) {
   return launchTargetWithStartupArgsOption({
+    ...(id === "serve" ? { defaultPreview: true } : {}),
     id,
     label
   });

@@ -41,6 +41,7 @@ import {
   startupArgsFromLaunchInput
 } from "../../launchPreviewOptions.js";
 import {
+  fileExists,
   nodeRuntimeShellCommand
 } from "../../nodePackage.js";
 import {
@@ -694,6 +695,7 @@ async function launchDescriptorUrlPath(worktreePath, {
 function jskitLaunchTarget(id, label) {
   return {
     defaultDisplay: "minimized",
+    ...(id === "dev" ? { defaultPreview: true } : {}),
     id,
     label
   };
@@ -722,14 +724,22 @@ function vibe64OnlinePublicSourceRootPreviewOption() {
 function vibe64OnlineLaunchTarget() {
   return {
     ...jskitLaunchTarget(JSKIT_ONLINE_LAUNCH_TARGET_ID, "Run Vibe64 Online"),
+    defaultPreview: true,
     previewOptions: [
       vibe64OnlinePublicSourceRootPreviewOption()
     ]
   };
 }
 
-function jskitDependenciesReady(session = {}) {
-  return String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes";
+async function jskitDependenciesReady(session = {}, worktreePath = sessionSourcePath(session)) {
+  if (String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes") {
+    return true;
+  }
+  if (!worktreePath) {
+    return false;
+  }
+  return await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"))
+    || await fileExists(path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli"));
 }
 
 function markLaunchTargetDependencyBlocked(launchTarget) {
@@ -1247,7 +1257,7 @@ async function listJskitLaunchTargets({
   const launchTargets = [];
   if (packageName === VIBE64_ONLINE_PACKAGE_NAME && scripts.dev) {
     launchTargets.push(vibe64OnlineLaunchTarget());
-    return jskitDependenciesReady(session)
+    return await jskitDependenciesReady(session, worktreePath)
       ? launchTargets
       : launchTargets.map(markLaunchTargetDependencyBlocked);
   }
@@ -1261,7 +1271,7 @@ async function listJskitLaunchTargets({
       previewRoutes
     }));
   }
-  return jskitDependenciesReady(session)
+  return await jskitDependenciesReady(session, worktreePath)
     ? launchTargets
     : launchTargets.map(markLaunchTargetDependencyBlocked);
 }
@@ -1469,7 +1479,7 @@ async function createJskitLaunchTargetTerminalSpec({
       message: "Create the session clone before running the app."
     };
   }
-  if (!jskitDependenciesReady(session)) {
+  if (!await jskitDependenciesReady(session, worktreePath)) {
     return {
       ok: false,
       message: "Install dependencies before running the app."

@@ -26,6 +26,7 @@ function launchModeForTarget(launchTargetId = "") {
 
 function vinextLaunchTarget(id, label) {
   return launchTargetWithStartupArgsOption({
+    ...(id === "dev" ? { defaultPreview: true } : {}),
     id,
     label
   });

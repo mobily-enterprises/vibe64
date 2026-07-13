@@ -536,6 +536,96 @@ test("launch terminal start writes session-readable preview diagnostics before a
   });
 });
 
+test("launch controller ensures an initial managed preview without a prior UI launch", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-ensure-initial-preview";
+    const session = {
+      metadata: {
+        workflow_driver_origin_id: TEST_WORKFLOW_ORIGIN_ID,
+        workflow_driver_username: "unit-owner"
+      },
+      sessionId,
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
+      targetRoot
+    };
+    const specTargetIds = [];
+    const terminalRequests = [];
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec({ launchTargetId }) {
+                specTargetIds.push(launchTargetId);
+                return {
+                  args: ["-lc", "npm run dev"],
+                  command: "bash",
+                  commandPreview: "npm run dev",
+                  cwd: targetRoot,
+                  metadata: {
+                    launchTargetId,
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    targetRoot
+                  },
+                  ok: true,
+                  waitForReadiness: false
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "built",
+                    label: "Run built app"
+                  },
+                  {
+                    defaultPreview: true,
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                return operation();
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                session.metadata[key] = value;
+              }
+            }
+          };
+        }
+      },
+      runCommand(request = {}) {
+        terminalRequests.push(request);
+        return {
+          id: "ensured-preview-terminal",
+          metadata: request.terminal.metadata,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await controller.ensurePreview(sessionId);
+
+    assert.equal(terminal.ok, true, JSON.stringify(terminal, null, 2));
+    assert.equal(terminal.id, "ensured-preview-terminal");
+    assert.deepEqual(specTargetIds, ["dev"]);
+    assert.equal(terminalRequests.length, 1);
+    assert.equal(terminalRequests[0].terminal.metadata.launchTargetId, "dev");
+  });
+});
+
 test("launch terminal start evaluates function env with the allocated terminal id", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-function-env";

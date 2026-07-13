@@ -347,12 +347,14 @@ function agentResultRoutingBriefing() {
 
 function managedPreviewPolicyInstruction() {
   return [
-    "- For every app, UI, browser, or runtime diagnosis, use only the Vibe64-managed preview. Never start another development server, choose another port, or replace the managed launch target.",
-    "- First run `vibe64-preview status --json`. Treat `endpoints.agent`, `terminal`, and `currentPage` as authoritative. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
+    "- For every app, UI, browser, or runtime diagnosis, use only the session's Vibe64-managed preview. Never start another development server, choose another port, or replace that preview.",
+    "- Before browser work, run `vibe64-preview ensure --wait --json`. This idempotent command starts, reuses, or recovers the session's one managed preview without requiring the user to open it first.",
+    "- Treat the returned `endpoints.agent`, `terminal`, and `currentPage` as authoritative. Use `vibe64-preview status --json` to refresh them. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
+    "- `currentPage` can be absent until a browser has visited the preview. For browser verification, navigate to `endpoints.agent.url`; do not treat an unobserved current page as a missing preview.",
     "- Read managed server output with `vibe64-preview logs --lines 200`. Do not launch a second server to obtain cleaner output.",
-    "- Run `vibe64-preview restart --wait` only when the managed preview is stopped, stale, unhealthy, or needs server-side changes loaded. Check status again after restarting.",
+    "- Do not ask the user to start or open the preview. If `vibe64-preview ensure --wait --json` fails, report its diagnostics as the managed-preview blocker.",
     "- Never substitute `npm run dev`, `npm start`, Vite, Next, JSKIT server commands, PHP development servers, or any other process that serves the app—even if a different port appears free.",
-    "- If `vibe64-preview`, its endpoint, or its current page is unavailable, report that managed-preview blocker clearly. Do not work around it by spinning up another server."
+    "- If `vibe64-preview` or its endpoint is unavailable, report that managed-preview blocker clearly. Do not work around it by spinning up another server."
   ].join("\n");
 }
 

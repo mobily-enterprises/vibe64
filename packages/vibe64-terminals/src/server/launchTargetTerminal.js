@@ -22,6 +22,9 @@ import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
+  managedPreviewTarget
+} from "@local/studio-terminal-core/shared";
+import {
   repairManagedSourcePermissions
 } from "@local/vibe64-execution/server";
 import {
@@ -38,7 +41,8 @@ import {
   previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  claimSessionWorkflowDriver
+  claimSessionWorkflowDriver,
+  workflowDriverFromSession
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
 import {
   vibe64SessionDebugDurationMs,
@@ -688,6 +692,62 @@ async function listLaunchTargets(context) {
 function findLaunchTarget(targets = [], launchTargetId = "") {
   const normalizedLaunchTargetId = normalizeLaunchTargetId(launchTargetId);
   return targets.find((target) => target.id === normalizedLaunchTargetId) || null;
+}
+
+function managedPreviewUnavailableMessage(launchTargets = []) {
+  const reasons = [...new Set(launchTargets
+    .map((target) => String(target?.disabledReason || "").trim())
+    .filter(Boolean))];
+  if (reasons.length > 0) {
+    return reasons.join(" ");
+  }
+  return launchTargets.length > 0
+    ? "The managed preview is not currently available."
+    : "This project does not currently provide a managed preview.";
+}
+
+function managedPreviewLaunchPlan({
+  launchTargets = [],
+  previewStatus = {}
+} = {}) {
+  const activeTerminal = previewStatus.activeTerminal || null;
+  const previewState = String(previewStatus.preview?.state || "").trim();
+  if (previewState === "ready" || (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))) {
+    return {
+      ready: true,
+      terminal: activeTerminal || {
+        ok: true
+      }
+    };
+  }
+
+  const activeMetadata = activeTerminal?.metadata || {};
+  const lastLaunchTarget = previewStatus.lastLaunchTarget || {};
+  const previousTargetId = normalizeLaunchTargetId(
+    lastLaunchTarget.id || activeMetadata.launchTargetId
+  );
+  const previousTarget = findLaunchTarget(launchTargets, previousTargetId);
+  const launchTarget = (
+    previousTarget && previousTarget.available !== false
+      ? previousTarget
+      : null
+  ) || managedPreviewTarget(launchTargets);
+  if (!launchTarget) {
+    return {
+      error: managedPreviewUnavailableMessage(launchTargets),
+      ready: false
+    };
+  }
+
+  const reusingPreviousTarget = launchTarget.id === previousTargetId;
+  return {
+    forceRestart: launchTerminalIsRunning(activeTerminal || {}),
+    launchInput: reusingPreviousTarget
+      ? normalizeLaunchInput(lastLaunchTarget.launchInput || activeMetadata.launchInput)
+      : {},
+    launchTargetId: launchTarget.id,
+    ready: false
+  };
 }
 
 function normalizePreviewRecovery(recovery = null) {
@@ -1652,7 +1712,7 @@ function createLaunchTargetTerminalController({
     return run;
   }
 
-  return Object.freeze({
+  const controller = {
     async close() {
       await Promise.allSettled([...launchReadyWrites.values()]);
       await launchPreviewProxies.closeAll();
@@ -1699,6 +1759,12 @@ function createLaunchTargetTerminalController({
       });
     },
 
+    ensurePreview(sessionId) {
+      return controller.startTerminal(sessionId, {
+        ensurePreview: true
+      });
+    },
+
     async openLaunchTarget(sessionId) {
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
@@ -1741,16 +1807,50 @@ function createLaunchTargetTerminalController({
       return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const cwd = sessionTerminalCwd(context.session, projectService);
-        const forceRestart = input.forceRestart === true;
-        const launchInput = normalizeLaunchInput(input.launchInput);
+        let forceRestart = input.forceRestart === true;
+        let launchInput = normalizeLaunchInput(input.launchInput);
+        let launchTargetId = normalizeLaunchTargetId(input.launchTargetId);
+        let launchTargets = null;
+        let workflowDriverOriginId = String(input.originId || "").trim();
+        if (input.ensurePreview === true) {
+          workflowDriverOriginId ||= workflowDriverFromSession(context.session).originId;
+          launchTargets = await listLaunchTargets(context);
+          const previewStatus = await resolveLaunchPreviewStatus({
+            context,
+            launchPreviewProxies,
+            launchTargets,
+            markReady: markLaunchReady,
+            options: {
+              env
+            },
+            publishSessionChanged,
+            sessionId
+          });
+          const launchPlan = managedPreviewLaunchPlan({
+            launchTargets,
+            previewStatus
+          });
+          if (launchPlan.ready) {
+            return launchPlan.terminal;
+          }
+          if (launchPlan.error) {
+            return {
+              error: launchPlan.error,
+              ok: false
+            };
+          }
+          forceRestart = launchPlan.forceRestart;
+          launchInput = launchPlan.launchInput;
+          launchTargetId = launchPlan.launchTargetId;
+        }
         const diagnosticBase = {
           cwd,
-          launchTargetId: input.launchTargetId,
+          launchTargetId,
           sessionId
         };
         try {
           await claimSessionWorkflowDriver(context.runtime, sessionId, {
-            originId: input?.originId || "",
+            originId: workflowDriverOriginId,
             reason: "launch-target",
             vibe64User: input?.vibe64User || null
           });
@@ -1794,8 +1894,8 @@ function createLaunchTargetTerminalController({
           workdir: cwd
         });
 
-        const launchTargets = await listLaunchTargets(context);
-        const launchTarget = findLaunchTarget(launchTargets, input.launchTargetId);
+        launchTargets ||= await listLaunchTargets(context);
+        const launchTarget = findLaunchTarget(launchTargets, launchTargetId);
         if (!launchTarget) {
           await writePreviewDiagnostic(context.session, {
             ...diagnosticBase,
@@ -2132,7 +2232,8 @@ function createLaunchTargetTerminalController({
         namespace: launchTargetTerminalNamespace(sessionId)
       });
     }
-  });
+  };
+  return Object.freeze(controller);
 }
 
 function previewPublicOriginForLaunch({

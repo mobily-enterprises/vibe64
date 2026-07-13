@@ -17,6 +17,105 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+test("agent preview command ensures the managed preview and waits for readiness", async () => {
+  const sessionId = "preview-command-ensure-session";
+  const ensureCalls = [];
+  const statuses = [
+    {
+      activeTerminal: {
+        id: "launch-terminal-1",
+        running: true,
+        status: "running"
+      },
+      lastLaunchTarget: {
+        agentHref: "http://vibe64-launch-agent:4100/",
+        id: "dev"
+      },
+      previewTarget: {
+        available: false,
+        href: ""
+      }
+    },
+    {
+      activeTerminal: {
+        id: "launch-terminal-1",
+        running: true,
+        status: "running"
+      },
+      lastLaunchTarget: {
+        agentHref: "http://vibe64-launch-agent:4100/",
+        id: "dev"
+      },
+      openTarget: {
+        href: "http://127.0.0.1:4100/"
+      },
+      previewTarget: {
+        available: true,
+        href: "/preview/session/",
+        targetHref: "http://127.0.0.1:4100/"
+      }
+    }
+  ];
+  let statusIndex = 0;
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async ensurePreview(receivedSessionId) {
+        ensureCalls.push(receivedSessionId);
+        return {
+          id: "launch-terminal-1",
+          ok: true
+        };
+      },
+      async launchStatus(receivedSessionId) {
+        assert.equal(receivedSessionId, sessionId);
+        const status = statuses[Math.min(statusIndex, statuses.length - 1)];
+        statusIndex += 1;
+        return status;
+      }
+    }
+  });
+
+  const result = await command.run({
+    args: [
+      "ensure",
+      "--wait",
+      "--json"
+    ],
+    sessionId
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(ensureCalls, [sessionId]);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    currentPage: null,
+    diagnostics: null,
+    endpoints: {
+      agent: {
+        hostname: "vibe64-launch-agent",
+        port: 4100,
+        url: "http://vibe64-launch-agent:4100/"
+      },
+      browser: {
+        hostname: "127.0.0.1",
+        port: 4100,
+        url: "http://127.0.0.1:4100/"
+      }
+    },
+    ensured: true,
+    launchTargetId: "dev",
+    ready: true,
+    stale: false,
+    terminal: {
+      command: "",
+      createdAt: "",
+      exitCode: null,
+      id: "launch-terminal-1",
+      running: true,
+      status: "running"
+    }
+  });
+});
+
 test("agent preview command restarts the managed launch target with saved input", async () => {
   const sessionId = "preview-command-session";
   const startCalls = [];

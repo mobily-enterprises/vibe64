@@ -1,1 +1,3 @@
-export {};
+export {
+  managedPreviewTarget
+} from "./managedPreview.js";

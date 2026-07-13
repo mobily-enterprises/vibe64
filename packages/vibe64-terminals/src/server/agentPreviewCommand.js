@@ -223,6 +223,7 @@ function responseError(message = "", code = "vibe64_agent_preview_command_failed
 function usageText() {
   return [
     "Usage:",
+    "  vibe64-preview ensure [--wait] [--json] [--timeout-ms <ms>]",
     "  vibe64-preview status [--json]",
     "  vibe64-preview logs [--lines <count>] [--json]",
     "  vibe64-preview restart [--wait] [--json] [--timeout-ms <ms>]",
@@ -442,15 +443,25 @@ function logsStdout(status = {}, {
   return `${header}\n\n${output || "No managed preview server output is available."}${output.endsWith("\n") ? "" : "\n"}`;
 }
 
-function restartStdout(summary = {}, {
+function previewStartStdout(summary = {}, {
+  command = "ensure",
   json = false
 } = {}) {
+  const payload = command === "restart"
+    ? {
+        ...summary,
+        restarted: true
+      }
+    : {
+        ...summary,
+        ensured: true
+      };
   if (json) {
-    return JSON.stringify(summary, null, 2) + "\n";
+    return JSON.stringify(payload, null, 2) + "\n";
   }
   return [
-    `Restarted preview${summary.launchTargetId ? ` ${summary.launchTargetId}` : ""}.`,
-    ...previewSummaryLines(summary)
+    command === "restart" ? "Restarted preview." : "Preview is ready.",
+    ...previewSummaryLines(payload)
   ].join("\n") + "\n";
 }
 
@@ -599,40 +610,49 @@ function createAgentPreviewCommandService({
         })
       });
     }
-    if (parsed.command !== "restart") {
+    if (!["ensure", "restart"].includes(parsed.command)) {
       return finish(responseError(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {
         exitCode: 2,
         stderr: usageText()
       }));
     }
-    if (typeof launchTarget.startTerminal !== "function") {
+    const ensuring = parsed.command === "ensure";
+    if (ensuring && typeof launchTarget.ensurePreview !== "function") {
+      return finish(responseError("Vibe64 managed preview startup is not available.", "vibe64_agent_preview_command_ensure_unavailable"));
+    }
+    if (!ensuring && typeof launchTarget.startTerminal !== "function") {
       return finish(responseError("Vibe64 preview restart is not available.", "vibe64_agent_preview_command_restart_unavailable"));
     }
 
-    const beforeStatus = await launchTarget.launchStatus(sessionId);
-    if (beforeStatus?.ok === false) {
-      return finish({
-        ...beforeStatus,
-        exitCode: 1,
-        stderr: `${beforeStatus.error || "Vibe64 preview status failed."}\n`
+    let started;
+    if (ensuring) {
+      started = await launchTarget.ensurePreview(sessionId);
+    } else {
+      const beforeStatus = await launchTarget.launchStatus(sessionId);
+      if (beforeStatus?.ok === false) {
+        return finish({
+          ...beforeStatus,
+          exitCode: 1,
+          stderr: `${beforeStatus.error || "Vibe64 preview status failed."}\n`
+        });
+      }
+      const launchTargetId = launchTargetIdFromStatus(beforeStatus);
+      if (!launchTargetId) {
+        return finish(responseError("No managed Vibe64 preview has been started for this session.", "vibe64_agent_preview_command_no_launch_target", {
+          exitCode: 1
+        }));
+      }
+      started = await launchTarget.startTerminal(sessionId, {
+        forceRestart: true,
+        launchInput: launchInputFromStatus(beforeStatus),
+        launchTargetId
       });
     }
-    const launchTargetId = launchTargetIdFromStatus(beforeStatus);
-    if (!launchTargetId) {
-      return finish(responseError("No managed Vibe64 launch target has been started for this session.", "vibe64_agent_preview_command_no_launch_target", {
-        exitCode: 1
-      }));
-    }
-    const started = await launchTarget.startTerminal(sessionId, {
-      forceRestart: true,
-      launchInput: launchInputFromStatus(beforeStatus),
-      launchTargetId
-    });
     if (started?.ok === false) {
       return finish({
         ...started,
         exitCode: 1,
-        stderr: `${started.error || "Vibe64 preview restart failed."}\n`
+        stderr: `${started.error || (ensuring ? "Vibe64 managed preview could not start." : "Vibe64 preview restart failed.")}\n`
       });
     }
     let status = await launchTarget.launchStatus(sessionId);
@@ -652,11 +672,11 @@ function createAgentPreviewCommandService({
           timedOut ? "vibe64_agent_preview_command_wait_timeout" : "vibe64_agent_preview_command_not_ready",
           {
             exitCode: 1,
-            stdout: restartStdout({
+            stdout: previewStartStdout({
               ...summary,
-              restarted: true,
               timedOut
             }, {
+              command: parsed.command,
               json: parsed.json
             })
           }
@@ -666,10 +686,8 @@ function createAgentPreviewCommandService({
     return finish({
       exitCode: 0,
       ok: true,
-      stdout: restartStdout({
-        ...statusSummary(status || {}, sessionId),
-        restarted: true
-      }, {
+      stdout: previewStartStdout(statusSummary(status || {}, sessionId), {
+        command: parsed.command,
         json: parsed.json
       })
     });

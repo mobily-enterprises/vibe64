@@ -13,6 +13,9 @@ import {
   PREVIEW_QUERY_MESSAGE_TYPE
 } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 import {
+  managedPreviewTarget
+} from "@local/studio-terminal-core/shared";
+import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
@@ -410,8 +413,7 @@ function useVibe64LaunchControlsSurface(props) {
       return null;
     }
     return embeddedAutoStartTarget.value ||
-      launchTargets.value.find((target) => target.available !== false) ||
-      null;
+      managedPreviewTarget(launchTargets.value);
   });
   const embeddedStartTargetUnavailableReason = computed(() => {
     const target = embeddedStartTarget.value;

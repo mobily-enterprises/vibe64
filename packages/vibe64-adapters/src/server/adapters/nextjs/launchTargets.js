@@ -31,6 +31,7 @@ function nextCommandOrPackageScript(packageJson = {}, packageManagerName = "npm"
 
 function nextjsLaunchTarget(id, label) {
   return launchTargetWithStartupArgsOption({
+    ...(id === "dev" ? { defaultPreview: true } : {}),
     id,
     label
   });

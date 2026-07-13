@@ -293,8 +293,11 @@ test("session briefing makes the managed preview the only permitted app server",
   });
 
   assert.match(briefing, /Managed preview policy:/u);
+  assert.match(briefing, /vibe64-preview ensure --wait --json/u);
   assert.match(briefing, /vibe64-preview status --json/u);
   assert.match(briefing, /vibe64-preview logs --lines 200/u);
+  assert.match(briefing, /without requiring the user to open it first/u);
+  assert.match(briefing, /do not treat an unobserved current page as a missing preview/u);
   assert.match(briefing, /Never start another development server/u);
   assert.match(briefing, /even if a different port appears free/u);
   assert.match(briefing, /Do not work around it by spinning up another server/u);
