@@ -91,7 +91,7 @@
     <div class="system-world__stage">
       <canvas
         ref="canvasElement"
-        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; begin a two-finger gesture vertically, use W and S, plus and minus, or Control-Up and Control-Down to move forward and back; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it; double-click a subsystem cloud to arrange its physical city stratum."
+        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; a vertical two-finger gesture dollies toward the cursor, while W and S, plus and minus, or Control-Up and Control-Down fly toward and away from the cursor; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it; double-click a subsystem cloud to arrange its physical city stratum."
         class="system-world__canvas"
         tabindex="0"
       />
@@ -635,7 +635,7 @@
 
       <div v-if="overview" class="system-world__controls-hint" aria-label="File city controls">
         <span><v-icon :icon="mdiMouse" size="13" /> Drag / arrows to move</span>
-        <span><v-icon :icon="mdiMouseScrollWheel" size="13" /> 2-finger ↕ / W S forward–back</span>
+        <span><v-icon :icon="mdiMouseScrollWheel" size="13" /> 2-finger ↕ / W S follow cursor</span>
         <span><v-icon :icon="mdiMouseRightClickOutline" size="13" /> 2-finger ↔ starts free orbit</span>
       </div>
 
@@ -704,7 +704,7 @@ import {
 } from "../world/worldLayout.js";
 import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "050";
+const rendererRevision = "051";
 
 const props = defineProps({
   active: {

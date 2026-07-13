@@ -718,7 +718,7 @@ function createSystemWorld({
   const camera = new THREE.PerspectiveCamera(42, 1, 1, 16_000);
   camera.position.set(0, 980, 1_150);
   const controls = new CameraControls(camera, canvas);
-  controls.dollyToCursor = false;
+  controls.dollyToCursor = true;
   controls.infinityDolly = false;
   controls.draggingSmoothTime = 0;
   controls.smoothTime = reducedMotion ? 0 : 0.18;
@@ -757,6 +757,7 @@ function createSystemWorld({
   const subsystemConnectionObjects = new Map();
   const subsystemConnectionPickables = [];
   const raycaster = new THREE.Raycaster();
+  const navigationPointer = new THREE.Vector2();
   const pointer = new THREE.Vector2();
   let active = true;
   let buildingEdgeLines = null;
@@ -2383,6 +2384,7 @@ function createSystemWorld({
   }
 
   function handlePointerMove(event) {
+    pointerNdc(event, navigationPointer);
     if (!grabState || event.pointerId !== grabState.pointerId) {
       updateSubsystemConnectionHover(event);
       return;
@@ -2404,6 +2406,28 @@ function createSystemWorld({
     markDirty();
   }
 
+  function walkTowardPointer(distance = 0, smooth = true) {
+    const step = Number(distance) || 0;
+    if (step === 0) {
+      return;
+    }
+    camera.updateMatrixWorld(true);
+    raycaster.setFromCamera(navigationPointer, camera);
+    const offset = raycaster.ray.direction.clone().multiplyScalar(step);
+    const position = controls.getPosition(new THREE.Vector3());
+    const target = controls.getTarget(new THREE.Vector3());
+    controls.setLookAt(
+      position.x + offset.x,
+      position.y + offset.y,
+      position.z + offset.z,
+      target.x + offset.x,
+      target.y + offset.y,
+      target.z + offset.z,
+      smooth && !reducedMotion
+    );
+    markDirty();
+  }
+
   function handleKeyDown(event) {
     if (event.defaultPrevented || event.altKey || event.metaKey) {
       return;
@@ -2417,9 +2441,9 @@ function createSystemWorld({
 
     if (event.ctrlKey) {
       if (event.key === "ArrowUp") {
-        void controls.dolly(dollyStep, smooth);
+        walkTowardPointer(dollyStep, smooth);
       } else if (event.key === "ArrowDown") {
-        void controls.dolly(-dollyStep, smooth);
+        walkTowardPointer(-dollyStep, smooth);
       } else {
         return;
       }
@@ -2441,13 +2465,13 @@ function createSystemWorld({
         case "W":
         case "+":
         case "=":
-          void controls.dolly(dollyStep, smooth);
+          walkTowardPointer(dollyStep, smooth);
           break;
         case "s":
         case "S":
         case "-":
         case "_":
-          void controls.dolly(-dollyStep, smooth);
+          walkTowardPointer(-dollyStep, smooth);
           break;
         default:
           handled = false;
