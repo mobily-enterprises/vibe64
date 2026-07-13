@@ -1459,9 +1459,118 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   assert.doesNotMatch(script, /credential\.helper=/u);
   assert.match(script, /git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
+  assert.match(script, /merge-base --is-ancestor "\$tracking_ref" HEAD/u);
+  assert.match(script, /Matching Vibe64 seed placeholder found/u);
+  assert.match(script, /merge --allow-unrelated-histories --strategy=ours/u);
+  assert.match(script, /origin\/%s contains history that is not in this local checkout/u);
   assert.match(script, /git -c safe\.directory="\$PWD" push -u origin "HEAD:\$remote_ref"/u);
   assert.doesNotMatch(script, /Working tree is already clean/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
+});
+
+test("Project Setup checkpoint refuses to push over unrelated remote history", async () => {
+  await withTemporaryRoot(async (root) => {
+    const localRoot = path.join(root, "local");
+    const remoteSourceRoot = path.join(root, "remote-source");
+    const remoteRoot = path.join(root, "origin.git");
+    await Promise.all([
+      mkdir(localRoot),
+      mkdir(remoteSourceRoot)
+    ]);
+    await createCommittedGitRepository(localRoot);
+    await createGitRepository(remoteSourceRoot);
+    runGit(remoteSourceRoot, ["config", "user.name", "Studio Test"]);
+    runGit(remoteSourceRoot, ["config", "user.email", "studio-test@example.com"]);
+    await writeFile(path.join(remoteSourceRoot, "README.md"), "# Remote placeholder\n", "utf8");
+    runGit(remoteSourceRoot, ["add", "README.md"]);
+    runGit(remoteSourceRoot, ["commit", "-m", "Remote placeholder"]);
+    runGit(root, ["init", "--bare", remoteRoot]);
+    runGit(remoteSourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(remoteSourceRoot, ["push", "origin", "main"]);
+    runGit(localRoot, ["remote", "add", "origin", remoteRoot]);
+    const remoteHeadBefore = runGit(root, ["--git-dir", remoteRoot, "rev-parse", "refs/heads/main"]);
+
+    const result = spawnSync("bash", ["-lc", gitCheckpointScript()], {
+      cwd: localRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VIBE64_CHECKPOINT_ALLOW_CREATE: "0",
+        VIBE64_COMMIT_MESSAGE: "Initial project setup"
+      }
+    });
+
+    assert.equal(result.status, 1);
+    assert.match(`${result.stdout}\n${result.stderr}`, /contains history that is not in this local checkout/u);
+    assert.match(`${result.stdout}\n${result.stderr}`, /Nothing was pushed/u);
+    assert.equal(
+      runGit(root, ["--git-dir", remoteRoot, "rev-parse", "refs/heads/main"]),
+      remoteHeadBefore
+    );
+  });
+});
+
+test("Project Setup checkpoint preserves and publishes over the matching seed placeholder", async () => {
+  await withTemporaryRoot(async (root) => {
+    const localRoot = path.join(root, "local");
+    const remoteSourceRoot = path.join(root, "remote-source");
+    const remoteRoot = path.join(root, "origin.git");
+    const seedMetadata = `${JSON.stringify({
+      id: "jskit-accounts",
+      repository: "vibe64-dev/jskit-seed-accounts",
+      schema: "vibe64.seed",
+      schemaVersion: 1
+    }, null, 2)}\n`;
+    const projectMetadata = `${JSON.stringify({
+      projectType: "jskit",
+      schema: "vibe64.project",
+      schemaVersion: 1
+    }, null, 2)}\n`;
+    await Promise.all([
+      mkdir(localRoot),
+      mkdir(remoteSourceRoot)
+    ]);
+    for (const repositoryRoot of [localRoot, remoteSourceRoot]) {
+      await createGitRepository(repositoryRoot);
+      runGit(repositoryRoot, ["config", "user.name", "Studio Test"]);
+      runGit(repositoryRoot, ["config", "user.email", "studio-test@example.com"]);
+      await writeFile(path.join(repositoryRoot, "vibe64.seed.json"), seedMetadata, "utf8");
+      await writeFile(path.join(repositoryRoot, "vibe64.project.json"), projectMetadata, "utf8");
+    }
+    await writeFile(path.join(remoteSourceRoot, "README.md"), "# Placeholder\n", "utf8");
+    runGit(remoteSourceRoot, ["add", "."]);
+    runGit(remoteSourceRoot, ["commit", "-m", "Add seed placeholder metadata"]);
+    const placeholderCommit = runGit(remoteSourceRoot, ["rev-parse", "HEAD"]);
+    await writeFile(path.join(localRoot, "README.md"), "# Complete seed\n", "utf8");
+    await writeFile(path.join(localRoot, "app.js"), "export const ready = true;\n", "utf8");
+    runGit(localRoot, ["add", "."]);
+    runGit(localRoot, ["commit", "-m", "Build complete seed"]);
+    const completedSeedCommit = runGit(localRoot, ["rev-parse", "HEAD"]);
+    runGit(root, ["init", "--bare", remoteRoot]);
+    runGit(remoteSourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(remoteSourceRoot, ["push", "origin", "main"]);
+    runGit(localRoot, ["remote", "add", "origin", remoteRoot]);
+
+    const result = spawnSync("bash", ["-lc", gitCheckpointScript()], {
+      cwd: localRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VIBE64_CHECKPOINT_ALLOW_CREATE: "0",
+        VIBE64_COMMIT_MESSAGE: "Initial project setup"
+      }
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(`${result.stdout}\n${result.stderr}`, /Matching Vibe64 seed placeholder found/u);
+    const publishedCommit = runGit(localRoot, ["rev-parse", "HEAD"]);
+    assert.equal(runGit(root, ["--git-dir", remoteRoot, "rev-parse", "refs/heads/main"]), publishedCommit);
+    assert.equal(
+      runGit(localRoot, ["show", "-s", "--format=%P", publishedCommit]),
+      `${completedSeedCommit} ${placeholderCommit}`
+    );
+    assert.equal(runGit(localRoot, ["show", `${publishedCommit}:app.js`]), "export const ready = true;");
+  });
 });
 
 test("Project Setup builds GitHub branch ref API paths", () => {

@@ -45,16 +45,26 @@ async function runDoctorHostCommand(commandArgs = [], {
 }
 
 async function runDoctorGit(targetRoot, args = [], options = {}) {
+  const runtimes = [...new Set([
+    "git",
+    ...(Array.isArray(options.runtimes) ? options.runtimes : [])
+  ])];
   return runDoctorHostCommand(doctorGitCommandArgs(targetRoot, args), {
     targetRoot,
-    ...options
+    ...options,
+    runtimes
   });
 }
 
 async function runDoctorGh(targetRoot, args = [], options = {}) {
+  const runtimes = [...new Set([
+    "gh",
+    ...(Array.isArray(options.runtimes) ? options.runtimes : [])
+  ])];
   return runDoctorHostCommand(["gh", ...args], {
     targetRoot,
-    ...options
+    ...options,
+    runtimes
   });
 }
 
