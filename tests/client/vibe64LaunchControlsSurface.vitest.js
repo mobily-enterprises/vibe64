@@ -4,6 +4,7 @@ import {
   launchPreviewAddressNavigationUrl,
   launchPreviewEmptyText,
   launchPreviewFrameUrl,
+  previewFrameLifecycleIdentity,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,
@@ -257,6 +258,39 @@ describe("Vibe64 launch controls surface", () => {
       displayBaseUrl: "https://app.example.test/home",
       visitedUrl: "https://app.example.test/jobs/42?tab=docs#files"
     })).toBe("https://preview.example.test/jobs/42?tab=docs&vibe64_preview_token=abc#files");
+  });
+
+  it("keeps preview lifecycle identity stable across output-only proxy token changes", () => {
+    const lifecycle = {
+      launchTargetId: "dev",
+      sessionId: "session-1",
+      terminalSessionId: "terminal-1"
+    };
+
+    expect(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?vibe64_preview_token=first"
+    })).toBe(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?vibe64_preview_token=second"
+    }));
+
+    expect(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?vibe64_preview_token=first"
+    })).not.toBe(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?tab=users&vibe64_preview_token=first"
+    }));
+
+    expect(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?vibe64_preview_token=first"
+    })).not.toBe(previewFrameLifecycleIdentity({
+      ...lifecycle,
+      src: "https://preview.example.test/settings?vibe64_preview_token=first",
+      terminalSessionId: "terminal-2"
+    }));
   });
 
   it("stores preview location as a host-independent route", () => {

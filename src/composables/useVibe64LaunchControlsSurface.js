@@ -183,6 +183,24 @@ function launchPreviewFrameUrl({
   }
 }
 
+function previewFrameLifecycleIdentity({
+  launchTargetId = "",
+  sessionId = "",
+  src = "",
+  terminalSessionId = ""
+} = {}) {
+  const canonicalSrc = previewUrlWithoutDisplayParams(src);
+  if (!canonicalSrc) {
+    return "";
+  }
+  return [
+    String(sessionId || "").trim(),
+    String(launchTargetId || "").trim(),
+    String(terminalSessionId || "").trim(),
+    canonicalSrc
+  ].join("\u0000");
+}
+
 function previewUrlForDebug(value = "") {
   return previewUrlWithoutDisplayParams(value);
 }
@@ -330,6 +348,7 @@ function useVibe64LaunchControlsSurface(props) {
     terminalIsRunning,
     terminalPreviewRequiresProxy,
     terminalStatus,
+    terminalSessionId,
     terminalSubtitle,
     terminalTitle,
     terminalVisible,
@@ -353,6 +372,7 @@ function useVibe64LaunchControlsSurface(props) {
   const previewFrame = ref(null);
   const previewFrameRequest = ref({
     id: 0,
+    identity: "",
     src: ""
   });
   const previewLoadedFrameRequestId = ref(0);
@@ -626,6 +646,7 @@ function useVibe64LaunchControlsSurface(props) {
     }
     previewFrameRequest.value = {
       id: previewFrameRequest.value.id + 1,
+      identity: "",
       src: ""
     };
     previewLoadedFrameRequestId.value = 0;
@@ -649,11 +670,18 @@ function useVibe64LaunchControlsSurface(props) {
       displayBaseUrl: previewDisplayBaseUrl.value,
       visitedUrl: visitedUrl || previewDisplayBaseUrl.value || previewBaseUrl.value
     });
-    if (!nextSrc || (!force && nextSrc === previewFrameRequest.value.src)) {
+    const nextIdentity = previewFrameLifecycleIdentity({
+      launchTargetId: activeLaunchTarget.value?.id,
+      sessionId: props.session?.sessionId,
+      src: nextSrc,
+      terminalSessionId: terminalSessionId.value
+    });
+    if (!nextIdentity || (!force && nextIdentity === previewFrameRequest.value.identity)) {
       return false;
     }
     previewFrameRequest.value = {
       id: previewFrameRequest.value.id + 1,
+      identity: nextIdentity,
       src: nextSrc
     };
     previewDebugLog("frame.requested", {
@@ -1136,7 +1164,6 @@ function useVibe64LaunchControlsSurface(props) {
       resetPreviewHistory(previewVisitedUrl.value);
     }
     if (!ready || !baseUrl) {
-      clearPreviewFrame("preview-not-ready");
       return;
     }
     requestPreviewFrame({
@@ -1145,6 +1172,14 @@ function useVibe64LaunchControlsSurface(props) {
   }, {
     flush: "sync",
     immediate: true
+  });
+
+  watch(() => String(props.session?.sessionId || ""), (sessionId, previousSessionId) => {
+    if (previousSessionId && sessionId !== previousSessionId) {
+      clearPreviewFrame("session-changed");
+    }
+  }, {
+    flush: "sync"
   });
   
   watch(previewPaneDisplayed, (displayed) => {
@@ -1485,6 +1520,7 @@ export {
   launchPreviewAddressNavigationUrl,
   launchPreviewEmptyText,
   launchPreviewFrameUrl,
+  previewFrameLifecycleIdentity,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,
