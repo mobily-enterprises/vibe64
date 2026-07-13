@@ -284,35 +284,23 @@
             <div>
               <div class="system-world__eyebrow">PHYSICAL STRATUM</div>
               <strong>{{ selectedSubsystem.depth ? `Layer -${selectedSubsystem.depth}` : 'Generated baseline' }}</strong>
-              <p>Shift every owned slab and scattered building together to express this subsystem's architectural layer.</p>
+              <p>Choose one of five physical layers. Every owned slab and scattered building moves together.</p>
             </div>
             <div class="system-world__stratum-controls" aria-label="Subsystem physical stratum controls">
-              <v-btn
-                :disabled="savingSubsystemDepth || selectedSubsystem.depth <= 0"
-                size="x-small"
-                type="button"
-                variant="tonal"
-                @click="shiftSelectedSubsystemDepth(-1)"
-              >
-                Restore one level
-              </v-btn>
-              <div class="system-world__stratum-scale" aria-hidden="true">
-                <span
+              <div class="system-world__stratum-scale" aria-label="Choose physical layer">
+                <button
                   v-for="depth in subsystemDepthLevels"
                   :key="depth"
+                  :aria-label="depth ? `Move to layer minus ${depth}` : 'Move to generated baseline layer zero'"
+                  :aria-pressed="selectedSubsystem.depth === depth"
                   :class="{ 'system-world__stratum-level--active': selectedSubsystem.depth === depth }"
-                >{{ depth ? `−${depth}` : '0' }}</span>
+                  :disabled="savingSubsystemDepth"
+                  type="button"
+                  @click="chooseSelectedSubsystemDepth(depth)"
+                >
+                  {{ depth ? `−${depth}` : '0' }}
+                </button>
               </div>
-              <v-btn
-                :disabled="savingSubsystemDepth || selectedSubsystem.depth >= SUBSYSTEM_DEPTH_MAX"
-                :loading="savingSubsystemDepth"
-                size="x-small"
-                type="button"
-                variant="tonal"
-                @click="shiftSelectedSubsystemDepth(1)"
-              >
-                Lower one level
-              </v-btn>
               <v-btn
                 :disabled="savingSubsystemDepth"
                 size="x-small"
@@ -714,11 +702,9 @@ import {
   isVisuallyLargeFile,
   topLevelPrecincts
 } from "../world/worldLayout.js";
-import {
-  SUBSYSTEM_DEPTH_MAX
-} from "../../shared/subsystemPresentationContract.js";
+import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "047";
+const rendererRevision = "048";
 
 const props = defineProps({
   active: {
@@ -1058,12 +1044,12 @@ function handleSubsystemDepthEdit(subsystem) {
   editingSubsystemDepthId.value = subsystem.id;
 }
 
-async function shiftSelectedSubsystemDepth(change) {
+async function chooseSelectedSubsystemDepth(depth) {
   if (!selectedSubsystem.value?.key || savingSubsystemDepth.value) {
     return;
   }
   const currentDepth = Number(selectedSubsystem.value.depth) || 0;
-  const nextDepth = Math.max(0, Math.min(SUBSYSTEM_DEPTH_MAX, currentDepth + change));
+  const nextDepth = Math.max(0, Math.min(SUBSYSTEM_DEPTH_MAX, Number(depth) || 0));
   if (nextDepth === currentDepth) {
     return;
   }
@@ -1820,7 +1806,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 0.05rem 0;
 }
-.system-world__stratum-scale span {
+.system-world__stratum-scale button {
   align-items: center;
   background: rgba(178, 208, 243, 0.1);
   border: 1px solid rgba(178, 208, 243, 0.16);
@@ -1830,7 +1816,13 @@ onBeforeUnmount(() => {
   font-size: 0.52rem;
   height: 1.25rem;
   justify-content: center;
+  padding: 0;
   width: 1.25rem;
+}
+.system-world__stratum-scale button:not(:disabled) { cursor: pointer; }
+.system-world__stratum-scale button:focus-visible {
+  outline: 2px solid #b9f1ff;
+  outline-offset: 2px;
 }
 .system-world__stratum-scale .system-world__stratum-level--active {
   background: #67dcff;
@@ -1838,6 +1830,7 @@ onBeforeUnmount(() => {
   color: #06101b;
   font-weight: 800;
 }
+.system-world__stratum-scale button:disabled { cursor: wait; opacity: 0.72; }
 
 .system-world__section { border-top: 1px solid rgba(133, 166, 220, 0.12); margin-top: 0.7rem; padding-top: 0.65rem; }
 .system-world__section > strong { display: block; font-size: 0.64rem; letter-spacing: 0.05em; margin-bottom: 0.34rem; text-transform: uppercase; }

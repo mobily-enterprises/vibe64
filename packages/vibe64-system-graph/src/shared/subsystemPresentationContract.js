@@ -1,5 +1,5 @@
 const SUBSYSTEM_DEPTH_DECLARATION_KIND = "subsystem-depth";
-const SUBSYSTEM_DEPTH_MAX = 2;
+const SUBSYSTEM_DEPTH_MAX = 4;
 
 function normalizeSubsystemDepth(value = 0) {
   const depth = Number(value);

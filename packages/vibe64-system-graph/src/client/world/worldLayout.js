@@ -9,8 +9,8 @@ import {
 
 const DIRECTORY_ELEVATION_STEP = 40;
 const FILE_BUILDING_HEIGHT_MAX = 322;
-const SUBSYSTEM_STRATUM_CLEARANCE = 198;
-const SUBSYSTEM_DEPTH_STEP = FILE_BUILDING_HEIGHT_MAX + SUBSYSTEM_STRATUM_CLEARANCE;
+const SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER = 2;
+const SUBSYSTEM_STRATUM_MIN_SEPARATION = 520;
 const SUBSYSTEM_SKY_ELEVATION = 720;
 
 function stableHash(value = "") {
@@ -30,6 +30,12 @@ function isVisuallyLargeFile(lines = 0, largestDocumentLines = 0) {
   const lineCount = Math.max(0, Number(lines) || 0);
   const largest = Math.max(0, Number(largestDocumentLines) || 0);
   return lineCount >= 900 || lineCount >= Math.max(500, largest * 0.62);
+}
+
+function fileBuildingHeight(lines = 0, largestDocumentLines = 0) {
+  const lineCount = Math.max(0, Number(lines) || 0);
+  const height = 12 + Math.min(FILE_BUILDING_HEIGHT_MAX - 12, Math.pow(lineCount, 0.62) * 1.75);
+  return isVisuallyLargeFile(lineCount, largestDocumentLines) ? Math.max(145, height) : height;
 }
 
 function cityLineStats(files = []) {
@@ -228,6 +234,47 @@ function ownerForDirectory(directoryPath = "", ownershipAnchors = []) {
   )) || null;
 }
 
+function layoutSubsystemStrata(layouts = [], lineStats = {}) {
+  const contentHeightByDepth = Array.from({ length: SUBSYSTEM_DEPTH_MAX + 1 }, () => 0);
+  for (const directory of layouts.flatMap((layout) => layout.directories)) {
+    if (!directory.subsystemId) {
+      continue;
+    }
+    contentHeightByDepth[directory.subsystemDepth] = Math.max(
+      contentHeightByDepth[directory.subsystemDepth],
+      directory.generatedElevation
+    );
+  }
+  for (const file of layouts.flatMap((layout) => layout.files)) {
+    file.buildingHeight = fileBuildingHeight(file.lines, lineStats.largest);
+    if (!file.subsystemId) {
+      continue;
+    }
+    contentHeightByDepth[file.subsystemDepth] = Math.max(
+      contentHeightByDepth[file.subsystemDepth],
+      file.generatedElevation + file.buildingHeight
+    );
+  }
+
+  let offset = 0;
+  return contentHeightByDepth.map((contentHeight, depth) => {
+    const separationFromAbove = depth === 0
+      ? 0
+      : Math.max(
+        SUBSYSTEM_STRATUM_MIN_SEPARATION,
+        contentHeight * SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER
+      );
+    offset += separationFromAbove;
+    return {
+      contentHeight,
+      depth,
+      elevation: -offset,
+      offset,
+      separationFromAbove
+    };
+  });
+}
+
 function layoutCampus(campus, {
   campusDepth,
   campusWidth,
@@ -313,27 +360,37 @@ function layoutCampus(campus, {
   };
 }
 
-function applySubsystemDepth(layouts = [], subsystems = []) {
+function applySubsystemDepth(layouts = [], subsystems = [], lineStats = {}) {
   const depthsBySubsystemId = new Map(
     subsystems.map((subsystem) => [subsystem.id, subsystemDepth(subsystem)])
   );
   const ownershipAnchors = directoryOwnershipAnchors(subsystems);
   const directories = layouts.flatMap((layout) => layout.directories);
-  const directoriesByPath = new Map();
+  const directoriesByPath = new Map(directories.map((directory) => [directory.path, directory]));
 
+  for (const directory of directories) {
+    const owner = ownerForDirectory(directory.path, ownershipAnchors);
+    directory.subsystemAnchorPath = owner?.path || "";
+    directory.subsystemBase = Boolean(owner && directory.path === owner.path);
+    directory.subsystemDepth = owner?.depth || 0;
+    directory.subsystemId = owner?.subsystemId || "";
+  }
+  for (const layout of layouts) {
+    for (const file of layout.files) {
+      file.subsystemDepth = depthsBySubsystemId.get(file.subsystemId) || 0;
+    }
+  }
+
+  const strata = layoutSubsystemStrata(layouts, lineStats);
   for (const directory of [...directories].sort((left, right) => (
     left.hierarchyDepth - right.hierarchyDepth || left.path.localeCompare(right.path)
   ))) {
-    const owner = ownerForDirectory(directory.path, ownershipAnchors);
     const parentDirectory = directoriesByPath.get(directory.parentPath);
-    directory.subsystemDepth = owner?.depth || 0;
-    directory.subsystemId = owner?.subsystemId || "";
-    directory.elevation = directory.generatedElevation - directory.subsystemDepth * SUBSYSTEM_DEPTH_STEP;
+    directory.elevation = directory.generatedElevation + strata[directory.subsystemDepth].elevation;
     directory.supportElevation = parentDirectory?.subsystemDepth === directory.subsystemDepth
       ? parentDirectory.elevation
       : directory.elevation - DIRECTORY_ELEVATION_STEP;
     directory.terraceHeight = directory.elevation - directory.supportElevation;
-    directoriesByPath.set(directory.path, directory);
   }
 
   for (const layout of layouts) {
@@ -344,15 +401,16 @@ function applySubsystemDepth(layouts = [], subsystems = []) {
       }
     }
     for (const file of layout.files) {
-      file.subsystemDepth = depthsBySubsystemId.get(file.subsystemId) || 0;
       file.supportElevation = directoriesByPath.get(file.directoryPath)?.elevation || 0;
-      file.elevation = file.generatedElevation - file.subsystemDepth * SUBSYSTEM_DEPTH_STEP;
+      file.elevation = file.generatedElevation + strata[file.subsystemDepth].elevation;
       if (file.subsystemId) {
         occupiedDepths.add(file.subsystemDepth);
       }
     }
     layout.campus.subsystemDepths = [...occupiedDepths].sort((left, right) => left - right);
+    layout.campus.subsystemStrata = layout.campus.subsystemDepths.map((depth) => strata[depth]);
   }
+  return strata;
 }
 
 function layoutFileCity(overview = {}, {
@@ -361,6 +419,7 @@ function layoutFileCity(overview = {}, {
 } = {}) {
   const files = overview.files || [];
   const campuses = fileCampuses(overview);
+  const lineStats = overview.lineStats || cityLineStats(files);
   const gap = campuses.length > 1 ? 72 : 0;
   const widths = campusWidths(campuses, width, gap);
   const largestCampusFileCount = Math.max(1, ...campuses.map((campus) => campus.files.length));
@@ -378,14 +437,15 @@ function layoutFileCity(overview = {}, {
       offsetX
     });
   });
-  applySubsystemDepth(layouts, overview.subsystems || []);
+  const subsystemStrata = applySubsystemDepth(layouts, overview.subsystems || [], lineStats);
 
   return {
     bounds: { depth, width },
     campuses: layouts.map((layout) => layout.campus),
     directories: layouts.flatMap((layout) => layout.directories),
     files: layouts.flatMap((layout) => layout.files),
-    lineStats: overview.lineStats || cityLineStats(files)
+    lineStats,
+    subsystemStrata
   };
 }
 
@@ -695,13 +755,14 @@ export {
   cityLineStats,
   DIRECTORY_ELEVATION_STEP,
   FILE_BUILDING_HEIGHT_MAX,
+  fileBuildingHeight,
   isVisuallyLargeFile,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   stableHash,
-  SUBSYSTEM_DEPTH_STEP,
-  SUBSYSTEM_STRATUM_CLEARANCE,
+  SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER,
+  SUBSYSTEM_STRATUM_MIN_SEPARATION,
   SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 };

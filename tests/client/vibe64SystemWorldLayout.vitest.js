@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   DIRECTORY_ELEVATION_STEP,
   FILE_BUILDING_HEIGHT_MAX,
+  fileBuildingHeight,
   isVisuallyLargeFile,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
-  SUBSYSTEM_DEPTH_STEP,
-  SUBSYSTEM_STRATUM_CLEARANCE,
+  SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER,
+  SUBSYSTEM_STRATUM_MIN_SEPARATION,
   SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 } from "../../packages/vibe64-system-graph/src/client/world/worldLayout.js";
@@ -83,7 +84,7 @@ describe("File City layout", () => {
     };
     const city = layoutFileCity({
       files: [
-        file("packages/core/src/deepFreeze.js", 40, core),
+        file("packages/core/src/deepFreeze.js", 1_800, core),
         file("packages/core/src/feature/service.js", 120, feature),
         file("src/shared/client.js", 80, core)
       ],
@@ -101,22 +102,37 @@ describe("File City layout", () => {
       }]
     });
 
+    const coreBase = city.directories.find((directory) => directory.path === "packages/core");
     const coreDirectory = city.directories.find((directory) => directory.path === "packages/core/src");
     const scatteredDirectory = city.directories.find((directory) => directory.path === "src/shared");
     const nestedFeature = city.directories.find((directory) => directory.path === "packages/core/src/feature");
     const coreFile = city.files.find((entry) => entry.path.endsWith("deepFreeze.js"));
     const featureFile = city.files.find((entry) => entry.path.endsWith("feature/service.js"));
 
-    expect(coreDirectory.generatedElevation - coreDirectory.elevation).toBe(SUBSYSTEM_DEPTH_STEP * 2);
-    expect(scatteredDirectory.generatedElevation - scatteredDirectory.elevation).toBe(SUBSYSTEM_DEPTH_STEP * 2);
+    const secondLayer = city.subsystemStrata[1];
+    const thirdLayer = city.subsystemStrata[2];
+
+    expect(city.subsystemStrata).toHaveLength(5);
+    expect(thirdLayer.separationFromAbove).toBeGreaterThanOrEqual(
+      thirdLayer.contentHeight * SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER
+    );
+    expect(thirdLayer.separationFromAbove).toBeGreaterThan(SUBSYSTEM_STRATUM_MIN_SEPARATION);
+    expect(thirdLayer.offset).toBe(secondLayer.offset + thirdLayer.separationFromAbove);
+    expect(coreDirectory.generatedElevation - coreDirectory.elevation).toBe(thirdLayer.offset);
+    expect(scatteredDirectory.generatedElevation - scatteredDirectory.elevation).toBe(thirdLayer.offset);
     expect(coreFile.elevation).toBe(coreDirectory.elevation);
+    expect(coreFile.buildingHeight).toBe(fileBuildingHeight(coreFile.lines, city.lineStats.largest));
     expect(featureFile.elevation).toBe(nestedFeature.elevation);
     expect(nestedFeature.supportElevation).toBe(nestedFeature.elevation - DIRECTORY_ELEVATION_STEP);
     expect(nestedFeature.terraceHeight).toBe(DIRECTORY_ELEVATION_STEP);
-    expect(SUBSYSTEM_DEPTH_STEP - FILE_BUILDING_HEIGHT_MAX).toBe(SUBSYSTEM_STRATUM_CLEARANCE);
-    expect(SUBSYSTEM_STRATUM_CLEARANCE).toBeGreaterThan(150);
+    expect(secondLayer.separationFromAbove).toBe(SUBSYSTEM_STRATUM_MIN_SEPARATION);
+    expect(FILE_BUILDING_HEIGHT_MAX).toBeGreaterThan(300);
     expect(city.directories.every((directory) => directory.terraceHeight === DIRECTORY_ELEVATION_STEP)).toBe(true);
     expect(city.campuses[0].subsystemDepths).toEqual([0, 2]);
+    expect(city.campuses[0].subsystemStrata.map((stratum) => stratum.depth)).toEqual([0, 2]);
+    expect(coreBase.subsystemBase).toBe(true);
+    expect(coreDirectory.subsystemBase).toBe(false);
+    expect(scatteredDirectory.subsystemBase).toBe(true);
   });
 
   it("promotes adapter-defined directories to campuses and leaves everything else on the main campus", () => {

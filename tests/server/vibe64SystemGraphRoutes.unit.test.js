@@ -94,7 +94,7 @@ test("System graph registers the active-session-only API and forwards opaque key
         path: `${apiRouteBase}/vibe64/system-graph/sessions/:sessionId/subsystems/:subsystemKey/depth`
       });
       await subsystemDepthRoute.handler({
-        body: { depth: 2 },
+        body: { depth: 4 },
         params: routeProjectParams({
           sessionId: "session-1",
           subsystemKey: "opaque-subsystem-key"
@@ -113,7 +113,7 @@ test("System graph registers the active-session-only API and forwards opaque key
         method: "readEntity"
       }, {
         input: {
-          depth: 2,
+          depth: 4,
           sessionId: "session-1",
           subsystemKey: "opaque-subsystem-key"
         },

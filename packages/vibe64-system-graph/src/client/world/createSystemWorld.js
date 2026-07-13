@@ -3,13 +3,11 @@ import CameraControls from "camera-controls";
 import { Text } from "troika-three-text";
 
 import {
-  FILE_BUILDING_HEIGHT_MAX,
-  isVisuallyLargeFile,
+  fileBuildingHeight,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
-  stableHash,
-  SUBSYSTEM_DEPTH_STEP
+  stableHash
 } from "./worldLayout.js";
 
 CameraControls.install({ THREE });
@@ -107,12 +105,6 @@ function fileColor(file = {}, colorMode = "folders") {
   return file.directoryDepth > 0
     ? directorySurfaceColor(file.directoryPath, file.directoryDepth)
     : campusSurfaceColor(file.campusId);
-}
-
-function fileBuildingHeight(lines = 0, largest = 0) {
-  const lineCount = Math.max(0, Number(lines) || 0);
-  const height = 12 + Math.min(FILE_BUILDING_HEIGHT_MAX - 12, Math.pow(lineCount, 0.62) * 1.75);
-  return isVisuallyLargeFile(lineCount, largest) ? Math.max(145, height) : height;
 }
 
 function boxGeometryWithFaceShading() {
@@ -867,12 +859,13 @@ function createSystemWorld({
       const rimColor = new THREE.Color(color).offsetHSL(0, 0.16, 0.28).getHex();
       const floors = [];
       const rims = [];
-      for (const subsystemDepth of campus.subsystemDepths || [0]) {
+      for (const stratum of campus.subsystemStrata || [{ depth: 0, elevation: 0 }]) {
+        const subsystemDepth = stratum.depth;
         const floor = new THREE.Mesh(
           new THREE.BoxGeometry(campus.width + 24, 28, campus.depth + 24),
           new THREE.MeshBasicMaterial({ color })
         );
-        floor.position.set(campus.x, -16 - subsystemDepth * SUBSYSTEM_DEPTH_STEP, campus.z);
+        floor.position.set(campus.x, stratum.elevation - 16, campus.z);
         floor.userData.campusId = campus.id;
         floor.userData.kind = "campus";
         floor.userData.subsystemDepth = subsystemDepth;
@@ -894,7 +887,7 @@ function createSystemWorld({
           maxWidth: Math.max(140, campus.width - 20),
           position: new THREE.Vector3(
             campus.x,
-            24 - subsystemDepth * SUBSYSTEM_DEPTH_STEP,
+            stratum.elevation + 24,
             campus.z - campus.depth / 2 + 22
           )
         });
@@ -997,7 +990,7 @@ function createSystemWorld({
     const transform = new THREE.Object3D();
 
     layout.files.forEach((file, index) => {
-      const height = fileBuildingHeight(file.lines, largest);
+      const height = Number(file.buildingHeight) || fileBuildingHeight(file.lines, largest);
       const baseColor = fileColor(file, viewMode);
       const elevation = Number(file.elevation) || 0;
       transform.position.set(file.x, elevation + height / 2 + 1, file.z);
@@ -1886,8 +1879,8 @@ function createSystemWorld({
       return false;
     }
     const campus = record.campus;
-    const deepestLayer = Math.max(0, ...(campus.subsystemDepths || []));
-    const verticalSpan = deepestLayer * SUBSYSTEM_DEPTH_STEP;
+    const deepestElevation = Math.min(0, ...(campus.subsystemStrata || []).map((stratum) => stratum.elevation));
+    const verticalSpan = Math.abs(deepestElevation);
     const span = Math.max(campus.width, campus.depth, verticalSpan);
     const distance = Math.max(220, span * 1.25);
     controls.setLookAt(
@@ -2371,6 +2364,14 @@ function createSystemWorld({
       : object?.userData.directoryPath;
     if (directoryPath != null) {
       const record = directoryObjects.get(directoryPath)?.directory;
+      if (viewMode === "subsystems" && record?.subsystemBase && record.subsystemId) {
+        const subsystem = subsystemObjects.get(record.subsystemId)?.subsystem;
+        if (subsystem) {
+          selectSubsystem(subsystem.id);
+          onSelectSubsystem(subsystem);
+          return;
+        }
+      }
       selectDirectory(directoryPath);
       onSelectDirectory(record || { path: directoryPath });
       return;
