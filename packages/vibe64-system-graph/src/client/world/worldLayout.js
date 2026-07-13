@@ -9,8 +9,9 @@ import {
 
 const DIRECTORY_ELEVATION_STEP = 40;
 const FILE_BUILDING_HEIGHT_MAX = 322;
-const SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER = 2;
-const SUBSYSTEM_STRATUM_MIN_SEPARATION = 520;
+const SUBSYSTEM_STRATUM_CIRCLE_OFFSET = 190;
+const SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER = 2.4;
+const SUBSYSTEM_STRATUM_MIN_SEPARATION = 720;
 const SUBSYSTEM_SKY_ELEVATION = 720;
 
 function stableHash(value = "") {
@@ -210,6 +211,18 @@ function subsystemDepth(subsystem = {}) {
     SUBSYSTEM_DEPTH_MAX,
     Math.max(0, Math.trunc(Number(subsystem.depth) || 0))
   );
+}
+
+function subsystemCircleElevation(cityLayout = {}, depth = 0) {
+  const normalizedDepth = Math.min(
+    SUBSYSTEM_DEPTH_MAX,
+    Math.max(0, Math.trunc(Number(depth) || 0))
+  );
+  if (normalizedDepth === 0) {
+    return SUBSYSTEM_SKY_ELEVATION;
+  }
+  const upperStratum = cityLayout.subsystemStrata?.[normalizedDepth - 1];
+  return (Number(upperStratum?.elevation) || 0) - SUBSYSTEM_STRATUM_CIRCLE_OFFSET;
 }
 
 function directoryOwnershipAnchors(subsystems = []) {
@@ -630,7 +643,7 @@ function layoutSubsystemConnectionBundles(cityLayout = {}, subsystemLayout = {},
 function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
   const directoriesByPath = new Map((cityLayout.directories || []).map((directory) => [directory.path, directory]));
   const filesByPath = new Map((cityLayout.files || []).map((file) => [file.path, file]));
-  const placed = [];
+  const placedByDepth = new Map();
 
   function targetForAnchor(anchor) {
     const target = anchor.kind === "file"
@@ -653,6 +666,7 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
   }
 
   function freePosition(record) {
+    const placed = placedByDepth.get(record.subsystemDepth) || [];
     const minimumGap = 34;
     const baseAngle = (stableHash(record.id) % 360) * (Math.PI / 180);
     for (let attempt = 0; attempt < 96; attempt += 1) {
@@ -677,6 +691,11 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
   }
 
   const records = stableSort(subsystems, (subsystem) => subsystem.id).map((subsystem) => {
+    const physicalDepth = subsystemDepth(subsystem);
+    const physicalStratum = cityLayout.subsystemStrata?.[physicalDepth];
+    const upperStratum = physicalDepth > 0
+      ? cityLayout.subsystemStrata?.[physicalDepth - 1]
+      : null;
     const targets = (subsystem.anchors || []).map(targetForAnchor).filter(Boolean);
     const anchorX = targets.length > 0
       ? targets.reduce((sum, target) => sum + target.x, 0) / targets.length
@@ -692,14 +711,19 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
       ...subsystem,
       anchorX,
       anchorZ,
+      ceilingElevation: physicalDepth > 0 ? Number(upperStratum?.elevation) || 0 : null,
+      floorElevation: Number(physicalStratum?.elevation) || 0,
       radius,
+      subsystemDepth: physicalDepth,
       targets,
-      y: SUBSYSTEM_SKY_ELEVATION
+      y: subsystemCircleElevation(cityLayout, physicalDepth)
     };
     const position = freePosition(record);
     record.x = position.x;
     record.z = position.z;
-    placed.push(record);
+    const depthRecords = placedByDepth.get(physicalDepth) || [];
+    depthRecords.push(record);
+    placedByDepth.set(physicalDepth, depthRecords);
     return record;
   });
   const recordsById = new Map(records.map((record) => [record.id, record]));
@@ -743,10 +767,21 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
     });
   }
 
+  const circleElevations = records.map((record) => record.y);
+  const minimumCircleElevation = circleElevations.length > 0
+    ? Math.min(...circleElevations)
+    : SUBSYSTEM_SKY_ELEVATION;
+  const maximumCircleElevation = circleElevations.length > 0
+    ? Math.max(...circleElevations)
+    : SUBSYSTEM_SKY_ELEVATION;
+
   return {
+    centerElevation: (minimumCircleElevation + maximumCircleElevation) / 2,
     dependencyEdges,
     elevation: SUBSYSTEM_SKY_ELEVATION,
     externalSatellites,
+    maximumCircleElevation,
+    minimumCircleElevation,
     subsystems: records
   };
 }
@@ -761,6 +796,8 @@ export {
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   stableHash,
+  subsystemCircleElevation,
+  SUBSYSTEM_STRATUM_CIRCLE_OFFSET,
   SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER,
   SUBSYSTEM_STRATUM_MIN_SEPARATION,
   SUBSYSTEM_SKY_ELEVATION,

@@ -8,6 +8,8 @@ import {
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
+  subsystemCircleElevation,
+  SUBSYSTEM_STRATUM_CIRCLE_OFFSET,
   SUBSYSTEM_STRATUM_HEIGHT_MULTIPLIER,
   SUBSYSTEM_STRATUM_MIN_SEPARATION,
   SUBSYSTEM_SKY_ELEVATION,
@@ -126,6 +128,7 @@ describe("File City layout", () => {
     expect(nestedFeature.supportElevation).toBe(nestedFeature.elevation - DIRECTORY_ELEVATION_STEP);
     expect(nestedFeature.terraceHeight).toBe(DIRECTORY_ELEVATION_STEP);
     expect(secondLayer.separationFromAbove).toBe(SUBSYSTEM_STRATUM_MIN_SEPARATION);
+    expect(SUBSYSTEM_STRATUM_MIN_SEPARATION).toBeGreaterThan(FILE_BUILDING_HEIGHT_MAX * 2);
     expect(FILE_BUILDING_HEIGHT_MAX).toBeGreaterThan(300);
     expect(city.directories.every((directory) => directory.terraceHeight === DIRECTORY_ELEVATION_STEP)).toBe(true);
     expect(city.campuses[0].subsystemDepths).toEqual([0, 2]);
@@ -195,16 +198,10 @@ describe("File City layout", () => {
     expect(isVisuallyLargeFile(420, 700)).toBe(false);
   });
 
-  it("places deterministic subsystem islands above their physical anchors without overlap", () => {
-    const city = layoutFileCity({
-      files: [
-        file("src/pages/index.vue", 120),
-        file("src/pages/projects/[slug].vue", 80),
-        file("packages/terminal/src/server/service.js", 500)
-      ]
-    });
+  it("places deterministic subsystem islands in level-local skies without same-level overlap", () => {
     const subsystems = [
       {
+        depth: 2,
         id: "subsystem:web-site",
         title: "Web site app",
         lines: 200,
@@ -232,6 +229,16 @@ describe("File City layout", () => {
         anchors: [{ kind: "directory", path: "src/pages", relation: "owns" }]
       },
       {
+        depth: 2,
+        id: "subsystem:web-admin",
+        title: "Web admin",
+        lines: 100,
+        fileCount: 1,
+        capabilities: [],
+        dependencies: { external: [], incoming: [], outgoing: [] },
+        anchors: [{ kind: "directory", path: "src/pages", relation: "implements" }]
+      },
+      {
         id: "subsystem:terminal",
         title: "Terminal",
         lines: 500,
@@ -240,13 +247,41 @@ describe("File City layout", () => {
         anchors: [{ kind: "file", path: "packages/terminal/src/server/service.js", relation: "implements" }]
       }
     ];
+    const webSite = {
+      subsystemDescription: "Web pages.",
+      subsystemId: "subsystem:web-site",
+      subsystemTitle: "Web site app"
+    };
+    const city = layoutFileCity({
+      files: [
+        file("src/pages/index.vue", 120, webSite),
+        file("src/pages/projects/[slug].vue", 80, webSite),
+        file("packages/terminal/src/server/service.js", 500)
+      ],
+      subsystems
+    });
     const first = layoutSubsystemSky(city, subsystems);
     const second = layoutSubsystemSky(city, subsystems);
+    const baselineCircle = first.subsystems.find((subsystem) => subsystem.id === "subsystem:terminal");
+    const lowerCircle = first.subsystems.find((subsystem) => subsystem.id === "subsystem:web-site");
+    const lowerPeer = first.subsystems.find((subsystem) => subsystem.id === "subsystem:web-admin");
 
     expect(second).toEqual(first);
     expect(first.elevation).toBe(SUBSYSTEM_SKY_ELEVATION);
-    expect(first.subsystems.every((subsystem) => subsystem.y === SUBSYSTEM_SKY_ELEVATION)).toBe(true);
-    expect(first.subsystems.find((subsystem) => subsystem.id === "subsystem:web-site").targets).toEqual([
+    expect(baselineCircle.y).toBe(SUBSYSTEM_SKY_ELEVATION);
+    expect(lowerCircle.subsystemDepth).toBe(2);
+    expect(lowerCircle.ceilingElevation).toBe(city.subsystemStrata[1].elevation);
+    expect(lowerCircle.floorElevation).toBe(city.subsystemStrata[2].elevation);
+    expect(lowerCircle.y).toBe(subsystemCircleElevation(city, 2));
+    expect(lowerCircle.y).toBe(city.subsystemStrata[1].elevation - SUBSYSTEM_STRATUM_CIRCLE_OFFSET);
+    expect(lowerCircle.y).toBeLessThan(city.subsystemStrata[1].elevation);
+    expect(lowerCircle.y).toBeGreaterThan(
+      city.subsystemStrata[2].elevation + city.subsystemStrata[2].contentHeight
+    );
+    expect(first.minimumCircleElevation).toBe(lowerCircle.y);
+    expect(first.maximumCircleElevation).toBe(baselineCircle.y);
+    expect(first.centerElevation).toBe((lowerCircle.y + baselineCircle.y) / 2);
+    expect(lowerCircle.targets).toEqual([
       expect.objectContaining({ kind: "directory", path: "src/pages", relation: "owns" })
     ]);
     expect(first.dependencyEdges).toEqual([
@@ -265,9 +300,8 @@ describe("File City layout", () => {
         sourceFileIds: ["file:src/pages/index.vue"]
       })
     ]);
-    const [left, right] = first.subsystems;
-    expect(Math.hypot(left.x - right.x, left.z - right.z)).toBeGreaterThanOrEqual(
-      left.radius + right.radius + 34
+    expect(Math.hypot(lowerCircle.x - lowerPeer.x, lowerCircle.z - lowerPeer.z)).toBeGreaterThanOrEqual(
+      lowerCircle.radius + lowerPeer.radius + 34
     );
   });
 

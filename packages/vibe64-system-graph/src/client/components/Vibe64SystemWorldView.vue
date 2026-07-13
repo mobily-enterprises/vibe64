@@ -236,7 +236,7 @@
           <v-icon :icon="mdiLayersTripleOutline" size="13" />
           <span>
             <strong>{{ subsystem.title }}</strong>
-            <small>{{ formatCount(subsystem.fileCount, 'file') }} · {{ dependencySummary(subsystem.dependencies) }}</small>
+            <small>{{ subsystem.depth ? `Layer −${subsystem.depth}` : 'Baseline' }} · {{ formatCount(subsystem.fileCount, 'file') }} · {{ dependencySummary(subsystem.dependencies) }}</small>
           </span>
         </button>
       </nav>
@@ -704,7 +704,7 @@ import {
 } from "../world/worldLayout.js";
 import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "048";
+const rendererRevision = "049";
 
 const props = defineProps({
   active: {

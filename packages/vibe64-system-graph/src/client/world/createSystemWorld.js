@@ -27,6 +27,7 @@ const DIMMED_ROOF_COLOR = 0x474e59;
 const DIMMED_TERRACE_COLOR = 0x252b33;
 const DIMMED_CAMPUS_COLOR = 0x1c222a;
 const DIMMED_EDGE_COLOR = 0x4a535f;
+const SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE = 74;
 const SUBSYSTEM_TETHER_COLORS = Object.freeze({
   owns: 0x59e3ff,
   implements: 0x70e8ad,
@@ -1108,9 +1109,12 @@ function createSystemWorld({
       group.add(ring);
       const fileLabel = `${subsystem.fileCount} ${subsystem.fileCount === 1 ? "file" : "files"}`;
       const capabilityLabel = `${subsystem.capabilities.length} ${subsystem.capabilities.length === 1 ? "capability" : "capabilities"}`;
+      const layerLabel = subsystem.subsystemDepth
+        ? `layer −${subsystem.subsystemDepth}`
+        : "baseline";
       const dependencies = subsystem.dependencies || { external: [], incoming: [], outgoing: [] };
       const dependencyLabel = `out ${dependencies.outgoing.length} · in ${dependencies.incoming.length} · external ${dependencies.external.length}`;
-      const label = addLabel(group, `${subsystem.title}\n${fileLabel} · ${capabilityLabel}\n${dependencyLabel}`, {
+      const label = addLabel(group, `${subsystem.title}\n${layerLabel} · ${fileLabel} · ${capabilityLabel}\n${dependencyLabel}`, {
         color: 0xffffff,
         fontSize: Math.max(12, Math.min(18, subsystem.radius * 0.16)),
         maxWidth: subsystem.radius * 1.65,
@@ -1902,16 +1906,17 @@ function createSystemWorld({
       return false;
     }
     const neighborhood = new Map([[record.subsystem.id, record.subsystem]]);
+    const focusedDepth = record.subsystem.subsystemDepth;
     if (subsystemConnectionsVisible) {
       for (const dependency of dependencyObjects) {
         if (dependency.fromSubsystemId === record.subsystem.id) {
           const target = subsystemObjects.get(dependency.toSubsystemId)?.subsystem;
-          if (target) {
+          if (target?.subsystemDepth === focusedDepth) {
             neighborhood.set(target.id, target);
           }
         } else if (dependency.toSubsystemId === record.subsystem.id) {
           const source = subsystemObjects.get(dependency.fromSubsystemId)?.subsystem;
-          if (source) {
+          if (source?.subsystemDepth === focusedDepth) {
             neighborhood.set(source.id, source);
           }
         }
@@ -1936,9 +1941,16 @@ function createSystemWorld({
     const centerY = (minY + maxY) / 2;
     const centerZ = (minZ + maxZ) / 2;
     const span = Math.max(540, maxX - minX, maxZ - minZ, (maxY - minY) * 2.4);
+    const proposedCameraY = maxY + span * 0.58;
+    const cameraY = Number.isFinite(record.subsystem.ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        record.subsystem.ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
     controls.setLookAt(
       centerX + span * 0.18,
-      maxY + span * 0.58,
+      cameraY,
       centerZ + span * 0.76,
       centerX,
       centerY,
@@ -2019,7 +2031,11 @@ function createSystemWorld({
   }
 
   function focusSubsystemLayer() {
-    const records = subsystemLayout?.subsystems || [];
+    const selectedDepth = subsystemObjects.get(selectedSubsystemId)?.subsystem.subsystemDepth;
+    const focusedDepth = Number.isFinite(selectedDepth) ? selectedDepth : 0;
+    const records = (subsystemLayout?.subsystems || []).filter((record) => (
+      record.subsystemDepth === focusedDepth
+    ));
     if (records.length === 0) {
       return false;
     }
@@ -2027,15 +2043,26 @@ function createSystemWorld({
     const maxX = Math.max(...records.map((record) => record.x + record.radius));
     const minZ = Math.min(...records.map((record) => record.z - record.radius));
     const maxZ = Math.max(...records.map((record) => record.z + record.radius));
+    const minY = Math.min(...records.map((record) => record.y - 18));
+    const maxY = Math.max(...records.map((record) => record.y + 72));
     const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
     const centerZ = (minZ + maxZ) / 2;
-    const span = Math.max(520, maxX - minX, maxZ - minZ);
+    const span = Math.max(520, maxX - minX, maxZ - minZ, (maxY - minY) * 1.8);
+    const ceilingElevation = records[0]?.ceilingElevation;
+    const proposedCameraY = centerY + span * 0.62;
+    const cameraY = Number.isFinite(ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
     controls.setLookAt(
       centerX + span * 0.16,
-      subsystemLayout.elevation + span * 0.62,
-      centerZ + span * 0.76,
+      cameraY,
+      centerZ + span * 1.2,
       centerX,
-      subsystemLayout.elevation,
+      centerY,
       centerZ,
       !reducedMotion
     );
@@ -2060,8 +2087,17 @@ function createSystemWorld({
   }
 
   function setView(view = "perspective") {
-    const span = Math.max(cityLayout?.bounds.width || 1_420, cityLayout?.bounds.depth || 980);
-    const targetY = viewMode === "subsystems" ? subsystemLayout?.elevation || 0 : 0;
+    const subsystemVerticalSpan = Math.max(0, (
+      Number(subsystemLayout?.maximumCircleElevation) || 0
+    ) - (
+      Number(subsystemLayout?.minimumCircleElevation) || 0
+    ));
+    const span = Math.max(
+      cityLayout?.bounds.width || 1_420,
+      cityLayout?.bounds.depth || 980,
+      viewMode === "subsystems" ? subsystemVerticalSpan * 1.8 : 0
+    );
+    const targetY = viewMode === "subsystems" ? subsystemLayout?.centerElevation || 0 : 0;
     if (view === "top") {
       controls.setLookAt(0, targetY + span * 1.12, 0.01, 0, targetY, 0, !reducedMotion);
     } else {
