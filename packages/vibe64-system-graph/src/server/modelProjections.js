@@ -9,6 +9,9 @@ import {
   subsystemOriginPriority
 } from "../shared/subsystemContract.js";
 import {
+  subsystemDepthsFromDeclarations
+} from "../shared/subsystemPresentationContract.js";
+import {
   normalizeSystemConnection
 } from "../shared/systemConnectionContract.js";
 
@@ -372,6 +375,7 @@ function fileCityProjection(file = {}, {
 
 function systemOverview(model = {}) {
   const definitions = subsystemDefinitions(model);
+  const subsystemDepths = subsystemDepthsFromDeclarations(model.declarations);
   const { assignments, metrics } = subsystemAssignments(model.files || [], definitions);
   const connections = projectedSystemConnections(model, assignments);
   const dependenciesBySubsystem = subsystemDependencyGraph(model, definitions, connections);
@@ -427,6 +431,7 @@ function systemOverview(model = {}) {
       const metric = metrics.get(definition.id) || { files: 0, lines: 0, matchedAnchors: new Set() };
       return {
         ...definition,
+        depth: subsystemDepths.get(definition.id) || 0,
         dependencies: dependenciesBySubsystem.get(definition.id),
         fileCount: metric.files,
         lines: metric.lines,

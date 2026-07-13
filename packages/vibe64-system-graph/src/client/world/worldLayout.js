@@ -3,8 +3,14 @@ import {
   treemap,
   treemapSquarify
 } from "d3-hierarchy";
+import {
+  SUBSYSTEM_DEPTH_MAX
+} from "../../shared/subsystemPresentationContract.js";
 
 const DIRECTORY_ELEVATION_STEP = 40;
+const FILE_BUILDING_HEIGHT_MAX = 322;
+const SUBSYSTEM_STRATUM_CLEARANCE = 198;
+const SUBSYSTEM_DEPTH_STEP = FILE_BUILDING_HEIGHT_MAX + SUBSYSTEM_STRATUM_CLEARANCE;
 const SUBSYSTEM_SKY_ELEVATION = 720;
 
 function stableHash(value = "") {
@@ -193,6 +199,35 @@ function pathBelowCampusRoot(path, rootPath) {
     : path;
 }
 
+function subsystemDepth(subsystem = {}) {
+  return Math.min(
+    SUBSYSTEM_DEPTH_MAX,
+    Math.max(0, Math.trunc(Number(subsystem.depth) || 0))
+  );
+}
+
+function directoryOwnershipAnchors(subsystems = []) {
+  return subsystems.flatMap((subsystem) => (
+    (subsystem.anchors || [])
+      .filter((anchor) => anchor.kind === "directory" && anchor.relation === "owns")
+      .map((anchor) => ({
+        depth: subsystemDepth(subsystem),
+        path: String(anchor.path || ""),
+        subsystemId: subsystem.id
+      }))
+  )).filter((anchor) => anchor.path).sort((left, right) => (
+    right.path.length - left.path.length ||
+    left.path.localeCompare(right.path) ||
+    left.subsystemId.localeCompare(right.subsystemId)
+  ));
+}
+
+function ownerForDirectory(directoryPath = "", ownershipAnchors = []) {
+  return ownershipAnchors.find((anchor) => (
+    directoryPath === anchor.path || directoryPath.startsWith(`${anchor.path}/`)
+  )) || null;
+}
+
 function layoutCampus(campus, {
   campusDepth,
   campusWidth,
@@ -228,8 +263,10 @@ function layoutCampus(campus, {
         depth: Math.max(8, node.y1 - node.y0),
         district: relativePath.split("/")[0] || campus.title,
         elevation: node.depth * DIRECTORY_ELEVATION_STEP,
+        generatedElevation: node.depth * DIRECTORY_ELEVATION_STEP,
         hierarchyDepth: node.depth,
         name: node.data.name,
+        parentPath: node.parent?.depth > 0 ? node.parent.data.path : "",
         path: node.data.path,
         width: Math.max(8, node.x1 - node.x0),
         x: offsetX + (node.x0 + node.x1) / 2 - centerX,
@@ -250,6 +287,7 @@ function layoutCampus(campus, {
       directoryPath: node.parent?.data.path || rootPath,
       district: relativeSegments.length > 1 ? relativeSegments[0] : campus.title,
       elevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
+      generatedElevation: (node.parent?.depth || 0) * DIRECTORY_ELEVATION_STEP,
       x: offsetX + (node.x0 + node.x1) / 2 - centerX,
       z: (node.y0 + node.y1) / 2 - centerZ
     };
@@ -275,6 +313,48 @@ function layoutCampus(campus, {
   };
 }
 
+function applySubsystemDepth(layouts = [], subsystems = []) {
+  const depthsBySubsystemId = new Map(
+    subsystems.map((subsystem) => [subsystem.id, subsystemDepth(subsystem)])
+  );
+  const ownershipAnchors = directoryOwnershipAnchors(subsystems);
+  const directories = layouts.flatMap((layout) => layout.directories);
+  const directoriesByPath = new Map();
+
+  for (const directory of [...directories].sort((left, right) => (
+    left.hierarchyDepth - right.hierarchyDepth || left.path.localeCompare(right.path)
+  ))) {
+    const owner = ownerForDirectory(directory.path, ownershipAnchors);
+    const parentDirectory = directoriesByPath.get(directory.parentPath);
+    directory.subsystemDepth = owner?.depth || 0;
+    directory.subsystemId = owner?.subsystemId || "";
+    directory.elevation = directory.generatedElevation - directory.subsystemDepth * SUBSYSTEM_DEPTH_STEP;
+    directory.supportElevation = parentDirectory?.subsystemDepth === directory.subsystemDepth
+      ? parentDirectory.elevation
+      : directory.elevation - DIRECTORY_ELEVATION_STEP;
+    directory.terraceHeight = directory.elevation - directory.supportElevation;
+    directoriesByPath.set(directory.path, directory);
+  }
+
+  for (const layout of layouts) {
+    const occupiedDepths = new Set([0]);
+    for (const directory of layout.directories) {
+      if (directory.subsystemId) {
+        occupiedDepths.add(directory.subsystemDepth);
+      }
+    }
+    for (const file of layout.files) {
+      file.subsystemDepth = depthsBySubsystemId.get(file.subsystemId) || 0;
+      file.supportElevation = directoriesByPath.get(file.directoryPath)?.elevation || 0;
+      file.elevation = file.generatedElevation - file.subsystemDepth * SUBSYSTEM_DEPTH_STEP;
+      if (file.subsystemId) {
+        occupiedDepths.add(file.subsystemDepth);
+      }
+    }
+    layout.campus.subsystemDepths = [...occupiedDepths].sort((left, right) => left - right);
+  }
+}
+
 function layoutFileCity(overview = {}, {
   depth = 1_180,
   width = 3_800
@@ -298,6 +378,7 @@ function layoutFileCity(overview = {}, {
       offsetX
     });
   });
+  applySubsystemDepth(layouts, overview.subsystems || []);
 
   return {
     bounds: { depth, width },
@@ -613,11 +694,14 @@ function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
 export {
   cityLineStats,
   DIRECTORY_ELEVATION_STEP,
+  FILE_BUILDING_HEIGHT_MAX,
   isVisuallyLargeFile,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   stableHash,
+  SUBSYSTEM_DEPTH_STEP,
+  SUBSYSTEM_STRATUM_CLEARANCE,
   SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 };

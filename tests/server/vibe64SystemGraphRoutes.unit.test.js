@@ -30,6 +30,13 @@ test("System graph registers the active-session-only API and forwards opaque key
           return {
             ok: true
           };
+        },
+        async setSubsystemDepth(input) {
+          calls.push({ input, method: "setSubsystemDepth" });
+          return {
+            depth: input.depth,
+            ok: true
+          };
         }
       };
       const app = testRouteApp();
@@ -44,6 +51,7 @@ test("System graph registers the active-session-only API and forwards opaque key
       const expectedRoutes = [
         ["GET", "/status"],
         ["GET", "/overview"],
+        ["POST", "/subsystems/:subsystemKey/depth"],
         ["GET", "/entities/:entityKey"],
         ["GET", "/entities/:entityKey/evidence"],
         ["GET", "/files/:fileKey/constellation"],
@@ -81,6 +89,17 @@ test("System graph registers the active-session-only API and forwards opaque key
           sessionId: "session-1"
         })
       }, testReply());
+      const subsystemDepthRoute = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/system-graph/sessions/:sessionId/subsystems/:subsystemKey/depth`
+      });
+      await subsystemDepthRoute.handler({
+        body: { depth: 2 },
+        params: routeProjectParams({
+          sessionId: "session-1",
+          subsystemKey: "opaque-subsystem-key"
+        })
+      }, testReply());
       assert.deepEqual(calls, [{
         input: {
           sessionId: "session-1"
@@ -92,6 +111,13 @@ test("System graph registers the active-session-only API and forwards opaque key
           sessionId: "session-1"
         },
         method: "readEntity"
+      }, {
+        input: {
+          depth: 2,
+          sessionId: "session-1",
+          subsystemKey: "opaque-subsystem-key"
+        },
+        method: "setSubsystemDepth"
       }]);
     });
   });

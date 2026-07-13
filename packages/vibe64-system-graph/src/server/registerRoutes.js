@@ -95,6 +95,18 @@ function registerRoutes(
     });
   });
 
+  routes.serviceRoute("POST", "/system-graph/sessions/:sessionId/subsystems/:subsystemKey/depth", {
+    bodyLimit: 16 * 1024,
+    summary: "Arrange one subsystem's physical File City stratum below its generated baseline."
+  }, (request) => {
+    const body = routes.requestBody(request);
+    return systemGraphService(app).setSubsystemDepth({
+      depth: body.depth,
+      sessionId: request.params.sessionId,
+      subsystemKey: request.params.subsystemKey
+    });
+  });
+
   routes.serviceRoute("GET", "/system-graph/sessions/:sessionId/entities/:entityKey", {
     summary: "Read one focused System entity and its immediate relationships."
   }, (request) => {

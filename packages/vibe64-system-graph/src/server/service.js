@@ -39,6 +39,11 @@ import {
 import {
   buildUpdatedSystemModel
 } from "./updateSystem.js";
+import {
+  normalizeSubsystemDepth,
+  SUBSYSTEM_DEPTH_DECLARATION_KIND,
+  subsystemDepthDeclaration
+} from "../shared/subsystemPresentationContract.js";
 
 const SYSTEM_UPDATE_EVENT_LIMIT = 500;
 const SYSTEM_UPDATE_TASK_LIMIT = 100;
@@ -373,6 +378,42 @@ function createService({
           ok: true,
           overview: systemOverview(document.model),
           systemStatus: await modelStatus(context, document)
+        };
+      });
+    },
+
+    async setSubsystemDepth(input = {}) {
+      return systemResult(async () => {
+        const context = requireSupportedContext(await systemContext(input.sessionId));
+        const activeTask = currentTask(context);
+        if (activeTask && !updateTaskDone(activeTask)) {
+          throw systemError(
+            "Wait for the current System update before arranging subsystem strata.",
+            "vibe64_system_update_active",
+            409
+          );
+        }
+        const document = await requiredDocument(context);
+        const subsystemId = decodeSystemKey(input.subsystemKey);
+        const subsystem = document.model.entities.find((entity) => (
+          entity.id === subsystemId && entity.kind === "subsystem"
+        ));
+        if (!subsystem) {
+          throw systemError("System subsystem was not found.", "vibe64_system_subsystem_not_found", 404);
+        }
+        const depth = normalizeSubsystemDepth(input.depth);
+        const declarations = (document.model.declarations || []).filter((declaration) => !(
+          declaration.kind === SUBSYSTEM_DEPTH_DECLARATION_KIND && declaration.subsystemId === subsystemId
+        ));
+        document.model.declarations = stableDeclarations(depth > 0
+          ? [...declarations, subsystemDepthDeclaration(subsystemId, depth)]
+          : declarations);
+        document.model.input.declarationsDigest = systemDeclarationsDigest(document.model.declarations);
+        await documentWriter(context.sourceRoot, document.model);
+        return {
+          depth,
+          ok: true,
+          subsystemId
         };
       });
     },

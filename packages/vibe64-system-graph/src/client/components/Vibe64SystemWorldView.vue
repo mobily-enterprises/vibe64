@@ -91,7 +91,7 @@
     <div class="system-world__stage">
       <canvas
         ref="canvasElement"
-        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; begin a two-finger gesture vertically, use W and S, plus and minus, or Control-Up and Control-Down to move forward and back; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it."
+        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; begin a two-finger gesture vertically, use W and S, plus and minus, or Control-Up and Control-Down to move forward and back; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it; double-click a subsystem cloud to arrange its physical city stratum."
         class="system-world__canvas"
         tabindex="0"
       />
@@ -277,6 +277,56 @@
             <span><strong>{{ selectedSubsystemDependencies.incoming.length }}</strong> incoming</span>
             <span><strong>{{ selectedSubsystemDependencies.external.length }}</strong> external</span>
           </div>
+          <section
+            v-if="editingSubsystemDepthId === selectedSubsystem.id"
+            class="system-world__stratum-editor"
+          >
+            <div>
+              <div class="system-world__eyebrow">PHYSICAL STRATUM</div>
+              <strong>{{ selectedSubsystem.depth ? `Layer -${selectedSubsystem.depth}` : 'Generated baseline' }}</strong>
+              <p>Shift every owned slab and scattered building together to express this subsystem's architectural layer.</p>
+            </div>
+            <div class="system-world__stratum-controls" aria-label="Subsystem physical stratum controls">
+              <v-btn
+                :disabled="savingSubsystemDepth || selectedSubsystem.depth <= 0"
+                size="x-small"
+                type="button"
+                variant="tonal"
+                @click="shiftSelectedSubsystemDepth(-1)"
+              >
+                Restore one level
+              </v-btn>
+              <div class="system-world__stratum-scale" aria-hidden="true">
+                <span
+                  v-for="depth in subsystemDepthLevels"
+                  :key="depth"
+                  :class="{ 'system-world__stratum-level--active': selectedSubsystem.depth === depth }"
+                >{{ depth ? `−${depth}` : '0' }}</span>
+              </div>
+              <v-btn
+                :disabled="savingSubsystemDepth || selectedSubsystem.depth >= SUBSYSTEM_DEPTH_MAX"
+                :loading="savingSubsystemDepth"
+                size="x-small"
+                type="button"
+                variant="tonal"
+                @click="shiftSelectedSubsystemDepth(1)"
+              >
+                Lower one level
+              </v-btn>
+              <v-btn
+                :disabled="savingSubsystemDepth"
+                size="x-small"
+                type="button"
+                variant="text"
+                @click="editingSubsystemDepthId = ''"
+              >
+                Done
+              </v-btn>
+            </div>
+          </section>
+          <p v-else class="system-world__stratum-hint">
+            Double-click this subsystem's cloud to arrange the slabs and buildings it owns.
+          </p>
           <section v-if="selectedSubsystemConnection" class="system-world__connection-focus">
             <div class="system-world__eyebrow">{{ selectedSubsystemConnection.kind }} collection point</div>
             <h3>
@@ -427,6 +477,14 @@
             {{ selectedSubsystem.unmatchedAnchorCount }} declared anchor{{ selectedSubsystem.unmatchedAnchorCount === 1 ? '' : 's' }} no longer match the current tree.
           </p>
           <div class="system-world__inspector-actions">
+            <v-btn
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="editingSubsystemDepthId = selectedSubsystem.id"
+            >
+              Arrange physical layer
+            </v-btn>
             <v-btn
               :disabled="!askChatAvailable"
               :prepend-icon="mdiMessageOutline"
@@ -656,8 +714,11 @@ import {
   isVisuallyLargeFile,
   topLevelPrecincts
 } from "../world/worldLayout.js";
+import {
+  SUBSYSTEM_DEPTH_MAX
+} from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "045";
+const rendererRevision = "047";
 
 const props = defineProps({
   active: {
@@ -689,6 +750,7 @@ const emit = defineEmits([
 
 const activeFileId = ref("");
 const canvasElement = ref(null);
+const editingSubsystemDepthId = ref("");
 const hoveredSubsystemConnection = ref(null);
 const selectedDirectory = ref(null);
 const selectedSubsystemConnection = ref(null);
@@ -711,7 +773,9 @@ const {
   loading,
   overview,
   reload,
+  savingSubsystemDepth,
   selectFile,
+  setSubsystemDepth,
   startUpdate,
   systemStatus,
   updateEvents,
@@ -727,6 +791,9 @@ const subsystems = computed(() => overview.value?.subsystems || []);
 const selectedSubsystem = computed(() => (
   subsystems.value.find((subsystem) => subsystem.id === selectedSubsystemId.value) || null
 ));
+const subsystemDepthLevels = Object.freeze(
+  Array.from({ length: SUBSYSTEM_DEPTH_MAX + 1 }, (_, depth) => depth)
+);
 const selectedSubsystemDependencies = computed(() => (
   selectedSubsystem.value?.dependencies || { external: [], incoming: [], outgoing: [] }
 ));
@@ -945,6 +1012,7 @@ async function handleFilePick(selection) {
     selection.subsystemConnectionId === selectedSubsystemConnection.value?.id;
   selectedDirectory.value = null;
   if (!preserveSubsystemSelection) {
+    editingSubsystemDepthId.value = "";
     selectedSubsystemConnection.value = null;
     selectedSubsystemId.value = "";
   }
@@ -960,6 +1028,7 @@ async function handleFilePick(selection) {
 
 function handleDirectoryPick(directory) {
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
   selectedSubsystemId.value = "";
   selectedDirectory.value = directory;
@@ -967,6 +1036,7 @@ function handleDirectoryPick(directory) {
 
 function handlePrecinctPick(campus) {
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
   selectedSubsystemId.value = "";
   selectedDirectory.value = campus;
@@ -974,9 +1044,35 @@ function handlePrecinctPick(campus) {
 
 function handleSubsystemPick(subsystem) {
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
   selectedDirectory.value = null;
   selectedSubsystemId.value = subsystem.id;
+}
+
+function handleSubsystemDepthEdit(subsystem) {
+  if (!subsystem?.id) {
+    return;
+  }
+  selectedSubsystemId.value = subsystem.id;
+  editingSubsystemDepthId.value = subsystem.id;
+}
+
+async function shiftSelectedSubsystemDepth(change) {
+  if (!selectedSubsystem.value?.key || savingSubsystemDepth.value) {
+    return;
+  }
+  const currentDepth = Number(selectedSubsystem.value.depth) || 0;
+  const nextDepth = Math.max(0, Math.min(SUBSYSTEM_DEPTH_MAX, currentDepth + change));
+  if (nextDepth === currentDepth) {
+    return;
+  }
+  worldError.value = "";
+  try {
+    await setSubsystemDepth(selectedSubsystem.value.key, nextDepth);
+  } catch (caught) {
+    worldError.value = String(caught?.message || caught || "Subsystem stratum could not be saved.");
+  }
 }
 
 function handleSubsystemConnectionPick(connection) {
@@ -986,6 +1082,7 @@ function handleSubsystemConnectionPick(connection) {
 
 function handleClearSelection() {
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedDirectory.value = null;
   selectedSubsystemConnection.value = null;
   selectedSubsystemId.value = "";
@@ -1000,6 +1097,7 @@ async function createWorld() {
     world = createSystemWorld({
       canvas: canvasElement.value,
       onClearSelection: handleClearSelection,
+      onEditSubsystemDepth: handleSubsystemDepthEdit,
       onHoverSubsystemConnection: (connection) => {
         hoveredSubsystemConnection.value = connection;
       },
@@ -1073,6 +1171,7 @@ async function applyOverview(nextOverview) {
 
 function selectCampus(campus) {
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
   selectedSubsystemId.value = "";
   selectedDirectory.value = campus;
@@ -1085,6 +1184,7 @@ function inspectSubsystem(subsystem, { focus = false } = {}) {
     return;
   }
   activeFileId.value = "";
+  editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
   selectedDirectory.value = null;
   selectedSubsystemId.value = subsystem.id;
@@ -1693,6 +1793,51 @@ onBeforeUnmount(() => {
 .system-world__metrics span { color: rgba(208, 222, 248, 0.58); display: grid; font-size: 0.56rem; min-width: 4.6rem; text-transform: uppercase; }
 .system-world__metrics strong { color: #fff; font-size: 0.78rem; }
 .system-world__inspector-actions { margin-top: 0.8rem; }
+.system-world__stratum-hint {
+  border-left: 2px solid rgba(94, 218, 255, 0.42);
+  font-size: 0.62rem !important;
+  margin: 0.7rem 0;
+  padding-left: 0.55rem;
+}
+.system-world__stratum-editor {
+  align-items: start;
+  background: linear-gradient(145deg, rgba(62, 205, 255, 0.12), rgba(78, 99, 174, 0.08));
+  border: 1px solid rgba(103, 223, 255, 0.3);
+  border-radius: 0.72rem;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0.72rem 0;
+  padding: 0.65rem;
+}
+.system-world__stratum-editor strong { display: block; font-size: 0.75rem; margin-top: 0.2rem; }
+.system-world__stratum-editor p { font-size: 0.6rem; margin: 0.26rem 0 0; }
+.system-world__stratum-controls { align-items: stretch; display: grid; gap: 0.28rem; justify-items: stretch; }
+.system-world__stratum-scale {
+  align-items: center;
+  display: flex;
+  gap: 0.22rem;
+  justify-content: center;
+  padding: 0.05rem 0;
+}
+.system-world__stratum-scale span {
+  align-items: center;
+  background: rgba(178, 208, 243, 0.1);
+  border: 1px solid rgba(178, 208, 243, 0.16);
+  border-radius: 999px;
+  color: rgba(218, 232, 250, 0.55);
+  display: inline-flex;
+  font-size: 0.52rem;
+  height: 1.25rem;
+  justify-content: center;
+  width: 1.25rem;
+}
+.system-world__stratum-scale .system-world__stratum-level--active {
+  background: #67dcff;
+  border-color: #b9f1ff;
+  color: #06101b;
+  font-weight: 800;
+}
 
 .system-world__section { border-top: 1px solid rgba(133, 166, 220, 0.12); margin-top: 0.7rem; padding-top: 0.65rem; }
 .system-world__section > strong { display: block; font-size: 0.64rem; letter-spacing: 0.05em; margin-bottom: 0.34rem; text-transform: uppercase; }

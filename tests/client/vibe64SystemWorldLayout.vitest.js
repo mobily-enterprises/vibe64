@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   DIRECTORY_ELEVATION_STEP,
+  FILE_BUILDING_HEIGHT_MAX,
   isVisuallyLargeFile,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
+  SUBSYSTEM_DEPTH_STEP,
+  SUBSYSTEM_STRATUM_CLEARANCE,
   SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
 } from "../../packages/vibe64-system-graph/src/client/world/worldLayout.js";
@@ -65,6 +68,55 @@ describe("File City layout", () => {
     const enormous = city.files.find((entry) => entry.id === "file:src/enormous.js");
     expect(enormous.cityWidth * enormous.cityDepth).toBeGreaterThan(tiny.cityWidth * tiny.cityDepth * 5);
     expect(isVisuallyLargeFile(enormous.lines, city.lineStats.largest)).toBe(true);
+  });
+
+  it("lowers every owned physical piece while preserving nested directory support", () => {
+    const core = {
+      subsystemDescription: "Shared primitives.",
+      subsystemId: "subsystem:core",
+      subsystemTitle: "Core"
+    };
+    const feature = {
+      subsystemDescription: "A nested feature.",
+      subsystemId: "subsystem:feature",
+      subsystemTitle: "Feature"
+    };
+    const city = layoutFileCity({
+      files: [
+        file("packages/core/src/deepFreeze.js", 40, core),
+        file("packages/core/src/feature/service.js", 120, feature),
+        file("src/shared/client.js", 80, core)
+      ],
+      subsystems: [{
+        anchors: [
+          { kind: "directory", path: "packages/core", relation: "owns" },
+          { kind: "directory", path: "src/shared", relation: "owns" }
+        ],
+        depth: 2,
+        id: "subsystem:core"
+      }, {
+        anchors: [{ kind: "directory", path: "packages/core/src/feature", relation: "owns" }],
+        depth: 0,
+        id: "subsystem:feature"
+      }]
+    });
+
+    const coreDirectory = city.directories.find((directory) => directory.path === "packages/core/src");
+    const scatteredDirectory = city.directories.find((directory) => directory.path === "src/shared");
+    const nestedFeature = city.directories.find((directory) => directory.path === "packages/core/src/feature");
+    const coreFile = city.files.find((entry) => entry.path.endsWith("deepFreeze.js"));
+    const featureFile = city.files.find((entry) => entry.path.endsWith("feature/service.js"));
+
+    expect(coreDirectory.generatedElevation - coreDirectory.elevation).toBe(SUBSYSTEM_DEPTH_STEP * 2);
+    expect(scatteredDirectory.generatedElevation - scatteredDirectory.elevation).toBe(SUBSYSTEM_DEPTH_STEP * 2);
+    expect(coreFile.elevation).toBe(coreDirectory.elevation);
+    expect(featureFile.elevation).toBe(nestedFeature.elevation);
+    expect(nestedFeature.supportElevation).toBe(nestedFeature.elevation - DIRECTORY_ELEVATION_STEP);
+    expect(nestedFeature.terraceHeight).toBe(DIRECTORY_ELEVATION_STEP);
+    expect(SUBSYSTEM_DEPTH_STEP - FILE_BUILDING_HEIGHT_MAX).toBe(SUBSYSTEM_STRATUM_CLEARANCE);
+    expect(SUBSYSTEM_STRATUM_CLEARANCE).toBeGreaterThan(150);
+    expect(city.directories.every((directory) => directory.terraceHeight === DIRECTORY_ELEVATION_STEP)).toBe(true);
+    expect(city.campuses[0].subsystemDepths).toEqual([0, 2]);
   });
 
   it("promotes adapter-defined directories to campuses and leaves everything else on the main campus", () => {

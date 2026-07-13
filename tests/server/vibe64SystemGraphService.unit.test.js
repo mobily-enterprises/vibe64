@@ -299,3 +299,45 @@ test("accepting a finding writes an evidence-bound declaration without changing 
     assert.equal(written.model.findings[0].status, "accepted");
   });
 });
+
+test("subsystem strata persist in the current-state document and can return to baseline", async () => {
+  await withTempRoot(async (root) => {
+    const model = modelFixture();
+    await writeSystemDocument(root, model);
+    const service = createService({
+      projectService: projectServiceFor(root),
+      snapshotReader: async () => constantSnapshot()
+    });
+    const initialOverview = await service.readOverview({ sessionId: "session-1" });
+    const subsystem = initialOverview.overview.subsystems.find((candidate) => candidate.id === "subsystem:client");
+
+    const lowered = await service.setSubsystemDepth({
+      depth: 2,
+      sessionId: "session-1",
+      subsystemKey: subsystem.key
+    });
+    assert.equal(lowered.ok, true);
+    assert.equal(lowered.depth, 2);
+    const loweredOverview = await service.readOverview({ sessionId: "session-1" });
+    assert.equal(loweredOverview.overview.subsystems[0].depth, 2);
+    let written = await readSystemDocument(root);
+    assert.deepEqual(written.model.declarations, [{
+      depth: 2,
+      kind: "subsystem-depth",
+      subsystemId: "subsystem:client"
+    }]);
+    assert.equal(
+      written.model.input.declarationsDigest,
+      systemDeclarationsDigest(written.model.declarations)
+    );
+
+    const restored = await service.setSubsystemDepth({
+      depth: 0,
+      sessionId: "session-1",
+      subsystemKey: subsystem.key
+    });
+    assert.equal(restored.ok, true);
+    written = await readSystemDocument(root);
+    assert.deepEqual(written.model.declarations, []);
+  });
+});

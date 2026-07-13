@@ -3,12 +3,13 @@ import CameraControls from "camera-controls";
 import { Text } from "troika-three-text";
 
 import {
-  DIRECTORY_ELEVATION_STEP,
+  FILE_BUILDING_HEIGHT_MAX,
   isVisuallyLargeFile,
   layoutFileCity,
   layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
-  stableHash
+  stableHash,
+  SUBSYSTEM_DEPTH_STEP
 } from "./worldLayout.js";
 
 CameraControls.install({ THREE });
@@ -110,7 +111,7 @@ function fileColor(file = {}, colorMode = "folders") {
 
 function fileBuildingHeight(lines = 0, largest = 0) {
   const lineCount = Math.max(0, Number(lines) || 0);
-  const height = 12 + Math.min(310, Math.pow(lineCount, 0.62) * 1.75);
+  const height = 12 + Math.min(FILE_BUILDING_HEIGHT_MAX - 12, Math.pow(lineCount, 0.62) * 1.75);
   return isVisuallyLargeFile(lineCount, largest) ? Math.max(145, height) : height;
 }
 
@@ -600,7 +601,13 @@ function subsystemBundleConnector(from, to, color) {
   const arrowSize = 3.8;
   const arrow = new THREE.Mesh(
     new THREE.ConeGeometry(arrowSize, arrowSize * 2.5, 8),
-    material.clone()
+    new THREE.MeshBasicMaterial({
+      color,
+      depthTest: true,
+      depthWrite: false,
+      opacity: 0.94,
+      transparent: true
+    })
   );
   const direction = points.at(-1).clone().sub(points.at(-2)).normalize();
   arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
@@ -690,6 +697,7 @@ function subsystemDependencyConnector(from, to, weight = 1, kinds = []) {
 function createSystemWorld({
   canvas,
   onClearSelection = () => {},
+  onEditSubsystemDepth = () => {},
   onHoverSubsystemConnection = () => {},
   onSelectDirectory = () => {},
   onSelectFile = () => {},
@@ -856,33 +864,42 @@ function createSystemWorld({
     });
     for (const campus of layout.campuses) {
       const color = campusSurfaceColor(campus.id);
-      const floor = new THREE.Mesh(
-        new THREE.BoxGeometry(campus.width + 24, 28, campus.depth + 24),
-        new THREE.MeshBasicMaterial({ color })
-      );
-      floor.position.set(campus.x, -16, campus.z);
-      floor.userData.campusId = campus.id;
-      floor.userData.kind = "campus";
-      worldRoot.add(floor);
       const rimColor = new THREE.Color(color).offsetHSL(0, 0.16, 0.28).getHex();
-      const rim = new THREE.LineSegments(
-        new THREE.EdgesGeometry(floor.geometry),
-        new THREE.LineBasicMaterial({ color: rimColor })
-      );
-      rim.position.copy(floor.position);
-      worldRoot.add(rim);
-      pickables.push(floor);
-      campusObjects.set(campus.id, { baseColor: color, campus, floor, rim, rimColor });
-      addLabel(worldRoot, campus.title.toUpperCase(), {
-        color: 0xd9f3ff,
-        fontSize: campus.implicit ? 18 : 22,
-        maxWidth: Math.max(140, campus.width - 20),
-        position: new THREE.Vector3(
-          campus.x,
-          24,
-          campus.z - campus.depth / 2 + 22
-        )
-      });
+      const floors = [];
+      const rims = [];
+      for (const subsystemDepth of campus.subsystemDepths || [0]) {
+        const floor = new THREE.Mesh(
+          new THREE.BoxGeometry(campus.width + 24, 28, campus.depth + 24),
+          new THREE.MeshBasicMaterial({ color })
+        );
+        floor.position.set(campus.x, -16 - subsystemDepth * SUBSYSTEM_DEPTH_STEP, campus.z);
+        floor.userData.campusId = campus.id;
+        floor.userData.kind = "campus";
+        floor.userData.subsystemDepth = subsystemDepth;
+        worldRoot.add(floor);
+        const rim = new THREE.LineSegments(
+          new THREE.EdgesGeometry(floor.geometry),
+          new THREE.LineBasicMaterial({ color: rimColor })
+        );
+        rim.position.copy(floor.position);
+        worldRoot.add(rim);
+        pickables.push(floor);
+        floors.push(floor);
+        rims.push(rim);
+        addLabel(worldRoot, subsystemDepth
+          ? `${campus.title.toUpperCase()} · LAYER −${subsystemDepth}`
+          : campus.title.toUpperCase(), {
+          color: 0xd9f3ff,
+          fontSize: campus.implicit ? 18 : 22,
+          maxWidth: Math.max(140, campus.width - 20),
+          position: new THREE.Vector3(
+            campus.x,
+            24 - subsystemDepth * SUBSYSTEM_DEPTH_STEP,
+            campus.z - campus.depth / 2 + 22
+          )
+        });
+      }
+      campusObjects.set(campus.id, { baseColor: color, campus, floors, rims, rimColor });
     }
   }
 
@@ -901,10 +918,10 @@ function createSystemWorld({
         directoryPath: directory.path,
         position: [
           directory.x,
-          directory.elevation - DIRECTORY_ELEVATION_STEP / 2,
+          directory.supportElevation + directory.terraceHeight / 2,
           directory.z
         ],
-        scale: [directory.width, DIRECTORY_ELEVATION_STEP, directory.depth]
+        scale: [directory.width, directory.terraceHeight, directory.depth]
       });
       directoryObjects.set(directory.path, {
         baseColor: terraceColor.getHex(),
@@ -1619,16 +1636,20 @@ function createSystemWorld({
     for (const [campusId, record] of campusObjects) {
       const selected = selectedCampusId === campusId;
       const relevant = !contextActive || relevantCampusIds.has(campusId);
-      record.floor.material.color.setHex(
-        selected
-          ? new THREE.Color(record.baseColor).offsetHSL(0, 0.08, 0.12).getHex()
-          : relevant
-            ? record.baseColor
-            : DIMMED_CAMPUS_COLOR
-      );
-      record.rim.material.color.setHex(
-        selected ? SELECTED_FILE_COLOR : relevant ? record.rimColor : DIMMED_EDGE_COLOR
-      );
+      for (const floor of record.floors) {
+        floor.material.color.setHex(
+          selected
+            ? new THREE.Color(record.baseColor).offsetHSL(0, 0.08, 0.12).getHex()
+            : relevant
+              ? record.baseColor
+              : DIMMED_CAMPUS_COLOR
+        );
+      }
+      for (const rim of record.rims) {
+        rim.material.color.setHex(
+          selected ? SELECTED_FILE_COLOR : relevant ? record.rimColor : DIMMED_EDGE_COLOR
+        );
+      }
     }
 
     for (const [directoryPath, record] of directoryObjects) {
@@ -1865,14 +1886,16 @@ function createSystemWorld({
       return false;
     }
     const campus = record.campus;
-    const span = Math.max(campus.width, campus.depth);
+    const deepestLayer = Math.max(0, ...(campus.subsystemDepths || []));
+    const verticalSpan = deepestLayer * SUBSYSTEM_DEPTH_STEP;
+    const span = Math.max(campus.width, campus.depth, verticalSpan);
     const distance = Math.max(220, span * 1.25);
     controls.setLookAt(
       campus.x + distance * 0.22,
       distance * 0.88,
       campus.z + distance * 0.72,
       campus.x,
-      0,
+      -verticalSpan / 2,
       campus.z,
       !reducedMotion
     );
@@ -2362,6 +2385,21 @@ function createSystemWorld({
     onClearSelection();
   }
 
+  function handleDoubleClick(event) {
+    const object = pickedIntersection(event)?.object;
+    if (object?.userData.kind !== "subsystem") {
+      return;
+    }
+    const record = subsystemObjects.get(object.userData.subsystemId);
+    if (!record) {
+      return;
+    }
+    event.preventDefault();
+    selectSubsystem(record.subsystem.id);
+    onSelectSubsystem(record.subsystem);
+    onEditSubsystemDepth(record.subsystem);
+  }
+
   function handlePointerCancel() {
     grabState = null;
     pointerDown = null;
@@ -2372,6 +2410,7 @@ function createSystemWorld({
   canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerup", handlePointerUp);
   canvas.addEventListener("pointercancel", handlePointerCancel);
+  canvas.addEventListener("dblclick", handleDoubleClick);
   canvas.addEventListener("pointerleave", clearSubsystemConnectionHover);
   canvas.addEventListener("lostpointercapture", handlePointerCancel);
   canvas.addEventListener("wheel", handleWheelMode, { capture: true, passive: true });
@@ -2391,6 +2430,7 @@ function createSystemWorld({
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
       canvas.removeEventListener("pointercancel", handlePointerCancel);
+      canvas.removeEventListener("dblclick", handleDoubleClick);
       canvas.removeEventListener("pointerleave", clearSubsystemConnectionHover);
       canvas.removeEventListener("lostpointercapture", handlePointerCancel);
       canvas.removeEventListener("wheel", handleWheelMode, true);

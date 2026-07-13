@@ -124,6 +124,14 @@ function useVibe64SystemGraph({
     requestRecoveryLabel: "Finding acceptance",
     writeMethod: "POST"
   });
+  const subsystemDepthResource = useEndpointResource({
+    enabled: false,
+    fallbackSaveError: "Subsystem stratum could not be saved.",
+    path: "",
+    queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "subsystem-depth")),
+    requestRecoveryLabel: "Subsystem stratum",
+    writeMethod: "POST"
+  });
 
   const overview = computed(() => overviewResource.data.value?.overview || null);
   const findings = computed(() => findingsResource.data.value?.findings || []);
@@ -139,6 +147,7 @@ function useVibe64SystemGraph({
   ));
   const error = computed(() => (
     updateStreamError.value ||
+    subsystemDepthResource.saveError.value ||
     updateResource.saveError.value ||
     statusResource.loadError.value ||
     overviewResource.loadError.value ||
@@ -265,6 +274,19 @@ function useVibe64SystemGraph({
     return response;
   }
 
+  async function setSubsystemDepth(subsystemKey = "", depth = 0) {
+    const normalizedSubsystemKey = String(subsystemKey || "").trim();
+    if (!normalizedSubsystemKey) {
+      return null;
+    }
+    const response = await subsystemDepthResource.save({ depth }, {
+      method: "POST",
+      path: `${sessionPath.value}/subsystems/${encodeSegment(normalizedSubsystemKey)}/depth`
+    });
+    await overviewResource.reload();
+    return response;
+  }
+
   watch(normalizedSessionId, () => {
     closeUpdateStream();
     selectedEntityKey.value = "";
@@ -291,6 +313,8 @@ function useVibe64SystemGraph({
     selectedEvidence,
     selectFile,
     selectedFileKey,
+    setSubsystemDepth,
+    savingSubsystemDepth: subsystemDepthResource.isSaving,
     startUpdate,
     systemStatus,
     updateEvents,
