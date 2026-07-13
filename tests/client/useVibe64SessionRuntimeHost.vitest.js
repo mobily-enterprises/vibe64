@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 
+import { agentMessageInputValidator } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
@@ -328,5 +330,40 @@ describe("Vibe64 session runtime host", () => {
       afterSubmissionId: "composer:initial",
       reason: "user_interrupt"
     });
+
+    expect(agentTurnControlPayloadFromContext({
+      agentSettings: {
+        model: "gpt-5"
+      },
+      sessionId: "2026-06-22_04-04-58"
+    })).toMatchObject({
+      agentSettings: {
+        model: "gpt-5"
+      }
+    });
+
+    const defaultSettingsMessage = agentTurnControlPayloadFromContext({
+      agentSettings: null,
+      composerSubmissionId: "composer:test",
+      displayFields: {
+        conversationRequest: "Use the default agent settings"
+      },
+      fields: {
+        conversationRequest: "Use the default agent settings"
+      },
+      message: "Use the default agent settings",
+      sessionId: "2026-06-22_04-04-58"
+    });
+    expect(defaultSettingsMessage).toMatchObject({
+      message: "Use the default agent settings"
+    });
+    expect(defaultSettingsMessage).not.toHaveProperty("agentSettings");
+    expect(() => validateSchemaPayload(
+      agentMessageInputValidator,
+      defaultSettingsMessage,
+      {
+        context: "agent message request contract"
+      }
+    )).not.toThrow();
   });
 });

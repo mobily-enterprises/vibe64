@@ -40,6 +40,7 @@ import {
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
+  agentSettingsInputFromContext,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64SessionPath
@@ -208,10 +209,14 @@ function artifactReadinessChangeRefreshDecision({
 function agentTurnControlPayloadFromContext(context = {}) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
   const {
+    agentSettings: _agentSettings,
     sessionId: _sessionId,
     ...body
   } = source;
-  return vibe64RealtimeOriginPayload(body);
+  return vibe64RealtimeOriginPayload({
+    ...body,
+    ...agentSettingsInputFromContext(source)
+  });
 }
 
 function useVibe64SessionRuntimeHost(props, emit) {
