@@ -704,7 +704,7 @@ import {
 } from "../world/worldLayout.js";
 import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
-const rendererRevision = "049";
+const rendererRevision = "050";
 
 const props = defineProps({
   active: {

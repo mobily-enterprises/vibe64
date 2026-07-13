@@ -1831,6 +1831,85 @@ function createSystemWorld({
     await fitWorld(false);
   }
 
+  function activePhysicalDepth() {
+    const selectedDepths = [
+      subsystemObjects.get(selectedSubsystemId)?.subsystem.subsystemDepth,
+      fileObjects.get(selectedFileId)?.file.subsystemDepth,
+      directoryObjects.get(selectedDirectoryPath)?.directory.subsystemDepth
+    ];
+    const selectedDepth = selectedDepths.find((depth) => Number.isFinite(depth));
+    return Math.max(0, Math.floor(selectedDepth || 0));
+  }
+
+  function layerCeilingElevation(depth = 0) {
+    const normalizedDepth = Math.max(0, Math.floor(Number(depth) || 0));
+    if (normalizedDepth === 0) {
+      return null;
+    }
+    const elevation = Number(cityLayout?.subsystemStrata?.[normalizedDepth - 1]?.elevation);
+    return Number.isFinite(elevation) ? elevation : null;
+  }
+
+  function physicalLayerOrbitElevation(depth = 0) {
+    const normalizedDepth = Math.max(0, Math.floor(Number(depth) || 0));
+    const floorElevation = Number(cityLayout?.subsystemStrata?.[normalizedDepth]?.elevation) || 0;
+    let skylineElevation = floorElevation;
+    for (const directory of cityLayout?.directories || []) {
+      if (directory.subsystemDepth === normalizedDepth) {
+        skylineElevation = Math.max(skylineElevation, Number(directory.elevation) || floorElevation);
+      }
+    }
+    for (const file of cityLayout?.files || []) {
+      if (file.subsystemDepth !== normalizedDepth) {
+        continue;
+      }
+      const height = fileObjects.get(file.id)?.height || fileBuildingHeight(
+        file.lines,
+        cityLayout?.lineStats?.largest
+      );
+      skylineElevation = Math.max(
+        skylineElevation,
+        (Number(file.elevation) || floorElevation) + height
+      );
+    }
+    return floorElevation + (skylineElevation - floorElevation) * 0.38;
+  }
+
+  function currentLayerOrbitTarget() {
+    const depth = activePhysicalDepth();
+    const semanticRecords = (subsystemLayout?.subsystems || []).filter((record) => (
+      record.subsystemDepth === depth
+    ));
+    const semanticElevation = semanticRecords.length > 0
+      ? semanticRecords.reduce((sum, record) => sum + record.y, 0) / semanticRecords.length
+      : subsystemLayout?.centerElevation || 0;
+    return {
+      ceilingElevation: layerCeilingElevation(depth),
+      depth,
+      x: 0,
+      y: viewMode === "subsystems" ? semanticElevation : physicalLayerOrbitElevation(depth),
+      z: 0
+    };
+  }
+
+  function currentLayerSpan() {
+    const target = currentLayerOrbitTarget();
+    const width = Number(cityLayout?.bounds?.width) || 1_420;
+    const depth = Number(cityLayout?.bounds?.depth) || 980;
+    if (viewMode !== "subsystems") {
+      return Math.max(width, depth);
+    }
+    const records = (subsystemLayout?.subsystems || []).filter((record) => (
+      record.subsystemDepth === target.depth
+    ));
+    const subsystemSpan = records.reduce((span, record) => Math.max(
+      span,
+      Math.abs(record.x - target.x) * 2 + record.radius * 2,
+      Math.abs(record.z - target.z) * 2 + record.radius * 2
+    ), 0);
+    return Math.max(width, depth, subsystemSpan);
+  }
+
   function focusFile(fileId = "") {
     const record = fileObjects.get(String(fileId || ""));
     if (!record) {
@@ -1839,9 +1918,17 @@ function createSystemWorld({
     const footprint = Math.max(record.file.cityWidth, record.file.cityDepth);
     const distance = Math.max(150, record.height * 2.5, footprint * 5.5);
     const elevation = Number(record.file.elevation) || 0;
+    const proposedCameraY = elevation + record.height + distance * 0.72;
+    const ceilingElevation = layerCeilingElevation(record.file.subsystemDepth);
+    const cameraY = Number.isFinite(ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
     controls.setLookAt(
       record.file.x + distance * 0.42,
-      elevation + record.height + distance * 0.72,
+      cameraY,
       record.file.z + distance * 0.68,
       record.file.x,
       elevation + record.height * 0.38,
@@ -1864,9 +1951,17 @@ function createSystemWorld({
     const directory = record.directory;
     const span = Math.max(directory.width, directory.depth);
     const distance = Math.max(180, span * 1.45);
+    const proposedCameraY = directory.elevation + distance * 0.92;
+    const ceilingElevation = layerCeilingElevation(directory.subsystemDepth);
+    const cameraY = Number.isFinite(ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
     controls.setLookAt(
       directory.x + distance * 0.25,
-      distance * 0.92,
+      cameraY,
       directory.z + distance * 0.72,
       directory.x,
       directory.elevation,
@@ -1887,12 +1982,13 @@ function createSystemWorld({
     const verticalSpan = Math.abs(deepestElevation);
     const span = Math.max(campus.width, campus.depth, verticalSpan);
     const distance = Math.max(220, span * 1.25);
+    const targetY = physicalLayerOrbitElevation(0);
     controls.setLookAt(
       campus.x + distance * 0.22,
-      distance * 0.88,
+      targetY + distance * 0.88,
       campus.z + distance * 0.72,
       campus.x,
-      -verticalSpan / 2,
+      targetY,
       campus.z,
       !reducedMotion
     );
@@ -2003,7 +2099,8 @@ function createSystemWorld({
   }
 
   function focusSubsystemGround(subsystemId = "") {
-    const targets = subsystemObjects.get(String(subsystemId || ""))?.subsystem.targets || [];
+    const subsystem = subsystemObjects.get(String(subsystemId || ""))?.subsystem;
+    const targets = subsystem?.targets || [];
     if (targets.length === 0) {
       return false;
     }
@@ -2011,18 +2108,28 @@ function createSystemWorld({
     const maxX = Math.max(...targets.map((target) => target.x + (Number(target.width) || 0) / 2));
     const minZ = Math.min(...targets.map((target) => target.z - (Number(target.depth) || 0) / 2));
     const maxZ = Math.max(...targets.map((target) => target.z + (Number(target.depth) || 0) / 2));
-    const targetY = Math.max(...targets.map((target) => (
+    const minY = Math.min(...targets.map((target) => Number(target.elevation) || 0));
+    const maxY = Math.max(...targets.map((target) => (
       target.fileId ? buildingTop(target.fileId)?.y || target.elevation : target.elevation
     )));
     const centerX = (minX + maxX) / 2;
+    const centerY = minY + (maxY - minY) * 0.38;
     const centerZ = (minZ + maxZ) / 2;
-    const span = Math.max(440, maxX - minX, maxZ - minZ, targetY * 0.7);
+    const span = Math.max(440, maxX - minX, maxZ - minZ, (maxY - minY) * 1.6);
+    const proposedCameraY = maxY + span * 0.76;
+    const ceilingElevation = layerCeilingElevation(subsystem.subsystemDepth);
+    const cameraY = Number.isFinite(ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
     controls.setLookAt(
       centerX + span * 0.28,
-      targetY + span * 0.76,
+      cameraY,
       centerZ + span * 0.78,
       centerX,
-      Math.max(0, targetY * 0.38),
+      centerY,
       centerZ,
       !reducedMotion
     );
@@ -2045,10 +2152,18 @@ function createSystemWorld({
     const maxZ = Math.max(...records.map((record) => record.z + record.radius));
     const minY = Math.min(...records.map((record) => record.y - 18));
     const maxY = Math.max(...records.map((record) => record.y + 72));
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-    const span = Math.max(520, maxX - minX, maxZ - minZ, (maxY - minY) * 1.8);
+    const orbitTarget = currentLayerOrbitTarget();
+    const centerX = orbitTarget.x;
+    const centerY = orbitTarget.y;
+    const centerZ = orbitTarget.z;
+    const span = Math.max(
+      520,
+      Math.abs(minX - centerX) * 2,
+      Math.abs(maxX - centerX) * 2,
+      Math.abs(minZ - centerZ) * 2,
+      Math.abs(maxZ - centerZ) * 2,
+      (maxY - minY) * 1.8
+    );
     const ceilingElevation = records[0]?.ceilingElevation;
     const proposedCameraY = centerY + span * 0.62;
     const cameraY = Number.isFinite(ceilingElevation)
@@ -2077,31 +2192,57 @@ function createSystemWorld({
     if (worldRoot.children.length === 0) {
       return;
     }
-    await controls.fitToBox(worldRoot, smooth && !reducedMotion, {
-      paddingBottom: 72,
-      paddingLeft: 84,
-      paddingRight: 84,
-      paddingTop: 105
-    });
+    const target = currentLayerOrbitTarget();
+    const span = currentLayerSpan();
+    const proposedCameraY = target.y + span * 0.72;
+    const cameraY = Number.isFinite(target.ceilingElevation)
+      ? Math.min(
+        proposedCameraY,
+        target.ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+      )
+      : proposedCameraY;
+    controls.setLookAt(
+      target.x + span * 0.18,
+      cameraY,
+      target.z + span * (Number.isFinite(target.ceilingElevation) ? 1.12 : 0.86),
+      target.x,
+      target.y,
+      target.z,
+      smooth && !reducedMotion
+    );
     markDirty();
   }
 
   function setView(view = "perspective") {
-    const subsystemVerticalSpan = Math.max(0, (
-      Number(subsystemLayout?.maximumCircleElevation) || 0
-    ) - (
-      Number(subsystemLayout?.minimumCircleElevation) || 0
-    ));
-    const span = Math.max(
-      cityLayout?.bounds.width || 1_420,
-      cityLayout?.bounds.depth || 980,
-      viewMode === "subsystems" ? subsystemVerticalSpan * 1.8 : 0
-    );
-    const targetY = viewMode === "subsystems" ? subsystemLayout?.centerElevation || 0 : 0;
+    const target = currentLayerOrbitTarget();
+    const span = currentLayerSpan();
     if (view === "top") {
-      controls.setLookAt(0, targetY + span * 1.12, 0.01, 0, targetY, 0, !reducedMotion);
+      controls.setLookAt(
+        target.x,
+        target.y + span * 1.12,
+        target.z + 0.01,
+        target.x,
+        target.y,
+        target.z,
+        !reducedMotion
+      );
     } else {
-      controls.setLookAt(0, targetY + span * 0.72, span * 0.86, 0, targetY, 0, !reducedMotion);
+      const proposedCameraY = target.y + span * 0.72;
+      const cameraY = Number.isFinite(target.ceilingElevation)
+        ? Math.min(
+          proposedCameraY,
+          target.ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
+        )
+        : proposedCameraY;
+      controls.setLookAt(
+        target.x,
+        cameraY,
+        target.z + span * (Number.isFinite(target.ceilingElevation) ? 1.12 : 0.86),
+        target.x,
+        target.y,
+        target.z,
+        !reducedMotion
+      );
     }
     markDirty();
   }
