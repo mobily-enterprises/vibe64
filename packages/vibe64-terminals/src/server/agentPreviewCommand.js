@@ -12,13 +12,18 @@ import {
   vibe64StatusCode
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  readSessionUiSyncStateForSession
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
+const DEFAULT_PREVIEW_LOG_LINES = 200;
 const DEFAULT_PREVIEW_WAIT_TIMEOUT_MS = 90_000;
+const MAX_PREVIEW_LOG_LINES = 5000;
 const PREVIEW_WAIT_POLL_INTERVAL_MS = 500;
 const VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID";
 const VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_SOCKET";
@@ -219,10 +224,11 @@ function usageText() {
   return [
     "Usage:",
     "  vibe64-preview status [--json]",
+    "  vibe64-preview logs [--lines <count>] [--json]",
     "  vibe64-preview restart [--wait] [--json] [--timeout-ms <ms>]",
     "",
-    "This command controls the Vibe64-managed preview for the current session.",
-    "Do not start npm/vite/jskit servers manually when this command is available."
+    "This is the only preview server the agent may use for this Vibe64 session.",
+    "Do not start npm, Vite, Next, JSKIT, or any other development server on another port."
   ].join("\n") + "\n";
 }
 
@@ -247,9 +253,17 @@ function parsePreviewCommandArgs(args = []) {
     args: values,
     command,
     json: hasFlag(values, "--json"),
+    lines: normalizeLogLines(optionValue(values, "--lines")),
     timeoutMs: normalizeTimeoutMs(optionValue(values, "--timeout-ms")),
     wait: hasFlag(values, "--wait")
   };
+}
+
+function normalizeLogLines(value = "") {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0
+    ? Math.min(number, MAX_PREVIEW_LOG_LINES)
+    : DEFAULT_PREVIEW_LOG_LINES;
 }
 
 function normalizeTimeoutMs(value = "") {
@@ -269,20 +283,112 @@ function activeTerminalExited(status = {}, terminalSessionId = "") {
   return normalizeText(terminal.status) === "exited";
 }
 
-function previewStatusSummary(status = {}) {
+function previewEndpoint(value = "") {
+  const url = normalizeText(value);
+  if (!url) {
+    return null;
+  }
+  try {
+    const parsed = new URL(url);
+    const defaultPort = parsed.protocol === "https:" ? 443 : parsed.protocol === "http:" ? 80 : 0;
+    return {
+      host: parsed.host,
+      hostname: parsed.hostname,
+      origin: parsed.origin,
+      path: `${parsed.pathname}${parsed.search}${parsed.hash}`,
+      port: Number(parsed.port) || defaultPort,
+      protocol: parsed.protocol.replace(/:$/u, ""),
+      url: parsed.toString()
+    };
+  } catch {
+    return null;
+  }
+}
+
+function previewPageUrl(baseUrl = "", route = "") {
+  const normalizedBaseUrl = normalizeText(baseUrl);
+  const normalizedRoute = normalizeText(route);
+  if (!normalizedBaseUrl || !normalizedRoute.startsWith("/")) {
+    return "";
+  }
+  try {
+    return new URL(normalizedRoute, normalizedBaseUrl).toString();
+  } catch {
+    return "";
+  }
+}
+
+function previewCurrentPage(previewState = {}, {
+  agentUrl = "",
+  browserUrl = ""
+} = {}) {
+  const route = normalizeText(previewState?.route);
+  if (!route) {
+    return null;
+  }
+  return {
+    agentUrl: previewPageUrl(agentUrl, route),
+    browserUrl: previewPageUrl(browserUrl, route),
+    href: normalizeText(previewState?.href),
+    observedAt: normalizeText(previewState?.updatedAt),
+    projectSlug: normalizeText(previewState?.projectSlug),
+    route,
+    title: normalizeText(previewState?.title)
+  };
+}
+
+function previewTerminal(status = {}) {
+  const terminal = isRecord(status?.activeTerminal) ? status.activeTerminal : null;
+  if (!terminal) {
+    return null;
+  }
+  return {
+    command: normalizeText(terminal.commandPreview),
+    createdAt: normalizeText(terminal.createdAt),
+    exitCode: terminal.exitCode ?? null,
+    id: normalizeText(terminal.id),
+    running: terminal.running === true,
+    status: normalizeText(terminal.status)
+  };
+}
+
+function previewDiagnostics(status = {}) {
+  const metadata = isRecord(status?.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
+  const sessionRoot = normalizeText(metadata.sessionRoot);
+  return sessionRoot ? {
+    latest: path.join(sessionRoot, "preview-last.json"),
+    log: path.join(sessionRoot, "preview-log.jsonl")
+  } : null;
+}
+
+function previewStatusSummary(status = {}, {
+  previewState = null
+} = {}) {
   const lastLaunchTarget = isRecord(status.lastLaunchTarget) ? status.lastLaunchTarget : {};
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const openTarget = isRecord(status.openTarget) ? status.openTarget : {};
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
+  const agentUrl = normalizeText(lastLaunchTarget.agentHref || activeMetadata.previewProxyTargetHref || activeMetadata.targetUrl || openTarget.href);
+  const browserUrl = normalizeText(openTarget.href || previewTarget.targetHref);
+  const agentEndpoint = previewEndpoint(agentUrl);
+  const browserEndpoint = previewEndpoint(browserUrl);
   return {
-    agentUrl: normalizeText(lastLaunchTarget.agentHref || activeMetadata.previewProxyTargetHref || activeMetadata.targetUrl || openTarget.href),
-    browserUrl: normalizeText(openTarget.href || previewTarget.targetHref),
+    currentPage: previewCurrentPage(previewState, {
+      agentUrl: agentEndpoint?.url,
+      browserUrl: browserEndpoint?.url
+    }),
+    diagnostics: previewDiagnostics(status),
+    endpoints: {
+      agent: agentEndpoint,
+      browser: browserEndpoint,
+      previewProxy: normalizeText(previewTarget.href) ? {
+        url: normalizeText(previewTarget.href)
+      } : null
+    },
     launchTargetId: normalizeText(lastLaunchTarget.id || activeMetadata.launchTargetId),
-    previewUrl: normalizeText(previewTarget.href),
     ready: previewReady(status),
-    running: status.activeTerminal?.running === true,
     stale: previewTarget.stale === true || normalizeText(previewTarget.recovery?.reason) === "server_source_changed",
-    status: normalizeText(status.activeTerminal?.status)
+    terminal: previewTerminal(status)
   };
 }
 
@@ -294,13 +400,54 @@ function statusStdout(summary = {}, {
   }
   return [
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
-    `Preview running: ${summary.running ? "yes" : "no"}`,
+    `Preview running: ${summary.terminal?.running ? "yes" : "no"}`,
     summary.launchTargetId ? `Launch target: ${summary.launchTargetId}` : "",
-    summary.agentUrl ? `Agent URL: ${summary.agentUrl}` : "",
-    summary.browserUrl ? `Browser URL: ${summary.browserUrl}` : "",
-    summary.previewUrl ? `Preview URL: ${summary.previewUrl}` : "",
+    summary.endpoints?.agent?.url ? `Agent URL: ${summary.endpoints.agent.url}` : "",
+    summary.endpoints?.agent?.hostname ? `Agent host: ${summary.endpoints.agent.hostname}` : "",
+    summary.endpoints?.agent?.port ? `Agent port: ${summary.endpoints.agent.port}` : "",
+    summary.endpoints?.browser?.url ? `Browser URL: ${summary.endpoints.browser.url}` : "",
+    summary.endpoints?.previewProxy?.url ? `Preview proxy URL: ${summary.endpoints.previewProxy.url}` : "",
+    summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : "Current page: not observed",
+    summary.currentPage?.agentUrl ? `Current page agent URL: ${summary.currentPage.agentUrl}` : "",
+    summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     `Stale: ${summary.stale ? "yes" : "no"}`
   ].filter(Boolean).join("\n") + "\n";
+}
+
+function previewLogTail(output = "", lines = DEFAULT_PREVIEW_LOG_LINES) {
+  const normalizedOutput = String(output || "").replace(/\r\n/gu, "\n");
+  const trailingNewline = normalizedOutput.endsWith("\n");
+  const entries = normalizedOutput.split("\n");
+  if (trailingNewline) {
+    entries.pop();
+  }
+  const tail = entries.slice(-normalizeLogLines(lines)).join("\n");
+  return tail && trailingNewline ? `${tail}\n` : tail;
+}
+
+function logsStdout(status = {}, summary = {}, {
+  json = false,
+  lines = DEFAULT_PREVIEW_LOG_LINES
+} = {}) {
+  const output = previewLogTail(status?.activeTerminal?.output, lines);
+  const payload = {
+    diagnostics: summary.diagnostics,
+    launchTargetId: summary.launchTargetId,
+    lineLimit: normalizeLogLines(lines),
+    output,
+    terminal: summary.terminal
+  };
+  if (json) {
+    return JSON.stringify(payload, null, 2) + "\n";
+  }
+  const header = [
+    summary.terminal?.id
+      ? `Managed preview logs: ${summary.terminal.id} (${summary.terminal.status || "unknown"})`
+      : "Managed preview logs: no terminal",
+    `Showing up to ${payload.lineLimit} lines.`,
+    summary.diagnostics?.log ? `Preview diagnostic log: ${summary.diagnostics.log}` : ""
+  ].filter(Boolean).join("\n");
+  return `${header}\n\n${output || "No managed preview server output is available."}${output.endsWith("\n") ? "" : "\n"}`;
 }
 
 function restartStdout(summary = {}, {
@@ -312,9 +459,12 @@ function restartStdout(summary = {}, {
   return [
     `Restarted preview${summary.launchTargetId ? ` ${summary.launchTargetId}` : ""}.`,
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
-    summary.agentUrl ? `Agent URL: ${summary.agentUrl}` : "",
-    summary.browserUrl ? `Browser URL: ${summary.browserUrl}` : "",
-    summary.previewUrl ? `Preview URL: ${summary.previewUrl}` : ""
+    summary.endpoints?.agent?.url ? `Agent URL: ${summary.endpoints.agent.url}` : "",
+    summary.endpoints?.agent?.hostname ? `Agent host: ${summary.endpoints.agent.hostname}` : "",
+    summary.endpoints?.agent?.port ? `Agent port: ${summary.endpoints.agent.port}` : "",
+    summary.endpoints?.browser?.url ? `Browser URL: ${summary.endpoints.browser.url}` : "",
+    summary.endpoints?.previewProxy?.url ? `Preview proxy URL: ${summary.endpoints.previewProxy.url}` : "",
+    summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : ""
   ].filter(Boolean).join("\n") + "\n";
 }
 
@@ -386,8 +536,23 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
 
 function createAgentPreviewCommandService({
   launchTarget = null,
-  logger = null
+  logger = null,
+  readSessionUiState = readSessionUiSyncStateForSession
 } = {}) {
+  function statusSummary(status = {}, sessionId = "") {
+    let uiState = null;
+    try {
+      uiState = typeof readSessionUiState === "function"
+        ? readSessionUiState(sessionId)
+        : null;
+    } catch {
+      uiState = null;
+    }
+    return previewStatusSummary(status, {
+      previewState: uiState?.preview || null
+    });
+  }
+
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const parsed = parsePreviewCommandArgs(input.args);
@@ -430,8 +595,26 @@ function createAgentPreviewCommandService({
       return finish({
         exitCode: 0,
         ok: true,
-        stdout: statusStdout(previewStatusSummary(status), {
+        stdout: statusStdout(statusSummary(status, sessionId), {
           json: parsed.json
+        })
+      });
+    }
+    if (parsed.command === "logs") {
+      const status = await launchTarget.launchStatus(sessionId);
+      if (status?.ok === false) {
+        return finish({
+          ...status,
+          exitCode: 1,
+          stderr: `${status.error || "Vibe64 preview logs failed."}\n`
+        });
+      }
+      return finish({
+        exitCode: 0,
+        ok: true,
+        stdout: logsStdout(status, statusSummary(status, sessionId), {
+          json: parsed.json,
+          lines: parsed.lines
         })
       });
     }
@@ -478,7 +661,7 @@ function createAgentPreviewCommandService({
       status = waited.status || status;
       timedOut = waited.timeout === true;
       if (!waited.ok) {
-        const summary = previewStatusSummary(status || {});
+        const summary = statusSummary(status || {}, sessionId);
         return finish(responseError(
           timedOut
             ? "Timed out waiting for Vibe64 preview to become ready."
@@ -501,7 +684,7 @@ function createAgentPreviewCommandService({
       exitCode: 0,
       ok: true,
       stdout: restartStdout({
-        ...previewStatusSummary(status || {}),
+        ...statusSummary(status || {}, sessionId),
         restarted: true
       }, {
         json: parsed.json

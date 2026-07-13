@@ -20,6 +20,7 @@ import {
   vibe64ProjectToolTerminalPath,
   vibe64SessionQueryKey,
   vibe64SessionPath,
+  vibe64SessionPreviewStatePath,
   vibe64SessionViewStatePath,
   vibe64SessionsQueryKey,
   vibe64SourceEditorCreateFilePath,
@@ -108,6 +109,7 @@ describe("Vibe64 session request config", () => {
     expect(vibe64AgentAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/agent-attachments`);
     expect(vibe64ComposerDraftPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/composer-draft`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
+    expect(vibe64SessionPreviewStatePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/preview-state`);
     expect(vibe64SessionViewStatePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/view-state`);
     expect(vibe64SourceEditorCreateFilePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/file`);
     expect(vibe64SourceEditorOpenFilePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/open-file`);

@@ -66,6 +66,7 @@ function launchPreviewBridgeScript({
     window.parent.postMessage({
       href,
       reason: String(reason || "location"),
+      title: String(document.title || ""),
       type: config.locationMessageType,
       version: config.version
     }, "*");

@@ -26,6 +26,27 @@ function readSessionUiSyncState(input = {}) {
   return key ? cloneSessionUiSyncRecord(sessionUiSyncStates.get(key)) : null;
 }
 
+function sessionUiSyncRecordUpdatedAt(record = {}) {
+  return Math.max(
+    ...[
+      record?.preview?.updatedAt,
+      record?.sourceEditor?.updatedAt,
+      record?.viewState?.updatedAt
+    ].map((value) => Date.parse(normalizedSessionUiSyncValue(value)) || 0)
+  );
+}
+
+function readSessionUiSyncStateForSession(sessionId = "") {
+  const normalizedSessionId = normalizedSessionUiSyncValue(sessionId);
+  if (!normalizedSessionId) {
+    return null;
+  }
+  const matches = [...sessionUiSyncStates.values()]
+    .filter((record) => normalizedSessionUiSyncValue(record?.sessionId) === normalizedSessionId)
+    .sort((left, right) => sessionUiSyncRecordUpdatedAt(right) - sessionUiSyncRecordUpdatedAt(left));
+  return cloneSessionUiSyncRecord(matches[0]);
+}
+
 function writeSessionUiSyncPatch(input = {}, patch = {}) {
   const key = sessionUiSyncStateKey(input);
   if (!key || !isPlainObject(patch)) {
@@ -59,6 +80,25 @@ function writeSessionUiSyncViewState(viewState = {}) {
   }
   return writeSessionUiSyncPatch(state, {
     viewState: state
+  });
+}
+
+function writeSessionUiSyncPreviewState(previewState = {}) {
+  const state = {
+    href: normalizedSessionUiSyncValue(previewState?.href),
+    originId: normalizedSessionUiSyncValue(previewState?.originId),
+    projectSlug: normalizedSessionUiSyncValue(previewState?.projectSlug),
+    reason: normalizedSessionUiSyncValue(previewState?.reason),
+    route: normalizedSessionUiSyncValue(previewState?.route),
+    sessionId: normalizedSessionUiSyncValue(previewState?.sessionId),
+    title: normalizedSessionUiSyncValue(previewState?.title),
+    updatedAt: normalizedSessionUiSyncValue(previewState?.updatedAt) || new Date().toISOString()
+  };
+  if (!state.originId || !state.projectSlug || !state.route || !state.sessionId) {
+    return null;
+  }
+  return writeSessionUiSyncPatch(state, {
+    preview: state
   });
 }
 
@@ -104,7 +144,9 @@ function clearSessionUiSyncState() {
 export {
   clearSessionUiSyncState,
   readSessionUiSyncState,
+  readSessionUiSyncStateForSession,
   sessionUiSyncStateKey,
+  writeSessionUiSyncPreviewState,
   writeSessionUiSyncSourceEditorOpen,
   writeSessionUiSyncViewState
 };

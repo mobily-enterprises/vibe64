@@ -48,6 +48,7 @@ test("launch preview bridge injects once and reports target URLs", () => {
   assert.match(injected, new RegExp(PREVIEW_LOCATION_MESSAGE_TYPE, "u"));
   assert.match(injected, new RegExp(PREVIEW_QUERY_MESSAGE_TYPE, "u"));
   assert.match(injected, /force: true/u);
+  assert.match(injected, /title: String\(document\.title/u);
   assert.doesNotMatch(injected, /vibe64:preview-ready/u);
   assert.doesNotMatch(injected, /MutationObserver/u);
   assert.match(injected, /http:\/\/127\.0\.0\.1:4103/u);

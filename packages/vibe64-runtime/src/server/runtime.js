@@ -27,6 +27,10 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  readSessionUiSyncStateForSession
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
+  managedPreviewPolicyInstruction,
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -654,24 +658,37 @@ function promptWorkflowFacts(metadata = {}) {
   );
 }
 
-function promptLaunchTargetContext(metadata = {}) {
-  const source = isPlainObject(metadata) ? metadata : {};
+function promptLaunchTargetContext(session = {}) {
+  const source = isPlainObject(session?.metadata) ? session.metadata : {};
   const agentHref = normalizeText(source[LAUNCH_TARGET_AGENT_HREF_METADATA]);
   const browserHref = normalizeText(source[LAUNCH_TARGET_OPEN_HREF_METADATA]);
-  if (!agentHref && !browserHref) {
+  const sessionId = normalizeText(session?.sessionId || session?.id);
+  const previewState = readSessionUiSyncStateForSession(sessionId)?.preview || null;
+  const currentRoute = normalizeText(previewState?.route);
+  let currentPageAgentHref = "";
+  if (agentHref && currentRoute.startsWith("/")) {
+    try {
+      currentPageAgentHref = new URL(currentRoute, agentHref).toString();
+    } catch {
+      currentPageAgentHref = "";
+    }
+  }
+  if (!agentHref && !browserHref && !currentRoute) {
     return "";
   }
   const label = normalizeText(source[LAUNCH_TARGET_LABEL_METADATA]);
   return [
-    "Existing app launch target:",
+    "Vibe64-managed app preview:",
     label ? `- launch target: ${label}` : "",
     agentHref ? `- Codex/app-server URL: ${agentHref}` : "",
     browserHref && browserHref !== agentHref ? `- browser URL: ${browserHref}` : "",
-    "- Use the existing launched app above for browser/UI checks.",
-    "- If you changed server-side routes, resources, providers, actions, repositories, migrations, or generated server metadata before browser/UI verification, run `vibe64-preview restart --wait` first, then rerun the browser check.",
-    "- Do not start another dev server (`npm run dev`, `vite`, `next dev`, `jskit ... server`, etc.) unless the user explicitly asks you to replace or restart the launch target.",
-    "- If `vibe64-preview` is unavailable, report that the managed preview cannot be restarted from the agent instead of starting a duplicate server.",
-    "- If the URL is missing, still starting, or unreachable, report that the Vibe64 launch target is not ready/reachable instead of starting a duplicate server."
+    currentRoute ? `- current user-visible page: ${currentRoute}` : "- current user-visible page: not observed",
+    normalizeText(previewState?.title) ? `- current page title: ${normalizeText(previewState.title)}` : "",
+    currentPageAgentHref ? `- current page Codex URL: ${currentPageAgentHref}` : "",
+    normalizeText(previewState?.updatedAt) ? `- current page observed at: ${normalizeText(previewState.updatedAt)}` : "",
+    "",
+    "Mandatory managed preview policy:",
+    managedPreviewPolicyInstruction()
   ].filter(Boolean).join("\n");
 }
 
@@ -758,7 +775,7 @@ function promptWithWorkflowContext({
       : "",
     userRequestLeadsPrompt ? "" : promptContextSection("User/request input", input),
     promptContextSection("Relevant workflow facts", promptWorkflowFacts(session.metadata)),
-    promptLaunchTargetContext(session.metadata),
+    promptLaunchTargetContext(session),
     "Missing information policy:\n" + missingInformationPolicyInstruction(),
     String(prompt || "").trim()
   ]
@@ -819,7 +836,7 @@ function promptWithConversationTurnContext({
     Object.keys(workflowFacts).length > 0
       ? promptContextSection("Current dynamic workflow facts", workflowFacts)
       : "",
-    promptLaunchTargetContext(session.metadata),
+    promptLaunchTargetContext(session),
     [
       "Response routing:",
       "- Answer this interactive conversation normally. Do not add Vibe64 transport markers or duplicate the response as JSON.",

@@ -4,6 +4,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
+import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
@@ -11,7 +12,8 @@ import {
   vibe64LaunchTargetsPath,
   vibe64LaunchTargetsQueryKey,
   vibe64LaunchTerminalPath,
-  vibe64LaunchTerminalStopPath
+  vibe64LaunchTerminalStopPath,
+  vibe64SessionPreviewStatePath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   vibe64LaunchTerminalWebSocketUrl
@@ -49,6 +51,10 @@ import {
   normalizePreviewInput,
   previewInputHasValues
 } from "@/lib/vibe64PreviewOptions.js";
+import {
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=60";
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
@@ -1126,6 +1132,37 @@ function useVibe64LaunchControls({
       : launchTargetsResource.reload();
   }
 
+  async function publishPreviewState(previewState = {}) {
+    const currentSessionId = sessionId.value;
+    const currentProjectSlug = projectSlug.value;
+    if (!currentSessionId || !currentProjectSlug || !String(previewState?.route || "").trim()) {
+      return false;
+    }
+    try {
+      const result = await getUsersWebHttpClient().request(
+        vibe64SessionPreviewStatePath(sessionsApiPath.value, currentSessionId),
+        {
+          body: vibe64RealtimeOriginPayload({
+            href: String(previewState?.href || "").trim(),
+            projectSlug: currentProjectSlug,
+            reason: String(previewState?.reason || "").trim(),
+            route: String(previewState?.route || "").trim(),
+            title: String(previewState?.title || "").trim()
+          }),
+          method: "POST"
+        }
+      );
+      return result?.ok !== false;
+    } catch (error) {
+      vibe64SessionDebugLog("client.launchPreview.state.publish.error", {
+        error: vibe64SessionDebugError(error),
+        route: String(previewState?.route || "").trim(),
+        sessionId: currentSessionId
+      });
+      return false;
+    }
+  }
+
   useRealtimeEvent({
     enabled: canLoadLaunchTargets,
     event: VIBE64_SESSION_CHANGED_EVENT,
@@ -1571,6 +1608,7 @@ function useVibe64LaunchControls({
     terminalPreviewRequiresProxy,
     terminalPreviewProxyPending,
     previewInputIsRemembered,
+    publishPreviewState,
     refresh,
     restartTerminal,
     retryTerminal,

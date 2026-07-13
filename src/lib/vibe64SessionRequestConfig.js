@@ -102,6 +102,10 @@ function vibe64SessionViewStatePath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/view-state");
 }
 
+function vibe64SessionPreviewStatePath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/preview-state");
+}
+
 function vibe64FixCodexTerminalPath(vibe64ApiPath = "", jobId = "", terminalSessionId = "") {
   const base = `${vibe64ApiPath}/fix-codex-jobs/${encodePathSegment(jobId)}/terminal`;
   return terminalSessionId ? `${base}/${encodePathSegment(terminalSessionId)}` : base;
@@ -329,6 +333,7 @@ export {
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
   vibe64ComposerDraftPath,
+  vibe64SessionPreviewStatePath,
   vibe64SessionViewStatePath,
   vibe64FixCodexTerminalPath,
   vibe64GlobalCodexTerminalPath,

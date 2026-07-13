@@ -41,6 +41,10 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  clearSessionUiSyncState,
+  writeSessionUiSyncPreviewState
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   currentStepAgentResultContract,
   currentStepInputConversationText,
   currentStepPromptInputInstruction,
@@ -4201,7 +4205,9 @@ test("vibe64 runtime prompt handoff shows the action input outside hidden termin
   });
 });
 
-test("vibe64 runtime renders compact conversation turns after the session briefing", async () => {
+test("vibe64 runtime renders compact conversation turns after the session briefing", async (t) => {
+  clearSessionUiSyncState();
+  t.after(() => clearSessionUiSyncState());
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");
     await mkdir(promptPackRoot, {
@@ -4242,6 +4248,15 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
       sessionId: "compact_agent_prompt",
       workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
+    writeSessionUiSyncPreviewState({
+      href: "http://127.0.0.1:4103/orders/42?tab=history",
+      originId: "tab-1",
+      projectSlug: "demo",
+      route: "/orders/42?tab=history",
+      sessionId: "compact_agent_prompt",
+      title: "Order 42",
+      updatedAt: "2026-07-13T02:01:00.000Z"
+    });
 
     const afterAction = await runtime.runAction("compact_agent_prompt", "agent_conversation", {
       conversationRequest: "This is the first prompt"
@@ -4258,11 +4273,16 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /Current dynamic workflow facts:/u);
     assert.match(prompt, /- launch_target_agent_href: http:\/\/vibe64-launch-agent:4103\/home/u);
     assert.match(prompt, /- launch_target_open_href: http:\/\/127\.0\.0\.1:4103\/home/u);
-    assert.match(prompt, /Existing app launch target:/u);
+    assert.match(prompt, /Vibe64-managed app preview:/u);
     assert.match(prompt, /- Codex\/app-server URL: http:\/\/vibe64-launch-agent:4103\/home/u);
     assert.match(prompt, /- browser URL: http:\/\/127\.0\.0\.1:4103\/home/u);
+    assert.match(prompt, /- current user-visible page: \/orders\/42\?tab=history/u);
+    assert.match(prompt, /- current page title: Order 42/u);
+    assert.match(prompt, /- current page Codex URL: http:\/\/vibe64-launch-agent:4103\/orders\/42\?tab=history/u);
     assert.match(prompt, /vibe64-preview restart --wait/u);
-    assert.match(prompt, /Do not start another dev server/u);
+    assert.match(prompt, /Never start another development server/u);
+    assert.match(prompt, /even if a different port appears free/u);
+    assert.match(prompt, /Do not work around it by spinning up another server/u);
     assert.match(prompt, /- dependencies_installed: yes/u);
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);

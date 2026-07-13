@@ -284,6 +284,22 @@ test("seed session briefing filters broad discovery contracts while preserving s
   assert.match(briefing, /Use npx jskit from the repository root/u);
 });
 
+test("session briefing makes the managed preview the only permitted app server", () => {
+  const briefing = promptSessionBriefing({
+    session: {
+      sessionId: "preview-policy",
+      targetRoot: "/workspace/example"
+    }
+  });
+
+  assert.match(briefing, /Managed preview policy:/u);
+  assert.match(briefing, /vibe64-preview status --json/u);
+  assert.match(briefing, /vibe64-preview logs --lines 200/u);
+  assert.match(briefing, /Never start another development server/u);
+  assert.match(briefing, /even if a different port appears free/u);
+  assert.match(briefing, /Do not work around it by spinning up another server/u);
+});
+
 test("vibe64 prompt renderer ignores project-home prompt overrides without a session source", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {

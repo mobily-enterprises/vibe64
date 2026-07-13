@@ -127,16 +127,121 @@ test("agent preview command restarts the managed launch target with saved input"
     }
   ]);
   assert.deepEqual(JSON.parse(result.stdout), {
-    agentUrl: "http://vibe64-launch-agent:4100/app",
-    browserUrl: "http://127.0.0.1:4100/app",
+    currentPage: null,
+    diagnostics: null,
+    endpoints: {
+      agent: {
+        host: "vibe64-launch-agent:4100",
+        hostname: "vibe64-launch-agent",
+        origin: "http://vibe64-launch-agent:4100",
+        path: "/app",
+        port: 4100,
+        protocol: "http",
+        url: "http://vibe64-launch-agent:4100/app"
+      },
+      browser: {
+        host: "127.0.0.1:4100",
+        hostname: "127.0.0.1",
+        origin: "http://127.0.0.1:4100",
+        path: "/app",
+        port: 4100,
+        protocol: "http",
+        url: "http://127.0.0.1:4100/app"
+      },
+      previewProxy: {
+        url: "/preview/session/app"
+      }
+    },
     launchTargetId: "jskit-dev",
-    previewUrl: "/preview/session/app",
     ready: true,
     restarted: true,
-    running: true,
     stale: false,
-    status: "running"
+    terminal: {
+      command: "",
+      createdAt: "",
+      exitCode: null,
+      id: "launch-terminal-2",
+      running: true,
+      status: "running"
+    }
   });
+});
+
+test("agent preview status exposes the managed endpoint, current page, and server logs", async () => {
+  const sessionId = "preview-inspection-session";
+  const status = {
+    activeTerminal: {
+      commandPreview: "npm run dev",
+      createdAt: "2026-07-13T02:00:00.000Z",
+      id: "launch-terminal-7",
+      metadata: {
+        sessionRoot: "/workspace/session-7"
+      },
+      output: "server ready\nGET /orders/42\nrender complete",
+      running: true,
+      status: "running"
+    },
+    lastLaunchTarget: {
+      agentHref: "http://vibe64-launch-agent:4103/",
+      id: "jskit-dev"
+    },
+    openTarget: {
+      href: "http://127.0.0.1:4103/"
+    },
+    previewTarget: {
+      available: true,
+      href: "/preview/session-7/",
+      targetHref: "http://127.0.0.1:4103/"
+    }
+  };
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus(receivedSessionId) {
+        assert.equal(receivedSessionId, sessionId);
+        return status;
+      },
+      async startTerminal() {
+        throw new Error("status and logs must not restart the preview");
+      }
+    },
+    readSessionUiState(receivedSessionId) {
+      assert.equal(receivedSessionId, sessionId);
+      return {
+        preview: {
+          href: "http://127.0.0.1:4103/orders/42?tab=history",
+          projectSlug: "demo",
+          route: "/orders/42?tab=history",
+          title: "Order 42",
+          updatedAt: "2026-07-13T02:01:00.000Z"
+        }
+      };
+    }
+  });
+
+  const statusResult = await command.run({
+    args: ["status", "--json"],
+    sessionId
+  });
+  const statusPayload = JSON.parse(statusResult.stdout);
+  assert.equal(statusPayload.endpoints.agent.hostname, "vibe64-launch-agent");
+  assert.equal(statusPayload.endpoints.agent.port, 4103);
+  assert.equal(statusPayload.currentPage.route, "/orders/42?tab=history");
+  assert.equal(statusPayload.currentPage.agentUrl, "http://vibe64-launch-agent:4103/orders/42?tab=history");
+  assert.equal(statusPayload.currentPage.browserUrl, "http://127.0.0.1:4103/orders/42?tab=history");
+  assert.equal(statusPayload.currentPage.title, "Order 42");
+  assert.deepEqual(statusPayload.diagnostics, {
+    latest: "/workspace/session-7/preview-last.json",
+    log: "/workspace/session-7/preview-log.jsonl"
+  });
+
+  const logsResult = await command.run({
+    args: ["logs", "--lines", "2", "--json"],
+    sessionId
+  });
+  const logsPayload = JSON.parse(logsResult.stdout);
+  assert.equal(logsPayload.lineLimit, 2);
+  assert.equal(logsPayload.output, "GET /orders/42\nrender complete");
+  assert.equal(logsPayload.terminal.id, "launch-terminal-7");
 });
 
 test("agent preview wrapper forwards command input over the private session socket", async () => {

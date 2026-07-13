@@ -93,6 +93,15 @@ function registerRoutes(
     );
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/preview-state", {
+    summary: "Publish the page displayed in a Vibe64 managed preview."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").broadcastSessionPreviewState(
+      request.params.sessionId,
+      routes.requestBody(request)
+    );
+  });
+
   routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/interrupt", {
     body: agentTurnInterruptInputValidator,
     summary: "Interrupt the active Vibe64 assistant turn."

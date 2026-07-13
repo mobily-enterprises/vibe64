@@ -345,6 +345,17 @@ function agentResultRoutingBriefing() {
   ].join("\n");
 }
 
+function managedPreviewPolicyInstruction() {
+  return [
+    "- For every app, UI, browser, or runtime diagnosis, use only the Vibe64-managed preview. Never start another development server, choose another port, or replace the managed launch target.",
+    "- First run `vibe64-preview status --json`. Treat `endpoints.agent`, `terminal`, and `currentPage` as authoritative. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
+    "- Read managed server output with `vibe64-preview logs --lines 200`. Do not launch a second server to obtain cleaner output.",
+    "- Run `vibe64-preview restart --wait` only when the managed preview is stopped, stale, unhealthy, or needs server-side changes loaded. Check status again after restarting.",
+    "- Never substitute `npm run dev`, `npm start`, Vite, Next, JSKIT server commands, PHP development servers, or any other process that serves the app—even if a different port appears free.",
+    "- If `vibe64-preview`, its endpoint, or its current page is unavailable, report that managed-preview blocker clearly. Do not work around it by spinning up another server."
+  ].join("\n");
+}
+
 function isPromptContextBriefingSection(key = "", value = null) {
   if (value === null || value === undefined) {
     return false;
@@ -557,6 +568,9 @@ function promptSessionBriefing(contextInput = {}) {
     "",
     "Session logs and diagnostics:",
     briefingSessionDiagnostics(context.session),
+    "",
+    "Managed preview policy:",
+    managedPreviewPolicyInstruction(),
     "",
     "Adapter:",
     `- id: ${context.adapter.id}`,
@@ -807,6 +821,7 @@ class PromptRenderer {
 
 export {
   PromptRenderer,
+  managedPreviewPolicyInstruction,
   promptContextForAction,
   promptSessionBriefing,
   renderPromptTemplate,

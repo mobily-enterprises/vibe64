@@ -26,6 +26,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import {
   readSessionUiSyncState,
+  writeSessionUiSyncPreviewState,
   writeSessionUiSyncViewState
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
@@ -401,13 +402,13 @@ function projectAppRoutePrefix(projectSlug = "") {
   return normalizedProjectSlug ? `/app/project/${encodeURIComponent(normalizedProjectSlug)}` : "";
 }
 
-function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
+function normalizedLocalRoute(routeFullPath = "", {
+  maxLength = 2048
+} = {}) {
   const route = normalizedInputText(routeFullPath);
-  const projectPrefix = projectAppRoutePrefix(projectSlug);
   if (
     !route ||
-    !projectPrefix ||
-    route.length > 1024 ||
+    route.length > maxLength ||
     /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(route) ||
     route.startsWith("//")
   ) {
@@ -418,7 +419,24 @@ function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
     if (parsed.origin !== "http://vibe64.local") {
       return "";
     }
-    const pathname = parsed.pathname.replace(/\/{2,}/gu, "/").replace(/\/+$/u, "") || "/";
+    const pathname = parsed.pathname.replace(/\/{2,}/gu, "/") || "/";
+    return `${pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "";
+  }
+}
+
+function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
+  const route = normalizedLocalRoute(routeFullPath, {
+    maxLength: 1024
+  });
+  const projectPrefix = projectAppRoutePrefix(projectSlug);
+  if (!route || !projectPrefix) {
+    return "";
+  }
+  try {
+    const parsed = new URL(route, "http://vibe64.local");
+    const pathname = parsed.pathname.replace(/\/+$/u, "") || "/";
     const dashboardPrefix = `${projectPrefix}/dashboard`;
     if (
       pathname !== projectPrefix &&
@@ -428,6 +446,27 @@ function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
       return "";
     }
     return `${pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "";
+  }
+}
+
+function normalizedPreviewHref(href = "", route = "") {
+  const value = normalizedInputText(href);
+  if (!value || value.length > 4096) {
+    return "";
+  }
+  try {
+    const parsed = new URL(value);
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      normalizedLocalRoute(`${parsed.pathname}${parsed.search}${parsed.hash}`) !== route
+    ) {
+      return "";
+    }
+    return parsed.toString();
   } catch {
     return "";
   }
@@ -3105,6 +3144,31 @@ function createService({
       return {
         ok: true,
         viewState
+      };
+    },
+
+    async broadcastSessionPreviewState(sessionId, input = {}) {
+      const route = normalizedLocalRoute(input?.route);
+      const preview = {
+        href: normalizedPreviewHref(input?.href, route),
+        originId: normalizedInputText(input?.originId),
+        projectSlug: normalizedInputText(input?.projectSlug),
+        reason: normalizedInputText(input?.reason).slice(0, 64),
+        route,
+        sessionId: normalizedInputText(sessionId),
+        title: normalizedInputText(input?.title).slice(0, 256),
+        updatedAt: new Date().toISOString()
+      };
+      if (!preview.sessionId || !preview.projectSlug || !preview.route || !preview.originId) {
+        return {
+          ok: false,
+          error: "Preview page updates require a session, project, route, and origin."
+        };
+      }
+      writeSessionUiSyncPreviewState(preview);
+      return {
+        ok: true,
+        preview
       };
     },
 
