@@ -17,6 +17,8 @@ import {
   routeApiEndpoint
 } from "./support/base-shell/http";
 
+test.use({ hasTouch: true });
+
 const sessionApi = `/vibe64/system-graph/sessions/${codexPromptSessionId}`;
 const serverSubsystem = {
   description: "Owns terminal commands and their public HTTP contract.",
@@ -58,6 +60,13 @@ const selectedFile = {
     specifier: "./helper.js",
     targetFile: "packages/terminal/src/server/helper.js",
     targetPackageId: "@local/terminal"
+  }, {
+    classification: "external-package",
+    kind: "import",
+    line: 12,
+    specifier: "ws",
+    targetFile: "",
+    targetPackageId: "ws"
   }],
   key: "large-service-key",
   lines: 1_800,
@@ -150,7 +159,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
         directory: selectedFile.directory,
         executionSide: selectedFile.executionSide,
         id: selectedFile.id,
-        importCount: 1,
+        importCount: 2,
         importedByCount: 0,
         key: selectedFile.key,
         lines: selectedFile.lines,
@@ -369,6 +378,14 @@ test("System renders the current repository as a LOC-scaled file city", async ({
       specifier: "./helper.js",
       targetPackageId: "@local/terminal",
       toFileId: "file:helper"
+    }, {
+      classification: "external-package",
+      fromFileId: selectedFile.id,
+      kind: "import",
+      line: 12,
+      specifier: "ws",
+      targetPackageId: "ws",
+      toFileId: ""
     }],
     entities: [serverSubsystem],
     files: [
@@ -445,11 +462,12 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByRole("button", { name: "New session" })).toBeVisible({ timeout: 15_000 });
   await page.goto(`${DASHBOARD_PATH}/system`);
 
-  await expect(page.getByText(/File City · 051/u)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/File City · 053/u)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Folders" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subsystems" })).toBeVisible();
   await expect(page.getByText("Drag / arrows to move", { exact: true })).toBeVisible();
   await expect(page.getByText("2-finger ↕ / W S follow cursor", { exact: true })).toBeVisible();
+  await expect(page.getByText("Double-click / double-tap to enter", { exact: true })).toBeVisible();
   await expect(page.locator("canvas[aria-label^='Interactive 3D file city']")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "File city campuses" })).toBeVisible();
 
@@ -470,10 +488,10 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await connectionsLayer.click();
   await librariesLayer.click();
   await expect(page.getByRole("navigation", { name: "File City subsystems" })).toBeVisible();
-  await page.getByRole("button", { name: /^Terminal 2 files/u }).click();
+  await page.getByRole("button", { name: /^Terminal\b.*\b2 files\b/u }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Terminal" })).toBeVisible();
   await expect(page.getByText("Start a terminal", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /used by.*Shell.*1 import from 1 file/iu })).toBeVisible();
+  await expect(page.getByRole("button", { name: /connects.*Shell.*1 import.*from 1 file/iu })).toBeVisible();
   await expect(page.getByText("ws", { exact: true })).toBeVisible();
   await expect(worldBack).toBeEnabled();
   await worldBack.click();
@@ -490,7 +508,7 @@ test("System renders the current repository as a LOC-scaled file city", async ({
 
   await page.getByRole("button", { name: /^Packages/u }).click();
   await expect(page.getByRole("heading", { level: 2, name: "Packages" })).toBeVisible();
-  await expect(page.getByText("JSKIT gives this source tree its own land parcel.", { exact: false })).toBeVisible();
+  await expect(page.getByText("gives this source tree its own land parcel.", { exact: false })).toBeVisible();
   await expect(page.getByText("Terminal", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Largest building.*largeTerminalService\.js/u }).click();
 
@@ -499,6 +517,24 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByText("Terminal", { exact: true })).toBeVisible();
   await expect(page.getByText("This file is structurally enormous.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: /imports.*helper\.js/u })).toBeVisible();
+  await expect(page.getByText("External imports", { exact: true })).toBeVisible();
+  await expect(page.getByText("ws", { exact: true })).toBeVisible();
+
+  const cityCanvas = page.locator("canvas[aria-label^='Interactive 3D file city']");
+  const canvasBounds = await cityCanvas.boundingBox();
+  if (!canvasBounds) {
+    throw new Error("File City canvas bounds were unavailable for the touch gesture.");
+  }
+  const selectedBuildingX = canvasBounds.x + canvasBounds.width / 2;
+  const selectedBuildingY = canvasBounds.y + canvasBounds.height / 2;
+  await page.touchscreen.tap(selectedBuildingX, selectedBuildingY);
+  await page.waitForTimeout(40);
+  await page.touchscreen.tap(selectedBuildingX, selectedBuildingY);
+  await page.waitForTimeout(40);
+  await expect(page.locator(".studio-autopilot__file-portal-carrier")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "File City immersive source editor" })).toBeVisible();
+  await page.getByRole("button", { name: "Close file and return to File City" }).click();
+  await expect(page.getByRole("dialog", { name: "File City immersive source editor" })).not.toBeVisible();
 
   await page.getByRole("button", { name: "Refresh map" }).click();
   await expect.poll(() => streamPathname).toBe(

@@ -111,7 +111,7 @@
     <div class="system-world__stage">
       <canvas
         ref="canvasElement"
-        aria-label="Interactive 3D file city and subsystem sky. Left-drag or use arrow keys to move; a vertical two-finger gesture dollies toward the cursor, while W and S, plus and minus, or Control-Up and Control-Down fly toward and away from the cursor; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, or subsystem to inspect it; double-click a subsystem cloud to arrange its physical city stratum."
+        aria-label="Interactive 3D file city, route compounds, and subsystem sky. Left-drag or use arrow keys to move; a vertical two-finger gesture dollies toward the cursor, while W and S, plus and minus, or Control-Up and Control-Down fly toward and away from the cursor; begin a two-finger gesture horizontally to orbit freely until that gesture ends; click a building, directory, campus, route, or subsystem to inspect it; double-click or double-tap a file building to enter its source; double-click a subsystem cloud to arrange its physical city stratum."
         class="system-world__canvas"
         tabindex="0"
       />
@@ -619,6 +619,16 @@
               </button>
             </div>
           </div>
+          <div v-if="selectedFileExternalRelations.length" class="system-world__section">
+            <strong>External imports</strong>
+            <div class="system-world__external-relations">
+              <div v-for="relation in selectedFileExternalRelations" :key="relation.key">
+                <span>imports →</span>
+                <strong>{{ relation.packageId }}</strong>
+                <small>{{ formatCount(relation.importCount, 'import') }}</small>
+              </div>
+            </div>
+          </div>
           <div class="system-world__inspector-actions">
             <v-btn
               :prepend-icon="mdiFileCodeOutline"
@@ -672,6 +682,7 @@
         <span><v-icon :icon="mdiMouse" size="13" /> Drag / arrows to move</span>
         <span><v-icon :icon="mdiMouseScrollWheel" size="13" /> 2-finger ↕ / W S follow cursor</span>
         <span><v-icon :icon="mdiMouseRightClickOutline" size="13" /> 2-finger ↔ starts free orbit</span>
+        <span><v-icon :icon="mdiCodeBraces" size="13" /> Double-click / double-tap to enter</span>
       </div>
 
       <div v-if="overview" class="system-world__legend" aria-label="File city visual legend">
@@ -772,6 +783,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   "ask-in-chat",
+  "open-source-file-immersive",
   "open-source-file"
 ]);
 
@@ -844,6 +856,9 @@ const selectedSubsystemRelationshipSections = computed(() => ([
 const cityFilesById = computed(() => new Map(
   (overview.value?.files || []).map((file) => [file.id, file])
 ));
+const cityFilesByPath = computed(() => new Map(
+  (overview.value?.files || []).map((file) => [file.path, file])
+));
 const routeGroupsById = computed(() => new Map(
   (overview.value?.adapter?.fileCity?.groups || [])
     .filter((group) => group.kind === "route")
@@ -879,7 +894,9 @@ function subsystemRelationshipDependencies(dependencies = []) {
     ...dependency,
     fileConnections: (dependency.fileConnections || []).map((connection) => ({
       ...connection,
-      injectionTokens: connection.injectionTokens || []
+      injectionTokens: connection.injectionTokens || [],
+      kinds: connection.kinds || [],
+      symbols: connection.symbols || []
     })),
     injectionTokens: dependency.injectionTokens || [],
     symbols: dependency.symbols || []
@@ -943,6 +960,26 @@ const fileRelations = computed(() => {
     });
   }
   return relations.slice(0, 10);
+});
+const selectedFileExternalRelations = computed(() => {
+  const selectedId = selectedFile.value?.id;
+  const relations = new Map();
+  for (const edge of fileConstellation.value?.edges || []) {
+    const packageId = String(edge.targetPackageId || "").trim();
+    if (edge.fromFileId !== selectedId || edge.toFileId || !packageId) {
+      continue;
+    }
+    const relation = relations.get(packageId) || {
+      importCount: 0,
+      key: `external:${packageId}`,
+      packageId
+    };
+    relation.importCount += 1;
+    relations.set(packageId, relation);
+  }
+  return [...relations.values()].sort((left, right) => (
+    left.packageId.localeCompare(right.packageId)
+  ));
 });
 const latestUpdateEvent = computed(() => updateEvents.value.at(-1) || null);
 const latestUpdateLabel = computed(() => {
@@ -1088,6 +1125,26 @@ async function handleFilePick(selection, { recordHistory = true } = {}) {
   }
 }
 
+function handleImmersiveFileOpen(selection = {}) {
+  if (!selection.fileId || !selection.path) {
+    return;
+  }
+  const returnView = selection.returnView || world?.captureView() || null;
+  const systemContext = sourceNavigationContext();
+  if (returnView) {
+    systemContext.camera = returnView;
+  }
+  emit("open-source-file-immersive", {
+    anchor: selection.anchor || null,
+    fileId: selection.fileId,
+    fileKey: selection.fileKey || "",
+    origin: "system",
+    path: selection.path,
+    returnView,
+    systemContext
+  });
+}
+
 function handleDirectoryPick(directory) {
   recordWorldNavigation();
   activeFileId.value = "";
@@ -1174,6 +1231,7 @@ async function createWorld() {
       onHoverSubsystemConnection: (connection) => {
         hoveredSubsystemConnection.value = connection;
       },
+      onOpenFile: handleImmersiveFileOpen,
       onSelectDirectory: handleDirectoryPick,
       onSelectFile: (selection) => void handleFilePick(selection),
       onSelectPrecinct: handlePrecinctPick,
@@ -1451,6 +1509,78 @@ async function navigateWorldHistory(direction) {
   }
 }
 
+function immersiveFile(path = "") {
+  return cityFilesByPath.value.get(String(path || "")) || null;
+}
+
+function hasImmersiveFile(path = "") {
+  return Boolean(immersiveFile(path));
+}
+
+function immersiveFileAnchor(path = "") {
+  const file = immersiveFile(path) || cityFilesById.value.get(activeFileId.value);
+  return file ? world?.fileScreenRect(file.id) || null : null;
+}
+
+function closeImmersiveFilePortal({ immediate = false } = {}) {
+  world?.endFilePortal({ immediate });
+}
+
+async function restoreImmersiveView(view = null, { immediate = false } = {}) {
+  if (!world || !view) {
+    return false;
+  }
+  return immediate
+    ? world.restoreView(view)
+    : world.flyToView(view);
+}
+
+async function travelImmersiveFile(path = "") {
+  const file = immersiveFile(path);
+  if (!file || !world || worldHistoryBusy.value) {
+    return null;
+  }
+  if (file.id === activeFileId.value) {
+    return {
+      anchor: world.beginFilePortal(file.id) || world.fileScreenRect(file.id),
+      fileId: file.id,
+      fileKey: file.key,
+      path: file.path
+    };
+  }
+
+  const fromFileId = activeFileId.value;
+  recordWorldNavigation();
+  worldHistoryBusy.value = true;
+  worldError.value = "";
+  try {
+    world.endFilePortal();
+    world.selectFile(file.id);
+    const loadingFile = handleFilePick({
+      fileId: file.id,
+      fileKey: file.key,
+      path: file.path
+    }, { recordHistory: false });
+    const [anchor] = await Promise.all([
+      world.flyToFile(file.id, { fromFileId }),
+      loadingFile
+    ]);
+    world.beginFilePortal(file.id);
+    return {
+      anchor: world.fileScreenRect(file.id) || anchor,
+      fileId: file.id,
+      fileKey: file.key,
+      path: file.path
+    };
+  } catch (caught) {
+    worldError.value = String(caught?.message || caught || "File City could not travel to that source file.");
+    return null;
+  } finally {
+    worldHistoryBusy.value = false;
+    syncWorldHistoryAvailability();
+  }
+}
+
 function openSelectedFile() {
   if (!selectedFile.value) {
     return;
@@ -1641,6 +1771,14 @@ watch(() => props.restoreRequest?.sequence || 0, () => {
 watch(() => props.sessionId, () => {
   worldViewHistory.clear();
   syncWorldHistoryAvailability();
+});
+
+defineExpose({
+  closeImmersiveFilePortal,
+  hasImmersiveFile,
+  immersiveFileAnchor,
+  restoreImmersiveView,
+  travelImmersiveFile
 });
 
 onMounted(() => {
@@ -2058,6 +2196,11 @@ onBeforeUnmount(() => {
 .system-world__relationships button:hover { background: rgba(91, 177, 228, 0.14); }
 .system-world__relationships span { color: rgba(105, 218, 255, 0.62); font-size: 0.52rem; text-transform: uppercase; }
 .system-world__relationships strong { font-size: 0.61rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.system-world__external-relations { display: grid; gap: 0.24rem; }
+.system-world__external-relations > div { align-items: center; background: rgba(151, 95, 212, 0.1); border: 1px solid rgba(198, 156, 255, 0.14); border-radius: 0.42rem; display: grid; gap: 0.36rem; grid-template-columns: 4.4rem minmax(0, 1fr) auto; padding: 0.36rem 0.44rem; }
+.system-world__external-relations span { color: rgba(210, 165, 255, 0.72); font-size: 0.52rem; text-transform: uppercase; }
+.system-world__external-relations strong { font-size: 0.61rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.system-world__external-relations small { color: rgba(225, 210, 246, 0.52); font-size: 0.52rem; white-space: nowrap; }
 .system-world__boundary-summary { border-top: 1px solid rgba(120, 171, 230, 0.1); display: grid; gap: 0.3rem; padding: 0.42rem 0.5rem; }
 .system-world__boundary-summary > strong { color: rgba(226, 239, 255, 0.74); font-size: 0.54rem; letter-spacing: 0.04em; text-transform: uppercase; }
 .system-world__boundary-summary p { color: rgba(224, 236, 253, 0.76); font-size: 0.56rem; margin: 0; overflow-wrap: anywhere; }
@@ -2113,6 +2256,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1120px) {
   .system-world__toolbar { grid-template-columns: 1fr auto; }
   .system-world__mode-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .system-world__controls-hint span:nth-child(3) { display: none; }
   .system-world__legend { display: none; }
 }
 

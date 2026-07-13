@@ -13,6 +13,9 @@ import {
 CameraControls.install({ THREE });
 
 const WHEEL_GESTURE_IDLE_MS = 180;
+const FILE_DOUBLE_TAP_WINDOW_MS = 360;
+const FILE_PORTAL_DURATION_MS = 260;
+const FILE_TRAVEL_DURATION_MS = 460;
 
 const SIDE_COLORS = Object.freeze({
   client: 0x35d0ff,
@@ -491,7 +494,7 @@ function textObject(text, {
   return label;
 }
 
-function curveLine(from, to, {
+function fileContextConnector(from, to, {
   color = 0xffffff,
   dashed = false,
   elevation = 70,
@@ -506,15 +509,54 @@ function curveLine(from, to, {
       color,
       dashSize: 12,
       gapSize: 7,
+      depthTest: false,
+      depthWrite: false,
       opacity,
       transparent: true
     })
-    : new THREE.LineBasicMaterial({ color, opacity, transparent: true });
+    : new THREE.LineBasicMaterial({
+      color,
+      depthTest: false,
+      depthWrite: false,
+      opacity,
+      transparent: true
+    });
   const line = new THREE.Line(geometry, material);
   if (dashed) {
     line.computeLineDistances();
   }
-  return line;
+  line.renderOrder = 11;
+  const arrowSize = 4.8;
+  const direction = curve.getTangent(1).normalize();
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(arrowSize, arrowSize * 2.5, 8),
+    new THREE.MeshBasicMaterial({
+      color,
+      depthTest: false,
+      depthWrite: false,
+      opacity,
+      transparent: true
+    })
+  );
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.position.copy(to).addScaledVector(direction, -arrowSize * 0.9);
+  arrow.renderOrder = 11;
+  const sourceMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(2.8, 8, 6),
+    new THREE.MeshBasicMaterial({
+      color,
+      depthTest: false,
+      depthWrite: false,
+      opacity,
+      transparent: true
+    })
+  );
+  sourceMarker.position.copy(from);
+  sourceMarker.renderOrder = 11;
+  const group = new THREE.Group();
+  group.userData.kind = "file-context-connection";
+  group.add(line, arrow, sourceMarker);
+  return group;
 }
 
 function subsystemTether(from, to, relation = "supports") {
@@ -701,6 +743,7 @@ function createSystemWorld({
   onClearSelection = () => {},
   onEditSubsystemDepth = () => {},
   onHoverSubsystemConnection = () => {},
+  onOpenFile = () => {},
   onSelectDirectory = () => {},
   onSelectFile = () => {},
   onSelectPrecinct = () => {},
@@ -751,10 +794,16 @@ function createSystemWorld({
   const subsystemRoot = new THREE.Group();
   const contextRoot = new THREE.Group();
   const subsystemOwnershipRoot = new THREE.Group();
-  scene.add(worldRoot);
-  scene.add(subsystemRoot);
-  scene.add(contextRoot);
-  scene.add(subsystemOwnershipRoot);
+  const filePortalRoot = new THREE.Group();
+  const fileTravelRoot = new THREE.Group();
+  scene.add(
+    worldRoot,
+    subsystemRoot,
+    contextRoot,
+    subsystemOwnershipRoot,
+    fileTravelRoot,
+    filePortalRoot
+  );
 
   const pickables = [];
   const campusObjects = new Map();
@@ -779,8 +828,11 @@ function createSystemWorld({
   let dependencyEvidenceRoot = null;
   let dirty = true;
   let externalContextRoot = null;
+  let filePortal = null;
+  let fileTravel = null;
   let grabState = null;
   let hoveredSubsystemConnectionId = "";
+  let lastTouchFileTap = { at: -Infinity, fileId: "" };
   let lastFrame = performance.now();
   let pointerDown = null;
   let roofInstances = null;
@@ -799,6 +851,7 @@ function createSystemWorld({
   let neighborFileIds = new Set();
   let wheelGestureAction = CameraControls.ACTION.DOLLY;
   let wheelGestureAt = -Infinity;
+  let suppressSyntheticDoubleClickUntil = -Infinity;
 
   function markDirty() {
     dirty = true;
@@ -817,6 +870,8 @@ function createSystemWorld({
     clearGroup(subsystemRoot);
     clearGroup(contextRoot);
     clearGroup(subsystemOwnershipRoot);
+    clearGroup(filePortalRoot);
+    clearGroup(fileTravelRoot);
     pickables.splice(0);
     campusObjects.clear();
     dependencyObjects.splice(0);
@@ -840,6 +895,8 @@ function createSystemWorld({
     dependencyEvidenceFileIds = new Set();
     dependencyEvidenceRoot = null;
     externalContextRoot = null;
+    filePortal = null;
+    fileTravel = null;
     subsystemConnectionRoot = null;
     roofInstances = null;
     selectedCampusId = null;
@@ -1798,6 +1855,469 @@ function createSystemWorld({
       : null;
   }
 
+  function captureView() {
+    const target = controls.getTarget(new THREE.Vector3());
+    return {
+      position: camera.position.toArray(),
+      target: target.toArray()
+    };
+  }
+
+  function worldViewPose(view = {}) {
+    if (!Array.isArray(view.position) || !Array.isArray(view.target)) {
+      return null;
+    }
+    return {
+      position: [
+        Number(view.position[0]) || 0,
+        Number(view.position[1]) || 0,
+        Number(view.position[2]) || 0
+      ],
+      target: [
+        Number(view.target[0]) || 0,
+        Number(view.target[1]) || 0,
+        Number(view.target[2]) || 0
+      ]
+    };
+  }
+
+  function restoreView(view = {}) {
+    const pose = worldViewPose(view);
+    if (!pose) {
+      return false;
+    }
+    controls.setLookAt(
+      ...pose.position,
+      ...pose.target,
+      false
+    );
+    markDirty();
+    return true;
+  }
+
+  async function flyToView(view = {}) {
+    const pose = worldViewPose(view);
+    if (!pose) {
+      return false;
+    }
+    await controls.setLookAt(
+      ...pose.position,
+      ...pose.target,
+      !reducedMotion
+    );
+    markDirty();
+    return true;
+  }
+
+  function fileScreenRect(fileId = "") {
+    const record = fileObjects.get(String(fileId || ""));
+    if (!record) {
+      return null;
+    }
+    const bounds = canvas.getBoundingClientRect();
+    const elevation = Number(record.file.elevation) || 0;
+    const halfWidth = Math.max(1, record.file.cityWidth / 2);
+    const halfDepth = Math.max(1, record.file.cityDepth / 2);
+    const projectPoint = (x, y, z) => {
+      const projected = new THREE.Vector3(x, y, z).project(camera);
+      return {
+        x: bounds.left + (projected.x + 1) * bounds.width / 2,
+        y: bounds.top + (1 - projected.y) * bounds.height / 2
+      };
+    };
+    const points = [];
+    camera.updateMatrixWorld();
+    for (const x of [record.file.x - halfWidth, record.file.x + halfWidth]) {
+      for (const y of [elevation, elevation + record.height + 3]) {
+        for (const z of [record.file.z - halfDepth, record.file.z + halfDepth]) {
+          points.push(projectPoint(x, y, z));
+        }
+      }
+    }
+    const minX = Math.min(...points.map((point) => point.x));
+    const maxX = Math.max(...points.map((point) => point.x));
+    const minY = Math.min(...points.map((point) => point.y));
+    const maxY = Math.max(...points.map((point) => point.y));
+    const width = Math.max(20, maxX - minX);
+    const height = Math.max(28, maxY - minY);
+    const roofHeight = Math.max(1.2, Math.min(3, record.height * 0.025));
+    const roofHalfWidth = Math.max(3, record.file.cityWidth * 0.86) / 2;
+    const roofHalfDepth = Math.max(3, record.file.cityDepth * 0.86) / 2;
+    const roofY = elevation + record.height + 1.6 + roofHeight / 2 + 0.12;
+    const surfacePoints = [
+      projectPoint(record.file.x - roofHalfWidth, roofY, record.file.z - roofHalfDepth),
+      projectPoint(record.file.x + roofHalfWidth, roofY, record.file.z - roofHalfDepth),
+      projectPoint(record.file.x + roofHalfWidth, roofY, record.file.z + roofHalfDepth),
+      projectPoint(record.file.x - roofHalfWidth, roofY, record.file.z + roofHalfDepth)
+    ];
+    const surfaceMinX = Math.min(...surfacePoints.map((point) => point.x));
+    const surfaceMaxX = Math.max(...surfacePoints.map((point) => point.x));
+    const surfaceMinY = Math.min(...surfacePoints.map((point) => point.y));
+    const surfaceMaxY = Math.max(...surfacePoints.map((point) => point.y));
+    return {
+      height,
+      surface: {
+        height: Math.max(2, surfaceMaxY - surfaceMinY),
+        points: surfacePoints,
+        width: Math.max(2, surfaceMaxX - surfaceMinX),
+        x: surfaceMinX,
+        y: surfaceMinY
+      },
+      width,
+      x: (minX + maxX - width) / 2,
+      y: (minY + maxY - height) / 2
+    };
+  }
+
+  function clearFilePortal() {
+    clearGroup(filePortalRoot);
+    filePortal = null;
+    markDirty();
+  }
+
+  function createFilePortalObject(record) {
+    const file = record.file;
+    const group = new THREE.Group();
+    const shellMaterial = new THREE.MeshBasicMaterial({
+      blending: THREE.AdditiveBlending,
+      color: SELECTED_FILE_COLOR,
+      depthWrite: false,
+      opacity: 0.72,
+      transparent: true
+    });
+    const shellGeometry = new THREE.BoxGeometry(
+      Math.max(3, file.cityWidth * 1.035),
+      record.height,
+      Math.max(3, file.cityDepth * 1.035)
+    );
+    const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+    shell.position.y = record.height / 2 + 1;
+    shell.renderOrder = 12;
+
+    const outlineMaterial = new THREE.LineBasicMaterial({
+      blending: THREE.AdditiveBlending,
+      color: 0xd8fbff,
+      depthTest: false,
+      depthWrite: false,
+      opacity: 0.95,
+      transparent: true
+    });
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(shellGeometry),
+      outlineMaterial
+    );
+    outline.position.copy(shell.position);
+    outline.renderOrder = 13;
+
+    const roofMaterial = new THREE.MeshBasicMaterial({
+      blending: THREE.AdditiveBlending,
+      color: 0xffffff,
+      depthTest: false,
+      depthWrite: false,
+      opacity: 0.88,
+      transparent: true
+    });
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        Math.max(3, file.cityWidth * 0.9),
+        Math.max(1.4, Math.min(3.4, record.height * 0.03)),
+        Math.max(3, file.cityDepth * 0.9)
+      ),
+      roofMaterial
+    );
+    roof.position.y = record.height + 2.2;
+    roof.renderOrder = 14;
+
+    const ringMaterials = [];
+    const ringRadius = Math.max(8, Math.max(file.cityWidth, file.cityDepth) * 0.72);
+    for (let index = 0; index < 3; index += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        blending: THREE.AdditiveBlending,
+        color: index === 1 ? 0xb59cff : SELECTED_FILE_COLOR,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0.72,
+        side: THREE.DoubleSide,
+        transparent: true
+      });
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(ringRadius, ringRadius + 1.8, 48),
+        material
+      );
+      ring.position.y = 1.2 + index * 1.5;
+      ring.rotation.x = -Math.PI / 2;
+      ring.renderOrder = 15;
+      ring.userData.portalRingIndex = index;
+      ringMaterials.push(material);
+      group.add(ring);
+    }
+
+    group.add(shell, outline, roof);
+    group.position.set(file.x, Number(file.elevation) || 0, file.z);
+    return {
+      group,
+      outlineMaterial,
+      ringMaterials,
+      roofMaterial,
+      shellMaterial
+    };
+  }
+
+  function beginFilePortal(fileId = "") {
+    const normalizedFileId = String(fileId || "");
+    const record = fileObjects.get(normalizedFileId);
+    if (!record) {
+      return null;
+    }
+    clearFilePortal();
+    const object = createFilePortalObject(record);
+    filePortalRoot.add(object.group);
+    filePortal = {
+      ...object,
+      amount: reducedMotion ? 1 : 0,
+      baseY: Number(record.file.elevation) || 0,
+      fileId: normalizedFileId,
+      height: record.height,
+      phase: reducedMotion ? "open" : "opening",
+      phaseAt: performance.now(),
+      phaseStartAmount: reducedMotion ? 1 : 0
+    };
+    markDirty();
+    return fileScreenRect(normalizedFileId);
+  }
+
+  function endFilePortal({ immediate = false } = {}) {
+    if (!filePortal) {
+      return;
+    }
+    if (immediate || reducedMotion) {
+      clearFilePortal();
+      return;
+    }
+    filePortal.phase = "closing";
+    filePortal.phaseAt = performance.now();
+    filePortal.phaseStartAmount = filePortal.amount;
+    markDirty();
+  }
+
+  function updateFilePortal(now) {
+    if (!filePortal) {
+      return;
+    }
+    const elapsed = now - filePortal.phaseAt;
+    if (filePortal.phase === "opening") {
+      const progress = Math.min(1, elapsed / FILE_PORTAL_DURATION_MS);
+      filePortal.amount = 1 - (1 - progress) ** 3;
+      if (progress >= 1) {
+        filePortal.phase = "open";
+        filePortal.phaseAt = now;
+      }
+    } else if (filePortal.phase === "closing") {
+      const progress = Math.min(1, elapsed / (FILE_PORTAL_DURATION_MS * 0.72));
+      filePortal.amount = filePortal.phaseStartAmount * (1 - progress ** 2);
+      if (progress >= 1) {
+        clearFilePortal();
+        return;
+      }
+    }
+
+    const pulse = (Math.sin(now * 0.0045) + 1) / 2;
+    const amount = filePortal.amount;
+    filePortal.group.position.y = filePortal.baseY + amount * (18 + filePortal.height * 0.13);
+    filePortal.group.rotation.y = amount * (0.045 + pulse * 0.035);
+    filePortal.group.scale.setScalar(1 + amount * (0.035 + pulse * 0.018));
+    filePortal.shellMaterial.opacity = amount * (0.54 + pulse * 0.2);
+    filePortal.outlineMaterial.opacity = amount * (0.72 + pulse * 0.28);
+    filePortal.roofMaterial.opacity = amount * (0.7 + pulse * 0.25);
+    filePortal.group.children.forEach((child) => {
+      const index = child.userData.portalRingIndex;
+      if (!Number.isInteger(index)) {
+        return;
+      }
+      const cycle = (now * 0.0007 + index / 3) % 1;
+      child.scale.setScalar(0.75 + cycle * 1.15);
+      filePortal.ringMaterials[index].opacity = amount * (1 - cycle) * 0.7;
+    });
+    markDirty();
+  }
+
+  function clearFileTravel() {
+    clearGroup(fileTravelRoot);
+    fileTravel = null;
+    markDirty();
+  }
+
+  function beginFileTravel(fromFileId = "", toFileId = "") {
+    const from = buildingTop(String(fromFileId || ""));
+    const to = buildingTop(String(toFileId || ""));
+    if (!from || !to || from.equals(to)) {
+      return;
+    }
+    clearFileTravel();
+    const middle = from.clone().lerp(to, 0.5);
+    middle.y = Math.max(from.y, to.y) + 70 + Math.min(180, from.distanceTo(to) * 0.16);
+    const curve = new THREE.QuadraticBezierCurve3(from, middle, to);
+    const beamMaterial = new THREE.MeshBasicMaterial({
+      blending: THREE.AdditiveBlending,
+      color: SELECTED_FILE_COLOR,
+      depthTest: false,
+      depthWrite: false,
+      opacity: 0.54,
+      transparent: true
+    });
+    const beam = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 56, 1.5, 6, false),
+      beamMaterial
+    );
+    beam.renderOrder = 16;
+    const sparkMaterial = new THREE.MeshBasicMaterial({
+      blending: THREE.AdditiveBlending,
+      color: 0xffffff,
+      depthTest: false,
+      depthWrite: false,
+      opacity: 1,
+      transparent: true
+    });
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(5.5, 12, 8), sparkMaterial);
+    spark.renderOrder = 17;
+    spark.position.copy(from);
+    fileTravelRoot.add(beam, spark);
+    fileTravel = {
+      beamMaterial,
+      curve,
+      duration: reducedMotion ? 1 : FILE_TRAVEL_DURATION_MS,
+      spark,
+      sparkMaterial,
+      startedAt: performance.now()
+    };
+    markDirty();
+  }
+
+  function updateFileTravel(now) {
+    if (!fileTravel) {
+      return;
+    }
+    const progress = Math.min(1, (now - fileTravel.startedAt) / fileTravel.duration);
+    const eased = progress < 0.5
+      ? 2 * progress ** 2
+      : 1 - (-2 * progress + 2) ** 2 / 2;
+    fileTravel.spark.position.copy(fileTravel.curve.getPoint(eased));
+    fileTravel.spark.scale.setScalar(0.8 + Math.sin(progress * Math.PI) * 1.2);
+    fileTravel.beamMaterial.opacity = 0.16 + Math.sin(progress * Math.PI) * 0.6;
+    fileTravel.sparkMaterial.opacity = Math.min(1, (1 - progress) * 4);
+    if (progress >= 1) {
+      clearFileTravel();
+      return;
+    }
+    markDirty();
+  }
+
+  function addExternalFileContext(edges = [], source = null) {
+    if (!source) {
+      return;
+    }
+    const dependencies = new Map();
+    for (const edge of edges) {
+      const packageId = String(edge.targetPackageId || "").trim();
+      if (edge.fromFileId !== selectedFileId || edge.toFileId || !packageId) {
+        continue;
+      }
+      const dependency = dependencies.get(packageId) || { importCount: 0, packageId };
+      dependency.importCount += 1;
+      dependencies.set(packageId, dependency);
+    }
+    const records = [...dependencies.values()].sort((left, right) => (
+      left.packageId.localeCompare(right.packageId)
+    ));
+    if (records.length === 0) {
+      return;
+    }
+
+    camera.updateMatrixWorld();
+    const screenRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    screenRight.y = 0;
+    if (screenRight.lengthSq() < 0.001) {
+      screenRight.set(1, 0, 0);
+    } else {
+      screenRight.normalize();
+    }
+    const towardCamera = camera.position.clone().sub(source);
+    towardCamera.y = 0;
+    if (towardCamera.lengthSq() < 0.001) {
+      towardCamera.set(0, 0, 1);
+    } else {
+      towardCamera.normalize();
+    }
+
+    const maximumColumns = 5;
+    records.forEach((dependency, index) => {
+      const row = Math.floor(index / maximumColumns);
+      const rowStart = row * maximumColumns;
+      const rowSize = Math.min(maximumColumns, records.length - rowStart);
+      const column = index - rowStart;
+      const horizontalOffset = (column - (rowSize - 1) / 2) * 156;
+      const radius = Math.max(
+        14,
+        Math.min(23, 13 + Math.log2(dependency.importCount + 1) * 2.8)
+      );
+      const position = source.clone()
+        .addScaledVector(screenRight, horizontalOffset)
+        .addScaledVector(towardCamera, 112 + row * 86);
+      position.y += 128 + row * 76;
+
+      const group = new THREE.Group();
+      group.position.copy(position);
+      group.userData.kind = "file-external-dependency";
+      group.userData.packageId = dependency.packageId;
+      const body = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(radius, 0),
+        new THREE.MeshBasicMaterial({
+          color: SUBSYSTEM_DEPENDENCY_COLORS.external,
+          depthTest: false,
+          depthWrite: false,
+          opacity: 0.94,
+          transparent: true
+        })
+      );
+      body.renderOrder = 12;
+      const halo = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(radius * 1.34, 1),
+        new THREE.MeshBasicMaterial({
+          color: 0xf0d9ff,
+          depthTest: false,
+          depthWrite: false,
+          opacity: 0.34,
+          transparent: true,
+          wireframe: true
+        })
+      );
+      halo.renderOrder = 12;
+      group.add(body, halo);
+      const importLabel = dependency.importCount === 1
+        ? "1 external import"
+        : `${dependency.importCount} external imports`;
+      const label = addLabel(group, `${dependency.packageId}\n${importLabel}`, {
+        color: 0xf7f1ff,
+        fontSize: 12,
+        maxWidth: 180,
+        position: new THREE.Vector3(0, radius + 18, 0)
+      });
+      label.material.depthTest = false;
+      label.material.depthWrite = false;
+      label.renderOrder = 12;
+
+      const direction = position.clone().sub(source).normalize();
+      const target = position.clone().addScaledVector(direction, -radius * 0.95);
+      const connector = fileContextConnector(source, target, {
+        color: SUBSYSTEM_DEPENDENCY_COLORS.external,
+        dashed: true,
+        elevation: 34 + row * 12,
+        opacity: 0.94
+      });
+      contextRoot.add(connector, group);
+    });
+  }
+
   function setFileContext(constellation = {}) {
     clearSubsystemConnectionSelection();
     clearContext();
@@ -1810,6 +2330,7 @@ function createSystemWorld({
     showExternalSatellites("");
     showDependencyEvidence("");
     showSubsystemConnectionBundles("");
+    const selectedTop = buildingTop(selectedFileId);
     for (const edge of constellation.edges || []) {
       const from = buildingTop(edge.fromFileId);
       const to = buildingTop(edge.toFileId);
@@ -1819,14 +2340,15 @@ function createSystemWorld({
       neighborFileIds.add(edge.fromFileId);
       neighborFileIds.add(edge.toFileId);
       const outgoing = edge.fromFileId === selectedFileId;
-      const line = curveLine(from, to, {
+      const connector = fileContextConnector(from, to, {
         color: outgoing ? 0x53dcff : 0xc78cff,
         dashed: edge.classification !== "local-file",
         elevation: 42 + Math.min(100, from.distanceTo(to) * 0.12),
         opacity: 0.82
       });
-      contextRoot.add(line);
+      contextRoot.add(connector);
     }
+    addExternalFileContext(constellation.edges || [], selectedTop);
     applySelectionStyles();
   }
 
@@ -1837,7 +2359,6 @@ function createSystemWorld({
     addDirectoryPrecincts(cityLayout);
     addFileBuildings(cityLayout);
     addSubsystemSky(overview, cityLayout);
-    markDirty();
     await fitWorld(false);
   }
 
@@ -1920,11 +2441,7 @@ function createSystemWorld({
     return Math.max(width, depth, subsystemSpan);
   }
 
-  function focusFile(fileId = "") {
-    const record = fileObjects.get(String(fileId || ""));
-    if (!record) {
-      return false;
-    }
+  function fileFocusPose(record) {
     const footprint = Math.max(record.file.cityWidth, record.file.cityDepth);
     const distance = Math.max(150, record.height * 2.5, footprint * 5.5);
     const elevation = Number(record.file.elevation) || 0;
@@ -1936,17 +2453,52 @@ function createSystemWorld({
         ceilingElevation - SUBSYSTEM_CIRCLE_CAMERA_CEILING_CLEARANCE
       )
       : proposedCameraY;
-    controls.setLookAt(
-      record.file.x + distance * 0.42,
-      cameraY,
-      record.file.z + distance * 0.68,
-      record.file.x,
-      elevation + record.height * 0.38,
-      record.file.z,
+    return {
+      position: [
+        record.file.x + distance * 0.42,
+        cameraY,
+        record.file.z + distance * 0.68
+      ],
+      target: [
+        record.file.x,
+        elevation + record.height * 0.38,
+        record.file.z
+      ]
+    };
+  }
+
+  function focusFile(fileId = "") {
+    const record = fileObjects.get(String(fileId || ""));
+    if (!record) {
+      return false;
+    }
+    const pose = fileFocusPose(record);
+    void controls.setLookAt(
+      ...pose.position,
+      ...pose.target,
       !reducedMotion
     );
     markDirty();
     return true;
+  }
+
+  async function flyToFile(fileId = "", { fromFileId = "" } = {}) {
+    const normalizedFileId = String(fileId || "");
+    const record = fileObjects.get(normalizedFileId);
+    if (!record) {
+      return null;
+    }
+    if (fromFileId) {
+      beginFileTravel(fromFileId, normalizedFileId);
+    }
+    const pose = fileFocusPose(record);
+    await controls.setLookAt(
+      ...pose.position,
+      ...pose.target,
+      !reducedMotion
+    );
+    markDirty();
+    return fileScreenRect(normalizedFileId);
   }
 
   function focusDirectory(directoryPath = "") {
@@ -2305,6 +2857,8 @@ function createSystemWorld({
   function frame(now = performance.now()) {
     const delta = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
+    updateFilePortal(now);
+    updateFileTravel(now);
     const controlsChanged = controls.update(delta);
     if (!active || (!dirty && !controlsChanged)) {
       return;
@@ -2520,15 +3074,44 @@ function createSystemWorld({
     }
   }
 
+  function openFileImmersively(fileId, record, event = null) {
+    event?.preventDefault?.();
+    const returnView = captureView();
+    const alreadySelected = selectedFileId === fileId;
+    if (!alreadySelected) {
+      selectFile(fileId);
+      onSelectFile({
+        fileId,
+        fileKey: record.file.key,
+        path: record.file.path
+      });
+    }
+    const anchor = fileScreenRect(fileId);
+    beginFilePortal(fileId);
+    onOpenFile({
+      anchor,
+      fileId,
+      fileKey: record.file.key,
+      path: record.file.path,
+      returnView
+    });
+  }
+
   function handlePointerUp(event) {
     grabState = null;
     if (!pointerDown || Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 6) {
       pointerDown = null;
+      if (event.pointerType === "touch") {
+        lastTouchFileTap = { at: -Infinity, fileId: "" };
+      }
       return;
     }
     pointerDown = null;
     const intersection = pickedIntersection(event);
     const object = intersection?.object;
+    if (event.pointerType === "touch" && object?.userData.kind !== "file-buildings") {
+      lastTouchFileTap = { at: -Infinity, fileId: "" };
+    }
     if (object?.userData.kind === "subsystem-connection") {
       selectSubsystemConnection(object.userData.subsystemConnectionId);
       return;
@@ -2548,6 +3131,19 @@ function createSystemWorld({
       const record = fileObjects.get(fileId);
       if (!record) {
         return;
+      }
+      if (event.pointerType === "touch") {
+        const tappedAt = Number(event.timeStamp) || performance.now();
+        const doubleTap = lastTouchFileTap.fileId === fileId &&
+          tappedAt - lastTouchFileTap.at <= FILE_DOUBLE_TAP_WINDOW_MS;
+        lastTouchFileTap = doubleTap
+          ? { at: -Infinity, fileId: "" }
+          : { at: tappedAt, fileId };
+        if (doubleTap) {
+          suppressSyntheticDoubleClickUntil = tappedAt + FILE_DOUBLE_TAP_WINDOW_MS;
+          openFileImmersively(fileId, record, event);
+          return;
+        }
       }
       const selectedConnection = subsystemConnectionObjects.get(selectedSubsystemConnectionId)?.bundle;
       if (selectedConnection?.consumerFileIds.includes(fileId)) {
@@ -2597,7 +3193,22 @@ function createSystemWorld({
   }
 
   function handleDoubleClick(event) {
-    const object = pickedIntersection(event)?.object;
+    const eventTime = Number(event.timeStamp) || performance.now();
+    if (eventTime <= suppressSyntheticDoubleClickUntil) {
+      event.preventDefault();
+      return;
+    }
+    const intersection = pickedIntersection(event);
+    const object = intersection?.object;
+    if (object?.userData.kind === "file-buildings") {
+      const fileId = object.userData.fileIds[intersection.instanceId];
+      const record = fileObjects.get(fileId);
+      if (!record) {
+        return;
+      }
+      openFileImmersively(fileId, record, event);
+      return;
+    }
     if (object?.userData.kind !== "subsystem") {
       return;
     }
@@ -2628,13 +3239,8 @@ function createSystemWorld({
   canvas.addEventListener("keydown", handleKeyDown);
 
   return Object.freeze({
-    captureView() {
-      const target = controls.getTarget(new THREE.Vector3());
-      return {
-        position: camera.position.toArray(),
-        target: target.toArray()
-      };
-    },
+    beginFilePortal,
+    captureView,
     clearSelection,
     dispose() {
       canvas.removeEventListener("pointerdown", handlePointerDown);
@@ -2650,7 +3256,11 @@ function createSystemWorld({
       controls.dispose();
       renderer.dispose();
     },
+    endFilePortal,
     fitWorld,
+    fileScreenRect,
+    flyToFile,
+    flyToView,
     focusDirectory,
     focusFile,
     focusPrecinct,
@@ -2661,22 +3271,7 @@ function createSystemWorld({
     markDirty,
     resize,
     rotateView,
-    restoreView(view = {}) {
-      if (!Array.isArray(view.position) || !Array.isArray(view.target)) {
-        return false;
-      }
-      controls.setLookAt(
-        Number(view.position[0]) || 0,
-        Number(view.position[1]) || 0,
-        Number(view.position[2]) || 0,
-        Number(view.target[0]) || 0,
-        Number(view.target[1]) || 0,
-        Number(view.target[2]) || 0,
-        false
-      );
-      markDirty();
-      return true;
-    },
+    restoreView,
     selectDirectory,
     selectFile,
     selectPrecinct,

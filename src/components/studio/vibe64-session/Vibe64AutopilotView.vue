@@ -195,6 +195,51 @@
               </v-alert>
 
               <div
+                v-if="commandFailureResponseVisible"
+                class="studio-autopilot__actions studio-autopilot__step-actions"
+              >
+                <v-btn
+                  v-if="commandFailureChatMode"
+                  :prepend-icon="mdiRefresh"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="returnToCommandFailureRecovery"
+                >
+                  Return to recovery
+                </v-btn>
+                <v-btn
+                  :loading="commandFailureHelpSending"
+                  :prepend-icon="mdiRobotOutline"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="askCodexAboutCommandFailure"
+                >
+                  Ask Codex for help
+                </v-btn>
+                <v-btn
+                  :prepend-icon="mdiRobotOutline"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="requestCommandAiFix"
+                >
+                  Fix it with Codex
+                </v-btn>
+                <v-btn
+                  v-if="!commandFailureChatMode"
+                  :prepend-icon="mdiClose"
+                  size="small"
+                  type="button"
+                  variant="text"
+                  @click="backToChatFromCommandFailure"
+                >
+                  Back to chat
+                </v-btn>
+              </div>
+
+              <div
                 v-if="stepInputFallbackActionsVisible && !composerControlTimelineFormVisible"
                 class="studio-autopilot__actions studio-autopilot__step-actions"
               >
@@ -428,8 +473,8 @@
             :fill="commandSpyExpanded"
             :height="commandSpyExpanded ? '100%' : '0'"
             :output="commandTerminalText"
-            :retryable="commandTerminalFailed"
-            :show-close="false"
+            :retryable="commandTerminalFailed && !commandFailureResponseVisible"
+            :show-close="commandTerminalFailed"
             :show-copy="true"
             :show-interrupt="false"
             :status="commandStatus || (commandTerminalFailed ? 'failed' : '')"
@@ -437,6 +482,7 @@
             :terminal="commandTerminal"
             :title="commandOverlayTitle"
             :visible="commandSpyVisible"
+            @close="dismissCommandFailureTerminal"
             @retry="retryFromCommandFailure"
             @update:expanded="commandSpyExpanded = $event"
           >
@@ -539,14 +585,85 @@
           </div>
         </Vibe64DashboardShell>
 
+        <Teleport to="body">
+          <div
+            v-if="immersivePortalFlightVisible"
+            aria-hidden="true"
+            class="studio-autopilot__file-portal-carrier"
+            :class="`studio-autopilot__file-portal-carrier--${immersivePortalFlightPhase}`"
+            :style="immersivePortalFlightStyle"
+          >
+            <div class="studio-autopilot__file-portal-carrier-halo" />
+            <div class="studio-autopilot__file-portal-carrier-plate">
+              <div class="studio-autopilot__file-portal-carrier-chrome">
+                <span>FILE</span>
+                <code>{{ immersiveEditorFile.path }}</code>
+                <i />
+              </div>
+              <div class="studio-autopilot__file-portal-carrier-code">
+                <span v-for="index in 14" :key="index" />
+              </div>
+              <div class="studio-autopilot__file-portal-carrier-scan" />
+            </div>
+            <div class="studio-autopilot__file-portal-carrier-sparks">
+              <i v-for="index in 8" :key="index" />
+            </div>
+          </div>
+        </Teleport>
+
         <section
-          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+          v-show="props.projectPane === 'dashboard' && (rightPaneTab === 'editor' || immersiveEditorOpen)"
+          ref="immersiveEditorElement"
+          :aria-label="immersiveEditorEngaged ? 'File City immersive source editor' : undefined"
           class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__editor-pane"
-          role="tabpanel"
+          :class="{
+            'studio-autopilot__editor-pane--immersive': immersiveEditorEngaged,
+            [`studio-autopilot__editor-pane--portal-${immersiveEditorPhase}`]: immersiveEditorEngaged
+          }"
+          :role="immersiveEditorEngaged ? 'dialog' : 'tabpanel'"
+          @keydown.esc.stop="closeImmersiveSourceEditor()"
         >
+          <div
+            v-if="immersiveEditorEngaged"
+            aria-hidden="true"
+            class="studio-autopilot__file-portal-facade"
+          >
+            <span v-for="index in 12" :key="index" />
+          </div>
+          <v-btn
+            v-if="immersiveEditorEngaged"
+            aria-keyshortcuts="Escape"
+            aria-label="Close file and return to File City"
+            class="studio-autopilot__file-portal-close"
+            :disabled="immersiveEditorTransitionBusy"
+            :icon="mdiClose"
+            size="large"
+            title="Close file and return to File City (Esc)"
+            type="button"
+            variant="flat"
+            @click="closeImmersiveSourceEditor()"
+          />
           <header class="studio-autopilot__session-tool-header">
             <v-btn
-              v-if="systemBackAvailable"
+              v-if="immersiveEditorEngaged"
+              :prepend-icon="mdiClose"
+              size="x-small"
+              title="Close the source portal"
+              type="button"
+              variant="tonal"
+              @click="closeImmersiveSourceEditor()"
+            >
+              Return to File City
+            </v-btn>
+            <span
+              v-if="immersiveEditorEngaged"
+              class="studio-autopilot__file-portal-path"
+              :title="immersiveEditorFile.path"
+            >
+              {{ immersiveEditorFile.path }}
+            </span>
+            <v-btn
+              v-if="!immersiveEditorEngaged && systemBackAvailable"
               :prepend-icon="mdiArrowLeft"
               size="x-small"
               title="Return to the System world"
@@ -557,6 +674,7 @@
               Back to System
             </v-btn>
             <v-btn
+              v-if="!immersiveEditorEngaged"
               :prepend-icon="mdiArrowLeft"
               size="x-small"
               title="Back to dashboard"
@@ -568,15 +686,18 @@
             </v-btn>
           </header>
           <Vibe64SessionSourceEditor
-            v-if="rightPaneTabMounted('editor')"
-            :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+            v-if="rightPaneTabMounted('editor') || immersiveEditorMounted"
+            :active="props.projectPane === 'dashboard' && (rightPaneTab === 'editor' || immersiveEditorEngaged)"
             :ask-codex-available="sourceEditorAskCodexAvailable"
             class="studio-autopilot__session-tool-content"
-            :open-request="sourceEditorOpenRequest"
+            :code-focus-mode="immersiveEditorEngaged"
+            :navigate-referenced-source="navigateImmersiveSourceReference"
+            :open-request="immersiveEditorEngaged ? immersiveEditorOpenRequest : sourceEditorOpenRequest"
             :open-sync-state="props.session?.uiSync?.sourceEditor || null"
             :project-slug="projectSlug"
             :session-id="sessionId"
             :sessions-api-path="props.sessionsApiPath"
+            :source-path-click-without-modifier="immersiveEditorEngaged"
             @ask-codex-about-file="askCodexAboutSourceEditorFile"
           />
         </section>
@@ -600,6 +721,7 @@
           </header>
           <Vibe64SystemWorldView
             v-if="rightPaneTabMounted('system')"
+            ref="systemWorldView"
             :active="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
             :ask-chat-available="sourceEditorAskCodexAvailable"
             class="studio-autopilot__session-tool-content"
@@ -607,6 +729,7 @@
             :restore-request="systemRestoreRequest"
             :session-id="sessionId"
             @ask-in-chat="askSystemContextAndFocus"
+            @open-source-file-immersive="openImmersiveSourceEditor"
             @open-source-file="openSourceEditorFile"
           />
         </section>
@@ -706,10 +829,12 @@ const {
   Vibe64SessionDiffPanel,
   activateComposerMenuItem,
   activateWorkflowButtonControl,
+  askCodexAboutCommandFailure,
   askCodexAboutSystemContext,
   askCodexAboutSourceEditorFile,
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
+  backToChatFromCommandFailure,
   backToDashboard,
   backToSystemFromEditor,
   backgroundTaskError,
@@ -723,6 +848,9 @@ const {
   chatTurns,
   clearSelectedControl,
   agentStopEnabled,
+  commandFailureChatMode,
+  commandFailureHelpSending,
+  commandFailureResponseVisible,
   commandFailureSummary,
   commandOverlayTitle,
   commandPreview,
@@ -735,6 +863,7 @@ const {
   commandTerminal,
   commandTerminalSummary,
   commandTerminalText,
+  dismissCommandFailureTerminal,
   composerControlAgentControlsVisible,
   composerControlAttachTextarea,
   composerControlAttachmentsEnabled,
@@ -781,6 +910,7 @@ const {
   projectSlug,
   recoverStuckStep,
   reportPreviewVisible,
+  returnToCommandFailureRecovery,
   requestAgentInterrupt,
   requestCommandAiFix,
   resendOptimisticComposerTurn,
@@ -844,6 +974,329 @@ function saveSessionProjectConfig(values = {}) {
     });
   }
 }
+
+const IMMERSIVE_EDITOR_REVEAL_MS = 140;
+const IMMERSIVE_PORTAL_FLIGHT_MS = 490;
+const immersiveEditorElement = ref(null);
+const immersiveEditorEngaged = ref(false);
+const immersiveEditorFile = ref({});
+const immersiveEditorMounted = ref(false);
+const immersiveEditorOpen = ref(false);
+const immersiveEditorOpenRequest = ref(null);
+const immersiveEditorPhase = ref("closed");
+const immersiveEditorReturnView = ref(null);
+const immersiveEditorTransitionBusy = ref(false);
+const immersivePortalFlightPhase = ref("idle");
+const immersivePortalFlightStyle = ref({});
+const immersivePortalFlightVisible = ref(false);
+const systemWorldView = ref(null);
+let immersiveEditorOpenSequence = 0;
+let immersiveEditorTransitionGeneration = 0;
+
+function immersivePortalFlightDuration() {
+  return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true
+    ? 0
+    : IMMERSIVE_PORTAL_FLIGHT_MS;
+}
+
+function waitForImmersiveEditorFrame() {
+  return new Promise((resolve) => {
+    const requestFrame = globalThis.requestAnimationFrame || (
+      (callback) => globalThis.setTimeout(callback, 16)
+    );
+    requestFrame(() => resolve());
+  });
+}
+
+function waitForImmersiveEditorTransition(duration) {
+  return duration > 0
+    ? new Promise((resolve) => globalThis.setTimeout(resolve, duration))
+    : Promise.resolve();
+}
+
+function setImmersiveEditorRequest(target = {}) {
+  const path = String(target.path || "").trim();
+  if (!path) {
+    return false;
+  }
+  immersiveEditorOpenSequence += 1;
+  immersiveEditorOpenRequest.value = {
+    column: Number(target.column || 0) || 0,
+    line: Number(target.line || 0) || 0,
+    path,
+    sequence: immersiveEditorOpenSequence
+  };
+  return true;
+}
+
+function clearImmersivePortalFlight() {
+  immersivePortalFlightPhase.value = "idle";
+  immersivePortalFlightStyle.value = {};
+  immersivePortalFlightVisible.value = false;
+}
+
+function portalClipPercentage(value) {
+  return Number.isFinite(value)
+    ? Math.max(-12, Math.min(112, value))
+    : 0;
+}
+
+function measureImmersivePortalFlight(anchor = null) {
+  const element = immersiveEditorElement.value;
+  if (!element) {
+    immersivePortalFlightStyle.value = {};
+    return false;
+  }
+  const target = element.getBoundingClientRect();
+  if (target.width <= 0 || target.height <= 0) {
+    immersivePortalFlightStyle.value = {};
+    return false;
+  }
+  const surface = anchor?.surface || anchor || {};
+  const sourceWidth = Math.max(2, Number(surface.width) || 28);
+  const sourceHeight = Math.max(2, Number(surface.height) || 20);
+  const sourceX = Number.isFinite(Number(surface.x))
+    ? Number(surface.x)
+    : target.left + target.width / 2 - sourceWidth / 2;
+  const sourceY = Number.isFinite(Number(surface.y))
+    ? Number(surface.y)
+    : target.top + target.height / 2 - sourceHeight / 2;
+  const shiftX = sourceX + sourceWidth / 2 - (target.left + target.width / 2);
+  const shiftY = sourceY + sourceHeight / 2 - (target.top + target.height / 2);
+  const scaleX = Math.max(0.006, Math.min(1.1, sourceWidth / target.width));
+  const scaleY = Math.max(0.006, Math.min(1.1, sourceHeight / target.height));
+  const distance = Math.hypot(shiftX, shiftY);
+  const arc = Math.max(34, Math.min(110, distance * 0.18));
+  const liftScaleX = Math.min(1.15, scaleX * 1.16);
+  const liftScaleY = Math.min(1.15, scaleY * 1.16);
+  const midScaleX = Math.max(0.38, Math.min(0.82, (scaleX + 1) * 0.48));
+  const midScaleY = Math.max(0.38, Math.min(0.82, (scaleY + 1) * 0.48));
+  const surfacePoints = Array.isArray(surface.points) ? surface.points : [];
+  const sourceClip = surfacePoints.length === 4
+    ? `polygon(${surfacePoints.map((point) => {
+      const x = portalClipPercentage((Number(point?.x) - sourceX) / sourceWidth * 100);
+      const y = portalClipPercentage((Number(point?.y) - sourceY) / sourceHeight * 100);
+      return `${x.toFixed(2)}% ${y.toFixed(2)}%`;
+    }).join(", ")})`
+    : "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
+  immersivePortalFlightStyle.value = {
+    "--file-portal-carrier-absorb-transform": `translate3d(${shiftX}px, ${shiftY}px, 0) scale(${scaleX * 0.72}, ${scaleY * 0.72})`,
+    "--file-portal-carrier-duration": `${IMMERSIVE_PORTAL_FLIGHT_MS}ms`,
+    "--file-portal-carrier-lift-transform": `translate3d(${shiftX}px, ${shiftY - Math.min(28, arc * 0.32)}px, 0) scale(${liftScaleX}, ${liftScaleY})`,
+    "--file-portal-carrier-mid-transform": `translate3d(${shiftX * 0.44}px, ${shiftY * 0.44 - arc}px, 0) scale(${midScaleX}, ${midScaleY})`,
+    "--file-portal-carrier-origin-transform": `translate3d(${shiftX}px, ${shiftY}px, 0) scale(${scaleX}, ${scaleY})`,
+    "--file-portal-carrier-source-clip": sourceClip,
+    height: `${target.height}px`,
+    left: `${target.left}px`,
+    top: `${target.top}px`,
+    width: `${target.width}px`
+  };
+  return true;
+}
+
+async function enterImmersiveEditor(anchor = null, generation = immersiveEditorTransitionGeneration) {
+  immersiveEditorOpen.value = true;
+  immersiveEditorPhase.value = "measuring";
+  clearImmersivePortalFlight();
+  await nextTick();
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  const duration = immersivePortalFlightDuration();
+  if (duration === 0 || !measureImmersivePortalFlight(anchor)) {
+    immersiveEditorPhase.value = "open";
+    return true;
+  }
+  immersivePortalFlightVisible.value = true;
+  immersivePortalFlightPhase.value = "origin";
+  await nextTick();
+  await waitForImmersiveEditorFrame();
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  immersivePortalFlightPhase.value = "flying";
+  await waitForImmersiveEditorTransition(duration * 0.68);
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  immersiveEditorPhase.value = "landing";
+  await waitForImmersiveEditorTransition(duration * 0.32);
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  immersiveEditorPhase.value = "open";
+  immersivePortalFlightPhase.value = "dissolving";
+  await waitForImmersiveEditorTransition(IMMERSIVE_EDITOR_REVEAL_MS);
+  if (generation === immersiveEditorTransitionGeneration) {
+    clearImmersivePortalFlight();
+  }
+  return generation === immersiveEditorTransitionGeneration;
+}
+
+async function exitImmersiveEditorToAnchor(anchor, generation) {
+  const duration = immersivePortalFlightDuration();
+  if (duration === 0 || !measureImmersivePortalFlight(anchor)) {
+    immersiveEditorPhase.value = "closing";
+    systemWorldView.value?.closeImmersiveFilePortal?.({ immediate: duration === 0 });
+    await waitForImmersiveEditorTransition(duration === 0 ? 0 : IMMERSIVE_EDITOR_REVEAL_MS);
+    return generation === immersiveEditorTransitionGeneration;
+  }
+  immersivePortalFlightVisible.value = true;
+  immersivePortalFlightPhase.value = "destination";
+  await nextTick();
+  await waitForImmersiveEditorFrame();
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  immersiveEditorPhase.value = "closing";
+  immersivePortalFlightPhase.value = "returning";
+  await waitForImmersiveEditorTransition(duration);
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  systemWorldView.value?.closeImmersiveFilePortal?.();
+  immersivePortalFlightPhase.value = "absorbing";
+  await waitForImmersiveEditorTransition(IMMERSIVE_EDITOR_REVEAL_MS * 0.82);
+  if (generation === immersiveEditorTransitionGeneration) {
+    clearImmersivePortalFlight();
+  }
+  return generation === immersiveEditorTransitionGeneration;
+}
+
+async function openImmersiveSourceEditor(target = {}) {
+  if (immersiveEditorTransitionBusy.value || !setImmersiveEditorRequest(target)) {
+    return false;
+  }
+  const generation = ++immersiveEditorTransitionGeneration;
+  immersiveEditorTransitionBusy.value = true;
+  immersiveEditorMounted.value = true;
+  immersiveEditorEngaged.value = true;
+  immersiveEditorReturnView.value = target.returnView || target.systemContext?.camera || null;
+  immersiveEditorFile.value = {
+    fileId: String(target.fileId || ""),
+    fileKey: String(target.fileKey || ""),
+    path: String(target.path || "")
+  };
+  try {
+    return await enterImmersiveEditor(target.anchor || null, generation);
+  } finally {
+    if (generation === immersiveEditorTransitionGeneration) {
+      immersiveEditorTransitionBusy.value = false;
+    }
+  }
+}
+
+function resetImmersiveSourceEditor() {
+  immersiveEditorTransitionGeneration += 1;
+  clearImmersivePortalFlight();
+  systemWorldView.value?.closeImmersiveFilePortal?.({ immediate: true });
+  if (immersiveEditorReturnView.value) {
+    void systemWorldView.value?.restoreImmersiveView?.(
+      immersiveEditorReturnView.value,
+      { immediate: true }
+    );
+  }
+  immersiveEditorEngaged.value = false;
+  immersiveEditorOpen.value = false;
+  immersiveEditorPhase.value = "closed";
+  immersiveEditorReturnView.value = null;
+  immersiveEditorTransitionBusy.value = false;
+}
+
+async function closeImmersiveSourceEditor({ immediate = false } = {}) {
+  if (!immersiveEditorEngaged.value || immersiveEditorTransitionBusy.value) {
+    return false;
+  }
+  if (immediate) {
+    resetImmersiveSourceEditor();
+    return true;
+  }
+  const generation = ++immersiveEditorTransitionGeneration;
+  immersiveEditorTransitionBusy.value = true;
+  const returnView = immersiveEditorReturnView.value;
+  const anchor = systemWorldView.value?.immersiveFileAnchor?.(immersiveEditorFile.value.path) || null;
+  if (!await exitImmersiveEditorToAnchor(anchor, generation)) {
+    return false;
+  }
+  immersiveEditorEngaged.value = false;
+  immersiveEditorOpen.value = false;
+  immersiveEditorPhase.value = "closed";
+  try {
+    await systemWorldView.value?.restoreImmersiveView?.(returnView);
+  } catch {
+    await systemWorldView.value?.restoreImmersiveView?.(returnView, { immediate: true });
+  }
+  if (generation !== immersiveEditorTransitionGeneration) {
+    return false;
+  }
+  immersiveEditorReturnView.value = null;
+  immersiveEditorTransitionBusy.value = false;
+  return true;
+}
+
+async function navigateImmersiveSourceReference(navigation = {}) {
+  const path = String(navigation.path || "").trim();
+  if (
+    !immersiveEditorEngaged.value ||
+    immersiveEditorTransitionBusy.value ||
+    !path ||
+    path === immersiveEditorFile.value.path
+  ) {
+    return false;
+  }
+  if (!systemWorldView.value?.hasImmersiveFile?.(path)) {
+    immersiveEditorFile.value = {
+      fileId: "",
+      fileKey: "",
+      path
+    };
+    return false;
+  }
+
+  const generation = ++immersiveEditorTransitionGeneration;
+  immersiveEditorTransitionBusy.value = true;
+  const sourceAnchor = systemWorldView.value?.immersiveFileAnchor?.(immersiveEditorFile.value.path) || null;
+  if (!await exitImmersiveEditorToAnchor(sourceAnchor, generation)) {
+    return true;
+  }
+  immersiveEditorOpen.value = false;
+  immersiveEditorPhase.value = "traveling";
+  setImmersiveEditorRequest(navigation);
+
+  try {
+    const destination = await systemWorldView.value?.travelImmersiveFile?.(path);
+    if (generation !== immersiveEditorTransitionGeneration) {
+      systemWorldView.value?.closeImmersiveFilePortal?.({ immediate: true });
+      return true;
+    }
+    immersiveEditorFile.value = {
+      fileId: String(destination?.fileId || ""),
+      fileKey: String(destination?.fileKey || ""),
+      path
+    };
+    await enterImmersiveEditor(destination?.anchor || null, generation);
+    return true;
+  } catch {
+    if (generation === immersiveEditorTransitionGeneration) {
+      await enterImmersiveEditor(null, generation);
+    }
+    return true;
+  } finally {
+    if (generation === immersiveEditorTransitionGeneration) {
+      immersiveEditorTransitionBusy.value = false;
+    }
+  }
+}
+
+watch([() => props.projectPane, rightPaneTab, sessionId], ([projectPane, pane, nextSessionId], previous = []) => {
+  if (!immersiveEditorEngaged.value) {
+    return;
+  }
+  const sessionChanged = previous.length > 0 && nextSessionId !== previous[2];
+  if (projectPane !== "dashboard" || pane !== "system" || sessionChanged) {
+    resetImmersiveSourceEditor();
+  }
+});
 
 const timelineControlElement = ref(null);
 const chatBodyElement = ref(null);
@@ -1408,6 +1861,382 @@ watch([
   min-width: 0;
 }
 
+.studio-autopilot__editor-pane--immersive {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(89, 227, 255, 0.12), transparent 42%),
+    rgb(var(--v-theme-surface));
+  border: 1px solid rgba(117, 243, 255, 0.42);
+  border-radius: 1rem;
+  box-shadow:
+    0 1.5rem 5rem rgba(0, 0, 0, 0.62),
+    0 0 2.4rem rgba(89, 227, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  height: calc(100% - 1.2rem) !important;
+  margin: 0.6rem;
+  overflow: hidden;
+  transform-origin: center;
+  will-change: filter, opacity, transform;
+  z-index: 20;
+}
+
+.studio-autopilot__editor-pane--portal-measuring {
+  opacity: 0;
+  transform: scale(0.985);
+  transition: none;
+}
+
+.studio-autopilot__editor-pane--portal-landing {
+  filter: brightness(1.32) saturate(1.22);
+  opacity: 0.3;
+  transform: scale(0.992);
+  transition:
+    filter 110ms ease-out,
+    opacity 110ms ease-out,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.studio-autopilot__editor-pane--portal-open {
+  filter: none;
+  opacity: 1;
+  transform: none;
+  transition:
+    filter 160ms ease-out,
+    opacity 160ms ease-out,
+    transform 210ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.studio-autopilot__editor-pane--portal-closing {
+  filter: brightness(1.22) saturate(1.12);
+  opacity: 0;
+  transform: scale(0.992);
+  transition:
+    filter 110ms ease-in,
+    opacity 120ms ease-in,
+    transform 130ms ease-in;
+}
+
+.studio-autopilot__editor-pane--immersive > .studio-autopilot__session-tool-header,
+.studio-autopilot__editor-pane--immersive > .studio-autopilot__session-tool-content {
+  position: relative;
+  z-index: 2;
+}
+
+.studio-autopilot__editor-pane--portal-landing > .studio-autopilot__session-tool-header,
+.studio-autopilot__editor-pane--portal-landing > .studio-autopilot__session-tool-content,
+.studio-autopilot__editor-pane--portal-measuring > .studio-autopilot__session-tool-header,
+.studio-autopilot__editor-pane--portal-measuring > .studio-autopilot__session-tool-content,
+.studio-autopilot__editor-pane--portal-closing > .studio-autopilot__session-tool-header,
+.studio-autopilot__editor-pane--portal-closing > .studio-autopilot__session-tool-content {
+  opacity: 0;
+}
+
+.studio-autopilot__editor-pane--portal-open > .studio-autopilot__session-tool-header,
+.studio-autopilot__editor-pane--portal-open > .studio-autopilot__session-tool-content {
+  opacity: 1;
+  transition: opacity 130ms ease-out 90ms;
+}
+
+.studio-autopilot__file-portal-carrier {
+  filter: drop-shadow(0 1.4rem 2.8rem rgba(0, 0, 0, 0.58));
+  isolation: isolate;
+  pointer-events: none;
+  position: fixed;
+  transform-origin: center;
+  will-change: filter, opacity, transform;
+  z-index: 2700;
+}
+
+.studio-autopilot__file-portal-carrier-halo {
+  background:
+    radial-gradient(ellipse at center, rgba(102, 240, 255, 0.3), transparent 68%),
+    linear-gradient(135deg, rgba(109, 224, 255, 0.24), rgba(174, 111, 255, 0.22));
+  border: 1px solid rgba(185, 250, 255, 0.68);
+  border-radius: 1.35rem;
+  box-shadow:
+    0 0 1.4rem rgba(92, 231, 255, 0.48),
+    0 0 4rem rgba(135, 105, 255, 0.26),
+    inset 0 0 2rem rgba(146, 242, 255, 0.18);
+  inset: -0.65rem;
+  opacity: 0.72;
+  position: absolute;
+}
+
+.studio-autopilot__file-portal-carrier-plate {
+  background:
+    radial-gradient(circle at 68% 12%, rgba(151, 105, 255, 0.28), transparent 32%),
+    linear-gradient(145deg, rgba(7, 21, 42, 0.99), rgba(8, 39, 56, 0.98) 48%, rgba(13, 18, 45, 0.99));
+  border: 1px solid rgba(151, 246, 255, 0.86);
+  border-radius: 1rem;
+  box-shadow:
+    0 0 0 1px rgba(85, 196, 255, 0.18),
+    0 0 2.2rem rgba(77, 226, 255, 0.26),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 -4rem 8rem rgba(22, 8, 70, 0.18);
+  clip-path: inset(0 round 1rem);
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.studio-autopilot__file-portal-carrier-plate::before,
+.studio-autopilot__file-portal-carrier-plate::after {
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.studio-autopilot__file-portal-carrier-plate::before {
+  background:
+    linear-gradient(90deg, transparent 0 49.8%, rgba(129, 238, 255, 0.15) 50%, transparent 50.2%),
+    linear-gradient(transparent 0 49.8%, rgba(129, 238, 255, 0.12) 50%, transparent 50.2%),
+    repeating-linear-gradient(90deg, transparent 0 6.4rem, rgba(109, 225, 255, 0.04) 6.4rem 6.5rem),
+    repeating-linear-gradient(0deg, transparent 0 4.2rem, rgba(109, 225, 255, 0.035) 4.2rem 4.3rem);
+  mix-blend-mode: screen;
+  opacity: 0.66;
+}
+
+.studio-autopilot__file-portal-carrier-plate::after {
+  background: linear-gradient(110deg, transparent 30%, rgba(198, 251, 255, 0.14) 46%, transparent 62%);
+  transform: translateX(-92%);
+}
+
+.studio-autopilot__file-portal-carrier-chrome {
+  align-items: center;
+  border-bottom: 1px solid rgba(130, 238, 255, 0.24);
+  color: rgba(221, 251, 255, 0.78);
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.67rem;
+  gap: 0.7rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  height: 2.5rem;
+  letter-spacing: 0.08em;
+  padding: 0 1rem;
+  position: relative;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
+.studio-autopilot__file-portal-carrier-chrome span {
+  color: rgb(126, 238, 255);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.studio-autopilot__file-portal-carrier-chrome code {
+  font: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-autopilot__file-portal-carrier-chrome i {
+  background: rgb(130, 241, 255);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0.55rem rgba(104, 235, 255, 0.9),
+    0 0 1.5rem rgba(104, 235, 255, 0.54);
+  height: 0.42rem;
+  width: 0.42rem;
+}
+
+.studio-autopilot__file-portal-carrier-code {
+  align-content: center;
+  display: grid;
+  gap: clamp(0.26rem, 1.3vh, 0.72rem);
+  inset: 2.5rem 0 0;
+  overflow: hidden;
+  padding: clamp(1rem, 5%, 2.8rem) clamp(1.2rem, 7%, 4.4rem);
+  position: absolute;
+  z-index: 2;
+}
+
+.studio-autopilot__file-portal-carrier-code span {
+  background: linear-gradient(90deg, rgba(109, 232, 255, 0.2), rgba(223, 252, 255, 0.88) 16%, rgba(177, 129, 255, 0.56) 62%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 0 0.65rem rgba(95, 225, 255, 0.14);
+  height: clamp(2px, 0.34vh, 4px);
+  opacity: 0.74;
+  transform-origin: left;
+  width: 82%;
+}
+
+.studio-autopilot__file-portal-carrier-code span:nth-child(4n + 1) { margin-left: 4%; width: 64%; }
+.studio-autopilot__file-portal-carrier-code span:nth-child(4n + 2) { margin-left: 10%; width: 76%; }
+.studio-autopilot__file-portal-carrier-code span:nth-child(4n + 3) { margin-left: 10%; width: 51%; }
+.studio-autopilot__file-portal-carrier-code span:nth-child(4n) { width: 88%; }
+
+.studio-autopilot__file-portal-carrier-scan {
+  background: linear-gradient(180deg, transparent, rgba(129, 240, 255, 0.55), transparent);
+  height: 18%;
+  left: 0;
+  opacity: 0.58;
+  position: absolute;
+  right: 0;
+  top: -20%;
+  z-index: 3;
+}
+
+.studio-autopilot__file-portal-carrier-sparks {
+  inset: -1.2rem;
+  position: absolute;
+}
+
+.studio-autopilot__file-portal-carrier-sparks i {
+  background: rgb(150, 245, 255);
+  border-radius: 999px;
+  box-shadow: 0 0 0.8rem rgba(104, 235, 255, 0.95);
+  height: 0.18rem;
+  left: 50%;
+  opacity: 0;
+  position: absolute;
+  top: 50%;
+  transform-origin: 0 0;
+  width: clamp(1.4rem, 8vw, 5rem);
+}
+
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(1) { transform: rotate(0deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(2) { transform: rotate(45deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(3) { transform: rotate(90deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(4) { transform: rotate(135deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(5) { transform: rotate(180deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(6) { transform: rotate(225deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(7) { transform: rotate(270deg) translateX(42%); }
+.studio-autopilot__file-portal-carrier-sparks i:nth-child(8) { transform: rotate(315deg) translateX(42%); }
+
+.studio-autopilot__file-portal-carrier--origin,
+.studio-autopilot__file-portal-carrier--absorbing {
+  transform: var(--file-portal-carrier-origin-transform);
+}
+
+.studio-autopilot__file-portal-carrier--origin .studio-autopilot__file-portal-carrier-halo,
+.studio-autopilot__file-portal-carrier--origin .studio-autopilot__file-portal-carrier-plate,
+.studio-autopilot__file-portal-carrier--absorbing .studio-autopilot__file-portal-carrier-halo,
+.studio-autopilot__file-portal-carrier--absorbing .studio-autopilot__file-portal-carrier-plate {
+  border-radius: 0.08rem;
+  clip-path: var(--file-portal-carrier-source-clip);
+}
+
+.studio-autopilot__file-portal-carrier--destination {
+  transform: none;
+}
+
+.studio-autopilot__file-portal-carrier--flying {
+  animation: studio-autopilot-file-carrier-arrive var(--file-portal-carrier-duration) cubic-bezier(0.18, 0.78, 0.2, 1) both;
+}
+
+.studio-autopilot__file-portal-carrier--flying .studio-autopilot__file-portal-carrier-halo,
+.studio-autopilot__file-portal-carrier--flying .studio-autopilot__file-portal-carrier-plate {
+  animation: studio-autopilot-file-plate-arrive var(--file-portal-carrier-duration) cubic-bezier(0.18, 0.78, 0.2, 1) both;
+}
+
+.studio-autopilot__file-portal-carrier--flying .studio-autopilot__file-portal-carrier-plate::after,
+.studio-autopilot__file-portal-carrier--returning .studio-autopilot__file-portal-carrier-plate::after {
+  animation: studio-autopilot-file-carrier-shine 310ms ease-out 75ms both;
+}
+
+.studio-autopilot__file-portal-carrier--flying .studio-autopilot__file-portal-carrier-scan,
+.studio-autopilot__file-portal-carrier--returning .studio-autopilot__file-portal-carrier-scan {
+  animation: studio-autopilot-file-carrier-scan 380ms ease-in-out 60ms both;
+}
+
+.studio-autopilot__file-portal-carrier--flying .studio-autopilot__file-portal-carrier-sparks i,
+.studio-autopilot__file-portal-carrier--returning .studio-autopilot__file-portal-carrier-sparks i {
+  animation: studio-autopilot-file-carrier-spark 280ms ease-out 135ms both;
+}
+
+.studio-autopilot__file-portal-carrier--returning {
+  animation: studio-autopilot-file-carrier-return var(--file-portal-carrier-duration) cubic-bezier(0.55, 0, 0.76, 0.18) both;
+}
+
+.studio-autopilot__file-portal-carrier--returning .studio-autopilot__file-portal-carrier-halo,
+.studio-autopilot__file-portal-carrier--returning .studio-autopilot__file-portal-carrier-plate {
+  animation: studio-autopilot-file-plate-return var(--file-portal-carrier-duration) cubic-bezier(0.55, 0, 0.76, 0.18) both;
+}
+
+.studio-autopilot__file-portal-carrier--dissolving {
+  filter: brightness(1.65) drop-shadow(0 0 2.4rem rgba(109, 236, 255, 0.72));
+  opacity: 0;
+  transform: scale(1.018);
+  transition:
+    filter 140ms ease-out,
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+
+.studio-autopilot__file-portal-carrier--absorbing {
+  filter: brightness(1.9) drop-shadow(0 0 1.5rem rgba(109, 236, 255, 0.9));
+  opacity: 0;
+  transform: var(--file-portal-carrier-absorb-transform);
+  transition:
+    filter 110ms ease-in,
+    opacity 110ms ease-in,
+    transform 115ms cubic-bezier(0.7, 0, 1, 1);
+}
+
+.studio-autopilot__editor-pane--immersive > .studio-autopilot__session-tool-header {
+  background: rgba(4, 12, 25, 0.94);
+  border-bottom-color: rgba(117, 243, 255, 0.2);
+  padding-right: 4.5rem;
+}
+
+.studio-autopilot__file-portal-close {
+  border: 1px solid rgba(147, 244, 255, 0.52);
+  box-shadow:
+    0 0.65rem 1.8rem rgba(0, 0, 0, 0.5),
+    0 0 1.2rem rgba(89, 227, 255, 0.26);
+  position: absolute;
+  right: 0.72rem;
+  top: 0.58rem;
+  z-index: 30;
+}
+
+.studio-autopilot__file-portal-path {
+  color: rgba(220, 248, 255, 0.74);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-autopilot__file-portal-facade {
+  background:
+    linear-gradient(90deg, rgba(5, 15, 31, 0.96), rgba(21, 62, 83, 0.94), rgba(7, 18, 38, 0.97)),
+    repeating-linear-gradient(90deg, transparent 0 8%, rgba(117, 243, 255, 0.12) 8% 9%);
+  display: grid;
+  gap: 0.28rem;
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+  inset: 0;
+  opacity: 0;
+  padding: 4%;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 90ms ease-out;
+  z-index: 5;
+}
+
+.studio-autopilot__file-portal-facade span {
+  background:
+    linear-gradient(90deg, rgba(89, 227, 255, 0.12), rgba(255, 255, 255, 0.64), rgba(181, 156, 255, 0.18));
+  border-block: 1px solid rgba(117, 243, 255, 0.46);
+  box-shadow: 0 0 0.8rem rgba(89, 227, 255, 0.2);
+  transform: scaleX(0.82);
+}
+
+.studio-autopilot__file-portal-facade span:nth-child(3n + 1) { transform: scaleX(0.72); }
+.studio-autopilot__file-portal-facade span:nth-child(3n + 2) { transform: scaleX(0.9); }
+.studio-autopilot__file-portal-facade span:nth-child(3n) { transform: scaleX(0.8); }
+
+.studio-autopilot__editor-pane--portal-landing .studio-autopilot__file-portal-facade,
+.studio-autopilot__editor-pane--portal-closing .studio-autopilot__file-portal-facade {
+  opacity: 0.94;
+}
+
 .studio-autopilot__composer :deep(.studio-autopilot-prompt-textarea) {
   padding-bottom: 0;
 }
@@ -1464,6 +2293,124 @@ watch([
   50% {
     opacity: 1;
     transform: scale(1.1) translateZ(0);
+  }
+}
+
+@keyframes studio-autopilot-file-carrier-arrive {
+  0% {
+    filter: brightness(1.8) drop-shadow(0 0 1.6rem rgba(103, 237, 255, 0.9));
+    transform: var(--file-portal-carrier-origin-transform);
+  }
+
+  14% {
+    filter: brightness(1.35) drop-shadow(0 1rem 2.2rem rgba(0, 0, 0, 0.46));
+    transform: var(--file-portal-carrier-lift-transform);
+  }
+
+  56% {
+    filter: brightness(1.1) drop-shadow(0 1.6rem 3.4rem rgba(0, 0, 0, 0.64));
+    transform: var(--file-portal-carrier-mid-transform) rotateZ(-1.2deg);
+  }
+
+  84% {
+    filter: brightness(1.14) drop-shadow(0 1.2rem 2.8rem rgba(0, 0, 0, 0.58));
+    transform: scale(1.018);
+  }
+
+  100% {
+    filter: drop-shadow(0 1.4rem 2.8rem rgba(0, 0, 0, 0.58));
+    transform: none;
+  }
+}
+
+@keyframes studio-autopilot-file-carrier-return {
+  0% {
+    filter: drop-shadow(0 1.4rem 2.8rem rgba(0, 0, 0, 0.58));
+    transform: none;
+  }
+
+  16% {
+    filter: brightness(1.14) drop-shadow(0 1.2rem 2.8rem rgba(0, 0, 0, 0.58));
+    transform: scale(1.018);
+  }
+
+  56% {
+    filter: brightness(1.1) drop-shadow(0 1.6rem 3.4rem rgba(0, 0, 0, 0.64));
+    transform: var(--file-portal-carrier-mid-transform) rotateZ(1.2deg);
+  }
+
+  86% {
+    filter: brightness(1.35) drop-shadow(0 1rem 2.2rem rgba(0, 0, 0, 0.46));
+    transform: var(--file-portal-carrier-lift-transform);
+  }
+
+  100% {
+    filter: brightness(1.8) drop-shadow(0 0 1.6rem rgba(103, 237, 255, 0.9));
+    transform: var(--file-portal-carrier-origin-transform);
+  }
+}
+
+@keyframes studio-autopilot-file-plate-arrive {
+  0%,
+  16% {
+    border-radius: 0.08rem;
+    clip-path: var(--file-portal-carrier-source-clip);
+  }
+
+  46% {
+    border-radius: 0.5rem;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  100% {
+    border-radius: 1rem;
+    clip-path: inset(0 round 1rem);
+  }
+}
+
+@keyframes studio-autopilot-file-plate-return {
+  0% {
+    border-radius: 1rem;
+    clip-path: inset(0 round 1rem);
+  }
+
+  54% {
+    border-radius: 0.5rem;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  84%,
+  100% {
+    border-radius: 0.08rem;
+    clip-path: var(--file-portal-carrier-source-clip);
+  }
+}
+
+@keyframes studio-autopilot-file-carrier-shine {
+  0% { transform: translateX(-92%); }
+  100% { transform: translateX(108%); }
+}
+
+@keyframes studio-autopilot-file-carrier-scan {
+  0% { opacity: 0; top: -20%; }
+  22% { opacity: 0.7; }
+  100% { opacity: 0; top: 104%; }
+}
+
+@keyframes studio-autopilot-file-carrier-spark {
+  0% { opacity: 0; width: 0; }
+  32% { opacity: 0.9; }
+  100% { opacity: 0; width: clamp(2.8rem, 15vw, 10rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-autopilot__file-portal-carrier,
+  .studio-autopilot__file-portal-carrier *,
+  .studio-autopilot__editor-pane--portal-closing,
+  .studio-autopilot__editor-pane--portal-landing,
+  .studio-autopilot__editor-pane--portal-open {
+    animation: none !important;
+    transition: none;
   }
 }
 
