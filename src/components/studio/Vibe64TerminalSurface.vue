@@ -22,6 +22,19 @@
       </div>
 
       <div class="vibe64-terminal-surface__actions" @pointerdown.stop>
+        <v-btn
+          v-if="error"
+          :aria-controls="errorDetailsId"
+          :aria-expanded="String(errorDetailsOpen)"
+          :aria-label="errorDetailsToggleLabel"
+          class="vibe64-terminal-surface__error-toggle"
+          color="error"
+          :icon="mdiAlertCircleOutline"
+          size="small"
+          :title="errorDetailsToggleLabel"
+          variant="tonal"
+          @click="toggleErrorDetails"
+        />
         <slot name="actions-before" />
         <v-btn
           v-if="retryable"
@@ -29,7 +42,7 @@
           :loading="starting"
           size="small"
           variant="flat"
-          @click="$emit('retry')"
+          @click="retry"
         >
           Retry
         </v-btn>
@@ -71,23 +84,32 @@
       </div>
     </header>
 
+    <span v-if="error" class="d-sr-only" role="alert">
+      {{ errorTitle }}. {{ error }}
+    </span>
+
+    <div
+      v-if="error"
+      v-show="errorDetailsOpen"
+      :id="errorDetailsId"
+      class="vibe64-terminal-surface__error-details"
+    >
+      <StudioErrorNotice
+        :title="errorTitle"
+        :error="error"
+        compact
+      >
+        <template v-if="$slots['error-actions']" #actions>
+          <slot name="error-actions" />
+        </template>
+      </StudioErrorNotice>
+    </div>
+
     <div v-show="expanded" class="vibe64-terminal-surface__body">
       <div v-if="$slots['before-terminal']" class="vibe64-terminal-surface__before-terminal">
         <slot name="before-terminal" />
       </div>
       <div class="vibe64-terminal-surface__stage">
-        <StudioErrorNotice
-          v-if="error"
-          :title="errorTitle"
-          :error="error"
-          compact
-          overlay
-        >
-          <template v-if="$slots['error-actions']" #actions>
-            <slot name="error-actions" />
-          </template>
-        </StudioErrorNotice>
-
         <div class="vibe64-terminal-surface__overlay">
           <slot name="overlay" />
         </div>
@@ -117,7 +139,8 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, useId, watch } from "vue";
+import { mdiAlertCircleOutline } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 
 const props = defineProps({
@@ -215,7 +238,7 @@ const props = defineProps({
   }
 });
 
-defineEmits([
+const emit = defineEmits([
   "close",
   "copy",
   "drag-start",
@@ -225,9 +248,33 @@ defineEmits([
   "toggle-expanded"
 ]);
 
+const errorDetailsOpen = ref(false);
+const errorDetailsId = `vibe64-terminal-error-details-${useId()}`;
+const errorDetailsToggleLabel = computed(() => (
+  errorDetailsOpen.value ? "Hide terminal error details" : "Show terminal error details"
+));
 const hostStyle = computed(() => ({
   "--vibe64-terminal-host-height": props.height
 }));
+
+function toggleErrorDetails() {
+  errorDetailsOpen.value = !errorDetailsOpen.value;
+}
+
+function retry() {
+  errorDetailsOpen.value = false;
+  emit("retry");
+}
+
+watch(() => props.error, () => {
+  errorDetailsOpen.value = false;
+});
+
+watch(() => props.starting, (starting) => {
+  if (starting) {
+    errorDetailsOpen.value = false;
+  }
+});
 </script>
 
 <style scoped>
@@ -305,6 +352,11 @@ const hostStyle = computed(() => ({
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
+}
+
+.vibe64-terminal-surface__error-details {
+  margin-bottom: 0.55rem;
+  min-width: 0;
 }
 
 .vibe64-terminal-surface__stage {
