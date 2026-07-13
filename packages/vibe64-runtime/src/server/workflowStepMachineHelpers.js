@@ -255,18 +255,19 @@ function artifactText(value = "") {
 
 function commandFailureInteraction({
   prompt = "The command failed. Fix anything needed, then retry the command.",
+  response = "",
   title = "Command needs attention"
 } = {}) {
   return {
     fields: [
       {
         kind: "textarea",
-        label: "Retry note",
+        label: "Retry note for Codex",
         name: "response",
-        placeholder: "Optional note about what changed before retrying.",
+        placeholder: "Optional context for Codex if the retry still needs help.",
         required: false,
         rows: 3,
-        value: ""
+        value: normalizeText(response)
       }
     ],
     kind: "command_failure_response",
@@ -978,6 +979,26 @@ async function submitCommandFailureInput(context = {}, machine = {}) {
   }
 }
 
+function commandAttemptState(state = {}, details = {}) {
+  return machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+    ...details,
+    response: state.response,
+    source: state.source
+  });
+}
+
+function commandFailureState(context = {}, state = {}, details = {}) {
+  return machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+    actionId: context.actionId || state.actionId,
+    from: STEP_STATUS.ATTEMPTING_EXECUTION,
+    message: normalizeText(context.actionResult?.message),
+    output: normalizeText(context.actionResult?.output),
+    ...details,
+    response: state.response,
+    source: state.source
+  });
+}
+
 async function markCommandActionStarted(context = {}, machine = {}, actionIds = []) {
   if (!actionIds.includes(context.actionId)) {
     return;
@@ -988,8 +1009,8 @@ async function markCommandActionStarted(context = {}, machine = {}, actionIds = 
     case STEP_STATUS.READY:
     case STEP_STATUS.FAILED:
     case STEP_STATUS.WAITING_FOR_INPUT:
-      await writeState(context, machine, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
-        actionId: context.actionId
+      await writeState(context, machine, commandAttemptState(state, {
+        actionId: context.actionId,
       }));
       return;
 
@@ -1021,13 +1042,13 @@ async function writeCommandActionFinishedState(context = {}, machine = {}, {
         return;
       }
       if (actionCompleted(context.actionResult)) {
-        await writeState(context, machine, machineState(incompleteState));
+        await writeState(context, machine, machineState(incompleteState, {
+          response: state.response,
+          source: state.source
+        }));
         return;
       }
-      await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        from: STEP_STATUS.ATTEMPTING_EXECUTION,
-        message: normalizeText(context.actionResult?.message),
-        output: normalizeText(context.actionResult?.output),
+      await writeState(context, machine, commandFailureState(context, state, {
         title: failureTitle
       }));
       return;
@@ -1056,6 +1077,7 @@ function commandStepView(context = {}, machine = {}, state = {}, {
       return {
         interaction: commandFailureInteraction({
           prompt: state.message || failurePrompt,
+          response: state.response,
           title: state.title || failureTitle
         }),
         next: nextForSession(context.session, {
@@ -1088,7 +1110,9 @@ export {
   artifactText,
   assertAgentResultSource,
   assertInputMatchesCurrentState,
+  commandAttemptState,
   commandFailureInteraction,
+  commandFailureState,
   commandStepView,
   commandSucceeded,
   createChatWithAiMachine,

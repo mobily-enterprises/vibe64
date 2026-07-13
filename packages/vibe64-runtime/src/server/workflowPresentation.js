@@ -8,7 +8,8 @@ import {
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   VIBE64_CLIENT_CONTROL_STATE_FLAGS,
   normalizeVibe64ComposerMenuGroupPath,
-  VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
+  VIBE64_OPERATION_ROUTES as OPERATION_ROUTES,
+  vibe64RuntimePolicyFailure
 } from "@local/vibe64-core/shared";
 import {
   vibe64SessionDebugDurationMs,
@@ -758,11 +759,37 @@ function conversationFallbackIntent(action = {}) {
   });
 }
 
+function commandFailurePresentationInteraction(session = {}, interaction = {}) {
+  if (normalizeText(interaction.kind) !== "command_failure_response") {
+    return interaction;
+  }
+  const platformFailure = vibe64RuntimePolicyFailure({
+    message: session.stepMachine?.message,
+    output: session.stepMachine?.output
+  });
+  const response = normalizeText(session.stepMachine?.response);
+  return {
+    ...interaction,
+    ...(platformFailure ? { failure: platformFailure } : {}),
+    fields: (Array.isArray(interaction.fields) ? interaction.fields : []).map((field) => (
+      normalizeText(field?.name) === "response" && response
+        ? {
+            ...field,
+            value: response
+          }
+        : field
+    )),
+    prompt: platformFailure?.message || interaction.prompt,
+    title: platformFailure?.title || interaction.title
+  };
+}
+
 function interactionPresentation(session = {}) {
-  const interaction = currentStepDefinition(session).interaction;
-  if (!isPlainObject(interaction)) {
+  const configuredInteraction = currentStepDefinition(session).interaction;
+  if (!isPlainObject(configuredInteraction)) {
     return null;
   }
+  const interaction = commandFailurePresentationInteraction(session, configuredInteraction);
   const conversationIntentId = normalizeText(interaction.intentId);
   if (conversationIntentId || normalizeText(interaction.kind) === "conversation") {
     if (!conversationIntentId) {

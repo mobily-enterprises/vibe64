@@ -47,6 +47,7 @@ function normalizeVibe64ComposerMenuGroupPath(value = [], fallback = []) {
 }
 
 export * from "./codexAuth.js";
+export * from "./commandFailure.js";
 export * from "./emailConfig.js";
 
 export {

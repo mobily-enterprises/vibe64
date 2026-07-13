@@ -28,6 +28,7 @@ function workflowDriverVibe64User(session = {}) {
 }
 
 async function runComposerSessionExclusive({
+  ignoreMissingSession = false,
   operationName = "",
   runtime = null,
   session = null
@@ -39,12 +40,23 @@ async function runComposerSessionExclusive({
       value: await operation()
     };
   }
-  return runSessionExclusive.call(
-    runtime.store,
-    session.sessionId,
-    operationName,
-    operation
-  );
+  try {
+    return await runSessionExclusive.call(
+      runtime.store,
+      session.sessionId,
+      operationName,
+      operation
+    );
+  } catch (error) {
+    if (ignoreMissingSession && normalizeText(error?.code) === "vibe64_session_not_found") {
+      return {
+        acquired: true,
+        sessionClosed: true,
+        value: null
+      };
+    }
+    throw error;
+  }
 }
 
 function createComposerHandoffCoordinator({
@@ -98,6 +110,7 @@ function createComposerHandoffCoordinator({
     }
     return startTask(key, async () => {
       const exclusive = await runComposerSessionExclusive({
+        ignoreMissingSession: true,
         operationName: COMPOSER_DRAIN_OPERATION_NAMES[kind],
         runtime,
         session
@@ -203,6 +216,7 @@ function createComposerHandoffCoordinator({
     const key = taskKey("delivery", sessionId, handoffId);
     return startTask(key, async () => {
       const exclusive = await runComposerSessionExclusive({
+        ignoreMissingSession: true,
         operationName: "composer-handoff-delivery",
         runtime,
         session

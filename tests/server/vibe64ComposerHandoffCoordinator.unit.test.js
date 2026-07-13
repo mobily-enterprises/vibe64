@@ -284,3 +284,42 @@ test("exclusive message actions cannot race the cross-process delivery drain", a
     );
   });
 });
+
+test("queued composer work becomes a no-op after its session is closed", async () => {
+  let deliveries = 0;
+  let drains = 0;
+  const sessionNotFound = Object.assign(new Error("Unknown vibe64 session: closed-session"), {
+    code: "vibe64_session_not_found"
+  });
+  const runtime = {
+    store: {
+      async runSessionExclusive() {
+        throw sessionNotFound;
+      }
+    }
+  };
+  const session = {
+    sessionId: "closed-session"
+  };
+  const coordinator = createComposerHandoffCoordinator({
+    async activate() {},
+    async deliver() {
+      deliveries += 1;
+    },
+    async drainControls() {
+      drains += 1;
+    }
+  });
+
+  assert.equal(await coordinator.drain({
+    runtime,
+    session
+  }), null);
+  assert.equal(await coordinator.schedule({
+    handoff: handoff(),
+    runtime,
+    session
+  }), null);
+  assert.equal(drains, 0);
+  assert.equal(deliveries, 0);
+});

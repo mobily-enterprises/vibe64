@@ -17,7 +17,9 @@ import {
   artifactIsReady,
   artifactText,
   assertAgentResultSource,
+  commandAttemptState,
   commandFailureInteraction,
+  commandFailureState,
   commandStepView,
   commandSucceeded,
   currentStepAgentResultContract,
@@ -933,7 +935,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.READY:
       case STEP_STATUS.FAILED:
       case STEP_STATUS.WAITING_FOR_INPUT:
-        await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION));
+        await writeState(context, this, commandAttemptState(state));
         return;
 
       case STEP_STATUS.ATTEMPTING_EXECUTION:
@@ -956,11 +958,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
         await writeState(context, this, await sessionSourceCommandSucceeded(context)
           ? machineState(STEP_STATUS.DONE)
-          : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-              from: STEP_STATUS.ATTEMPTING_EXECUTION,
-              message: normalizeText(context.actionResult?.message),
-              output: normalizeText(context.actionResult?.output)
-            }));
+          : commandFailureState(context, state));
         return;
 
       case STEP_STATUS.DONE:
@@ -1054,7 +1052,7 @@ const dependenciesInstalledMachine = {
       case STEP_STATUS.READY:
       case STEP_STATUS.FAILED:
       case STEP_STATUS.WAITING_FOR_INPUT:
-        await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION));
+        await writeState(context, this, commandAttemptState(state));
         return;
 
       case STEP_STATUS.ATTEMPTING_EXECUTION:
@@ -1077,11 +1075,7 @@ const dependenciesInstalledMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
         await writeState(context, this, await commandSucceeded(context, dependenciesInstalledMetadataName)
           ? machineState(STEP_STATUS.DONE)
-          : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-              from: STEP_STATUS.ATTEMPTING_EXECUTION,
-              message: normalizeText(context.actionResult?.message),
-              output: normalizeText(context.actionResult?.output)
-            }));
+          : commandFailureState(context, state));
         return;
 
       case STEP_STATUS.DONE:
@@ -1404,21 +1398,21 @@ const createAndMergePullRequestMachine = {
       return;
     }
     if (context.actionId === "create_pr_on_gh") {
-      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+      await writeState(context, this, commandAttemptState(state, {
         actionId: context.actionId,
         phase: pullRequestPhase.CREATING_PR
       }));
       return;
     }
     if (context.actionId === "merge_pr") {
-      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+      await writeState(context, this, commandAttemptState(state, {
         actionId: context.actionId,
         phase: pullRequestPhase.MERGING
       }));
       return;
     }
     if (context.actionId === syncMainCheckoutActionId) {
-      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+      await writeState(context, this, commandAttemptState(state, {
         actionId: context.actionId,
         phase: pullRequestPhase.SYNCING_MAIN
       }));
@@ -1430,15 +1424,13 @@ const createAndMergePullRequestMachine = {
       await writeState(context, this, machineState(STEP_STATUS.DONE));
       return;
     }
+    const state = await readState(context, this);
     if (context.actionId === "create_pr_on_gh") {
       await writeState(context, this, await actionCreatedMetadata(context, "pr_url")
         ? machineState(STEP_STATUS.READY, {
             phase: pullRequestPhase.MERGE_READY
           })
-        : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-            from: STEP_STATUS.ATTEMPTING_EXECUTION,
-            message: normalizeText(context.actionResult?.message),
-            output: normalizeText(context.actionResult?.output),
+        : commandFailureState(context, state, {
             phase: pullRequestPhase.CREATING_PR,
             title: "Pull request needs attention"
           }));
@@ -1449,10 +1441,7 @@ const createAndMergePullRequestMachine = {
         ? machineState(STEP_STATUS.READY, {
             phase: pullRequestPhase.SYNC_READY
           })
-        : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-            from: STEP_STATUS.ATTEMPTING_EXECUTION,
-            message: normalizeText(context.actionResult?.message),
-            output: normalizeText(context.actionResult?.output),
+        : commandFailureState(context, state, {
             phase: pullRequestPhase.MERGING,
             title: "Merge needs attention"
           }));
@@ -1461,10 +1450,7 @@ const createAndMergePullRequestMachine = {
     if (context.actionId === syncMainCheckoutActionId) {
       await writeState(context, this, await actionCreatedMetadata(context, mainCheckoutSyncedMetadataName)
         ? machineState(STEP_STATUS.DONE)
-        : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-            from: STEP_STATUS.ATTEMPTING_EXECUTION,
-            message: normalizeText(context.actionResult?.message),
-            output: normalizeText(context.actionResult?.output),
+        : commandFailureState(context, state, {
             phase: pullRequestPhase.SYNCING_MAIN,
             title: "Git cache refresh needs attention"
           }));

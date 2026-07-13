@@ -30,7 +30,9 @@ import {
   VIBE64_ACTION_DISPATCH_ROUTES,
   VIBE64_CLIENT_CONTROL_ACTIONS,
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
-  VIBE64_CLIENT_CONTROL_STATE_FLAGS
+  VIBE64_CLIENT_CONTROL_STATE_FLAGS,
+  VIBE64_RUNTIME_POLICY_FAILURE_KIND,
+  vibe64CommandFailureHelpPrompt
 } from "@local/vibe64-core/shared";
 import {
   _testing as workflowRegistryTesting
@@ -78,6 +80,23 @@ const clientControlActions = Object.freeze(new Set(Object.values(VIBE64_CLIENT_C
 const clientControlIconTokens = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ICON_TOKENS)));
 const clientControlStateFlags = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_STATE_FLAGS)));
 const builtinIntentTypes = Object.freeze(new Set(["action", "continue", "reject"]));
+
+test("command failure help prompts carry the command, error, output, and retry note", () => {
+  const prompt = vibe64CommandFailureHelpPrompt({
+    actionLabel: "Save changes",
+    attemptedCommand: "git add -A && git commit",
+    error: "Vibe64 could not start Git.",
+    note: "Check the platform runtime declaration.",
+    output: "Declared runtimes: (none)."
+  });
+
+  assert.match(prompt, /Action:\nSave changes/u);
+  assert.match(prompt, /Command:\ngit add -A && git commit/u);
+  assert.match(prompt, /Error:\nVibe64 could not start Git\./u);
+  assert.match(prompt, /Terminal output:\nDeclared runtimes: \(none\)\./u);
+  assert.match(prompt, /My retry note:\nCheck the platform runtime declaration\./u);
+  assert.match(prompt, /Do not discard or abandon my work\./u);
+});
 
 test("current step conversation text keeps a last-resort completion fallback", () => {
   assert.equal(currentStepInputConversationText({
@@ -3196,6 +3215,81 @@ test("vibe64 runtime keeps failed worktree creation retryable", async () => {
   });
 });
 
+test("vibe64 runtime identifies platform runtime failures and preserves retry context", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          commit_changes: true
+        }
+      }),
+      targetRoot
+    });
+    const sessionId = "commit_runtime_policy_failure";
+    await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: sourceMetadata(targetRoot, sessionId),
+      sessionId
+    });
+
+    const ready = await runtime.getSession(sessionId);
+    await recordStepMachineActionStarted(runtime, ready, "commit_changes");
+    const attempting = await runtime.getSession(sessionId);
+    const runtimePolicyOutput = [
+      "Vibe64 runtime error: git requires runtime git.",
+      "Declared runtimes: (none).",
+      "The command did not declare a runtime that provides git, so host git was blocked."
+    ].join("\n");
+    await recordStepMachineActionFinished(runtime, attempting, "commit_changes", {
+      message: "Save changes failed with exit code 127.",
+      output: runtimePolicyOutput,
+      status: "blocked"
+    });
+
+    const failed = await runtime.getSession(sessionId);
+    assert.equal(failed.stepMachine.message, "Save changes failed with exit code 127.");
+    assert.equal(failed.stepMachine.output, runtimePolicyOutput);
+    assert.equal(failed.presentation.screen.title, "Vibe64 needs attention");
+    assert.equal(
+      failed.presentation.screen.message,
+      "Vibe64 could not start Git. Your work is safe. This is a Vibe64 platform configuration error, not a problem with your project."
+    );
+    assert.equal(failed.presentation.screen.input.kind, "command_failure_response");
+    assert.equal(failed.presentation.screen.input.failure.kind, VIBE64_RUNTIME_POLICY_FAILURE_KIND);
+    assert.equal(failed.presentation.screen.input.failure.tool, "git");
+    assert.equal(failed.presentation.screen.input.submitLabel, "Retry command");
+    assert.equal(failed.presentation.screen.input.fields[0].label, "Retry note for Codex");
+
+    const retryReady = await runtime.submitCurrentStepInput(sessionId, {
+      fields: {
+        response: "Please inspect why Vibe64 could not start Git."
+      },
+      kind: "user_response",
+      source: "ui",
+      stepId: "changes_committed",
+      stepStatus: "waiting_for_input"
+    });
+    assert.equal(retryReady.stepMachine.status, "ready");
+    assert.equal(retryReady.stepMachine.response, "Please inspect why Vibe64 could not start Git.");
+
+    await recordStepMachineActionStarted(runtime, retryReady, "commit_changes");
+    const retryAttempt = await runtime.getSession(sessionId);
+    assert.equal(retryAttempt.stepMachine.response, "Please inspect why Vibe64 could not start Git.");
+    await recordStepMachineActionFinished(runtime, retryAttempt, "commit_changes", {
+      message: "Save changes failed with exit code 127.",
+      output: runtimePolicyOutput,
+      status: "blocked"
+    });
+
+    const failedAgain = await runtime.getSession(sessionId);
+    assert.equal(failedAgain.stepMachine.response, "Please inspect why Vibe64 could not start Git.");
+    assert.equal(
+      failedAgain.presentation.screen.input.fields[0].value,
+      "Please inspect why Vibe64 could not start Git."
+    );
+  });
+});
+
 test("vibe64 runtime treats source_path as the session clone completion signal", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -4278,7 +4372,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /- current user-visible page: \/orders\/42\?tab=history/u);
     assert.match(prompt, /- current page title: Order 42/u);
     assert.match(prompt, /- current page Codex URL: http:\/\/vibe64-launch-agent:4103\/orders\/42\?tab=history/u);
-    assert.match(prompt, /vibe64-preview restart --wait/u);
+    assert.match(prompt, /vibe64-preview ensure --wait --json/u);
     assert.match(prompt, /Never start another development server/u);
     assert.match(prompt, /even if a different port appears free/u);
     assert.match(prompt, /Do not work around it by spinning up another server/u);

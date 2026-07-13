@@ -18,9 +18,9 @@ import {
   repositoryCommandProfileForSession
 } from "./repositoryCommandProfile.js";
 import {
-  completedMetadataSpec,
-  normalizeHookCommandResult,
-  worktreeCommandSpec
+  gitCompletedMetadataSpec,
+  gitWorktreeCommandSpec,
+  normalizeHookCommandResult
 } from "./shellHelpers.js";
 
 function mergePrScript({
@@ -185,14 +185,14 @@ async function mergePrTerminalSpec({
     : null;
   const beforeMergeScript = normalizeText(hookResult?.script);
   const values = configValues(config);
-  return worktreeCommandSpec({
+  return gitWorktreeCommandSpec({
     commandPreview: "gh pr merge",
     label: "Merge PR",
     metadata: {
       pr_merged: "yes"
     },
     requiresHostGithubCredentials: true,
-    runtimes: hookResult?.runtimes,
+    runtimes: ["gh", ...(hookResult?.runtimes || [])],
     script: mergePrScript({
       beforeMergeScript,
       mergeMethod: values.github_pr_merge_method || "merge",
@@ -230,7 +230,7 @@ async function syncMainCheckoutTerminalSpec({
   const cachePath = normalizeText(session.metadata?.source_cache_path) ||
     projectGitCachePath(context, syncRoot);
   return {
-    ...completedMetadataSpec({
+    ...gitCompletedMetadataSpec({
       commandPreview: "git fetch --prune origin",
       cwd: syncRoot,
       label: "Refresh Git cache",
@@ -264,7 +264,7 @@ async function projectSyncMainCheckoutTerminalSpec({
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
   const cachePath = projectGitCachePath(context, syncRoot);
   return {
-    ...completedMetadataSpec({
+    ...gitCompletedMetadataSpec({
       commandPreview: "git fetch --prune origin",
       cwd: syncRoot,
       label: "Refresh Git cache",

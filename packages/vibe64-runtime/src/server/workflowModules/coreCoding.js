@@ -45,7 +45,9 @@ import {
   assertAgentResultSource,
   artifactIsReady,
   artifactText,
+  commandAttemptState,
   commandFailureInteraction,
+  commandFailureState,
   commandSucceeded,
   currentStepAgentResultContract,
   disableAction,
@@ -1516,7 +1518,8 @@ const workDefinitionMachine = {
     }
 
     if (context.actionId === "create_issue_on_gh") {
-      await writeState(context, this, machineState(STEP_STATUS.ATTEMPTING_EXECUTION, {
+      const state = await readState(context, this);
+      await writeState(context, this, commandAttemptState(state, {
         phase: workDefinitionPhase.CREATING_ISSUE
       }));
       return;
@@ -1538,10 +1541,9 @@ const workDefinitionMachine = {
         }));
         return;
       }
-      await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        from: STEP_STATUS.ATTEMPTING_EXECUTION,
+      const state = await readState(context, this);
+      await writeState(context, this, commandFailureState(context, state, {
         message: normalizeText(context.actionResult?.message) || "Could not create the GitHub issue.",
-        output: normalizeText(context.actionResult?.output),
         phase: workDefinitionPhase.CREATING_ISSUE
       }));
       return;

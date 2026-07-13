@@ -18,7 +18,7 @@ import {
   repositoryCommandProfileForSession
 } from "./repositoryCommandProfile.js";
 import {
-  worktreeCommandSpec
+  gitWorktreeCommandSpec
 } from "./shellHelpers.js";
 
 function localSourceCommitAcceptanceScript() {
@@ -270,7 +270,11 @@ function commitChangesScript(session = {}) {
     "if [ -z \"$COMMIT_TITLE\" ]; then",
     `  COMMIT_TITLE="Vibe64 session ${session.sessionId}"`,
     "fi",
-    "if [ -n \"$(git status --short)\" ]; then",
+    "if ! GIT_STATUS=\"$(git status --short)\"; then",
+    "  printf '[studio] Git could not inspect the working tree. No commit was attempted.\\n' >&2",
+    "  exit 1",
+    "fi",
+    "if [ -n \"$GIT_STATUS\" ]; then",
     "  printf '[studio] Committing changes: %s\\n' \"$COMMIT_TITLE\"",
     "  git add -A",
     "  git commit -m \"$COMMIT_TITLE\"",
@@ -307,12 +311,13 @@ async function commitChangesTerminalSpec({ session = {} } = {}) {
       message: "Local source commit requires main_checkout_root metadata."
     };
   }
-  return worktreeCommandSpec({
+  return gitWorktreeCommandSpec({
     applySuccessFacts: commitChangesSuccessMetadataFromFacts,
     commandPreview: "git add -A && git commit",
     label: "Commit changes",
     mounts: await commitChangesMounts(repositoryProfile, session),
     requiresHostGithubCredentials: repositoryProfile.githubAuthRequired,
+    runtimes: repositoryProfile.githubAuthRequired ? ["gh"] : [],
     script: commitChangesScript(session),
     session
   });

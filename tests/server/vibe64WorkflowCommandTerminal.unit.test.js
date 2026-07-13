@@ -39,7 +39,8 @@ import {
   updateCodeIndexTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/worktreeDependencies";
 import {
-  normalizeHookCommandResult
+  normalizeHookCommandResult,
+  requiredCommandRuntimes
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/shellHelpers";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
@@ -216,6 +217,14 @@ test("workflow hook normalization preserves runtimes", () => {
   assert.deepEqual(normalizeHookCommandResult("npm test", {
     runtimes: ["node22"]
   }).runtimes, ["node22"]);
+});
+
+test("managed command runtimes add required tools once", () => {
+  assert.deepEqual(requiredCommandRuntimes(["git"], ["gh", " git ", "node22", "gh"]), [
+    "git",
+    "gh",
+    "node22"
+  ]);
 });
 
 test("workflow command specs preserve hook runtimes", async () => {
@@ -427,41 +436,73 @@ test("workflow command specs describe intent without gateway execution policy", 
       targetRoot: sourcePath
     };
     const specs = [
-      await commitChangesTerminalSpec({
-        session: worktreeSession
-      }),
-      await createPrOnGhTerminalSpec({
-        session: worktreeSession
-      }),
-      await mergePrTerminalSpec({
-        session: {
-          ...worktreeSession,
-          metadata: {
-            ...worktreeSession.metadata,
-            pr_url: "https://github.com/example/project/pull/12"
-          }
-        },
-        targetRoot: sourcePath
-      }),
-      await syncMainCheckoutTerminalSpec({
-        context: {
-          projectRuntimeRoot: projectRuntimeRoot(targetRoot)
-        },
-        session: {
-          ...worktreeSession,
-          metadata: {
-            ...worktreeSession.metadata,
-            pr_merged: "yes"
-          }
-        },
-        targetRoot
-      })
+      {
+        expectedRuntimes: ["git", "gh"],
+        spec: await commitChangesTerminalSpec({
+          session: worktreeSession
+        })
+      },
+      {
+        expectedRuntimes: ["gh"],
+        spec: await createIssueOnGhTerminalSpec({
+          session: worktreeSession
+        })
+      },
+      {
+        expectedRuntimes: ["git", "gh"],
+        spec: await createPrOnGhTerminalSpec({
+          session: worktreeSession
+        })
+      },
+      {
+        expectedRuntimes: ["git", "gh"],
+        spec: await mergePrTerminalSpec({
+          session: {
+            ...worktreeSession,
+            metadata: {
+              ...worktreeSession.metadata,
+              pr_url: "https://github.com/example/project/pull/12"
+            }
+          },
+          targetRoot: sourcePath
+        })
+      },
+      {
+        expectedRuntimes: ["git"],
+        spec: await syncMainCheckoutTerminalSpec({
+          context: {
+            projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+          },
+          session: {
+            ...worktreeSession,
+            metadata: {
+              ...worktreeSession.metadata,
+              pr_merged: "yes"
+            }
+          },
+          targetRoot
+        })
+      },
+      {
+        expectedRuntimes: ["git"],
+        spec: await projectSyncMainCheckoutTerminalSpec({
+          context: {
+            projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+          },
+          targetRoot
+        })
+      }
     ];
 
-    for (const spec of specs) {
+    for (const { expectedRuntimes, spec } of specs) {
       assert.equal(spec.ok, true, spec.message || "");
+      assert.deepEqual(spec.runtimes, expectedRuntimes, spec.commandPreview);
       assertWorkflowCommandSpecHasNoGatewayPolicy(spec);
     }
+
+    const commitScript = specs[0].spec.args.at(-1);
+    assert.match(commitScript, /if ! GIT_STATUS="\$\(git status --short\)"; then/u);
+    assert.match(commitScript, /Git could not inspect the working tree\. No commit was attempted\./u);
   });
 });
 
@@ -1836,7 +1877,7 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
     });
 
     assert.equal(spec.ok, true);
-    assert.deepEqual(spec.runtimes, ["node22"]);
+    assert.deepEqual(spec.runtimes, ["git", "gh", "node22"]);
     const script = spec.args.at(-1);
     assert.match(script, /printf '\[studio\] Checking before merge\.\\n'/u);
     assert.match(script, /npm run verify/u);

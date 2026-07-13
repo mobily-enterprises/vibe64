@@ -25,6 +25,22 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(commandSpyIndex).toBeLessThan(firstPanePageIndex);
   });
 
+  it("keeps every command failure recoverable without trapping the chat composer", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+
+    expect(componentSource).toContain("Ask Codex for help");
+    expect(componentSource).toContain("Fix it with Codex");
+    expect(componentSource).toContain("Back to chat");
+    expect(componentSource).toContain(":retryable=\"commandTerminalFailed && !commandFailureResponseVisible\"");
+    expect(componentSource).toContain(":show-close=\"commandTerminalFailed\"");
+    expect(componentSource).toContain("@close=\"dismissCommandFailureTerminal\"");
+    expect(composableSource).toContain("actions: commandFailureResponseVisible.value ? [] : props.actions?.currentActions || []");
+    expect(composableSource).toContain("!(commandFailureResponseVisible.value && commandFailureChatMode.value)");
+    expect(composableSource).toContain("vibe64CommandFailureHelpPrompt(context)");
+    expect(composableSource).toContain("if (retryNote && commandTerminalFailed.value)");
+  });
+
   it("keeps the composer as one surface across selected and passive modes", () => {
     const source = fs.readFileSync(componentPath, "utf8");
     const composerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";

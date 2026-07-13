@@ -24,7 +24,7 @@ import {
 } from "./repositoryCommandProfile.js";
 import {
   completedMetadataSpec,
-  worktreeCommandSpec
+  gitWorktreeCommandSpec
 } from "./shellHelpers.js";
 
 function createIssueOnGhScript(session = {}) {
@@ -191,6 +191,7 @@ async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
     cwd: sessionSourcePath(session) || session.targetRoot || process.cwd(),
     label: "Create issue on GH",
     requiresHostGithubCredentials: true,
+    runtimes: ["gh"],
     script: createIssueOnGhScript(session)
   });
 }
@@ -209,11 +210,12 @@ async function createPrOnGhTerminalSpec({ session = {} } = {}) {
       message: "Create the session clone before creating the pull request."
     };
   }
-  return worktreeCommandSpec({
+  return gitWorktreeCommandSpec({
     applySuccessFacts: createPrSuccessMetadataFromFacts,
     commandPreview: "gh pr create",
     label: "Create PR on GH",
     requiresHostGithubCredentials: true,
+    runtimes: ["gh"],
     script: createPrOnGhScript(session),
     session
   });

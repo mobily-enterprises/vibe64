@@ -19,6 +19,13 @@ import {
 
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
 
+function requiredCommandRuntimes(required = [], configured = []) {
+  return [...new Set([
+    ...(Array.isArray(required) ? required : []),
+    ...(Array.isArray(configured) ? configured : [])
+  ].map(normalizeText).filter(Boolean))];
+}
+
 async function gitOutput(cwd, args, {
   timeout = GIT_COMMAND_TIMEOUT_MS
 } = {}) {
@@ -159,6 +166,13 @@ function completedMetadataSpec({
   };
 }
 
+function gitCompletedMetadataSpec(options = {}) {
+  return completedMetadataSpec({
+    ...options,
+    runtimes: requiredCommandRuntimes(["git"], options.runtimes)
+  });
+}
+
 async function worktreeCommandSpec({
   applySuccessFacts = null,
   commandPreview = "",
@@ -196,6 +210,13 @@ async function worktreeCommandSpec({
     runtimeConfigPhases,
     runtimes,
     script
+  });
+}
+
+async function gitWorktreeCommandSpec(options = {}) {
+  return worktreeCommandSpec({
+    ...options,
+    runtimes: requiredCommandRuntimes(["git"], options.runtimes)
   });
 }
 
@@ -273,6 +294,8 @@ async function requiredHookCommand({
 
 export {
   completedMetadataSpec,
+  gitCompletedMetadataSpec,
+  gitWorktreeCommandSpec,
   gitWorktreeStatus,
   isGitWorktree,
   normalizeHookCommandResult,
@@ -282,6 +305,7 @@ export {
   readCurrentCommit,
   readCurrentCommitIfPresent,
   readCurrentRemoteUrlIfPresent,
+  requiredCommandRuntimes,
   requiredHookCommand,
   worktreeCommandSpec
 };

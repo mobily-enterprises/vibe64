@@ -16,7 +16,9 @@ import {
   mdiStopCircleOutline
 } from "@mdi/js";
 import {
-  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
+  VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES,
+  vibe64CommandFailureHelpPrompt,
+  vibe64RuntimePolicyFailure
 } from "@local/vibe64-core/shared";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
@@ -375,6 +377,9 @@ function useVibe64AutopilotView(props, emit) {
   const terminalFailureFix = useVibe64TerminalFailureFixCommand({
     sessionsApiPath: () => props.sessionsApiPath
   });
+  const commandFailureChatMode = ref(false);
+  const commandFailureHelpSending = ref(false);
+  const commandFailureTerminalDismissed = ref(false);
   const commandSpyExpanded = ref(false);
   const screenControlFormRef = ref(null);
   const rightPaneTab = ref("preview");
@@ -387,6 +392,7 @@ function useVibe64AutopilotView(props, emit) {
   const optimisticComposerTurn = ref(null);
   const optimisticComposerMessages = ref([]);
   const remoteComposerSubmission = ref(null);
+  let commandFailureSubmissionManagesRetry = false;
 
   function composerControlTargetSubmissionId() {
     const handoff = props.session?.composerHandoff;
@@ -477,7 +483,9 @@ function useVibe64AutopilotView(props, emit) {
     onSaved: async () => {
       await props.refreshSessionData();
       await nextTick();
-      await runNextOperation();
+      if (!commandFailureSubmissionManagesRetry) {
+        await runNextOperation();
+      }
     },
     sessionsApiPath: () => props.sessionsApiPath,
     session: computed(() => props.session)
@@ -551,6 +559,26 @@ function useVibe64AutopilotView(props, emit) {
     stepInput.visible &&
     !displayRunning.value
   ));
+  const commandFailureResponseVisible = computed(() => Boolean(
+    stepInputFormVisible.value &&
+    stepInput.interaction?.kind === "command_failure_response"
+  ));
+  const commandFailureIdentity = computed(() => (
+    commandFailureResponseVisible.value || commandTerminalFailed.value
+      ? [
+          sessionId.value,
+          props.session?.currentStep || "",
+          props.session?.stepMachine?.status || "",
+          commandResult.value?.actionId || props.session?.stepMachine?.actionId || "",
+          commandResult.value?.terminalSessionId || "",
+          commandResult.value?.output || props.session?.stepMachine?.output || ""
+        ].join("::")
+      : ""
+  ));
+  const stepInputComposerActive = computed(() => Boolean(
+    stepInputFormVisible.value &&
+    !(commandFailureResponseVisible.value && commandFailureChatMode.value)
+  ));
   const stepInputTimelineDisplayFields = computed(() => {
     if (!stepInputFormVisible.value) {
       return [];
@@ -576,9 +604,16 @@ function useVibe64AutopilotView(props, emit) {
     }
     return "";
   });
+  const commandRuntimePolicyFailure = computed(() => vibe64RuntimePolicyFailure({
+    error: commandTerminalError.value,
+    message: props.session?.stepMachine?.message,
+    output: commandOutput.value || commandResult.value?.output || props.session?.stepMachine?.output
+  }));
   const commandFailureSummary = computed(() => (
+    commandRuntimePolicyFailure.value?.message ||
     commandTerminalError.value ||
     failure.value?.error ||
+    props.session?.stepMachine?.message ||
     "The command did not finish properly."
   ));
   const sessionDetailState = computed(() => {
@@ -616,7 +651,7 @@ function useVibe64AutopilotView(props, emit) {
   });
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
-      ? "Command needs attention."
+      ? commandRuntimePolicyFailure.value?.title || "Command needs attention."
       : "Command running.";
   });
   const commandTerminalSummary = computed(() => commandPreview.value || displayStatusText.value || "Running command.");
@@ -725,9 +760,11 @@ function useVibe64AutopilotView(props, emit) {
     immediate: true
   });
   const commandSpyVisible = computed(() => Boolean(
-    commandTerminalVisible.value ||
     commandRunning.value ||
-    commandTerminalFailed.value
+    (
+      (commandTerminalVisible.value || commandTerminalFailed.value) &&
+      !commandFailureTerminalDismissed.value
+    )
   ));
   const screenStopAction = computed(() => String(screenState.value.stopAction || ""));
   const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_preview") && props.reportPreview?.visible));
@@ -830,12 +867,13 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlFields.value.map((field) => field.name).join("|")
   ].join(":"));
   const workflowScreenControls = computed(() => currentStepWorkflowControls({
-    actions: props.actions?.currentActions || [],
+    actions: commandFailureResponseVisible.value ? [] : props.actions?.currentActions || [],
     interaction: stepInput.interaction,
     session: props.session
   }));
   const stepInputFallbackWorkflowControls = computed(() => {
     if (
+      commandFailureResponseVisible.value ||
       !stepInputFormVisible.value ||
       stepInputHasWorkflowIntents.value ||
       workflowScreenControls.value.length
@@ -1162,7 +1200,7 @@ function useVibe64AutopilotView(props, emit) {
   const composerUserResponseControlsVisible = computed(() => Boolean(
     selectedScreenControlVisible.value ||
     workflowButtonControls.value.length ||
-    stepInputFormVisible.value
+    stepInputComposerActive.value
   ));
   const composerMenuItems = computed(() => {
     const menu = props.session?.presentation?.composerMenu;
@@ -1189,7 +1227,7 @@ function useVibe64AutopilotView(props, emit) {
     composerVisible: composerVisible.value,
     selectedScreenAnswerChoicesVisible: composerSelectedScreenAnswerChoicesVisible.value,
     selectedScreenControlVisible: composerSelectedScreenControlVisible.value,
-    stepInputFormVisible: stepInputFormVisible.value
+    stepInputFormVisible: stepInputComposerActive.value
   }));
   const passiveComposerWorkflowControls = computed(() => (
     !agentStopVisible.value &&
@@ -1202,7 +1240,7 @@ function useVibe64AutopilotView(props, emit) {
     !sessionControlsBlocking.value &&
     passiveComposerShouldShow({
       selectedScreenControlVisible: selectedScreenControlVisible.value,
-      stepInputFormVisible: stepInputFormVisible.value
+      stepInputFormVisible: stepInputComposerActive.value
     })
   ));
   const controlSurfaceMode = computed(() => composerControlSurfaceMode({
@@ -1755,11 +1793,109 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function submitCommandFailureResponse() {
-    const saved = await stepInput.submit();
+    const retryNote = String(stepInput.values?.response || "").trim();
+    commandFailureSubmissionManagesRetry = true;
+    let saved = false;
+    try {
+      saved = await stepInput.submit();
+    } finally {
+      commandFailureSubmissionManagesRetry = false;
+    }
     if (saved) {
+      commandFailureChatMode.value = false;
+      commandFailureTerminalDismissed.value = false;
       await retry();
+      await nextTick();
+      if (retryNote && commandTerminalFailed.value) {
+        await askCodexAboutCommandFailure({
+          allowOutsideFailureCard: true,
+          note: retryNote
+        });
+      }
     }
     return saved;
+  }
+
+  function commandFailureHelpContext({
+    note = ""
+  } = {}) {
+    const actionId = String(
+      commandResult.value?.actionId ||
+      props.session?.stepMachine?.actionId ||
+      ""
+    ).trim();
+    const action = currentActionById(actionId);
+    return {
+      actionLabel: String(
+        commandResult.value?.actionLabel ||
+        action?.label ||
+        displayStatusText.value ||
+        "Command"
+      ).trim(),
+      attemptedCommand: String(
+        commandResult.value?.attemptedCommand ||
+        commandPreview.value ||
+        ""
+      ).trim(),
+      error: commandFailureSummary.value,
+      note: String(note || stepInput.values?.response || "").trim(),
+      output: String(
+        commandResult.value?.output ||
+        commandOutput.value ||
+        props.session?.stepMachine?.output ||
+        ""
+      ).trim()
+    };
+  }
+
+  async function askCodexAboutCommandFailure(options = {}) {
+    if (
+      (!commandFailureResponseVisible.value && options.allowOutsideFailureCard !== true) ||
+      commandFailureHelpSending.value
+    ) {
+      return false;
+    }
+    const context = commandFailureHelpContext(options);
+    const prompt = vibe64CommandFailureHelpPrompt(context);
+    if (!prompt) {
+      return false;
+    }
+    const displayMessage = context.note || `Help me recover from the failed ${context.actionLabel} command.`;
+    commandFailureHelpSending.value = true;
+    try {
+      const accepted = await props.sendAgentMessage({
+        agentSettings: requestAgentSettings.value,
+        displayFields: {
+          conversationRequest: displayMessage
+        },
+        fields: {
+          conversationRequest: prompt
+        },
+        message: prompt
+      }) !== false;
+      if (accepted) {
+        commandFailureChatMode.value = true;
+        commandFailureTerminalDismissed.value = true;
+      }
+      return accepted;
+    } finally {
+      commandFailureHelpSending.value = false;
+    }
+  }
+
+  function backToChatFromCommandFailure() {
+    commandFailureChatMode.value = true;
+    dismissCommandFailureTerminal();
+  }
+
+  function returnToCommandFailureRecovery() {
+    commandFailureChatMode.value = false;
+    commandFailureTerminalDismissed.value = false;
+  }
+
+  function dismissCommandFailureTerminal() {
+    commandFailureTerminalDismissed.value = true;
+    commandSpyExpanded.value = false;
   }
 
   async function saveCurrentStepInputForControl(control = {}) {
@@ -2190,11 +2326,12 @@ function useVibe64AutopilotView(props, emit) {
       await submitCommandFailureResponse();
       return;
     }
+    commandFailureTerminalDismissed.value = false;
     await retry();
   }
 
   async function requestCommandAiFix() {
-    if (!commandTerminalFailed.value) {
+    if (!commandTerminalFailed.value && !commandFailureResponseVisible.value) {
       return;
     }
     openFixCodexDialog(await terminalFailureFix.request({
@@ -2471,6 +2608,14 @@ function useVibe64AutopilotView(props, emit) {
     immediate: true
   });
 
+  watch(commandFailureIdentity, (identity, previousIdentity) => {
+    if (identity === previousIdentity) {
+      return;
+    }
+    commandFailureChatMode.value = false;
+    commandFailureTerminalDismissed.value = false;
+  });
+
   return {
     Vibe64FixCodexDialog,
     TargetScriptsPanel,
@@ -2480,12 +2625,14 @@ function useVibe64AutopilotView(props, emit) {
     activateControl,
     activateWorkflowButtonControl,
     activeSessionTool,
+    askCodexAboutCommandFailure,
     askCodexAboutSystemContext,
     artifactControlFormVisible,
     artifactWorkflowActionsVisible,
     backgroundTaskError,
     bottomComposerVisible,
     bottomWorkflowActionsVisible,
+    backToChatFromCommandFailure,
     backToDashboard,
     backToSystemFromEditor,
     canSubmitSelectedControl,
@@ -2500,6 +2647,9 @@ function useVibe64AutopilotView(props, emit) {
     agentStopEnabled,
     agentStopVisible,
     commandFailureSummary,
+    commandFailureChatMode,
+    commandFailureHelpSending,
+    commandFailureResponseVisible,
     commandOverlayTitle,
     commandPreview,
     commandResult,
@@ -2512,6 +2662,7 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminal,
     commandTerminalSummary,
     commandTerminalText,
+    dismissCommandFailureTerminal,
     composerControlAgentControlsVisible,
     composerControlAttachTextarea,
     composerControlAttachmentsEnabled,
@@ -2577,6 +2728,7 @@ function useVibe64AutopilotView(props, emit) {
     passiveComposerWorkflowControls,
     recoverStuckStep,
     reportPreviewVisible,
+    returnToCommandFailureRecovery,
     requestAgentInterrupt,
     requestCommandAiFix,
     resendOptimisticComposerTurn,
