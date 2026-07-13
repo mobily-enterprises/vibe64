@@ -4249,7 +4249,6 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
       workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
     writeSessionUiSyncPreviewState({
-      href: "http://127.0.0.1:4103/orders/42?tab=history",
       originId: "tab-1",
       projectSlug: "demo",
       route: "/orders/42?tab=history",

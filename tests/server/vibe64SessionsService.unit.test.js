@@ -835,10 +835,8 @@ test("preview state broadcasting records the page displayed for the session agen
   });
 
   const result = await service.broadcastSessionPreviewState("session-1", {
-    href: "http://127.0.0.1:4103/orders/42?tab=history#latest",
     originId: "tab-1",
     projectSlug: "beepollen",
-    reason: "pushState",
     route: "/orders/42?tab=history#latest",
     title: "Order 42"
   });
@@ -847,25 +845,15 @@ test("preview state broadcasting records the page displayed for the session agen
     projectSlug: "beepollen",
     route: "https://example.com/orders/42"
   });
-  const mismatchedHref = await service.broadcastSessionPreviewState("session-1", {
-    href: "http://127.0.0.1:4103/not-the-page",
-    originId: "tab-1",
-    projectSlug: "beepollen",
-    route: "/orders/42"
-  });
 
   assert.equal(result.ok, true);
-  assert.equal(result.preview.href, "http://127.0.0.1:4103/orders/42?tab=history#latest");
   assert.equal(result.preview.route, "/orders/42?tab=history#latest");
   assert.equal(result.preview.title, "Order 42");
-  assert.equal(result.preview.reason, "pushState");
   assert.match(result.preview.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
   const inspected = await service.inspectSession("session-1", {
     projectSlug: "beepollen"
   });
-  assert.deepEqual(inspected.uiSync.preview, mismatchedHref.preview);
-  assert.equal(inspected.uiSync.preview.href, "");
-  assert.equal(inspected.uiSync.preview.route, "/orders/42");
+  assert.deepEqual(inspected.uiSync.preview, result.preview);
   assert.deepEqual(invalid, {
     ok: false,
     error: "Preview page updates require a session, project, route, and origin."

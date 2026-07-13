@@ -402,9 +402,7 @@ function projectAppRoutePrefix(projectSlug = "") {
   return normalizedProjectSlug ? `/app/project/${encodeURIComponent(normalizedProjectSlug)}` : "";
 }
 
-function normalizedLocalRoute(routeFullPath = "", {
-  maxLength = 2048
-} = {}) {
+function normalizedLocalRoute(routeFullPath = "", maxLength = 2048) {
   const route = normalizedInputText(routeFullPath);
   if (
     !route ||
@@ -427,9 +425,7 @@ function normalizedLocalRoute(routeFullPath = "", {
 }
 
 function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
-  const route = normalizedLocalRoute(routeFullPath, {
-    maxLength: 1024
-  });
+  const route = normalizedLocalRoute(routeFullPath, 1024);
   const projectPrefix = projectAppRoutePrefix(projectSlug);
   if (!route || !projectPrefix) {
     return "";
@@ -446,27 +442,6 @@ function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
       return "";
     }
     return `${pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return "";
-  }
-}
-
-function normalizedPreviewHref(href = "", route = "") {
-  const value = normalizedInputText(href);
-  if (!value || value.length > 4096) {
-    return "";
-  }
-  try {
-    const parsed = new URL(value);
-    if (
-      !["http:", "https:"].includes(parsed.protocol) ||
-      parsed.username ||
-      parsed.password ||
-      normalizedLocalRoute(`${parsed.pathname}${parsed.search}${parsed.hash}`) !== route
-    ) {
-      return "";
-    }
-    return parsed.toString();
   } catch {
     return "";
   }
@@ -3150,10 +3125,8 @@ function createService({
     async broadcastSessionPreviewState(sessionId, input = {}) {
       const route = normalizedLocalRoute(input?.route);
       const preview = {
-        href: normalizedPreviewHref(input?.href, route),
         originId: normalizedInputText(input?.originId),
         projectSlug: normalizedInputText(input?.projectSlug),
-        reason: normalizedInputText(input?.reason).slice(0, 64),
         route,
         sessionId: normalizedInputText(sessionId),
         title: normalizedInputText(input?.title).slice(0, 256),

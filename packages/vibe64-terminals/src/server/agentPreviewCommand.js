@@ -250,7 +250,6 @@ function parsePreviewCommandArgs(args = []) {
   const values = Array.isArray(args) ? args.map((arg) => String(arg || "").trim()).filter(Boolean) : [];
   const command = values.find((arg) => !arg.startsWith("-")) || "";
   return {
-    args: values,
     command,
     json: hasFlag(values, "--json"),
     lines: normalizeLogLines(optionValue(values, "--lines")),
@@ -290,14 +289,13 @@ function previewEndpoint(value = "") {
   }
   try {
     const parsed = new URL(url);
-    const defaultPort = parsed.protocol === "https:" ? 443 : parsed.protocol === "http:" ? 80 : 0;
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return null;
+    }
+    const defaultPort = parsed.protocol === "https:" ? 443 : 80;
     return {
-      host: parsed.host,
       hostname: parsed.hostname,
-      origin: parsed.origin,
-      path: `${parsed.pathname}${parsed.search}${parsed.hash}`,
       port: Number(parsed.port) || defaultPort,
-      protocol: parsed.protocol.replace(/:$/u, ""),
       url: parsed.toString()
     };
   } catch {
@@ -319,8 +317,7 @@ function previewPageUrl(baseUrl = "", route = "") {
 }
 
 function previewCurrentPage(previewState = {}, {
-  agentUrl = "",
-  browserUrl = ""
+  agentUrl = ""
 } = {}) {
   const route = normalizeText(previewState?.route);
   if (!route) {
@@ -328,10 +325,7 @@ function previewCurrentPage(previewState = {}, {
   }
   return {
     agentUrl: previewPageUrl(agentUrl, route),
-    browserUrl: previewPageUrl(browserUrl, route),
-    href: normalizeText(previewState?.href),
     observedAt: normalizeText(previewState?.updatedAt),
-    projectSlug: normalizeText(previewState?.projectSlug),
     route,
     title: normalizeText(previewState?.title)
   };
@@ -374,16 +368,12 @@ function previewStatusSummary(status = {}, {
   const browserEndpoint = previewEndpoint(browserUrl);
   return {
     currentPage: previewCurrentPage(previewState, {
-      agentUrl: agentEndpoint?.url,
-      browserUrl: browserEndpoint?.url
+      agentUrl: agentEndpoint?.url
     }),
     diagnostics: previewDiagnostics(status),
     endpoints: {
       agent: agentEndpoint,
-      browser: browserEndpoint,
-      previewProxy: normalizeText(previewTarget.href) ? {
-        url: normalizeText(previewTarget.href)
-      } : null
+      browser: browserEndpoint
     },
     launchTargetId: normalizeText(lastLaunchTarget.id || activeMetadata.launchTargetId),
     ready: previewReady(status),
@@ -392,12 +382,7 @@ function previewStatusSummary(status = {}, {
   };
 }
 
-function statusStdout(summary = {}, {
-  json = false
-} = {}) {
-  if (json) {
-    return JSON.stringify(summary, null, 2) + "\n";
-  }
+function previewSummaryLines(summary = {}) {
   return [
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
     `Preview running: ${summary.terminal?.running ? "yes" : "no"}`,
@@ -406,12 +391,19 @@ function statusStdout(summary = {}, {
     summary.endpoints?.agent?.hostname ? `Agent host: ${summary.endpoints.agent.hostname}` : "",
     summary.endpoints?.agent?.port ? `Agent port: ${summary.endpoints.agent.port}` : "",
     summary.endpoints?.browser?.url ? `Browser URL: ${summary.endpoints.browser.url}` : "",
-    summary.endpoints?.previewProxy?.url ? `Preview proxy URL: ${summary.endpoints.previewProxy.url}` : "",
     summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : "Current page: not observed",
     summary.currentPage?.agentUrl ? `Current page agent URL: ${summary.currentPage.agentUrl}` : "",
     summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     `Stale: ${summary.stale ? "yes" : "no"}`
-  ].filter(Boolean).join("\n") + "\n";
+  ].filter(Boolean);
+}
+
+function statusStdout(summary = {}, {
+  json = false
+} = {}) {
+  return json
+    ? JSON.stringify(summary, null, 2) + "\n"
+    : previewSummaryLines(summary).join("\n") + "\n";
 }
 
 function previewLogTail(output = "", lines = DEFAULT_PREVIEW_LOG_LINES) {
@@ -425,27 +417,27 @@ function previewLogTail(output = "", lines = DEFAULT_PREVIEW_LOG_LINES) {
   return tail && trailingNewline ? `${tail}\n` : tail;
 }
 
-function logsStdout(status = {}, summary = {}, {
+function logsStdout(status = {}, {
   json = false,
   lines = DEFAULT_PREVIEW_LOG_LINES
 } = {}) {
   const output = previewLogTail(status?.activeTerminal?.output, lines);
   const payload = {
-    diagnostics: summary.diagnostics,
-    launchTargetId: summary.launchTargetId,
+    diagnostics: previewDiagnostics(status),
+    launchTargetId: launchTargetIdFromStatus(status),
     lineLimit: normalizeLogLines(lines),
     output,
-    terminal: summary.terminal
+    terminal: previewTerminal(status)
   };
   if (json) {
     return JSON.stringify(payload, null, 2) + "\n";
   }
   const header = [
-    summary.terminal?.id
-      ? `Managed preview logs: ${summary.terminal.id} (${summary.terminal.status || "unknown"})`
+    payload.terminal?.id
+      ? `Managed preview logs: ${payload.terminal.id} (${payload.terminal.status || "unknown"})`
       : "Managed preview logs: no terminal",
     `Showing up to ${payload.lineLimit} lines.`,
-    summary.diagnostics?.log ? `Preview diagnostic log: ${summary.diagnostics.log}` : ""
+    payload.diagnostics?.log ? `Preview diagnostic log: ${payload.diagnostics.log}` : ""
   ].filter(Boolean).join("\n");
   return `${header}\n\n${output || "No managed preview server output is available."}${output.endsWith("\n") ? "" : "\n"}`;
 }
@@ -458,14 +450,8 @@ function restartStdout(summary = {}, {
   }
   return [
     `Restarted preview${summary.launchTargetId ? ` ${summary.launchTargetId}` : ""}.`,
-    `Preview ready: ${summary.ready ? "yes" : "no"}`,
-    summary.endpoints?.agent?.url ? `Agent URL: ${summary.endpoints.agent.url}` : "",
-    summary.endpoints?.agent?.hostname ? `Agent host: ${summary.endpoints.agent.hostname}` : "",
-    summary.endpoints?.agent?.port ? `Agent port: ${summary.endpoints.agent.port}` : "",
-    summary.endpoints?.browser?.url ? `Browser URL: ${summary.endpoints.browser.url}` : "",
-    summary.endpoints?.previewProxy?.url ? `Preview proxy URL: ${summary.endpoints.previewProxy.url}` : "",
-    summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : ""
-  ].filter(Boolean).join("\n") + "\n";
+    ...previewSummaryLines(summary)
+  ].join("\n") + "\n";
 }
 
 function launchInputFromStatus(status = {}) {
@@ -540,14 +526,9 @@ function createAgentPreviewCommandService({
   readSessionUiState = readSessionUiSyncStateForSession
 } = {}) {
   function statusSummary(status = {}, sessionId = "") {
-    let uiState = null;
-    try {
-      uiState = typeof readSessionUiState === "function"
-        ? readSessionUiState(sessionId)
-        : null;
-    } catch {
-      uiState = null;
-    }
+    const uiState = typeof readSessionUiState === "function"
+      ? readSessionUiState(sessionId)
+      : null;
     return previewStatusSummary(status, {
       previewState: uiState?.preview || null
     });
@@ -573,7 +554,7 @@ function createAgentPreviewCommandService({
     if (!sessionId) {
       return finish(responseError("Vibe64 preview command session id is required.", "vibe64_agent_preview_command_session_required"));
     }
-    if (!launchTarget || typeof launchTarget.launchStatus !== "function" || typeof launchTarget.startTerminal !== "function") {
+    if (!launchTarget || typeof launchTarget.launchStatus !== "function") {
       return finish(responseError("Vibe64 preview control is not available.", "vibe64_agent_preview_command_unavailable"));
     }
     if (!parsed.command || parsed.command === "help" || parsed.command === "--help" || parsed.command === "-h") {
@@ -612,7 +593,7 @@ function createAgentPreviewCommandService({
       return finish({
         exitCode: 0,
         ok: true,
-        stdout: logsStdout(status, statusSummary(status, sessionId), {
+        stdout: logsStdout(status, {
           json: parsed.json,
           lines: parsed.lines
         })
@@ -623,6 +604,9 @@ function createAgentPreviewCommandService({
         exitCode: 2,
         stderr: usageText()
       }));
+    }
+    if (typeof launchTarget.startTerminal !== "function") {
+      return finish(responseError("Vibe64 preview restart is not available.", "vibe64_agent_preview_command_restart_unavailable"));
     }
 
     const beforeStatus = await launchTarget.launchStatus(sessionId);
@@ -652,15 +636,14 @@ function createAgentPreviewCommandService({
       });
     }
     let status = await launchTarget.launchStatus(sessionId);
-    let timedOut = false;
     if (parsed.wait) {
       const waited = await waitForPreviewReady(launchTarget, sessionId, {
         terminalSessionId: started.id,
         timeoutMs: parsed.timeoutMs
       });
       status = waited.status || status;
-      timedOut = waited.timeout === true;
       if (!waited.ok) {
+        const timedOut = waited.timeout === true;
         const summary = statusSummary(status || {}, sessionId);
         return finish(responseError(
           timedOut

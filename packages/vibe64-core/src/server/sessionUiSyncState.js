@@ -26,25 +26,15 @@ function readSessionUiSyncState(input = {}) {
   return key ? cloneSessionUiSyncRecord(sessionUiSyncStates.get(key)) : null;
 }
 
-function sessionUiSyncRecordUpdatedAt(record = {}) {
-  return Math.max(
-    ...[
-      record?.preview?.updatedAt,
-      record?.sourceEditor?.updatedAt,
-      record?.viewState?.updatedAt
-    ].map((value) => Date.parse(normalizedSessionUiSyncValue(value)) || 0)
-  );
-}
-
 function readSessionUiSyncStateForSession(sessionId = "") {
   const normalizedSessionId = normalizedSessionUiSyncValue(sessionId);
   if (!normalizedSessionId) {
     return null;
   }
-  const matches = [...sessionUiSyncStates.values()]
-    .filter((record) => normalizedSessionUiSyncValue(record?.sessionId) === normalizedSessionId)
-    .sort((left, right) => sessionUiSyncRecordUpdatedAt(right) - sessionUiSyncRecordUpdatedAt(left));
-  return cloneSessionUiSyncRecord(matches[0]);
+  const state = [...sessionUiSyncStates.values()].find(
+    (record) => normalizedSessionUiSyncValue(record?.sessionId) === normalizedSessionId
+  );
+  return cloneSessionUiSyncRecord(state);
 }
 
 function writeSessionUiSyncPatch(input = {}, patch = {}) {
@@ -85,10 +75,8 @@ function writeSessionUiSyncViewState(viewState = {}) {
 
 function writeSessionUiSyncPreviewState(previewState = {}) {
   const state = {
-    href: normalizedSessionUiSyncValue(previewState?.href),
     originId: normalizedSessionUiSyncValue(previewState?.originId),
     projectSlug: normalizedSessionUiSyncValue(previewState?.projectSlug),
-    reason: normalizedSessionUiSyncValue(previewState?.reason),
     route: normalizedSessionUiSyncValue(previewState?.route),
     sessionId: normalizedSessionUiSyncValue(previewState?.sessionId),
     title: normalizedSessionUiSyncValue(previewState?.title),

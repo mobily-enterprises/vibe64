@@ -11,26 +11,12 @@ import {
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewOpeningOverlayVisible,
-  previewPageStateFromMessage,
   previewRouteFromUrl,
   previewUrlForRoute,
   redactPreviewDebugDetails
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
-  it("publishes the exact page reported by the managed preview bridge", () => {
-    expect(previewPageStateFromMessage({
-      href: "http://127.0.0.1:4103/orders/42?tab=history#latest",
-      reason: "pushState",
-      title: "Order 42"
-    }, "http://studio.local/preview/orders/42")).toEqual({
-      href: "http://127.0.0.1:4103/orders/42?tab=history#latest",
-      reason: "pushState",
-      route: "/orders/42?tab=history#latest",
-      title: "Order 42"
-    });
-  });
-
   it("keeps launch lifecycle text stable during background polling", () => {
     expect(launchPreviewEmptyText({
       loading: true,

@@ -1143,9 +1143,7 @@ function useVibe64LaunchControls({
         vibe64SessionPreviewStatePath(sessionsApiPath.value, currentSessionId),
         {
           body: vibe64RealtimeOriginPayload({
-            href: String(previewState?.href || "").trim(),
             projectSlug: currentProjectSlug,
-            reason: String(previewState?.reason || "").trim(),
             route: String(previewState?.route || "").trim(),
             title: String(previewState?.title || "").trim()
           }),

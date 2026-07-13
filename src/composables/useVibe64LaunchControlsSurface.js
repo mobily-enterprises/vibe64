@@ -126,17 +126,6 @@ function previewUrlForRoute(route = "", baseUrl = "") {
   }
 }
 
-function previewPageStateFromMessage(data = {}, frameUrl = "") {
-  const href = previewUrlWithoutDisplayParams(data?.href || data?.url || frameUrl);
-  const route = previewRouteFromUrl(href || frameUrl);
-  return route ? {
-    href,
-    reason: String(data?.reason || "location"),
-    route,
-    title: String(data?.title || "")
-  } : null;
-}
-
 function previewAddressDisplayText(value = "", {
   displayBaseUrl = "",
   previewBaseUrl = ""
@@ -1078,14 +1067,6 @@ function useVibe64LaunchControlsSurface(props) {
     return previewMessageType(value) === PREVIEW_LOCATION_MESSAGE_TYPE;
   }
 
-  function publishPreviewPage(data = {}, frameUrl = "") {
-    const state = previewPageStateFromMessage(data, frameUrl);
-    if (!state) {
-      return;
-    }
-    void publishPreviewState(state);
-  }
-  
   function handlePreviewLocationMessage(event) {
     if (!isPreviewBridgeMessage(event?.data)) {
       return;
@@ -1118,7 +1099,10 @@ function useVibe64LaunchControlsSurface(props) {
       setPreviewVisitedUrl(frameUrl, {
         reason: String(event?.data?.reason || "")
       });
-      publishPreviewPage(event.data, frameUrl);
+      void publishPreviewState({
+        route: previewRouteFromUrl(frameUrl),
+        title: String(event?.data?.title || "")
+      });
     }
   }
   
@@ -1508,7 +1492,6 @@ export {
   launchToolbarDockShouldShow,
   previewOpeningOverlayVisible,
   previewAddressDisplayText,
-  previewPageStateFromMessage,
   previewRouteFromUrl,
   previewUrlForRoute,
   redactPreviewDebugDetails,

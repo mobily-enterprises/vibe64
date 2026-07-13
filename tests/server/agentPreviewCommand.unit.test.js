@@ -131,25 +131,14 @@ test("agent preview command restarts the managed launch target with saved input"
     diagnostics: null,
     endpoints: {
       agent: {
-        host: "vibe64-launch-agent:4100",
         hostname: "vibe64-launch-agent",
-        origin: "http://vibe64-launch-agent:4100",
-        path: "/app",
         port: 4100,
-        protocol: "http",
         url: "http://vibe64-launch-agent:4100/app"
       },
       browser: {
-        host: "127.0.0.1:4100",
         hostname: "127.0.0.1",
-        origin: "http://127.0.0.1:4100",
-        path: "/app",
         port: 4100,
-        protocol: "http",
         url: "http://127.0.0.1:4100/app"
-      },
-      previewProxy: {
-        url: "/preview/session/app"
       }
     },
     launchTargetId: "jskit-dev",
@@ -199,17 +188,12 @@ test("agent preview status exposes the managed endpoint, current page, and serve
       async launchStatus(receivedSessionId) {
         assert.equal(receivedSessionId, sessionId);
         return status;
-      },
-      async startTerminal() {
-        throw new Error("status and logs must not restart the preview");
       }
     },
     readSessionUiState(receivedSessionId) {
       assert.equal(receivedSessionId, sessionId);
       return {
         preview: {
-          href: "http://127.0.0.1:4103/orders/42?tab=history",
-          projectSlug: "demo",
           route: "/orders/42?tab=history",
           title: "Order 42",
           updatedAt: "2026-07-13T02:01:00.000Z"
@@ -227,7 +211,6 @@ test("agent preview status exposes the managed endpoint, current page, and serve
   assert.equal(statusPayload.endpoints.agent.port, 4103);
   assert.equal(statusPayload.currentPage.route, "/orders/42?tab=history");
   assert.equal(statusPayload.currentPage.agentUrl, "http://vibe64-launch-agent:4103/orders/42?tab=history");
-  assert.equal(statusPayload.currentPage.browserUrl, "http://127.0.0.1:4103/orders/42?tab=history");
   assert.equal(statusPayload.currentPage.title, "Order 42");
   assert.deepEqual(statusPayload.diagnostics, {
     latest: "/workspace/session-7/preview-last.json",
