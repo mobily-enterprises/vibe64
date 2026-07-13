@@ -186,6 +186,28 @@ test("preview public origin supports env-driven localhost hosted routing config"
   assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
 });
 
+test("preview public origin isolates localhost instances by public port", () => {
+  const input = {
+    env: {
+      VIBE64_PUBLIC_PROTOCOL: "http"
+    },
+    publicProtocol: "http",
+    sessionId: "2026-07-07_12-21-30"
+  };
+  const port3000Origin = previewPublicOriginForLaunch({
+    ...input,
+    publicHost: "merc.users.localhost:3000"
+  });
+  const port3001Origin = previewPublicOriginForLaunch({
+    ...input,
+    publicHost: "merc.users.localhost:3001"
+  });
+
+  assert.notEqual(new URL(port3000Origin).hostname, new URL(port3001Origin).hostname);
+  assert.match(port3000Origin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
+  assert.match(port3001Origin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3001$/u);
+});
+
 test("web launch target port allocation reserves ports during concurrent spec creation", async () => {
   const fixture = await createLaunchSpecFixture();
   const preferredPort = 48000 + crypto.randomInt(1000);

@@ -312,14 +312,20 @@ test("launch preview proxy inherits the host XDG runtime directory when scoped e
   });
 });
 
-test("launch preview public socket path supports localhost HTTP origins", async () => {
+test("launch preview public socket path isolates localhost HTTP origins by port", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   try {
     assert.equal(
       previewPublicSocketPath("http://v64preview-abcd1234--workspace.localhost:3000", {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }),
-      path.join(socketDir, "v64preview-abcd1234--workspace.sock")
+      path.join(socketDir, "v64preview-abcd1234--workspace--p3000.sock")
+    );
+    assert.equal(
+      previewPublicSocketPath("http://v64preview-abcd1234--workspace.localhost:3001", {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }),
+      path.join(socketDir, "v64preview-abcd1234--workspace--p3001.sock")
     );
   } finally {
     await rm(socketDir, {
@@ -345,18 +351,21 @@ test("launch preview public socket path defaults under XDG runtime dir", () => {
   );
 });
 
-test("launch preview proxy prunes only stale sockets that match its production namespace", async () => {
+test("launch preview proxy prunes only stale sockets that match its managed namespace", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-prune-"));
   const staleSocketPath = path.join(socketDir, "v64preview-aaaaaaaaaaaa--workspace.sock");
+  const staleLocalSocketPath = path.join(socketDir, "v64preview-dddddddddddd--workspace--p3000.sock");
   const liveSocketPath = path.join(socketDir, "v64preview-bbbbbbbbbbbb--workspace.sock");
   const regularPath = path.join(socketDir, "v64preview-cccccccccccc--workspace.sock");
   const unrelatedPath = path.join(socketDir, "somebody-else.sock");
   const staleServer = createServer();
+  const staleLocalServer = createServer();
   const liveServer = createServer();
   try {
     await Promise.all([
       listenOnUnixSocket(staleServer, staleSocketPath),
-      listenOnUnixSocket(liveServer, liveSocketPath)
+      listenOnUnixSocket(liveServer, liveSocketPath),
+      listenOnUnixSocket(staleLocalServer, staleLocalSocketPath)
     ]);
     await writeFile(regularPath, "not a socket");
     await writeFile(unrelatedPath, "unrelated");
@@ -368,8 +377,9 @@ test("launch preview proxy prunes only stale sockets that match its production n
       socketHasLiveListener: async (socketPath) => socketPath === liveSocketPath
     });
 
-    assert.equal(result.removed, 1);
+    assert.equal(result.removed, 2);
     await assert.rejects(() => lstat(staleSocketPath), (error) => error?.code === "ENOENT");
+    await assert.rejects(() => lstat(staleLocalSocketPath), (error) => error?.code === "ENOENT");
     assert.equal((await lstat(liveSocketPath)).isSocket(), true);
     assert.equal((await lstat(regularPath)).isFile(), true);
     assert.equal((await lstat(unrelatedPath)).isFile(), true);
@@ -377,6 +387,7 @@ test("launch preview proxy prunes only stale sockets that match its production n
   } finally {
     await Promise.all([
       closeServer(staleServer),
+      closeServer(staleLocalServer),
       closeServer(liveServer)
     ]);
     await rm(socketDir, {

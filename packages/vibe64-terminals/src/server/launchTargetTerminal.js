@@ -2155,23 +2155,36 @@ function previewPublicOriginForLaunch({
     return "";
   }
   const workspace = studioHostMatch.workspace;
-  const baseDomain = normalizePublicDomain(
-    previewPublicDomain ||
-      env?.[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] ||
-      previewPublicBaseDomain(studioHostMatch.baseDomain)
-  );
-  if (!baseDomain) {
-    return "";
-  }
   const protocol = normalizePublicProtocol(
     env?.[VIBE64_PUBLIC_PROTOCOL_ENV] ||
       publicProtocol ||
       DEFAULT_PUBLIC_PROTOCOL
   );
-  const hash = stableHash([
+  const configuredPreviewDomain = String(
+    previewPublicDomain || env?.[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] || ""
+  ).trim();
+  let baseDomain = normalizePublicDomain(
+    configuredPreviewDomain ||
+      previewPublicBaseDomain(studioHostMatch.baseDomain)
+  );
+  if (!configuredPreviewDomain) {
+    const requestPort = publicDomainPort(normalizePublicDomain(publicHost), protocol);
+    if (requestPort) {
+      baseDomain = `${baseDomain}:${requestPort}`;
+    }
+  }
+  if (!baseDomain) {
+    return "";
+  }
+  const hashInput = [
     terminalProjectScopeKey(),
     sessionId
-  ].join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 12);
+  ];
+  const publicPort = publicDomainPort(baseDomain, protocol);
+  if (publicPort) {
+    hashInput.push(`public-port:${publicPort}`);
+  }
+  const hash = stableHash(hashInput.join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 12);
   if (!hash) {
     return "";
   }
@@ -2224,6 +2237,14 @@ function normalizePublicDomain(value = "") {
     return new URL(text.includes("://") ? text : `http://${text}`).host.replace(/\.+$/u, "");
   } catch {
     return text.replace(/^\/*/u, "").replace(/\/*$/u, "").replace(/\.+$/u, "");
+  }
+}
+
+function publicDomainPort(domain = "", protocol = "https") {
+  try {
+    return new URL(`${protocol}://${domain}`).port;
+  } catch {
+    return "";
   }
 }
 

@@ -60,7 +60,7 @@ const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_ID
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
-const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.sock$/u;
+const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -1695,13 +1695,15 @@ function normalizePreviewPublicOrigin(value = "") {
 
 function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   const origin = normalizePreviewPublicOrigin(publicOrigin);
-  const host = new URL(origin).hostname;
+  const url = new URL(origin);
+  const host = url.hostname;
   const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)--([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.|$)/u.exec(host);
   if (!match) {
     throw new Error("Launch preview public origin must use the <preview>--<workspace> host format.");
   }
   const socketDir = previewProxySocketDir(env);
-  return path.join(socketDir, `${match[1]}--${match[2]}.sock`);
+  const portSuffix = url.port ? `--p${url.port}` : "";
+  return path.join(socketDir, `${match[1]}--${match[2]}${portSuffix}.sock`);
 }
 
 function previewProxySocketDir(env = process.env) {
