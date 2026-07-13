@@ -11,6 +11,9 @@ import {
   normalizeSubsystemCapability,
   normalizeSubsystemDefinition
 } from "../../../shared/subsystemContract.js";
+import {
+  normalizeSystemConnection
+} from "../../../shared/systemConnectionContract.js";
 
 const JSKIT_SYSTEM_ADAPTER_VERSION = 3;
 const JSKIT_FILE_CITY_CAMPUSES = Object.freeze([
@@ -278,7 +281,20 @@ function packageSubsystemCapabilities(packageEntry, evidenceIds = []) {
       origin: "derived",
       sourcePath: provider.entrypoint,
       evidenceIds
-    }))
+    })),
+    ...["client", "server"].flatMap((side) => (
+      (packageEntry.containerTokens?.[side] || []).map((token) => ({
+        id: `jskit:capability:container-token:${packageEntry.packageId}:${side}:${token}`,
+        kind: "container-token",
+        direction: "provides",
+        title: humanize(token),
+        value: token,
+        description: `${side} container token declared by JSKIT metadata`,
+        origin: "derived",
+        sourcePath: packageEntry.descriptorPath,
+        evidenceIds
+      }))
+    ))
   ];
 }
 
@@ -811,11 +827,134 @@ function compileFiles(extractionFiles = []) {
     lines: Number(file.lines) || 0,
     packageId: String(file.packageId || ""),
     executionSide: String(file.executionSide || "unknown"),
-    imports: Array.isArray(file.imports) ? file.imports : [],
+    imports: Array.isArray(file.imports)
+      ? file.imports.map((record) => ({
+          ...record,
+          symbols: [...new Set((record.symbols || []).map(String).filter(Boolean))].sort()
+        }))
+      : [],
+    tokenBindings: Array.isArray(file.tokenBindings) ? file.tokenBindings : [],
     calls: Array.isArray(file.calls) ? file.calls : [],
     routes: Array.isArray(file.routes) ? file.routes : [],
     implementedEntityIds: []
   }));
+}
+
+function packageSubsystemId(packageId = "") {
+  return packageId ? `jskit:subsystem:package:${packageId}` : "";
+}
+
+function connectionEndpoint({ filePath = "", packageId = "", externalId = "" } = {}) {
+  return {
+    subsystemId: packageSubsystemId(packageId),
+    fileId: filePath ? `file:${normalizePath(filePath)}` : "",
+    externalId
+  };
+}
+
+function compileSystemConnections({ extraction, files, evidence }) {
+  const connections = new Map();
+  for (const file of files) {
+    const source = connectionEndpoint({
+      filePath: file.path,
+      packageId: file.packageId
+    });
+    for (const importRecord of file.imports || []) {
+      const target = importRecord.classification === "external-package" && importRecord.targetPackageId
+        ? connectionEndpoint({ externalId: `package:${importRecord.targetPackageId}` })
+        : importRecord.targetFile || importRecord.targetPackageId
+          ? connectionEndpoint({
+            filePath: importRecord.targetFile,
+            packageId: importRecord.targetPackageId
+          })
+          : connectionEndpoint({ externalId: `unresolved:${importRecord.specifier}` });
+      const connection = normalizeSystemConnection({
+        id: stableId("connection", "import", file.path, importRecord.line, importRecord.specifier),
+        kind: "import",
+        source,
+        target,
+        reference: importRecord.specifier,
+        symbols: importRecord.symbols || [],
+        evidenceIds: [sourceEvidence(file.path, importRecord.line, "import", evidence)],
+        line: importRecord.line
+      });
+      connections.set(connection.id, connection);
+    }
+    for (const binding of file.tokenBindings || []) {
+      if (binding.direction !== "consumes") {
+        continue;
+      }
+      const connection = normalizeSystemConnection({
+        id: stableId("connection", "injection", file.path, binding.line, binding.token, binding.mechanism),
+        kind: "injection",
+        source,
+        target: connectionEndpoint({
+          filePath: binding.targetFile,
+          packageId: binding.targetPackageId,
+          externalId: binding.targetExternalId
+        }),
+        reference: binding.token,
+        evidenceIds: [sourceEvidence(file.path, binding.line, "injection", evidence)],
+        line: binding.line
+      });
+      connections.set(connection.id, connection);
+    }
+  }
+  const declarationRelationships = new Map(
+    (extraction.relationships || [])
+      .filter((relationship) => relationship.kind === "depends_on")
+      .map((relationship) => [`${relationship.from}\u0000${relationship.to}`, relationship])
+  );
+  const localPackageIds = new Set((extraction.packages || []).map((entry) => entry.packageId));
+  for (const packageEntry of extraction.packages || []) {
+    for (const dependencyId of packageEntry.dependsOn || []) {
+      const possibleTargets = new Set([
+        packageSubsystemId(dependencyId),
+        `jskit:external:package:${dependencyId}`
+      ]);
+      if ([...declarationRelationships.values()].some((relationship) => (
+        relationship.from === packageEntry.id && possibleTargets.has(relationship.to)
+      ))) {
+        continue;
+      }
+      const targetId = localPackageIds.has(dependencyId)
+        ? packageSubsystemId(dependencyId)
+        : `jskit:external:package:${dependencyId}`;
+      const relationship = {
+        kind: "depends_on",
+        from: packageEntry.id,
+        to: targetId
+      };
+      const key = `${relationship.from}\u0000${relationship.to}`;
+      if (!declarationRelationships.has(key)) {
+        declarationRelationships.set(key, relationship);
+      }
+    }
+  }
+  for (const relationship of declarationRelationships.values()) {
+    if (relationship.kind !== "depends_on") {
+      continue;
+    }
+    const packageId = String(relationship.from || "").replace(/^jskit:subsystem:package:/u, "");
+    const packageEntry = (extraction.packages || []).find((entry) => entry.packageId === packageId);
+    const externalPrefix = "jskit:external:package:";
+    const target = relationship.to.startsWith(externalPrefix)
+      ? connectionEndpoint({ externalId: `package:${relationship.to.slice(externalPrefix.length)}` })
+      : { subsystemId: relationship.to };
+    const connection = normalizeSystemConnection({
+      id: stableId("connection", "declaration", relationship.from, relationship.to),
+      kind: "declaration",
+      source: { subsystemId: relationship.from },
+      target,
+      reference: relationship.to.startsWith(externalPrefix)
+        ? relationship.to.slice(externalPrefix.length)
+        : relationship.to.replace(/^jskit:subsystem:package:/u, ""),
+      evidenceIds: packageEntry ? descriptorEvidence(packageEntry, evidence) : [],
+      line: 1
+    });
+    connections.set(connection.id, connection);
+  }
+  return stableSort(connections.values(), (connection) => connection.id);
 }
 
 function attachImplementedEntities(files, relationships) {
@@ -833,6 +972,7 @@ function attachImplementedEntities(files, relationships) {
     file.implementedEntityIds.sort((left, right) => left.localeCompare(right));
     delete file.calls;
     delete file.routes;
+    delete file.tokenBindings;
   }
 }
 
@@ -842,6 +982,7 @@ function refreshCoverage(model) {
     files: model.files.length,
     entities: model.entities.length,
     relationships: model.relationships.length,
+    connections: model.connections?.length || 0,
     evidence: model.evidence.length,
     operations: model.entities.filter((entity) => entity.kind === "operation").length,
     consumers: model.relationships.filter((relationship) => relationship.kind === "consumes").length,
@@ -928,6 +1069,11 @@ function compileJskitSystemModel(extraction = {}, {
     relationships,
     systemId
   });
+  const connections = compileSystemConnections({
+    extraction,
+    files,
+    evidence
+  });
   attachImplementedEntities(files, relationships);
 
   const model = {
@@ -946,6 +1092,7 @@ function compileJskitSystemModel(extraction = {}, {
     files: stableSort(files, (file) => file.id),
     entities: stableSort(entities.values(), (entity) => entity.id),
     relationships: stableSort(relationships.values(), (relationship) => relationship.id),
+    connections,
     evidence: stableSort(evidence.values(), (entry) => entry.id),
     findings: [],
     diagnostics: stableSort(diagnostics, (diagnostic) => `${diagnostic.path || ""}:${diagnostic.line || 0}:${diagnostic.code || ""}`),
@@ -1025,6 +1172,20 @@ function mergeScopedSystemModel(previousModel = {}, scopedModel = {}, scopes = [
       pathPackage.set(entity.metadata.descriptorPath, entity.metadata.packageId);
     }
   }
+  const connectionsById = new Map(
+    (previousModel.connections || [])
+      .filter((connection) => {
+        const sourceFile = String(connection.source?.fileId || "").replace(/^file:/u, "");
+        const sourcePackage = pathPackage.get(sourceFile);
+        const sourceSubsystemPackage = String(connection.source?.subsystemId || "")
+          .replace(/^jskit:subsystem:package:/u, "");
+        return !scopeSet.has(sourcePackage || sourceSubsystemPackage);
+      })
+      .map((connection) => [connection.id, connection])
+  );
+  for (const connection of scopedModel.connections || []) {
+    connectionsById.set(connection.id, connection);
+  }
   const evidenceById = new Map(
     (previousModel.evidence || [])
       .filter((entry) => !scopeSet.has(pathPackage.get(entry.path)))
@@ -1046,6 +1207,7 @@ function mergeScopedSystemModel(previousModel = {}, scopedModel = {}, scopes = [
     files: stableSort(filesById.values(), (file) => file.id),
     entities: stableSort(entitiesById.values(), (entity) => entity.id),
     relationships: stableSort(relationshipsById.values(), (relationship) => relationship.id),
+    connections: stableSort(connectionsById.values(), (connection) => connection.id),
     evidence: stableSort(evidenceById.values(), (entry) => entry.id),
     findings: [],
     diagnostics: stableSort(diagnostics, (diagnostic) => `${diagnostic.path || ""}:${diagnostic.line || 0}:${diagnostic.code || ""}`),

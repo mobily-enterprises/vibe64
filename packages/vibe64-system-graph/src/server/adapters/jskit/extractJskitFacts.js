@@ -324,6 +324,58 @@ function addImportRecord(records, record) {
   }
 }
 
+function importDeclarationSymbols(statement) {
+  const clause = statement.importClause;
+  if (!clause) {
+    return [];
+  }
+  const symbols = [];
+  if (clause.name) {
+    symbols.push("default");
+  }
+  if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+    symbols.push("*");
+  } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+    for (const element of clause.namedBindings.elements || []) {
+      symbols.push(String(element.propertyName?.text || element.name?.text || ""));
+    }
+  }
+  return sortStrings(new Set(symbols.filter(Boolean)));
+}
+
+function exportDeclarationSymbols(statement) {
+  const clause = statement.exportClause;
+  if (!clause || ts.isNamespaceExport(clause)) {
+    return ["*"];
+  }
+  if (!ts.isNamedExports(clause)) {
+    return [];
+  }
+  return sortStrings(new Set(
+    (clause.elements || [])
+      .map((element) => String(element.propertyName?.text || element.name?.text || ""))
+      .filter(Boolean)
+  ));
+}
+
+function callImportSymbols(callExpression) {
+  const parent = callExpression.compilerNode.parent;
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === callExpression.compilerNode) {
+    return [String(parent.name?.text || "")].filter(Boolean);
+  }
+  if (ts.isVariableDeclaration(parent)) {
+    if (ts.isObjectBindingPattern(parent.name)) {
+      return sortStrings(new Set(
+        (parent.name.elements || [])
+          .map((element) => String(element.propertyName?.text || element.name?.text || ""))
+          .filter(Boolean)
+      ));
+    }
+    return ["*"];
+  }
+  return ["*"];
+}
+
 function extractStaticImports(sourceFile) {
   const records = new Map();
   for (const statement of sourceFile.compilerNode.statements || []) {
@@ -333,7 +385,8 @@ function extractStaticImports(sourceFile) {
         addImportRecord(records, {
           kind: "import",
           line: sourceLine(sourceFile, sourceFile.getDescendantAtPos(statement.moduleSpecifier.pos) || sourceFile),
-          specifier
+          specifier,
+          symbols: importDeclarationSymbols(statement)
         });
       }
     } else if (ts.isExportDeclaration(statement) && statement.moduleSpecifier) {
@@ -342,7 +395,8 @@ function extractStaticImports(sourceFile) {
         addImportRecord(records, {
           kind: "export",
           line: sourceLine(sourceFile, sourceFile.getDescendantAtPos(statement.moduleSpecifier.pos) || sourceFile),
-          specifier
+          specifier,
+          symbols: exportDeclarationSymbols(statement)
         });
       }
     }
@@ -363,11 +417,125 @@ function extractStaticImports(sourceFile) {
     addImportRecord(records, {
       kind: isRequire ? "require" : "dynamic-import",
       line: sourceLine(sourceFile, callExpression),
-      specifier
+      specifier,
+      symbols: callImportSymbols(callExpression)
     });
   }
 
   return stableSort(records.values(), (record) => `${record.specifier}:${record.kind}:${record.line}`);
+}
+
+function addTokenBinding(records, binding) {
+  const token = String(binding.token || "").trim();
+  if (!token) {
+    return;
+  }
+  const key = `${binding.direction}:${token}:${binding.line}:${binding.mechanism}`;
+  if (!records.has(key)) {
+    records.set(key, {
+      direction: binding.direction,
+      line: Math.max(1, Number(binding.line) || 1),
+      mechanism: binding.mechanism,
+      token
+    });
+  }
+}
+
+function staticTokenValue(sourceFile, node) {
+  if (!node) {
+    return "";
+  }
+  const literal = stringLiteralValue(node);
+  if (literal || !ts.isIdentifier(node)) {
+    return literal;
+  }
+  for (const statement of sourceFile.compilerNode.statements || []) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations || []) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text) {
+        return stringLiteralValue(declaration.initializer);
+      }
+    }
+  }
+  return "";
+}
+
+function actionDependencyTokens(sourceFile, callExpression) {
+  if (callExpressionName(callExpression.compilerNode) !== "withActionDefaults") {
+    return [];
+  }
+  const options = callExpression.compilerNode.arguments?.[1];
+  if (!ts.isObjectLiteralExpression(options)) {
+    return [];
+  }
+  const dependencies = (options.properties || []).find((property) => (
+    ts.isPropertyAssignment(property) && objectPropertyName(property.name) === "dependencies"
+  ));
+  if (!dependencies || !ts.isObjectLiteralExpression(dependencies.initializer)) {
+    return [];
+  }
+  return (dependencies.initializer.properties || [])
+    .filter(ts.isPropertyAssignment)
+    .map((property) => staticTokenValue(sourceFile, property.initializer))
+    .filter(Boolean);
+}
+
+function callExpressionReceiver(node) {
+  return ts.isPropertyAccessExpression(node?.expression)
+    ? String(node.expression.expression?.getText?.() || "").trim()
+    : "";
+}
+
+function extractJskitTokenBindings(sourceFile) {
+  const records = new Map();
+  for (const callExpression of sourceFile.getDescendantsOfKind(ts.SyntaxKind.CallExpression)) {
+    const name = callExpressionName(callExpression.compilerNode);
+    const receiver = callExpressionReceiver(callExpression.compilerNode);
+    const token = staticTokenValue(sourceFile, callExpression.compilerNode.arguments?.[0]);
+    if ((name === "service" || name === "singleton") && receiver === "app" && token) {
+      addTokenBinding(records, {
+        direction: "provides",
+        line: sourceLine(sourceFile, callExpression),
+        mechanism: name,
+        token
+      });
+    } else if (name === "make" && (receiver === "scope" || receiver === "app") && token) {
+      addTokenBinding(records, {
+        direction: "consumes",
+        line: sourceLine(sourceFile, callExpression),
+        mechanism: "make",
+        token
+      });
+    }
+    for (const dependencyToken of actionDependencyTokens(sourceFile, callExpression)) {
+      addTokenBinding(records, {
+        direction: "consumes",
+        line: sourceLine(sourceFile, callExpression),
+        mechanism: "action-dependency",
+        token: dependencyToken
+      });
+    }
+  }
+  for (const property of sourceFile.getDescendantsOfKind(ts.SyntaxKind.PropertyDeclaration)) {
+    const node = property.compilerNode;
+    const isStatic = compilerNodeHasModifier(node, ts.SyntaxKind.StaticKeyword);
+    if (!isStatic || objectPropertyName(node.name) !== "dependsOn" || !ts.isArrayLiteralExpression(node.initializer)) {
+      continue;
+    }
+    for (const element of node.initializer.elements || []) {
+      addTokenBinding(records, {
+        direction: "consumes",
+        line: sourceLine(sourceFile, property),
+        mechanism: "provider-depends-on",
+        token: staticTokenValue(sourceFile, element)
+      });
+    }
+  }
+  return stableSort(records.values(), (record) => (
+    `${record.direction}:${record.token}:${record.line}:${record.mechanism}`
+  ));
 }
 
 function normalizeHttpPath(value = "") {
@@ -766,6 +934,8 @@ function packageRecords(packageRegistry = new Map()) {
     [...packageRegistry.values()].map((entry) => {
       const descriptor = ensureObject(entry.descriptor);
       const capabilities = ensureObject(descriptor.capabilities);
+      const apiSummary = ensureObject(ensureObject(descriptor.metadata).apiSummary);
+      const containerTokens = ensureObject(apiSummary.containerTokens);
       return {
         id: `jskit:subsystem:package:${entry.packageId}`,
         packageId: entry.packageId,
@@ -779,12 +949,77 @@ function packageRecords(packageRegistry = new Map()) {
           provides: sortStrings(ensureArray(capabilities.provides).map(String)),
           requires: sortStrings(ensureArray(capabilities.requires).map(String))
         },
+        containerTokens: {
+          client: sortStrings(ensureArray(containerTokens.client).map(String)),
+          server: sortStrings(ensureArray(containerTokens.server).map(String))
+        },
         providers: providerRecords(entry),
         executionSides: []
       };
     }),
     (entry) => entry.packageId
   );
+}
+
+function resolveJskitTokenBindings(files, packages) {
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const providersByToken = new Map();
+
+  function addProvider(token, provider) {
+    if (!token || !provider.filePath) {
+      return;
+    }
+    const records = providersByToken.get(token) || [];
+    if (!records.some((record) => record.filePath === provider.filePath)) {
+      records.push(provider);
+      providersByToken.set(token, records);
+    }
+  }
+
+  for (const file of files) {
+    for (const binding of file.tokenBindings || []) {
+      if (binding.direction === "provides") {
+        addProvider(binding.token, {
+          filePath: file.path,
+          packageId: file.packageId
+        });
+      }
+    }
+  }
+  for (const packageEntry of packages) {
+    for (const side of ["client", "server"]) {
+      const provider = (packageEntry.providers || []).find((entry) => entry.side === side);
+      if (!provider || !filesByPath.has(provider.entrypoint)) {
+        continue;
+      }
+      for (const token of packageEntry.containerTokens?.[side] || []) {
+        addProvider(token, {
+          filePath: provider.entrypoint,
+          packageId: packageEntry.packageId
+        });
+      }
+    }
+  }
+
+  for (const file of files) {
+    file.tokenBindings = (file.tokenBindings || []).map((binding) => {
+      if (binding.direction !== "consumes") {
+        return binding;
+      }
+      const providers = providersByToken.get(binding.token) || [];
+      if (providers.length !== 1) {
+        return {
+          ...binding,
+          targetExternalId: `token:${binding.token}`
+        };
+      }
+      return {
+        ...binding,
+        targetFile: providers[0].filePath,
+        targetPackageId: providers[0].packageId
+      };
+    });
+  }
 }
 
 function seedExecutionSides(filesByPath, packages) {
@@ -860,6 +1095,7 @@ async function inspectSystemSource({ targetRoot, packageRoots = [] }) {
       executionSideEvidence: [],
       exports: parsedSourceFile ? extractExportedSymbols(parsedSourceFile) : [],
       calls: parsedSourceFile ? extractStaticCallFacts(parsedSourceFile) : [],
+      tokenBindings: parsedSourceFile ? extractJskitTokenBindings(parsedSourceFile) : [],
       rawImports: parsedSourceFile ? extractStaticImports(parsedSourceFile) : [],
       imports: [],
       routes: routeExtraction.routes
@@ -1001,6 +1237,7 @@ async function extractJskitFacts({ targetRoot, scopes = [] }) {
     packages
   });
   const files = stableSort(filesByPath.values(), (file) => file.path);
+  resolveJskitTokenBindings(files, packages);
   const relationships = dependencyRelationships(packages);
   const scoped = scopedPayload({
     files,

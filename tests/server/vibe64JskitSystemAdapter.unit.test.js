@@ -105,7 +105,11 @@ async function createFixtureProject() {
         "import { BetaProvider } from '@local/beta/server/BetaProvider';",
         "import { sharedValue } from '../shared/common.js';",
         "export class AlphaProvider {",
-        "  register(app) { app.get('/api/alpha/:id', async () => sharedValue); }",
+        "  static dependsOn = ['feature.beta.service'];",
+        "  register(app) {",
+        "    app.service('feature.alpha.service', (scope) => scope.make('feature.beta.service'));",
+        "    app.get('/api/alpha/:id', async () => sharedValue);",
+        "  }",
         "}",
         ""
       ].join("\n"),
@@ -129,7 +133,12 @@ async function createFixtureProject() {
       }
     },
     sourceFiles: {
-      "src/server/BetaProvider.js": "export class BetaProvider {}\n"
+      "src/server/BetaProvider.js": [
+        "export class BetaProvider {",
+        "  register(app) { app.service('feature.beta.service', () => ({})); }",
+        "}",
+        ""
+      ].join("\n")
     }
   });
   return root;
@@ -170,9 +179,19 @@ test("Vibe64-owned JSKIT adapter extracts deterministic facts without executing 
         kind: "import",
         line: 1,
         specifier: "@local/beta/server/BetaProvider",
+        symbols: ["BetaProvider"],
         targetFile: "packages/beta/src/server/BetaProvider.js",
         targetPackageId: "@local/beta"
       }
+    );
+    assert.ok(
+      first.files
+        .find((file) => file.path.endsWith("AlphaProvider.js"))
+        .tokenBindings.some((binding) => (
+          binding.direction === "consumes" &&
+          binding.token === "feature.beta.service" &&
+          binding.targetFile === "packages/beta/src/server/BetaProvider.js"
+        ))
     );
     assert.equal(first.files.find((file) => file.path === "src/unowned.js").executionSide, "unknown");
 

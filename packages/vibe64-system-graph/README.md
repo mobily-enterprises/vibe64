@@ -41,4 +41,16 @@ An inferred declaration can deliberately cross the directory tree:
 }
 ```
 
-The client renders these definitions as a semantic sky above File City. Selecting a subsystem always illuminates its owned files and directory terraces and reveals its evidence-backed ownership tethers. Dependency context is deliberately progressive: the optional Connections layer adds amber arrows to responsibilities the selection uses, green arrows from responsibilities that use it, and concrete source-building to target-building import arrows whenever the adapter can resolve both files; the independent Libraries layer adds compact npm-package satellites and evidence drops to their importing files. Both layers default off. Node built-in modules are omitted because they are implementation details rather than architectural dependencies. Import counts remain evidence, while adapter-declared `depends_on` relationships preserve intentional dependencies even when no direct import proves them. The physical city remains authoritative; the sky explains why its code exists and what it relies on.
+The client renders these definitions as a semantic sky above File City. Selecting a subsystem always illuminates its owned files and directory terraces and reveals its evidence-backed ownership tethers. Dependency context is deliberately progressive: the optional Connections layer renders cyan imports, purple injections, and dashed amber declarations. It draws a concrete building-to-building arrow only when both file endpoints are proven. The independent Libraries layer adds compact npm-package satellites and evidence drops to their importing files. Both layers default off. Node built-in modules are omitted because they are implementation details rather than architectural dependencies. The physical city remains authoritative; the sky explains why its code exists and what it relies on.
+
+## Connection contract
+
+Vibe64 owns one small, fixed connection vocabulary:
+
+- `import`: a source file statically imports or re-exports a target file or package;
+- `injection`: a source file consumes a container token that can be resolved to its registered owner;
+- `declaration`: framework metadata declares a subsystem dependency without claiming a file-level call.
+
+Adapters translate framework facts into these records; they do not provide renderers or invent connection kinds. Adding a genuinely new architectural paradigm requires a deliberate Vibe64 contract and renderer change. This keeps the model equally usable by future Laravel, Next.js, and other adapters without making the client understand JSKIT.
+
+The JSKIT adapter mechanically translates static imports, package export maps, descriptor dependencies, literal `app.service` and `app.singleton` registrations, `scope.make` consumers, provider `static dependsOn` tokens, action dependency declarations, and descriptor container tokens. Unknown or ambiguous tokens remain external references. The inspector groups exact file pairs and lets each imported file expand to show the source path, target path, and statically selected exports.

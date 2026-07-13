@@ -246,38 +246,59 @@
             <span><strong>{{ formatLines(selectedSubsystem.lines) }}</strong> lines</span>
             <span><strong>{{ selectedSubsystem.anchors.length }}</strong> anchors</span>
             <span><strong>{{ selectedSubsystem.capabilities.length }}</strong> capabilities</span>
-            <span><strong>{{ selectedSubsystemDependencies.outgoing.length }}</strong> uses</span>
-            <span><strong>{{ selectedSubsystemDependencies.incoming.length }}</strong> used by</span>
+            <span><strong>{{ selectedSubsystemDependencies.outgoing.length }}</strong> outgoing</span>
+            <span><strong>{{ selectedSubsystemDependencies.incoming.length }}</strong> incoming</span>
             <span><strong>{{ selectedSubsystemDependencies.external.length }}</strong> external</span>
           </div>
-          <div v-if="selectedSubsystemDependencies.outgoing.length" class="system-world__section">
-            <strong>Uses other subsystems</strong>
+          <div
+            v-for="section in selectedSubsystemRelationshipSections"
+            :key="section.direction"
+            class="system-world__section"
+          >
+            <strong>{{ section.title }}</strong>
             <div class="system-world__relationships">
-              <button
-                v-for="dependency in selectedSubsystemDependencies.outgoing"
+              <div
+                v-for="dependency in section.dependencies"
                 :key="dependency.subsystemId"
-                title="Focus the concrete file imports for this relationship"
-                type="button"
-                @click="focusSubsystemDependency(dependency, 'outgoing')"
+                class="system-world__relationship"
               >
-                <span>uses →</span>
-                <strong>{{ dependency.title }} · {{ dependencyEvidenceLabel(dependency) }}</strong>
-              </button>
-            </div>
-          </div>
-          <div v-if="selectedSubsystemDependencies.incoming.length" class="system-world__section">
-            <strong>Used by other subsystems</strong>
-            <div class="system-world__relationships">
-              <button
-                v-for="dependency in selectedSubsystemDependencies.incoming"
-                :key="dependency.subsystemId"
-                title="Focus the concrete file imports for this relationship"
-                type="button"
-                @click="focusSubsystemDependency(dependency, 'incoming')"
-              >
-                <span>← used by</span>
-                <strong>{{ dependency.title }} · {{ dependencyEvidenceLabel(dependency) }}</strong>
-              </button>
+                <button
+                  title="Focus the exact file endpoints proven for this relationship"
+                  type="button"
+                  @click="focusSubsystemDependency(dependency, section.direction)"
+                >
+                  <span>{{ section.direction === 'outgoing' ? 'connects →' : '← connects' }}</span>
+                  <strong>{{ dependency.title }} · {{ dependencyEvidenceLabel(dependency) }}</strong>
+                </button>
+                <div v-if="dependency.fileConnections.length" class="system-world__connection-files">
+                  <details
+                    v-for="connection in dependency.fileConnections"
+                    :key="`${connection.fromFileId}:${connection.toFileId}`"
+                  >
+                    <summary>
+                      <strong>{{ pathFileName(connection.toPath) }}</strong>
+                      <span>from {{ pathFileName(connection.fromPath) }}</span>
+                    </summary>
+                    <div class="system-world__connection-detail">
+                      <code>{{ connection.fromPath }}</code>
+                      <span aria-hidden="true">→</span>
+                      <code>{{ connection.toPath }}</code>
+                      <p v-if="connection.symbols.length">
+                        Exports used:
+                        <strong>{{ connection.symbols.join(', ') }}</strong>
+                      </p>
+                      <p v-else-if="connection.kinds.includes('import')">No named export is statically selected by this import.</p>
+                      <p v-if="connection.kinds.includes('injection')">
+                        Injected token:
+                        <strong>{{ connection.references.join(', ') }}</strong>
+                      </p>
+                    </div>
+                  </details>
+                </div>
+                <p v-else-if="dependency.declared" class="system-world__declared-only">
+                  Declared by framework metadata; no exact file pair is claimed.
+                </p>
+              </div>
             </div>
           </div>
           <div v-if="selectedSubsystemDependencies.external.length" class="system-world__section">
@@ -481,10 +502,11 @@
         <template v-if="viewMode === 'subsystems'">
           <span><i class="system-world__legend-cloud" /> Cloud = subsystem</span>
           <span><i class="system-world__legend-owned" /> Cyan = owned code</span>
-          <span v-if="showSubsystemConnections"><i class="system-world__legend-outgoing" /> Amber arrow = uses</span>
-          <span v-if="showSubsystemConnections"><i class="system-world__legend-incoming" /> Green arrow = used by</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-import" /> Cyan = import</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-injection" /> Purple = injection</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-declaration" /> Dashed amber = declaration</span>
           <span v-if="showSubsystemLibraries"><i class="system-world__legend-external" /> Satellite = npm package</span>
-          <span v-if="showSubsystemConnections"><i class="system-world__legend-evidence" /> Thin arrows = file imports</span>
+          <span v-if="showSubsystemConnections"><i class="system-world__legend-evidence" /> Building arrows = exact evidence</span>
           <span v-if="showSubsystemLibraries"><i class="system-world__legend-library-evidence" /> Purple drops = library imports</span>
         </template>
         <template v-else>
@@ -540,7 +562,7 @@ import {
   topLevelPrecincts
 } from "../world/worldLayout.js";
 
-const rendererRevision = "034";
+const rendererRevision = "036";
 
 const props = defineProps({
   active: {
@@ -610,6 +632,18 @@ const selectedSubsystem = computed(() => (
 const selectedSubsystemDependencies = computed(() => (
   selectedSubsystem.value?.dependencies || { external: [], incoming: [], outgoing: [] }
 ));
+const selectedSubsystemRelationshipSections = computed(() => ([
+  {
+    dependencies: selectedSubsystemDependencies.value.outgoing,
+    direction: "outgoing",
+    title: "Outgoing subsystem connections"
+  },
+  {
+    dependencies: selectedSubsystemDependencies.value.incoming,
+    direction: "incoming",
+    title: "Incoming subsystem connections"
+  }
+].filter((section) => section.dependencies.length > 0)));
 const selectedFile = computed(() => (
   activeFileId.value && fileConstellation.value?.selectedFile?.id === activeFileId.value
     ? fileConstellation.value.selectedFile
@@ -702,6 +736,10 @@ function fileName(file = {}) {
   return String(file?.path || "File").split("/").pop();
 }
 
+function pathFileName(filePath = "") {
+  return String(filePath || "Unknown file").split("/").pop();
+}
+
 function formatLines(value = 0) {
   return Math.max(0, Number(value) || 0).toLocaleString();
 }
@@ -715,16 +753,26 @@ function dependencySummary(dependencies = {}) {
   const outgoing = dependencies?.outgoing?.length || 0;
   const incoming = dependencies?.incoming?.length || 0;
   const external = dependencies?.external?.length || 0;
-  return `uses ${outgoing} · used by ${incoming} · external ${external}`;
+  return `out ${outgoing} · in ${incoming} · external ${external}`;
 }
 
 function dependencyEvidenceLabel(dependency = {}) {
   const imports = Math.max(0, Number(dependency.importCount) || 0);
+  const injections = Math.max(0, Number(dependency.injectionCount) || 0);
   const files = Math.max(0, Number(dependency.fileCount) || 0);
-  if (imports > 0) {
-    return `${formatCount(imports, "import")} from ${formatCount(files, "file")}`;
+  const evidence = [];
+  if (imports) {
+    evidence.push(formatCount(imports, "import"));
   }
-  return dependency.declared ? "declared dependency" : "dependency";
+  if (injections) {
+    evidence.push(formatCount(injections, "injection"));
+  }
+  if (dependency.declared) {
+    evidence.push("declared");
+  }
+  return evidence.length > 0
+    ? `${evidence.join(" + ")}${files ? ` from ${formatCount(files, "file")}` : ""}`
+    : "connection";
 }
 
 function renderFrame(time) {
@@ -1306,7 +1354,7 @@ onBeforeUnmount(() => {
 .system-world__stale { background: rgba(108, 61, 8, 0.86); border: 1px solid rgba(255, 183, 70, 0.4); top: 0.75rem; }
 .system-world__stale span,
 .system-world__progress-pulse { background: #ffb84d; border-radius: 50%; height: 0.42rem; width: 0.42rem; }
-.system-world__progress { background: rgba(11, 28, 48, 0.88); border: 1px solid rgba(53, 208, 255, 0.3); bottom: 3.2rem; }
+.system-world__progress { background: rgba(11, 28, 48, 0.88); border: 1px solid rgba(53, 208, 255, 0.3); bottom: 5.25rem; }
 .system-world__progress-pulse { animation: system-pulse 1s ease-in-out infinite; background: var(--city-blue); box-shadow: 0 0 0.65rem var(--city-blue); }
 @keyframes system-pulse { 50% { opacity: 0.25; transform: scale(0.7); } }
 
@@ -1451,10 +1499,25 @@ onBeforeUnmount(() => {
 .system-world__largest-file small { color: rgba(222, 231, 247, 0.5); font-size: 0.56rem; }
 
 .system-world__relationships { display: grid; gap: 0.24rem; }
+.system-world__relationship { background: rgba(89, 127, 184, 0.06); border-radius: 0.42rem; overflow: hidden; }
 .system-world__relationships button { align-items: center; background: rgba(89, 127, 184, 0.08); border: 0; border-radius: 0.42rem; color: rgba(225, 236, 253, 0.82); cursor: pointer; display: grid; font: inherit; gap: 0.36rem; grid-template-columns: 4.4rem 1fr; padding: 0.36rem 0.44rem; text-align: left; }
+.system-world__relationship > button { width: 100%; }
 .system-world__relationships button:hover { background: rgba(91, 177, 228, 0.14); }
 .system-world__relationships span { color: rgba(105, 218, 255, 0.62); font-size: 0.52rem; text-transform: uppercase; }
 .system-world__relationships strong { font-size: 0.61rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.system-world__connection-files { border-top: 1px solid rgba(120, 171, 230, 0.1); padding: 0.2rem 0.32rem 0.32rem; }
+.system-world__connection-files details { border-radius: 0.34rem; color: rgba(225, 236, 253, 0.78); }
+.system-world__connection-files details[open] { background: rgba(8, 17, 31, 0.42); }
+.system-world__connection-files summary { cursor: pointer; display: grid; gap: 0.06rem; padding: 0.3rem 0.38rem; }
+.system-world__connection-files summary::marker { color: rgba(105, 218, 255, 0.72); }
+.system-world__connection-files summary strong { font-size: 0.59rem; }
+.system-world__connection-files summary span { font-size: 0.48rem; text-transform: none; }
+.system-world__connection-detail { display: grid; gap: 0.24rem; padding: 0 0.4rem 0.42rem; }
+.system-world__connection-detail code { color: rgba(204, 221, 247, 0.68); font-size: 0.52rem; overflow-wrap: anywhere; }
+.system-world__connection-detail > span { font-size: 0.52rem; }
+.system-world__connection-detail p { font-size: 0.55rem; margin: 0.12rem 0 0; }
+.system-world__connection-detail p strong { color: rgba(236, 246, 255, 0.9); font-size: inherit; white-space: normal; }
+.system-world__declared-only { font-size: 0.53rem !important; margin: 0 !important; padding: 0.18rem 0.46rem 0.4rem; }
 
 .system-world__controls-hint,
 .system-world__legend {
@@ -1481,10 +1544,11 @@ onBeforeUnmount(() => {
 .system-world__legend-building { background: #6b8be8; }
 .system-world__legend-cloud { background: #55cde5; border: 1px solid #d9fbff; border-radius: 50%; }
 .system-world__legend-owned { background: #75f3ff; height: 0.12rem !important; width: 0.7rem !important; }
-.system-world__legend-outgoing { background: #ffc86b; height: 0.12rem !important; width: 0.7rem !important; }
-.system-world__legend-incoming { background: #70e8ad; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-import { background: #59e3ff; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-injection { background: #c69cff; height: 0.12rem !important; width: 0.7rem !important; }
+.system-world__legend-declaration { background: repeating-linear-gradient(90deg, #ffc86b 0 0.18rem, transparent 0.18rem 0.28rem); height: 0.12rem !important; width: 0.8rem !important; }
 .system-world__legend-external { background: #c69cff; transform: rotate(45deg) scale(0.72); }
-.system-world__legend-evidence { background: linear-gradient(90deg, #ffc86b 0 50%, #70e8ad 50%); height: 0.08rem !important; width: 0.8rem !important; }
+.system-world__legend-evidence { background: linear-gradient(90deg, #59e3ff 0 50%, #c69cff 50%); height: 0.08rem !important; width: 0.8rem !important; }
 .system-world__legend-library-evidence { background: #c69cff; height: 0.08rem !important; width: 0.8rem !important; }
 
 @media (max-width: 1120px) {

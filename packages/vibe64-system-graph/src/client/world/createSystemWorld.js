@@ -38,6 +38,11 @@ const SUBSYSTEM_DEPENDENCY_COLORS = Object.freeze({
   incoming: 0x70e8ad,
   outgoing: 0xffc86b
 });
+const SYSTEM_CONNECTION_COLORS = Object.freeze({
+  declaration: 0xffc86b,
+  import: 0x59e3ff,
+  injection: 0xc69cff
+});
 const BOX_EDGE_PAIRS = Object.freeze([
   [0, 1], [1, 2], [2, 3], [3, 0],
   [4, 5], [5, 6], [6, 7], [7, 4],
@@ -52,6 +57,16 @@ function appendBoxEdges(positions, corners) {
 
 function sideColor(side = "unknown") {
   return SIDE_COLORS[side] || SIDE_COLORS.unknown;
+}
+
+function systemConnectionColor(kinds = []) {
+  if (kinds.includes("injection")) {
+    return SYSTEM_CONNECTION_COLORS.injection;
+  }
+  if (kinds.includes("import")) {
+    return SYSTEM_CONNECTION_COLORS.import;
+  }
+  return SYSTEM_CONNECTION_COLORS.declaration;
 }
 
 function hashedColor(value = "", {
@@ -569,23 +584,32 @@ function fileDependencyConnector(from, to, color, weight = 1) {
   return group;
 }
 
-function subsystemDependencyConnector(from, to, weight = 1) {
+function subsystemDependencyConnector(from, to, weight = 1, kinds = []) {
   const middle = from.clone().lerp(to, 0.5);
   middle.y += 34 + Math.min(72, Math.log2(Math.max(1, weight) + 1) * 13);
   const curve = new THREE.QuadraticBezierCurve3(from, middle, to);
   const points = curve.getPoints(32);
-  const lineMaterial = new THREE.LineBasicMaterial({
-    color: SUBSYSTEM_DEPENDENCY_COLORS.outgoing,
-    opacity: 0.94,
-    transparent: true
-  });
+  const color = systemConnectionColor(kinds);
+  const declarationOnly = kinds.length === 1 && kinds[0] === "declaration";
+  const lineMaterial = declarationOnly
+    ? new THREE.LineDashedMaterial({
+        color,
+        dashSize: 10,
+        gapSize: 7,
+        opacity: 0.82,
+        transparent: true
+      })
+    : new THREE.LineBasicMaterial({ color, opacity: 0.94, transparent: true });
   const line = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(points),
     lineMaterial
   );
+  if (declarationOnly) {
+    line.computeLineDistances();
+  }
   const arrowSize = 4 + Math.min(5, Math.log2(Math.max(1, weight) + 1));
   const arrowMaterial = new THREE.MeshBasicMaterial({
-    color: SUBSYSTEM_DEPENDENCY_COLORS.outgoing
+    color
   });
   const arrow = new THREE.Mesh(
     new THREE.ConeGeometry(arrowSize, arrowSize * 2.4, 8),
@@ -1001,7 +1025,7 @@ function createSystemWorld({
       const fileLabel = `${subsystem.fileCount} ${subsystem.fileCount === 1 ? "file" : "files"}`;
       const capabilityLabel = `${subsystem.capabilities.length} ${subsystem.capabilities.length === 1 ? "capability" : "capabilities"}`;
       const dependencies = subsystem.dependencies || { external: [], incoming: [], outgoing: [] };
-      const dependencyLabel = `uses ${dependencies.outgoing.length} · used by ${dependencies.incoming.length} · external ${dependencies.external.length}`;
+      const dependencyLabel = `out ${dependencies.outgoing.length} · in ${dependencies.incoming.length} · external ${dependencies.external.length}`;
       const label = addLabel(group, `${subsystem.title}\n${fileLabel} · ${capabilityLabel}\n${dependencyLabel}`, {
         color: 0xffffff,
         fontSize: Math.max(12, Math.min(18, subsystem.radius * 0.16)),
@@ -1052,7 +1076,12 @@ function createSystemWorld({
         toRecord.subsystem.y + 8,
         toRecord.subsystem.z
       ).addScaledVector(direction, -toRecord.subsystem.radius * 0.88);
-      const connector = subsystemDependencyConnector(from, to, dependency.importCount);
+      const connector = subsystemDependencyConnector(
+        from,
+        to,
+        dependency.connectionCount,
+        dependency.kinds
+      );
       subsystemRoot.add(connector.object);
       dependencyObjects.push({
         ...dependency,
@@ -1192,7 +1221,7 @@ function createSystemWorld({
       }
     };
     const renderedFileConnections = new Set();
-    const addFileConnections = (connections, color) => {
+    const addFileConnections = (connections) => {
       for (const connection of connections || []) {
         const key = `${connection.fromFileId}\u0000${connection.toFileId}`;
         if (renderedFileConnections.has(key)) {
@@ -1209,8 +1238,8 @@ function createSystemWorld({
         dependencyEvidenceRoot.add(fileDependencyConnector(
           from,
           to,
-          color,
-          connection.importCount
+          systemConnectionColor(connection.kinds),
+          connection.connectionCount
         ));
       }
     };
@@ -1218,13 +1247,13 @@ function createSystemWorld({
     if (subsystemConnectionsVisible) {
       for (const dependency of dependencyObjects) {
         if (dependency.fromSubsystemId === subsystemId) {
-          addFileConnections(dependency.fileConnections, SUBSYSTEM_DEPENDENCY_COLORS.outgoing);
+          addFileConnections(dependency.fileConnections);
           continue;
         }
         if (dependency.toSubsystemId !== subsystemId) {
           continue;
         }
-        addFileConnections(dependency.fileConnections, SUBSYSTEM_DEPENDENCY_COLORS.incoming);
+        addFileConnections(dependency.fileConnections);
       }
     }
 
@@ -1263,9 +1292,7 @@ function createSystemWorld({
       }
       dependencySubsystemIds.add(dependency.fromSubsystemId);
       dependencySubsystemIds.add(dependency.toSubsystemId);
-      dependency.connector.setColor(
-        outgoing ? SUBSYSTEM_DEPENDENCY_COLORS.outgoing : SUBSYSTEM_DEPENDENCY_COLORS.incoming
-      );
+      dependency.connector.setColor(systemConnectionColor(dependency.kinds));
     }
     for (const satellite of externalSatelliteObjects) {
       const visible = subsystemRoot.visible && subsystemLibrariesVisible && (

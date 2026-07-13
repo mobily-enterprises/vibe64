@@ -96,6 +96,11 @@ export default defineConfig({
       ]
     },
     proxy: {
+      "^/app/?(?:\\?.*)?$": {
+        target: apiProxyTarget,
+        changeOrigin: true,
+        headers: apiProxyHeaders
+      },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,

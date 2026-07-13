@@ -3,6 +3,10 @@ import {
   SUBSYSTEM_ANCHOR_RELATIONS,
   SUBSYSTEM_CAPABILITY_DIRECTIONS
 } from "../shared/subsystemContract.js";
+import {
+  SYSTEM_CONNECTION_KINDS,
+  normalizeSystemConnection
+} from "../shared/systemConnectionContract.js";
 
 const SYSTEM_DOCUMENT_SCHEMA_VERSION = 1;
 
@@ -60,7 +64,7 @@ function collectStrings(value, target) {
 
 function stringCodec(model = {}) {
   const values = new Set();
-  for (const tableName of ["files", "entities", "relationships", "evidence", "findings", "diagnostics"]) {
+  for (const tableName of ["files", "entities", "relationships", "connections", "evidence", "findings", "diagnostics"]) {
     collectStrings(model[tableName], values);
   }
   const strings = [...values].sort((left, right) => left.localeCompare(right));
@@ -79,7 +83,8 @@ function encodeImport(record, stringIndex) {
     enumCode(IMPORT_CLASSIFICATIONS, record.classification),
     stringIndex(record.targetFile),
     stringIndex(record.targetPackageId),
-    Math.max(0, Number(record.line) || 0)
+    Math.max(0, Number(record.line) || 0),
+    (record.symbols || []).map(stringIndex)
   ];
 }
 
@@ -90,8 +95,54 @@ function decodeImport(record, stringValue) {
     classification: enumValue(IMPORT_CLASSIFICATIONS, record[2], "unresolved"),
     targetFile: stringValue(record[3]),
     targetPackageId: stringValue(record[4]),
-    line: Math.max(0, Number(record[5]) || 0)
+    line: Math.max(0, Number(record[5]) || 0),
+    symbols: (record[6] || []).map(stringValue).filter(Boolean)
   };
+}
+
+function encodeConnectionEndpoint(endpoint = {}, stringIndex) {
+  return [
+    stringIndex(endpoint.subsystemId),
+    stringIndex(endpoint.fileId),
+    stringIndex(endpoint.externalId)
+  ];
+}
+
+function decodeConnectionEndpoint(endpoint = [], stringValue) {
+  return {
+    subsystemId: stringValue(endpoint[0]),
+    fileId: stringValue(endpoint[1]),
+    externalId: stringValue(endpoint[2])
+  };
+}
+
+function encodeConnection(connection, stringIndex) {
+  const normalized = normalizeSystemConnection(connection);
+  return [
+    stringIndex(normalized.id),
+    enumCode(SYSTEM_CONNECTION_KINDS, normalized.kind),
+    enumCode(ORIGINS, normalized.origin),
+    encodeConnectionEndpoint(normalized.source, stringIndex),
+    encodeConnectionEndpoint(normalized.target, stringIndex),
+    stringIndex(normalized.reference),
+    normalized.symbols.map(stringIndex),
+    normalized.evidenceIds.map(stringIndex),
+    normalized.line
+  ];
+}
+
+function decodeConnection(connection, stringValue) {
+  return normalizeSystemConnection({
+    id: stringValue(connection[0]),
+    kind: enumValue(SYSTEM_CONNECTION_KINDS, connection[1], "import"),
+    origin: enumValue(ORIGINS, connection[2], "derived"),
+    source: decodeConnectionEndpoint(connection[3], stringValue),
+    target: decodeConnectionEndpoint(connection[4], stringValue),
+    reference: stringValue(connection[5]),
+    symbols: (connection[6] || []).map(stringValue).filter(Boolean),
+    evidenceIds: (connection[7] || []).map(stringValue).filter(Boolean),
+    line: Math.max(0, Number(connection[8]) || 0)
+  });
 }
 
 function encodeFile(file, stringIndex) {
@@ -323,6 +374,7 @@ function encodeSystemDocument(model = {}) {
     files: (model.files || []).map((file) => encodeFile(file, codec.encode)),
     entities: (model.entities || []).map((entity) => encodeEntity(entity, codec.encode)),
     relationships: (model.relationships || []).map((relationship) => encodeRelationship(relationship, codec.encode)),
+    connections: (model.connections || []).map((connection) => encodeConnection(connection, codec.encode)),
     evidence: (model.evidence || []).map((entry) => encodeEvidence(entry, codec.encode)),
     findings: (model.findings || []).map((finding) => encodeFinding(finding, codec.encode)),
     coverage: model.coverage || {},
@@ -357,6 +409,7 @@ function decodeSystemDocument(document = {}) {
     files: validated.files.map((file) => decodeFile(file, stringValue)),
     entities: validated.entities.map((entity) => decodeEntity(entity, stringValue)),
     relationships: validated.relationships.map((relationship) => decodeRelationship(relationship, stringValue)),
+    connections: (validated.connections || []).map((connection) => decodeConnection(connection, stringValue)),
     evidence: validated.evidence.map((entry) => decodeEvidence(entry, stringValue)),
     findings: validated.findings.map((finding) => decodeFinding(finding, stringValue)),
     coverage: validated.coverage || {},

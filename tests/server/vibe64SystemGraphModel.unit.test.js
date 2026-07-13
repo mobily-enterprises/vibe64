@@ -260,6 +260,7 @@ test("compact document round-trips deterministically with one current snapshot",
     "files",
     "entities",
     "relationships",
+    "connections",
     "evidence",
     "findings",
     "coverage",
@@ -273,6 +274,7 @@ test("compact document round-trips deterministically with one current snapshot",
   assert.deepEqual(decoded.files, model.files);
   assert.deepEqual(decoded.entities, model.entities);
   assert.deepEqual(decoded.relationships, model.relationships);
+  assert.deepEqual(decoded.connections, model.connections);
   assert.deepEqual(decoded.findings, model.findings);
   assert.ok(decoded.entities.some((entity) => (
     entity.kind === "subsystem" &&
@@ -391,36 +393,22 @@ test("subsystem projections aggregate declared, imported, and external dependenc
   const client = overview.subsystems.find((subsystem) => subsystem.packageId === "@local/client-shell");
   const terminal = overview.subsystems.find((subsystem) => subsystem.packageId === "@local/terminal");
 
-  assert.deepEqual(client.dependencies.outgoing, [{
-    classifications: ["cross-package"],
-    declared: true,
-    fileCount: 1,
-    fileConnections: [{
-      fromFileId: "file:packages/client-shell/src/client/ClientProvider.js",
-      importCount: 1,
-      toFileId: "file:packages/terminal/src/server/TerminalProvider.js"
-    }],
-    importCount: 1,
-    sourceFileIds: ["file:packages/client-shell/src/client/ClientProvider.js"],
-    subsystemId: terminal.id,
-    title: terminal.title
-  }]);
-  assert.deepEqual(terminal.dependencies.incoming, [{
-    classifications: ["cross-package"],
-    declared: true,
-    fileCount: 1,
-    fileConnections: [{
-      fromFileId: "file:packages/client-shell/src/client/ClientProvider.js",
-      importCount: 1,
-      toFileId: "file:packages/terminal/src/server/TerminalProvider.js"
-    }],
-    importCount: 1,
-    sourceFileIds: ["file:packages/client-shell/src/client/ClientProvider.js"],
-    subsystemId: client.id,
-    title: client.title
-  }]);
+  const outgoing = client.dependencies.outgoing[0];
+  assert.equal(outgoing.subsystemId, terminal.id);
+  assert.equal(outgoing.declared, true);
+  assert.deepEqual(outgoing.kinds, ["declaration", "import"]);
+  assert.equal(outgoing.importCount, 1);
+  assert.equal(outgoing.fileConnections[0].fromPath, "packages/client-shell/src/client/ClientProvider.js");
+  assert.equal(outgoing.fileConnections[0].toPath, "packages/terminal/src/server/TerminalProvider.js");
+  assert.deepEqual(outgoing.fileConnections[0].references, ["@local/terminal/server"]);
+
+  const incoming = terminal.dependencies.incoming[0];
+  assert.equal(incoming.subsystemId, client.id);
+  assert.deepEqual(incoming.kinds, ["declaration", "import"]);
+  assert.equal(incoming.fileConnections.length, 1);
   assert.deepEqual(terminal.dependencies.external, [
     {
+      connectionCount: 1,
       fileCount: 1,
       importCount: 1,
       kind: "package",
