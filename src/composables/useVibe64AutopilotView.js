@@ -382,6 +382,8 @@ function useVibe64AutopilotView(props, emit) {
   const lastDashboardRoutePath = ref("");
   const openedCodexTerminalAttentionSignature = ref("");
   const sourceEditorOpenRequest = ref(null);
+  const systemRestoreRequest = ref(null);
+  const systemReturnContext = ref(null);
   const optimisticComposerTurn = ref(null);
   const optimisticComposerMessages = ref([]);
   const remoteComposerSubmission = ref(null);
@@ -433,6 +435,7 @@ function useVibe64AutopilotView(props, emit) {
   });
   let composerHandoffState = null;
   let sourceEditorOpenSequence = 0;
+  let systemRestoreSequence = 0;
   let removeBrowserLifecycleDisconnectListener = () => null;
 
   function startSelectedComposerSubmission(input = {}) {
@@ -457,11 +460,13 @@ function useVibe64AutopilotView(props, emit) {
   ]);
   const standaloneSessionPaneIds = Object.freeze([
     "editor",
+    "system",
     "diff"
   ]);
   const sessionPaneIds = Object.freeze([
     "run",
     "editor",
+    "system",
     "config",
     "session-details",
     "diff",
@@ -1580,6 +1585,14 @@ function useVibe64AutopilotView(props, emit) {
         title: sessionSourceRoot.value ? "Edit session source files" : "Create the session source before editing files"
       };
     }
+    if (toolId === "system") {
+      return {
+        disabled: !sessionSourceRoot.value,
+        title: sessionSourceRoot.value
+          ? "Explore the current active-session architecture"
+          : "Create the session source before opening System"
+      };
+    }
     if (toolId === "config") {
       return {
         disabled: !sessionConfigEditable.value,
@@ -1655,10 +1668,23 @@ function useVibe64AutopilotView(props, emit) {
     return opened;
   }
 
+  const systemBackAvailable = computed(() => Boolean(
+    systemReturnContext.value &&
+    systemReturnContext.value.sessionId === sessionId.value
+  ));
+
   function openSourceEditorFile(target = {}) {
     const filePath = String(target?.path || "").trim();
     if (!filePath) {
       return false;
+    }
+    if (target.origin === "system") {
+      systemReturnContext.value = {
+        ...(target.systemContext && typeof target.systemContext === "object" ? target.systemContext : {}),
+        sessionId: sessionId.value
+      };
+    } else {
+      systemReturnContext.value = null;
     }
     sourceEditorOpenSequence += 1;
     sourceEditorOpenRequest.value = {
@@ -1673,6 +1699,41 @@ function useVibe64AutopilotView(props, emit) {
     }
     return opened;
   }
+
+  function backToSystemFromEditor() {
+    if (!systemBackAvailable.value) {
+      return false;
+    }
+    systemRestoreSequence += 1;
+    systemRestoreRequest.value = {
+      ...systemReturnContext.value,
+      sequence: systemRestoreSequence
+    };
+    const opened = selectSessionTool("system");
+    if (opened) {
+      emit("project-attention");
+    }
+    return opened;
+  }
+
+  function askCodexAboutSystemContext(input = {}) {
+    const prompt = String(input?.prompt || input?.text || "").trim();
+    if (!prompt || !sourceEditorAskCodexAvailable.value) {
+      return false;
+    }
+    setConversationComposerDraft(prompt, {
+      publishDraft: true
+    });
+    emit("project-attention");
+    return true;
+  }
+
+  watch(sessionId, (nextSessionId, previousSessionId) => {
+    if (previousSessionId && nextSessionId !== previousSessionId) {
+      systemReturnContext.value = null;
+      systemRestoreRequest.value = null;
+    }
+  });
 
   function selectSessionToolFromNav(tabId = "") {
     if (selectSessionTool(tabId)) {
@@ -2419,12 +2480,14 @@ function useVibe64AutopilotView(props, emit) {
     activateControl,
     activateWorkflowButtonControl,
     activeSessionTool,
+    askCodexAboutSystemContext,
     artifactControlFormVisible,
     artifactWorkflowActionsVisible,
     backgroundTaskError,
     bottomComposerVisible,
     bottomWorkflowActionsVisible,
     backToDashboard,
+    backToSystemFromEditor,
     canSubmitSelectedControl,
     chatCollapsed,
     chatReloadAvailable,
@@ -2551,6 +2614,8 @@ function useVibe64AutopilotView(props, emit) {
     sourceEditorAskCodexAvailable,
     askCodexAboutSourceEditorFile,
     sourceEditorOpenRequest,
+    systemBackAvailable,
+    systemRestoreRequest,
     statusAgentStopVisible,
     statusActionsVisible,
     stepInput,

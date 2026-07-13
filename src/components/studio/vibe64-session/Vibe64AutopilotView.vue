@@ -546,6 +546,17 @@
         >
           <header class="studio-autopilot__session-tool-header">
             <v-btn
+              v-if="systemBackAvailable"
+              :prepend-icon="mdiArrowLeft"
+              size="x-small"
+              title="Return to the System world"
+              type="button"
+              variant="tonal"
+              @click="backToSystemFromEditor"
+            >
+              Back to System
+            </v-btn>
+            <v-btn
               :prepend-icon="mdiArrowLeft"
               size="x-small"
               title="Back to dashboard"
@@ -567,6 +578,36 @@
             :session-id="sessionId"
             :sessions-api-path="props.sessionsApiPath"
             @ask-codex-about-file="askCodexAboutSourceEditorFile"
+          />
+        </section>
+
+        <section
+          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+          class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__system-pane"
+          role="tabpanel"
+        >
+          <header class="studio-autopilot__session-tool-header">
+            <v-btn
+              :prepend-icon="mdiArrowLeft"
+              size="x-small"
+              title="Back to dashboard"
+              type="button"
+              variant="tonal"
+              @click="backToDashboard"
+            >
+              Back to dashboard
+            </v-btn>
+          </header>
+          <Vibe64SystemWorldView
+            v-if="rightPaneTabMounted('system')"
+            :active="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+            :ask-chat-available="sourceEditorAskCodexAvailable"
+            class="studio-autopilot__session-tool-content"
+            :resolve-request-url="resolveStudioRequestUrl"
+            :restore-request="systemRestoreRequest"
+            :session-id="sessionId"
+            @ask-in-chat="askSystemContextAndFocus"
+            @open-source-file="openSourceEditorFile"
           />
         </section>
 
@@ -630,7 +671,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
+import { defineAsyncComponent, nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -645,6 +686,7 @@ import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64
 import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
+import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -653,6 +695,9 @@ import {
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
+const Vibe64SystemWorldView = defineAsyncComponent(() => (
+  import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64SystemWorldView())
+));
 
 const {
   Vibe64FixCodexDialog,
@@ -661,10 +706,12 @@ const {
   Vibe64SessionDiffPanel,
   activateComposerMenuItem,
   activateWorkflowButtonControl,
+  askCodexAboutSystemContext,
   askCodexAboutSourceEditorFile,
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
   backToDashboard,
+  backToSystemFromEditor,
   backgroundTaskError,
   bottomComposerVisible,
   bottomWorkflowActionsVisible,
@@ -763,6 +810,8 @@ const {
   sessionToolbarVisible,
   sourceEditorAskCodexAvailable,
   sourceEditorOpenRequest,
+  systemBackAvailable,
+  systemRestoreRequest,
   statusAgentStopVisible,
   statusActionsVisible,
   stepInput,
@@ -814,6 +863,14 @@ function focusBottomComposer() {
       pendingComposerFocus = null;
     }
   });
+}
+
+function askSystemContextAndFocus(input = {}) {
+  const added = askCodexAboutSystemContext(input);
+  if (added) {
+    focusBottomComposer();
+  }
+  return added;
 }
 
 function submitComposerControlAndFocus(options = {}) {

@@ -493,6 +493,34 @@
       "options": {},
       "installedAt": "2026-06-30T03:21:05.570Z",
       "migrationSyncVersion": "0.1.0"
+    },
+    "@local/vibe64-system-graph": {
+      "packageId": "@local/vibe64-system-graph",
+      "version": "0.1.0",
+      "source": {
+        "type": "local-package",
+        "packagePath": "packages/vibe64-system-graph",
+        "descriptorPath": "packages/vibe64-system-graph/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {
+            "@local/vibe64-system-graph": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "file:packages/vibe64-system-graph"
+            }
+          },
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-07-11T17:16:51.180Z"
     }
   }
 }
