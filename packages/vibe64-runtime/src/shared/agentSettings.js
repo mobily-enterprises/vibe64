@@ -20,6 +20,16 @@ const VIBE64_CODEX_DEFAULT_THINKING = "xhigh";
 const VIBE64_CODEX_SPARK_MODEL = "gpt-5.3-codex-spark";
 const VIBE64_CODEX_SOURCE_EXPLANATION_MODEL = VIBE64_CODEX_SPARK_MODEL;
 const VIBE64_CODEX_SOURCE_EXPLANATION_THINKING = "medium";
+const VIBE64_CODEX_STANDARD_THINKING_VALUES = Object.freeze([
+  "low",
+  "medium",
+  "high",
+  "xhigh"
+]);
+const VIBE64_CODEX_SOL_THINKING_VALUES = Object.freeze([
+  ...VIBE64_CODEX_STANDARD_THINKING_VALUES,
+  "max"
+]);
 
 const VIBE64_AGENT_PROVIDERS = Object.freeze([
   Object.freeze({
@@ -38,17 +48,20 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
           }),
           Object.freeze({
             label: "GPT-5.6 Sol",
+            supportedThinking: VIBE64_CODEX_SOL_THINKING_VALUES,
             value: VIBE64_CODEX_DEFAULT_MODEL
           }),
           Object.freeze({
             label: "GPT-5.5",
+            supportedThinking: VIBE64_CODEX_STANDARD_THINKING_VALUES,
             value: VIBE64_CODEX_GPT_5_5_MODEL
           }),
           Object.freeze({
             label: "Codex Spark",
             request: Object.freeze({
-              reasoning: false
+              summary: false
             }),
+            supportedThinking: VIBE64_CODEX_STANDARD_THINKING_VALUES,
             value: VIBE64_CODEX_SPARK_MODEL
           })
         ])
@@ -77,6 +90,10 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
           Object.freeze({
             label: "X High",
             value: "xhigh"
+          }),
+          Object.freeze({
+            label: "Max",
+            value: "max"
           })
         ])
       })
@@ -137,10 +154,11 @@ function normalizedParameterValue(provider = {}, parameterId = "", value = "") {
 function normalizeVibe64AgentSettings(value = {}) {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const provider = agentProviderDefinition(input.providerId || input.provider);
+  const model = normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, input.model);
   return {
-    model: normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, input.model),
+    model,
     providerId: provider.id,
-    thinking: normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, input.thinking)
+    thinking: normalizedAgentThinkingValue(provider, model, input.thinking)
   };
 }
 
@@ -173,6 +191,56 @@ function effectiveAgentParameterOption(provider = {}, parameterId = "", value = 
   const effectiveValue = effectiveAgentParameterValue(provider, parameterId, value);
   return (Array.isArray(parameter?.options) ? parameter.options : [])
     .find((option) => normalizeAgentSettingText(option.value) === effectiveValue) || null;
+}
+
+function supportedAgentThinkingValues(provider = {}, model = "") {
+  const modelOption = effectiveAgentParameterOption(
+    provider,
+    VIBE64_AGENT_PARAMETER_IDS.MODEL,
+    model
+  );
+  return Array.isArray(modelOption?.supportedThinking)
+    ? new Set(modelOption.supportedThinking.map((value) => normalizeAgentSettingText(value)))
+    : null;
+}
+
+function normalizedAgentThinkingValue(provider = {}, model = "", value = "") {
+  const normalized = normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, value);
+  const supported = supportedAgentThinkingValues(provider, model);
+  if (!supported || !normalized || supported.has(normalized)) {
+    return normalized;
+  }
+  const fallback = normalizeAgentSettingText(
+    agentProviderParameter(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING)?.defaultValue
+  );
+  return supported.has(fallback) ? fallback : "";
+}
+
+function vibe64AgentSettingParameters(value = {}) {
+  const normalized = normalizeVibe64AgentSettings(value);
+  const provider = agentProviderDefinition(normalized.providerId);
+  const modelOption = effectiveAgentParameterOption(
+    provider,
+    VIBE64_AGENT_PARAMETER_IDS.MODEL,
+    normalized.model
+  );
+  const requestsReasoning = agentOptionRequestValue(modelOption, "reasoning", true);
+  const supportedThinking = supportedAgentThinkingValues(provider, normalized.model);
+  return (Array.isArray(provider.parameters) ? provider.parameters : []).flatMap((parameter) => {
+    if (parameter.id === VIBE64_AGENT_PARAMETER_IDS.THINKING && requestsReasoning === false) {
+      return [];
+    }
+    if (parameter.id !== VIBE64_AGENT_PARAMETER_IDS.THINKING || !supportedThinking) {
+      return [parameter];
+    }
+    return [{
+      ...parameter,
+      options: parameter.options.filter((option) => (
+        !normalizeAgentSettingText(option.value) ||
+        supportedThinking.has(normalizeAgentSettingText(option.value))
+      ))
+    }];
+  });
 }
 
 function effectiveVibe64AgentSettings(value = {}) {
@@ -210,7 +278,8 @@ function effectiveVibe64AgentExecutionSettings(value = {}) {
     model: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, normalized.model),
     providerId: provider.id,
     request: {
-      reasoning: agentOptionRequestValue(modelOption, "reasoning", true)
+      reasoning: agentOptionRequestValue(modelOption, "reasoning", true),
+      summary: agentOptionRequestValue(modelOption, "summary", true)
     },
     thinking: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, normalized.thinking)
   };
@@ -254,5 +323,6 @@ export {
   effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
   normalizeVibe64AgentSettings,
-  publicVibe64AgentSettings
+  publicVibe64AgentSettings,
+  vibe64AgentSettingParameters
 };

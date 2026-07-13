@@ -14,7 +14,8 @@ import {
   displayVibe64AgentSetting,
   effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
-  normalizeVibe64AgentSettings
+  normalizeVibe64AgentSettings,
+  vibe64AgentSettingParameters
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
 import {
   agentSettingsStorageKey
@@ -54,7 +55,7 @@ describe("vibe64AgentSettings", () => {
     });
   });
 
-  it("exposes Codex Spark and uses Spark/Medium for source explanations", () => {
+  it("exposes Codex Spark and uses the configured source explanation effort", () => {
     expect(displayVibe64AgentSetting("codex", "model", VIBE64_CODEX_SPARK_MODEL)).toBe("Codex Spark");
     expect(defaultVibe64SourceExplanationAgentSettings()).toEqual({
       model: VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
@@ -70,9 +71,30 @@ describe("vibe64AgentSettings", () => {
       model: VIBE64_CODEX_SPARK_MODEL,
       providerId: "codex",
       request: {
-        reasoning: false
+        reasoning: true,
+        summary: false
       },
       thinking: "medium"
+    });
+  });
+
+  it("shows and accepts only the thinking levels supported by the selected Codex model", () => {
+    const thinkingValues = (model) => vibe64AgentSettingParameters({
+      model,
+      providerId: "codex"
+    }).find((parameter) => parameter.id === "thinking").options.map((option) => option.value);
+
+    expect(thinkingValues(VIBE64_CODEX_SPARK_MODEL)).toEqual(["", "low", "medium", "high", "xhigh"]);
+    expect(thinkingValues(VIBE64_CODEX_GPT_5_5_MODEL)).toEqual(["", "low", "medium", "high", "xhigh"]);
+    expect(thinkingValues(VIBE64_CODEX_SOL_MODEL)).toEqual(["", "low", "medium", "high", "xhigh", "max"]);
+    expect(normalizeVibe64AgentSettings({
+      model: VIBE64_CODEX_SPARK_MODEL,
+      providerId: "codex",
+      thinking: "max"
+    })).toEqual({
+      model: VIBE64_CODEX_SPARK_MODEL,
+      providerId: "codex",
+      thinking: VIBE64_CODEX_DEFAULT_THINKING
     });
   });
 

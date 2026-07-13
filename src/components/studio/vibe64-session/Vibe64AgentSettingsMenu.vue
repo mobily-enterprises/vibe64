@@ -73,7 +73,8 @@ import {
 import {
   VIBE64_AGENT_PROVIDERS,
   displayVibe64AgentSetting,
-  normalizeVibe64AgentSettings
+  normalizeVibe64AgentSettings,
+  vibe64AgentSettingParameters
 } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
@@ -102,9 +103,7 @@ const provider = computed(() => (
   VIBE64_AGENT_PROVIDERS[0]
 ));
 const providerLabel = computed(() => provider.value?.label || "AI");
-const parameters = computed(() => (
-  Array.isArray(provider.value?.parameters) ? provider.value.parameters : []
-));
+const parameters = computed(() => vibe64AgentSettingParameters(currentSettings.value));
 const summary = computed(() => {
   const text = parameters.value
     .map((parameter) => displayVibe64AgentSetting(

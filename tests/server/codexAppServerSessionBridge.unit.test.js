@@ -147,6 +147,25 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
   }), {
     approvalPolicy: "never",
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
+    effort: "high",
+    model: VIBE64_CODEX_SPARK_MODEL,
+    sandboxPolicy: {
+      type: "dangerFullAccess"
+    }
+  });
+});
+
+test("codex app-server bridge sends Spark source explanations at medium effort", () => {
+  assert.deepEqual(codexAppServerTurnSettings({
+    agentSettings: {
+      model: VIBE64_CODEX_SPARK_MODEL,
+      thinking: "medium"
+    },
+    cwd: "/runtime/projects/repo-test/sessions/active/session/source"
+  }), {
+    approvalPolicy: "never",
+    cwd: "/runtime/projects/repo-test/sessions/active/session/source",
+    effort: "medium",
     model: VIBE64_CODEX_SPARK_MODEL,
     sandboxPolicy: {
       type: "dangerFullAccess"

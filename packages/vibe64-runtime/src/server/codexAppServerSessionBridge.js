@@ -153,6 +153,8 @@ function codexAppServerTurnSettings({
   };
   if (effectiveSettings.request.reasoning !== false) {
     settings.effort = normalizeAgentText(effort) || effectiveSettings.thinking;
+  }
+  if (effectiveSettings.request.summary !== false) {
     settings.summary = CODEX_SESSION_REASONING_SUMMARY;
   }
   return settings;
