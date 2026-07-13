@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -14,6 +14,7 @@ const DEPENDENCY_SECTIONS = Object.freeze([
   "peerDependencies"
 ]);
 const JSKIT_PACKAGE_PATTERN = /^@jskit-ai\/[a-z0-9._-]+$/iu;
+const PROGRESS_INTERVAL_MS = 5_000;
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -41,6 +42,73 @@ function run(command, args, {
   }
 
   return capture ? String(result.stdout || "") : "";
+}
+
+function formatElapsedTime(elapsedMilliseconds = 0) {
+  const elapsedSeconds = Math.max(0, Math.floor(Number(elapsedMilliseconds) / 1000));
+  if (elapsedSeconds < 1) {
+    return "under 1s";
+  }
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds}s`;
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function runWithProgress(command, args, {
+  activity,
+  progressIntervalMs = PROGRESS_INTERVAL_MS,
+  step
+} = {}) {
+  const normalizedActivity = String(activity || `${command} ${args.join(" ")}`).trim();
+  const normalizedStep = String(step || "Update").trim();
+  const startedAt = Date.now();
+
+  console.log(`[jskit:update] ${normalizedStep}: ${normalizedActivity}.`);
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const child = spawn(command, args, {
+      cwd: ROOT_DIR,
+      shell: process.platform === "win32",
+      stdio: "inherit"
+    });
+    const progressTimer = setInterval(() => {
+      console.log(
+        `[jskit:update] ${normalizedStep} is still running (${formatElapsedTime(Date.now() - startedAt)} elapsed): ${normalizedActivity}.`
+      );
+    }, progressIntervalMs);
+    progressTimer.unref();
+
+    function finish(error = null) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearInterval(progressTimer);
+      if (error) {
+        reject(error);
+        return;
+      }
+      console.log(
+        `[jskit:update] ${normalizedStep} complete in ${formatElapsedTime(Date.now() - startedAt)}.`
+      );
+      resolve();
+    }
+
+    child.once("error", finish);
+    child.once("close", (status, signal) => {
+      if (status === 0) {
+        finish();
+        return;
+      }
+      const outcome = signal ? `signal ${signal}` : `exit code ${status}`;
+      finish(new Error(`${command} ${args.join(" ")} failed with ${outcome}.`));
+    });
+  });
 }
 
 function parseFlagValue(args, name) {
@@ -272,19 +340,31 @@ function jskitDependencyNames(manifest) {
   return [...names].sort((left, right) => left.localeCompare(right));
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const dryRun = isDryRun(args);
   const registryArgs = npmRegistryArgs(args);
 
-  run("npx", ["jskit", "app", "update-packages", ...args]);
+  await runWithProgress("npx", ["jskit", "app", "update-packages", ...args], {
+    activity: dryRun
+      ? "checking root JSKIT package updates and managed migrations"
+      : "updating root JSKIT packages and generating managed migrations",
+    step: "Step 1/3"
+  });
 
+  console.log("[jskit:update] Step 2/3: aligning JSKIT ranges in workspace manifests and descriptors.");
   const { changedFiles, workspaceJskitPackages } = updateWorkspacePackages({
     dryRun,
     registryArgs
   });
+  console.log(
+    `[jskit:update] Step 2/3 complete: ${changedFiles.length} workspace files ${dryRun ? "would change" : "changed"}.`
+  );
 
   if (dryRun) {
+    console.log(
+      `[jskit:update] Step 3/3 skipped in dry-run mode: ${workspaceJskitPackages.length} workspace JSKIT packages would be refreshed.`
+    );
     console.log(
       `[jskit:update] dry-run mode: would update ${changedFiles.length} workspace files and refresh ${workspaceJskitPackages.length} workspace JSKIT packages.`
     );
@@ -292,7 +372,16 @@ function main() {
   }
 
   if (workspaceJskitPackages.length > 0) {
-    run("npm", ["update", ...registryArgs, "--workspaces", ...workspaceJskitPackages]);
+    await runWithProgress(
+      "npm",
+      ["update", ...registryArgs, "--workspaces", ...workspaceJskitPackages],
+      {
+        activity: `refreshing ${workspaceJskitPackages.length} workspace JSKIT packages and updating the lockfile`,
+        step: "Step 3/3"
+      }
+    );
+  } else {
+    console.log("[jskit:update] Step 3/3 skipped: no workspace JSKIT packages were found.");
   }
 
   console.log(
@@ -300,4 +389,11 @@ function main() {
   );
 }
 
-main();
+if (path.resolve(process.argv[1] || "") === fileURLToPath(import.meta.url)) {
+  await main();
+}
+
+export {
+  formatElapsedTime,
+  runWithProgress
+};
