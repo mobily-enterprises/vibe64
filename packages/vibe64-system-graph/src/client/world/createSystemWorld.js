@@ -6,6 +6,7 @@ import {
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   stableHash
 } from "./worldLayout.js";
@@ -43,6 +44,7 @@ const SYSTEM_CONNECTION_COLORS = Object.freeze({
   import: 0x59e3ff,
   injection: 0xc69cff
 });
+const SUBSYSTEM_LAST_MILE_COLOR = 0xffe08a;
 const BOX_EDGE_PAIRS = Object.freeze([
   [0, 1], [1, 2], [2, 3], [3, 0],
   [4, 5], [5, 6], [6, 7], [7, 4],
@@ -546,28 +548,22 @@ function fileDependencyConnector(from, to, color, weight = 1) {
   midpoint.y = Math.max(from.y, to.y) + 18 + Math.min(70, from.distanceTo(to) * 0.08);
   const curve = new THREE.QuadraticBezierCurve3(from, midpoint, to);
   const points = curve.getPoints(24);
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.LineBasicMaterial({
     color,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
     opacity: 0.94,
     transparent: true
   });
-  const tube = new THREE.Mesh(
-    new THREE.TubeGeometry(
-      curve,
-      24,
-      0.9 + Math.min(0.75, Math.log2(Math.max(1, weight) + 1) * 0.2),
-      6,
-      false
-    ),
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points),
     material
   );
-  tube.renderOrder = 7;
+  line.renderOrder = 7;
   const arrowSize = 3 + Math.min(2.5, Math.log2(Math.max(1, weight) + 1) * 0.75);
   const arrow = new THREE.Mesh(
     new THREE.ConeGeometry(arrowSize, arrowSize * 2.5, 7),
-    new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color, depthTest: true, depthWrite: false })
   );
   const direction = points.at(-1).clone().sub(points.at(-2)).normalize();
   arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
@@ -575,13 +571,72 @@ function fileDependencyConnector(from, to, color, weight = 1) {
   arrow.renderOrder = 7;
   const sourceMarker = new THREE.Mesh(
     new THREE.SphereGeometry(arrowSize * 0.58, 8, 6),
-    new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color, depthTest: true, depthWrite: false })
   );
   sourceMarker.position.copy(points[0]);
   sourceMarker.renderOrder = 7;
   const group = new THREE.Group();
-  group.add(tube, arrow, sourceMarker);
+  group.add(line, arrow, sourceMarker);
   return group;
+}
+
+function subsystemBundleConnector(from, to, color) {
+  const middle = from.clone().lerp(to, 0.5);
+  middle.y = Math.max(from.y, to.y) + 52 + Math.min(120, from.distanceTo(to) * 0.1);
+  const curve = new THREE.QuadraticBezierCurve3(from, middle, to);
+  const points = curve.getPoints(32);
+  const material = new THREE.LineBasicMaterial({
+    color,
+    depthTest: true,
+    depthWrite: false,
+    opacity: 0.94,
+    transparent: true
+  });
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(points),
+    material
+  );
+  line.renderOrder = 8;
+  const arrowSize = 3.8;
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(arrowSize, arrowSize * 2.5, 8),
+    material.clone()
+  );
+  const direction = points.at(-1).clone().sub(points.at(-2)).normalize();
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.position.copy(points.at(-1)).addScaledVector(direction, -arrowSize * 0.8);
+  arrow.renderOrder = 8;
+  const object = new THREE.Group();
+  object.add(line, arrow);
+  return {
+    object,
+    pickables: [line, arrow]
+  };
+}
+
+function subsystemBundleColor(weight = 1) {
+  const density = Math.min(1, Math.log2(Math.max(1, weight)) / 4);
+  return new THREE.Color(0xd4d7dc)
+    .lerp(new THREE.Color(0x171a1f), density)
+    .getHex();
+}
+
+function subsystemLastMileConnector(from, to) {
+  const middle = from.clone().lerp(to, 0.5);
+  middle.y = Math.max(from.y, to.y) + 14 + Math.min(46, from.distanceTo(to) * 0.08);
+  const curve = new THREE.QuadraticBezierCurve3(from, middle, to);
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(curve.getPoints(20)),
+    new THREE.LineBasicMaterial({
+      color: SUBSYSTEM_LAST_MILE_COLOR,
+      depthTest: true,
+      depthWrite: false,
+      opacity: 0.9,
+      transparent: true
+    })
+  );
+  line.renderOrder = 9;
+  return line;
 }
 
 function subsystemDependencyConnector(from, to, weight = 1, kinds = []) {
@@ -635,10 +690,12 @@ function subsystemDependencyConnector(from, to, weight = 1, kinds = []) {
 function createSystemWorld({
   canvas,
   onClearSelection = () => {},
+  onHoverSubsystemConnection = () => {},
   onSelectDirectory = () => {},
   onSelectFile = () => {},
   onSelectPrecinct = () => {},
   onSelectSubsystem = () => {},
+  onSelectSubsystemConnection = () => {},
   reducedMotion = false
 } = {}) {
   if (!canvas) {
@@ -696,6 +753,8 @@ function createSystemWorld({
   const fileObjects = new Map();
   const directoryObjects = new Map();
   const subsystemObjects = new Map();
+  const subsystemConnectionObjects = new Map();
+  const subsystemConnectionPickables = [];
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let active = true;
@@ -710,6 +769,7 @@ function createSystemWorld({
   let dirty = true;
   let externalContextRoot = null;
   let grabState = null;
+  let hoveredSubsystemConnectionId = "";
   let lastFrame = performance.now();
   let pointerDown = null;
   let roofInstances = null;
@@ -718,6 +778,12 @@ function createSystemWorld({
   let selectedFileId = "";
   let selectedSubsystemId = "";
   let subsystemConnectionsVisible = false;
+  let subsystemConnectionRoot = null;
+  let selectedSubsystemConnectionId = "";
+  let subsystemBundledEdgeIds = new Set();
+  let subsystemBundleRelevantDirectoryPaths = new Set();
+  let subsystemBundleRelevantFileIds = new Set();
+  let subsystemFileEvidenceVisible = false;
   let subsystemLibrariesVisible = false;
   let neighborFileIds = new Set();
   let wheelGestureAction = CameraControls.ACTION.DOLLY;
@@ -735,6 +801,7 @@ function createSystemWorld({
   }
 
   function clearWorld() {
+    clearSubsystemConnectionHover();
     clearGroup(worldRoot);
     clearGroup(subsystemRoot);
     clearGroup(contextRoot);
@@ -746,9 +813,15 @@ function createSystemWorld({
     fileObjects.clear();
     directoryObjects.clear();
     subsystemObjects.clear();
+    subsystemConnectionObjects.clear();
+    subsystemConnectionPickables.splice(0);
     selectedDirectoryPath = null;
     selectedFileId = "";
     selectedSubsystemId = "";
+    selectedSubsystemConnectionId = "";
+    subsystemBundledEdgeIds = new Set();
+    subsystemBundleRelevantDirectoryPaths = new Set();
+    subsystemBundleRelevantFileIds = new Set();
     neighborFileIds = new Set();
     buildingEdgeLines = null;
     buildingInstances = null;
@@ -756,6 +829,7 @@ function createSystemWorld({
     dependencyEvidenceFileIds = new Set();
     dependencyEvidenceRoot = null;
     externalContextRoot = null;
+    subsystemConnectionRoot = null;
     roofInstances = null;
     selectedCampusId = null;
     subsystemLayout = null;
@@ -1090,7 +1164,8 @@ function createSystemWorld({
     }
     externalContextRoot = new THREE.Group();
     dependencyEvidenceRoot = new THREE.Group();
-    subsystemRoot.add(dependencyEvidenceRoot, externalContextRoot);
+    subsystemConnectionRoot = new THREE.Group();
+    subsystemRoot.add(dependencyEvidenceRoot, subsystemConnectionRoot, externalContextRoot);
     subsystemRoot.visible = viewMode === "subsystems";
   }
 
@@ -1099,6 +1174,174 @@ function createSystemWorld({
       clearGroup(dependencyEvidenceRoot);
     }
     dependencyEvidenceFileIds = new Set();
+  }
+
+  function clearSubsystemConnectionBundles() {
+    clearSubsystemConnectionHover();
+    if (subsystemConnectionRoot) {
+      clearGroup(subsystemConnectionRoot);
+    }
+    subsystemConnectionObjects.clear();
+    subsystemConnectionPickables.splice(0);
+    subsystemBundledEdgeIds = new Set();
+    subsystemBundleRelevantDirectoryPaths = new Set();
+    subsystemBundleRelevantFileIds = new Set();
+  }
+
+  function clearSubsystemConnectionSelection({ notify = true } = {}) {
+    const hadSelection = Boolean(selectedSubsystemConnectionId);
+    selectedSubsystemConnectionId = "";
+    if (hadSelection && notify) {
+      onSelectSubsystemConnection(null);
+    }
+  }
+
+  function directoryConnectionDockPosition(directory = {}, bundleId = "") {
+    const hash = stableHash(bundleId);
+    const side = hash % 4;
+    const position = ((hash >>> 2) % 1_000) / 1_000;
+    const xInset = Math.min(12, Math.max(5, directory.width * 0.08));
+    const zInset = Math.min(12, Math.max(5, directory.depth * 0.08));
+    const x = directory.x - directory.width / 2 + xInset + position * Math.max(0, directory.width - xInset * 2);
+    const z = directory.z - directory.depth / 2 + zInset + position * Math.max(0, directory.depth - zInset * 2);
+    if (side === 0) {
+      return new THREE.Vector3(x, directory.elevation + 9, directory.z + directory.depth / 2 - zInset);
+    }
+    if (side === 1) {
+      return new THREE.Vector3(directory.x + directory.width / 2 - xInset, directory.elevation + 9, z);
+    }
+    if (side === 2) {
+      return new THREE.Vector3(x, directory.elevation + 9, directory.z - directory.depth / 2 + zInset);
+    }
+    return new THREE.Vector3(directory.x - directory.width / 2 + xInset, directory.elevation + 9, z);
+  }
+
+  function subsystemConnectionEndpoint(bundle = {}) {
+    if (bundle.collectionKind === "directory") {
+      const directory = directoryObjects.get(bundle.collectionPath)?.directory;
+      if (directory) {
+        return directoryConnectionDockPosition(directory, bundle.id);
+      }
+    }
+    if (bundle.collectionKind === "file") {
+      const position = buildingTop(bundle.collectionFileId);
+      if (position) {
+        const direction = stableHash(bundle.id) % 2 === 0 ? 1 : -1;
+        return position.add(new THREE.Vector3(direction * 7, 22, direction * 5));
+      }
+    }
+    const subsystem = subsystemObjects.get(bundle.consumerSubsystemId)?.subsystem;
+    return subsystem
+      ? new THREE.Vector3(subsystem.x, subsystem.y - 9, subsystem.z)
+      : null;
+  }
+
+  function subsystemConnectionSource(bundle = {}) {
+    if (bundle.providerFileIds.length === 1) {
+      const position = buildingTop(bundle.providerFileIds[0]);
+      if (position) {
+        return position;
+      }
+    }
+    const subsystem = subsystemObjects.get(bundle.providerSubsystemId)?.subsystem;
+    return subsystem
+      ? new THREE.Vector3(subsystem.x, subsystem.y - 9, subsystem.z)
+      : null;
+  }
+
+  function showSubsystemConnectionBundles(subsystemId = "") {
+    clearSubsystemConnectionBundles();
+    if (!subsystemConnectionRoot || !subsystemConnectionsVisible || !subsystemId) {
+      selectedSubsystemConnectionId = "";
+      return;
+    }
+    const bundles = layoutSubsystemConnectionBundles(cityLayout, subsystemLayout, subsystemId);
+    if (!bundles.some((bundle) => bundle.id === selectedSubsystemConnectionId)) {
+      selectedSubsystemConnectionId = "";
+    }
+    for (const bundle of bundles) {
+      const from = subsystemConnectionSource(bundle);
+      const to = subsystemConnectionEndpoint(bundle);
+      if (!from || !to) {
+        continue;
+      }
+      const color = subsystemBundleColor(Math.max(bundle.connectionCount, bundle.usageCount));
+      const connector = subsystemBundleConnector(from, to, color);
+      for (const pickable of connector.pickables) {
+        pickable.userData.kind = "subsystem-connection";
+        pickable.userData.subsystemConnectionId = bundle.id;
+        subsystemConnectionPickables.push(pickable);
+      }
+      subsystemConnectionRoot.add(connector.object);
+      const expanded = bundle.id === selectedSubsystemConnectionId;
+      const dockRadius = 8.5 + Math.min(3.5, Math.log2(bundle.usageCount + 1) * 0.55);
+      const dock = new THREE.Mesh(
+        new THREE.CylinderGeometry(dockRadius, dockRadius * 1.18, 16, 12),
+        new THREE.MeshBasicMaterial({
+          color: expanded ? SUBSYSTEM_LAST_MILE_COLOR : 0xf1f5f9,
+          depthTest: false,
+          depthWrite: false
+        })
+      );
+      dock.position.copy(to);
+      dock.renderOrder = 9;
+      dock.userData.kind = "subsystem-connection";
+      dock.userData.subsystemConnectionId = bundle.id;
+      subsystemConnectionPickables.push(dock);
+      subsystemConnectionRoot.add(dock);
+      if (bundle.collectionKind === "directory") {
+        subsystemBundleRelevantDirectoryPaths.add(bundle.collectionPath);
+      }
+      if (bundle.collectionKind === "file" && bundle.collectionFileId) {
+        subsystemBundleRelevantFileIds.add(bundle.collectionFileId);
+      }
+      for (const fileId of bundle.providerFileIds) {
+        subsystemBundleRelevantFileIds.add(fileId);
+      }
+      subsystemBundledEdgeIds.add(bundle.edgeId);
+      if (expanded) {
+        for (const fileId of bundle.providerFileIds) {
+          subsystemBundleRelevantFileIds.add(fileId);
+        }
+        for (const fileId of bundle.consumerFileIds) {
+          const building = buildingTop(fileId);
+          if (!building) {
+            continue;
+          }
+          subsystemBundleRelevantFileIds.add(fileId);
+          subsystemConnectionRoot.add(subsystemLastMileConnector(to, building));
+        }
+      }
+      subsystemConnectionObjects.set(bundle.id, {
+        bundle,
+        connector,
+        dock,
+        expanded
+      });
+    }
+  }
+
+  function selectSubsystemConnection(subsystemConnectionId = "") {
+    const nextId = String(subsystemConnectionId || "");
+    selectedSubsystemConnectionId = nextId === selectedSubsystemConnectionId ? "" : nextId;
+    selectedFileId = "";
+    showSubsystemConnectionBundles(selectedSubsystemId);
+    applySelectionStyles();
+    const selected = subsystemConnectionObjects.get(selectedSubsystemConnectionId);
+    onSelectSubsystemConnection(selected
+      ? { ...selected.bundle, expanded: true }
+      : null);
+  }
+
+  function selectSubsystemConnectionFile(fileId = "") {
+    const selected = subsystemConnectionObjects.get(selectedSubsystemConnectionId)?.bundle;
+    const normalizedFileId = String(fileId || "");
+    if (!selected?.consumerFileIds.includes(normalizedFileId)) {
+      return false;
+    }
+    selectedFileId = normalizedFileId;
+    applySelectionStyles();
+    return true;
   }
 
   function showSubsystemOwnership(subsystemId = "") {
@@ -1244,7 +1487,7 @@ function createSystemWorld({
       }
     };
 
-    if (subsystemConnectionsVisible) {
+    if (subsystemConnectionsVisible && subsystemFileEvidenceVisible) {
       for (const dependency of dependencyObjects) {
         if (dependency.fromSubsystemId === subsystemId) {
           addFileConnections(dependency.fileConnections);
@@ -1285,7 +1528,7 @@ function createSystemWorld({
       const incoming = dependency.toSubsystemId === selectedSubsystemId;
       const visible = subsystemRoot.visible && subsystemConnectionsVisible && Boolean(selectedSubsystemId) && (
         outgoing || incoming
-      );
+      ) && !subsystemBundledEdgeIds.has(dependency.id);
       dependency.connector.object.visible = visible;
       if (!visible) {
         continue;
@@ -1316,6 +1559,10 @@ function createSystemWorld({
       }
     }
 
+    for (const directoryPath of subsystemBundleRelevantDirectoryPaths) {
+      includeDirectoryAncestry(directoryPath);
+    }
+
     for (const [fileId, record] of fileObjects) {
       const selected = fileId === selectedFileId;
       const neighbor = neighborFileIds.has(fileId);
@@ -1333,7 +1580,8 @@ function createSystemWorld({
       ) || (
         selectedCampusId != null && insideCampus
       ) || inSelectedSubsystem;
-      const relevant = selected || neighbor || dependencyEvidenceFileIds.has(fileId) || inSelectedScope;
+      const relevant = selected || neighbor || dependencyEvidenceFileIds.has(fileId) ||
+        subsystemBundleRelevantFileIds.has(fileId) || inSelectedScope;
       const dimmed = contextActive && !relevant;
       if (relevant) {
         relevantCampusIds.add(record.file.campusId);
@@ -1428,6 +1676,7 @@ function createSystemWorld({
   }
 
   function selectFile(fileId = "") {
+    clearSubsystemConnectionSelection();
     selectedFileId = String(fileId || "");
     selectedSubsystemId = "";
     selectedCampusId = null;
@@ -1435,10 +1684,12 @@ function createSystemWorld({
     showSubsystemOwnership("");
     showExternalSatellites("");
     showDependencyEvidence("");
+    showSubsystemConnectionBundles("");
     applySelectionStyles();
   }
 
   function selectDirectory(directoryPath = null) {
+    clearSubsystemConnectionSelection();
     selectedCampusId = null;
     selectedSubsystemId = "";
     selectedDirectoryPath = directoryPath == null ? null : String(directoryPath);
@@ -1447,10 +1698,12 @@ function createSystemWorld({
     showSubsystemOwnership("");
     showExternalSatellites("");
     showDependencyEvidence("");
+    showSubsystemConnectionBundles("");
     applySelectionStyles();
   }
 
   function selectPrecinct(campusId = null) {
+    clearSubsystemConnectionSelection();
     selectedCampusId = campusId == null ? null : String(campusId);
     selectedSubsystemId = "";
     selectedDirectoryPath = null;
@@ -1459,11 +1712,14 @@ function createSystemWorld({
     showSubsystemOwnership("");
     showExternalSatellites("");
     showDependencyEvidence("");
+    showSubsystemConnectionBundles("");
     applySelectionStyles();
   }
 
   function selectSubsystem(subsystemId = "") {
-    selectedSubsystemId = String(subsystemId || "");
+    const nextSubsystemId = String(subsystemId || "");
+    clearSubsystemConnectionSelection();
+    selectedSubsystemId = nextSubsystemId;
     selectedCampusId = null;
     selectedDirectoryPath = null;
     selectedFileId = "";
@@ -1471,18 +1727,26 @@ function createSystemWorld({
     showSubsystemOwnership(selectedSubsystemId);
     showExternalSatellites(selectedSubsystemId);
     showDependencyEvidence(selectedSubsystemId);
+    showSubsystemConnectionBundles(selectedSubsystemId);
     applySelectionStyles();
   }
 
-  function setSubsystemLayers({ connections = false, libraries = false } = {}) {
+  function setSubsystemLayers({ connections = false, fileEvidence = false, libraries = false } = {}) {
     subsystemConnectionsVisible = connections === true;
+    subsystemFileEvidenceVisible = subsystemConnectionsVisible && fileEvidence === true;
     subsystemLibrariesVisible = libraries === true;
     showExternalSatellites(selectedSubsystemId);
     showDependencyEvidence(selectedSubsystemId);
+    const previousConnectionId = selectedSubsystemConnectionId;
+    showSubsystemConnectionBundles(selectedSubsystemId);
+    if (previousConnectionId && !selectedSubsystemConnectionId) {
+      onSelectSubsystemConnection(null);
+    }
     applySelectionStyles();
   }
 
   function clearSelection() {
+    clearSubsystemConnectionSelection();
     selectedCampusId = null;
     selectedDirectoryPath = null;
     selectedFileId = "";
@@ -1491,6 +1755,7 @@ function createSystemWorld({
     showSubsystemOwnership("");
     showExternalSatellites("");
     showDependencyEvidence("");
+    showSubsystemConnectionBundles("");
     applySelectionStyles();
   }
 
@@ -1506,6 +1771,7 @@ function createSystemWorld({
   }
 
   function setFileContext(constellation = {}) {
+    clearSubsystemConnectionSelection();
     clearContext();
     selectedFileId = constellation.selectedFile?.id || "";
     selectedSubsystemId = "";
@@ -1515,6 +1781,7 @@ function createSystemWorld({
     showSubsystemOwnership("");
     showExternalSatellites("");
     showDependencyEvidence("");
+    showSubsystemConnectionBundles("");
     for (const edge of constellation.edges || []) {
       const from = buildingTop(edge.fromFileId);
       const to = buildingTop(edge.toFileId);
@@ -1800,6 +2067,9 @@ function createSystemWorld({
     const previousMode = viewMode;
     viewMode = ["folders", "subsystems", "runtime"].includes(nextMode) ? nextMode : "folders";
     subsystemRoot.visible = viewMode === "subsystems";
+    if (!subsystemRoot.visible) {
+      clearSubsystemConnectionHover();
+    }
     applySelectionStyles();
     if (viewMode === "subsystems") {
       if (!focusSubsystem(selectedSubsystemId)) {
@@ -1852,12 +2122,47 @@ function createSystemWorld({
     pointerNdc(event);
     raycaster.setFromCamera(pointer, camera);
     const activePickables = subsystemRoot.visible
-      ? pickables
+      ? [...subsystemConnectionPickables, ...pickables]
       : pickables.filter((object) => object.userData.kind !== "subsystem");
     return raycaster.intersectObjects(activePickables, false)[0] || null;
   }
 
+  function clearSubsystemConnectionHover() {
+    if (!hoveredSubsystemConnectionId) {
+      return;
+    }
+    hoveredSubsystemConnectionId = "";
+    onHoverSubsystemConnection(null);
+  }
+
+  function updateSubsystemConnectionHover(event) {
+    if (!subsystemRoot.visible || !subsystemConnectionsVisible) {
+      clearSubsystemConnectionHover();
+      return;
+    }
+    const intersection = pickedIntersection(event);
+    const subsystemConnectionId = intersection?.object?.userData.kind === "subsystem-connection"
+      ? intersection.object.userData.subsystemConnectionId
+      : "";
+    if (subsystemConnectionId === hoveredSubsystemConnectionId) {
+      return;
+    }
+    hoveredSubsystemConnectionId = subsystemConnectionId;
+    const record = subsystemConnectionObjects.get(subsystemConnectionId);
+    if (!record) {
+      onHoverSubsystemConnection(null);
+      return;
+    }
+    const bounds = canvas.getBoundingClientRect();
+    onHoverSubsystemConnection({
+      ...record.bundle,
+      canvasX: Math.max(12, Math.min(bounds.width - 274, event.clientX - bounds.left + 14)),
+      canvasY: Math.max(84, event.clientY - bounds.top - 12)
+    });
+  }
+
   function handlePointerDown(event) {
+    clearSubsystemConnectionHover();
     if (document.activeElement !== canvas) {
       canvas.focus({ preventScroll: true });
     }
@@ -1886,6 +2191,7 @@ function createSystemWorld({
 
   function handlePointerMove(event) {
     if (!grabState || event.pointerId !== grabState.pointerId) {
+      updateSubsystemConnectionHover(event);
       return;
     }
     pointerNdc(event, grabState.pointer);
@@ -1997,6 +2303,10 @@ function createSystemWorld({
     pointerDown = null;
     const intersection = pickedIntersection(event);
     const object = intersection?.object;
+    if (object?.userData.kind === "subsystem-connection") {
+      selectSubsystemConnection(object.userData.subsystemConnectionId);
+      return;
+    }
     if (object?.userData.kind === "subsystem") {
       const subsystemId = object.userData.subsystemId;
       const record = subsystemObjects.get(subsystemId);
@@ -2011,6 +2321,18 @@ function createSystemWorld({
       const fileId = object.userData.fileIds[intersection.instanceId];
       const record = fileObjects.get(fileId);
       if (!record) {
+        return;
+      }
+      const selectedConnection = subsystemConnectionObjects.get(selectedSubsystemConnectionId)?.bundle;
+      if (selectedConnection?.consumerFileIds.includes(fileId)) {
+        selectSubsystemConnectionFile(fileId);
+        onSelectFile({
+          fileId,
+          fileKey: record.file.key,
+          path: record.file.path,
+          preserveSubsystemSelection: true,
+          subsystemConnectionId: selectedSubsystemConnectionId
+        });
         return;
       }
       selectFile(fileId);
@@ -2043,12 +2365,14 @@ function createSystemWorld({
   function handlePointerCancel() {
     grabState = null;
     pointerDown = null;
+    clearSubsystemConnectionHover();
   }
 
   canvas.addEventListener("pointerdown", handlePointerDown);
   canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerup", handlePointerUp);
   canvas.addEventListener("pointercancel", handlePointerCancel);
+  canvas.addEventListener("pointerleave", clearSubsystemConnectionHover);
   canvas.addEventListener("lostpointercapture", handlePointerCancel);
   canvas.addEventListener("wheel", handleWheelMode, { capture: true, passive: true });
   canvas.addEventListener("keydown", handleKeyDown);
@@ -2067,6 +2391,7 @@ function createSystemWorld({
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
       canvas.removeEventListener("pointercancel", handlePointerCancel);
+      canvas.removeEventListener("pointerleave", clearSubsystemConnectionHover);
       canvas.removeEventListener("lostpointercapture", handlePointerCancel);
       canvas.removeEventListener("wheel", handleWheelMode, true);
       canvas.removeEventListener("keydown", handleKeyDown);
@@ -2105,6 +2430,7 @@ function createSystemWorld({
     selectFile,
     selectPrecinct,
     selectSubsystem,
+    selectSubsystemConnectionFile,
     setActive(value) {
       active = value === true;
       markDirty();

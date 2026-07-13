@@ -143,11 +143,13 @@ function subsystemDependencyGraph(model = {}, definitions = [], connections = []
         declared: false,
         fileConnections: new Map(),
         fromSubsystemId,
+        injectionTokens: new Set(),
         injectionCount: 0,
         importCount: 0,
         connectionCount: 0,
         kinds: new Set(),
         sourceFileIds: new Set(),
+        symbols: new Set(),
         toSubsystemId
       });
     }
@@ -185,6 +187,12 @@ function subsystemDependencyGraph(model = {}, definitions = [], connections = []
       edge.declared ||= connection.kind === "declaration";
       edge.importCount += connection.kind === "import" ? 1 : 0;
       edge.injectionCount += connection.kind === "injection" ? 1 : 0;
+      if (connection.kind === "injection" && connection.reference) {
+        edge.injectionTokens.add(connection.reference);
+      }
+      for (const symbol of connection.symbols) {
+        edge.symbols.add(symbol);
+      }
       if (connection.source.fileId) {
         edge.sourceFileIds.add(connection.source.fileId);
       }
@@ -195,6 +203,7 @@ function subsystemDependencyGraph(model = {}, definitions = [], connections = []
           fromFileId: connection.source.fileId,
           fromPath: filesById.get(connection.source.fileId)?.path || "",
           importCount: 0,
+          injectionTokens: new Set(),
           injectionCount: 0,
           kinds: new Set(),
           references: new Set(),
@@ -207,6 +216,9 @@ function subsystemDependencyGraph(model = {}, definitions = [], connections = []
         fileConnection.injectionCount += connection.kind === "injection" ? 1 : 0;
         fileConnection.kinds.add(connection.kind);
         fileConnection.references.add(connection.reference);
+        if (connection.kind === "injection" && connection.reference) {
+          fileConnection.injectionTokens.add(connection.reference);
+        }
         for (const symbol of connection.symbols) {
           fileConnection.symbols.add(symbol);
         }
@@ -247,14 +259,17 @@ function subsystemDependencyGraph(model = {}, definitions = [], connections = []
         `${connection.fromFileId}:${connection.toFileId}`
       )).map((connection) => ({
         ...connection,
+        injectionTokens: [...connection.injectionTokens].sort(),
         kinds: [...connection.kinds].sort(),
         references: [...connection.references].filter(Boolean).sort(),
         symbols: [...connection.symbols].sort()
       })),
       injectionCount: edge.injectionCount,
+      injectionTokens: [...edge.injectionTokens].sort(),
       importCount: edge.importCount,
       kinds: [...edge.kinds].sort(),
-      sourceFileIds: [...edge.sourceFileIds].sort()
+      sourceFileIds: [...edge.sourceFileIds].sort(),
+      symbols: [...edge.symbols].sort()
     };
     dependenciesBySubsystem.get(from.id).outgoing.push({
       ...summary,

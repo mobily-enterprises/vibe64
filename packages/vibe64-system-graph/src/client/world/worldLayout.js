@@ -312,6 +312,180 @@ function topLevelPrecincts(overview = {}) {
   return layoutFileCity(overview).campuses;
 }
 
+function commonDirectoryPath(directoryPaths = []) {
+  const paths = directoryPaths.map((directoryPath) => String(directoryPath || "")).filter(Boolean);
+  if (paths.length === 0) {
+    return "";
+  }
+  const segments = paths.map((directoryPath) => directoryPath.split("/").filter(Boolean));
+  const shared = [];
+  for (let index = 0; index < Math.min(...segments.map((parts) => parts.length)); index += 1) {
+    const segment = segments[0][index];
+    if (!segments.every((parts) => parts[index] === segment)) {
+      break;
+    }
+    shared.push(segment);
+  }
+  return shared.join("/");
+}
+
+function subsystemConnectionInterfaces(fileConnection = {}) {
+  const interfaces = [];
+  const injectionTokens = new Set(fileConnection.injectionTokens || []);
+  for (const symbol of fileConnection.symbols || []) {
+    interfaces.push({
+      kind: "import",
+      reference: symbol
+    });
+  }
+  for (const token of injectionTokens) {
+    interfaces.push({
+      kind: "injection",
+      reference: token
+    });
+  }
+  if ((fileConnection.kinds || []).includes("import") && !(fileConnection.symbols || []).length) {
+    const moduleReference = (fileConnection.references || []).find((reference) => (
+      !injectionTokens.has(reference)
+    )) || fileConnection.toPath || fileConnection.toFileId;
+    interfaces.push({
+      kind: "import",
+      reference: moduleReference
+    });
+  }
+  return interfaces.filter((entry) => entry.reference);
+}
+
+function subsystemOwnedAnchor(subsystem = {}, file = {}) {
+  return [...(subsystem.anchors || [])]
+    .filter((anchor) => anchor.relation === "owns")
+    .sort((left, right) => (
+      String(right.path || "").length - String(left.path || "").length ||
+      String(left.path || "").localeCompare(String(right.path || ""))
+    ))
+    .find((anchor) => (
+    anchor.kind === "file"
+      ? file.path === anchor.path
+      : file.path === anchor.path || file.path.startsWith(`${anchor.path}/`)
+  )) || null;
+}
+
+function layoutSubsystemConnectionBundles(cityLayout = {}, subsystemLayout = {}, selectedSubsystemId = "") {
+  const filesById = new Map((cityLayout.files || []).map((file) => [file.id, file]));
+  const directoriesByPath = new Map((cityLayout.directories || []).map((directory) => [directory.path, directory]));
+  const subsystemsById = new Map((subsystemLayout.subsystems || []).map((subsystem) => [subsystem.id, subsystem]));
+  const selectedId = String(selectedSubsystemId || "");
+  const bundles = [];
+
+  for (const edge of subsystemLayout.dependencyEdges || []) {
+    if (edge.fromSubsystemId !== selectedId && edge.toSubsystemId !== selectedId) {
+      continue;
+    }
+    const consumerSubsystem = subsystemsById.get(edge.fromSubsystemId);
+    const providerSubsystem = subsystemsById.get(edge.toSubsystemId);
+    if (!consumerSubsystem || !providerSubsystem) {
+      continue;
+    }
+    const interactions = new Map();
+    for (const fileConnection of edge.fileConnections || []) {
+      for (const connectionInterface of subsystemConnectionInterfaces(fileConnection)) {
+        const key = `${connectionInterface.kind}\u0000${connectionInterface.reference}`;
+        const interaction = interactions.get(key) || {
+          connectionCount: 0,
+          connectionCountsByConsumerFileId: new Map(),
+          consumerFileIds: new Set(),
+          kind: connectionInterface.kind,
+          providerFileIds: new Set(),
+          reference: connectionInterface.reference
+        };
+        const connectionCount = Math.max(1, Number(fileConnection.connectionCount) || 0);
+        interaction.connectionCount += connectionCount;
+        interaction.connectionCountsByConsumerFileId.set(
+          fileConnection.fromFileId,
+          (interaction.connectionCountsByConsumerFileId.get(fileConnection.fromFileId) || 0) + connectionCount
+        );
+        interaction.consumerFileIds.add(fileConnection.fromFileId);
+        interaction.providerFileIds.add(fileConnection.toFileId);
+        interactions.set(key, interaction);
+      }
+    }
+
+    for (const interaction of interactions.values()) {
+      const partitions = new Map();
+      for (const fileId of interaction.consumerFileIds) {
+        const file = filesById.get(fileId);
+        const anchor = file ? subsystemOwnedAnchor(consumerSubsystem, file) : null;
+        const partitionKey = anchor ? `${anchor.kind}:${anchor.path}` : `file:${fileId}`;
+        const partition = partitions.get(partitionKey) || {
+          anchor,
+          consumerFileIds: []
+        };
+        partition.consumerFileIds.push(fileId);
+        partitions.set(partitionKey, partition);
+      }
+
+      for (const [partitionKey, partition] of partitions) {
+        const consumerFiles = partition.consumerFileIds.map((fileId) => filesById.get(fileId)).filter(Boolean);
+        let collection = {
+          collectionKind: "subsystem",
+          collectionPath: ""
+        };
+        if (partition.anchor?.kind === "file" && consumerFiles.length === 1) {
+          collection = {
+            collectionFileId: consumerFiles[0].id,
+            collectionKind: "file",
+            collectionPath: consumerFiles[0].path
+          };
+        } else if (!partition.anchor && consumerFiles.length === 1) {
+          collection = {
+            collectionFileId: consumerFiles[0].id,
+            collectionKind: "file",
+            collectionPath: consumerFiles[0].path
+          };
+        } else if (partition.anchor?.kind === "directory") {
+          const directoryPath = commonDirectoryPath(consumerFiles.map((file) => file.directoryPath));
+          const ownedDirectoryPath = directoryPath === partition.anchor.path || directoryPath.startsWith(`${partition.anchor.path}/`)
+            ? directoryPath
+            : partition.anchor.path;
+          if (directoriesByPath.has(ownedDirectoryPath)) {
+            collection = {
+              collectionKind: "directory",
+              collectionPath: ownedDirectoryPath
+            };
+          }
+        }
+        const id = [
+          edge.id,
+          interaction.kind,
+          interaction.reference,
+          partitionKey,
+          collection.collectionKind,
+          collection.collectionPath
+        ].join("\u0000");
+        bundles.push({
+          ...collection,
+          connectionCount: partition.consumerFileIds.reduce((total, fileId) => (
+            total + (interaction.connectionCountsByConsumerFileId.get(fileId) || 0)
+          ), 0),
+          consumerFileIds: stableSort(partition.consumerFileIds),
+          consumerSubsystemId: consumerSubsystem.id,
+          consumerSubsystemTitle: consumerSubsystem.title,
+          edgeId: edge.id,
+          id,
+          kind: interaction.kind,
+          providerFileIds: stableSort(interaction.providerFileIds),
+          providerSubsystemId: providerSubsystem.id,
+          providerSubsystemTitle: providerSubsystem.title,
+          reference: interaction.reference,
+          usageCount: new Set(partition.consumerFileIds).size
+        });
+      }
+    }
+  }
+
+  return stableSort(bundles, (bundle) => bundle.id);
+}
+
 function layoutSubsystemSky(cityLayout = {}, subsystems = []) {
   const directoriesByPath = new Map((cityLayout.directories || []).map((directory) => [directory.path, directory]));
   const filesByPath = new Map((cityLayout.files || []).map((file) => [file.path, file]));
@@ -441,6 +615,7 @@ export {
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   stableHash,
   SUBSYSTEM_SKY_ELEVATION,

@@ -368,6 +368,7 @@ test("subsystem projections aggregate declared, imported, and external dependenc
     kind: "import",
     line: 3,
     specifier: "@local/terminal/server",
+    symbols: ["TerminalProvider"],
     targetFile: "packages/terminal/src/server/TerminalProvider.js",
     targetPackageId: "@local/terminal"
   });
@@ -398,9 +399,12 @@ test("subsystem projections aggregate declared, imported, and external dependenc
   assert.equal(outgoing.declared, true);
   assert.deepEqual(outgoing.kinds, ["declaration", "import"]);
   assert.equal(outgoing.importCount, 1);
+  assert.deepEqual(outgoing.symbols, ["TerminalProvider"]);
+  assert.deepEqual(outgoing.injectionTokens, []);
   assert.equal(outgoing.fileConnections[0].fromPath, "packages/client-shell/src/client/ClientProvider.js");
   assert.equal(outgoing.fileConnections[0].toPath, "packages/terminal/src/server/TerminalProvider.js");
   assert.deepEqual(outgoing.fileConnections[0].references, ["@local/terminal/server"]);
+  assert.deepEqual(outgoing.fileConnections[0].symbols, ["TerminalProvider"]);
 
   const incoming = terminal.dependencies.incoming[0];
   assert.equal(incoming.subsystemId, client.id);

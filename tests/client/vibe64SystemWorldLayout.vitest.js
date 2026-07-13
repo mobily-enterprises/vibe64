@@ -4,6 +4,7 @@ import {
   DIRECTORY_ELEVATION_STEP,
   isVisuallyLargeFile,
   layoutFileCity,
+  layoutSubsystemConnectionBundles,
   layoutSubsystemSky,
   SUBSYSTEM_SKY_ELEVATION,
   topLevelPrecincts
@@ -200,5 +201,118 @@ describe("File City layout", () => {
     expect(Math.hypot(left.x - right.x, left.z - right.z)).toBeGreaterThanOrEqual(
       left.radius + right.radius + 34
     );
+  });
+
+  it("collects repeated subsystem usage at one owned directory before the exact last mile", () => {
+    const city = layoutFileCity({
+      files: [
+        file("packages/core/src/deepFreeze.js", 30),
+        file("packages/terminals/src/client/session.js", 80),
+        file("packages/terminals/src/server/service.js", 120)
+      ]
+    });
+    const providerFileId = "file:packages/core/src/deepFreeze.js";
+    const consumerFileIds = [
+      "file:packages/terminals/src/client/session.js",
+      "file:packages/terminals/src/server/service.js"
+    ];
+    const subsystemLayout = {
+      dependencyEdges: [{
+        fileConnections: consumerFileIds.map((fromFileId) => ({
+          connectionCount: 1,
+          fromFileId,
+          kinds: ["import"],
+          symbols: ["deepFreeze"],
+          toFileId: providerFileId
+        })),
+        fromSubsystemId: "subsystem:terminals",
+        id: "subsystem:terminals->subsystem:core",
+        toSubsystemId: "subsystem:core"
+      }],
+      subsystems: [
+        {
+          anchors: [{ kind: "directory", path: "packages/terminals", relation: "owns" }],
+          id: "subsystem:terminals",
+          title: "Vibe64 terminals"
+        },
+        {
+          anchors: [{ kind: "directory", path: "packages/core", relation: "owns" }],
+          id: "subsystem:core",
+          title: "Vibe64 core"
+        }
+      ]
+    };
+
+    expect(layoutSubsystemConnectionBundles(city, subsystemLayout, "subsystem:core")).toEqual([
+      expect.objectContaining({
+        collectionKind: "directory",
+        collectionPath: "packages/terminals/src",
+        consumerFileIds,
+        consumerSubsystemId: "subsystem:terminals",
+        providerFileIds: [providerFileId],
+        providerSubsystemId: "subsystem:core",
+        reference: "deepFreeze",
+        usageCount: 2
+      })
+    ]);
+  });
+
+  it("draws separate collection points for disconnected owned pieces and unanchored files", () => {
+    const city = layoutFileCity({
+      files: [
+        file("packages/core/src/helper.js", 30),
+        file("src/feature-a/client.js", 80),
+        file("src/feature-b/server.js", 120),
+        file("strays/legacy.js", 60)
+      ]
+    });
+    const providerFileId = "file:packages/core/src/helper.js";
+    const consumerFileIds = [
+      "file:src/feature-a/client.js",
+      "file:src/feature-b/server.js",
+      "file:strays/legacy.js"
+    ];
+    const subsystemLayout = {
+      dependencyEdges: [{
+        fileConnections: consumerFileIds.map((fromFileId) => ({
+          connectionCount: 1,
+          fromFileId,
+          kinds: ["import"],
+          symbols: ["sharedHelper"],
+          toFileId: providerFileId
+        })),
+        fromSubsystemId: "subsystem:scattered",
+        id: "subsystem:scattered->subsystem:core",
+        toSubsystemId: "subsystem:core"
+      }],
+      subsystems: [
+        {
+          anchors: [
+            { kind: "directory", path: "src/feature-a", relation: "owns" },
+            { kind: "directory", path: "src/feature-b", relation: "owns" }
+          ],
+          id: "subsystem:scattered",
+          title: "Scattered feature"
+        },
+        {
+          anchors: [{ kind: "directory", path: "packages/core", relation: "owns" }],
+          id: "subsystem:core",
+          title: "Vibe64 core"
+        }
+      ]
+    };
+
+    const bundles = layoutSubsystemConnectionBundles(city, subsystemLayout, "subsystem:core");
+    expect(bundles).toHaveLength(3);
+    expect(bundles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ collectionKind: "directory", collectionPath: "src/feature-a" }),
+      expect.objectContaining({ collectionKind: "directory", collectionPath: "src/feature-b" }),
+      expect.objectContaining({
+        collectionFileId: "file:strays/legacy.js",
+        collectionKind: "file",
+        collectionPath: "strays/legacy.js"
+      })
+    ]));
+    expect(bundles.every((bundle) => bundle.usageCount === 1)).toBe(true);
   });
 });
