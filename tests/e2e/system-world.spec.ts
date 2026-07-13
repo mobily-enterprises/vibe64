@@ -445,13 +445,18 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByRole("button", { name: "New session" })).toBeVisible({ timeout: 15_000 });
   await page.goto(`${DASHBOARD_PATH}/system`);
 
-  await expect(page.getByText(/File City · 034/u)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/File City · 051/u)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Folders" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subsystems" })).toBeVisible();
   await expect(page.getByText("Drag / arrows to move", { exact: true })).toBeVisible();
-  await expect(page.getByText("2-finger ↕ / W S forward–back", { exact: true })).toBeVisible();
+  await expect(page.getByText("2-finger ↕ / W S follow cursor", { exact: true })).toBeVisible();
   await expect(page.locator("canvas[aria-label^='Interactive 3D file city']")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "File city campuses" })).toBeVisible();
+
+  const worldBack = page.getByRole("button", { name: "Back to previous File City view" });
+  const worldForward = page.getByRole("button", { name: "Forward to next File City view" });
+  await expect(worldBack).toBeDisabled();
+  await expect(worldForward).toBeDisabled();
 
   await page.getByRole("button", { name: "Subsystems" }).click();
   const connectionsLayer = page.getByRole("button", { exact: true, name: "Connections" });
@@ -470,6 +475,13 @@ test("System renders the current repository as a LOC-scaled file city", async ({
   await expect(page.getByText("Start a terminal", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /used by.*Shell.*1 import from 1 file/iu })).toBeVisible();
   await expect(page.getByText("ws", { exact: true })).toBeVisible();
+  await expect(worldBack).toBeEnabled();
+  await worldBack.click();
+  await expect(page.getByRole("heading", { level: 2, name: "Terminal" })).not.toBeVisible();
+  await expect(worldForward).toBeEnabled();
+  await worldForward.click();
+  await expect(page.getByRole("heading", { level: 2, name: "Terminal" })).toBeVisible();
+  await expect(worldForward).toBeDisabled();
   await page.getByRole("button", { name: "Discover more" }).click();
   await expect(page.getByRole("textbox")).toHaveValue(
     /discover meaningful subsystems/iu

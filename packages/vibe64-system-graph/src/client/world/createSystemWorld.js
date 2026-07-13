@@ -2672,6 +2672,7 @@ function createSystemWorld({
     selectFile,
     selectPrecinct,
     selectSubsystem,
+    selectSubsystemConnection,
     selectSubsystemConnectionFile,
     setActive(value) {
       active = value === true;

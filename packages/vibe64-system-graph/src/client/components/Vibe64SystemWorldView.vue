@@ -50,6 +50,26 @@
 
       <div class="system-world__view-actions">
         <v-btn
+          aria-label="Back to previous File City view"
+          :disabled="!canNavigateWorldBack || worldHistoryBusy"
+          :icon="mdiArrowLeft"
+          size="x-small"
+          title="Back to previous File City view"
+          type="button"
+          variant="text"
+          @click="navigateWorldHistory('back')"
+        />
+        <v-btn
+          aria-label="Forward to next File City view"
+          :disabled="!canNavigateWorldForward || worldHistoryBusy"
+          :icon="mdiArrowRight"
+          size="x-small"
+          title="Forward to next File City view"
+          type="button"
+          variant="text"
+          @click="navigateWorldHistory('forward')"
+        />
+        <v-btn
           :icon="mdiCrosshairsGps"
           size="x-small"
           title="Fit the current layer"
@@ -673,6 +693,8 @@ import {
 } from "vue";
 import {
   mdiAlertOutline,
+  mdiArrowLeft,
+  mdiArrowRight,
   mdiCityVariantOutline,
   mdiCodeBraces,
   mdiCrosshairsGps,
@@ -700,8 +722,12 @@ import {
 } from "../world/createSystemWorld.js";
 import {
   isVisuallyLargeFile,
+  layoutFileCity,
   topLevelPrecincts
 } from "../world/worldLayout.js";
+import {
+  createWorldViewHistory
+} from "../world/worldViewHistory.js";
 import { SUBSYSTEM_DEPTH_MAX } from "../../shared/subsystemPresentationContract.js";
 
 const rendererRevision = "051";
@@ -735,6 +761,8 @@ const emit = defineEmits([
 ]);
 
 const activeFileId = ref("");
+const canNavigateWorldBack = ref(false);
+const canNavigateWorldForward = ref(false);
 const canvasElement = ref(null);
 const editingSubsystemDepthId = ref("");
 const hoveredSubsystemConnection = ref(null);
@@ -746,12 +774,15 @@ const showSubsystemFileEvidence = ref(false);
 const showSubsystemLibraries = ref(false);
 const viewMode = ref("folders");
 const worldError = ref("");
+const worldHistoryBusy = ref(false);
 const worldView = ref("perspective");
 let animationFrame = 0;
 let overviewGeneration = 0;
 let resizeObserver = null;
 let viewRotationPointer = null;
 let world = null;
+let applyingRestoreRequest = false;
+const worldViewHistory = createWorldViewHistory({ limit: 64 });
 
 const {
   error,
@@ -990,9 +1021,26 @@ function resizeWorld() {
   world.resize(bounds.width, bounds.height);
 }
 
-async function handleFilePick(selection) {
+function syncWorldHistoryAvailability() {
+  canNavigateWorldBack.value = worldViewHistory.canBack;
+  canNavigateWorldForward.value = worldViewHistory.canForward;
+}
+
+function recordWorldNavigation() {
+  if (!world || !overview.value || applyingRestoreRequest || worldHistoryBusy.value) {
+    return false;
+  }
+  const recorded = worldViewHistory.record(sourceNavigationContext());
+  syncWorldHistoryAvailability();
+  return recorded;
+}
+
+async function handleFilePick(selection, { recordHistory = true } = {}) {
   if (!selection.fileKey) {
     return;
+  }
+  if (recordHistory) {
+    recordWorldNavigation();
   }
   const preserveSubsystemSelection = selection.preserveSubsystemSelection === true &&
     selection.subsystemConnectionId === selectedSubsystemConnection.value?.id;
@@ -1013,6 +1061,7 @@ async function handleFilePick(selection) {
 }
 
 function handleDirectoryPick(directory) {
+  recordWorldNavigation();
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
@@ -1021,6 +1070,7 @@ function handleDirectoryPick(directory) {
 }
 
 function handlePrecinctPick(campus) {
+  recordWorldNavigation();
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
@@ -1029,6 +1079,7 @@ function handlePrecinctPick(campus) {
 }
 
 function handleSubsystemPick(subsystem) {
+  recordWorldNavigation();
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
@@ -1062,16 +1113,24 @@ async function chooseSelectedSubsystemDepth(depth) {
 }
 
 function handleSubsystemConnectionPick(connection) {
+  recordWorldNavigation();
   selectedSubsystemConnection.value = connection;
   activeFileId.value = "";
 }
 
-function handleClearSelection() {
+function clearSelectionState() {
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedDirectory.value = null;
   selectedSubsystemConnection.value = null;
   selectedSubsystemId.value = "";
+}
+
+function handleClearSelection() {
+  if (activeFileId.value || selectedDirectory.value || selectedSubsystemId.value || selectedSubsystemConnection.value) {
+    recordWorldNavigation();
+  }
+  clearSelectionState();
 }
 
 async function createWorld() {
@@ -1156,6 +1215,7 @@ async function applyOverview(nextOverview) {
 }
 
 function selectCampus(campus) {
+  recordWorldNavigation();
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
@@ -1169,6 +1229,7 @@ function inspectSubsystem(subsystem, { focus = false } = {}) {
   if (!subsystem?.id) {
     return;
   }
+  recordWorldNavigation();
   activeFileId.value = "";
   editingSubsystemDepthId.value = "";
   selectedSubsystemConnection.value = null;
@@ -1184,6 +1245,7 @@ function inspectSubsystemConnectionFile(file) {
   if (!file?.key || !selectedSubsystemConnection.value) {
     return;
   }
+  recordWorldNavigation();
   if (!world?.selectSubsystemConnectionFile(file.id)) {
     return;
   }
@@ -1194,13 +1256,14 @@ function inspectSubsystemConnectionFile(file) {
     path: file.path,
     preserveSubsystemSelection: true,
     subsystemConnectionId: selectedSubsystemConnection.value.id
-  });
+  }, { recordHistory: false });
 }
 
 function focusSubsystemDependency(dependency, direction) {
   if (!selectedSubsystem.value || !dependency?.subsystemId) {
     return;
   }
+  recordWorldNavigation();
   showSubsystemConnections.value = true;
   world?.setSubsystemLayers({
     connections: true,
@@ -1218,6 +1281,7 @@ function inspectFile(file, { focus = false } = {}) {
   if (!file?.key) {
     return;
   }
+  recordWorldNavigation();
   world?.selectFile(file.id);
   if (focus) {
     world?.focusFile(file.id);
@@ -1226,19 +1290,22 @@ function inspectFile(file, { focus = false } = {}) {
     fileId: file.id,
     fileKey: file.key,
     path: file.path
-  });
+  }, { recordHistory: false });
 }
 
 function fitWorld() {
+  recordWorldNavigation();
   void world?.fitWorld();
 }
 
 function setWorldView(view) {
+  recordWorldNavigation();
   worldView.value = view;
   world?.setView(view);
 }
 
 function rotateWorld(degrees) {
+  recordWorldNavigation();
   world?.rotateView(degrees, 0, true);
 }
 
@@ -1246,6 +1313,7 @@ function startViewRotation(event) {
   if (event.button !== 0) {
     return;
   }
+  recordWorldNavigation();
   event.currentTarget.setPointerCapture?.(event.pointerId);
   viewRotationPointer = {
     id: event.pointerId,
@@ -1277,12 +1345,19 @@ function endViewRotation(event) {
   viewRotationPointer = null;
 }
 
-function setViewMode(mode) {
+function setViewMode(mode, { recordHistory = true } = {}) {
+  if (mode === viewMode.value) {
+    return;
+  }
+  if (recordHistory) {
+    recordWorldNavigation();
+  }
   viewMode.value = mode;
   world?.setViewMode(mode);
 }
 
 function toggleSubsystemLayer(layer) {
+  recordWorldNavigation();
   if (layer === "connections") {
     showSubsystemConnections.value = !showSubsystemConnections.value;
     if (!showSubsystemConnections.value) {
@@ -1310,14 +1385,41 @@ function sourceNavigationContext() {
     mode: "city",
     selectedCampusId: selectedDirectory.value?.kind === "campus" ? selectedDirectory.value.id : "",
     selectedDirectoryPath: selectedDirectory.value?.kind === "campus" ? null : selectedDirectory.value?.path ?? null,
-    selectedFileKey: selectedFile.value?.key || "",
-    selectedSubsystemId: selectedSubsystem.value?.id || "",
+    selectedFileId: activeFileId.value,
+    selectedFileKey: selectedFile.value?.key || selectedCityFile.value?.key || "",
+    selectedSubsystemConnectionFileId: selectedSubsystemConnectionFile.value?.id || "",
+    selectedSubsystemConnectionId: selectedSubsystemConnection.value?.id || "",
+    selectedSubsystemId: selectedSubsystemId.value,
     subsystemConnectionsVisible: showSubsystemConnections.value,
     subsystemFileEvidenceVisible: showSubsystemFileEvidence.value,
     subsystemLibrariesVisible: showSubsystemLibraries.value,
     viewMode: viewMode.value,
     view: worldView.value
   };
+}
+
+async function navigateWorldHistory(direction) {
+  if (!world || !overview.value || worldHistoryBusy.value) {
+    return;
+  }
+  const currentView = sourceNavigationContext();
+  const targetView = direction === "forward"
+    ? worldViewHistory.forward(currentView)
+    : worldViewHistory.back(currentView);
+  syncWorldHistoryAvailability();
+  if (!targetView) {
+    return;
+  }
+  worldHistoryBusy.value = true;
+  worldError.value = "";
+  try {
+    await applyRestoreRequest(targetView);
+  } catch (caught) {
+    worldError.value = String(caught?.message || caught || "File City history could not be restored.");
+  } finally {
+    worldHistoryBusy.value = false;
+    syncWorldHistoryAvailability();
+  }
 }
 
 function openSelectedFile() {
@@ -1407,54 +1509,83 @@ async function applyRestoreRequest(request) {
   if (!request || !world || !overview.value) {
     return;
   }
-  if (request.viewMode || request.colorMode) {
-    setViewMode(request.viewMode || request.colorMode);
-  }
-  showSubsystemConnections.value = request.subsystemConnectionsVisible === true;
-  showSubsystemFileEvidence.value = showSubsystemConnections.value && request.subsystemFileEvidenceVisible === true;
-  showSubsystemLibraries.value = request.subsystemLibrariesVisible === true;
-  world.setSubsystemLayers({
-    connections: showSubsystemConnections.value,
-    fileEvidence: showSubsystemFileEvidence.value,
-    libraries: showSubsystemLibraries.value
-  });
-  if (request.selectedFileKey) {
-    const response = await selectFile(request.selectedFileKey);
-    const constellation = response?.constellation || fileConstellation.value;
-    if (constellation?.selectedFile) {
-      activeFileId.value = constellation.selectedFile.id;
-      selectedDirectory.value = null;
-      world.setFileContext(constellation);
+  const previousApplyingRestoreRequest = applyingRestoreRequest;
+  applyingRestoreRequest = true;
+  try {
+    if (request.viewMode || request.colorMode) {
+      setViewMode(request.viewMode || request.colorMode, { recordHistory: false });
     }
-  } else if (request.selectedCampusId) {
-    const campus = campuses.value.find((entry) => entry.id === request.selectedCampusId);
-    if (campus) {
-      selectedDirectory.value = campus;
-      activeFileId.value = "";
-      world.selectPrecinct(campus.id);
-    }
-  } else if (request.selectedSubsystemId) {
-    const subsystem = subsystems.value.find((entry) => entry.id === request.selectedSubsystemId);
-    if (subsystem) {
+    showSubsystemConnections.value = request.subsystemConnectionsVisible === true;
+    showSubsystemFileEvidence.value = showSubsystemConnections.value && request.subsystemFileEvidenceVisible === true;
+    showSubsystemLibraries.value = request.subsystemLibrariesVisible === true;
+    world.setSubsystemLayers({
+      connections: showSubsystemConnections.value,
+      fileEvidence: showSubsystemFileEvidence.value,
+      libraries: showSubsystemLibraries.value
+    });
+
+    clearSelectionState();
+    world.clearSelection();
+
+    const subsystem = subsystems.value.find((entry) => entry.id === request.selectedSubsystemId) || null;
+    const connectionRequested = Boolean(request.selectedSubsystemConnectionId && subsystem);
+    if (connectionRequested) {
       selectedSubsystemId.value = subsystem.id;
-      selectedDirectory.value = null;
-      activeFileId.value = "";
+      world.selectSubsystem(subsystem.id);
+      world.selectSubsystemConnection(request.selectedSubsystemConnectionId);
+    }
+
+    const requestedFileId = String(
+      request.selectedSubsystemConnectionFileId || request.selectedFileId || ""
+    );
+    const requestedCityFile = cityFilesById.value.get(requestedFileId) || null;
+    const requestedFileKey = String(request.selectedFileKey || requestedCityFile?.key || "");
+    if (requestedFileKey) {
+      const response = await selectFile(requestedFileKey);
+      const constellation = response?.constellation || fileConstellation.value;
+      if (constellation?.selectedFile) {
+        activeFileId.value = requestedFileId || constellation.selectedFile.id;
+        if (connectionRequested) {
+          world.selectSubsystemConnectionFile(activeFileId.value);
+        } else {
+          world.setFileContext(constellation);
+        }
+      }
+    } else if (request.selectedCampusId) {
+      const campus = campuses.value.find((entry) => entry.id === request.selectedCampusId);
+      if (campus) {
+        selectedDirectory.value = campus;
+        world.selectPrecinct(campus.id);
+      }
+    } else if (request.selectedDirectoryPath) {
+      const directory = layoutFileCity(overview.value).directories.find((entry) => (
+        entry.path === request.selectedDirectoryPath
+      ));
+      if (directory) {
+        selectedDirectory.value = directory;
+        world.selectDirectory(directory.path);
+      }
+    } else if (subsystem && !connectionRequested) {
+      selectedSubsystemId.value = subsystem.id;
       world.selectSubsystem(subsystem.id);
     }
-  }
-  worldView.value = request.view || "perspective";
-  if (!world.restoreView(request.camera || {})) {
-    if (activeFileId.value) {
-      world.focusFile(activeFileId.value);
-    } else if (selectedDirectory.value) {
-      if (selectedDirectory.value.kind === "campus") {
-        world.focusPrecinct(selectedDirectory.value.id);
-      } else {
-        world.focusDirectory(selectedDirectory.value.path);
+
+    worldView.value = request.view || "perspective";
+    if (!world.restoreView(request.camera || {})) {
+      if (activeFileId.value) {
+        world.focusFile(activeFileId.value);
+      } else if (selectedDirectory.value) {
+        if (selectedDirectory.value.kind === "campus") {
+          world.focusPrecinct(selectedDirectory.value.id);
+        } else {
+          world.focusDirectory(selectedDirectory.value.path);
+        }
+      } else if (selectedSubsystem.value) {
+        world.focusSubsystem(selectedSubsystem.value.id);
       }
-    } else if (selectedSubsystem.value) {
-      world.focusSubsystem(selectedSubsystem.value.id);
     }
+  } finally {
+    applyingRestoreRequest = previousApplyingRestoreRequest;
   }
 }
 
@@ -1476,6 +1607,11 @@ watch(() => props.restoreRequest?.sequence || 0, () => {
   if (props.restoreRequest) {
     void applyRestoreRequest(props.restoreRequest);
   }
+});
+
+watch(() => props.sessionId, () => {
+  worldViewHistory.clear();
+  syncWorldHistoryAvailability();
 });
 
 onMounted(() => {
