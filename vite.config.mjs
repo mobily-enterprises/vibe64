@@ -43,11 +43,7 @@ export default defineConfig({
   resolve: {
     preserveSymlinks: true,
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-      "@local/vibe64-system-graph/client": fileURLToPath(new URL(
-        "./packages/vibe64-system-graph/src/client/index.js",
-        import.meta.url
-      ))
+      "@": fileURLToPath(new URL("./src", import.meta.url))
     }
   },
   plugins: [
