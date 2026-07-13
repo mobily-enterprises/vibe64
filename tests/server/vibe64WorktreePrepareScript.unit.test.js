@@ -394,6 +394,15 @@ test("create worktree creates an isolated clone from project repository metadata
         fullName: "example/project"
       })
     }, null, 2)}\n`);
+    const cachePath = path.join(targetRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(cachePath), {
+      recursive: true
+    });
+    runCommand("git", ["init", "--bare", cachePath], {
+      cwd: tempRoot
+    });
+    runGit(cachePath, ["fetch", remoteRoot, "+refs/heads/*:refs/heads/*"]);
+    assert.equal(runGit(cachePath, ["remote"]), "");
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "metadata-remote");
     const sourcePath = testSessionSourcePath(targetRoot, "metadata-remote");
@@ -437,7 +446,8 @@ test("create worktree creates an isolated clone from project repository metadata
     assert.equal(runGit(sourcePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
     assert.equal(runGit(sourcePath, ["remote", "get-url", "origin"]), remoteRoot);
     await assertNoGitAlternates(sourcePath);
-    assert.equal(runGit(path.join(targetRoot, "git-cache", "repository.git"), ["rev-parse", "--is-bare-repository"]), "true");
+    assert.equal(runGit(cachePath, ["rev-parse", "--is-bare-repository"]), "true");
+    assert.equal(runGit(cachePath, ["remote", "get-url", "origin"]), remoteRoot);
     assert.notEqual(runCommandResult("git", ["-C", targetRoot, "worktree", "list", "--porcelain"]).status, 0);
   });
 });
