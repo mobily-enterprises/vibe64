@@ -65,7 +65,11 @@ test("Studio Setup Playwright browser check launches the CLI-matched browser rev
   assert.doesNotMatch(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
   assert.match(commandArgs[2], /playwright install --dry-run chromium/u);
   assert.match(commandArgs[2], /expected_chromium/u);
+  assert.match(commandArgs[2], /expected_chromium_version/u);
   assert.match(commandArgs[2], /find -H "\$expected_chromium"/u);
+  assert.match(commandArgs[2], /chromium_headless_shell-/u);
+  assert.match(commandArgs[2], /reported_chromium_version/u);
+  assert.match(commandArgs[2], /Chromium version mismatch/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
   assert.match(commandArgs[2], /vibe64-playwright-launch/u);
   assert.match(commandArgs[2], /--dump-dom/u);
@@ -106,6 +110,7 @@ test("Studio Setup Playwright browser check fails missing or invalid shared runt
     mkdirSync(fakeBin);
     writeFileSync(fakePlaywright, [
       "#!/usr/bin/env bash",
+      "printf 'browser: chromium version 123.4.5.6\\n'",
       "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
       ""
     ].join("\n"));
@@ -119,6 +124,60 @@ test("Studio Setup Playwright browser check fails missing or invalid shared runt
     assert.match(`${empty.stdout}${empty.stderr}`, /Chromium revision expected at .*chromium-9876 is not installed/u);
   } finally {
     rmSync(emptyRuntime, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("Studio Setup Playwright browser check rejects a revision directory with the wrong binary version", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "vibe64-mismatched-playwright-"));
+  const fakeBin = path.join(root, "bin");
+  const chromium = path.join(root, "chromium-9876", "chrome-linux", "chrome");
+  const headlessShell = path.join(
+    root,
+    "chromium_headless_shell-9876",
+    "chrome-linux",
+    "headless_shell"
+  );
+  try {
+    mkdirSync(fakeBin, {
+      recursive: true
+    });
+    mkdirSync(path.dirname(chromium), {
+      recursive: true
+    });
+    mkdirSync(path.dirname(headlessShell), {
+      recursive: true
+    });
+    writeFileSync(path.join(fakeBin, "playwright"), [
+      "#!/usr/bin/env bash",
+      "printf 'browser: chromium version 123.4.5.6\\n'",
+      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
+      ""
+    ].join("\n"));
+    writeFileSync(chromium, "#!/usr/bin/env bash\nprintf 'Chromium 999.0.0.0\\n'\n");
+    writeFileSync(headlessShell, "#!/usr/bin/env bash\nprintf 'Chromium 123.4.5.6\\n'\n");
+    chmodSync(path.join(fakeBin, "playwright"), 0o755);
+    chmodSync(chromium, 0o755);
+    chmodSync(headlessShell, 0o755);
+
+    const commandArgs = playwrightBrowserLaunchCommandArgs();
+    const result = spawnSync(commandArgs[0], commandArgs.slice(1), {
+      encoding: "utf8",
+      env: {
+        PATH: `${fakeBin}:/usr/bin:/bin`,
+        PLAYWRIGHT_BROWSERS_PATH: root
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(
+      `${result.stdout}${result.stderr}`,
+      /Chromium version mismatch: expected 123\.4\.5\.6, observed 999\.0\.0\.0/u
+    );
+  } finally {
+    rmSync(root, {
       force: true,
       recursive: true
     });
