@@ -36,6 +36,10 @@ import {
 import {
   vibe64BrowserTabOriginId
 } from "../../src/lib/vibe64BrowserTabOrigin.js";
+import {
+  managedPreviewTarget,
+  preferredPreviewTarget
+} from "@local/studio-terminal-core/shared";
 
 describe("Vibe64 launch controls", () => {
   const managedSourceMetadata = {
@@ -639,7 +643,7 @@ describe("Vibe64 launch controls", () => {
     })).toBe("Network request failed. (network, /api/vibe64/sessions/session-1/launch-targets)");
   });
 
-  it("refreshes launch targets only for launch-target session events", () => {
+  it("refreshes launch targets for lifecycle events and explicit refresh hints", () => {
     const ownOriginId = vibe64BrowserTabOriginId();
 
     expect(launchTargetsRealtimeShouldRefresh({
@@ -689,10 +693,53 @@ describe("Vibe64 launch controls", () => {
     }, "session-1")).toBe(false);
     expect(launchTargetsRealtimeShouldRefresh({
       payload: {
+        clientRefresh: {
+          includeLaunchTargets: true
+        },
+        reason: "command-terminal-closed",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        clientRefresh: {
+          includeLaunchTargets: true
+        },
+        reason: "codex-app-server-turn-idle",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
+        clientRefresh: {
+          includeLaunchTargets: true
+        },
         reason: "launch-target-ready",
         sessionId: "session-2"
       }
     }, "session-1")).toBe(false);
+  });
+
+  it("uses adapter preview preference while respecting availability", () => {
+    const launchTargets = [
+      {
+        available: true,
+        id: "built"
+      },
+      {
+        available: false,
+        defaultPreview: true,
+        disabledReason: "Install dependencies before running the app.",
+        id: "dev"
+      }
+    ];
+
+    expect(preferredPreviewTarget(launchTargets)?.id).toBe("dev");
+    expect(managedPreviewTarget(launchTargets)?.id).toBe("built");
+    expect(managedPreviewTarget(launchTargets.map((target) => ({
+      ...target,
+      available: true
+    })))?.id).toBe("dev");
   });
 });
 

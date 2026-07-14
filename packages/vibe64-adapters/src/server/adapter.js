@@ -184,6 +184,7 @@ function adapterLaunchTarget(input = {}) {
   const previewRoutes = normalizePreviewRoutes(input.previewRoutes);
   return {
     available: input.available !== false,
+    ...(input.defaultPreview === true ? { defaultPreview: true } : {}),
     defaultDisplay: normalizeLaunchTargetDisplay(input.defaultDisplay),
     disabledReason: normalizeText(input.disabledReason),
     id: assertLaunchTargetId(input.id),

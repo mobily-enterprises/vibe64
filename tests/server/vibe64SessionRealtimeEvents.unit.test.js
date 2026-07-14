@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD,
   VIBE64_SESSION_CHANGED_EVENT,
   vibe64SessionChangedServiceEvent,
   createVibe64SessionChangedPublisher
@@ -243,6 +244,39 @@ test("Vibe64 session change publisher can include an explicit realtime payload",
       }
     },
     reason: "codex-app-server-reasoning-summary",
+    sessionId: "session-1"
+  });
+});
+
+test("Vibe64 session change publisher merges client refresh responsibilities", async () => {
+  const events = [];
+  const publish = createVibe64SessionChangedPublisher({
+    domainEvents: {
+      async publish(event) {
+        events.push(event);
+      }
+    },
+    methodName: "startCommandTerminal",
+    serviceToken: "feature.vibe64-terminals.service"
+  });
+
+  await publish("session-1", {
+    payload: VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD,
+    reason: "command-terminal-closed",
+    session: {
+      clientRefresh: {
+        includeList: true
+      },
+      sessionId: "session-1"
+    }
+  });
+
+  assert.deepEqual(events[0].meta.realtime.payload, {
+    clientRefresh: {
+      includeLaunchTargets: true,
+      includeList: true
+    },
+    reason: "command-terminal-closed",
     sessionId: "session-1"
   });
 });

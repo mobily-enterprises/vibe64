@@ -176,6 +176,7 @@ test("@preview-lifecycle auto-starts without exposing passive actions", async ({
         },
         {
           available: true,
+          defaultPreview: true,
           id: "dev",
           label: "Run app"
         }

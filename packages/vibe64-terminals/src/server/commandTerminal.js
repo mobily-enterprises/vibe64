@@ -24,6 +24,9 @@ import {
   claimSessionWorkflowDriver
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
 import {
+  VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -863,6 +866,7 @@ function scheduleCommandTerminalPostCommitEffects({
     });
     const publishResult = await Promise.allSettled([
       publishSessionChanged(sessionId, {
+        payload: VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD,
         reason: "command-terminal-closed",
         session: completion.session
       }),

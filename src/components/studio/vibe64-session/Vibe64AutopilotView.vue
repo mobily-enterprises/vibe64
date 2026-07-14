@@ -768,7 +768,7 @@
           role="tabpanel"
         >
           <Vibe64LaunchControls
-            :auto-start-target-id="props.sessionSelectionClosed ? '' : 'dev'"
+            :auto-start-managed-preview="!props.sessionSelectionClosed"
             button-label="Run"
             button-size="small"
             button-variant="tonal"

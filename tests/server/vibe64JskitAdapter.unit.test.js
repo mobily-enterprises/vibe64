@@ -1038,8 +1038,6 @@ test("jskit launch targets accept dependencies installed by the agent", async ()
         server: "node server.js"
       }
     }, null, 2));
-    await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
-
     const session = {
       metadata: {
         source_path: targetRoot
@@ -1047,11 +1045,24 @@ test("jskit launch targets accept dependencies installed by the agent", async ()
       sessionId: "jskit_launch_after_agent_install",
       targetRoot
     };
-    const launchTargets = await listJskitLaunchTargets({
+    const adapter = createJskitTargetAdapter();
+    const launchTargetsBeforeInstall = await adapter.listLaunchTargets({
       session
     });
+    const previewBeforeInstall = launchTargetsBeforeInstall.find((target) => target.id === "dev");
 
-    assert.equal(launchTargets.find((target) => target.id === "dev")?.available, undefined);
+    assert.equal(previewBeforeInstall?.available, false);
+    assert.equal(previewBeforeInstall?.defaultPreview, true);
+
+    await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
+
+    const launchTargetsAfterInstall = await adapter.listLaunchTargets({
+      session
+    });
+    const previewAfterInstall = launchTargetsAfterInstall.find((target) => target.id === "dev");
+
+    assert.equal(previewAfterInstall?.available, true);
+    assert.equal(previewAfterInstall?.defaultPreview, true);
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       launchTargetId: "dev",

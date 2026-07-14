@@ -680,6 +680,10 @@ const props = defineProps({
     default: "tonal",
     type: String
   },
+  autoStartManagedPreview: {
+    default: false,
+    type: Boolean
+  },
   autoStartTargetId: {
     default: "",
     type: String

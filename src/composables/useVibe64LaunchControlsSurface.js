@@ -13,7 +13,8 @@ import {
   PREVIEW_QUERY_MESSAGE_TYPE
 } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 import {
-  managedPreviewTarget
+  managedPreviewTarget,
+  preferredPreviewTarget
 } from "@local/studio-terminal-core/shared";
 import {
   readLocalStorageJson,
@@ -360,6 +361,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewInputIsRemembered,
     visible
   } = useVibe64LaunchControls({
+    autoStartManagedPreview: () => props.autoStartManagedPreview,
     autoStartTargetId: () => props.autoStartTargetId,
     previewDisplayed: () => props.previewDisplayed,
     windowDisplayed: () => props.windowDisplayed,
@@ -413,7 +415,8 @@ function useVibe64LaunchControlsSurface(props) {
       return null;
     }
     return embeddedAutoStartTarget.value ||
-      managedPreviewTarget(launchTargets.value);
+      managedPreviewTarget(launchTargets.value) ||
+      preferredPreviewTarget(launchTargets.value);
   });
   const embeddedStartTargetUnavailableReason = computed(() => {
     const target = embeddedStartTarget.value;
@@ -435,7 +438,10 @@ function useVibe64LaunchControlsSurface(props) {
   const manualLaunchMenuVisible = computed(() => Boolean(
     !terminalVisible.value &&
     launchTargets.value.length > 0 &&
-    !(props.embeddedPreview && requestedAutoStartTargetId.value)
+    !(
+      props.embeddedPreview &&
+      (requestedAutoStartTargetId.value || props.autoStartManagedPreview)
+    )
   ));
   const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
     ? launchPreviewToolbarStorageKey(props.session, projectSlug.value)

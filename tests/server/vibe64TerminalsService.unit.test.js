@@ -8377,7 +8377,7 @@ test("Vibe64 Codex app-server preserves active turn id across concurrent status 
   });
 });
 
-test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts with live thread status", async () => {
+test("Vibe64 Codex app-server checks live provider state before releasing a failed turn", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_failure_event_active_provider";
     const worktree = testSessionSourcePath(targetRoot, sessionId);
@@ -8409,7 +8409,9 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
       recursive: true
     });
 
+    let providerThreadStatus = "active";
     const providerSubscribers = [];
+    const publishedSessionEvents = [];
     const readThreadStatusCalls = [];
     await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
       event: {
@@ -8451,7 +8453,7 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
               activeTurnId: turnId,
               status: {
                 activeFlags: [],
-                type: "active"
+                type: providerThreadStatus
               }
             }
           };
@@ -8466,6 +8468,9 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
         async createRuntime() {
           return runtime;
         }
+      },
+      publishSessionChanged: async (_publishedSessionId, event = {}) => {
+        publishedSessionEvents.push(event);
       }
     });
 
@@ -8506,6 +8511,15 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
     assert.equal(run.providerTurnId, turnId);
     assert.equal(run.error, "");
     assert.equal(session.stepMachine?.status, "awaiting_agent_result");
+
+    providerThreadStatus = "failed";
+    const failedReconciliation = await controller.reconcileThreads([sessionId]);
+    assert.equal(failedReconciliation.ok, true);
+    const idleEvent = publishedSessionEvents.findLast((event) => (
+      event.reason === "codex-app-server-turn-idle"
+    ));
+    assert.ok(idleEvent, "Expected the failed Codex turn to publish its idle state.");
+    assert.equal(idleEvent.payload?.clientRefresh?.includeLaunchTargets, true);
   });
 });
 
@@ -10886,6 +10900,7 @@ test("Vibe64 command terminal records action results and metadata after success"
     let startedCommand = "";
     let startedArgs = [];
     let startedEnv = {};
+    const publishedSessionChanges = [];
     const successfulCommandHooks = [];
     const command = createCommandTerminalController({
       afterSuccessfulCommand: async (event) => {
@@ -10906,6 +10921,12 @@ test("Vibe64 command terminal records action results and metadata after success"
             VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
+      },
+      publishSessionChanged: async (sessionId, event = {}) => {
+        publishedSessionChanges.push({
+          event,
+          sessionId
+        });
       },
       runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-terminal";
@@ -10960,6 +10981,7 @@ test("Vibe64 command terminal records action results and metadata after success"
     assert.equal(updatedSession.metadata.dynamic_done, "from-result-file");
     assert.equal(updatedSession.metadata.stale_value, undefined);
     await waitForArrayLength(successfulCommandHooks, 1);
+    await waitForArrayLength(publishedSessionChanges, 1);
     assert.deepEqual(successfulCommandHooks, [
       {
         actionId: "unit_command",
@@ -10970,6 +10992,13 @@ test("Vibe64 command terminal records action results and metadata after success"
         }
       }
     ]);
+    assert.equal(publishedSessionChanges[0].sessionId, "terminal_success");
+    assert.equal(publishedSessionChanges[0].event.reason, "command-terminal-closed");
+    assert.deepEqual(publishedSessionChanges[0].event.payload, {
+      clientRefresh: {
+        includeLaunchTargets: true
+      }
+    });
     assert.deepEqual(updatedSession.actionResult, undefined);
     assert.deepEqual(updatedSession.actionResults.map((result) => ({
       actionId: result.actionId,

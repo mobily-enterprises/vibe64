@@ -2,6 +2,11 @@ const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
 const VIBE64_SESSION_EVENT_ENTITY = "session";
 const VIBE64_SESSION_EVENT_SOURCE = "vibe64";
 const VIBE64_SESSION_REALTIME_AUDIENCE = "all_clients";
+const VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD = Object.freeze({
+  clientRefresh: Object.freeze({
+    includeLaunchTargets: true
+  })
+});
 
 function normalizeSessionId(value = "") {
   return String(value || "").trim();
@@ -43,15 +48,36 @@ function sessionStatePayload(source = {}) {
   };
 }
 
-function clientRefreshPayload(source = {}) {
-  const clientRefresh = source?.clientRefresh;
-  if (!plainObject(clientRefresh) || clientRefresh.includeList !== true) {
+function normalizedClientRefresh(value = null) {
+  if (!plainObject(value)) {
     return {};
   }
   return {
-    clientRefresh: {
-      includeList: true
-    }
+    ...(value.includeLaunchTargets === true ? { includeLaunchTargets: true } : {}),
+    ...(value.includeList === true ? { includeList: true } : {})
+  };
+}
+
+function clientRefreshPayload(source = {}) {
+  const clientRefresh = normalizedClientRefresh(source?.clientRefresh);
+  return Object.keys(clientRefresh).length > 0
+    ? { clientRefresh }
+    : {};
+}
+
+function mergeRealtimePayload(basePayload = {}, additionalPayload = null) {
+  const {
+    clientRefresh: additionalClientRefresh,
+    ...additionalFields
+  } = plainObject(additionalPayload) ? additionalPayload : {};
+  const clientRefresh = {
+    ...normalizedClientRefresh(basePayload.clientRefresh),
+    ...normalizedClientRefresh(additionalClientRefresh)
+  };
+  return {
+    ...basePayload,
+    ...additionalFields,
+    ...(Object.keys(clientRefresh).length > 0 ? { clientRefresh } : {})
   };
 }
 
@@ -174,13 +200,12 @@ function createVibe64SessionChangedPublisher({
       return null;
     }
     const realtimePayload = {
-      ...vibe64SessionRealtimePayload({
+      ...mergeRealtimePayload(vibe64SessionRealtimePayload({
         args: [normalizedSessionId],
         result: session || {
           sessionId: normalizedSessionId
         }
-      }),
-      ...(plainObject(payload) ? payload : {}),
+      }), payload),
       ...(originId ? { originId: normalizeSessionId(originId) } : {}),
       ...(reason ? { reason } : {})
     };
@@ -210,6 +235,7 @@ function createVibe64SessionChangedPublisher({
 }
 
 export {
+  VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD,
   VIBE64_SESSION_CHANGED_EVENT,
   vibe64SessionChangedServiceEvent,
   createVibe64SessionChangedPublisher

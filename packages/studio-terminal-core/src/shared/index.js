@@ -1,3 +1,4 @@
 export {
-  managedPreviewTarget
+  managedPreviewTarget,
+  preferredPreviewTarget
 } from "./managedPreview.js";
