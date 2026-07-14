@@ -208,14 +208,22 @@ test("Vibe64-owned JSKIT adapter extracts deterministic facts without executing 
   }
 });
 
-test("System adapter registry ships JSKIT only and the updater consumes its normalized model", async () => {
+test("System adapter registry exposes every implemented adapter and the updater consumes the JSKIT model", async () => {
   const root = await createFixtureProject();
   try {
     const registry = createSystemAdapterRegistry();
-    assert.deepEqual(registry.availableAdapterIds(), ["jskit"]);
-    assert.equal(registry.adapterFor("laravel"), null);
+    assert.deepEqual(registry.availableAdapterIds(), [
+      "cpp",
+      "jskit",
+      "laravel",
+      "nextjs",
+      "node-web",
+      "vinext"
+    ]);
+    assert.equal(registry.adapterFor("laravel")?.id, "laravel");
+    assert.equal(registry.adapterFor("unknown"), null);
     assert.throws(
-      () => registry.requireAdapter("laravel"),
+      () => registry.requireAdapter("unknown"),
       (error) => error.code === "vibe64_system_adapter_unsupported"
     );
 

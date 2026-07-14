@@ -121,7 +121,7 @@ function routeSegmentDetails(segment = "", { root = false } = {}) {
     };
   }
   const optionalBracket = sourceSegment.match(/^\[\[([^\]]+)\]\]$/u);
-  const optionalDollar = sourceSegment.match(/^\(\$([^\)]+)\)$/u);
+  const optionalDollar = sourceSegment.match(/^\(\$([^)]+)\)$/u);
   if (optionalBracket || optionalDollar) {
     return {
       routeSegment: sourceSegment,

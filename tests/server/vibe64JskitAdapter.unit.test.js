@@ -1569,14 +1569,13 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /Generator discovery commands:/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /Inspect placement state with `npx jskit list-placements --json`/u);
     assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
-    assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
-    assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
-    assert.match(afterPrompt.actionResult.prompt, /Do not use `id`; Vibe64 rejects input fields without `name`/u);
-    assert.match(afterPrompt.actionResult.prompt, /"name": "apiKey"/u);
+    assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result routing/u);
+    assert.match(afterPrompt.actionResult.prompt, /Use `inputFields` only for structured text, textarea, or password values/u);
+    assert.match(afterPrompt.actionResult.prompt, /Every item needs `name`, `label`, `kind`, `privacy`, and `required`/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /"name": "supabaseProjectUrl"/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /"name": "supabaseAnonKey"/u);
     assert.match(afterPrompt.actionResult.prompt, /Possible answers:/u);
-    assert.match(afterPrompt.actionResult.prompt, /Do not use `inputFields` for simple answer choices/u);
+    assert.match(afterPrompt.actionResult.prompt, /For a small fixed choice, ask in Markdown and list the exact choices; do not create inputFields/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /input field may include `options/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /submitOnSelect/u);
 

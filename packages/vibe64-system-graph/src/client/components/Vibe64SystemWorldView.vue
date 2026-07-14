@@ -517,11 +517,13 @@
         </template>
 
         <template v-else-if="selectedDirectory">
-          <div class="system-world__eyebrow">{{ selectedDirectory.kind === 'campus'
-            ? (selectedDirectory.implicit ? 'MAIN CAMPUS' : 'ADAPTER CAMPUS')
-            : selectedDirectory.semanticGroupKind === 'route'
-              ? 'ROUTE COMPOUND'
-              : 'DIRECTORY PRECINCT' }}</div>
+          <div class="system-world__eyebrow">
+            {{ selectedDirectory.kind === 'campus'
+              ? (selectedDirectory.implicit ? 'MAIN CAMPUS' : 'ADAPTER CAMPUS')
+              : selectedDirectory.semanticGroupKind === 'route'
+                ? 'ROUTE COMPOUND'
+                : 'DIRECTORY PRECINCT' }}
+          </div>
           <h2>{{ selectedDirectory.name }}</h2>
           <p v-if="selectedDirectory.routePath" class="system-world__path">
             Runtime path: {{ selectedDirectory.routePath }} · {{ selectedDirectory.routeSegmentKind }}

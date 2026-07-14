@@ -158,9 +158,9 @@ test("composer messages retain the authenticated identity needed by background r
       id: 42,
       login: "alice-github"
     },
+    home: "/home/alice",
     username: "alice"
   });
-  assert.equal("home" in message.vibe64User, false);
   assert.equal("role" in message.vibe64User, false);
 });
 

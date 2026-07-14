@@ -846,7 +846,7 @@ test("source editor preserves failed explanation details for recovery", async ()
   const events = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn(_sessionId, _input = {}, options = {}) {
+      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
         options.onEvent({
           threadId: "agent-thread-failed",
           type: "thread"
