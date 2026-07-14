@@ -26,6 +26,20 @@ const execFileAsync = promisify(execFile);
 const FAKE_SCREENSHOT_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==";
 const FAKE_SCREENSHOT_BYTES = Buffer.from(FAKE_SCREENSHOT_BASE64, "base64");
 
+test("managed screenshot helpers inject dependencies across the serialized worker boundary", () => {
+  const workerSource = agentPreviewBrowserWorkerSource({
+    playwrightModulePath: "/runtime/playwright/index.js"
+  });
+  const metricsSource = workerSource.match(
+    /const pngVisualMetrics = ([\s\S]*?);\nconst domTextFacts/u
+  )?.[1] || "";
+
+  assert.ok(metricsSource);
+  assert.doesNotMatch(metricsSource, /\binflateSync\b/u);
+  assert.doesNotMatch(workerSource, /const pngPaethPredictor =/u);
+  assert.match(workerSource, /pngVisualMetrics\(bytes, inflateSync\)/u);
+});
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -613,7 +627,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "5");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "6");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",

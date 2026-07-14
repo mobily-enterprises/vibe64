@@ -1,5 +1,3 @@
-import { inflateSync } from "node:zlib";
-
 function documentReadyForScreenshot(browserDocument = globalThis.document) {
   return Boolean(
     browserDocument?.readyState === "complete" &&
@@ -10,21 +8,23 @@ function documentReadyForScreenshot(browserDocument = globalThis.document) {
   );
 }
 
-function pngPaethPredictor(left, above, upperLeft) {
-  const estimate = left + above - upperLeft;
-  const leftDistance = Math.abs(estimate - left);
-  const aboveDistance = Math.abs(estimate - above);
-  const upperLeftDistance = Math.abs(estimate - upperLeft);
-  if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance) {
-    return left;
-  }
-  return aboveDistance <= upperLeftDistance ? above : upperLeft;
-}
-
-function pngVisualMetrics(pngBytes, {
+function pngVisualMetrics(pngBytes, inflatePng, {
   darkPixelThreshold = 0.1,
   maximumSampledPixels = 250_000
 } = {}) {
+  if (typeof inflatePng !== "function") {
+    throw new Error("Managed preview screenshot PNG inflater is unavailable.");
+  }
+  const paethPredictor = (left, above, upperLeft) => {
+    const estimate = left + above - upperLeft;
+    const leftDistance = Math.abs(estimate - left);
+    const aboveDistance = Math.abs(estimate - above);
+    const upperLeftDistance = Math.abs(estimate - upperLeft);
+    if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance) {
+      return left;
+    }
+    return aboveDistance <= upperLeftDistance ? above : upperLeft;
+  };
   const bytes = Buffer.isBuffer(pngBytes) ? pngBytes : Buffer.from(pngBytes || []);
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   if (bytes.length < signature.length || !bytes.subarray(0, signature.length).equals(signature)) {
@@ -87,7 +87,7 @@ function pngVisualMetrics(pngBytes, {
   if (!Number.isSafeInteger(rowBytes) || !Number.isSafeInteger(expectedBytes)) {
     throw new Error("Managed preview screenshot dimensions are unsafe.");
   }
-  const inflated = inflateSync(Buffer.concat(imageDataChunks));
+  const inflated = inflatePng(Buffer.concat(imageDataChunks));
   if (inflated.length < expectedBytes) {
     throw new Error("Managed preview screenshot has incomplete PNG pixel data.");
   }
@@ -120,7 +120,7 @@ function pngVisualMetrics(pngBytes, {
       } else if (filter === 3) {
         prediction = Math.floor((left + above) / 2);
       } else if (filter === 4) {
-        prediction = pngPaethPredictor(left, above, upperLeft);
+        prediction = paethPredictor(left, above, upperLeft);
       } else if (filter !== 0) {
         throw new Error("Managed preview screenshot uses an unsupported PNG filter.");
       }
@@ -216,7 +216,6 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightModulePath);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
-const pngPaethPredictor = ${pngPaethPredictor.toString()};
 const pngVisualMetrics = ${pngVisualMetrics.toString()};
 const domTextFacts = ${domTextFacts.toString()};
 const state = Object.create(null);
@@ -605,7 +604,7 @@ async function runCommand(input = {}) {
       byteLength: bytes.length,
       capturedAt: new Date().toISOString(),
       ...domTextFacts(bodyText),
-      ...pngVisualMetrics(bytes),
+      ...pngVisualMetrics(bytes, inflateSync),
       outputPath,
       sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
       title: String(title || ""),
