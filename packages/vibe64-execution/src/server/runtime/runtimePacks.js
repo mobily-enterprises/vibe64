@@ -102,6 +102,10 @@ function runtimePackGuardBinPath(options = {}) {
   return path.join(runtimePackRoot(options), "guard-bin");
 }
 
+function runtimePackPolicyBinPath(options = {}) {
+  return path.join(runtimePackRoot(options), "policy-bin");
+}
+
 function runtimePackManagedCommands(runtime = "") {
   const packName = normalizeText(runtime);
   return [...(RUNTIME_PACKS[packName]?.managedCommands || [])];
@@ -135,6 +139,7 @@ export {
   managedCommandsForRuntimePacks,
   runtimePackBinPaths,
   runtimePackGuardBinPath,
+  runtimePackPolicyBinPath,
   runtimePackManagedCommands,
   runtimePackRoot
 };

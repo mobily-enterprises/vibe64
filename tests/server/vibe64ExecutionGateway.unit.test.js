@@ -114,7 +114,8 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.browsers, "/opt/vibe64/runtime-packs/playwright/browsers");
   assert.equal(env.npmPrefix, path.join(currentUser.homedir, ".local"));
   const pathParts = env.path.split(":");
-  assert.equal(pathParts[0], "/opt/vibe64/runtime-packs/managed-bin");
+  assert.equal(pathParts[0], "/opt/vibe64/runtime-packs/policy-bin");
+  assert.equal(pathParts[1], "/opt/vibe64/runtime-packs/managed-bin");
   assert.ok(pathParts.includes(path.join(currentUser.homedir, ".local", "bin")));
   assert.equal(env.author, "merc via Vibe64");
   assert.equal(env.email, "merc@sas.users.vibe64.invalid");
@@ -299,10 +300,11 @@ test("execution gateway does not let request env override shared tool cache poli
     command: process.execPath,
     args: [
       "-e",
-      "console.log(JSON.stringify({ shared: process.env.VIBE64_SHARED_CACHE_ROOT, browsers: process.env.PLAYWRIGHT_BROWSERS_PATH }))"
+      "console.log(JSON.stringify({ shared: process.env.VIBE64_SHARED_CACHE_ROOT, browsers: process.env.PLAYWRIGHT_BROWSERS_PATH, skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD }))"
     ],
     env: {
       PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong-playwright",
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0",
       VIBE64_SHARED_CACHE_ROOT: "/tmp/wrong-cache"
     }
   });
@@ -310,7 +312,8 @@ test("execution gateway does not let request env override shared tool cache poli
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
     browsers: "/opt/vibe64/runtime-packs/playwright/browsers",
-    shared: "/var/cache/vibe64"
+    shared: "/var/cache/vibe64",
+    skipDownload: "1"
   });
 });
 
@@ -1048,7 +1051,8 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
   assert.equal(parts[0], "/tmp/vibe64-git-shim");
-  assert.deepEqual(parts.slice(1, 12), [
+  assert.deepEqual(parts.slice(1, 13), [
+    "/runtime-packs/policy-bin",
     "/runtime-packs/node22/bin",
     "/runtime-packs/node20/bin",
     "/runtime-packs/git/bin",
@@ -1078,7 +1082,8 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 15), [
+  assert.deepEqual(parts.slice(0, 16), [
+    "/runtime-packs/policy-bin",
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
     "/runtime-packs/node22/bin",

@@ -80,6 +80,9 @@ import {
   claimSessionWorkflowDriver
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
 import {
+  VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -1313,6 +1316,7 @@ function createCodexTerminalController({
     }
     const previewPrepared = await prepareAgentPreviewCommand({
       commandService: agentPreviewCommand,
+      env,
       sessionId,
       wrapperHostDir: prepared.hostWrapperDir
     });
@@ -4160,6 +4164,7 @@ function createCodexTerminalController({
   async function writeCodexAppServerAgentRun(sessionId = "", {
     error = "",
     inputSource = "",
+    publishPayload = null,
     publishReason = "",
     runState = VIBE64_AGENT_RUN_STATE.COMPLETED,
     status = "",
@@ -4234,7 +4239,10 @@ function createCodexTerminalController({
       };
     }
     await publishSessionChanged(normalizedSessionId, {
-      payload: codexAppServerAgentRunRealtimePayload(runPatch),
+      payload: {
+        ...codexAppServerAgentRunRealtimePayload(runPatch),
+        ...(isRecord(publishPayload) ? publishPayload : {})
+      },
       reason: publishReason || "codex-app-server-turn-state"
     });
     return {
@@ -4333,6 +4341,7 @@ function createCodexTerminalController({
     const status = normalizeText(input.status) || "completed";
     const result = await writeCodexAppServerAgentRun(sessionId, {
       error: normalizeText(input.error),
+      publishPayload: VIBE64_LAUNCH_TARGETS_CLIENT_REFRESH_PAYLOAD,
       publishReason: "codex-app-server-turn-idle",
       runState: terminalCodexAppServerAgentRunState(status),
       status,

@@ -108,6 +108,7 @@ export {
   DEFAULT_VIBE64_SHARED_CACHE_ROOT,
   PLAYWRIGHT_BROWSERS_DIR_NAME,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
   PLAYWRIGHT_RUNTIME_PACK_NAME,
   VIBE64_SHARED_CACHE_ROOT_ENV,
   resolvePlaywrightBrowsersPath,
@@ -122,6 +123,7 @@ export {
   managedCommandsForRuntimePacks,
   runtimePackBinPaths,
   runtimePackGuardBinPath,
+  runtimePackPolicyBinPath,
   runtimePackManagedCommands,
   runtimePackRoot
 } from "./runtime/runtimePacks.js";
@@ -132,3 +134,12 @@ export {
   summarizePlaywrightBrowserLaunchOutput,
   playwrightRuntimeEnv
 } from "./runtime/browserRuntime.js";
+export {
+  agentPlaywrightCommandSource
+} from "./runtime/agentPlaywrightCommandSource.js";
+export {
+  agentPreviewBrowserWorkerSource
+} from "./runtime/agentPreviewBrowserWorkerSource.js";
+export {
+  agentPreviewWrapperSource
+} from "./runtime/agentPreviewWrapperSource.js";

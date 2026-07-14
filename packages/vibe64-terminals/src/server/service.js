@@ -553,6 +553,7 @@ function createService({
 
   function closeAllSessionTerminals(sessionId) {
     return closeTerminalControllersForSession(sessionId, [
+      { controller: agentPreviewCommand, label: "agentPreview" },
       { controller: launchTarget, label: "launchTarget" },
       {
         controller: {

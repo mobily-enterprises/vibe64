@@ -35,6 +35,7 @@ const BLOCKED_ENV_NAMES = new Set([
   "NODE_OPTIONS"
 ]);
 const DEFAULT_PATH = [
+  "/opt/vibe64/runtime-packs/policy-bin",
   "/opt/vibe64/runtime-packs/operator-clis/bin",
   "/opt/vibe64/runtime-packs/node22/bin",
   "/opt/vibe64/runtime-packs/node20/bin",

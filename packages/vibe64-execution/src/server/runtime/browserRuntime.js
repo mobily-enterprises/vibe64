@@ -1,5 +1,6 @@
 import {
   PLAYWRIGHT_BROWSERS_PATH_ENV,
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
   resolvePlaywrightBrowsersPath
 } from "../env/sharedToolEnv.js";
 
@@ -8,7 +9,8 @@ const PLAYWRIGHT_BROWSER_LAUNCH_OK_PATTERN =
 
 function playwrightRuntimeEnv(options = {}) {
   return {
-    [PLAYWRIGHT_BROWSERS_PATH_ENV]: resolvePlaywrightBrowsersPath(options)
+    [PLAYWRIGHT_BROWSERS_PATH_ENV]: resolvePlaywrightBrowsersPath(options),
+    [PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV]: "1"
   };
 }
 

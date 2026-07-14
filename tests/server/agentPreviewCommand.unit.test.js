@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import { promisify } from "node:util";
 
 import {
   AGENT_PREVIEW_COMMAND_NAME,
+  VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV,
@@ -16,6 +18,165 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 
 const execFileAsync = promisify(execFile);
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function processRunning(pid) {
+  try {
+    if (readFileSync(`/proc/${pid}/stat`, "utf8").split(" ")[2] === "Z") {
+      return false;
+    }
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function execWithInput(command, args, {
+  env = process.env,
+  input = ""
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      env,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0 && !signal) {
+        resolve({ stderr, stdout });
+        return;
+      }
+      reject(new Error(`Command failed (${signal || code}): ${stderr || stdout}`));
+    });
+    child.stdin.end(input);
+  });
+}
+
+async function writeExecutable(filePath, source) {
+  await mkdir(path.dirname(filePath), {
+    recursive: true
+  });
+  await writeFile(filePath, source, "utf8");
+  await chmod(filePath, 0o755);
+}
+
+async function createFakePlaywrightRuntime(runtimeRoot) {
+  const nodePath = path.join(runtimeRoot, "node22", "bin", "node");
+  const npmPath = path.join(runtimeRoot, "node22", "bin", "npm");
+  const playwrightRoot = path.join(runtimeRoot, "playwright");
+  const playwrightModule = path.join(playwrightRoot, "runtime", "lib", "node_modules", "playwright");
+  await writeExecutable(nodePath, `#!/bin/sh\nexec ${process.execPath} "$@"\n`);
+  await writeExecutable(npmPath, "#!/bin/sh\nexit 0\n");
+  await mkdir(playwrightModule, {
+    recursive: true
+  });
+  await mkdir(path.join(playwrightRoot, "browsers"), {
+    recursive: true
+  });
+  await writeExecutable(path.join(playwrightRoot, "bin", "playwright"), "#!/bin/sh\nexit 0\n");
+  await writeFile(path.join(playwrightRoot, "runtime.env"), "playwright_version=1.50.1\n", "utf8");
+  await writeFile(path.join(playwrightModule, "index.js"), `
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
+let launchCount = 0;
+exports.chromium = {
+  async launch() {
+    const launchId = ++launchCount;
+    const browserChild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true,
+      stdio: "ignore"
+    });
+    browserChild.unref();
+    let connected = true;
+    const pages = [];
+    return {
+      launchId,
+      childPid: browserChild.pid,
+      isConnected() { return connected; },
+      async close() {
+        connected = false;
+        try { browserChild.kill("SIGKILL"); } catch {}
+        for (const page of pages) page.closed = true;
+      },
+      async newContext() {
+        return {
+          pages() { return [...pages]; },
+          async newPage() {
+            const page = {
+              closed: false,
+              currentUrl: "about:blank",
+              isClosed() { return this.closed; },
+              url() { return this.currentUrl; },
+              async goto(url) { this.currentUrl = url; },
+              async title() { return "Fake preview"; },
+              async screenshot(options) {
+                fs.writeFileSync(options.path, JSON.stringify({
+                  fullPage: options.fullPage,
+                  launchId,
+                  url: this.currentUrl
+                }));
+              }
+            };
+            pages.push(page);
+            return page;
+          }
+        };
+      }
+    };
+  }
+};
+`, "utf8");
+  return {
+    nodePath,
+    playwrightModule
+  };
+}
+
+function createReadyPreviewCommandService({
+  previewUrl,
+  terminalId = () => "launch-terminal"
+} = {}) {
+  return createAgentPreviewCommandService({
+    launchTarget: {
+      async ensurePreview() {
+        return {
+          id: terminalId(),
+          ok: true
+        };
+      },
+      async launchStatus() {
+        return {
+          activeTerminal: {
+            id: terminalId(),
+            running: true,
+            status: "running"
+          },
+          lastLaunchTarget: {
+            id: "dev"
+          },
+          previewTarget: {
+            available: true,
+            href: previewUrl
+          }
+        };
+      }
+    }
+  });
+}
 
 test("agent preview command ensures the managed preview and waits for readiness", async () => {
   const sessionId = "preview-command-ensure-session";
@@ -390,6 +551,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "3");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -424,51 +586,28 @@ test("agent preview wrapper forwards command input over the private session sock
 test("agent preview wrapper captures the authenticated page with managed Playwright", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-screenshot-"));
   const runtimeRoot = path.join(root, "runtime-packs");
-  const managedPlaywright = path.join(runtimeRoot, "playwright", "bin", "playwright");
   const blockedPlaywright = path.join(root, "guard-bin", "playwright");
   const outputPath = path.join(root, "current page.png");
   const previewUrl = "https://preview.example.test/home?vibe64_preview_token=private-token";
+  const sessionId = "screenshot-wrapper-session";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl,
+    terminalId: () => "launch-terminal-screenshot"
+  });
   try {
-    await mkdir(path.dirname(managedPlaywright), {
-      recursive: true
-    });
+    await createFakePlaywrightRuntime(runtimeRoot);
     await mkdir(path.dirname(blockedPlaywright), {
       recursive: true
     });
-    await writeFile(managedPlaywright, [
-      "#!/bin/sh",
-      "for last_arg in \"$@\"; do :; done",
-      "printf '%s\\n' \"$@\" > \"$last_arg\"",
-      "printf 'Navigating to %s\\n' \"$7\""
-    ].join("\n") + "\n", "utf8");
     await writeFile(blockedPlaywright, "#!/bin/sh\nexit 99\n", "utf8");
-    await chmod(managedPlaywright, 0o755);
     await chmod(blockedPlaywright, 0o755);
 
-    const receivedArgs = [];
     const prepared = await prepareAgentPreviewCommand({
-      commandService: {
-        async run(input) {
-          receivedArgs.push(input.args);
-          if (input.args[0] === "ensure") {
-            return {
-              exitCode: 0,
-              ok: true,
-              stdout: "{}\n"
-            };
-          }
-          assert.deepEqual(input.args, ["inspect-url"]);
-          return {
-            exitCode: 0,
-            ok: true,
-            stdout: `${previewUrl}\n`
-          };
-        }
-      },
+      commandService,
       env: {
         VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
       },
-      sessionId: "screenshot-wrapper-session",
+      sessionId,
       wrapperHostDir: root
     });
 
@@ -487,26 +626,173 @@ test("agent preview wrapper captures the authenticated page with managed Playwri
     assert.equal(executed.stdout, `Screenshot saved to ${outputPath}\n`);
     assert.doesNotMatch(executed.stdout, /private-token/u);
     assert.equal(executed.stderr, "");
-    assert.deepEqual(receivedArgs, [
-      ["ensure", "--wait", "--json"],
-      ["inspect-url"]
-    ]);
-    const capturedArgs = (await readFile(outputPath, "utf8")).trim().split("\n");
-    assert.deepEqual(capturedArgs, [
-      "screenshot",
-      "--browser",
-      "chromium",
-      "--full-page",
-      "--wait-for-timeout",
-      "1000",
-      previewUrl,
-      outputPath
-    ]);
+    assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+      fullPage: true,
+      launchId: 1,
+      url: previewUrl
+    });
   } finally {
+    await commandService.closeAllForSession(sessionId);
     await rm(root, {
       force: true,
       recursive: true
     });
+  }
+});
+
+test("managed preview browser persists interaction state and recovers killed browser and preview processes", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-recovery-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const previewUrl = "https://preview.example.test/app?vibe64_preview_token=recovery-token";
+  const sessionId = "browser-recovery-session";
+  let terminalId = "launch-terminal-1";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl,
+    terminalId: () => terminalId
+  });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    const prepared = await prepareAgentPreviewCommand({
+      commandService,
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      sessionId,
+      wrapperHostDir: root
+    });
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+    const evalCode = "state.count = (state.count || 0) + 1; return { childPid: browser.childPid, count: state.count, launchId: browser.launchId };";
+
+    const first = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    const firstMetadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    assert.deepEqual(firstMetadata.browserProcessGroups, [{
+      groupId: first.result.childPid,
+      startTimeTicks: firstMetadata.browserProcessGroups[0].startTimeTicks
+    }]);
+    assert.deepEqual(first.result, {
+      childPid: first.result.childPid,
+      count: 1,
+      launchId: 1
+    });
+
+    const second = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    assert.deepEqual(second.result, {
+      childPid: first.result.childPid,
+      count: 2,
+      launchId: 1
+    });
+
+    process.kill(firstMetadata.pid, "SIGKILL");
+    await wait(100);
+    const afterWorkerKill = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    const recoveredMetadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    assert.notEqual(recoveredMetadata.pid, firstMetadata.pid);
+    assert.equal(processRunning(first.result.childPid), false);
+    assert.deepEqual(afterWorkerKill.result, {
+      childPid: afterWorkerKill.result.childPid,
+      count: 1,
+      launchId: 1
+    });
+
+    terminalId = "launch-terminal-2";
+    const afterPreviewKill = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    assert.deepEqual(afterPreviewKill.result, {
+      childPid: afterPreviewKill.result.childPid,
+      count: 2,
+      launchId: 2
+    });
+    assert.notEqual(afterPreviewKill.result.childPid, afterWorkerKill.result.childPid);
+    assert.equal(processRunning(afterWorkerKill.result.childPid), false);
+    const status = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "status"], {
+      env: commandEnv
+    })).stdout);
+    assert.equal(status.previewIdentity, "dev:launch-terminal-2");
+    assert.equal(status.running, true);
+
+    process.kill(recoveredMetadata.pid, "SIGKILL");
+    await wait(100);
+    assert.equal(processRunning(afterPreviewKill.result.childPid), true);
+    await commandService.closeAllForSession(sessionId);
+    for (let attempt = 0; attempt < 20 && processRunning(recoveredMetadata.pid); attempt += 1) {
+      await wait(25);
+    }
+    assert.equal(processRunning(recoveredMetadata.pid), false);
+    assert.equal(processRunning(afterPreviewKill.result.childPid), false);
+    await assert.rejects(stat(prepared.hostBrowserSocketPath), {
+      code: "ENOENT"
+    });
+    await assert.rejects(stat(prepared.hostBrowserMetadataPath), {
+      code: "ENOENT"
+    });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed preview browser exits after idle expiry and loss of its Vibe64 control lease", async () => {
+  for (const mode of ["idle", "control-loss"]) {
+    const root = await mkdtemp(path.join(os.tmpdir(), `vibe64-preview-browser-${mode}-`));
+    const runtimeRoot = path.join(root, "runtime-packs");
+    const sessionId = `browser-${mode}-session`;
+    const commandService = createReadyPreviewCommandService({
+      previewUrl: "https://preview.example.test/lease?vibe64_preview_token=lease-token"
+    });
+    try {
+      await createFakePlaywrightRuntime(runtimeRoot);
+      const prepared = await prepareAgentPreviewCommand({
+        browserControlHealthFailureLimit: 2,
+        browserControlHealthIntervalMs: 30,
+        browserIdleTimeoutMs: mode === "idle" ? 100 : 10_000,
+        commandService,
+        env: {
+          VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+        },
+        sessionId,
+        wrapperHostDir: root
+      });
+      await execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
+        env: {
+          ...process.env,
+          ...prepared.env
+        }
+      });
+      const metadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+      if (mode === "control-loss") {
+        await commandService.releaseControlForSession(sessionId);
+      }
+      for (let attempt = 0; attempt < 100 && processRunning(metadata.pid); attempt += 1) {
+        await wait(25);
+      }
+      assert.equal(processRunning(metadata.pid), false, `${mode} worker should exit`);
+      await assert.rejects(stat(prepared.hostBrowserMetadataPath), {
+        code: "ENOENT"
+      });
+    } finally {
+      await commandService.closeAllForSession(sessionId);
+      await rm(root, {
+        force: true,
+        recursive: true
+      });
+    }
   }
 });
 
