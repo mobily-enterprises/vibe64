@@ -165,39 +165,19 @@ test("@preview-lifecycle loads launch targets from pathless session summaries", 
 test("@preview-lifecycle auto-starts without exposing passive actions", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    initialLaunchStatus: {
-      ...launchStatusPayload(),
-      activeTerminal: null,
-      launchTargets: [
-        {
-          available: true,
-          id: "built",
-          label: "Run built app"
-        },
-        {
-          available: true,
-          defaultPreview: true,
-          id: "dev",
-          label: "Run app"
-        }
-      ],
-      openTarget: {
-        available: false,
-        disabledReason: "Run a launch target first.",
-        href: "",
-        kind: "url",
-        label: "Open browser",
-        previewHref: ""
+    initialLaunchStatus: idleLaunchStatusPayload([
+      {
+        available: true,
+        id: "built",
+        label: "Run built app"
       },
-      previewTarget: {
-        available: false,
-        disabledReason: "Run a launch target first.",
-        href: "",
-        kind: "url",
-        label: "Preview",
-        targetHref: ""
+      {
+        available: true,
+        defaultPreview: true,
+        id: "dev",
+        label: "Run app"
       }
-    },
+    ]),
     launchTerminalDelayMs: 1000
   });
 
@@ -221,40 +201,16 @@ test("@preview-lifecycle auto-starts without exposing passive actions", async ({
 
 test("@preview-lifecycle automatically recovers when the first status has no targets", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
-  const emptyLaunchStatus = {
-    activeTerminal: null,
-    launchTargets: [],
-    ok: true,
-    openTarget: {
-      available: false,
-      disabledReason: "Run a launch target first.",
-      href: "",
-      kind: "url",
-      label: "Open browser",
-      previewHref: ""
-    },
-    previewTarget: {
-      available: false,
-      disabledReason: "Run a launch target first.",
-      href: "",
-      kind: "url",
-      label: "Preview",
-      targetHref: ""
-    }
-  };
   const launchSession = await mockLaunchSession(page, {
     launchStatusSequence: [
-      emptyLaunchStatus,
-      {
-        ...emptyLaunchStatus,
-        launchTargets: [
-          {
-            available: true,
-            id: "dev",
-            label: "Run app"
-          }
-        ]
-      }
+      idleLaunchStatusPayload(),
+      idleLaunchStatusPayload([
+        {
+          available: true,
+          id: "dev",
+          label: "Run app"
+        }
+      ])
     ]
   });
 
@@ -263,6 +219,61 @@ test("@preview-lifecycle automatically recovers when the first status has no tar
   await expect(page.getByText("Preview will appear here when it is ready.")).toBeVisible();
   await expect(page.locator(".vibe64-launch-controls__preview-empty").getByRole("button")).toHaveCount(0);
 
+  await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
+    {
+      launchInput: {
+        values: {}
+      },
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
+    }
+  ]);
+});
+
+test("@preview-lifecycle refreshes disabled targets after the selected session advances", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const session = {
+    ...sessionPayload(),
+    revision: 1
+  };
+  const launchSession = await mockLaunchSession(page, {
+    launchStatusSequence: [
+      idleLaunchStatusPayload([
+        {
+          available: false,
+          defaultPreview: true,
+          disabledReason: "Install dependencies before running the app.",
+          id: "dev",
+          label: "Run app"
+        }
+      ]),
+      idleLaunchStatusPayload([
+        {
+          available: true,
+          defaultPreview: true,
+          id: "dev",
+          label: "Run app"
+        }
+      ])
+    ],
+    session
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(page.getByText("Install dependencies before running the app.")).toBeVisible();
+  expect(launchSession.getLaunchStatusRequestCount()).toBe(1);
+
+  session.metadata = {
+    ...session.metadata,
+    dependencies_installed: "yes"
+  };
+  session.revision = 2;
+  await page.getByRole("button", {
+    name: "Reload chat"
+  }).click();
+
+  await expect.poll(() => launchSession.getLaunchStatusRequestCount()).toBe(2);
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
       launchInput: {
@@ -920,7 +931,8 @@ async function mockLaunchSession(page: Page, {
     ? Boolean((sequencedLaunchStatuses[0] as { activeTerminal?: unknown })?.activeTerminal)
     : !initialLaunchStatus || Boolean(initialLaunchStatus.activeTerminal);
   let initialLaunchStatusActive = true;
-  let launchStatusRequestCount = 0;
+  let launchStatusReadCount = 0;
+  let launchStatusSequenceIndex = 0;
   let previewLoadCount = 0;
   const previewServer = previewBootstrapToken
     ? await startPreviewAppServer({
@@ -935,8 +947,8 @@ async function mockLaunchSession(page: Page, {
     : proxyAppUrl;
   function currentLaunchStatus() {
     if (sequencedLaunchStatuses.length > 0 && !launchStarted) {
-      const index = Math.min(launchStatusRequestCount, sequencedLaunchStatuses.length - 1);
-      launchStatusRequestCount += 1;
+      const index = Math.min(launchStatusSequenceIndex, sequencedLaunchStatuses.length - 1);
+      launchStatusSequenceIndex += 1;
       return sequencedLaunchStatuses[index];
     }
     if (initialLaunchStatusActive && initialLaunchStatus) {
@@ -963,6 +975,7 @@ async function mockLaunchSession(page: Page, {
     const url = new URL(request.url());
     const method = request.method();
     if (method === "GET" && url.pathname.endsWith("/launch-targets")) {
+      launchStatusReadCount += 1;
       await fulfillJson(route, currentLaunchStatus());
       return;
     }
@@ -1086,6 +1099,9 @@ async function mockLaunchSession(page: Page, {
     },
     getLaunchStartPayloads() {
       return launchStartPayloads;
+    },
+    getLaunchStatusRequestCount() {
+      return launchStatusReadCount;
     },
     getSavedText(path: string) {
       return sourceEditor?.getText(path) || "";
@@ -1828,6 +1844,30 @@ function launchStatusPayload(options: {
       kind: "url",
       label: "Preview",
       targetHref: TARGET_APP_URL
+    }
+  };
+}
+
+function idleLaunchStatusPayload(launchTargets: unknown[] = []) {
+  return {
+    activeTerminal: null,
+    launchTargets,
+    ok: true,
+    openTarget: {
+      available: false,
+      disabledReason: "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Open browser",
+      previewHref: ""
+    },
+    previewTarget: {
+      available: false,
+      disabledReason: "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Preview",
+      targetHref: ""
     }
   };
 }

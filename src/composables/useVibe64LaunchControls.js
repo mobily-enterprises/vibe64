@@ -25,7 +25,8 @@ import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
-  isClosedVibe64Session
+  isClosedVibe64Session,
+  vibe64SessionRevision
 } from "@/lib/vibe64SessionViewModel.js";
 import {
   useVibe64Terminal
@@ -669,6 +670,9 @@ function useVibe64LaunchControls({
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
+  const sessionRevision = computed(() => vibe64SessionRevision(selectedSession.value));
+  let launchTargetsRefreshSessionId = sessionId.value;
+  let launchTargetsRefreshRevision = sessionRevision.value;
   const launchScopeKey = computed(() => launchControlScopeKey(projectSlug.value, sessionId.value));
   const requestedAutoStartTargetId = computed(() => String(readRefOrGetterValue(autoStartTargetId) || "").trim());
   const autoStartRequestKey = computed(() => requestedAutoStartTargetId.value || (
@@ -1182,6 +1186,50 @@ function useVibe64LaunchControls({
     onEvent: () => refresh({
       scopeKey: launchScopeKey.value
     })
+  });
+
+  watch([
+    sessionId,
+    sessionRevision,
+    canLoadLaunchTargets,
+    autoStartRequestKey,
+    () => launchTargetsResource.isLoading.value,
+    launchStatusLoadError,
+    terminalVisible,
+    autoStartTarget,
+    previewState
+  ], () => {
+    const currentSessionId = sessionId.value;
+    const currentRevision = sessionRevision.value;
+    if (
+      currentSessionId !== launchTargetsRefreshSessionId ||
+      launchTargetsRefreshRevision === null
+    ) {
+      launchTargetsRefreshSessionId = currentSessionId;
+      launchTargetsRefreshRevision = currentRevision;
+      return;
+    }
+    if (currentRevision === null || currentRevision <= launchTargetsRefreshRevision) {
+      return;
+    }
+    if (terminalVisible.value || autoStartTarget.value || previewState.value !== "idle") {
+      launchTargetsRefreshRevision = currentRevision;
+      return;
+    }
+    if (
+      !canLoadLaunchTargets.value ||
+      !autoStartRequestKey.value ||
+      launchTargetsResource.isLoading.value ||
+      launchStatusLoadError.value
+    ) {
+      return;
+    }
+    launchTargetsRefreshRevision = currentRevision;
+    void refresh({
+      scopeKey: launchScopeKey.value
+    });
+  }, {
+    flush: "post"
   });
 
   function clearAutoStartTimer() {

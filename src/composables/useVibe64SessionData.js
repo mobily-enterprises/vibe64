@@ -39,6 +39,7 @@ import {
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionDisplayTitle,
+  vibe64SessionRevision as sessionRevisionNumber,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel,
   isClosedVibe64Session
@@ -145,11 +146,6 @@ function selectedSessionOperationSummary(session = {}) {
     operationKind: String(source.kind || ""),
     operationRoute: String(source.route || "")
   };
-}
-
-function sessionRevisionNumber(session = null) {
-  const revision = Number(session?.revision);
-  return Number.isFinite(revision) ? revision : null;
 }
 
 function sessionRecordHasRuntimeProjection(session = null) {

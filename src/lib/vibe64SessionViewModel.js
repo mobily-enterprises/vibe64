@@ -82,6 +82,11 @@ function isOpenVibe64Session(session = {}) {
   return !isClosedVibe64Session(session);
 }
 
+function vibe64SessionRevision(session = null) {
+  const revision = Number(session?.revision);
+  return Number.isFinite(revision) ? revision : null;
+}
+
 function vibe64SessionArchive(session = {}) {
   const status = String(session?.status || "").trim();
   if (status === "abandoned") {
@@ -258,6 +263,7 @@ export {
   normalizeVibe64SessionArchiveTab,
   vibe64SessionArchive,
   vibe64SessionDisplayTitle,
+  vibe64SessionRevision,
   buildVibe64SessionFacts,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel,
