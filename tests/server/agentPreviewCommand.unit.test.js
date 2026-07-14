@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -278,7 +278,7 @@ test("agent preview status exposes the managed endpoint, current page, and serve
     },
     previewTarget: {
       available: true,
-      href: "/preview/session-7/",
+      href: "https://v64preview-example.test/?vibe64_preview_token=preview-secret",
       targetHref: "http://127.0.0.1:4103/"
     }
   };
@@ -316,6 +316,15 @@ test("agent preview status exposes the managed endpoint, current page, and serve
     log: "/workspace/session-7/preview-log.jsonl"
   });
 
+  const inspectionResult = await command.run({
+    args: ["inspect-url"],
+    sessionId
+  });
+  assert.equal(
+    inspectionResult.stdout,
+    "https://v64preview-example.test/orders/42?tab=history&vibe64_preview_token=preview-secret\n"
+  );
+
   const logsResult = await command.run({
     args: ["logs", "--lines", "2", "--json"],
     sessionId
@@ -324,6 +333,33 @@ test("agent preview status exposes the managed endpoint, current page, and serve
   assert.equal(logsPayload.lineLimit, 2);
   assert.equal(logsPayload.output, "GET /orders/42\nrender complete");
   assert.equal(logsPayload.terminal.id, "launch-terminal-7");
+});
+
+test("agent preview inspection URL falls back to the direct managed endpoint", async () => {
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus() {
+        return {
+          lastLaunchTarget: {
+            agentHref: "http://vibe64-launch-agent:4104/home",
+            id: "dev"
+          },
+          previewTarget: {
+            available: false,
+            href: ""
+          }
+        };
+      }
+    }
+  });
+
+  const result = await command.run({
+    args: ["inspect-url"],
+    sessionId: "direct-inspection-session"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stdout, "http://vibe64-launch-agent:4104/home\n");
 });
 
 test("agent preview wrapper forwards command input over the private session socket", async () => {
@@ -377,6 +413,95 @@ test("agent preview wrapper forwards command input over the private session sock
       "--json"
     ]);
     assert.equal(receivedInput.sessionId, "wrapper-session");
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("agent preview wrapper captures the authenticated page with managed Playwright", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-screenshot-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const managedPlaywright = path.join(runtimeRoot, "playwright", "bin", "playwright");
+  const blockedPlaywright = path.join(root, "guard-bin", "playwright");
+  const outputPath = path.join(root, "current page.png");
+  const previewUrl = "https://preview.example.test/home?vibe64_preview_token=private-token";
+  try {
+    await mkdir(path.dirname(managedPlaywright), {
+      recursive: true
+    });
+    await mkdir(path.dirname(blockedPlaywright), {
+      recursive: true
+    });
+    await writeFile(managedPlaywright, [
+      "#!/bin/sh",
+      "for last_arg in \"$@\"; do :; done",
+      "printf '%s\\n' \"$@\" > \"$last_arg\"",
+      "printf 'Navigating to %s\\n' \"$7\""
+    ].join("\n") + "\n", "utf8");
+    await writeFile(blockedPlaywright, "#!/bin/sh\nexit 99\n", "utf8");
+    await chmod(managedPlaywright, 0o755);
+    await chmod(blockedPlaywright, 0o755);
+
+    const receivedArgs = [];
+    const prepared = await prepareAgentPreviewCommand({
+      commandService: {
+        async run(input) {
+          receivedArgs.push(input.args);
+          if (input.args[0] === "ensure") {
+            return {
+              exitCode: 0,
+              ok: true,
+              stdout: "{}\n"
+            };
+          }
+          assert.deepEqual(input.args, ["inspect-url"]);
+          return {
+            exitCode: 0,
+            ok: true,
+            stdout: `${previewUrl}\n`
+          };
+        }
+      },
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      sessionId: "screenshot-wrapper-session",
+      wrapperHostDir: root
+    });
+
+    const executed = await execFileAsync(prepared.hostWrapperPath, [
+      "screenshot",
+      "--output",
+      outputPath
+    ], {
+      env: {
+        ...process.env,
+        ...prepared.env,
+        PATH: `${path.dirname(blockedPlaywright)}:${process.env.PATH}`
+      }
+    });
+
+    assert.equal(executed.stdout, `Screenshot saved to ${outputPath}\n`);
+    assert.doesNotMatch(executed.stdout, /private-token/u);
+    assert.equal(executed.stderr, "");
+    assert.deepEqual(receivedArgs, [
+      ["ensure", "--wait", "--json"],
+      ["inspect-url"]
+    ]);
+    const capturedArgs = (await readFile(outputPath, "utf8")).trim().split("\n");
+    assert.deepEqual(capturedArgs, [
+      "screenshot",
+      "--browser",
+      "chromium",
+      "--full-page",
+      "--wait-for-timeout",
+      "1000",
+      previewUrl,
+      outputPath
+    ]);
   } finally {
     await rm(root, {
       force: true,

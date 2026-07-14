@@ -348,9 +348,12 @@ function agentResultRoutingBriefing() {
 function managedPreviewPolicyInstruction() {
   return [
     "- For every app, UI, browser, or runtime diagnosis, use only the session's Vibe64-managed preview. Never start another development server, choose another port, or replace that preview.",
-    "- Before browser work, run `vibe64-preview ensure --wait --json`. This idempotent command starts, reuses, or recovers the session's one managed preview without requiring the user to open it first.",
+    "- A request to view, inspect, or describe the current page is a direct visual-browser request. Immediately run `vibe64-preview screenshot`, then inspect the image at the path it prints with the image-viewing tool. This one command idempotently ensures the preview and captures its authenticated current page with Vibe64's managed Playwright. Do this before reading AGENTS.md, project source, package manifests, or UI documentation.",
+    "- For browser work that needs interaction rather than a one-shot visual inspection, first run `vibe64-preview ensure --wait --json`. This idempotent command starts, reuses, or recovers the session's one managed preview without requiring the user to open it first.",
     "- Treat the returned `endpoints.agent`, `terminal`, and `currentPage` as authoritative. Use `vibe64-preview status --json` to refresh them. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
     "- `currentPage` can be absent until a browser has visited the preview. For browser verification, navigate to `endpoints.agent.url`; do not treat an unobserved current page as a missing preview.",
+    "- `vibe64-preview screenshot` owns the managed Playwright invocation and already has its matching Chromium. Never use `npx playwright`, project `require(\"playwright\")`, `playwright install`, another browser CLI, or any browser download for this inspection.",
+    "- Describe only what the rendered browser actually shows. Never infer page appearance from source code. If the browser renders a sign-in page, error, or blank screen, report that exact result instead of describing the intended page.",
     "- Read managed server output with `vibe64-preview logs --lines 200`. Do not launch a second server to obtain cleaner output.",
     "- Do not ask the user to start or open the preview. If `vibe64-preview ensure --wait --json` fails, report its diagnostics as the managed-preview blocker.",
     "- Never substitute `npm run dev`, `npm start`, Vite, Next, JSKIT server commands, PHP development servers, or any other process that serves the app—even if a different port appears free.",

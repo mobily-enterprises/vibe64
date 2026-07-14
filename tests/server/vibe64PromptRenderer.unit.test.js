@@ -295,6 +295,12 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /Managed preview policy:/u);
   assert.match(briefing, /vibe64-preview ensure --wait --json/u);
   assert.match(briefing, /vibe64-preview status --json/u);
+  assert.match(briefing, /Immediately run `vibe64-preview screenshot`/u);
+  assert.match(briefing, /one command idempotently ensures the preview/u);
+  assert.match(briefing, /managed Playwright/u);
+  assert.match(briefing, /before reading AGENTS\.md/u);
+  assert.match(briefing, /Never use `npx playwright`/u);
+  assert.match(briefing, /Never infer page appearance from source code/u);
   assert.match(briefing, /vibe64-preview logs --lines 200/u);
   assert.match(briefing, /without requiring the user to open it first/u);
   assert.match(briefing, /do not treat an unobserved current page as a missing preview/u);

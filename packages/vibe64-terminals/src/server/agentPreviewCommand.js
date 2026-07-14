@@ -15,6 +15,9 @@ import {
   readSessionUiSyncStateForSession
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  runtimePackBinPaths
+} from "@local/vibe64-execution/server";
+import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 
@@ -28,6 +31,7 @@ const PREVIEW_WAIT_POLL_INTERVAL_MS = 500;
 const VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID";
 const VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_SOCKET";
 const VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_TOKEN";
+const VIBE64_AGENT_PREVIEW_PLAYWRIGHT_COMMAND_ENV = "VIBE64_AGENT_PREVIEW_PLAYWRIGHT_COMMAND";
 
 const commandServers = new Map();
 
@@ -106,6 +110,7 @@ function sendJson(response, statusCode, payload = {}) {
 
 function wrapperScriptSource() {
   return `#!/usr/bin/env node
+import { spawn } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
@@ -144,6 +149,101 @@ function requestSocket({ body, socketPath }) {
   });
 }
 
+function responsePayload(response = {}) {
+  try {
+    return JSON.parse(response.text || "{}");
+  } catch {
+    fail(response.text || "Vibe64 preview command returned invalid JSON.");
+  }
+}
+
+function writePayload(payload = {}) {
+  if (payload.stdout) {
+    process.stdout.write(String(payload.stdout));
+    if (!String(payload.stdout).endsWith("\\n")) {
+      process.stdout.write("\\n");
+    }
+  }
+  if (payload.stderr) {
+    process.stderr.write(String(payload.stderr));
+    if (!String(payload.stderr).endsWith("\\n")) {
+      process.stderr.write("\\n");
+    }
+  }
+  if (payload.ok === false && !payload.stderr && payload.error) {
+    process.stderr.write(String(payload.error) + "\\n");
+  }
+}
+
+function payloadExitCode(payload = {}) {
+  return Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
+}
+
+function managedPlaywrightPath() {
+  const command = process.env.${VIBE64_AGENT_PREVIEW_PLAYWRIGHT_COMMAND_ENV} || "";
+  if (!path.isAbsolute(command)) {
+    fail("Vibe64 managed Playwright is unavailable for this session.");
+  }
+  return command;
+}
+
+function screenshotOutputPath(args = [], sessionId = "") {
+  const outputIndex = args.indexOf("--output");
+  const outputEntry = args.find((arg) => String(arg || "").startsWith("--output="));
+  const requested = outputIndex >= 0
+    ? String(args[outputIndex + 1] || "").trim()
+    : String(outputEntry || "").slice("--output=".length).trim();
+  const safeSessionId = String(sessionId || "session").replace(/[^A-Za-z0-9_.-]+/gu, "-");
+  const defaultFile = "vibe64-current-page-" + safeSessionId + ".png";
+  return path.resolve(requested || path.join(process.env.TMPDIR || "/tmp", defaultFile));
+}
+
+function redactPreviewUrl(text = "", previewUrl = "") {
+  return String(text || "")
+    .split(String(previewUrl || "")).join("[managed preview URL redacted]")
+    .replace(/(vibe64_preview_token=)[^&\\s]+/gu, "$1[redacted]");
+}
+
+function captureScreenshot({ outputPath, previewUrl }) {
+  return new Promise((resolve) => {
+    const child = spawn(managedPlaywrightPath(), [
+      "screenshot",
+      "--browser",
+      "chromium",
+      "--full-page",
+      "--wait-for-timeout",
+      "1000",
+      previewUrl,
+      outputPath
+    ], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", (error) => resolve({
+      error,
+      exitCode: 1,
+      stderr,
+      stdout
+    }));
+    child.once("close", (exitCode) => resolve({
+      exitCode: Number.isInteger(exitCode) ? exitCode : 1,
+      stderr,
+      stdout
+    }));
+  });
+}
+
 if (commandName !== ${JSON.stringify(AGENT_PREVIEW_COMMAND_NAME)}) {
   fail("Vibe64 preview command wrapper was invoked with an unsupported command.");
 }
@@ -156,43 +256,53 @@ if (!socketPath || !sessionId || !token) {
   fail("Vibe64 preview command identity is not available for this session.");
 }
 
-const response = await requestSocket({
-  socketPath,
-  body: {
-    args: process.argv.slice(2),
-    cwd: process.cwd(),
-    sessionId,
-    token
-  }
-}).catch((error) => {
-  fail(error?.message || error || "Vibe64 preview command request failed.");
-});
-
-let payload = {};
-try {
-  payload = JSON.parse(response.text || "{}");
-} catch {
-  fail(response.text || "Vibe64 preview command returned invalid JSON.");
+async function runRemoteCommand(args = []) {
+  const response = await requestSocket({
+    socketPath,
+    body: {
+      args,
+      cwd: process.cwd(),
+      sessionId,
+      token
+    }
+  }).catch((error) => {
+    fail(error?.message || error || "Vibe64 preview command request failed.");
+  });
+  return responsePayload(response);
 }
 
-if (payload.stdout) {
-  process.stdout.write(String(payload.stdout));
-  if (!String(payload.stdout).endsWith("\\n")) {
-    process.stdout.write("\\n");
+const args = process.argv.slice(2);
+if (args[0] === "screenshot") {
+  const ensured = await runRemoteCommand(["ensure", "--wait", "--json"]);
+  if (payloadExitCode(ensured) !== 0) {
+    writePayload(ensured);
+    process.exit(payloadExitCode(ensured));
   }
-}
-if (payload.stderr) {
-  process.stderr.write(String(payload.stderr));
-  if (!String(payload.stderr).endsWith("\\n")) {
-    process.stderr.write("\\n");
+  const inspected = await runRemoteCommand(["inspect-url"]);
+  if (payloadExitCode(inspected) !== 0) {
+    writePayload(inspected);
+    process.exit(payloadExitCode(inspected));
   }
-}
-if (payload.ok === false && !payload.stderr && payload.error) {
-  process.stderr.write(String(payload.error) + "\\n");
+  const previewUrl = String(inspected.stdout || "").trim();
+  if (!previewUrl) {
+    fail("Managed preview inspection URL is unavailable.");
+  }
+  const outputPath = screenshotOutputPath(args.slice(1), sessionId);
+  const captured = await captureScreenshot({
+    outputPath,
+    previewUrl
+  });
+  if (captured.exitCode !== 0) {
+    const detail = redactPreviewUrl(captured.stderr || captured.stdout || captured.error?.message, previewUrl);
+    fail(detail || "Vibe64 managed Playwright could not capture the current page.", captured.exitCode);
+  }
+  process.stdout.write("Screenshot saved to " + outputPath + "\\n");
+  process.exit(0);
 }
 
-const exitCode = Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
-process.exit(exitCode);
+const payload = await runRemoteCommand(args);
+writePayload(payload);
+process.exit(payloadExitCode(payload));
 `;
 }
 
@@ -225,6 +335,8 @@ function usageText() {
     "Usage:",
     "  vibe64-preview ensure [--wait] [--json] [--timeout-ms <ms>]",
     "  vibe64-preview status [--json]",
+    "  vibe64-preview inspect-url",
+    "  vibe64-preview screenshot [--output <path>]",
     "  vibe64-preview logs [--lines <count>] [--json]",
     "  vibe64-preview restart [--wait] [--json] [--timeout-ms <ms>]",
     "",
@@ -304,17 +416,47 @@ function previewEndpoint(value = "") {
   }
 }
 
-function previewPageUrl(baseUrl = "", route = "") {
+function previewPageUrl(baseUrl = "", route = "", {
+  inheritBaseSearch = false
+} = {}) {
   const normalizedBaseUrl = normalizeText(baseUrl);
   const normalizedRoute = normalizeText(route);
   if (!normalizedBaseUrl || !normalizedRoute.startsWith("/")) {
     return "";
   }
   try {
-    return new URL(normalizedRoute, normalizedBaseUrl).toString();
+    const base = new URL(normalizedBaseUrl);
+    const page = new URL(normalizedRoute, base);
+    if (inheritBaseSearch) {
+      for (const [name, value] of base.searchParams) {
+        if (!page.searchParams.has(name)) {
+          page.searchParams.append(name, value);
+        }
+      }
+    }
+    return page.toString();
   } catch {
     return "";
   }
+}
+
+function previewInspectionUrl(status = {}, {
+  previewState = null
+} = {}) {
+  const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
+  const proxyUrl = normalizeText(previewTarget.href);
+  const route = normalizeText(previewState?.route);
+  if (proxyUrl) {
+    return route
+      ? previewPageUrl(proxyUrl, route, {
+          inheritBaseSearch: true
+        }) || proxyUrl
+      : proxyUrl;
+  }
+  const summary = previewStatusSummary(status, {
+    previewState
+  });
+  return normalizeText(summary.currentPage?.agentUrl || summary.endpoints?.agent?.url);
 }
 
 function previewCurrentPage(previewState = {}, {
@@ -545,6 +687,15 @@ function createAgentPreviewCommandService({
     });
   }
 
+  function inspectionUrl(status = {}, sessionId = "") {
+    const uiState = typeof readSessionUiState === "function"
+      ? readSessionUiState(sessionId)
+      : null;
+    return previewInspectionUrl(status, {
+      previewState: uiState?.preview || null
+    });
+  }
+
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const parsed = parsePreviewCommandArgs(input.args);
@@ -590,6 +741,31 @@ function createAgentPreviewCommandService({
         stdout: statusStdout(statusSummary(status, sessionId), {
           json: parsed.json
         })
+      });
+    }
+    if (parsed.command === "inspect-url") {
+      const status = await launchTarget.launchStatus(sessionId);
+      if (status?.ok === false) {
+        return finish({
+          ...status,
+          exitCode: 1,
+          stderr: `${status.error || "Vibe64 preview status failed."}\n`
+        });
+      }
+      const url = inspectionUrl(status, sessionId);
+      if (!url) {
+        return finish(responseError(
+          "Managed preview inspection URL is unavailable. Run vibe64-preview ensure --wait --json first.",
+          "vibe64_agent_preview_command_inspection_url_unavailable",
+          {
+            exitCode: 1
+          }
+        ));
+      }
+      return finish({
+        exitCode: 0,
+        ok: true,
+        stdout: `${url}\n`
       });
     }
     if (parsed.command === "logs") {
@@ -817,6 +993,7 @@ async function ensureAgentPreviewCommandServer({
 
 async function prepareAgentPreviewCommand({
   commandService,
+  env = process.env,
   sessionId = "",
   wrapperHostDir = ""
 } = {}) {
@@ -836,11 +1013,15 @@ async function prepareAgentPreviewCommand({
     sessionId: normalizedSessionId,
     wrapperHostDir: normalizedWrapperHostDir
   });
+  const [playwrightBinDir] = runtimePackBinPaths("playwright", {
+    env
+  });
   return {
     env: {
       [VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
       [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
-      [VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV]: server.token
+      [VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV]: server.token,
+      [VIBE64_AGENT_PREVIEW_PLAYWRIGHT_COMMAND_ENV]: path.join(playwrightBinDir, "playwright")
     },
     hostSocketPath: commandSocketHostPath(normalizedWrapperHostDir),
     hostWrapperPath: wrapperHostPath(normalizedWrapperHostDir),
