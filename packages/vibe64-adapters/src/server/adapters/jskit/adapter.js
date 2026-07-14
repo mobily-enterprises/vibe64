@@ -846,39 +846,6 @@ function jskitRuntimeRequirements({
   ].filter(Boolean);
 }
 
-function jskitSettingsSections({
-  projectConfig = {}
-} = {}) {
-  const auth = jskitProjectAppAuthConfig(projectConfig);
-  return [
-    {
-      description: "JSKIT decides how generated app login is provided.",
-      fields: [
-        {
-          description: "Current JSKIT app login provider.",
-          id: "auth_provider",
-          label: "Provider",
-          type: "string",
-          value: auth.provider
-        },
-        ...(auth.provider === JSKIT_AUTH_PROVIDER_LOCAL
-          ? [
-              {
-                description: "Storage backend for JSKIT local username/password auth.",
-                id: "auth_local_backend",
-                label: "Local backend",
-                type: "string",
-                value: auth.localBackend
-              }
-            ]
-          : [])
-      ],
-      id: "auth",
-      title: "Authentication"
-    }
-  ];
-}
-
 async function jskitProjectEnvironment({
   projectConfig = {}
 } = {}) {
@@ -941,7 +908,6 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
           runtimeRequirements: jskitRuntimeRequirements
         })
       ],
-      settingsSections: jskitSettingsSections,
       launchTargetTerminalSpecFactory,
       launchTargets,
       targetScriptTerminalSpecFactory: createJskitTargetScriptTerminalSpec,

@@ -101,7 +101,7 @@ function jskitAppAuthConfigFields() {
           value: JSKIT_AUTH_PROVIDER_LOCAL
         },
         {
-          description: "Use Supabase Auth. Configure it from adapter settings before seeding or running login-backed workflows.",
+          description: "Use Supabase Auth. Configure its URL and publishable key in project Config before seeding or running login-backed workflows.",
           label: "Supabase",
           value: JSKIT_AUTH_PROVIDER_SUPABASE
         }

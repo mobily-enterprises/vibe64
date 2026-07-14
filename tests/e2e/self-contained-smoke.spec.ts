@@ -22,6 +22,7 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
   await page.goto(`${DASHBOARD_PATH}/history`);
   await expect(page.getByRole("heading", { level: 1, name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
   await expect(page.getByText("Review completed and abandoned Vibe64 sessions.", { exact: true })).toHaveCount(0);
   await page.goto(DEVELOPMENT_PATH);
   await expect(page).toHaveURL(developmentUrlPattern());
@@ -60,18 +61,6 @@ test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
     timeout: 15_000
   });
   await expect(recoveryBanner).toHaveCount(0);
-});
-
-test("adapter-owned settings page renders JSKIT auth settings without managed Supabase setup", async ({ page }) => {
-  await mockReadyStudioShell(page);
-
-  await page.goto(`${DASHBOARD_PATH}/settings`);
-
-  await expect(page.getByRole("heading", { level: 1, name: "Project Settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Authentication", exact: true })).toBeVisible();
-  await expect(page.getByText("Provider", { exact: true })).toBeVisible();
-  await expect(page.getByText("local", { exact: true })).toBeVisible();
-  await expect(page.getByText("Connect Supabase token", { exact: true })).toHaveCount(0);
 });
 
 function escapedPathPattern(pathValue: string) {
@@ -338,42 +327,6 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           values: savedProjectConfigValues
         },
         ok: true
-      }
-    ],
-    [
-      "/api/vibe64/adapter-settings",
-      {
-        ok: true,
-        settings: {
-          adapter: {
-            id: "jskit",
-            label: "JSKIT target adapter"
-          },
-          projectConfig: {
-            ready: true
-          },
-          projectType: {
-            projectType: "jskit",
-            ready: true
-          },
-          sections: [
-            {
-              components: [],
-              description: "JSKIT decides how generated app login is provided.",
-              fields: [
-                {
-                  description: "Current JSKIT app login provider.",
-                  id: "auth_provider",
-                  label: "Provider",
-                  type: "string",
-                  value: "local"
-                }
-              ],
-              id: "auth",
-              title: "Authentication"
-            }
-          ]
-        }
       }
     ],
     [

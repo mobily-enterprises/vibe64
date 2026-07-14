@@ -9,7 +9,6 @@ import {
   createService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
-  adapterSettingsComponentInputValidator,
   projectEnvMaterializeInputValidator,
   projectEnvUserValuesInputValidator
 } from "../../packages/vibe64-project/src/server/inputSchemas.js";
@@ -1861,58 +1860,6 @@ test("Vibe64 project service can preview and save config with a draft project ty
     const draftSavedManifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
     assert.equal(draftSavedManifest.projectType, "jskit");
     assert.equal(draftSavedManifest.config.github_pr_merge_method, "rebase");
-  });
-});
-
-test("Vibe64 project service exposes JSKIT-owned auth settings without managed Supabase components", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({
-      targetRoot
-    });
-
-    await service.saveProjectType({
-      projectType: "jskit"
-    });
-    await service.saveProjectConfig({
-      values: {
-        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
-        github_pr_merge_method: "merge",
-        jskit_database_runtime: "none"
-      }
-    });
-
-    const settings = await service.readAdapterSettings();
-    const authSection = settings.settings.sections.find((section) => section.id === "auth");
-    assert.equal(settings.ok, true);
-    assert.equal(authSection?.title, "Authentication");
-    assert.deepEqual(authSection?.components || [], []);
-    assert.deepEqual(authSection?.fields.map((field) => [field.id, field.value]), [
-      ["auth_provider", JSKIT_AUTH_PROVIDER_LOCAL],
-      ["auth_local_backend", JSKIT_AUTH_LOCAL_BACKEND_FILE]
-    ]);
-  });
-});
-
-test("adapter settings component input keeps adapter-owned payload bags", () => {
-  const result = adapterSettingsComponentInputValidator.schema.patch({
-    environment: "prod",
-    payload: {
-      customField: "custom value",
-      nested: {
-        enabled: true
-      }
-    }
-  });
-
-  assert.deepEqual(result.errors, {});
-  assert.deepEqual(result.validatedObject, {
-    environment: "prod",
-    payload: {
-      customField: "custom value",
-      nested: {
-        enabled: true
-      }
-    }
   });
 });
 

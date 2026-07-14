@@ -212,7 +212,6 @@ function projectSelectionSetupMetadata(runtimeProfile = null) {
 
 function createService({
   adapterServices = () => ({}),
-  adapterSettingsComponentHandlers = {},
   env = process.env,
   projectContext = null,
   projectConfigSavedHooks = [],
@@ -234,15 +233,6 @@ function createService({
       : adapterServices;
     return services && typeof services === "object" && !Array.isArray(services)
       ? services
-      : {};
-  }
-
-  function adapterSettingsComponentHandlerRegistry(context = {}) {
-    const handlers = typeof adapterSettingsComponentHandlers === "function"
-      ? adapterSettingsComponentHandlers(context)
-      : adapterSettingsComponentHandlers;
-    return handlers && typeof handlers === "object" && !Array.isArray(handlers)
-      ? handlers
       : {};
   }
 
@@ -1583,195 +1573,6 @@ function createService({
     return readProjectConfigForAdapter(adapter, projectType, input);
   }
 
-  async function adapterSettingsContext(input = {}) {
-    if (!currentTargetRoot()) {
-      return {
-        adapter: null,
-        projectConfig: noProjectSelectedConfigState(),
-        projectType: noProjectSelectedTypeState(),
-        ready: false,
-        sections: [],
-        services: {}
-      };
-    }
-    const { adapter, projectType } = await createProjectAdapter(input);
-    const projectConfig = await readProjectConfigForAdapter(adapter, projectType, input);
-    const services = adapterServiceContext({
-      adapter,
-      input,
-      projectConfig,
-      projectType,
-      targetRoot: currentTargetRoot()
-    });
-
-    async function saveProjectConfigValues(values = {}) {
-      return saveProjectConfigState({
-        ...input,
-        projectType: projectType.projectType,
-        values: {
-          ...(projectConfig.values || {}),
-          ...(values && typeof values === "object" && !Array.isArray(values) ? values : {})
-        }
-      });
-    }
-
-    return {
-      adapter,
-      config: projectConfig,
-      input,
-      projectConfig,
-      projectLocalRoot: projectLocalRoot(),
-      projectRuntimeRoot: projectRuntimeRoot(),
-      projectType,
-      ready: projectType.ready === true && projectConfig.ready === true,
-      saveProjectConfigValues,
-      services,
-      sourceConfigRoot: sourceConfigRoot(),
-      sourceRoot: currentSourceRoot(),
-      targetRoot: currentTargetRoot()
-    };
-  }
-
-  async function readAdapterSettingsState(input = {}) {
-    const context = await adapterSettingsContext(input);
-    if (!context.adapter) {
-      return {
-        adapter: null,
-        config: context.projectConfig,
-        projectConfig: context.projectConfig,
-        projectType: context.projectType,
-        sections: []
-      };
-    }
-    const sections = typeof context.adapter.listSettingsSections === "function"
-      ? await context.adapter.listSettingsSections(context)
-      : [];
-    return {
-      adapter: {
-        id: context.adapter.id,
-        label: context.adapter.label
-      },
-      config: context.projectConfig,
-      projectConfig: context.projectConfig,
-      projectType: context.projectType,
-      sections
-    };
-  }
-
-  async function adapterSettingsActionContext(input = {}) {
-    const context = await adapterSettingsContext(input);
-    if (!context.adapter) {
-      const error = new Error(context.projectType.message || "Choose a project before using adapter settings.");
-      error.code = context.projectType.errorCode || "vibe64_project_not_selected";
-      throw error;
-    }
-    return context;
-  }
-
-  async function adapterSettingsComponentContext(componentId = "", input = {}) {
-    const context = await adapterSettingsActionContext(input);
-    const sections = typeof context.adapter.listSettingsSections === "function"
-      ? await context.adapter.listSettingsSections(context)
-      : [];
-    const normalizedComponentId = normalizeText(componentId);
-    const component = sections
-      .flatMap((section) => Array.isArray(section.components) ? section.components : [])
-      .find((candidate) => candidate.id === normalizedComponentId || candidate.component === normalizedComponentId);
-    if (!component) {
-      const error = new Error(`Adapter settings component is not available: ${normalizedComponentId || "(empty)"}`);
-      error.code = "vibe64_adapter_settings_component_missing";
-      throw error;
-    }
-    const handlers = adapterSettingsComponentHandlerRegistry({
-      ...context,
-      component
-    });
-    const handler = handlers[component.id] || handlers[component.component] || null;
-    if (!handler) {
-      const error = new Error(`Adapter settings component is not wired: ${component.id}.`);
-      error.code = "vibe64_adapter_settings_component_unwired";
-      throw error;
-    }
-    return {
-      ...context,
-      component,
-      handler,
-      sections
-    };
-  }
-
-  function adapterSettingsComponentOperationMethod(operation = "") {
-    return {
-      connect: "connect",
-      disconnect: "disconnect",
-      "smtp-login": "saveSmtpLogin",
-      "smtp-login/disconnect": "disconnectSmtpLogin",
-      setup: "setup",
-      sync: "sync"
-    }[normalizeText(operation)] || normalizeText(operation);
-  }
-
-  async function readAdapterSettingsComponentState(componentId = "", input = {}) {
-    const context = await adapterSettingsComponentContext(componentId, input);
-    if (typeof context.handler.read === "function") {
-      return context.handler.read(input, context);
-    }
-    if (typeof context.handler.getStatus === "function") {
-      return context.handler.getStatus(input, context);
-    }
-    const error = new Error(`Adapter settings component cannot be read: ${context.component.id}.`);
-    error.code = "vibe64_adapter_settings_component_read_unavailable";
-    throw error;
-  }
-
-  async function runAdapterSettingsComponentOperationState(componentId = "", operation = "", input = {}) {
-    const context = await adapterSettingsComponentContext(componentId, input);
-    const method = adapterSettingsComponentOperationMethod(operation);
-    let result = null;
-    if (typeof context.handler.run === "function") {
-      result = await context.handler.run(operation, input, context);
-    } else if (method && typeof context.handler[method] === "function") {
-      result = await context.handler[method](input, context);
-    } else {
-      const error = new Error(`Adapter settings component operation is not available: ${operation || "(empty)"}.`);
-      error.code = "vibe64_adapter_settings_component_operation_missing";
-      throw error;
-    }
-    const saveValues = context.component.saveValuesOnSuccess?.[normalizeText(operation)] || null;
-    if (
-      saveValues &&
-      typeof saveValues === "object" &&
-      !Array.isArray(saveValues) &&
-      result?.ok !== false
-    ) {
-      return {
-        ...result,
-        config: await context.saveProjectConfigValues(saveValues)
-      };
-    }
-    return result;
-  }
-
-  async function startAdapterSettingsActionState(actionId = "", input = {}) {
-    const context = await adapterSettingsActionContext(input);
-    return context.adapter.startSettingsAction(actionId, context);
-  }
-
-  async function submitAdapterSettingsActionState(actionId = "", stepId = "", input = {}) {
-    const context = await adapterSettingsActionContext(input);
-    return context.adapter.submitSettingsAction(actionId, stepId, input?.payload || {}, context);
-  }
-
-  async function adapterSettingsActionStatusState(actionId = "", input = {}) {
-    const context = await adapterSettingsActionContext(input);
-    return context.adapter.settingsActionStatus(actionId, context);
-  }
-
-  async function cancelAdapterSettingsActionState(actionId = "", input = {}) {
-    const context = await adapterSettingsActionContext(input);
-    return context.adapter.cancelSettingsAction(actionId, context);
-  }
-
   async function currentProjectConfigStateForEnvironment(input = {}) {
     const projectType = await readProjectTypeState(input);
     if (!projectType.ready) {
@@ -3074,59 +2875,6 @@ function createService({
         return {
           defaults: await readProjectConfigDefaultsState(input),
           ok: true
-        };
-      });
-    },
-
-    async readAdapterSettings(input = {}) {
-      return projectResult(async () => {
-        return {
-          ok: true,
-          settings: await readAdapterSettingsState(input)
-        };
-      });
-    },
-
-    async readAdapterSettingsComponent(componentId = "", input = {}) {
-      return projectResult(() => readAdapterSettingsComponentState(componentId, input));
-    },
-
-    async runAdapterSettingsComponentOperation(componentId = "", operation = "", input = {}) {
-      return projectResult(() => runAdapterSettingsComponentOperationState(componentId, operation, input));
-    },
-
-    async startAdapterSettingsAction(actionId = "", input = {}) {
-      return projectResult(async () => {
-        return {
-          ok: true,
-          step: await startAdapterSettingsActionState(actionId, input)
-        };
-      });
-    },
-
-    async submitAdapterSettingsAction(actionId = "", stepId = "", input = {}) {
-      return projectResult(async () => {
-        return {
-          ok: true,
-          step: await submitAdapterSettingsActionState(actionId, stepId, input)
-        };
-      });
-    },
-
-    async adapterSettingsActionStatus(actionId = "", input = {}) {
-      return projectResult(async () => {
-        return {
-          ok: true,
-          step: await adapterSettingsActionStatusState(actionId, input)
-        };
-      });
-    },
-
-    async cancelAdapterSettingsAction(actionId = "", input = {}) {
-      return projectResult(async () => {
-        return {
-          ok: true,
-          step: await cancelAdapterSettingsActionState(actionId, input)
         };
       });
     },
