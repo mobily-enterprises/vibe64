@@ -237,25 +237,7 @@ test("@preview-lifecycle refreshes disabled targets after the selected session a
     revision: 1
   };
   const launchSession = await mockLaunchSession(page, {
-    launchStatusSequence: [
-      idleLaunchStatusPayload([
-        {
-          available: false,
-          defaultPreview: true,
-          disabledReason: "Install dependencies before running the app.",
-          id: "dev",
-          label: "Run app"
-        }
-      ]),
-      idleLaunchStatusPayload([
-        {
-          available: true,
-          defaultPreview: true,
-          id: "dev",
-          label: "Run app"
-        }
-      ])
-    ],
+    launchStatusSequence: previewAvailabilitySequence(),
     session
   });
 
@@ -271,6 +253,33 @@ test("@preview-lifecycle refreshes disabled targets after the selected session a
   session.revision = 2;
   await page.getByRole("button", {
     name: "Reload chat"
+  }).click();
+
+  await expect.poll(() => launchSession.getLaunchStatusRequestCount()).toBe(2);
+  await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
+    {
+      launchInput: {
+        values: {}
+      },
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
+    }
+  ]);
+});
+
+test("@preview-lifecycle lets the user recheck a disabled target without a session signal", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page, {
+    launchStatusSequence: previewAvailabilitySequence()
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(page.getByText("Install dependencies before running the app.")).toBeVisible();
+  expect(launchSession.getLaunchStatusRequestCount()).toBe(1);
+
+  await page.getByRole("button", {
+    name: "Check again"
   }).click();
 
   await expect.poll(() => launchSession.getLaunchStatusRequestCount()).toBe(2);
@@ -1870,6 +1879,29 @@ function idleLaunchStatusPayload(launchTargets: unknown[] = []) {
       targetHref: ""
     }
   };
+}
+
+function previewAvailabilitySequence() {
+  const previewTarget = {
+    defaultPreview: true,
+    id: "dev",
+    label: "Run app"
+  };
+  return [
+    idleLaunchStatusPayload([
+      {
+        ...previewTarget,
+        available: false,
+        disabledReason: "Install dependencies before running the app."
+      }
+    ]),
+    idleLaunchStatusPayload([
+      {
+        ...previewTarget,
+        available: true
+      }
+    ])
+  ];
 }
 
 function sessionPayload({

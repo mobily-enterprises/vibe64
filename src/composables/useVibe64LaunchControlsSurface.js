@@ -488,6 +488,14 @@ function useVibe64LaunchControlsSurface(props) {
   ));
   const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
   const previewUrl = computed(() => previewFrameRequest.value.src);
+  const previewCheckAgainVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewState.value === "idle" &&
+    !previewUrl.value &&
+    !terminalVisible.value &&
+    embeddedStartTargetUnavailableReason.value &&
+    !loadError.value
+  ));
   const previewStarting = computed(() => Boolean(
     previewState.value === "starting"
   ));
@@ -1263,6 +1271,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewCanRestart,
     previewCanShowLog,
     previewCanStart,
+    previewCheckAgainVisible,
     previewDisplayedAddress,
     previewDisplayedUrl,
     previewEmbedUnavailableReason,

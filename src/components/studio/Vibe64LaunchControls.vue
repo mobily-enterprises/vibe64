@@ -465,6 +465,18 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewEmptyText }}</span>
+        <v-btn
+          v-if="previewCheckAgainVisible"
+          :disabled="operationBusy"
+          :loading="loading"
+          :prepend-icon="mdiRefresh"
+          size="small"
+          title="Check preview availability again"
+          variant="tonal"
+          @click="retryLaunchStatus"
+        >
+          Check again
+        </v-btn>
         <code
           v-if="launchStatusDetailText"
           class="vibe64-launch-controls__preview-status-detail"
@@ -754,6 +766,7 @@ const {
   previewBackAvailable,
   previewCanRestart,
   previewCanShowLog,
+  previewCheckAgainVisible,
   previewDisplayedAddress,
   previewEmptyText,
   previewFrame,
