@@ -8,7 +8,8 @@ import {
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_REWIND_SESSION,
-  ACTION_RUN_SESSION_INTENT
+  ACTION_RUN_SESSION_INTENT,
+  ACTION_UPDATE_CURRENT_SESSION
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
   sessionInspectInputValidator,
@@ -118,6 +119,51 @@ test("session list route forwards the requested archive filter", async () => {
         archive: "abandoned"
       }
     });
+    });
+  });
+});
+
+test("current session route forwards the selected session id", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "PUT",
+        path: `${apiRouteBase}/vibe64/sessions/current`
+      });
+      assert.ok(route);
+
+      let executedAction = null;
+      const reply = testReply();
+      await route.handler({
+        input: {
+          body: {
+            sessionId: "session-2"
+          }
+        },
+        params: routeProjectParams(),
+        async executeAction(action) {
+          executedAction = action;
+          return {
+            ok: true,
+            sessionId: "session-2"
+          };
+        }
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(executedAction, {
+        actionId: ACTION_UPDATE_CURRENT_SESSION,
+        input: {
+          sessionId: "session-2"
+        }
+      });
     });
   });
 });

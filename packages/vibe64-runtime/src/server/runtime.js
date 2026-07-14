@@ -1053,6 +1053,7 @@ class Vibe64SessionRuntime {
     this.store = store || createVibe64SessionStore({
       clock,
       projectLocalRoot: this.stateRoot,
+      projectSessionSourceRoot: this.projectSessionSourceRoot,
       targetRoot
     });
     this.now = createClockNow(clock);
@@ -1122,6 +1123,10 @@ class Vibe64SessionRuntime {
       ? await this.store.listSessionSummaries(options)
       : await this.store.listSessions(options);
     return summaries.map((summary) => this.sessionSummaryView(summary));
+  }
+
+  async updateCurrentSession(sessionId = "") {
+    return this.store.updateCurrentSession(sessionId);
   }
 
   async compactClosedSessionIfNeeded(session = {}) {

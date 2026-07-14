@@ -17,6 +17,11 @@ import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
+import {
+  clearVibe64CurrentSessionAliasIfMatches,
+  resolveVibe64CurrentSessionAliasPath,
+  updateVibe64CurrentSessionAlias
+} from "./currentSessionAlias.js";
 
 const VIBE64_SESSION_SCHEMA_VERSION = 1;
 const VIBE64_CLOSED_SESSION_ARCHIVE_SCHEMA_VERSION = 1;
@@ -758,6 +763,7 @@ function isoFromConversationTimestamp(timestamp = "") {
 function sessionPathsFromRoot({
   activeSessionsRoot = "",
   closedSessionsRoot = "",
+  currentSessionAliasPath = "",
   sessionId = "",
   sessionRoot = "",
   sessionsRoot = "",
@@ -775,6 +781,7 @@ function sessionPathsFromRoot({
     commandLifecyclesRoot: sessionRoot ? path.join(sessionRoot, "command-lifecycle") : "",
     commandLogPath: sessionRoot ? path.join(sessionRoot, "command-log.jsonl") : "",
     conversationLogRoot: sessionRoot ? path.join(sessionRoot, "conversation-log") : "",
+    currentSessionAliasPath,
     currentStepPath: sessionRoot ? path.join(sessionRoot, "current_step") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
@@ -792,16 +799,20 @@ function sessionPathsFromRoot({
 }
 
 function resolveVibe64SessionPaths({
-	  sessionId = "",
-	  stateRoot = "",
-	  targetRoot = process.cwd()
-	} = {}) {
-	  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-	  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : "";
-	  if (!resolvedStateRoot) {
-	    throw vibe64Error("Vibe64 session paths require projectLocalRoot.", "vibe64_project_local_root_required");
-	  }
-	  const sessionsRoot = path.join(resolvedStateRoot, "sessions");
+  projectSessionSourceRoot = "",
+  sessionId = "",
+  stateRoot = "",
+  targetRoot = process.cwd()
+} = {}) {
+  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
+  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : "";
+  if (!resolvedStateRoot) {
+    throw vibe64Error("Vibe64 session paths require projectLocalRoot.", "vibe64_project_local_root_required");
+  }
+  const sessionsRoot = path.join(resolvedStateRoot, "sessions");
+  const sourceSessionsRoot = projectSessionSourceRoot
+    ? path.join(path.resolve(projectSessionSourceRoot), "sessions")
+    : "";
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const closedSessionsRoot = path.join(sessionsRoot, "closed");
   const normalizedSessionId = normalizeText(sessionId);
@@ -809,6 +820,9 @@ function resolveVibe64SessionPaths({
   return sessionPathsFromRoot({
     activeSessionsRoot,
     closedSessionsRoot,
+    currentSessionAliasPath: sourceSessionsRoot
+      ? resolveVibe64CurrentSessionAliasPath(sourceSessionsRoot)
+      : "",
     sessionId: normalizedSessionId,
     sessionRoot,
     sessionsRoot,
@@ -990,6 +1004,7 @@ function nextConversationTurnId(turnIds = []) {
 function createVibe64SessionStore({
   clock = undefined,
   projectLocalRoot = "",
+  projectSessionSourceRoot = "",
   stateRoot = "",
   targetRoot = process.cwd()
 } = {}) {
@@ -1003,6 +1018,7 @@ function createVibe64SessionStore({
 
   function paths(sessionId = "") {
     return resolveVibe64SessionPaths({
+      projectSessionSourceRoot,
       sessionId,
       stateRoot: normalizedStateRoot,
       targetRoot: normalizedTargetRoot
@@ -1014,6 +1030,7 @@ function createVibe64SessionStore({
     return sessionPathsFromRoot({
       activeSessionsRoot: rootPaths.activeSessionsRoot,
       closedSessionsRoot: rootPaths.closedSessionsRoot,
+      currentSessionAliasPath: rootPaths.currentSessionAliasPath,
       sessionId: assertValidVibe64SessionId(sessionId),
       sessionRoot,
       sessionsRoot: rootPaths.sessionsRoot,
@@ -2607,10 +2624,7 @@ function createVibe64SessionStore({
     if (finalArchiveExists || finalMetadataExists) {
       if (finalArchiveExists && finalMetadataExists) {
         await validateClosedSessionArchive(finalArchivePath);
-        await rm(sessionPaths.sessionRoot, {
-          force: true,
-          recursive: true
-        });
+        await removeActiveSessionRoot(sessionPaths);
         return readClosedArchiveRecordForStatus(rootPaths, status, sessionPaths.sessionId);
       }
       throw vibe64Error(
@@ -2665,10 +2679,7 @@ function createVibe64SessionStore({
       archiveFinalized = true;
       await rename(stagedMetadataPath, finalMetadataPath);
       metadataFinalized = true;
-      await rm(sessionPaths.sessionRoot, {
-        force: true,
-        recursive: true
-      });
+      await removeActiveSessionRoot(sessionPaths);
       return readClosedArchiveRecordForStatus(rootPaths, status, sessionPaths.sessionId);
     } catch (error) {
       if (!metadataFinalized) {
@@ -2693,6 +2704,46 @@ function createVibe64SessionStore({
         recursive: true
       });
     }
+  }
+
+  async function updateCurrentSession(sessionId = "") {
+    const selectedSessionId = normalizeText(sessionId);
+    const rootPaths = paths();
+    if (!rootPaths.currentSessionAliasPath) {
+      throw vibe64Error(
+        "Updating the current Vibe64 session requires projectSessionSourceRoot.",
+        "vibe64_project_session_source_root_required"
+      );
+    }
+    return enqueueSessionMutation(rootPaths.currentSessionAliasPath, async () => {
+      if (selectedSessionId) {
+        await ensureActiveSessionRoot(selectedSessionId);
+      }
+      await updateVibe64CurrentSessionAlias({
+        aliasPath: rootPaths.currentSessionAliasPath,
+        sessionId: selectedSessionId
+      });
+      return {
+        sessionId: selectedSessionId
+      };
+    });
+  }
+
+  async function removeActiveSessionRoot(sessionPaths) {
+    const removeSessionRoot = () => rm(sessionPaths.sessionRoot, {
+      force: true,
+      recursive: true
+    });
+    if (!sessionPaths.currentSessionAliasPath) {
+      return removeSessionRoot();
+    }
+    return enqueueSessionMutation(sessionPaths.currentSessionAliasPath, async () => {
+      await clearVibe64CurrentSessionAliasIfMatches({
+        aliasPath: sessionPaths.currentSessionAliasPath,
+        sessionId: sessionPaths.sessionId
+      });
+      await removeSessionRoot();
+    });
   }
 
   async function createSession({
@@ -2879,6 +2930,7 @@ function createVibe64SessionStore({
     readStatus,
     readStepState,
     runSessionExclusive,
+    updateCurrentSession,
     writeArtifact,
     writeAgentRunEvent,
     writeBackgroundTaskEvent,

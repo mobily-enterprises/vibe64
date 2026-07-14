@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, readdir, readFile, stat } from "node:fs/promises";
+import { access, lstat, mkdir, readdir, readFile, readlink, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -54,15 +54,18 @@ function createTestSessionStore({
   return createVibe64SessionStore({
     ...options,
     projectLocalRoot: projectLocalRoot(targetRoot),
+    projectSessionSourceRoot: options.projectSessionSourceRoot || projectLocalRoot(targetRoot),
     targetRoot
   });
 }
 
 function resolveTestSessionPaths({
+  projectSessionSourceRoot = "",
   sessionId = "",
   targetRoot
 } = {}) {
   return resolveVibe64SessionPaths({
+    projectSessionSourceRoot: projectSessionSourceRoot || projectLocalRoot(targetRoot),
     sessionId,
     stateRoot: projectLocalRoot(targetRoot),
     targetRoot
@@ -108,6 +111,90 @@ test("vibe64 session store creates inspectable session state under the runtime r
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
+  });
+});
+
+test("vibe64 session store tracks the current session outside the active session directory", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const projectSessionSourceRoot = path.join(targetRoot, "managed-project");
+    const store = createTestSessionStore({
+      projectSessionSourceRoot,
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "session-a"
+    });
+    await store.createSession({
+      sessionId: "session-b"
+    });
+    const paths = resolveTestSessionPaths({
+      projectSessionSourceRoot,
+      sessionId: "session-a",
+      targetRoot
+    });
+    await mkdir(path.join(projectSessionSourceRoot, "sessions", "active", "session-a", "source"), {
+      recursive: true
+    });
+
+    await store.updateCurrentSession("session-a");
+
+    assert.equal((await lstat(paths.currentSessionAliasPath)).isSymbolicLink(), true);
+    assert.equal(await readlink(paths.currentSessionAliasPath), path.join("active", "session-a"));
+    assert.equal(
+      await stat(path.join(paths.currentSessionAliasPath, "source")).then((entry) => entry.isDirectory()),
+      true
+    );
+    await assertPathMissing(path.join(projectLocalRoot(targetRoot), "sessions", "selected"));
+    assert.deepEqual((await readdir(paths.activeSessionsRoot)).sort(), ["session-a", "session-b"]);
+    assert.deepEqual((await store.listSessions()).map((session) => session.sessionId), ["session-a", "session-b"]);
+
+    await store.updateCurrentSession("session-b");
+    assert.equal(await readlink(paths.currentSessionAliasPath), path.join("active", "session-b"));
+
+    await store.updateCurrentSession("");
+    await assertPathMissing(paths.currentSessionAliasPath);
+
+    await assert.rejects(
+      () => store.updateCurrentSession("missing-session"),
+      (error) => error?.code === "vibe64_session_not_found"
+    );
+  });
+});
+
+test("vibe64 session store requires the managed source root before updating the current session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({
+      projectLocalRoot: projectLocalRoot(targetRoot),
+      targetRoot
+    });
+
+    await assert.rejects(
+      () => store.updateCurrentSession(""),
+      (error) => error?.code === "vibe64_project_session_source_root_required"
+    );
+    await assertPathMissing(path.join(projectLocalRoot(targetRoot), "sessions", "selected"));
+  });
+});
+
+test("vibe64 session store never overwrites a real current-session alias path", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "session-a"
+    });
+    const paths = resolveTestSessionPaths({
+      sessionId: "session-a",
+      targetRoot
+    });
+    await writeFile(paths.currentSessionAliasPath, "keep me\n", "utf8");
+
+    await assert.rejects(
+      () => store.updateCurrentSession("session-a"),
+      (error) => error?.code === "vibe64_current_session_alias_conflict"
+    );
+    assert.equal(await readFile(paths.currentSessionAliasPath, "utf8"), "keep me\n");
   });
 });
 
@@ -1297,9 +1384,12 @@ test("vibe64 session store compacts closed sessions into closed status archives"
     const archivePath = path.join(projectLocalRoot(targetRoot), "sessions", "closed", "abandoned", "closed_session.tar.gz");
     const metadataPath = path.join(projectLocalRoot(targetRoot), "sessions", "closed", "abandoned", "closed_session.json");
 
+    await store.updateCurrentSession("closed_session");
+
     await store.compactClosedSession("closed_session");
 
     await assertPathMissing(paths.sessionRoot);
+    await assertPathMissing(paths.currentSessionAliasPath);
     await assertPathExists(archivePath);
     await assertPathExists(metadataPath);
 
@@ -1342,6 +1432,29 @@ test("vibe64 session store compacts closed sessions into closed status archives"
     assert.equal(archivedSession.archivePath, archivePath);
     assert.equal(archivedSession.sessionRoot, "");
     assert.equal(archivedSession.artifactsRoot, "");
+  });
+});
+
+test("vibe64 session store keeps the current alias when compacting another session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "current_session"
+    });
+    await store.createSession({
+      sessionId: "closed_session"
+    });
+    await store.updateCurrentSession("current_session");
+    await store.writeStatus("closed_session", VIBE64_SESSION_STATUS.FINISHED);
+
+    await store.compactClosedSession("closed_session");
+
+    const paths = resolveTestSessionPaths({
+      targetRoot
+    });
+    assert.equal(await readlink(paths.currentSessionAliasPath), path.join("active", "current_session"));
   });
 });
 

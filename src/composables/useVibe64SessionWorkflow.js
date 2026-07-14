@@ -72,7 +72,8 @@ function useVibe64SessionWorkflow({
     selectedSessionTitle,
     selectSessionId,
     sessionList,
-    sessionsApiPath
+    sessionsApiPath,
+    updateCurrentSessionCommand = {}
   } = sessionData;
 
   const clipboard = useVibe64SessionClipboard();
@@ -154,6 +155,7 @@ function useVibe64SessionWorkflow({
   const pageError = computed(() => {
     return sessionList.loadError ||
       commandMessage(createSessionCommand, "error") ||
+      commandMessage(updateCurrentSessionCommand, "error") ||
       workflow.actions.error.value ||
       commandMessage(workflow.dialogs.abandon.command, "error") ||
       "";

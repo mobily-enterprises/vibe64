@@ -256,6 +256,35 @@ function createService(options = {}) {
   return serviceWithDefaultWorkflowOrigin(service, defaultOriginId);
 }
 
+test("session service updates the project current-session alias without source setup", async () => {
+  const createRuntimeOptions = [];
+  const selectedSessionIds = [];
+  const service = createService({
+    projectService: {
+      async createRuntime(options = {}) {
+        createRuntimeOptions.push(options);
+        return {
+          async updateCurrentSession(sessionId) {
+            selectedSessionIds.push(sessionId);
+            return {
+              sessionId
+            };
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.updateCurrentSession("session-2");
+
+  assert.deepEqual(createRuntimeOptions, [{ sourceSetupRequired: false }]);
+  assert.deepEqual(selectedSessionIds, ["session-2"]);
+  assert.deepEqual(result, {
+    ok: true,
+    sessionId: "session-2"
+  });
+});
+
 function composerMessageRuntimeHarness(initialSession = {}) {
   let currentSession = {
     actions: [

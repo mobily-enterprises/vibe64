@@ -3374,6 +3374,19 @@ function createService({
       });
     },
 
+    async updateCurrentSession(sessionId = "") {
+      return sessionResult(async () => {
+        const runtime = await projectService.createRuntime({
+          sourceSetupRequired: false
+        });
+        const currentSession = await runtime.updateCurrentSession(sessionId);
+        return {
+          ok: true,
+          sessionId: currentSession.sessionId
+        };
+      });
+    },
+
     async inspectSession(sessionId, input = {}) {
       const startedAtMs = Date.now();
       const includeRuntimeEnrichment = inputFlagEnabled(input?.includeRuntimeEnrichment);

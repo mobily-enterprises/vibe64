@@ -150,6 +150,18 @@ const sessionCreateInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const currentSessionInputValidator = deepFreeze({
+  schema: createSchema({
+    ...vibe64UserInputSchema,
+    sessionId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
 const sessionIdInputValidator = deepFreeze({
   schema: createSchema({
     ...originInputSchema,
@@ -423,6 +435,7 @@ export {
   agentMessageCancelInputValidator,
   agentTurnInterruptInputValidator,
   agentMessageInputValidator,
+  currentSessionInputValidator,
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
   sessionConversationLogInputValidator,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  composerMenuProjectionFromRealtimePayload,
   agentTurnRealtimeOverlayFromPayload,
+  composerMenuProjectionFromRealtimePayload,
   rememberSessionComposerMenu,
   rememberSessionDetailRecord,
   selectedSessionShouldLoadComposerMenu,
@@ -15,9 +15,116 @@ import {
   selectedSessionRealtimeShouldRefresh,
   selectedSessionDetailLoadState,
   selectedSessionDetailRefreshReason,
+  selectedSessionIdForCurrentAlias,
   selectedSessionRecord,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
+import {
+  createVibe64CurrentSessionPublisher
+} from "../../src/lib/vibe64CurrentSessionPublisher.js";
+
+describe("current session alias synchronization", () => {
+  it("publishes only a selected session confirmed by the loaded session list", () => {
+    const sessions = [
+      { sessionId: "session-1" },
+      { sessionId: "session-2" }
+    ];
+
+    expect(selectedSessionIdForCurrentAlias({
+      selectedSessionId: "session-2",
+      sessions
+    })).toBe("session-2");
+    expect(selectedSessionIdForCurrentAlias({
+      selectedSessionId: "missing",
+      sessions
+    })).toBe(null);
+    expect(selectedSessionIdForCurrentAlias({
+      selectedSessionId: "session-2",
+      sessionListLoading: true,
+      sessions
+    })).toBe(null);
+    expect(selectedSessionIdForCurrentAlias({
+      selectedSessionId: "session-2",
+      sessionListLoaded: false,
+      sessions
+    })).toBe(null);
+    expect(selectedSessionIdForCurrentAlias({
+      selectedSessionId: "session-2",
+      sessionListLoadError: "Could not load sessions.",
+      sessions: []
+    })).toBe(null);
+    expect(selectedSessionIdForCurrentAlias({
+      createSessionRunning: true,
+      sessions: []
+    })).toBe(null);
+    expect(selectedSessionIdForCurrentAlias({
+      sessions: []
+    })).toBe("");
+  });
+
+  it("coalesces rapid current-session publications to the latest selection", async () => {
+    const calls = [];
+    let releaseFirst = () => null;
+    let markFirstStarted = () => null;
+    const firstPublication = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    const firstPublicationStarted = new Promise((resolve) => {
+      markFirstStarted = resolve;
+    });
+    const publisher = createVibe64CurrentSessionPublisher({
+      async publish({ sessionId }) {
+        calls.push(sessionId);
+        if (sessionId === "session-1") {
+          markFirstStarted();
+          await firstPublication;
+        }
+      }
+    });
+
+    publisher.request({
+      apiPath: "/project-a/sessions/current",
+      sessionId: "session-1"
+    });
+    await firstPublicationStarted;
+    publisher.request({
+      apiPath: "/project-a/sessions/current",
+      sessionId: "session-2"
+    });
+    const publishing = publisher.request({
+      apiPath: "/project-a/sessions/current",
+      sessionId: "session-3"
+    });
+    releaseFirst();
+    await publishing;
+
+    expect(calls).toEqual(["session-1", "session-3"]);
+  });
+
+  it("deduplicates successful publications within one project only", async () => {
+    const calls = [];
+    const publisher = createVibe64CurrentSessionPublisher({
+      async publish(publication) {
+        calls.push(publication);
+      }
+    });
+
+    await publisher.request({ apiPath: "/project-a/current", sessionId: "session-1" });
+    await publisher.request({ apiPath: "/project-a/current", sessionId: "session-1" });
+    await publisher.request({ apiPath: "/project-b/current", sessionId: "session-1" });
+
+    expect(calls).toEqual([
+      {
+        apiPath: "/project-a/current",
+        sessionId: "session-1"
+      },
+      {
+        apiPath: "/project-b/current",
+        sessionId: "session-1"
+      }
+    ]);
+  });
+});
 
 describe("useVibe64SessionData selected session record", () => {
   it("prefers the selected detail record over the shallow list summary", () => {

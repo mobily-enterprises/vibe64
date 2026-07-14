@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ACTION_INSPECT_SESSION,
   ACTION_RUN_SESSION_ACTION,
+  ACTION_UPDATE_CURRENT_SESSION,
   featureActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 
@@ -81,6 +82,26 @@ test("session inspect action forwards composer menu and runtime enrichment optio
       }
     }
   ]);
+});
+
+test("current session action forwards the selected session id", async () => {
+  const action = featureAction(ACTION_UPDATE_CURRENT_SESSION);
+  const calls = [];
+
+  await action.execute({
+    sessionId: "session-2"
+  }, {}, {
+    featureService: {
+      async updateCurrentSession(...args) {
+        calls.push(args);
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(calls, [["session-2"]]);
 });
 
 test("session action command forwards object agent settings", async () => {

@@ -3,6 +3,7 @@ import {
   ACTION_ADVANCE_SESSION,
   ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST,
   ACTION_CREATE_SESSION,
+  ACTION_UPDATE_CURRENT_SESSION,
   ACTION_INSPECT_SESSION_DIFF,
   ACTION_INSPECT_SESSION,
   ACTION_LIST_SESSIONS,
@@ -46,6 +47,12 @@ function registerRoutes(
     actionId: ACTION_CREATE_SESSION,
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Create an Vibe64 session."
+  });
+
+  routes.actionRoute("PUT", "/sessions/current", {
+    actionId: ACTION_UPDATE_CURRENT_SESSION,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Update the current Vibe64 session alias."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId", {

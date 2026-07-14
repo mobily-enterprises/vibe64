@@ -1,4 +1,5 @@
 import {
+  currentSessionInputValidator,
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
   sessionConversationLogInputValidator,
@@ -14,6 +15,7 @@ import {
 
 const ACTION_LIST_SESSIONS = "feature.vibe64-sessions.list";
 const ACTION_CREATE_SESSION = "feature.vibe64-sessions.create";
+const ACTION_UPDATE_CURRENT_SESSION = "feature.vibe64-sessions.current.update";
 const ACTION_INSPECT_SESSION = "feature.vibe64-sessions.inspect";
 const ACTION_INSPECT_SESSION_DIFF = "feature.vibe64-sessions.diff.inspect";
 const ACTION_READ_SESSION_CONVERSATION_LOG = "feature.vibe64-sessions.conversation-log.read";
@@ -61,6 +63,24 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.createSession(input || {});
+    }
+  },
+  {
+    id: ACTION_UPDATE_CURRENT_SESSION,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"],
+    input: currentSessionInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_UPDATE_CURRENT_SESSION
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.updateCurrentSession(input?.sessionId || "");
     }
   },
   {
@@ -334,6 +354,7 @@ export {
   ACTION_ADVANCE_SESSION,
   ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST,
   ACTION_CREATE_SESSION,
+  ACTION_UPDATE_CURRENT_SESSION,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_DIFF,
   ACTION_LIST_SESSIONS,
