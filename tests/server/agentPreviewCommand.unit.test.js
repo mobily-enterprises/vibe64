@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -22,6 +23,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 
 const execFileAsync = promisify(execFile);
+const FAKE_SCREENSHOT_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==";
+const FAKE_SCREENSHOT_BYTES = Buffer.from(FAKE_SCREENSHOT_BASE64, "base64");
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,8 +97,8 @@ async function createFakePlaywrightRuntime(runtimeRoot) {
   await writeExecutable(path.join(playwrightRoot, "bin", "playwright"), "#!/bin/sh\nexit 0\n");
   await writeFile(path.join(playwrightRoot, "runtime.env"), "playwright_version=1.50.1\n", "utf8");
   await writeFile(path.join(playwrightModule, "index.js"), `
-const fs = require("node:fs");
 const { spawn } = require("node:child_process");
+const screenshotBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==", "base64");
 let launchCount = 0;
 exports.chromium = {
   async launch() {
@@ -169,16 +172,25 @@ exports.chromium = {
                 }
                 this.renderReady = true;
               },
+              locator(selector) {
+                if (selector !== "body") {
+                  throw new Error("Unexpected fake preview locator: " + selector);
+                }
+                return {
+                  async innerText() {
+                    return "Home\\nReady\\nCore services are available.";
+                  }
+                };
+              },
               async title() { return "Fake preview"; },
               async screenshot(options) {
                 if (this.loadState !== "load" || !this.renderReady) {
                   throw new Error("Managed preview screenshot ran before rendered-page readiness.");
                 }
-                fs.writeFileSync(options.path, JSON.stringify({
-                  fullPage: options.fullPage,
-                  launchId,
-                  url: this.currentUrl
-                }));
+                if (options.fullPage !== true || options.type !== "png") {
+                  throw new Error("Managed preview screenshot did not request a full-page PNG.");
+                }
+                return Buffer.from(screenshotBytes);
               }
             };
             pages.push(page);
@@ -601,7 +613,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "4");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "5");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -673,14 +685,69 @@ test("agent preview wrapper captures the authenticated page with managed Playwri
       }
     });
 
-    assert.equal(executed.stdout, `Screenshot saved to ${outputPath}\n`);
+    const capture = JSON.parse(executed.stdout);
+    assert.equal(capture.outputPath, outputPath);
+    assert.equal(
+      capture.sha256,
+      crypto.createHash("sha256").update(FAKE_SCREENSHOT_BYTES).digest("hex")
+    );
+    assert.equal(capture.byteLength, FAKE_SCREENSHOT_BYTES.length);
+    assert.equal(capture.width, 2);
+    assert.equal(capture.height, 2);
+    assert.equal(capture.totalPixels, 4);
+    assert.equal(capture.sampledPixels, 4);
+    assert.equal(capture.samplingStep, 1);
+    assert.equal(capture.luminance, 0.75);
+    assert.equal(capture.darkPixelThreshold, 0.1);
+    assert.equal(capture.darkPixelPercentage, 25);
+    assert.equal(capture.title, "Fake preview");
+    assert.equal(capture.domTextSummary, "Home Ready Core services are available.");
+    assert.equal(capture.domTextLength, 39);
+    assert.match(capture.url, /^https:\/\/preview\.example\.test\/home\?/u);
+    assert.match(capture.url, /vibe64_preview_token=%5Bredacted%5D/u);
+    assert.equal(Number.isNaN(Date.parse(capture.capturedAt)), false);
     assert.doesNotMatch(executed.stdout, /private-token/u);
     assert.equal(executed.stderr, "");
-    assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
-      fullPage: true,
-      launchId: 1,
-      url: previewUrl
-    });
+    assert.deepEqual(await readFile(outputPath), FAKE_SCREENSHOT_BYTES);
+
+    await assert.rejects(
+      execFileAsync(prepared.hostWrapperPath, [
+        "screenshot",
+        "--output",
+        outputPath
+      ], {
+        env: {
+          ...process.env,
+          ...prepared.env
+        }
+      }),
+      /screenshot path already exists/u
+    );
+    assert.deepEqual(await readFile(outputPath), FAKE_SCREENSHOT_BYTES);
+
+    const automaticCaptures = [];
+    for (let index = 0; index < 2; index += 1) {
+      const automatic = await execFileAsync(prepared.hostWrapperPath, [
+        "screenshot"
+      ], {
+        env: {
+          ...process.env,
+          ...prepared.env,
+          TMPDIR: root
+        }
+      });
+      automaticCaptures.push(JSON.parse(automatic.stdout));
+    }
+    assert.notEqual(automaticCaptures[0].outputPath, automaticCaptures[1].outputPath);
+    for (const automaticCapture of automaticCaptures) {
+      assert.equal(path.dirname(automaticCapture.outputPath), root);
+      assert.match(
+        path.basename(automaticCapture.outputPath),
+        /^vibe64-page-screenshot-wrapper-session-.+-[a-f0-9]{12}\.png$/u
+      );
+      assert.equal(automaticCapture.sha256, capture.sha256);
+      assert.deepEqual(await readFile(automaticCapture.outputPath), FAKE_SCREENSHOT_BYTES);
+    }
   } finally {
     await commandService.closeAllForSession(sessionId);
     await rm(root, {

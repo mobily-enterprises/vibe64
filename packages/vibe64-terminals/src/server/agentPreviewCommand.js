@@ -31,7 +31,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "4";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "5";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
@@ -191,6 +191,7 @@ function usageText() {
     "  vibe64-playwright test [playwright test arguments]",
     "  vibe64-playwright npm-run <package-script> [-- script arguments]",
     "",
+    "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
     "This is the only preview server the agent may use for this Vibe64 session.",
     "Do not start npm, Vite, Next, JSKIT, or any other development server on another port."
   ].join("\n") + "\n";

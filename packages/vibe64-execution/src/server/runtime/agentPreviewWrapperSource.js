@@ -129,7 +129,10 @@ function screenshotOutputPath(args = []) {
     ? String(args[outputIndex + 1] || "").trim()
     : String(outputEntry || "").slice("--output=".length).trim();
   const safeSessionId = String(sessionId || "session").replace(/[^A-Za-z0-9_.-]+/gu, "-");
-  return path.resolve(requested || path.join(process.env.TMPDIR || "/tmp", "vibe64-current-page-" + safeSessionId + ".png"));
+  const timestamp = new Date().toISOString().replace(/[^0-9A-Za-z]+/gu, "-").replace(/-+$/u, "");
+  const nonce = crypto.randomBytes(6).toString("hex");
+  const filename = ["vibe64-page", safeSessionId, timestamp, nonce].join("-") + ".png";
+  return path.resolve(requested || path.join(process.env.TMPDIR || "/tmp", filename));
 }
 
 async function previewSession() {
@@ -557,16 +560,14 @@ try {
     }
     if (browserCommand === "screenshot") {
       const outputPath = screenshotOutputPath(browserArgs);
-      await interactiveCommand("screenshot", { outputPath });
-      process.stdout.write("Screenshot saved to " + outputPath + "\\n");
+      printJson(await interactiveCommand("screenshot", { outputPath }));
       process.exit(0);
     }
     fail("Unknown managed preview browser command: " + (browserCommand || "(missing)"), 64);
   }
   if (args[0] === "screenshot") {
     const outputPath = screenshotOutputPath(args.slice(1));
-    await interactiveCommand("screenshot", { outputPath });
-    process.stdout.write("Screenshot saved to " + outputPath + "\\n");
+    printJson(await interactiveCommand("screenshot", { outputPath }));
     process.exit(0);
   }
   const payload = await remoteCommand(args);

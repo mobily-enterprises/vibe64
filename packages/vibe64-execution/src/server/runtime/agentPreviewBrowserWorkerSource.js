@@ -1,3 +1,5 @@
+import { inflateSync } from "node:zlib";
+
 function documentReadyForScreenshot(browserDocument = globalThis.document) {
   return Boolean(
     browserDocument?.readyState === "complete" &&
@@ -6,6 +8,174 @@ function documentReadyForScreenshot(browserDocument = globalThis.document) {
       ?.getEntriesByName("first-contentful-paint")
       ?.length
   );
+}
+
+function pngPaethPredictor(left, above, upperLeft) {
+  const estimate = left + above - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const aboveDistance = Math.abs(estimate - above);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance) {
+    return left;
+  }
+  return aboveDistance <= upperLeftDistance ? above : upperLeft;
+}
+
+function pngVisualMetrics(pngBytes, {
+  darkPixelThreshold = 0.1,
+  maximumSampledPixels = 250_000
+} = {}) {
+  const bytes = Buffer.isBuffer(pngBytes) ? pngBytes : Buffer.from(pngBytes || []);
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (bytes.length < signature.length || !bytes.subarray(0, signature.length).equals(signature)) {
+    throw new Error("Managed preview screenshot is not a PNG image.");
+  }
+
+  let offset = signature.length;
+  let header = null;
+  const imageDataChunks = [];
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const typeOffset = offset + 4;
+    const dataOffset = offset + 8;
+    const dataEnd = dataOffset + length;
+    const chunkEnd = dataEnd + 4;
+    if (chunkEnd > bytes.length) {
+      throw new Error("Managed preview screenshot has a truncated PNG chunk.");
+    }
+    const type = bytes.toString("ascii", typeOffset, dataOffset);
+    if (type === "IHDR") {
+      header = {
+        bitDepth: bytes[dataOffset + 8],
+        colorType: bytes[dataOffset + 9],
+        compression: bytes[dataOffset + 10],
+        filter: bytes[dataOffset + 11],
+        height: bytes.readUInt32BE(dataOffset + 4),
+        interlace: bytes[dataOffset + 12],
+        width: bytes.readUInt32BE(dataOffset)
+      };
+    } else if (type === "IDAT") {
+      imageDataChunks.push(bytes.subarray(dataOffset, dataEnd));
+    } else if (type === "IEND") {
+      break;
+    }
+    offset = chunkEnd;
+  }
+
+  const channels = new Map([
+    [0, 1],
+    [2, 3],
+    [4, 2],
+    [6, 4]
+  ]).get(header?.colorType);
+  if (
+    !header ||
+    header.bitDepth !== 8 ||
+    header.compression !== 0 ||
+    header.filter !== 0 ||
+    header.interlace !== 0 ||
+    !channels ||
+    !header.width ||
+    !header.height ||
+    !imageDataChunks.length
+  ) {
+    throw new Error("Managed preview screenshot uses an unsupported PNG layout.");
+  }
+
+  const rowBytes = header.width * channels;
+  const expectedBytes = header.height * (rowBytes + 1);
+  if (!Number.isSafeInteger(rowBytes) || !Number.isSafeInteger(expectedBytes)) {
+    throw new Error("Managed preview screenshot dimensions are unsafe.");
+  }
+  const inflated = inflateSync(Buffer.concat(imageDataChunks));
+  if (inflated.length < expectedBytes) {
+    throw new Error("Managed preview screenshot has incomplete PNG pixel data.");
+  }
+
+  const totalPixels = header.width * header.height;
+  const samplingStep = Math.max(
+    1,
+    Math.ceil(Math.sqrt(totalPixels / Math.max(1, maximumSampledPixels)))
+  );
+  let previous = Buffer.alloc(rowBytes);
+  let luminanceTotal = 0;
+  let darkPixels = 0;
+  let sampledPixels = 0;
+  let inputOffset = 0;
+
+  for (let y = 0; y < header.height; y += 1) {
+    const filter = inflated[inputOffset];
+    inputOffset += 1;
+    const row = Buffer.allocUnsafe(rowBytes);
+    for (let index = 0; index < rowBytes; index += 1) {
+      const encoded = inflated[inputOffset + index];
+      const left = index >= channels ? row[index - channels] : 0;
+      const above = previous[index];
+      const upperLeft = index >= channels ? previous[index - channels] : 0;
+      let prediction = 0;
+      if (filter === 1) {
+        prediction = left;
+      } else if (filter === 2) {
+        prediction = above;
+      } else if (filter === 3) {
+        prediction = Math.floor((left + above) / 2);
+      } else if (filter === 4) {
+        prediction = pngPaethPredictor(left, above, upperLeft);
+      } else if (filter !== 0) {
+        throw new Error("Managed preview screenshot uses an unsupported PNG filter.");
+      }
+      row[index] = (encoded + prediction) & 255;
+    }
+    inputOffset += rowBytes;
+
+    if (y % samplingStep === 0) {
+      for (let x = 0; x < header.width; x += samplingStep) {
+        const index = x * channels;
+        const grayscale = header.colorType === 0 || header.colorType === 4;
+        const red = row[index];
+        const green = grayscale ? row[index] : row[index + 1];
+        const blue = grayscale ? row[index] : row[index + 2];
+        const alpha = header.colorType === 4
+          ? row[index + 1] / 255
+          : header.colorType === 6
+            ? row[index + 3] / 255
+            : 1;
+        const composedRed = red * alpha + 255 * (1 - alpha);
+        const composedGreen = green * alpha + 255 * (1 - alpha);
+        const composedBlue = blue * alpha + 255 * (1 - alpha);
+        const luminance = (
+          0.2126 * composedRed +
+          0.7152 * composedGreen +
+          0.0722 * composedBlue
+        ) / 255;
+        luminanceTotal += luminance;
+        darkPixels += luminance <= darkPixelThreshold ? 1 : 0;
+        sampledPixels += 1;
+      }
+    }
+    previous = row;
+  }
+
+  return {
+    darkPixelPercentage: Number(((darkPixels / sampledPixels) * 100).toFixed(4)),
+    darkPixelThreshold,
+    height: header.height,
+    luminance: Number((luminanceTotal / sampledPixels).toFixed(6)),
+    sampledPixels,
+    samplingStep,
+    totalPixels,
+    width: header.width
+  };
+}
+
+function domTextFacts(value = "", maximumLength = 1200) {
+  const text = String(value || "").replace(/\s+/gu, " ").trim();
+  return {
+    domTextLength: text.length,
+    domTextSummary: text.length > maximumLength
+      ? text.slice(0, maximumLength - 1).trimEnd() + "…"
+      : text
+  };
 }
 
 function agentPreviewBrowserWorkerSource({
@@ -22,6 +192,7 @@ import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import process from "node:process";
+import { inflateSync } from "node:zlib";
 
 const socketPath = String(process.argv[2] || "").trim();
 const metadataPath = String(process.argv[3] || "").trim();
@@ -45,6 +216,9 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightModulePath);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
+const pngPaethPredictor = ${pngPaethPredictor.toString()};
+const pngVisualMetrics = ${pngVisualMetrics.toString()};
+const domTextFacts = ${domTextFacts.toString()};
 const state = Object.create(null);
 let browser = null;
 let context = null;
@@ -416,14 +590,40 @@ async function runCommand(input = {}) {
       throw new Error("A screenshot output path is required.");
     }
     await waitForScreenshotReady();
-    await page.screenshot({
+    const [title, bodyText] = await Promise.all([
+      page.title(),
+      page.locator("body").innerText()
+    ]);
+    const screenshotResult = await page.screenshot({
       fullPage: true,
-      path: outputPath
+      type: "png"
     });
-    return {
+    const bytes = Buffer.isBuffer(screenshotResult)
+      ? screenshotResult
+      : Buffer.from(screenshotResult || []);
+    const capture = {
+      byteLength: bytes.length,
+      capturedAt: new Date().toISOString(),
+      ...domTextFacts(bodyText),
+      ...pngVisualMetrics(bytes),
       outputPath,
+      sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+      title: String(title || ""),
       url: safeUrl(page.url())
     };
+    try {
+      await writeFile(outputPath, bytes, { flag: "wx" });
+    } catch (error) {
+      if (error?.code === "EEXIST") {
+        const immutablePathError = new Error(
+          "Managed preview screenshot path already exists: " + outputPath
+        );
+        immutablePathError.code = "vibe64_managed_browser_screenshot_exists";
+        throw immutablePathError;
+      }
+      throw error;
+    }
+    return capture;
   }
   if (command === "close") {
     await closeBrowser();

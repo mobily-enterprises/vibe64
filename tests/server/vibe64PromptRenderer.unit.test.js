@@ -301,6 +301,17 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /vibe64-playwright test/u);
   assert.match(briefing, /exact managed browser version/u);
   assert.match(briefing, /Immediately run `vibe64-preview screenshot`/u);
+  assert.match(briefing, /read its JSON capture metadata/u);
+  assert.match(briefing, /unique immutable `outputPath`, `sha256`/u);
+  assert.match(briefing, /DOM text summary, luminance, and dark-pixel percentage/u);
+  assert.match(briefing, /interaction request.+takes precedence over the initial-screenshot rule/u);
+  assert.match(briefing, /do not capture before acting/u);
+  assert.match(briefing, /Use one `vibe64-preview browser eval` call/u);
+  assert.match(briefing, /Take exactly one post-action screenshot only when/u);
+  assert.match(briefing, /Never claim that the application is black/u);
+  assert.match(briefing, /run `sha256sum` on the same `outputPath`/u);
+  assert.match(briefing, /reopen that exact file once without taking another screenshot/u);
+  assert.match(briefing, /image-handoff failure/u);
   assert.match(briefing, /one command idempotently ensures the preview/u);
   assert.match(briefing, /managed Playwright/u);
   assert.match(briefing, /before reading AGENTS\.md/u);
