@@ -31,7 +31,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "3";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "4";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
@@ -922,7 +922,6 @@ async function registeredWorkerMetadata(descriptor = {}) {
     if (
       metadata?.socketPath !== descriptor.socketPath ||
       metadata?.workerScriptPath !== descriptor.workerScriptPath ||
-      metadata?.contractVersion !== descriptor.contractVersion ||
       metadata?.signature !== browserWorkerMetadataSignature(metadata, descriptor.token)
     ) {
       return null;
@@ -951,9 +950,7 @@ async function registeredWorkerMetadata(descriptor = {}) {
         return null;
       }
     } catch {
-      if (metadata?.contractVersion !== AGENT_PREVIEW_COMMAND_CONTRACT_VERSION) {
-        return null;
-      }
+      // Signed metadata and the matching process identity already establish ownership.
     }
     return metadata;
   } catch {

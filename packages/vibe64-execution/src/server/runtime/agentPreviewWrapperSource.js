@@ -41,7 +41,7 @@ function fail(message, code = 1) {
   process.exit(code);
 }
 
-function requestSocket({ body, requestPath, socketPath, timeoutMs = 15_000 }) {
+function requestSocket({ body, requestPath, socketPath, timeoutMs = 0 }) {
   const requestBody = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const request = http.request({
@@ -259,7 +259,6 @@ function trackedProcessGroupAlive(entry = {}) {
 async function metadataOwnsProcess(metadata = {}) {
   const pid = Number(metadata?.pid);
   if (
-    metadata?.contractVersion !== contractVersion ||
     metadata?.socketPath !== browserSocketPath ||
     metadata?.workerScriptPath !== workerScriptPath ||
     metadata?.signature !== metadataSignature(metadata)
@@ -288,7 +287,8 @@ async function metadataOwnsProcess(metadata = {}) {
     const commandLine = (await readFile("/proc/" + pid + "/cmdline", "utf8")).split("\\0");
     return commandLine.includes(workerScriptPath) && commandLine.includes(browserSocketPath);
   } catch {
-    return metadata?.socketPath === browserSocketPath && metadata?.contractVersion === contractVersion;
+    // Signed metadata and the matching process identity already establish ownership.
+    return true;
   }
 }
 
@@ -348,7 +348,7 @@ async function removeWorkerFiles() {
   ]).catch(() => null);
 }
 
-async function workerRequest(input = {}, { timeoutMs = 30_000 } = {}) {
+async function workerRequest(input = {}, { timeoutMs = 0 } = {}) {
   const response = await requestSocket({
     body: {
       ...input,

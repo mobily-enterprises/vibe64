@@ -1,3 +1,13 @@
+function documentReadyForScreenshot(browserDocument = globalThis.document) {
+  return Boolean(
+    browserDocument?.readyState === "complete" &&
+    browserDocument.fonts?.status !== "loading" &&
+    browserDocument.defaultView?.performance
+      ?.getEntriesByName("first-contentful-paint")
+      ?.length
+  );
+}
+
 function agentPreviewBrowserWorkerSource({
   contractVersion = "1",
   controlHealthFailureLimit = 4,
@@ -34,6 +44,7 @@ if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !contr
 const require = createRequire(import.meta.url);
 const { chromium } = require(playwrightModulePath);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
 const state = Object.create(null);
 let browser = null;
 let context = null;
@@ -290,7 +301,7 @@ async function ensureBrowser(url = "", {
       previewUrl = requestedUrl;
       previewIdentity = requestedIdentity;
       await page.goto(requestedUrl, {
-        waitUntil: "domcontentloaded"
+        waitUntil: "load"
       });
     } catch (error) {
       await closeBrowser();
@@ -299,6 +310,24 @@ async function ensureBrowser(url = "", {
     }
   }
   return statusPayload();
+}
+
+async function waitForScreenshotReady() {
+  try {
+    await page.waitForLoadState("load");
+    await page.waitForFunction(documentReadyForScreenshot, undefined, {
+      polling: "raf"
+    });
+  } catch (error) {
+    if (error?.name !== "TimeoutError") {
+      throw error;
+    }
+    const readinessError = new Error(
+      "The managed preview page did not finish loading and render content."
+    );
+    readinessError.code = "vibe64_managed_browser_render_not_ready";
+    throw readinessError;
+  }
 }
 
 function outputPathFromInput(input = {}) {
@@ -386,6 +415,7 @@ async function runCommand(input = {}) {
     if (!outputPath) {
       throw new Error("A screenshot output path is required.");
     }
+    await waitForScreenshotReady();
     await page.screenshot({
       fullPage: true,
       path: outputPath

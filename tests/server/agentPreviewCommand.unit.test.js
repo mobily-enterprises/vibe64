@@ -8,6 +8,10 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
+  agentPreviewBrowserWorkerSource,
+  agentPreviewWrapperSource
+} from "../../packages/vibe64-execution/src/server/index.js";
+import {
   AGENT_PREVIEW_COMMAND_NAME,
   VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
@@ -119,11 +123,57 @@ exports.chromium = {
             const page = {
               closed: false,
               currentUrl: "about:blank",
+              loadState: "",
+              renderReady: false,
               isClosed() { return this.closed; },
               url() { return this.currentUrl; },
-              async goto(url) { this.currentUrl = url; },
+              async goto(url, options) {
+                if (options?.waitUntil !== "load") {
+                  throw new Error("Managed preview navigation did not wait for page load.");
+                }
+                this.currentUrl = url;
+                this.loadState = "load";
+              },
+              async waitForLoadState(state) {
+                if (state !== "load") {
+                  throw new Error("Managed preview screenshot did not wait for page load.");
+                }
+                this.loadState = state;
+              },
+              async waitForFunction(predicate, argument, options) {
+                const browserDocument = ({
+                  fonts = "loaded",
+                  painted = true,
+                  readyState = "complete"
+                } = {}) => ({
+                  defaultView: {
+                    performance: {
+                      getEntriesByName(name) {
+                        return name === "first-contentful-paint" && painted ? [{}] : [];
+                      }
+                    }
+                  },
+                  fonts: { status: fonts },
+                  readyState
+                });
+                if (
+                  predicate(browserDocument({ readyState: "loading" })) ||
+                  predicate(browserDocument({ fonts: "loading" })) ||
+                  predicate(browserDocument({ painted: false })) ||
+                  !predicate(browserDocument())
+                ) {
+                  throw new Error("Managed preview screenshot used an invalid render-readiness predicate.");
+                }
+                if (argument !== undefined || options?.polling !== "raf") {
+                  throw new Error("Managed preview screenshot readiness was not frame-driven.");
+                }
+                this.renderReady = true;
+              },
               async title() { return "Fake preview"; },
               async screenshot(options) {
+                if (this.loadState !== "load" || !this.renderReady) {
+                  throw new Error("Managed preview screenshot ran before rendered-page readiness.");
+                }
                 fs.writeFileSync(options.path, JSON.stringify({
                   fullPage: options.fullPage,
                   launchId,
@@ -551,7 +601,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "3");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "4");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -739,6 +789,73 @@ test("managed preview browser persists interaction state and recovers killed bro
     await assert.rejects(stat(prepared.hostBrowserMetadataPath), {
       code: "ENOENT"
     });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed preview browser replaces and cleans up a stale worker contract", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-upgrade-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "browser-upgrade-session";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl: "https://preview.example.test/upgrade?vibe64_preview_token=upgrade-token"
+  });
+  try {
+    const runtime = await createFakePlaywrightRuntime(runtimeRoot);
+    const preparationOptions = {
+      commandService,
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      sessionId,
+      wrapperHostDir: root
+    };
+    const prepared = await prepareAgentPreviewCommand(preparationOptions);
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+    const currentContractVersion = prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV];
+    const staleContractVersion = String(Number(currentContractVersion) - 1);
+    await Promise.all([
+      writeExecutable(prepared.hostBrowserWorkerPath, agentPreviewBrowserWorkerSource({
+        contractVersion: staleContractVersion,
+        playwrightModulePath: runtime.playwrightModule
+      })),
+      writeExecutable(prepared.hostWrapperPath, agentPreviewWrapperSource({
+        contractVersion: staleContractVersion,
+        managedNodePath: runtime.nodePath,
+        workerScriptPath: prepared.hostBrowserWorkerPath
+      }))
+    ]);
+
+    const staleBrowser = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: "return { childPid: browser.childPid };"
+    })).stdout);
+    const staleMetadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    assert.equal(staleMetadata.contractVersion, staleContractVersion);
+
+    await prepareAgentPreviewCommand(preparationOptions);
+    const currentStatus = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
+      env: commandEnv
+    })).stdout);
+    const currentMetadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    assert.equal(currentStatus.contractVersion, currentContractVersion);
+    assert.equal(currentMetadata.contractVersion, currentContractVersion);
+    assert.notEqual(currentMetadata.pid, staleMetadata.pid);
+    for (let attempt = 0; attempt < 20 && (
+      processRunning(staleMetadata.pid) || processRunning(staleBrowser.result.childPid)
+    ); attempt += 1) {
+      await wait(25);
+    }
+    assert.equal(processRunning(staleMetadata.pid), false);
+    assert.equal(processRunning(staleBrowser.result.childPid), false);
   } finally {
     await commandService.closeAllForSession(sessionId);
     await rm(root, {
