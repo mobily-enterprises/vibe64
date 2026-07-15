@@ -187,6 +187,7 @@ function commandTerminalTestRunCommand(startTerminal) {
       command: request.command,
       commandPreview: terminal.commandPreview,
       cwd: request.cwd,
+      detachedIdleTimeoutMs: terminal.detachedIdleTimeoutMs,
       env: request.env,
       maxRunning: terminal.maxRunning,
       metadata: terminal.metadata,
@@ -376,6 +377,67 @@ class UnitCommandAdapter extends TargetAdapter {
       }
     };
   }
+}
+
+function unitCommandDefinition({
+  id = "unit_command",
+  label = "Unit command"
+} = {}) {
+  return {
+    adapterCapability: "unit_command",
+    id,
+    label,
+    type: "command"
+  };
+}
+
+async function commandTerminalFixture(targetRoot, {
+  actions = [unitCommandDefinition()],
+  publishSessionChanged,
+  readTerminalSessionImpl = () => ({
+    ok: true,
+    status: "running"
+  }),
+  runCommand,
+  sessionId
+} = {}) {
+  const runtime = new Vibe64SessionRuntime({
+    adapter: new UnitCommandAdapter(),
+    targetRoot,
+    workflow: {
+      id: `unit-${sessionId}`,
+      steps: [
+        {
+          actions,
+          id: "unit_step",
+          label: "Unit step"
+        }
+      ]
+    }
+  });
+  await runtime.createSession({ sessionId });
+  const command = createCommandTerminalController({
+    env: await commandTerminalTestEnv(targetRoot),
+    ensureRuntimeNetwork: async () => null,
+    projectService: {
+      targetRoot,
+      async createRuntime() {
+        return runtime;
+      },
+      async projectConfigEnvironment() {
+        return {
+          VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
+        };
+      }
+    },
+    publishSessionChanged,
+    readTerminalSessionImpl,
+    runCommand
+  });
+  return {
+    command,
+    runtime
+  };
 }
 
 test("launch terminal actions are parsed only from the first output lines", () => {
@@ -11988,53 +12050,16 @@ test("host GitHub command result files for Git cache refresh are allocated besid
 
 test("Vibe64 command terminal claims one active execution per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      adapter: new UnitCommandAdapter(),
-      targetRoot,
-      workflow: {
-        id: "unit-terminal-duplicate-claim",
-        steps: [
-          {
-            actions: [
-              {
-                adapterCapability: "unit_command",
-                id: "unit_command",
-                label: "Unit command",
-                type: "command"
-              },
-              {
-                adapterCapability: "unit_command",
-                id: "second_unit_command",
-                label: "Second unit command",
-                type: "command"
-              }
-            ],
-            id: "unit_step",
-            label: "Unit step"
-          }
-        ]
-      }
-    });
-    await runtime.createSession({
-      sessionId: "terminal_duplicate_claim"
-    });
-
     let closeTerminal = async () => null;
     let startCount = 0;
-    const command = createCommandTerminalController({
-      env: await commandTerminalTestEnv(targetRoot),
-      ensureRuntimeNetwork: async () => null,
-      projectService: {
-        targetRoot,
-        async createRuntime() {
-          return runtime;
-        },
-        async projectConfigEnvironment() {
-          return {
-            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
-          };
-        }
-      },
+    const { command, runtime } = await commandTerminalFixture(targetRoot, {
+      actions: [
+        unitCommandDefinition(),
+        unitCommandDefinition({
+          id: "second_unit_command",
+          label: "Second unit command"
+        })
+      ],
       runCommand: commandTerminalTestRunCommand((options) => {
         startCount += 1;
         const id = `unit-command-duplicate-terminal-${startCount}`;
@@ -12059,7 +12084,8 @@ test("Vibe64 command terminal claims one active execution per session", async ()
           ok: true,
           status: "running"
         };
-      })
+      }),
+      sessionId: "terminal_duplicate_claim"
     });
 
     const first = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
@@ -12116,48 +12142,10 @@ test("Vibe64 command terminal claims one active execution per session", async ()
 
 test("Vibe64 command terminal duplicate start waits until claimed command is attachable", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      adapter: new UnitCommandAdapter(),
-      targetRoot,
-      workflow: {
-        id: "unit-terminal-duplicate-starting",
-        steps: [
-          {
-            actions: [
-              {
-                adapterCapability: "unit_command",
-                id: "unit_command",
-                label: "Unit command",
-                type: "command"
-              }
-            ],
-            id: "unit_step",
-            label: "Unit step"
-          }
-        ]
-      }
-    });
-    await runtime.createSession({
-      sessionId: "terminal_duplicate_starting"
-    });
-
     const terminalStarted = deferred();
     const terminalReleased = deferred();
     let startCount = 0;
-    const command = createCommandTerminalController({
-      env: await commandTerminalTestEnv(targetRoot),
-      ensureRuntimeNetwork: async () => null,
-      projectService: {
-        targetRoot,
-        async createRuntime() {
-          return runtime;
-        },
-        async projectConfigEnvironment() {
-          return {
-            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
-          };
-        }
-      },
+    const { command, runtime } = await commandTerminalFixture(targetRoot, {
       runCommand: commandTerminalTestRunCommand(async () => {
         startCount += 1;
         terminalStarted.resolve();
@@ -12167,7 +12155,8 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
           ok: true,
           status: "running"
         };
-      })
+      }),
+      sessionId: "terminal_duplicate_starting"
     });
 
     const first = command.startTerminal("terminal_duplicate_starting", testWorkflowInput({
@@ -12192,6 +12181,73 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
     assert.equal(duplicateResult.operationOutcome, "command_already_running");
     assert.equal(duplicateResult.terminalSessionId, "unit-command-delayed-terminal");
     assert.equal(startCount, 1);
+  });
+});
+
+test("Vibe64 command terminal makes a lost server terminal retryable", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let startCount = 0;
+    const publishedSessionChanges = [];
+    const { command, runtime } = await commandTerminalFixture(targetRoot, {
+      publishSessionChanged: async (sessionId, event) => {
+        publishedSessionChanges.push({
+          event,
+          sessionId
+        });
+      },
+      readTerminalSessionImpl: () => ({
+        code: "terminal_session_not_found",
+        error: "Terminal session not found.",
+        ok: false
+      }),
+      runCommand: commandTerminalTestRunCommand((options) => {
+        assert.equal(options.detachedIdleTimeoutMs, 30 * 60 * 1000);
+        startCount += 1;
+        return {
+          id: `unit-command-lost-terminal-${startCount}`,
+          ok: true,
+          status: "running"
+        };
+      }),
+      sessionId: "terminal_lost"
+    });
+
+    const first = await command.startTerminal("terminal_lost", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+    assert.equal(first.ok, true);
+    assert.equal(startCount, 1);
+
+    const lost = await command.startTerminal("terminal_lost", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+    assert.equal(lost.ok, false);
+    assert.equal(lost.code, "vibe64_command_terminal_lost");
+    assert.equal(lost.operationOutcome, "command_interrupted");
+    assert.equal(startCount, 1);
+
+    const lifecycle = await runtime.store.readCommandLifecycle("terminal_lost", "1-unit_command-001");
+    assert.equal(lifecycle.phase, "failed");
+    assert.equal(lifecycle.outcome, "failed");
+    assert.equal(lifecycle.terminalStatus, "missing");
+    assert.equal(publishedSessionChanges.at(-1).event.reason, "command-terminal-lost");
+
+    const retry = await command.startTerminal("terminal_lost", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+    assert.equal(retry.ok, true);
+    assert.equal(retry.id, "unit-command-lost-terminal-2");
+    assert.equal(startCount, 2);
+
+    const missingSubscription = await command.subscribeTerminal(
+      "terminal_lost",
+      "unit-command-lost-terminal-2",
+      () => null
+    );
+    assert.equal(missingSubscription.code, "terminal_session_not_found");
+    const retryLifecycle = await runtime.store.readCommandLifecycle("terminal_lost", "1-unit_command-002");
+    assert.equal(retryLifecycle.phase, "failed");
+    assert.equal(retryLifecycle.terminalStatus, "missing");
   });
 });
 

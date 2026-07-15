@@ -15,6 +15,10 @@ import {
   responseRefreshRecommended
 } from "@/lib/vibe64StaleOperation.js";
 
+const HEADLESS_COMMAND_RECONNECT_DELAY_MS = 250;
+const HEADLESS_COMMAND_RECONNECT_MAX_DELAY_MS = 5_000;
+const COMMAND_OBSERVER_DETACHED = Symbol("command-observer-detached");
+
 function normalizePlainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -134,6 +138,8 @@ function commandSuccess({
 
 function useVibe64HeadlessCommandRunner({
   closeCommandTerminal = null,
+  reconnectDelayMs = HEADLESS_COMMAND_RECONNECT_DELAY_MS,
+  reconnectMaxDelayMs = HEADLESS_COMMAND_RECONNECT_MAX_DELAY_MS,
   startCommandTerminal = null,
   webSocketUrl = vibe64CommandTerminalWebSocketUrl
 } = {}) {
@@ -149,9 +155,20 @@ function useVibe64HeadlessCommandRunner({
   const activeSessionId = ref("");
   const running = ref(false);
   const lastResult = ref(null);
+  const reconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
+  const reconnectMaxDelay = Math.max(reconnectDelay, Number(reconnectMaxDelayMs) || 0);
   let activeTerminal = null;
   let activeAction = null;
+  let disposed = false;
+  let reconnectAttempt = 0;
+  let reconnectTimer = null;
+  let resolveCommandCompletion = null;
+  let resolveObserverDetach;
   let stopRequested = false;
+  let terminalStreamFailure = null;
+  const observerDetachSignal = new Promise((resolve) => {
+    resolveObserverDetach = () => resolve(COMMAND_OBSERVER_DETACHED);
+  });
 
   const terminal = useVibe64Terminal({
     driver: createWebSocketTerminalDriver({
@@ -163,8 +180,69 @@ function useVibe64HeadlessCommandRunner({
       }
     }),
     initiallyVisible: false,
+    onEvent(event) {
+      if (event.type === "snapshot") {
+        reconnectAttempt = 0;
+        return;
+      }
+      if (event.type === "exit") {
+        settleCommand("exited");
+        return;
+      }
+      if (event.type === "stream-error" && event.code) {
+        terminalStreamFailure = {
+          code: event.code,
+          error: event.error
+        };
+        clearTerminalReconnect();
+        settleCommand(event.code === "terminal_session_not_found" ? "missing" : "rejected");
+        return;
+      }
+      if (event.type === "disconnected" && event.intentional !== true) {
+        scheduleTerminalReconnect();
+      }
+    },
     presentation: "headless"
   });
+
+  function clearTerminalReconnect() {
+    if (reconnectTimer == null) {
+      return;
+    }
+    globalThis.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function terminalCanReconnect() {
+    return !disposed && running.value && Boolean(activeTerminal) && !stopRequested && !terminalStreamFailure;
+  }
+
+  function settleCommand(reason, session = terminal.terminalSnapshot()) {
+    resolveCommandCompletion?.({
+      reason,
+      session
+    });
+  }
+
+  function scheduleTerminalReconnect() {
+    if (reconnectTimer != null || !terminalCanReconnect()) {
+      return;
+    }
+    const delayMs = Math.min(
+      reconnectMaxDelay,
+      reconnectDelay * (2 ** reconnectAttempt)
+    );
+    reconnectAttempt += 1;
+    reconnectTimer = globalThis.setTimeout(async () => {
+      reconnectTimer = null;
+      if (!terminalCanReconnect()) {
+        return;
+      }
+      if (!(await terminal.connectTerminalSocket())) {
+        scheduleTerminalReconnect();
+      }
+    }, delayMs);
+  }
 
   async function runCommandAction({
     advanceOnSuccess = false,
@@ -187,7 +265,10 @@ function useVibe64HeadlessCommandRunner({
     lastResult.value = null;
     activeTerminal = null;
     activeAction = action;
+    reconnectAttempt = 0;
+    resolveCommandCompletion = null;
     stopRequested = false;
+    terminalStreamFailure = null;
     terminal.resetTerminalSessionState();
     terminal.resetTerminalDisplay();
     vibe64SessionDebugLog("client.headlessCommand.run.start", {
@@ -197,11 +278,24 @@ function useVibe64HeadlessCommandRunner({
     });
 
     try {
-      const response = await runStartCommandTerminal(normalizedSessionId, {
-        actionId,
-        advanceOnSuccess: advanceOnSuccess === true,
-        input: normalizePlainObject(input)
-      });
+      const response = await Promise.race([
+        runStartCommandTerminal(normalizedSessionId, {
+          actionId,
+          advanceOnSuccess: advanceOnSuccess === true,
+          input: normalizePlainObject(input)
+        }),
+        observerDetachSignal
+      ]);
+      if (response === COMMAND_OBSERVER_DETACHED) {
+        return resultFromCompletion({
+          action,
+          completion: {
+            reason: "detached"
+          },
+          sessionId: normalizedSessionId,
+          terminalSessionId: ""
+        });
+      }
       if (startResponseIsFinishedCommandClaim(response)) {
         const result = commandSuccess({
           action: actionFromCommandClaim(response, action),
@@ -235,19 +329,37 @@ function useVibe64HeadlessCommandRunner({
         ? terminalSnapshotFromStartResponse(response, terminalSessionId)
         : response;
       activeTerminal = {
-        owned: !attached,
         sessionId: normalizedSessionId,
         terminalSessionId
       };
-      await terminal.attachTerminal(session, {
-        ownership: attached ? "attached" : "owned"
+      const completion = new Promise((resolve) => {
+        resolveCommandCompletion = resolve;
       });
-      const settled = await terminal.waitForSettlement(terminalSessionId);
-      const result = resultFromSettlement({
+      if (disposed) {
+        settleCommand("detached", session);
+      } else if (stopRequested) {
+        settleCommand("stopped", session);
+      } else if (String(session.status || "") === "exited") {
+        settleCommand("exited", session);
+      }
+      if (!disposed && !stopRequested && String(session.status || "") !== "exited") {
+        await Promise.race([
+          terminal.attachTerminal(session, {
+            ownership: attached ? "attached" : "owned"
+          }),
+          completion
+        ]);
+        if (terminal.terminalStatus.value === "exited") {
+          settleCommand("exited");
+        } else if (terminal.terminalConnectionStatus.value !== "connected") {
+          scheduleTerminalReconnect();
+        }
+      }
+      const completed = await completion;
+      const result = resultFromCompletion({
         action: claimedAction,
-        session: settled,
+        completion: completed,
         sessionId: normalizedSessionId,
-        stopped: stopRequested,
         terminalSessionId
       });
       lastResult.value = result;
@@ -280,20 +392,23 @@ function useVibe64HeadlessCommandRunner({
       lastResult.value = result;
       return result;
     } finally {
-      await closeActiveTerminal();
+      resolveCommandCompletion = null;
+      await closeActiveTerminal({
+        deleteSession: terminal.terminalStatus.value === "exited" || stopRequested
+      });
       running.value = false;
       activeAction = null;
       stopRequested = false;
     }
   }
 
-  function resultFromSettlement({
+  function resultFromCompletion({
     action,
-    session,
+    completion,
     sessionId,
-    stopped,
     terminalSessionId
   }) {
+    const session = completion.session || {};
     const common = {
       action,
       attemptedCommand: terminalAttemptedCommand(session),
@@ -303,7 +418,31 @@ function useVibe64HeadlessCommandRunner({
       sessionId,
       terminalSessionId
     };
-    if (stopped) {
+    if (completion.reason === "detached") {
+      return commandFailure({
+        ...common,
+        code: "vibe64_command_observer_detached",
+        error: `${terminalActionLabel(action)} continues without this closed view.`,
+        exitCode: null
+      });
+    }
+    if (completion.reason === "missing") {
+      return commandFailure({
+        ...common,
+        code: "vibe64_command_terminal_lost",
+        error: `${terminalActionLabel(action)} lost its server terminal. Retry the command.`,
+        exitCode: null
+      });
+    }
+    if (completion.reason === "rejected") {
+      return commandFailure({
+        ...common,
+        code: terminalStreamFailure?.code,
+        error: terminalStreamFailure?.error || "Terminal stream was rejected.",
+        exitCode: null
+      });
+    }
+    if (completion.reason === "stopped") {
       return commandFailure({
         ...common,
         error: `${terminalActionLabel(action)} was stopped before it finished.`,
@@ -324,12 +463,14 @@ function useVibe64HeadlessCommandRunner({
   }
 
   function stopCommandAction() {
-    if (!running.value || !activeTerminal) {
+    if (!running.value) {
       return false;
     }
     stopRequested = true;
     terminal.terminalError.value = `${terminalActionLabel(activeAction || {})} was stopped before it finished.`;
+    clearTerminalReconnect();
     terminal.closeTerminalSocket();
+    settleCommand("stopped");
     return true;
   }
 
@@ -340,18 +481,25 @@ function useVibe64HeadlessCommandRunner({
     terminal.resetTerminalDisplay();
   }
 
-  async function closeActiveTerminal() {
+  async function closeActiveTerminal({
+    deleteSession = true
+  } = {}) {
     const active = activeTerminal;
     activeTerminal = null;
+    clearTerminalReconnect();
     terminal.closeTerminalSocket();
-    if (active?.owned && active.sessionId && active.terminalSessionId) {
+    if (deleteSession && active?.sessionId && active.terminalSessionId) {
       await runCloseCommandTerminal(active.sessionId, active.terminalSessionId).catch(() => null);
     }
     terminal.resetTerminalSessionState();
   }
 
   registerUnmountCleanup(() => {
-    void closeActiveTerminal();
+    disposed = true;
+    clearTerminalReconnect();
+    terminal.closeTerminalSocket();
+    resolveObserverDetach();
+    settleCommand("detached");
   });
 
   return {

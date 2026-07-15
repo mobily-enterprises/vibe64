@@ -2,7 +2,8 @@ import path from "node:path";
 import { access } from "node:fs/promises";
 
 import {
-  closeTerminalSessionsForNamespace
+  closeTerminalSessionsForNamespace,
+  readTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import {
   absoluteUniqueGitPaths,
@@ -96,6 +97,7 @@ const COMMAND_LIFECYCLE_ACTIVE_PHASES = new Set([
 
 const COMMAND_CLAIM_OBSERVE_TIMEOUT_MS = 30000;
 const COMMAND_CLAIM_OBSERVE_INTERVAL_MS = 100;
+const COMMAND_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const HOST_GITHUB_WORKSPACE_UMASK = "0007";
 
 function delay(ms) {
@@ -1130,6 +1132,7 @@ async function startCommandTerminalProcess({
     session,
     terminal: {
       commandPreview: spec.commandPreview,
+      detachedIdleTimeoutMs: target === "command" ? COMMAND_TERMINAL_DETACHED_IDLE_TIMEOUT_MS : 0,
       helperPayloadRoot: resultFile.directory,
       maxRunning,
       metadata: {
@@ -1179,10 +1182,90 @@ function createCommandTerminalController({
   logger = null,
   projectService,
   publishSessionChanged = async () => null,
+  readTerminalSessionImpl = readTerminalSession,
   resolveCommandTerminalToolHomeImpl = resolveCommandTerminalToolHome,
   runCommand = null
 } = {}) {
   const commandRunner = runCommand || runVibe64Command;
+
+  async function reconcileMissingCommandTerminal(sessionId, terminalSessionId, terminalFailure = null) {
+    const normalizedTerminalSessionId = normalizeText(terminalSessionId);
+    if (!normalizedTerminalSessionId) {
+      return null;
+    }
+    const terminal = terminalFailure ?? readTerminalSessionImpl(normalizedTerminalSessionId, {
+      namespace: commandTerminalNamespace(sessionId)
+    });
+    if (terminal?.code !== "terminal_session_not_found") {
+      return null;
+    }
+    const runtime = await projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
+    const recovered = await runtime.store.mutateSession(sessionId, async () => {
+      const session = await runtime.getSession(sessionId);
+      const lifecycle = activeCommandLifecycles(session).find((entry) => {
+        return commandLifecyclePhase(entry) === "started" &&
+          normalizeText(entry.terminalSessionId) === normalizedTerminalSessionId;
+      });
+      if (!lifecycle) {
+        return null;
+      }
+      const action = actionById(session, lifecycle.actionId) || {
+        id: lifecycle.actionId,
+        label: lifecycle.actionLabel
+      };
+      const message = `${action.label || action.id || "Command"} lost its server terminal. Retry the command.`;
+      await writeCommandLifecycleEvent({
+        lifecycleId: lifecycle.id,
+        runtime,
+        sessionId,
+        patch: {
+          error: {
+            code: "vibe64_command_terminal_lost",
+            message
+          },
+          outcome: "failed",
+          phase: "failed",
+          terminalStatus: "missing"
+        },
+        event: {
+          kind: "terminal_lost",
+          message,
+          outcome: "failed"
+        }
+      });
+      if (typeof runtime.recordCommandActionFinished === "function") {
+        await runtime.recordCommandActionFinished(session, action.id, {
+          message,
+          status: "blocked"
+        });
+      }
+      return {
+        action,
+        lifecycle,
+        message,
+        session: await runtime.getSession(sessionId)
+      };
+    });
+    if (!recovered) {
+      return null;
+    }
+    await publishSessionChanged(sessionId, {
+      reason: "command-terminal-lost",
+      session: recovered.session
+    });
+    vibe64SessionDebugLog("server.commandTerminal.terminalLost", {
+      actionId: recovered.action.id,
+      commandLifecycleId: recovered.lifecycle.id,
+      sessionId,
+      terminalSessionId: normalizedTerminalSessionId
+    });
+    return recovered;
+  }
+
   return Object.freeze({
     closeAllForSession(sessionId) {
       return closeTerminalSessionsForNamespace(commandTerminalNamespace(sessionId));
@@ -1366,6 +1449,23 @@ function createCommandTerminalController({
               runtime,
               sessionId
             });
+            const terminalSessionId = normalizeText(observedClaim.lifecycle?.terminalSessionId);
+            const recovered = await reconcileMissingCommandTerminal(
+              sessionId,
+              terminalSessionId
+            );
+            if (recovered) {
+              return {
+                actionId: recovered.action.id,
+                actionLabel: recovered.action.label,
+                code: "vibe64_command_terminal_lost",
+                error: recovered.message,
+                ok: false,
+                operationOutcome: "command_interrupted",
+                refreshRecommended: true,
+                terminalSessionId
+              };
+            }
             vibe64SessionDebugLog("server.commandTerminal.start.claimObserved", {
               ...vibe64SessionDebugSummary(observedClaim.session || claim.session || session),
               actionId,
@@ -1565,13 +1665,17 @@ function createCommandTerminalController({
       });
     },
 
-    subscribeTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
-      return subscribeOwnedTerminalSession(terminalSessionId, subscriber, {
+    async subscribeTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
+      const subscription = subscribeOwnedTerminalSession(terminalSessionId, subscriber, {
         env,
         input,
         logger,
         namespace: commandTerminalNamespace(sessionId)
       });
+      if (subscription?.ok === false) {
+        await reconcileMissingCommandTerminal(sessionId, terminalSessionId, subscription);
+      }
+      return subscription;
     },
 
     writeTerminal(sessionId, terminalSessionId, data, input = {}) {

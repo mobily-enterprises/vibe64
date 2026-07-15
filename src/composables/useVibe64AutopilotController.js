@@ -917,6 +917,14 @@ function useVibe64AutopilotController({
       input: operationInput(operation),
       sessionId: launchedSessionId
     });
+    if (result?.code === "vibe64_command_observer_detached") {
+      vibe64SessionDebugLog("client.autopilot.commandTerminal.detached", {
+        ...operationDebugSummary(operation),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        sessionId: launchedSessionId
+      });
+      return;
+    }
     if (commandStartNeedsRefresh(result)) {
       vibe64SessionDebugLog("client.autopilot.commandTerminal.startNeedsRefresh", {
         ...operationDebugSummary(operation),

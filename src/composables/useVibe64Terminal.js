@@ -885,6 +885,9 @@ function useVibe64Terminal({
       applyTerminalSession(message.session || {}, {
         replaceOutput: message.replaceOutput === true
       });
+      emitTerminalEvent("snapshot", {
+        status: terminalStatus.value
+      });
       return;
     }
 
@@ -935,6 +938,10 @@ function useVibe64Terminal({
       if (terminalResizeErrorMessage(error)) {
         return;
       }
+      emitTerminalEvent("stream-error", {
+        code: String(message.code || ""),
+        error
+      });
       terminalError.value = error;
     }
   }
@@ -1248,6 +1255,7 @@ function useVibe64Terminal({
     terminalStarting,
     terminalStatus,
     terminalVisible,
+    terminalSnapshot,
     waitForExit,
     waitForSettlement
   };

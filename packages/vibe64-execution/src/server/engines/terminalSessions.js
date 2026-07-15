@@ -21,6 +21,14 @@ const TERMINAL_KEY_INPUTS = Object.freeze({
 });
 const stores = new Map();
 
+function terminalSessionNotFound() {
+  return {
+    code: "terminal_session_not_found",
+    error: "Terminal session not found.",
+    ok: false
+  };
+}
+
 function normalizeNamespace(namespace = "") {
   return String(namespace || "default").trim() || "default";
 }
@@ -47,6 +55,10 @@ function trimBuffer(output) {
 
 function isRunningSession(session = {}) {
   return session.status === "running" || session.status === "closing";
+}
+
+function sessionUsesDetachedCleanup(session = {}) {
+  return isRunningSession(session) || session.status === "exited";
 }
 
 function terminalSessionMatchesFilter(session = {}, filter = null) {
@@ -205,7 +217,7 @@ function clearDetachedCleanupTimer(session = {}) {
 
 function scheduleDetachedCleanup(session = {}, namespace = "default") {
   clearDetachedCleanupTimer(session);
-  if (!isRunningSession(session) || session?.subscribers?.size) {
+  if (!sessionUsesDetachedCleanup(session) || session?.subscribers?.size) {
     return;
   }
   const timeoutMs = normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs);
@@ -700,10 +712,7 @@ function readTerminalSession(id, { namespace = "default", outputLimit = 0 } = {}
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
 
   return terminalSessionResponse(session, {
@@ -715,10 +724,7 @@ function updateTerminalSessionMetadata(id, metadata = {}, { namespace = "default
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
   return applySessionMetadata(session, metadata);
 }
@@ -727,10 +733,7 @@ function subscribeTerminalSession(id, subscriber, { namespace = "default", outpu
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
   if (typeof subscriber !== "function") {
     return {
@@ -760,10 +763,7 @@ function writeTerminalSession(id, data, { namespace = "default" } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
   if (session.status !== "running") {
     return readTerminalSession(id, { namespace });
@@ -787,10 +787,7 @@ function resizeTerminalSession(id, size = {}, { namespace = "default" } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
 
   const nextSize = normalizeTerminalSize(size);
@@ -824,10 +821,7 @@ function stopTerminalSession(id, { namespace = "default" } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
-    return {
-      ok: false,
-      error: "Terminal session not found."
-    };
+    return terminalSessionNotFound();
   }
 
   if (session.status === "running") {
@@ -882,10 +876,9 @@ async function closeDetachedTerminalSessions({
   let closed = 0;
   for (const { namespace: currentNamespace, session } of listStoredSessions({
     namespace,
-    namespacePrefix,
-    runningOnly: true
+    namespacePrefix
   })) {
-    if (session.subscribers?.size) {
+    if (!sessionUsesDetachedCleanup(session) || session.subscribers?.size) {
       continue;
     }
     const timeoutMs = idleMs == null

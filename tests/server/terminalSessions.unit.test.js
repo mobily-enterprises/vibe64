@@ -64,6 +64,16 @@ test("terminal sessions retain a bounded output buffer", () => {
   assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 2 * 1024 * 1024);
 });
 
+test("terminal sessions identify a missing server terminal structurally", () => {
+  assert.deepEqual(readTerminalSession("missing", {
+    namespace: `terminal-missing-${crypto.randomUUID()}`
+  }), {
+    code: "terminal_session_not_found",
+    error: "Terminal session not found.",
+    ok: false
+  });
+});
+
 test("terminal session snapshots can opt into bounded output", async () => {
   const namespace = `terminal-output-limit-${crypto.randomUUID()}`;
   const session = startTerminalSession({
@@ -400,6 +410,26 @@ test("terminal sessions schedule detached idle cleanup for opted-in terminals", 
   });
 
   try {
+    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal sessions prune exited records after detached idle cleanup", async () => {
+  const namespace = `terminal-detached-exited-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: ["-e", ""],
+    command: process.execPath,
+    commandPreview: "node exits",
+    detachedIdleTimeoutMs: 100,
+    namespace
+  });
+
+  try {
+    await waitFor(() => readTerminalSession(session.id, { namespace }).status === "exited", {
+      intervalMs: 5
+    });
     await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);

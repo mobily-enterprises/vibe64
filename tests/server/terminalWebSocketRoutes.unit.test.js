@@ -78,6 +78,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
   process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
   try {
     const calls = [];
+    let subscriptionFailure = null;
     const service = {};
     const fastify = {
       registered: null,
@@ -110,6 +111,9 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
         subscribe(resolvedService, { request, sessionId, subscriber, terminalSessionId }) {
           assert.equal(resolvedService, service);
           calls.push(["subscribe", sessionId, terminalSessionId, request.vibe64User?.email || "", currentProjectScopeKey()]);
+          if (subscriptionFailure) {
+            return subscriptionFailure;
+          }
           subscriber({
             line: "ready",
             type: "terminal.output"
@@ -187,6 +191,34 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
         ["resize", "session-1", "terminal-1", 120, 40, "owner@example.com", `project:${slug}`],
         ["unsubscribe"]
       ]);
+
+      subscriptionFailure = {
+        code: "terminal_session_not_found",
+        error: "Terminal session not found.",
+        ok: false
+      };
+      const missing = testSocket();
+      fastify.registered.handler(missing, {
+        headers: {},
+        ip: "10.0.0.8",
+        params: {
+          sessionId: "session-1",
+          slug,
+          terminalSessionId: "terminal-missing"
+        },
+        vibe64User: {
+          email: "owner@example.com"
+        }
+      });
+      await waitForSocketMessages(missing, 1);
+      assert.deepEqual(missing.sent, [
+        {
+          code: "terminal_session_not_found",
+          error: "Terminal session not found.",
+          type: "error"
+        }
+      ]);
+      assert.equal(missing.closed.code, 1008);
     });
   } finally {
     if (previousBypass == null) {

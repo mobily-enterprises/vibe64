@@ -7,15 +7,9 @@ import {
 describe("useVibe64AutopilotController", () => {
   it("dispatches a server-routed command operation without reading action metadata", async () => {
     const context = createControllerContext({
-      operation: {
-        actionId: "cmd_action",
+      operation: commandTerminalOperation({
         advanceOnSuccess: true,
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      })
     });
 
     await context.controller.runNextOperation();
@@ -30,6 +24,23 @@ describe("useVibe64AutopilotController", () => {
     }));
     expect(context.session.value.currentStep).toBe("step_b");
     expect(context.actions.advanceSession).not.toHaveBeenCalled();
+  });
+
+  it("treats a detached command observer as neutral", async () => {
+    const context = createControllerContext({
+      operation: commandTerminalOperation()
+    });
+    context.commandRunner.runCommandAction.mockResolvedValueOnce({
+      code: "vibe64_command_observer_detached",
+      error: "Run command continues without this closed view.",
+      ok: false
+    });
+
+    await context.controller.runNextOperation();
+
+    expect(context.refreshSessionData).not.toHaveBeenCalled();
+    expect(context.controller.failure.value).toBe(null);
+    expect(context.controller.commandResult.value).toBe(null);
   });
 
   it("dispatches prompt work as a normal server action request", async () => {
@@ -280,15 +291,9 @@ describe("useVibe64AutopilotController", () => {
   it("surfaces command failures and retries from the server operation", async () => {
     const context = createControllerContext({
       commandFails: true,
-      operation: {
-        actionId: "cmd_action",
+      operation: commandTerminalOperation({
         advanceOnSuccess: true,
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      })
     });
 
     await context.controller.runNextOperation();
@@ -454,15 +459,9 @@ describe("useVibe64AutopilotController", () => {
   it("refreshes stale command-start conflicts instead of showing command failure", async () => {
     const context = createControllerContext({
       commandStartConflict: true,
-      operation: {
-        actionId: "cmd_action",
+      operation: commandTerminalOperation({
         advanceOnSuccess: true,
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      })
     });
 
     await context.controller.runNextOperation();
@@ -478,14 +477,7 @@ describe("useVibe64AutopilotController", () => {
   it("keeps following server state when terminal transport fails after a command completed", async () => {
     const context = createControllerContext({
       commandTransportFailsAfterServerProgress: true,
-      operation: {
-        actionId: "cmd_action",
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      operation: commandTerminalOperation()
     });
 
     await context.controller.runNextOperation();
@@ -501,14 +493,7 @@ describe("useVibe64AutopilotController", () => {
   it("continues through a server-provided follow-up operation after command success", async () => {
     const context = createControllerContext({
       commandCompletesWithServerAdvance: true,
-      operation: {
-        actionId: "cmd_action",
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      operation: commandTerminalOperation()
     });
 
     await context.controller.runNextOperation();
@@ -523,14 +508,7 @@ describe("useVibe64AutopilotController", () => {
     const context = createControllerContext({
       commandCompletesWithServerAdvance: true,
       commandCompletionStaleRefreshes: 2,
-      operation: {
-        actionId: "cmd_action",
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      operation: commandTerminalOperation()
     });
 
     await context.controller.runNextOperation();
@@ -543,14 +521,7 @@ describe("useVibe64AutopilotController", () => {
 
   it("stops command completion polling when the server says the command is no longer applying", async () => {
     const context = createControllerContext({
-      operation: {
-        actionId: "cmd_action",
-        executable: true,
-        id: "command-terminal:cmd_action",
-        kind: "command",
-        label: "Run command",
-        route: "command-terminal"
-      }
+      operation: commandTerminalOperation()
     });
 
     await context.controller.runNextOperation();
@@ -583,6 +554,18 @@ describe("useVibe64AutopilotController", () => {
     expect(context.session.value.stepMachine.status).toBe("ready");
   });
 });
+
+function commandTerminalOperation(overrides = {}) {
+  return {
+    actionId: "cmd_action",
+    executable: true,
+    id: "command-terminal:cmd_action",
+    kind: "command",
+    label: "Run command",
+    route: "command-terminal",
+    ...overrides
+  };
+}
 
 function createControllerContext({
   actionResults = [],

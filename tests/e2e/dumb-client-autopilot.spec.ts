@@ -845,9 +845,10 @@ test.describe("Autopilot dumb client contract", () => {
     await expectCurrentAutopilotStep(page, "Plan and execute");
   });
 
-  test("continues from server state when a command stream closes after server completion", async ({ page }) => {
-    await mockCommandTerminalSocketThatCloses(page);
+  test("reconnects when a command stream closes before server completion", async ({ page }) => {
+    await mockCommandTerminalSocketThatReconnects(page);
     const advances: unknown[] = [];
+    let terminalDeletes = 0;
     const session = sessionPayload({
       actions: [
         {
@@ -923,6 +924,7 @@ test.describe("Autopilot dumb client contract", () => {
         }));
       },
       onCommandTerminalClose: () => {
+        terminalDeletes += 1;
         session.next = {
           disabledReason: "",
           enabled: true,
@@ -958,8 +960,6 @@ test.describe("Autopilot dumb client contract", () => {
         };
       },
       onCommandTerminalStart: () => {
-        // The server owns command completion; the socket below intentionally
-        // closes before sending an exited status.
         return {
           commandPreview: "echo test",
           id: "server-command-terminal",
@@ -971,7 +971,11 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
+    await expect.poll(() => page.evaluate(() => (
+      Reflect.get(window, "__vibe64CommandTerminalConnectionCount")
+    ))).toBe(2);
     await expect.poll(() => advances.length).toBe(1);
+    expect(terminalDeletes).toBe(1);
     await expectCurrentAutopilotStep(page, "Next server step");
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
   });
@@ -4666,9 +4670,10 @@ async function mockInspectTerminalSockets(page: Page) {
   });
 }
 
-async function mockCommandTerminalSocketThatCloses(page: Page) {
+async function mockCommandTerminalSocketThatReconnects(page: Page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
+    let commandTerminalConnectionCount = 0;
 
     class MockWebSocket extends EventTarget {
       static CONNECTING = 0;
@@ -4685,6 +4690,9 @@ async function mockCommandTerminalSocketThatCloses(page: Page) {
         if (!pathname.includes("/command-terminal/")) {
           return new OriginalWebSocket(url);
         }
+        commandTerminalConnectionCount += 1;
+        Reflect.set(window, "__vibe64CommandTerminalConnectionCount", commandTerminalConnectionCount);
+        const connectionNumber = commandTerminalConnectionCount;
         window.setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
           this.dispatchEvent(new Event("open"));
@@ -4692,6 +4700,7 @@ async function mockCommandTerminalSocketThatCloses(page: Page) {
             data: JSON.stringify({
               session: {
                 commandPreview: "echo test",
+                id: "server-command-terminal",
                 ok: true,
                 output: "Server command output.",
                 status: "running"
@@ -4699,8 +4708,18 @@ async function mockCommandTerminalSocketThatCloses(page: Page) {
               type: "snapshot"
             })
           }));
-          this.readyState = MockWebSocket.CLOSED;
-          this.dispatchEvent(new CloseEvent("close"));
+          if (connectionNumber === 1) {
+            this.readyState = MockWebSocket.CLOSED;
+            this.dispatchEvent(new CloseEvent("close"));
+            return;
+          }
+          this.dispatchEvent(new MessageEvent("message", {
+            data: JSON.stringify({
+              exitCode: 0,
+              status: "exited",
+              type: "status"
+            })
+          }));
         }, 0);
       }
 

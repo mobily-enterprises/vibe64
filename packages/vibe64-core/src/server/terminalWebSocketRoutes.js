@@ -68,12 +68,13 @@ function registerTerminalWebSocketRoute(
         subscription = null;
       };
 
-      const closeWithError = (code, error) => {
+      const closeWithError = (closeCode, error, errorCode = "") => {
         sendSocketJson(socket, {
+          ...(errorCode ? { code: errorCode } : {}),
           error,
           type: "error"
         });
-        socket.close(code, error);
+        socket.close(closeCode, error);
       };
 
       if (!isLocalStudioRequest(request)) {
@@ -171,7 +172,11 @@ function registerTerminalWebSocketRoute(
           toolId
         }))).then((result) => {
           if (result?.ok === false) {
-            closeWithError(1008, result.error || "Terminal session not found.");
+            closeWithError(
+              1008,
+              result.error || "Terminal session not found.",
+              String(result.code || "")
+            );
             return;
           }
           subscription = result;
