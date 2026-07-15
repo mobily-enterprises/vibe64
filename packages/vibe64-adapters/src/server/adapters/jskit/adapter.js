@@ -43,7 +43,8 @@ import {
 } from "../../nodeWebProject.js";
 import {
   Vibe64DescribedWorkflowTargetAdapter,
-  inspectDescribedProject
+  inspectDescribedProject,
+  inspectProjectSourceMarkers
 } from "../../workflowAdapter.js";
 import {
   defaultConfigFromFields
@@ -79,6 +80,7 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   jskitMariaDbDatabaseName
 } from "./setupMariaDbRuntime.js";
 import {
@@ -124,6 +126,12 @@ const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorkt
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_DEPLOYMENT_AUTH_REQUIRED_PHASES = Object.freeze([
   RUNTIME_CONFIG_PHASES.DEPLOY,
+  RUNTIME_CONFIG_PHASES.SERVER
+]);
+const JSKIT_MANAGED_MARIADB_PREPARATION_PHASES = Object.freeze([
+  RUNTIME_CONFIG_PHASES.MIGRATE,
+  RUNTIME_CONFIG_PHASES.PREVIEW,
+  RUNTIME_CONFIG_PHASES.SEED,
   RUNTIME_CONFIG_PHASES.SERVER
 ]);
 const JSKIT_TOOLING_CONTRACT = [
@@ -173,6 +181,7 @@ const JSKIT_SEED_MODULE_INVENTORY = [
 ].join("\n");
 const JSKIT_SEED_RECIPE_CONTRACT = [
   "For seed work, the JSKIT seed guidance is authoritative for scaffold, auth provider, database runtime, tenancy, package, and generator choices.",
+  "On the first execution of an accepted JSKIT seed, `package.json`, the lockfile, and `node_modules` may be absent. That is the expected pre-scaffold state, not a setup failure. Run the accepted scaffold command first and wait for it to finish, then run `npm install` before inspecting installed-package docs or resolving `node_modules` references from the generated `AGENTS.md`. On a retry, preserve any completed root scaffold and rerun `npm install`; never create a nested replacement app just because `node_modules` is absent.",
   "Do not read broad JSKIT manuals, browse the catalog, or run baseline discovery commands to decide the normal seed recipe.",
   "Use the exact mapped seed commands first. Use `npx jskit ... help` only for one selected command whose syntax is genuinely missing from the accepted plan or whose mapped command failed.",
   "If mapped local auth, Supabase, database, or generator support is unavailable, stop and report the JSKIT/Vibe64 setup gap instead of switching providers or inventing app-local scaffolding."
@@ -920,6 +929,15 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     });
   }
 
+  async inspectCommittedWorkflow({
+    source = {}
+  } = {}) {
+    const markers = await inspectProjectSourceMarkers(source, JSKIT_MARKERS);
+    return {
+      seedRequired: !allMarkersExist(markers)
+    };
+  }
+
   async allowsStudioSelfTarget({
     targetRoot = ""
   } = {}) {
@@ -958,6 +976,45 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
 
   async getRuntimeConfigProfile() {
     return createJskitRuntimeConfigProfile();
+  }
+
+  async listExecutionEnvironmentPreparations({
+    config = {},
+    runtimeConfigPhases = [],
+    runtimeConfigEnv = {},
+    serviceDataRoot = "",
+    targetRoot = ""
+  } = {}) {
+    if (
+      !jskitConfigNeedsManagedMariaDb(config) ||
+      !normalizeText(serviceDataRoot) ||
+      !runtimeConfigPhases.some((phase) => JSKIT_MANAGED_MARIADB_PREPARATION_PHASES.includes(phase))
+    ) {
+      return [];
+    }
+    const databaseName = normalizeText(runtimeConfigEnv.DB_NAME) || jskitMariaDbDatabaseName(targetRoot);
+    const [command, ...args] = jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
+      databaseName,
+      serviceDataRoot,
+      targetRoot
+    });
+    return [{
+      allowedRoots: [
+        serviceDataRoot,
+        targetRoot
+      ].filter(Boolean),
+      args,
+      command,
+      coalesceKey: JSON.stringify({
+        databaseName,
+        serviceDataRoot
+      }),
+      cwd: targetRoot,
+      id: "jskit-managed-mariadb",
+      label: "prepare the JSKIT managed database",
+      runtimes: ["mariadb"],
+      timeout: 120_000
+    }];
   }
 
   async createDeploymentPublishPlan({

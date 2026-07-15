@@ -67,6 +67,22 @@ function gitObjectPath(relativePath = "") {
     .join("/");
 }
 
+function committedSourceRelativePath(relativePath = "") {
+  const value = normalizeText(relativePath);
+  const parts = value.split(/[\\/]+/u);
+  if (
+    !value ||
+    path.posix.isAbsolute(value) ||
+    path.win32.isAbsolute(value) ||
+    parts.includes("..")
+  ) {
+    const error = new Error(`Committed project source path must be relative: ${value || "(empty)"}.`);
+    error.code = "vibe64_committed_project_source_path_invalid";
+    throw error;
+  }
+  return gitObjectPath(value);
+}
+
 function gitArgs(args = [], {
   gitDir = ""
 } = {}) {
@@ -138,6 +154,46 @@ async function readGitFile({
   } catch {
     return null;
   }
+}
+
+async function createCommittedGitSourceReader({
+  committedConfig = {}
+} = {}) {
+  const gitDir = normalizeText(committedConfig.gitDir);
+  if (!gitDir) {
+    const error = new Error("Committed Git source is unavailable for workflow inspection.");
+    error.code = "vibe64_committed_project_source_unavailable";
+    throw error;
+  }
+
+  const resolvedGitDir = path.resolve(gitDir);
+  const revision = normalizeText(committedConfig.commit || committedConfig.ref) || "HEAD";
+  const treeOutput = await runGit([
+    "ls-tree",
+    "-r",
+    "--name-only",
+    "-z",
+    revision
+  ], {
+    cwd: path.dirname(resolvedGitDir),
+    gitDir: resolvedGitDir
+  });
+  const paths = new Set(String(treeOutput || "").split("\0").filter(Boolean));
+  return Object.freeze({
+    exists(relativePath = "") {
+      return paths.has(committedSourceRelativePath(relativePath));
+    },
+    async readText(relativePath = "") {
+      const normalizedPath = committedSourceRelativePath(relativePath);
+      if (!paths.has(normalizedPath)) {
+        return null;
+      }
+      return runGit(["show", `${revision}:${normalizedPath}`], {
+        cwd: path.dirname(resolvedGitDir),
+        gitDir: resolvedGitDir
+      });
+    }
+  });
 }
 
 async function readCommittedConfigFromGit({
@@ -363,6 +419,7 @@ export {
   COMMITTED_PROJECT_CONFIG_VALUES_DIR,
   COMMITTED_PROJECT_TYPE_FIELD,
   committedProjectConfigRefFromMetadata,
+  createCommittedGitSourceReader,
   readCommittedProjectConfig,
   readCommittedProjectConfigFromGitCache,
   readCommittedProjectConfigFromSource

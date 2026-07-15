@@ -48,6 +48,9 @@ import {
   pathExists
 } from "@local/vibe64-core/server/core";
 import {
+  createCommittedGitSourceReader
+} from "@local/vibe64-core/server/committedProjectConfig";
+import {
   buildRuntimeLock,
   runtimePackage,
   writeRuntimeLock
@@ -2654,12 +2657,23 @@ function createService({
     ]).has(String(error?.code || "").trim());
   }
 
-  function workflowCreationBaselineForProjectType(projectType = {}, {
+  async function workflowCreationBaselineForProjectType(projectType = {}, {
+    adapter = null,
     workflowRepositoryProfile = ""
   } = {}) {
     const baseline = {};
     if (projectType.sourceType === "git-cache") {
-      baseline.seedRequired = false;
+      const committedConfig = await committedProjectAdapterContext(currentTargetRoot()).readCommittedConfig();
+      const committedWorkflow = adapter
+        ? await adapter.inspectCommittedWorkflow({
+            source: await createCommittedGitSourceReader({
+              committedConfig
+            })
+          })
+        : null;
+      baseline.seedRequired = typeof committedWorkflow?.seedRequired === "boolean"
+        ? committedWorkflow.seedRequired
+        : false;
     }
     const normalizedProfile = normalizeWorkflowRepositoryProfile(workflowRepositoryProfile);
     if (normalizedProfile) {
@@ -2710,7 +2724,7 @@ function createService({
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
     const workflowRepositoryProfile = await currentWorkflowRepositoryProfile();
-    let workflowCreationBaseline = workflowCreationBaselineForProjectType({}, {
+    let workflowCreationBaseline = await workflowCreationBaselineForProjectType({}, {
       workflowRepositoryProfile
     });
     if (options?.skipProjectConfig === true) {
@@ -2721,7 +2735,8 @@ function createService({
         adapter = projectAdapter.adapter;
         projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
         resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
-        workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType, {
+        workflowCreationBaseline = await workflowCreationBaselineForProjectType(projectAdapter.projectType, {
+          adapter: projectAdapter.adapter,
           workflowRepositoryProfile
         });
       } catch (error) {
@@ -2732,7 +2747,8 @@ function createService({
           adapter = committedSetup.adapter;
           projectConfig = committedSetup.projectConfig;
           resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-          workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType, {
+          workflowCreationBaseline = await workflowCreationBaselineForProjectType(committedSetup.projectType, {
+            adapter: committedSetup.adapter,
             workflowRepositoryProfile
           });
         } else if (setupRequired || !runtimeSetupOptionalError(error)) {

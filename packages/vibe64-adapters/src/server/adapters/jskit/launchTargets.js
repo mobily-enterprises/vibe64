@@ -45,12 +45,8 @@ import {
   nodeRuntimeShellCommand
 } from "../../nodePackage.js";
 import {
-  jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
-import {
-  jskitLocalAuthConfigUsesDatabase
-} from "./appAuthConfig.js";
 
 const DEFAULT_BUILT_LAUNCH_BUILD_COMMAND = "npm run build";
 const DEFAULT_BUILT_LAUNCH_SERVER_COMMAND = "npm run server";
@@ -59,7 +55,6 @@ const DEFAULT_DEV_FRONTEND_COMMAND = "npm run dev -- --host 0.0.0.0 --port \"$PO
 const DEFAULT_MIGRATION_COMMAND = "npm run db:migrate";
 const DEFAULT_DEV_BACKEND_PORT = 3000;
 const DEFAULT_LAUNCH_PORT = 4100;
-const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_ONLINE_LAUNCH_TARGET_ID = "online";
 const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
@@ -248,37 +243,6 @@ async function resolveMigrationCommand(root) {
 function jskitRuntimeCommand(command = "") {
   const normalizedCommand = String(command || "").trim();
   return normalizedCommand ? nodeRuntimeShellCommand(normalizedCommand, "npm") : "";
-}
-
-function shellCommandFromArgs(args = []) {
-  return args.map((arg) => shellQuote(String(arg))).join(" ");
-}
-
-function jskitProjectConfigValue(projectConfig = {}, key = "", fallback = "") {
-  return String(projectConfig?.values?.[key] ?? fallback).trim();
-}
-
-function jskitConfigSelectsManagedMariaDb(projectConfig = {}) {
-  return (jskitProjectConfigValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb") === "mariadb" ||
-    jskitLocalAuthConfigUsesDatabase(projectConfig);
-}
-
-function jskitManagedMariaDbLaunchPreparationCommand({
-  projectConfig = {},
-  serviceDataRoot = "",
-  targetRoot = ""
-} = {}) {
-  if (!jskitConfigSelectsManagedMariaDb(projectConfig) || !String(serviceDataRoot || "").trim()) {
-    return null;
-  }
-  return {
-    command: shellCommandFromArgs(jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
-      serviceDataRoot,
-      targetRoot
-    })),
-    label: "Preparing JSKIT managed database.",
-    networkEnv: false
-  };
 }
 
 function jskitManagedPreviewEnv(config = {}) {
@@ -886,7 +850,6 @@ function createJskitDevCommand({
   migrationCommand = "",
   previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
   previewAuthProfileLabel = "Preparing preview auth user.",
-  runtimePreparationCommand = "",
   startupArgs = []
 } = {}) {
   const backendCommandWithArgs = jskitManagedPreviewServerRuntimeCommandWithStartupArgs(backendCommand, startupArgs, {
@@ -904,12 +867,6 @@ function createJskitDevCommand({
       backendPort,
       frontendCommand: frontendRuntimeCommand
     }),
-    ...(String(runtimePreparationCommand || "").trim()
-      ? [
-          "printf '\\n[studio] Preparing JSKIT managed database.\\n'",
-          runtimePreparationCommand
-        ]
-      : []),
     ...(migrationRuntimeCommand
       ? [
           "printf '\\n[studio] Applying database migrations.\\n'",
@@ -1305,20 +1262,12 @@ async function createJskitBuiltLaunchDescriptor({
   config,
   databaseHost = "",
   launchInput = {},
-  projectConfig = {},
   selfTarget = null,
-  serviceDataRoot = "",
-  targetRoot = "",
   vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
-  const runtimePreparationCommand = jskitManagedMariaDbLaunchPreparationCommand({
-    projectConfig,
-    serviceDataRoot,
-    targetRoot
-  });
   const migrationCommand = config.migrationCommand
     ? {
         command: jskitRuntimeCommand(config.migrationCommand),
@@ -1345,7 +1294,6 @@ async function createJskitBuiltLaunchDescriptor({
                 networkEnv: false
               }
             : null,
-          runtimePreparationCommand,
           migrationCommand,
           previewAuthProfileCommand,
           config.serverCommand
@@ -1359,7 +1307,6 @@ async function createJskitBuiltLaunchDescriptor({
             : null
         ].filter(Boolean)
       : [
-          runtimePreparationCommand,
           migrationCommand,
           previewAuthProfileCommand,
           {
@@ -1375,7 +1322,6 @@ async function createJskitBuiltLaunchDescriptor({
       buildCommand: config.buildCommand,
       commandSource: config.commandSource,
       databaseHost,
-      managedMariaDbPreparation: runtimePreparationCommand ? "enabled" : "",
       migrationCommand: config.migrationCommand,
       runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled",
@@ -1387,7 +1333,7 @@ async function createJskitBuiltLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_BUILT_RESTART_ON_CHANGE,
-    runtimes: runtimePreparationCommand ? ["node22", "mariadb"] : ["node22"],
+    runtimes: ["node22"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -1400,21 +1346,13 @@ async function createJskitDevLaunchDescriptor({
   config,
   databaseHost = "",
   launchInput = {},
-  projectConfig = {},
   selfTarget = null,
-  serviceDataRoot = "",
-  targetRoot = "",
   vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
   const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
-  const runtimePreparationCommand = jskitManagedMariaDbLaunchPreparationCommand({
-    projectConfig,
-    serviceDataRoot,
-    targetRoot
-  });
   return {
     command: createJskitDevCommand({
       agentRunsRoot,
@@ -1426,7 +1364,6 @@ async function createJskitDevLaunchDescriptor({
         vibe64User
       }),
       previewAuthProfileLabel: "Preparing preview auth user.",
-      runtimePreparationCommand: runtimePreparationCommand?.command || "",
       startupArgs
     }),
     env: jskitManagedPreviewEnv(selfTarget),
@@ -1436,7 +1373,6 @@ async function createJskitDevLaunchDescriptor({
       commandSource: config.commandSource,
       databaseHost,
       frontendCommand: config.frontendCommand,
-      managedMariaDbPreparation: runtimePreparationCommand ? "enabled" : "",
       migrationCommand: config.migrationCommand,
       mode: "dev",
       runtimeNamespace: config.runtimeNamespace,
@@ -1448,7 +1384,7 @@ async function createJskitDevLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
-    runtimes: runtimePreparationCommand ? ["node22", "mariadb"] : ["node22"],
+    runtimes: ["node22"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -1586,10 +1522,7 @@ async function createJskitLaunchTargetTerminalSpec({
           config: launchConfig,
           databaseHost,
           launchInput,
-          projectConfig: context.config || {},
           selfTarget,
-          serviceDataRoot: context.serviceDataRoot || "",
-          targetRoot: launchTargetRoot,
           vibe64User: context.vibe64User || null,
           workdir: launchWorktreePath,
           worktreePath: launchWorktreePath

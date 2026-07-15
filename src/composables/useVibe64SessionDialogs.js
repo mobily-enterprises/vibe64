@@ -26,6 +26,7 @@ import {
 function useVibe64SessionDialogs({
   activeActionId,
   canOpenDiff = () => false,
+  clearSelectedSession = () => null,
   commandBusy = () => false,
   isSelectedSessionClosed,
   onAbandoned = () => null,
@@ -73,8 +74,11 @@ function useVibe64SessionDialogs({
       error: "Vibe64 session could not be abandoned.",
       success: "Vibe64 session abandoned."
     },
-    onRunSuccess: async () => {
+    onRunSuccess: async (_response, { context } = {}) => {
       clearAbandonDialog();
+      if (!context?.sessionId || context.sessionId === unref(selectedSessionId)) {
+        clearSelectedSession();
+      }
       onAbandoned();
       await refreshSessionData({
         includeList: true,

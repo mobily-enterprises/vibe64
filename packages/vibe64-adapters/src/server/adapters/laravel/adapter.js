@@ -25,7 +25,8 @@ import {
 } from "../../managedDatabases/deployment.js";
 import {
   Vibe64DescribedWorkflowTargetAdapter,
-  inspectDescribedProject
+  inspectDescribedProject,
+  inspectProjectSourceMarkers
 } from "../../workflowAdapter.js";
 import {
   nodePackageManagerInspectionExtra,
@@ -54,6 +55,7 @@ import {
   hasComposerDependency,
   laravelRuntimeCommand,
   phpArtisanCommand,
+  parseComposerJson,
   readComposerJson
 } from "./composerPackage.js";
 import {
@@ -476,6 +478,24 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
         updateCodeIndex: laravelCodeIndexHook
       }
     });
+  }
+
+  async inspectCommittedWorkflow({
+    source = {}
+  } = {}) {
+    const [markers, composerText] = await Promise.all([
+      inspectProjectSourceMarkers(source, LARAVEL_MARKERS),
+      source.readText("composer.json")
+    ]);
+    const composerJson = composerText === null
+      ? null
+      : parseComposerJson(composerText, "composer.json");
+    return {
+      seedRequired: !allMarkersReady({
+        composerJson,
+        markers
+      })
+    };
   }
 
   async listProjectTools(context = {}) {

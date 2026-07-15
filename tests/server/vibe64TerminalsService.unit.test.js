@@ -3562,6 +3562,239 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
   });
 });
 
+test("Vibe64 Codex app-server reconnect preserves workflow ownership when the provider echo omits its client id", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "workflow-prompt-echo-after-restart";
+    const threadId = "00000000-0000-4000-8000-000000000128";
+    const turnId = "workflow-turn-after-restart";
+    const clientId = "composer:unit:workflow-after-restart";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const internalPrompt = [
+      "User/request input:",
+      "Keep the user's real message visible.",
+      "",
+      "Vibe64 workflow context:",
+      "- action: Discuss seed choices",
+      "- hidden workflow instructions must never become a user message"
+    ].join("\n");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_id: "codex_app_server",
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeStepState(sessionId, "maintenance_conversation", {
+      inputPrompt: "Waiting for Codex.",
+      schemaVersion: 1,
+      status: "awaiting_agent_result"
+    });
+    await runtime.store.writeConversationUserMessage(sessionId, {
+      text: "Keep the user's real message visible."
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "codex-prompt-delivery-abandoned",
+        message: "Codex app-server prompt delivery ended before a provider turn was created.",
+        state: VIBE64_AGENT_RUN_STATE.FAILED
+      },
+      patch: {
+        error: "Codex app-server prompt delivery ended before a provider turn was created.",
+        handoffId: "000001-maintenance_conversation.json:agent_conversation",
+        inputSource: "workflow",
+        pendingUserMessageClientIds: [clientId],
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "delivery_failed",
+        providerThreadId: "",
+        providerTurnId: "",
+        state: VIBE64_AGENT_RUN_STATE.FAILED,
+        stepId: "maintenance_conversation",
+        stepStatus: "awaiting_agent_result"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    let providerSubscriber = null;
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async listLoadedThreads() {
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            async readThreadStatus() {
+              return {
+                raw: {
+                  activeTurnId: turnId,
+                  status: "active"
+                }
+              };
+            },
+            subscribe(callback) {
+              providerSubscriber = callback;
+              return () => {
+                if (providerSubscriber === callback) {
+                  providerSubscriber = null;
+                }
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await terminalService.reconcileAgentSessions([{ sessionId }]);
+    let session = await runtime.getSession(sessionId);
+    let run = codexAppServerAgentRunSnapshot(session);
+
+    assert.equal(result.ok, true);
+    assert.equal(typeof providerSubscriber, "function");
+    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.ACTIVE);
+    assert.equal(run.inputSource, "workflow");
+    assert.equal(run.providerThreadId, threadId);
+    assert.equal(run.providerTurnId, turnId);
+    assert.deepEqual(run.pendingUserMessageClientIds, [clientId]);
+
+    providerSubscriber({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [{
+            text: internalPrompt,
+            type: "text"
+          }],
+          id: "workflow-prompt-echo-without-client-id",
+          type: "userMessage"
+        },
+        threadId,
+        turnId
+      }
+    });
+    await waitForCondition(async () => {
+      const currentSession = await runtime.getSession(sessionId);
+      return codexAppServerAgentRunSnapshot(currentSession)?.pendingUserMessageClientIds?.length === 0;
+    }, "The owned workflow prompt echo was not consumed after reconnect.");
+
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    const conversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.ACTIVE);
+    assert.equal(run.inputSource, "workflow");
+    assert.equal(run.providerThreadId, threadId);
+    assert.equal(run.providerTurnId, turnId);
+    assert.equal(
+      run.events.some((event) => (
+        event.kind === "codex-app-server-user-message-consumed" &&
+        event.clientId === clientId
+      )),
+      true
+    );
+    assert.deepEqual(
+      conversationLog
+        .map((turn) => turn.user?.text)
+        .filter(Boolean),
+      ["Keep the user's real message visible."]
+    );
+    assert.equal(
+      conversationLog.some((turn) => turn.user?.text === internalPrompt),
+      false
+    );
+
+    const secondClientId = "composer:unit:workflow-echo-before-turn-started";
+    const secondTurnId = "workflow-turn-with-user-echo-first";
+    await runtime.store.writeConversationUserMessage(sessionId, {
+      text: "Preserve this second real message too."
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "codex-prompt-delivery-abandoned",
+        message: "Simulated restart before turn/started was replayed.",
+        state: VIBE64_AGENT_RUN_STATE.FAILED
+      },
+      patch: {
+        error: "Simulated restart before turn/started was replayed.",
+        inputSource: "workflow",
+        pendingUserMessageClientIds: [secondClientId],
+        providerStatus: "delivery_failed",
+        providerThreadId: "",
+        providerTurnId: "",
+        state: VIBE64_AGENT_RUN_STATE.FAILED
+      }
+    });
+    providerSubscriber({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [{
+            text: internalPrompt,
+            type: "text"
+          }],
+          id: "workflow-prompt-echo-before-turn-started",
+          type: "userMessage"
+        },
+        threadId,
+        turnId: secondTurnId
+      }
+    });
+    await waitForCondition(async () => {
+      const currentSession = await runtime.getSession(sessionId);
+      const currentRun = codexAppServerAgentRunSnapshot(currentSession);
+      return currentRun?.state === VIBE64_AGENT_RUN_STATE.ACTIVE &&
+        currentRun?.providerTurnId === secondTurnId &&
+        currentRun?.pendingUserMessageClientIds?.length === 0;
+    }, "The owned prompt echo did not recover the workflow turn when it arrived before turn/started.");
+
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    const recoveredConversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(run.inputSource, "workflow");
+    assert.equal(run.providerThreadId, threadId);
+    assert.deepEqual(
+      recoveredConversationLog
+        .map((turn) => turn.user?.text)
+        .filter(Boolean),
+      [
+        "Keep the user's real message visible.",
+        "Preserve this second real message too."
+      ]
+    );
+    assert.equal(
+      recoveredConversationLog.some((turn) => turn.user?.text === internalPrompt),
+      false
+    );
+  });
+});
+
 test("Vibe64 Codex app-server readiness returns control for an unrecoverable tracked turn", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "ready-reconciles-replaced-turn";
@@ -4492,7 +4725,7 @@ test("Vibe64 Codex terminal close does not have a stale process fallback when me
   });
 });
 
-test("Vibe64 Codex polling cannot complete a claimed turn before its provider turn id arrives", async () => {
+test("Vibe64 Codex polling releases an orphaned prompt claim without losing its ownership", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_identity_pending";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -4503,14 +4736,18 @@ test("Vibe64 Codex polling cannot complete a claimed turn before its provider tu
     });
     const session = {
       agentRuns: [
-        codexAppServerAgentRun({
-          inputSource: "workflow",
-          providerStatus: "starting",
-          providerThreadId: "thread-1",
-          providerTurnId: "",
-          state: VIBE64_AGENT_RUN_STATE.STARTING,
-          updatedAt: new Date().toISOString()
-        })
+        {
+          ...codexAppServerAgentRun({
+            inputSource: "workflow",
+            providerStatus: "starting",
+            providerThreadId: "thread-1",
+            providerTurnId: "",
+            state: VIBE64_AGENT_RUN_STATE.STARTING,
+            updatedAt: new Date().toISOString()
+          }),
+          handoffId: "000001-agent_conversation.json:agent_conversation",
+          pendingUserMessageClientIds: ["composer:unit:orphaned-prompt"]
+        }
       ],
       currentStep: "seed_application_defined",
       metadata: {
@@ -4568,12 +4805,13 @@ test("Vibe64 Codex polling cannot complete a claimed turn before its provider tu
 
     assert.equal(state.ok, true);
     assert.equal(readThreadStatusCalls, 1);
-    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.STARTING);
-    assert.equal(run.providerStatus, "starting");
+    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.FAILED);
+    assert.equal(run.providerStatus, "delivery_failed");
     assert.equal(run.providerTurnId, "");
-    assert.equal(run.error, "");
-    assert.equal(state.codexAgentTurn.active, true);
-    assert.equal(state.codexAgentTurn.state, "starting");
+    assert.match(run.error, /message is safe; retry it/u);
+    assert.deepEqual(run.pendingUserMessageClientIds, ["composer:unit:orphaned-prompt"]);
+    assert.equal(state.codexAgentTurn.active, false);
+    assert.equal(state.codexAgentTurn.state, "idle");
   });
 });
 
@@ -5472,7 +5710,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: String(conversationLog.length + 1).padStart(6, "0")
       };
     }
+    const startupEvents = [];
     const runtime = {
+      adapter: {
+        async listExecutionEnvironmentPreparations() {
+          return [{
+            allowedRoots: [targetRoot],
+            coalesceKey: `codex-startup:${sessionId}`,
+            command: "unit-database-preparation",
+            cwd: targetRoot,
+            id: "unit-database-preparation",
+            runtimes: []
+          }];
+        }
+      },
+      projectConfig: {},
       stateRoot,
       targetRoot,
       async getSession() {
@@ -5695,6 +5947,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         };
       },
       async ensureAvailable() {
+        startupEvents.push("provider-available");
         providerCalls.ensureAvailable += 1;
         return {
           ok: true
@@ -5832,6 +6085,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       },
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: (options = {}) => {
+        startupEvents.push("provider-created");
         providerFactoryOptions.push(options);
         return provider;
       },
@@ -5863,6 +6117,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       publishSessionChanged: async (_sessionId, event = {}) => {
         publishSessionEvents.push(event);
         publishSessionReasons.push(event.reason);
+      },
+      runCommand: async () => {
+        startupEvents.push("environment-prepared");
+        return {
+          ok: true
+        };
       }
     });
 
@@ -5893,6 +6153,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(result.codexAgentTurn.active, true);
     assert.equal(providerCalls.ensureAvailable, 1);
     assert.equal(providerCalls.ensureRuntime, 1);
+    assert.ok(startupEvents.indexOf("environment-prepared") < startupEvents.indexOf("provider-created"));
+    assert.ok(startupEvents.indexOf("environment-prepared") < startupEvents.indexOf("provider-available"));
     assert.equal(providerFactoryOptions.length, 1);
     assert.equal(providerFactoryOptions[0].targetRoot, worktree);
     assert.equal(providerFactoryOptions[0].runtimeDir, "");
@@ -8127,6 +8389,7 @@ test("Vibe64 Codex app-server interrupt race trusts idle provider state", async 
     const session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "finalizing");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    await controller.closeAllForSession(sessionId);
   });
 });
 

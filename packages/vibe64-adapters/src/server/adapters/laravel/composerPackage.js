@@ -40,10 +40,14 @@ async function readComposerJson(root = "") {
     throw error;
   }
 
+  return parseComposerJson(text, composerJsonPath);
+}
+
+function parseComposerJson(text = "", filePath = "composer.json") {
   try {
-    return JSON.parse(text);
+    return JSON.parse(String(text));
   } catch {
-    throw vibe64Error(`Invalid JSON in Laravel composer file: ${composerJsonPath}`, "vibe64_invalid_laravel_composer_json");
+    throw vibe64Error(`Invalid JSON in Laravel composer file: ${filePath}`, "vibe64_invalid_laravel_composer_json");
   }
 }
 
@@ -119,5 +123,6 @@ export {
   laravelRuntimeCommandArgs,
   laravelRuntimePackageIds,
   phpArtisanCommand,
+  parseComposerJson,
   readComposerJson
 };

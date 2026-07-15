@@ -103,6 +103,18 @@ function commandIds() {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function committedSource(files = {}) {
+  const entries = new Map(Object.entries(files));
+  return {
+    exists(relativePath = "") {
+      return entries.has(relativePath);
+    },
+    async readText(relativePath = "") {
+      return entries.get(relativePath) ?? null;
+    }
+  };
+}
+
 test("laravel adapter is registered as an implemented project type", async () => {
   const registry = createVibe64AdapterRegistry();
   const projectTypes = registry.availableProjectTypes();
@@ -117,6 +129,29 @@ test("laravel adapter is registered as an implemented project type", async () =>
   assert.equal(laravelProjectType.projectUrl, "https://laravel.com");
   assert.ok(laravelProjectType.techStack.includes("Laravel"));
   assert.equal((await registry.createAdapter("laravel")).id, "laravel");
+});
+
+test("laravel adapter decides committed seededness from Laravel source markers", async () => {
+  const adapter = createLaravelTargetAdapter();
+  const seeded = await adapter.inspectCommittedWorkflow({
+    source: committedSource({
+      artisan: "#!/usr/bin/env php\n",
+      "bootstrap/app.php": "<?php\n",
+      "composer.json": JSON.stringify({
+        require: {
+          "laravel/framework": "^13.0"
+        }
+      })
+    })
+  });
+  const unseeded = await adapter.inspectCommittedWorkflow({
+    source: committedSource({
+      "vibe64.project.json": "{}\n"
+    })
+  });
+
+  assert.equal(seeded.seedRequired, false);
+  assert.equal(unseeded.seedRequired, true);
 });
 
 test("laravel adapter exposes project facts, commands, defaults, and prompt context", async () => {

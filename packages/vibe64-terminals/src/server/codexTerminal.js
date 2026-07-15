@@ -378,6 +378,21 @@ function codexAppServerPendingUserMessageClientIds(session = {}) {
     .filter(Boolean);
 }
 
+function codexAppServerPendingUserMessageOwnership(session = {}, clientId = "") {
+  const pendingClientIds = codexAppServerPendingUserMessageClientIds(session);
+  const normalizedClientId = normalizeText(clientId);
+  const ownedClientId = normalizedClientId
+    ? pendingClientIds.find((id) => id === normalizedClientId)
+    : pendingClientIds[0];
+  if (!ownedClientId) {
+    return null;
+  }
+  return {
+    clientId: ownedClientId,
+    inputSource: normalizeText(codexAppServerAgentRun(session)?.inputSource)
+  };
+}
+
 function codexAppServerWorkflowResultEvent(session = {}, threadId = "", turnId = "") {
   const normalizedThreadId = normalizeText(threadId);
   const normalizedTurnId = normalizeText(turnId);
@@ -1149,6 +1164,7 @@ function createCodexTerminalController({
   const codexAppServerThreadReconciliations = new Map();
   let codexAppServerThreadReconcileGeneration = 0;
   const codexAppServerFinalAssistantResults = new Map();
+  const codexAppServerPromptDeliveries = new Set();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
   const codexAppServerLiveProgressItems = new Set();
@@ -1372,6 +1388,7 @@ function createCodexTerminalController({
     const terminalEnvForSession = async (currentSession = session) => ({
       ...await loadProjectExecutionEnv({
         projectService,
+        runCommand,
         runtime,
         session: currentSession,
         target,
@@ -1670,6 +1687,7 @@ function createCodexTerminalController({
       ? terminalEnv
       : await loadProjectExecutionEnv({
           projectService,
+          runCommand,
           runtime: effectiveRuntime,
           session,
           target: "codex",
@@ -1744,6 +1762,18 @@ function createCodexTerminalController({
     if (timer) {
       clearTimeout(timer);
       codexAppServerFinalizingTimers.delete(key);
+    }
+  }
+
+  function clearCodexAppServerSessionRecoveryTimers(sessionId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    clearCodexAppServerActiveTimer(normalizedSessionId);
+    const finalizingKeyPrefix = `${normalizedSessionId}:`;
+    for (const [key, timer] of codexAppServerFinalizingTimers.entries()) {
+      if (key.startsWith(finalizingKeyPrefix)) {
+        clearTimeout(timer);
+        codexAppServerFinalizingTimers.delete(key);
+      }
     }
   }
 
@@ -2049,6 +2079,44 @@ function createCodexTerminalController({
     });
   }
 
+  async function failOrphanedCodexAppServerPromptDelivery(runtime, session = {}, turn = {}) {
+    const sessionId = normalizeText(session.sessionId);
+    if (!sessionId) {
+      return session;
+    }
+    const error = "Vibe64 restarted before Codex confirmed the message. Your message is safe; retry it.";
+    const updatedAt = new Date().toISOString();
+    const runPatch = codexAppServerAgentRunPatch({
+      error,
+      handoffId: turn.handoffId,
+      inputSource: turn.inputSource,
+      runState: VIBE64_AGENT_RUN_STATE.FAILED,
+      session,
+      status: "delivery_failed",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      updatedAt
+    });
+    delete runPatch.pendingUserMessageClientIds;
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "codex-prompt-delivery-abandoned",
+        message: error,
+        state: VIBE64_AGENT_RUN_STATE.FAILED
+      },
+      patch: runPatch
+    });
+    await publishSessionChanged(sessionId, {
+      payload: codexAppServerAgentRunRealtimePayload(runPatch),
+      reason: "codex-prompt-delivery-abandoned"
+    });
+    vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.orphaned", {
+      sessionId,
+      threadId: turn.threadId
+    });
+    return runtime.getSession(sessionId);
+  }
+
   async function reconcileCodexAppServerActiveTurn(session = {}) {
     const sessionId = normalizeText(session.sessionId);
     const turn = codexAppServerTurnState(session);
@@ -2090,9 +2158,41 @@ function createCodexTerminalController({
     }
     const thread = await codexAppServerReadThreadStatus(provider, turn.threadId);
     const status = codexAppServerThreadStatus(thread);
+    const providerTurnId = codexAppServerThreadTurnId(thread);
+    if (turn.state === "starting") {
+      if (codexAppServerTurnStatusIsActive(status) && providerTurnId) {
+        await markCodexAppServerProviderTurnActive(sessionId, {
+          status,
+          threadId: turn.threadId,
+          turnId: providerTurnId
+        });
+        const runtime = await createRuntimeForSession(sessionId);
+        return runtime.getSession(sessionId);
+      }
+      if (codexAppServerTurnStatusIsActive(status) || !status) {
+        scheduleCodexAppServerActiveRecovery(sessionId);
+        return session;
+      }
+      if (
+        !codexAppServerPromptDeliveries.has(sessionId) &&
+        (!providerTurnId || !codexAppServerTurnStatusIsComplete(status))
+      ) {
+        const runtime = await createRuntimeForSession(sessionId);
+        return failOrphanedCodexAppServerPromptDelivery(runtime, session, turn);
+      }
+      if (codexAppServerPromptDeliveries.has(sessionId)) {
+        return session;
+      }
+      await markCodexAppServerProviderTurnActive(sessionId, {
+        status: "inProgress",
+        threadId: turn.threadId,
+        turnId: providerTurnId
+      });
+    }
     if (!status || codexAppServerTurnStatusIsActive(status)) {
       scheduleCodexAppServerActiveRecovery(sessionId);
-      return session;
+      const runtime = await createRuntimeForSession(sessionId);
+      return runtime.getSession(sessionId);
     }
     if (!codexAppServerTurnStatusIsComplete(status)) {
       return session;
@@ -3474,15 +3574,31 @@ function createCodexTerminalController({
       return;
     }
     const runtime = await createRuntimeForSession(normalizedSessionId);
-    if (clientId && await writeCodexAppServerUserMessageOwnership(
-      runtime,
-      normalizedSessionId,
-      clientId,
-      {
-        eventKind: "codex-app-server-user-message-consumed",
-        owned: false
+    const session = await runtime.getSession(normalizedSessionId);
+    const ownership = codexAppServerPendingUserMessageOwnership(session, clientId);
+    if (ownership) {
+      const turn = codexAppServerTurnState(session);
+      const providerTurnId = codexAppServerNotificationTurnId(notification);
+      const providerTurnAlreadyTracked = normalizeText(turn.state) === "active" &&
+        (!normalizedThreadId || normalizeText(turn.threadId) === normalizedThreadId) &&
+        (!providerTurnId || normalizeText(turn.turnId) === providerTurnId);
+      if (!providerTurnAlreadyTracked) {
+        await markCodexAppServerProviderTurnActive(normalizedSessionId, {
+          inputSource: ownership.inputSource,
+          status: "inProgress",
+          threadId: normalizedThreadId,
+          turnId: providerTurnId
+        });
       }
-    )) {
+      await writeCodexAppServerUserMessageOwnership(
+        runtime,
+        normalizedSessionId,
+        ownership.clientId,
+        {
+          eventKind: "codex-app-server-user-message-consumed",
+          owned: false
+        }
+      );
       return;
     }
     await markCodexAppServerProviderTurnActive(normalizedSessionId, {
@@ -4292,8 +4408,13 @@ function createCodexTerminalController({
     const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
+    const pendingInputSource = codexAppServerPendingUserMessageClientIds(session).length > 0
+      ? codexAppServerRunInputSource(session)
+      : "";
+    const inputSource = normalizeText(input.inputSource) || pendingInputSource;
     if (codexAppServerTurnCanReceiveProviderActivity(turn, normalizedThreadId, normalizedTurnId)) {
       return markCodexAppServerTurnActive(normalizedSessionId, {
+        inputSource,
         status: normalizeText(input.status) || "inProgress",
         threadId: normalizedThreadId,
         turnId: normalizedTurnId
@@ -4316,7 +4437,7 @@ function createCodexTerminalController({
       };
     }
     return markCodexAppServerTurnActive(normalizedSessionId, {
-      inputSource: "terminal",
+      inputSource: inputSource || "terminal",
       status: normalizeText(input.status) || "inProgress",
       threadId: normalizedThreadId,
       turnId: normalizedTurnId
@@ -4522,13 +4643,13 @@ function createCodexTerminalController({
       const runtime = await createRuntimeForSession(normalizedSessionId);
       const session = await runtime.getSession(normalizedSessionId);
       const turn = codexAppServerTurnState(session);
-      if (turn.state !== "active" || !turn.threadId) {
+      if (!["active", "starting"].includes(turn.state) || !turn.threadId) {
         return session;
       }
       const reconciledSession = await reconcileCodexAppServerActiveTurn(session);
       const currentSession = await runtime.getSession(normalizedSessionId);
       const currentTurn = codexAppServerTurnState(currentSession);
-      if (currentTurn.state === "active" && currentTurn.threadId) {
+      if (["active", "starting"].includes(currentTurn.state) && currentTurn.threadId) {
         scheduleCodexAppServerActiveRecovery(normalizedSessionId);
       }
       return reconciledSession;
@@ -5369,6 +5490,7 @@ function createCodexTerminalController({
     });
     const terminalEnv = await loadProjectExecutionEnv({
       projectService,
+      runCommand,
       runtime,
       session,
       target: "codex",
@@ -5630,6 +5752,7 @@ function createCodexTerminalController({
     });
     const terminalEnv = await loadProjectExecutionEnv({
       projectService,
+      runCommand,
       runtime,
       session,
       target: "fix-codex",
@@ -6396,6 +6519,8 @@ function createCodexTerminalController({
       };
     }
 
+    const normalizedSessionId = normalizeText(sessionId);
+    codexAppServerPromptDeliveries.add(normalizedSessionId);
     let activeThreadId = "";
     let healthAttempt = null;
     let providerFailure = "";
@@ -6660,6 +6785,8 @@ function createCodexTerminalController({
         healthAttempt
       });
       throw error;
+    } finally {
+      codexAppServerPromptDeliveries.delete(normalizedSessionId);
     }
   }
 
@@ -7752,6 +7879,7 @@ function createCodexTerminalController({
     },
 
     async closeAllForSession(sessionId) {
+      clearCodexAppServerSessionRecoveryTimers(sessionId);
       let session = null;
       let providerOptions = null;
       let unsubscribeResult = null;

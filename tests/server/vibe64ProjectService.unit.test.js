@@ -173,6 +173,25 @@ async function writeVibe64SourceConfig(root, {
   }, null, 2)}\n`, "utf8");
 }
 
+async function writeSeededJskitMarkers(root) {
+  const files = {
+    ".jskit/lock.json": "{}\n",
+    "config/public.js": "export default {};\n",
+    "packages/main/package.descriptor.mjs": "export default {};\n",
+    "src/main.js": "export {};\n"
+  };
+  await writePackageJson(root, {
+    name: "seeded-jskit-app"
+  });
+  await Promise.all(Object.entries(files).map(async ([relativePath, contents]) => {
+    const filePath = path.join(root, relativePath);
+    await mkdir(path.dirname(filePath), {
+      recursive: true
+    });
+    await writeFile(filePath, contents, "utf8");
+  }));
+}
+
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -1161,7 +1180,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
   });
 });
 
-test("Vibe64 project service reads committed config from online git cache without an active source", async () => {
+test("Vibe64 project service keeps a config-only JSKIT Git cache in the seed workflow", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const sourceRoot = path.join(root, "source");
@@ -1253,10 +1272,10 @@ test("Vibe64 project service reads committed config from online git cache withou
     const creationOptions = await runtime.workflowDefinitionCreationOptions();
     assert.equal(runtime.targetRoot, projectRoot);
     assert.equal(runtime.sourceContractRoot, "");
-    assert.equal(creationOptions.seedRequired, false);
-    assert.equal(creationOptions.mode, "select");
+    assert.equal(creationOptions.seedRequired, true);
+    assert.equal(creationOptions.mode, "seed_required");
     assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
-    assert.equal(creationOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+    assert.equal(creationOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
 
     const savedBootstrapConfig = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
       projectType: "jskit",
@@ -1323,6 +1342,7 @@ test("Vibe64 project service ignores stale bootstrap config when committed git-c
       mergeMethod: "merge",
       projectType: "jskit"
     });
+    await writeSeededJskitMarkers(sourceRoot);
     await commitAll(sourceRoot, "Commit Vibe64 config");
 
     const projectContext = createStudioProjectContext({
@@ -1421,6 +1441,7 @@ test("Vibe64 project service reads committed config when active session sources 
       mergeMethod: "merge",
       projectType: "jskit"
     });
+    await writeSeededJskitMarkers(sourceRoot);
     await commitAll(sourceRoot, "Commit Vibe64 config");
 
     const projectContext = createStudioProjectContext({

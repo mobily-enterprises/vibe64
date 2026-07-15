@@ -1064,6 +1064,7 @@ async function startCommandTerminalProcess({
   const terminalEnvRecords = await loadProjectExecutionEnvRecords({
     action,
     projectService,
+    runCommand: runCommand || runVibe64Command,
     runtime,
     session,
     sourcePath: terminalWorktreePath(session),

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -201,6 +202,30 @@ function codexAppServerCommandRunner(runtimeDir, commandCalls = []) {
       stdout: "",
       timedOut: false
     };
+  };
+}
+
+async function startOrphanedDetachedProcessGroup(directory) {
+  const childPidPath = path.join(directory, "child.pid");
+  const script = [
+    "const { spawn } = require('node:child_process');",
+    "const { writeFileSync } = require('node:fs');",
+    "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);'], { stdio: 'ignore' });",
+    "writeFileSync(process.argv[1], String(child.pid));",
+    "child.unref();"
+  ].join("\n");
+  const leader = spawn(process.execPath, ["-e", script, childPidPath], {
+    detached: true,
+    stdio: "ignore"
+  });
+  const processGroupId = leader.pid;
+  await new Promise((resolve, reject) => {
+    leader.once("error", reject);
+    leader.once("exit", resolve);
+  });
+  return {
+    childPid: Number(await readFile(childPidPath, "utf8")),
+    processGroupId
   };
 }
 
@@ -488,6 +513,7 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
     await writeMetadata(runtimeDir, metadata);
     const runtime = await ensureCodexAppServerRuntime({
       authStateSignature: metadata.authStateSignature,
+      processGroupIsAlive: () => true,
       runtimeDir,
       commandRunner() {
         throw new Error("command runner must not be called when metadata is live");
@@ -637,6 +663,7 @@ test("codex provider replaces a runtime whose socket exists but does not answer"
     const commandCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
       authStateSignature: metadata.authStateSignature,
+      processGroupIsAlive: () => true,
       readyTimeoutMs: 2000,
       runtimeDir,
       commandRunner: codexAppServerCommandRunner(runtimeDir, commandCalls),
@@ -664,6 +691,7 @@ test("codex provider preserves a live-looking runtime when liveness probe times 
     const runtime = await ensureCodexAppServerRuntime({
       authStateSignature: metadata.authStateSignature,
       livenessTimeoutMs: 10,
+      processGroupIsAlive: () => true,
       runtimeDir,
       commandRunner() {
         throw new Error("command runner must not be called for a suspect app-server runtime");
@@ -923,6 +951,59 @@ test("codex provider removes a dead managed app-server runtime directory", async
         code: "ENOENT"
       }
     );
+  });
+});
+
+test("codex provider reuses and stops the detached process group after its leader exits", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX process groups are not available on Windows.");
+    return;
+  }
+  await withTemporaryDirectory(async (baseDir) => {
+    const runtimeDir = path.join(baseDir, "codex-app-server-orphaned-leader");
+    await mkdir(runtimeDir, {
+      recursive: true
+    });
+    const fixture = await startOrphanedDetachedProcessGroup(runtimeDir);
+    try {
+      const metadata = metadataForRuntime(runtimeDir, {
+        pid: fixture.processGroupId
+      });
+      await writeFile(metadata.socketPath, "");
+      await writeMetadata(runtimeDir, metadata);
+
+      const runtime = await ensureCodexAppServerRuntime({
+        authStateSignature: metadata.authStateSignature,
+        runtimeDir,
+        commandRunner() {
+          throw new Error("command runner must not replace a responsive surviving process group");
+        },
+        WebSocketImpl: ResponsiveFakeWebSocket
+      });
+
+      assert.equal(runtime.reused, true);
+      assert.equal(runtime.pid, fixture.processGroupId);
+
+      const result = await stopCodexAppServerRuntime({
+        runtimeDir
+      });
+
+      assert.equal(result.pid, fixture.processGroupId);
+      assert.equal(result.stopped, true);
+      assert.equal(result.runtimeDirRemoved, true);
+      assert.throws(
+        () => process.kill(-fixture.processGroupId, 0),
+        {
+          code: "ESRCH"
+        }
+      );
+    } finally {
+      try {
+        process.kill(-fixture.processGroupId, "SIGKILL");
+      } catch {
+        // The assertion path normally stops the complete fixture group first.
+      }
+    }
   });
 });
 

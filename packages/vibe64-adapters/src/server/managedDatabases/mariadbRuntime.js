@@ -210,7 +210,7 @@ function managedMariaDbServiceStartScript({
     "  mariadb_root_using_password \"$previous_bootstrap_password\" \"$@\"",
     "}",
     "mariadb_root_open() {",
-    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=root \"$@\"",
+    "  env -u MYSQL_PWD mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=root \"$@\"",
     "}",
     "mariadb_ready_with_password() {",
     "  mariadb_root_password --execute=\"SELECT 1\" >/dev/null 2>&1",

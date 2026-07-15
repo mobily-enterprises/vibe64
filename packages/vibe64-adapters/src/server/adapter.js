@@ -401,6 +401,14 @@ class TargetAdapter {
     return null;
   }
 
+  async listExecutionEnvironmentPreparations() {
+    return [];
+  }
+
+  async inspectCommittedWorkflow() {
+    return null;
+  }
+
   async createDeploymentPublishPlan() {
     return unsupportedDeploymentPublishPlan({
       adapterId: this.id,

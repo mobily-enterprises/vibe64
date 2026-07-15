@@ -226,6 +226,19 @@ async function inspectProjectMarkers(targetRoot, markers = []) {
   }));
 }
 
+async function inspectProjectSourceMarkers(source = {}, markers = []) {
+  if (typeof source.exists !== "function") {
+    throw vibe64Error(
+      "Committed project source does not provide marker inspection.",
+      "vibe64_committed_project_source_invalid"
+    );
+  }
+  return Promise.all(markers.map(async (marker) => ({
+    ...marker,
+    exists: await source.exists(marker.relativePath)
+  })));
+}
+
 async function inspectDescribedProject(targetRoot, {
   extra = () => ({}),
   markers = [],
@@ -490,5 +503,6 @@ export {
   vibe64WorkflowCapabilities,
   createVibe64WorkflowCommandTerminalSpec,
   inspectDescribedProject,
+  inspectProjectSourceMarkers,
   normalizeWorkflowCommands
 };

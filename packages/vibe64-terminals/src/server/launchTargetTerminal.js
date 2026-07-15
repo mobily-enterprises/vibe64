@@ -1956,6 +1956,7 @@ function createLaunchTargetTerminalController({
         try {
           const terminalEnvRecords = await loadProjectExecutionEnvRecords({
             projectService,
+            runCommand,
             runtime: context.runtime,
             session: context.session,
             target: "launch-target",

@@ -126,6 +126,46 @@ function processIsAlive(pid) {
   }
 }
 
+function processGroupIsAlive(processGroupId) {
+  const normalizedProcessGroupId = Number(processGroupId);
+  if (!Number.isSafeInteger(normalizedProcessGroupId) || normalizedProcessGroupId <= 0) {
+    return false;
+  }
+  if (process.platform === "win32") {
+    return processIsAlive(normalizedProcessGroupId);
+  }
+  try {
+    process.kill(-normalizedProcessGroupId, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function signalProcessGroup(processGroupId, signal) {
+  const normalizedProcessGroupId = Number(processGroupId);
+  const target = process.platform === "win32"
+    ? normalizedProcessGroupId
+    : -normalizedProcessGroupId;
+  try {
+    process.kill(target, signal);
+    return true;
+  } catch (error) {
+    if (!["ESRCH", "EPERM"].includes(String(error?.code || ""))) {
+      throw error;
+    }
+    return false;
+  }
+}
+
+async function waitForProcessGroupExit(processGroupId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && processGroupIsAlive(processGroupId)) {
+    await delay(100);
+  }
+  return !processGroupIsAlive(processGroupId);
+}
+
 async function ensurePrivateDirectory(dirPath = "") {
   await mkdir(dirPath, {
     mode: 0o700,
@@ -411,7 +451,7 @@ async function codexAppServerRuntimeProcessState(runtimeDir = "") {
   }
   return {
     hasMetadata: true,
-    alive: processIsAlive(metadata.pid)
+    alive: processGroupIsAlive(metadata.pid)
   };
 }
 
@@ -436,34 +476,20 @@ async function stopCodexAppServerProcess(runtimeDir = "") {
   }
   const metadata = await readCodexAppServerMetadata(normalizedRuntimeDir);
   const pid = Number(metadata?.pid);
-  if (!Number.isSafeInteger(pid) || pid <= 0 || !processIsAlive(pid)) {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || !processGroupIsAlive(pid)) {
     return {
       stopped: false
     };
   }
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (error) {
-    if (!["ESRCH", "EPERM"].includes(String(error?.code || ""))) {
-      throw error;
-    }
-  }
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline && processIsAlive(pid)) {
-    await delay(100);
-  }
-  if (processIsAlive(pid)) {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch (error) {
-      if (!["ESRCH", "EPERM"].includes(String(error?.code || ""))) {
-        throw error;
-      }
-    }
+  signalProcessGroup(pid, "SIGTERM");
+  let stopped = await waitForProcessGroupExit(pid, 3000);
+  if (!stopped) {
+    signalProcessGroup(pid, "SIGKILL");
+    stopped = await waitForProcessGroupExit(pid, 1000);
   }
   return {
     pid,
-    stopped: !processIsAlive(pid)
+    stopped
   };
 }
 
@@ -779,7 +805,10 @@ async function codexAppServerRuntimeStatus(metadata = {}, options = {}) {
       status: CODEX_APP_SERVER_RUNTIME_STATUS.INCOMPATIBLE
     };
   }
-  if (!processIsAlive(normalized.pid)) {
+  const runtimeProcessGroupIsAlive = typeof options.processGroupIsAlive === "function"
+    ? options.processGroupIsAlive(normalized.pid)
+    : processGroupIsAlive(normalized.pid);
+  if (!runtimeProcessGroupIsAlive) {
     return {
       metadata: normalized,
       replace: true,

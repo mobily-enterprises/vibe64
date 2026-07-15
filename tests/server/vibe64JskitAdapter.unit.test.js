@@ -360,6 +360,9 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
       assert.match(seedPromptContext.seed_recipe_contract, /seed guidance is authoritative/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /expected pre-scaffold state, not a setup failure/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /run `npm install` before inspecting installed-package docs/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /preserve any completed root scaffold/u);
       assert.match(seedPromptContext.seed_recipe_contract, /Do not read broad JSKIT manuals/u);
       assert.match(seedPromptContext.seed_recipe_contract, /Use the exact mapped seed commands first/u);
       assert.match(seedPromptContext.seed_deslop_contract, /full Vibe64 deslop pass/u);
@@ -1207,12 +1210,13 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.launchReady, false);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
-    assert.equal(spec.metadata.managedMariaDbPreparation, "enabled");
+    assert.equal(spec.metadata.managedMariaDbPreparation, undefined);
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.serverCommand, "npm run server");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.ok(spec.restartOnChange.include.includes("src/**"));
     assert.ok(spec.restartOnChange.include.includes("server.js"));
+    assert.deepEqual(spec.runtimes, ["node22"]);
 
     const args = spec.args({
       id: "unit-terminal"
@@ -1233,19 +1237,17 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
-    const prepareDbIndex = startupScript.indexOf("Preparing JSKIT managed database");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
     const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const serverIndex = startupScript.indexOf("npm run server");
     assert.notEqual(buildIndex, -1);
-    assert.notEqual(prepareDbIndex, -1);
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
     assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
+    assert.doesNotMatch(startupScript, /Preparing JSKIT managed database/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
-    assert.ok(buildIndex < prepareDbIndex);
-    assert.ok(prepareDbIndex < migrateIndex);
+    assert.ok(buildIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
@@ -1303,11 +1305,12 @@ test("jskit dev launch starts backend and Vite together", async () => {
       assert.ok(Number(spec.metadata.backendPort) > Number(spec.metadata.port));
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
-    assert.equal(spec.metadata.managedMariaDbPreparation, "enabled");
+    assert.equal(spec.metadata.managedMariaDbPreparation, undefined);
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
     assert.equal(spec.metadata.serverRestartCheck, "active-agent-runs");
+    assert.deepEqual(spec.runtimes, ["node22"]);
 
     const args = spec.args({
       id: "unit-terminal"
@@ -1331,16 +1334,14 @@ test("jskit dev launch starts backend and Vite together", async () => {
       startupScript,
       new RegExp(`VIBE64_JSKIT_BACKEND_PORT=\\\\?"?${spec.metadata.backendPort}`, "u")
     );
-    const prepareDbIndex = startupScript.indexOf("Preparing JSKIT managed database");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
     const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const startStackIndex = startupScript.indexOf("trap cleanup_vibe64_jskit_dev EXIT INT TERM\nvibe64_jskit_start_stack");
-    assert.notEqual(prepareDbIndex, -1);
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(startStackIndex, -1);
+    assert.doesNotMatch(startupScript, /Preparing JSKIT managed database/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
-    assert.ok(prepareDbIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < startStackIndex);
     assert.match(startupScript, /npm run server/u);
