@@ -45,6 +45,91 @@ describe("useVibe64SessionDialogs", () => {
     }));
   });
 
+  it("dismisses confirmation and exposes the closing session while abandon is in flight", async () => {
+    let finishRequest;
+    const requestPending = new Promise((resolve) => {
+      finishRequest = resolve;
+    });
+    commandMocks.useCommand.mockImplementationOnce((options = {}) => ({
+      isRunning: false,
+      message: "",
+      run: vi.fn(async (context = {}) => {
+        await requestPending;
+        const response = {
+          ok: true
+        };
+        await options.onRunSuccess?.(response, {
+          context
+        });
+        return response;
+      })
+    }));
+    const selectedSessionId = ref("session-1");
+    const dialogs = useVibe64SessionDialogs({
+      activeActionId: ref(""),
+      clearSelectedSession: vi.fn(() => {
+        selectedSessionId.value = "";
+      }),
+      isSelectedSessionClosed: ref(false),
+      refreshSessionData: vi.fn(async () => null),
+      runActionCommand: {
+        run: vi.fn()
+      },
+      selectedSessionId,
+      selectedSessionTitle: ref("Session one"),
+      sessionsApiPath: ref("/api/app/project/example/vibe64/sessions")
+    });
+
+    dialogs.abandon.request();
+    const abandonPromise = dialogs.abandon.confirm();
+
+    expect(dialogs.abandon.open.value).toBe(false);
+    expect(dialogs.abandon.closing.value).toBe(true);
+    expect(dialogs.abandon.closingSessionId.value).toBe("session-1");
+    expect(dialogs.abandon.closingSessionTitle.value).toBe("Session one");
+    expect(selectedSessionId.value).toBe("session-1");
+
+    finishRequest();
+    await abandonPromise;
+
+    expect(dialogs.abandon.closing.value).toBe(false);
+    expect(dialogs.abandon.closingSessionId.value).toBe("");
+    expect(dialogs.abandon.closingSessionTitle.value).toBe("");
+  });
+
+  it("restores the session pane when abandon fails", async () => {
+    const failure = new Error("Abandon request failed.");
+    commandMocks.useCommand.mockImplementationOnce(() => ({
+      isRunning: false,
+      message: "Vibe64 session could not be abandoned.",
+      run: vi.fn(async () => {
+        throw failure;
+      })
+    }));
+    const selectedSessionId = ref("session-1");
+    const clearSelectedSession = vi.fn();
+    const dialogs = useVibe64SessionDialogs({
+      activeActionId: ref(""),
+      clearSelectedSession,
+      isSelectedSessionClosed: ref(false),
+      refreshSessionData: vi.fn(async () => null),
+      runActionCommand: {
+        run: vi.fn()
+      },
+      selectedSessionId,
+      selectedSessionTitle: ref("Session one"),
+      sessionsApiPath: ref("/api/app/project/example/vibe64/sessions")
+    });
+
+    dialogs.abandon.request();
+    await expect(dialogs.abandon.confirm()).rejects.toThrow("Abandon request failed.");
+
+    expect(dialogs.abandon.open.value).toBe(false);
+    expect(dialogs.abandon.closing.value).toBe(false);
+    expect(selectedSessionId.value).toBe("session-1");
+    expect(clearSelectedSession).not.toHaveBeenCalled();
+  });
+
   it("clears the abandoned selection before waiting for the session-list refresh", async () => {
     const events = [];
     const selectedSessionId = ref("session-1");

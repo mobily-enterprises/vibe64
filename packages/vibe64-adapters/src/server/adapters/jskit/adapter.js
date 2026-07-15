@@ -87,6 +87,10 @@ import {
   resolveBuiltLaunchConfig
 } from "./launchTargets.js";
 import {
+  JSKIT_CREATE_APP_PACKAGE_SPEC,
+  JSKIT_CREATE_APP_PLAYWRIGHT_OPTION
+} from "./scaffoldToolchain.js";
+import {
   JSKIT_APP_AUTH_RUNTIME_ENV,
   JSKIT_LOCAL_AUTH_STORE_DIR,
   createJskitRuntimeConfigProfile,
@@ -426,8 +430,8 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "For one small fixed-choice answer, add possible answers as normal text after the question, exactly as a `Possible answers:` section with bullet lines. Put the short button label before `:` and the exact answer to send back after `:`. Do not use answer choices for API keys, service URLs, app names, free-form feature descriptions, or numbered multi-question batches. Do not put these choices in workflow input field descriptors.",
     "",
     "Command mapping after the questions:",
-    "- Public app or no teams/workspaces: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`.",
-    "- Teams/workspaces with a configured database: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode personal --title \"<app title>\" --initial-bundles none`.",
+    `- Public app or no teams/workspaces: \`npx ${JSKIT_CREATE_APP_PACKAGE_SPEC} <app-name> --target . --force --tenancy-mode none --title "<app title>" --initial-bundles none ${JSKIT_CREATE_APP_PLAYWRIGHT_OPTION}\`.`,
+    `- Teams/workspaces with a configured database: \`npx ${JSKIT_CREATE_APP_PACKAGE_SPEC} <app-name> --target . --force --tenancy-mode personal --title "<app title>" --initial-bundles none ${JSKIT_CREATE_APP_PLAYWRIGHT_OPTION}\`.`,
     "- Always run `npm install` after scaffolding before `npx jskit add ...` commands.",
     "- If sign-in is selected and the configured app login provider is local with database-backed storage, run `npx jskit add package database-runtime-mysql --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"` before local auth.",
     "- If sign-in is selected and the configured app login provider is local, run `npx jskit add bundle auth-local`.",
@@ -443,7 +447,8 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "Seed output contract:",
     "The final seed description should be short and command-first. It must list the selected answers, the exact scaffold command, the exact `npx jskit ...` commands to run, the verification commands, and one smallest visible browser workflow.",
     "Do not include `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, or `npx jskit show <package>` as mandatory seed steps. Those are for unusual uncertainty, not normal seeding.",
-    "Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
+    `Do not use \`npx ${JSKIT_CREATE_APP_PACKAGE_SPEC} . --name ...\`, and do not scaffold into a child directory.`,
+    `Keep ${JSKIT_CREATE_APP_PLAYWRIGHT_OPTION} on the scaffold command. Vibe64 owns this exact test-browser version; do not replace it, install a browser, or choose a different Playwright version.`,
     "If Vite dev-server dependency optimization fails for JSKIT runtime packages, do not ask Codex to add app-local `optimizeDeps` exclusions for JSKIT internals. Treat it as a JSKIT package metadata/update issue and keep the generated app config framework-owned."
   ].join("\n");
 }
@@ -477,6 +482,8 @@ function jskitPromptContext({
     blueprint_relative_path: JSKIT_BLUEPRINT_RELATIVE_PATH,
     database_contract: databaseContract,
     database_runtime: databaseRuntime,
+    create_app_package_spec: JSKIT_CREATE_APP_PACKAGE_SPEC,
+    create_app_playwright_option: JSKIT_CREATE_APP_PLAYWRIGHT_OPTION,
     app_auth_contract: authContract,
     app_auth_environment: appAuth.environment,
     app_auth_local_backend: appAuth.localBackend,

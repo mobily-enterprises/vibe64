@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -8,6 +11,7 @@ import {
 } from "../../packages/vibe64-execution/src/server/credentialHomes.js";
 import {
   PLAYWRIGHT_BROWSERS_PATH_ENV,
+  VIBE64_PLAYWRIGHT_VERSION_ENV,
   VIBE64_SHARED_CACHE_ROOT_ENV
 } from "../../packages/vibe64-execution/src/server/env/sharedToolEnv.js";
 import {
@@ -106,6 +110,41 @@ test("Codex runtime context derives Playwright browsers path from the runtime-pa
   assert.equal(context.ok, true);
   assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-runtimes/playwright/browsers");
   assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/srv/vibe64-runtimes/playwright/browsers");
+});
+
+test("Codex runtime context exposes the active managed Playwright version and rejects project overrides", async () => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-managed-playwright-"));
+  try {
+    await mkdir(path.join(runtimeRoot, "playwright"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(runtimeRoot, "playwright/runtime.env"),
+      "playwright_version=1.50.1\nchromium_revision=1155\n",
+      "utf8"
+    );
+    const context = codexRuntimeContext({
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      home: "/home/v64d_tenant",
+      terminalEnv: {
+        VIBE64_PLAYWRIGHT_VERSION: "9.9.9"
+      },
+      username: "v64d_tenant"
+    });
+
+    assert.equal(context.ok, true);
+    assert.equal(context.terminalEnv[VIBE64_PLAYWRIGHT_VERSION_ENV], undefined);
+    assert.equal(context.env[VIBE64_PLAYWRIGHT_VERSION_ENV], "1.50.1");
+    assert.equal(context.providerOptions.env[VIBE64_PLAYWRIGHT_VERSION_ENV], "1.50.1");
+    assert.equal(context.terminalProcessEnv[VIBE64_PLAYWRIGHT_VERSION_ENV], "1.50.1");
+  } finally {
+    await rm(runtimeRoot, {
+      force: true,
+      recursive: true
+    });
+  }
 });
 
 test("Codex runtime context rejects missing required system root", () => {

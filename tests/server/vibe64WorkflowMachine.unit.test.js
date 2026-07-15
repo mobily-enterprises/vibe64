@@ -4927,6 +4927,83 @@ test("vibe64 runtime reuses the persisted prompt context snapshot for later prom
   });
 });
 
+test("vibe64 runtime recreates a stale prompt context snapshot when a template adds a token", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeComposerTemplatePrompt(promptPackRoot);
+    await Promise.all([
+      writeFile(
+        path.join(promptPackRoot, "make_plan.txt"),
+        "Make plan with {{adapter.promptContext.marker}}.",
+        "utf8"
+      ),
+      writeFile(
+        path.join(promptPackRoot, "execute_plan.txt"),
+        "Execute plan with {{adapter.promptContext.release_pin}}.",
+        "utf8"
+      )
+    ]);
+
+    const initialRuntime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptContext: {
+          marker: "initial-context"
+        },
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    await initialRuntime.createSession({
+      initialStep: "plan_and_execute",
+      metadata: sourceMetadata(targetRoot, "stale_prompt_context"),
+      sessionId: "stale_prompt_context"
+    });
+    await initialRuntime.runAction("stale_prompt_context", "make_plan");
+    await initialRuntime.store.writeMetadataValue(
+      "stale_prompt_context",
+      "agent_briefing_delivered",
+      "yes"
+    );
+    await initialRuntime.submitCurrentStepInput("stale_prompt_context", {
+      kind: "ready",
+      source: "codex",
+      stepId: "plan_and_execute",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    const staleSnapshot = await initialRuntime.store.readPromptContextSnapshot("stale_prompt_context");
+    assert.equal(staleSnapshot.adapter.promptContext.release_pin, undefined);
+
+    const restartedRuntime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptContext: {
+          marker: "current-context",
+          release_pin: "@example/create-app@1.2.3"
+        },
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    const result = await restartedRuntime.runAction("stale_prompt_context", "execute_plan");
+
+    assert.equal(
+      result.actionResult.promptContext.adapter.promptContext.release_pin,
+      "@example/create-app@1.2.3"
+    );
+    assert.match(result.actionResult.prompt, /Vibe64 session briefing/u);
+    assert.match(result.actionResult.prompt, /@example\/create-app@1\.2\.3/u);
+    const refreshedSnapshot = await restartedRuntime.store.readPromptContextSnapshot("stale_prompt_context");
+    assert.equal(refreshedSnapshot.adapter.promptContext.marker, "current-context");
+    assert.equal(
+      refreshedSnapshot.adapter.promptContext.release_pin,
+      "@example/create-app@1.2.3"
+    );
+  });
+});
+
 test("vibe64 runtime sends static adapter context once and references it later", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const promptPackRoot = path.join(targetRoot, "prompt-pack");

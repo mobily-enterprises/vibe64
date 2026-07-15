@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   sessionPanelDashboardContext,
   sessionPanelRuntimeHostDiagnostics,
+  sessionPanelSelectedSessionClosing,
   sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
 
@@ -23,6 +24,30 @@ describe("useVibe64SessionPanel", () => {
     expect(sessionPanelDashboardContext(null)).toEqual({
       projectContext: {}
     });
+  });
+
+  it("blocks only the session whose abandon request is in flight", () => {
+    expect(sessionPanelSelectedSessionClosing({
+      abandon: {
+        closing: true,
+        closingSessionId: "session-a"
+      },
+      selectedSessionId: "session-a"
+    })).toBe(true);
+    expect(sessionPanelSelectedSessionClosing({
+      abandon: {
+        closing: true,
+        closingSessionId: "session-a"
+      },
+      selectedSessionId: "session-b"
+    })).toBe(false);
+    expect(sessionPanelSelectedSessionClosing({
+      abandon: {
+        closing: false,
+        closingSessionId: "session-a"
+      },
+      selectedSessionId: "session-a"
+    })).toBe(false);
   });
 
   it("reports exact runtime host counts for visible, hidden, orphaned, and errored hosts", () => {

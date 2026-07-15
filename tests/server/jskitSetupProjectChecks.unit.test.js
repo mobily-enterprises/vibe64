@@ -505,7 +505,9 @@ test("JSKIT seed command defaults tenancy because seed workflow now chooses it",
   const preview = scaffoldCommandPreview();
   const script = scaffoldScript();
 
-  assert.match(preview, /npx @jskit-ai\/create-app/u);
+  assert.match(preview, /npx @jskit-ai\/create-app /u);
+  assert.doesNotMatch(preview, /@jskit-ai\/create-app@/u);
+  assert.match(preview, /--playwright-version "\$VIBE64_PLAYWRIGHT_VERSION"/u);
   assert.match(preview, /--tenancy-mode none/u);
   assert.match(script, /--tenancy-mode none/u);
   assert.doesNotMatch(script, /--tenancy-mode single/u);

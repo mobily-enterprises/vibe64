@@ -378,7 +378,7 @@ const blockedAppSetupPayload = {
         kind: "terminal",
         actionId: "terminal-scaffold-jskit",
         label: "Seed this project",
-        commandPreview: "npx @jskit-ai/create-app example-target-app --target . --force --tenancy-mode none --title \"Example Target App\" --initial-bundles none"
+        commandPreview: "npx @jskit-ai/create-app@0.1.123 example-target-app --target . --force --tenancy-mode none --title \"Example Target App\" --initial-bundles none"
       }
     },
     {

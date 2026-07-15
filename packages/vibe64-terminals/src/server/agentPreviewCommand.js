@@ -1207,6 +1207,7 @@ async function prepareAgentPreviewCommand({
     agentPlaywrightSource: agentPlaywrightCommandSource({
       managedNodePath,
       managedNpmPath,
+      managedPreviewPath: wrapperHostPath(normalizedWrapperHostDir),
       runtimeRoot: packRoot
     }),
     browserWorkerSource: agentPreviewBrowserWorkerSource({

@@ -358,7 +358,7 @@ function managedPreviewPolicyInstruction() {
     "- Treat the returned `endpoints.agent`, `terminal`, and `currentPage` as authoritative. Use `vibe64-preview status --json` to refresh them. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
     "- `currentPage` can be absent until a browser has visited the preview. For browser verification, navigate to `endpoints.agent.url`; do not treat an unobserved current page as a missing preview.",
     "- `vibe64-preview` owns interactive Playwright and already has its matching Chromium. Never use `npx playwright`, project `require(\"playwright\")`, `playwright install`, another browser CLI, or any browser download for inspection or interaction.",
-    "- Keep ordinary portable Playwright tests in the project with its normal `@playwright/test` dev dependency. Inside Vibe64, run them only through `vibe64-playwright test` or `vibe64-playwright npm-run <script>` so the test package is paired with the exact managed browser version. Never install browser payloads in the project or user cache.",
+    "- Keep ordinary portable Playwright tests in the project with its normal `@playwright/test` dev dependency and a `PLAYWRIGHT_BASE_URL` override. Inside Vibe64, immediately run them through `vibe64-playwright test [arguments]` or `vibe64-playwright npm-run <script> [-- arguments]`. These commands automatically ensure the current managed preview, supply its agent origin as `PLAYWRIGHT_BASE_URL`, and pair the project test package with the exact managed browser version. Do not inspect or hard-code managed ports, add Vibe64 URL-discovery helpers to the project, or pass the managed preview URL manually. Never install browser payloads in the project or user cache.",
     "- Describe only what the rendered browser actually shows. Never infer page appearance from source code. If the browser renders a sign-in page, error, or blank screen, report that exact result instead of describing the intended page.",
     "- Read managed server output with `vibe64-preview logs --lines 200`. Do not launch a second server to obtain cleaner output.",
     "- Do not ask the user to start or open the preview. If `vibe64-preview ensure --wait --json` fails, report its diagnostics as the managed-preview blocker.",
@@ -697,6 +697,9 @@ function scalarPromptContextTokens(promptContext = {}) {
 
 function promptContextInlineTokenKeys(context = {}) {
   const keys = new Set();
+  if (promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED) {
+    keys.add("create_app_package_spec");
+  }
   if (promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED && context.action?.promptId === "run_deslop") {
     keys.add("seed_deslop_contract");
   }

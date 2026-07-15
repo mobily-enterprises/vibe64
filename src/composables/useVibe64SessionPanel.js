@@ -144,6 +144,10 @@ function useVibe64SessionPanel(props, emit) {
   ));
   const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
   const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
+  const selectedSessionClosing = computed(() => sessionPanelSelectedSessionClosing({
+    abandon: selectedAbandon.value,
+    selectedSessionId: selection.selectedSessionId
+  }));
   const rawPageError = computed(() => blockingVibe64SessionPageError({
     hasMountedRuntime: runtimeHostSessionIds.value.length > 0,
     runtimePageError: selectedRuntimeState.value?.pageError,
@@ -225,6 +229,7 @@ function useVibe64SessionPanel(props, emit) {
     projectPane,
     runtimeHostSessionIds,
     selectedAbandon,
+    selectedSessionClosing,
     selection,
     sessionData,
     setRuntimeBusy,
@@ -321,6 +326,15 @@ function sessionPanelPageErrorMessage(error = "") {
   return message;
 }
 
+function sessionPanelSelectedSessionClosing({
+  abandon = null,
+  selectedSessionId = ""
+} = {}) {
+  const selectedId = String(selectedSessionId || "").trim();
+  const closingId = String(abandon?.closingSessionId || "").trim();
+  return Boolean(abandon?.closing && selectedId && closingId === selectedId);
+}
+
 function sessionPanelDashboardContext(projectContext = {}) {
   const safeProjectContext = projectContext && typeof projectContext === "object" && !Array.isArray(projectContext)
     ? projectContext
@@ -402,6 +416,7 @@ function sessionPanelRuntimeHostDiagnostics({
 export {
   sessionPanelDashboardContext,
   sessionPanelRuntimeHostDiagnostics,
+  sessionPanelSelectedSessionClosing,
   sessionPanelToolbarSessions,
   useVibe64SessionPanel,
   vibe64SessionPanelEmits,

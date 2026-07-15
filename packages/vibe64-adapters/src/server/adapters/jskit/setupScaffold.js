@@ -11,6 +11,10 @@ import {
 import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
+import {
+  JSKIT_CREATE_APP_PACKAGE_SPEC,
+  JSKIT_CREATE_APP_PLAYWRIGHT_OPTION
+} from "./scaffoldToolchain.js";
 
 const JSKIT_SCAFFOLD_ALLOWED_NON_SOURCE_ENTRIES = new Set([
   "node_modules"
@@ -23,7 +27,7 @@ function repoNameFromTargetRoot(targetRoot) {
 }
 
 function scaffoldCommandPreview() {
-  return `npx @jskit-ai/create-app "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote("none")} --title "$JSKIT_APP_TITLE" --initial-bundles none`;
+  return `npx ${JSKIT_CREATE_APP_PACKAGE_SPEC} "$JSKIT_APP_NAME" --target . --force --tenancy-mode ${shellQuote("none")} --title "$JSKIT_APP_TITLE" --initial-bundles none ${JSKIT_CREATE_APP_PLAYWRIGHT_OPTION}`;
 }
 
 function scaffoldScript() {

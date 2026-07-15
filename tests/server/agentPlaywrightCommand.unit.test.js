@@ -55,6 +55,7 @@ async function createProject(projectRoot, version) {
   await writeFile(path.join(packageRoot, "cli.js"), [
     "process.stdout.write(JSON.stringify({",
     "  args: process.argv.slice(2),",
+    "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
     "  browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH,",
     "  managed: process.env.VIBE64_MANAGED_PLAYWRIGHT_TEST,",
     "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
@@ -62,7 +63,10 @@ async function createProject(projectRoot, version) {
   ].join("\n") + "\n", "utf8");
 }
 
-async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion) {
+async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion, {
+  previewFailure = "",
+  previewUrl = "http://127.0.0.1:4104/home"
+} = {}) {
   const runtimeRoot = path.join(root, "runtime-packs");
   const projectRoot = path.join(root, "project");
   await createProject(projectRoot, projectVersion);
@@ -76,9 +80,49 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
   );
   await writeExecutable(
     path.join(runtimeRoot, "node22", "bin", "npm"),
-    "#!/bin/sh\nexit 0\n"
+    [
+      "#!/usr/bin/env node",
+      "process.stdout.write(JSON.stringify({",
+      "  args: process.argv.slice(2),",
+      "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
+      "  browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH,",
+      "  managed: process.env.VIBE64_MANAGED_PLAYWRIGHT_TEST,",
+      "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+      "}));"
+    ].join("\n") + "\n"
   );
-  const commandService = createAgentPreviewCommandService();
+  const commandService = createAgentPreviewCommandService({
+    launchTarget: {
+      async ensurePreview() {
+        return previewFailure
+          ? {
+              error: previewFailure,
+              ok: false
+            }
+          : {
+              id: "managed-preview-terminal"
+            };
+      },
+      async launchStatus() {
+        return {
+          activeTerminal: {
+            id: "managed-preview-terminal",
+            running: true,
+            status: "running"
+          },
+          lastLaunchTarget: {
+            agentHref: previewUrl,
+            id: "dev"
+          },
+          previewTarget: {
+            available: true,
+            href: previewUrl
+          }
+        };
+      }
+    },
+    readSessionUiState: () => null
+  });
   const prepared = await prepareAgentPreviewCommand({
     commandService,
     env: {
@@ -99,7 +143,7 @@ test("managed Playwright test command uses the exact versioned browser runtime w
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-command-"));
   let fixture;
   try {
-    fixture = await prepareFixture(root, "1.50.1");
+    fixture = await prepareFixture(root, "1.61.1");
     assert.equal(path.basename(fixture.prepared.hostPlaywrightWrapperPath), AGENT_PLAYWRIGHT_COMMAND_NAME);
     const status = JSON.parse((await execFileAsync(
       fixture.prepared.hostPlaywrightWrapperPath,
@@ -112,10 +156,10 @@ test("managed Playwright test command uses the exact versioned browser runtime w
         }
       }
     )).stdout);
-    assert.equal(status.version, "1.50.1");
+    assert.equal(status.version, "1.61.1");
     assert.equal(
       status.browsersPath,
-      path.join(fixture.runtimeRoot, "playwright-versions", "1.50.1", "browsers")
+      path.join(fixture.runtimeRoot, "playwright-versions", "1.61.1", "browsers")
     );
 
     const executed = JSON.parse((await execFileAsync(
@@ -125,20 +169,79 @@ test("managed Playwright test command uses the exact versioned browser runtime w
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
+          ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override",
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
         }
       }
     )).stdout);
     assert.deepEqual(executed.args, ["test", "--grep", "checkout"]);
+    assert.equal(executed.baseUrl, "http://127.0.0.1:4104");
     assert.equal(
       executed.browsersPath,
-      path.join(fixture.runtimeRoot, "playwright-versions", "1.50.1", "browsers")
+      path.join(fixture.runtimeRoot, "playwright-versions", "1.61.1", "browsers")
     );
     assert.equal(executed.managed, "1");
     assert.equal(executed.skipDownload, "1");
+
+    const npmRun = JSON.parse((await execFileAsync(
+      fixture.prepared.hostPlaywrightWrapperPath,
+      ["npm-run", "e2e", "--", "--grep", "settings"],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ...fixture.prepared.env
+        }
+      }
+    )).stdout);
+    assert.deepEqual(npmRun.args, ["run", "e2e", "--", "--grep", "settings"]);
+    assert.equal(npmRun.baseUrl, "http://127.0.0.1:4104");
+
+    await writeExecutable(
+      fixture.prepared.hostWrapperPath,
+      "This is deliberately not executable JavaScript because an explicit PLAYWRIGHT_BASE_URL must bypass it.\n"
+    );
+    const explicit = JSON.parse((await execFileAsync(
+      fixture.prepared.hostPlaywrightWrapperPath,
+      ["test", "--grep", "override"],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom"
+        }
+      }
+    )).stdout);
+    assert.equal(explicit.baseUrl, "http://127.0.0.1:6200/custom");
   } finally {
-    await fixture?.commandService.closeAllForSession("playwright-1.50.1");
+    await fixture?.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed Playwright test command reports a managed-preview blocker before starting tests", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-preview-blocker-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
+      previewFailure: "managed preview did not become ready"
+    });
+    await assert.rejects(
+      execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ...fixture.prepared.env
+        }
+      }),
+      /could not prepare the managed preview.+Project tests were not started.+managed preview did not become ready/isu
+    );
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {
       force: true,
       recursive: true
@@ -150,15 +253,15 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-mismatch-"));
   let fixture;
   try {
-    fixture = await prepareFixture(root, "1.60.0", "1.50.1");
+    fixture = await prepareFixture(root, "1.62.0", "1.61.1");
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
         cwd: fixture.projectRoot
       }),
-      /requires Playwright 1\.60\.0.*does not provide its matching managed browser runtime/isu
+      /requires Playwright 1\.62\.0.*does not provide its matching managed browser runtime/isu
     );
 
-    await createRuntime(fixture.runtimeRoot, "1.60.0");
+    await createRuntime(fixture.runtimeRoot, "1.62.0");
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["install", "chromium"], {
         cwd: fixture.projectRoot
@@ -166,7 +269,7 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
       /Browser installation is never permitted/iu
     );
   } finally {
-    await fixture?.commandService.closeAllForSession("playwright-1.60.0");
+    await fixture?.commandService.closeAllForSession("playwright-1.62.0");
     await rm(root, {
       force: true,
       recursive: true

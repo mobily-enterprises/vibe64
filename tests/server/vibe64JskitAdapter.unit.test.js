@@ -359,6 +359,11 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
+      assert.equal(seedPromptContext.create_app_package_spec, "@jskit-ai/create-app");
+      assert.equal(
+        seedPromptContext.create_app_playwright_option,
+        '--playwright-version "$VIBE64_PLAYWRIGHT_VERSION"'
+      );
       assert.match(seedPromptContext.seed_recipe_contract, /seed guidance is authoritative/u);
       assert.match(seedPromptContext.seed_recipe_contract, /expected pre-scaffold state, not a setup failure/u);
       assert.match(seedPromptContext.seed_recipe_contract, /run `npm install` before inspecting installed-package docs/u);
@@ -399,7 +404,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/assistant-runtime/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/workspaces-core/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /create-app <app-name> --target \. --force/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /@jskit-ai\/create-app <app-name> --target \. --force/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /--playwright-version "\$VIBE64_PLAYWRIGHT_VERSION"/u);
       assert.match(seedPromptContext.seed_issue_guidance, /npx jskit add bundle auth-local/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /local, run `npx jskit add bundle auth-base`/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
@@ -1562,7 +1568,8 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.match(afterPrompt.actionResult.prompt, /Do not start a discovery adventure/u);
     assert.match(afterPrompt.actionResult.prompt, /smallest visible app workflow/u);
     assert.match(afterPrompt.actionResult.prompt, /browser-local state/u);
-    assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
+    assert.match(afterPrompt.actionResult.prompt, /@jskit-ai\/create-app <app-name> --target \. --force/u);
+    assert.match(afterPrompt.actionResult.prompt, /--playwright-version "\$VIBE64_PLAYWRIGHT_VERSION"/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not include `npx jskit list`/u);
     assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);

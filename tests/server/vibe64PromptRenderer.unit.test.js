@@ -300,6 +300,10 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /automatically recovers a killed preview or browser worker/u);
   assert.match(briefing, /vibe64-playwright test/u);
   assert.match(briefing, /exact managed browser version/u);
+  assert.match(briefing, /automatically ensure the current managed preview/u);
+  assert.match(briefing, /supply its agent origin as `PLAYWRIGHT_BASE_URL`/u);
+  assert.match(briefing, /Do not inspect or hard-code managed ports/u);
+  assert.match(briefing, /add Vibe64 URL-discovery helpers/u);
   assert.match(briefing, /Immediately run `vibe64-preview screenshot`/u);
   assert.match(briefing, /read its JSON capture metadata/u);
   assert.match(briefing, /unique immutable `outputPath`, `sha256`/u);

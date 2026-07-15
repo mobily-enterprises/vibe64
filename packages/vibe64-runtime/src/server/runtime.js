@@ -1359,6 +1359,26 @@ class Vibe64SessionRuntime {
     }));
   }
 
+  async recreatePromptContextSnapshotForSession(session) {
+    const adapter = await this.adapterViewForSession({
+      ...session,
+      adapter: null,
+      promptContextSnapshot: null
+    });
+    const promptContextSnapshot = await this.store.writePromptContextSnapshot(
+      session.sessionId,
+      createPromptContextSnapshot({
+        adapter,
+        now: this.now
+      })
+    );
+    return {
+      ...session,
+      adapter: promptContextSnapshot.adapter,
+      promptContextSnapshot
+    };
+  }
+
   async promptSessionForAction(session) {
     const promptContextSnapshot = await this.promptContextSnapshotForSession(session);
     return {
@@ -1512,18 +1532,29 @@ class Vibe64SessionRuntime {
     input = {},
     session
   } = {}) {
-    const promptSession = await this.promptSessionForAction(session);
+    let promptSession = await this.promptSessionForAction(session);
     const promptInput = await inputWithAcceptedPlanForAction(this.store, promptSession, action, input);
-    const sessionBriefingIncluded = !sessionBriefingIsDelivered(promptSession);
-    const actionPromptSession = promptSessionWithStaticContextReferences(promptSession);
-    const renderedPrompt = await this.adapter.renderPrompt({
+    let promptContextRecreated = false;
+    const renderAdapterPrompt = () => this.adapter.renderPrompt({
       action,
       config: this.projectConfig,
       input: promptInput,
       runtime: this,
-      session: actionPromptSession,
+      session: promptSessionWithStaticContextReferences(promptSession),
       store: this.store
     });
+    let renderedPrompt;
+    try {
+      renderedPrompt = await renderAdapterPrompt();
+    } catch (error) {
+      if (normalizeText(error?.code) !== "vibe64_unknown_prompt_token") {
+        throw error;
+      }
+      promptSession = await this.recreatePromptContextSnapshotForSession(promptSession);
+      promptContextRecreated = true;
+      renderedPrompt = await renderAdapterPrompt();
+    }
+    const sessionBriefingIncluded = promptContextRecreated || !sessionBriefingIsDelivered(promptSession);
     const isAgentConversation = agentConversationAction(action);
     const userRequestLeadsPrompt = Boolean(normalizeText(promptInput?.conversationRequest));
     const promptWithActionContext = isAgentConversation

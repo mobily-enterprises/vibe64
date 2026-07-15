@@ -1,16 +1,18 @@
 function agentPlaywrightCommandSource({
   managedNodePath = "",
   managedNpmPath = "",
+  managedPreviewPath = "",
   runtimeRoot = ""
 } = {}) {
   return `#!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 const managedNodePath = ${JSON.stringify(String(managedNodePath || ""))};
 const managedNpmPath = ${JSON.stringify(String(managedNpmPath || ""))};
+const managedPreviewPath = ${JSON.stringify(String(managedPreviewPath || ""))};
 const runtimeRoot = ${JSON.stringify(String(runtimeRoot || ""))};
 
 function fail(message, code = 1) {
@@ -100,10 +102,69 @@ function managedRuntime(version = "") {
   return null;
 }
 
-function childEnv(runtime = {}) {
+function managedPreviewBaseUrl(projectRoot = "") {
+  const explicitBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || "").trim();
+  if (explicitBaseUrl) {
+    return explicitBaseUrl;
+  }
+  if (!path.isAbsolute(managedPreviewPath) || !existsSync(managedPreviewPath)) {
+    fail(
+      "Vibe64 could not select the managed preview for Playwright tests. " +
+      "The session's vibe64-preview command is unavailable. Project tests were not started."
+    );
+  }
+  const result = spawnSync(managedNodePath, [
+    managedPreviewPath,
+    "ensure",
+    "--wait",
+    "--json"
+  ], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: 120_000
+  });
+  const diagnostics = [result.error?.message, result.stderr, result.stdout]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("\\n");
+  if (result.error || result.status !== 0) {
+    fail(
+      "Vibe64 could not prepare the managed preview for Playwright tests. " +
+      "Project tests were not started." +
+      (diagnostics ? "\\n" + diagnostics : "")
+    );
+  }
+  let status;
+  try {
+    status = JSON.parse(String(result.stdout || "{}"));
+  } catch {
+    fail(
+      "Vibe64 returned invalid managed-preview status for Playwright tests. " +
+      "Project tests were not started."
+    );
+  }
+  const endpoint = String(status?.endpoints?.agent?.url || "").trim();
+  try {
+    const url = new URL(endpoint);
+    if (status?.ready !== true || !["http:", "https:"].includes(url.protocol)) {
+      throw new Error("Managed preview is not ready.");
+    }
+    return url.origin;
+  } catch {
+    fail(
+      "Vibe64 did not provide a ready HTTP managed preview for Playwright tests. " +
+      "Project tests were not started."
+    );
+  }
+}
+
+function childEnv(runtime = {}, projectRoot = "") {
   return {
     ...process.env,
     PATH: [path.dirname(runtime.cliPath), process.env.PATH || ""].filter(Boolean).join(":"),
+    PLAYWRIGHT_BASE_URL: managedPreviewBaseUrl(projectRoot),
     PLAYWRIGHT_BROWSERS_PATH: runtime.browsersPath,
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
     VIBE64_MANAGED_PLAYWRIGHT_TEST: "1"
@@ -152,7 +213,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "  vibe64-playwright npm-run <package-script> [-- script arguments]",
     "  vibe64-playwright status",
     "",
-    "The project keeps ordinary portable Playwright tests. Vibe64 supplies only the matching managed browser runtime."
+    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, and selects the matching managed browser runtime."
   ].join("\\n") + "\\n");
   process.exit(0);
 }
@@ -168,7 +229,7 @@ if (command === "status") {
 if (command === "test") {
   run(managedNodePath, [project.cliPath, "test", ...args], {
     cwd: projectRoot,
-    env: childEnv(runtime)
+    env: childEnv(runtime, projectRoot)
   });
 } else if (command === "npm-run") {
   const script = String(args.shift() || "").trim();
@@ -177,7 +238,7 @@ if (command === "test") {
   }
   run(managedNpmPath, ["run", script, ...args], {
     cwd: projectRoot,
-    env: childEnv(runtime)
+    env: childEnv(runtime, projectRoot)
   });
 } else {
   fail("Unsupported managed Playwright command: " + command + ". Browser installation is never permitted.", 64);

@@ -18,13 +18,36 @@
       </div>
     </Transition>
 
+    <Transition name="studio-ai-sessions-closing">
+      <section
+        v-if="selectedSessionClosing"
+        class="studio-ai-sessions__closing-overlay"
+        aria-label="Closing session"
+        aria-live="polite"
+        role="status"
+      >
+        <div class="studio-ai-sessions__closing-card">
+          <v-progress-circular
+            color="primary"
+            indeterminate
+            size="32"
+            width="3"
+          />
+          <strong>Closing session…</strong>
+          <span>Stopping its tools and archiving its state.</span>
+        </div>
+      </section>
+    </Transition>
+
     <div
       v-if="emptyLayoutVisible"
       class="studio-ai-sessions__empty-layout"
+      :aria-hidden="selectedSessionClosing ? 'true' : undefined"
       :class="{
         'studio-ai-sessions__empty-layout--chat-collapsed': chatCollapsed,
         'studio-ai-sessions__empty-layout--dashboard': dashboardProjectActive
       }"
+      :inert="selectedSessionClosing"
     >
       <section
         class="studio-ai-sessions__empty-main"
@@ -115,6 +138,8 @@
     <div
       v-show="runtimeHostSessionIds.length > 0"
       class="studio-ai-sessions__runtime-stack"
+      :aria-hidden="selectedSessionClosing ? 'true' : undefined"
+      :inert="selectedSessionClosing"
     >
       <Vibe64SessionRuntimeHost
         v-for="runtimeSessionId in runtimeHostSessionIds"
@@ -178,6 +203,7 @@ const {
   projectPane,
   runtimeHostSessionIds,
   selectedAbandon,
+  selectedSessionClosing,
   selection,
   sessionData,
   setRuntimeBusy,
@@ -355,6 +381,51 @@ const {
   position: absolute;
   top: 0.85rem;
   z-index: 12;
+}
+
+.studio-ai-sessions__closing-overlay {
+  align-items: center;
+  background: rgba(var(--v-theme-background), 0.92);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  padding: 1rem;
+  position: absolute;
+  z-index: 14;
+}
+
+.studio-ai-sessions__closing-card {
+  align-items: center;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 14px;
+  box-shadow: 0 1rem 2.5rem rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 0.65rem;
+  justify-items: center;
+  max-width: min(100%, 26rem);
+  padding: 1.35rem 1.6rem;
+  text-align: center;
+}
+
+.studio-ai-sessions__closing-card strong {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1rem;
+}
+
+.studio-ai-sessions__closing-card span {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.86rem;
+}
+
+.studio-ai-sessions-closing-enter-active,
+.studio-ai-sessions-closing-leave-active {
+  transition: opacity 120ms ease;
+}
+
+.studio-ai-sessions-closing-enter-from,
+.studio-ai-sessions-closing-leave-to {
+  opacity: 0;
 }
 
 .studio-ai-sessions-error-enter-active,
