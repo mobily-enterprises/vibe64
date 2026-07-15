@@ -4639,6 +4639,54 @@ test("vibe64 runtime returns a quiet agent conversation turn to user control", a
   });
 });
 
+test("vibe64 runtime rejects stale agent-wait recovery inside the session mutation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: sourceMetadata(targetRoot, "stale_agent_control_return"),
+      sessionId: "stale_agent_control_return",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+
+    await runtime.runAction("stale_agent_control_return", "agent_conversation", {
+      conversationRequest: "Explain this codebase."
+    });
+    const waitingForAgent = await runtime.getSession("stale_agent_control_return");
+
+    let releaseConcurrentMutation;
+    let signalConcurrentMutationStarted;
+    const concurrentMutationStarted = new Promise((resolve) => {
+      signalConcurrentMutationStarted = resolve;
+    });
+    const concurrentMutationCanFinish = new Promise((resolve) => {
+      releaseConcurrentMutation = resolve;
+    });
+    const concurrentMutation = runtime.store.mutateSession(
+      "stale_agent_control_return",
+      async () => {
+        signalConcurrentMutationStarted();
+        await concurrentMutationCanFinish;
+      }
+    );
+    await concurrentMutationStarted;
+
+    const recovery = runtime.returnControlFromAgentWait("stale_agent_control_return", {
+      expectedRevision: waitingForAgent.revision,
+      message: "The assistant result was missing."
+    });
+    releaseConcurrentMutation();
+    await concurrentMutation;
+    const returned = await recovery;
+
+    assert.equal(returned.stepMachine.status, "awaiting_agent_result");
+    assert.deepEqual(await runtime.store.readConversationLog("stale_agent_control_return"), []);
+  });
+});
+
 test("vibe64 runtime preserves prompt machine details when returning agent control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

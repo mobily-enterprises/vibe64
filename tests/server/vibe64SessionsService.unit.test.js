@@ -4724,6 +4724,7 @@ test("session inspect reports missing result when a tracked Codex turn completed
     },
     sessionId: "session-completed-agent-turn-without-result",
     status: VIBE64_SESSION_STATUS.ACTIVE,
+    revision: 17,
     stepMachine: {
       status: "awaiting_agent_result"
     }
@@ -4769,6 +4770,7 @@ test("session inspect reports missing result when a tracked Codex turn completed
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
+  assert.equal(inspected.returnControlInput.expectedRevision, 17);
   assert.match(inspected.returnControlInput.inputPrompt, /did not receive its result text/u);
   assert.match(inspected.returnControlInput.message, /did not receive its result text/u);
 });

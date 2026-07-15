@@ -1113,6 +1113,7 @@ async function recoverAgentWaitWithoutProvider(runtime, session = {}, agentState
     sessionId: currentSession.sessionId
   });
   const recovered = await runtime.returnControlFromAgentWait(currentSession.sessionId, {
+    expectedRevision: currentSession.revision,
     inputPrompt,
     message
   });

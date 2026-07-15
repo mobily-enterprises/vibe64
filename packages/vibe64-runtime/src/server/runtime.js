@@ -2035,6 +2035,7 @@ class Vibe64SessionRuntime {
   }
 
   async returnControlFromAgentWait(sessionId, {
+    expectedRevision = null,
     inputPrompt = "What would you like to do?",
     message = "Control back to the user."
   } = {}) {
@@ -2046,6 +2047,14 @@ class Vibe64SessionRuntime {
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.getSession(sessionId);
+        if (expectedRevision !== null && session.revision !== expectedRevision) {
+          vibe64SessionDebugLog("server.runtime.returnControlFromAgentWait.blocked", {
+            ...vibe64SessionDebugSummary(session),
+            expectedRevision,
+            reason: "stale_session_revision"
+          });
+          return session;
+        }
         if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
           vibe64SessionDebugLog("server.runtime.returnControlFromAgentWait.blocked", {
             ...vibe64SessionDebugSummary(session),
