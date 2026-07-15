@@ -417,6 +417,11 @@
           :interrupt-disabled="composerControlInterruptDisabled"
           :interrupt-visible="composerControlInterruptVisible"
           :layout="composerControlLayout"
+          :preview-capture-busy="previewAttachmentState.captureBusy"
+          :preview-capture-visible="previewAttachmentState.captureAvailable"
+          :preview-diagnostics-available="previewAttachmentState.diagnosticsAvailable"
+          :preview-diagnostics-busy="previewAttachmentState.diagnosticsBusy"
+          :preview-diagnostics-visible="composerControlAttachmentsEnabled"
           :running="composerControlRunning"
           :selected-control="composerControlSelectedControl"
           :selected-control-fields="composerControlFields"
@@ -427,7 +432,9 @@
           @answer-choice="submitSelectedAnswerChoice"
           @answer-choice-other="useFreeTextForAnswerChoice"
           @activate-control="activateWorkflowButtonControl"
+          @attach-preview-diagnostics="attachPreviewDiagnostics"
           @cancel="clearSelectedControl"
+          @capture-preview="captureVisiblePreview"
           @composer-menu-item="activateComposerMenuItem"
           @composer-menu-item-text="insertComposerMenuItemText"
           @interrupt="requestAgentInterruptAndFocus"
@@ -768,6 +775,7 @@
           role="tabpanel"
         >
           <Vibe64LaunchControls
+            :attach-preview-file="attachPreviewFile"
             :auto-start-managed-preview="!props.sessionSelectionClosed"
             button-label="Run"
             button-size="small"
@@ -779,6 +787,7 @@
             :session="session"
             :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
+            @preview-attachment-state="updatePreviewAttachmentState"
           />
         </div>
       </section>
@@ -973,6 +982,42 @@ function saveSessionProjectConfig(values = {}) {
       sessionId: props.session?.sessionId || props.session?.id || ""
     });
   }
+}
+
+const previewAttachmentState = ref({
+  attachDiagnostics: null,
+  capture: null,
+  captureAvailable: false,
+  captureBusy: false,
+  diagnosticsAvailable: false,
+  diagnosticsBusy: false
+});
+
+function updatePreviewAttachmentState(state = {}) {
+  previewAttachmentState.value = {
+    attachDiagnostics: typeof state.attachDiagnostics === "function" ? state.attachDiagnostics : null,
+    capture: typeof state.capture === "function" ? state.capture : null,
+    captureAvailable: state.captureAvailable === true,
+    captureBusy: state.captureBusy === true,
+    diagnosticsAvailable: state.diagnosticsAvailable === true,
+    diagnosticsBusy: state.diagnosticsBusy === true
+  };
+}
+
+function captureVisiblePreview() {
+  return previewAttachmentState.value.capture?.();
+}
+
+function attachPreviewDiagnostics() {
+  return previewAttachmentState.value.attachDiagnostics?.();
+}
+
+async function attachPreviewFile(file) {
+  const uploaded = await screenControlFormRef.value?.attachFiles?.([file]);
+  if (!Array.isArray(uploaded) || uploaded.length < 1) {
+    throw new Error("Open the chat composer before attaching a preview file.");
+  }
+  return uploaded[0];
 }
 
 const IMMERSIVE_EDITOR_REVEAL_MS = 140;

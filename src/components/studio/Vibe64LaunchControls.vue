@@ -640,10 +640,20 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar
+      v-model="previewAttachmentNoticeVisible"
+      :color="previewAttachmentNoticeColor"
+      location="bottom center"
+      :timeout="previewAttachmentNoticeColor === 'error' ? 7000 : 2600"
+    >
+      {{ previewAttachmentNoticeText }}
+    </v-snackbar>
   </div>
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiArrowLeft,
@@ -666,6 +676,16 @@ import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import {
   useVibe64LaunchControlsSurface
 } from "@/composables/useVibe64LaunchControlsSurface.js";
+import {
+  useVibe64PreviewCapture
+} from "@/composables/useVibe64PreviewCapture.js";
+import {
+  previewDiagnosticsFile
+} from "@/lib/vibe64PreviewDiagnostics.js";
+
+const emit = defineEmits([
+  "preview-attachment-state"
+]);
 
 const embeddedTerminalStyle = Object.freeze({
   alignSelf: "start",
@@ -680,6 +700,10 @@ const embeddedTerminalStyle = Object.freeze({
 });
 
 const props = defineProps({
+  attachPreviewFile: {
+    default: null,
+    type: Function
+  },
   buttonLabel: {
     default: "Run",
     type: String
@@ -768,8 +792,11 @@ const {
   previewCanShowLog,
   previewCheckAgainVisible,
   previewDisplayedAddress,
+  previewDiagnosticsAvailable,
+  previewDiagnosticsBusy: previewDiagnosticsRequestBusy,
   previewEmptyText,
   previewFrame,
+  previewFrameLoaded,
   previewFrameRequestId,
   previewIssue,
   previewIssueVisible,
@@ -801,6 +828,7 @@ const {
   recoverEmbeddedPreview,
   reloadPreview,
   retryLaunchStatus,
+  requestPreviewDiagnostics,
   resetPreviewAddressDraft,
   savePreviewOptions,
   submitPreviewAddress,
@@ -827,6 +855,91 @@ const {
   toggleTerminal,
   visible
 } = useVibe64LaunchControlsSurface(props);
+
+const {
+  busy: previewCaptureBusy,
+  buttonVisible: previewCaptureButtonVisible,
+  capturePreview: captureVisiblePreview,
+  noticeColor: previewAttachmentNoticeColor,
+  noticeText: previewAttachmentNoticeText,
+  noticeVisible: previewAttachmentNoticeVisible
+} = useVibe64PreviewCapture({
+  attachFile: props.attachPreviewFile,
+  previewDisplayed: () => props.previewDisplayed,
+  previewFrame,
+  previewLoaded: previewFrameLoaded,
+  scopeKey: () => String(props.session?.sessionId || "")
+});
+
+const previewDiagnosticsAttachmentBusy = ref(false);
+const previewDiagnosticsAttachmentAvailable = computed(() => Boolean(
+  previewDiagnosticsAvailable.value &&
+  typeof props.attachPreviewFile === "function"
+));
+let previewDiagnosticsAttachmentSequence = 0;
+
+async function attachPreviewDiagnostics() {
+  if (
+    previewDiagnosticsAttachmentBusy.value ||
+    !previewDiagnosticsAttachmentAvailable.value
+  ) {
+    return false;
+  }
+  previewDiagnosticsAttachmentBusy.value = true;
+  previewAttachmentNoticeVisible.value = false;
+  try {
+    const snapshot = await requestPreviewDiagnostics();
+    previewDiagnosticsAttachmentSequence += 1;
+    const attached = await props.attachPreviewFile(previewDiagnosticsFile(snapshot, {
+      sequence: previewDiagnosticsAttachmentSequence
+    }));
+    if (!attached) {
+      throw new Error("The preview diagnostics file could not be attached to the current message.");
+    }
+    return true;
+  } catch (error) {
+    previewAttachmentNoticeColor.value = "error";
+    previewAttachmentNoticeText.value = String(error?.message || error || "Preview diagnostics could not be attached.");
+    previewAttachmentNoticeVisible.value = true;
+    return false;
+  } finally {
+    previewDiagnosticsAttachmentBusy.value = false;
+  }
+}
+
+watch(
+  [
+    previewCaptureButtonVisible,
+    previewCaptureBusy,
+    previewDiagnosticsAttachmentAvailable,
+    previewDiagnosticsAttachmentBusy,
+    previewDiagnosticsRequestBusy
+  ],
+  ([captureAvailable, captureBusy, diagnosticsAvailable, diagnosticsBusy, diagnosticsRequestBusy]) => {
+    emit("preview-attachment-state", {
+      attachDiagnostics: attachPreviewDiagnostics,
+      capture: captureVisiblePreview,
+      captureAvailable: Boolean(captureAvailable),
+      captureBusy: Boolean(captureBusy),
+      diagnosticsAvailable: Boolean(diagnosticsAvailable),
+      diagnosticsBusy: Boolean(diagnosticsBusy || diagnosticsRequestBusy)
+    });
+  },
+  {
+    immediate: true
+  }
+);
+
+onBeforeUnmount(() => {
+  emit("preview-attachment-state", {
+    attachDiagnostics: null,
+    capture: null,
+    captureAvailable: false,
+    captureBusy: false,
+    diagnosticsAvailable: false,
+    diagnosticsBusy: false
+  });
+});
 </script>
 
 <style scoped>

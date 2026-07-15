@@ -157,8 +157,23 @@
                     @update-setting="updateAgentParameter"
                   />
 
+                  <v-btn
+                    v-if="previewCaptureVisible"
+                    aria-label="Attach visible preview"
+                    class="vibe64-workflow-control-form__tool-button"
+                    density="comfortable"
+                    :disabled="previewCaptureBusy || attachmentToolDisabled"
+                    :icon="mdiEyePlusOutline"
+                    :loading="previewCaptureBusy"
+                    size="small"
+                    title="Attach visible preview"
+                    type="button"
+                    variant="flat"
+                    @click="$emit('capture-preview')"
+                  />
+
                   <v-menu
-                    v-if="composerToolsVisible"
+                    v-if="composerMenuVisible"
                     v-model="attachmentMenuOpen"
                     :close-on-content-click="false"
                     location="top start"
@@ -192,6 +207,18 @@
                       >
                         <v-icon :icon="mdiFileUploadOutline" size="18" />
                         <span>Attach files</span>
+                      </button>
+
+                      <button
+                        v-if="previewDiagnosticsVisible"
+                        class="vibe64-workflow-control-form__attachment-menu-item"
+                        :disabled="!previewDiagnosticsAvailable || previewDiagnosticsBusy || attachmentToolDisabled"
+                        :title="previewDiagnosticsAvailable ? 'Attach console and network diagnostics' : 'Preview diagnostics will be available after the app preview loads.'"
+                        type="button"
+                        @click="requestPreviewDiagnosticsAttachment"
+                      >
+                        <v-icon :icon="mdiConsoleNetworkOutline" size="18" />
+                        <span>{{ previewDiagnosticsBusy ? "Attaching preview diagnostics…" : "Attach console & network" }}</span>
                       </button>
 
                       <v-menu
@@ -382,8 +409,10 @@ import { computed, ref } from "vue";
 import {
   mdiChevronRight,
   mdiClose,
+  mdiConsoleNetworkOutline,
   mdiFileDocumentOutline,
   mdiFileUploadOutline,
+  mdiEyePlusOutline,
   mdiPlus,
   mdiSend,
   mdiStop
@@ -406,7 +435,9 @@ const emit = defineEmits([
   "answer-choice",
   "answer-choice-other",
   "activate-control",
+  "attach-preview-diagnostics",
   "cancel",
+  "capture-preview",
   "composer-menu-item",
   "composer-menu-item-text",
   "interrupt",
@@ -468,6 +499,26 @@ const props = defineProps({
   inputDisabledReason: {
     default: "",
     type: String
+  },
+  previewCaptureBusy: {
+    default: false,
+    type: Boolean
+  },
+  previewCaptureVisible: {
+    default: false,
+    type: Boolean
+  },
+  previewDiagnosticsBusy: {
+    default: false,
+    type: Boolean
+  },
+  previewDiagnosticsAvailable: {
+    default: false,
+    type: Boolean
+  },
+  previewDiagnosticsVisible: {
+    default: false,
+    type: Boolean
   },
   interruptDisabled: {
     default: false,
@@ -606,9 +657,14 @@ const inlineSubmitFieldName = computed(() => {
 const composerMenuItems = computed(() => (Array.isArray(props.composerMenuItems) ? props.composerMenuItems : [])
   .filter((item) => item && item.visible !== false && item.id && item.label));
 const composerMenuGroups = computed(() => composerMenuGroupsForItems(composerMenuItems.value));
-const composerToolsVisible = computed(() => Boolean(
+const composerMenuVisible = computed(() => Boolean(
   props.attachmentsEnabled ||
+  props.previewDiagnosticsVisible ||
   composerMenuItems.value.length
+));
+const composerToolsVisible = computed(() => Boolean(
+  composerMenuVisible.value ||
+  props.previewCaptureVisible
 ));
 const composerToolDisabled = computed(() => Boolean(
   (!props.attachmentsEnabled || attachmentToolDisabled.value) &&
@@ -695,6 +751,19 @@ function chooseAttachmentFiles() {
   attachmentMenuOpen.value = false;
   promptMenuOpen.value = false;
   promptTextareaComponent()?.openFilePicker?.();
+}
+
+function requestPreviewDiagnosticsAttachment() {
+  attachmentMenuOpen.value = false;
+  promptMenuOpen.value = false;
+  emit("attach-preview-diagnostics");
+}
+
+async function attachFiles(files = []) {
+  const component = promptTextareaComponent();
+  return typeof component?.attachFiles === "function"
+    ? component.attachFiles(files)
+    : [];
 }
 
 function composerMenuItemDisabled(item = {}) {
@@ -808,6 +877,7 @@ function focusComposer(options = {}) {
 }
 
 defineExpose({
+  attachFiles,
   composerMenuGroups,
   clearAttachments,
   composerFocusSnapshot,

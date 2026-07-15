@@ -183,6 +183,46 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
   });
 });
 
+test("launch preview proxy never revalidates transformed HTML with upstream validators", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure("session-transformed-cache", `${target.origin}/cached-page`);
+      const previewUrl = new URL(preview.href);
+      const cleanPreviewUrl = new URL(preview.href);
+      cleanPreviewUrl.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      const previewCookieName = previewTokenCookieName(previewUrl.origin);
+      const bootstrapResponse = await fetch(preview.href, {
+        headers: {
+          Accept: "text/html"
+        },
+        redirect: "manual"
+      });
+      const bootstrapCookie = bootstrapResponse.headers.get("set-cookie");
+
+      const response = await fetch(cleanPreviewUrl, {
+        headers: {
+          Accept: "text/html",
+          Cookie: previewCookiePair(bootstrapCookie, previewCookieName),
+          "If-Modified-Since": "Mon, 01 Jan 2024 00:00:00 GMT",
+          "If-None-Match": "\"target-v1\""
+        }
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(response.headers.get("etag"), null);
+      assert.equal(response.headers.get("expires"), null);
+      assert.equal(response.headers.get("last-modified"), null);
+      assert.match(await response.text(), /data-vibe64-preview-bridge="1"/u);
+      assert.equal(target.requests.at(-1)?.ifModifiedSince, "");
+      assert.equal(target.requests.at(-1)?.ifNoneMatch, "");
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("launch preview proxy uses the configured local port range", async () => {
   const port = await unusedLocalPort();
   await withTargetServer(async (target) => {
@@ -1286,6 +1326,8 @@ async function withTargetServer(callback) {
   const server = createServer((request, response) => {
     requests.push({
       host: request.headers.host || "",
+      ifModifiedSince: request.headers["if-modified-since"] || "",
+      ifNoneMatch: request.headers["if-none-match"] || "",
       url: request.url || ""
     });
     if (request.url === "/api/ping") {
@@ -1341,6 +1383,27 @@ async function withTargetServer(callback) {
       response.end(JSON.stringify({
         ok: true
       }));
+      return;
+    }
+    if (request.url === "/cached-page") {
+      if (
+        request.headers["if-none-match"] === "\"target-v1\"" ||
+        request.headers["if-modified-since"] === "Mon, 01 Jan 2024 00:00:00 GMT"
+      ) {
+        response.writeHead(304, {
+          ETag: "\"target-v1\""
+        });
+        response.end();
+        return;
+      }
+      response.writeHead(200, {
+        "Cache-Control": "no-cache",
+        ETag: "\"target-v1\"",
+        Expires: "Wed, 01 Jan 2025 00:00:00 GMT",
+        "Last-Modified": "Mon, 01 Jan 2024 00:00:00 GMT",
+        "Content-Type": "text/html; charset=utf-8"
+      });
+      response.end("<!doctype html><html><head><title>Cached target</title></head><body>Cached target home</body></html>");
       return;
     }
     response.writeHead(200, {

@@ -78,6 +78,7 @@ function normalizePreviewTargetHref(value = "") {
 }
 
 function proxyRequestHeaders(headers = {}, targetUrl, {
+  freshDocument = false,
   previewAuth = null,
   proxyOrigin = "",
   targetHost = ""
@@ -88,6 +89,10 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   delete nextHeaders["content-length"];
   delete nextHeaders.host;
   delete nextHeaders.upgrade;
+  if (freshDocument) {
+    delete nextHeaders["if-modified-since"];
+    delete nextHeaders["if-none-match"];
+  }
   nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
     proxyOrigin
   });
@@ -451,7 +456,11 @@ function responseHeaders(response, {
   }
   delete headers["content-length"];
   if (injected) {
+    headers["cache-control"] = "no-store";
     delete headers["content-encoding"];
+    delete headers.etag;
+    delete headers.expires;
+    delete headers["last-modified"];
   }
   if (headers.location && proxyOrigin && targetOrigin) {
     headers.location = proxiedLocation(headers.location, {
@@ -736,6 +745,7 @@ async function proxyPreviewRequest(request, response, {
     const method = String(request.method || "GET").toUpperCase();
     const fetchOptions = {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
+        freshDocument: requestIsBrowserDocumentNavigation(request),
         previewAuth,
         proxyOrigin,
         targetHost

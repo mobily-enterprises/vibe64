@@ -8,6 +8,9 @@ import {
   useVibe64LaunchControls
 } from "@/composables/useVibe64LaunchControls.js";
 import {
+  PREVIEW_BRIDGE_VERSION,
+  PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
+  PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE
@@ -42,6 +45,7 @@ import {
 const PREVIEW_DISPLAY_QUERY_PARAMS = Object.freeze([
   PREVIEW_PROXY_TOKEN_QUERY_PARAM
 ]);
+const PREVIEW_DIAGNOSTICS_TIMEOUT_MS = 3000;
 
 function previewUrlWithoutDisplayParams(value = "") {
   const text = String(value || "").trim();
@@ -375,6 +379,10 @@ function useVibe64LaunchControlsSurface(props) {
     launchTargets.value.length < 1
   ));
   const previewFrame = ref(null);
+  const previewBridgeVersion = ref(0);
+  const previewDiagnosticsBusy = ref(false);
+  const previewDiagnosticsPendingRequests = new Map();
+  let previewDiagnosticsRequestSequence = 0;
   const previewFrameRequest = ref({
     id: 0,
     identity: "",
@@ -488,6 +496,16 @@ function useVibe64LaunchControlsSurface(props) {
   ));
   const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
   const previewUrl = computed(() => previewFrameRequest.value.src);
+  const previewFrameLoaded = computed(() => Boolean(
+    previewUrl.value &&
+    previewFrameRequestId.value > 0 &&
+    previewLoadedFrameRequestId.value === previewFrameRequestId.value
+  ));
+  const previewDiagnosticsAvailable = computed(() => Boolean(
+    previewFrameLoaded.value &&
+    previewFrame.value?.contentWindow &&
+    previewBridgeVersion.value >= PREVIEW_BRIDGE_VERSION
+  ));
   const previewCheckAgainVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewState.value === "idle" &&
@@ -656,7 +674,25 @@ function useVibe64LaunchControlsSurface(props) {
     }));
   }
 
+  function rejectPreviewDiagnosticsRequests(message = "Preview diagnostics are no longer available.") {
+    for (const pending of previewDiagnosticsPendingRequests.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(message));
+    }
+    previewDiagnosticsPendingRequests.clear();
+    previewDiagnosticsBusy.value = false;
+  }
+
+  function resetPreviewBridge(reason = "") {
+    previewBridgeVersion.value = 0;
+    rejectPreviewDiagnosticsRequests();
+    previewDebugLog("bridge.reset", {
+      reason
+    });
+  }
+
   function clearPreviewFrame(reason = "") {
+    resetPreviewBridge(reason || "frame-cleared");
     if (!previewFrameRequest.value.src) {
       return false;
     }
@@ -695,6 +731,7 @@ function useVibe64LaunchControlsSurface(props) {
     if (!nextIdentity || (!force && nextIdentity === previewFrameRequest.value.identity)) {
       return false;
     }
+    resetPreviewBridge(reason || "frame-requested");
     previewFrameRequest.value = {
       id: previewFrameRequest.value.id + 1,
       identity: nextIdentity,
@@ -930,6 +967,47 @@ function useVibe64LaunchControlsSurface(props) {
       type: PREVIEW_QUERY_MESSAGE_TYPE
     }, "*");
   }
+
+  async function requestPreviewDiagnostics() {
+    if (previewDiagnosticsBusy.value) {
+      throw new Error("Preview diagnostics are already being collected.");
+    }
+    if (!previewDiagnosticsAvailable.value) {
+      throw new Error("Preview diagnostics are not available for the current app page.");
+    }
+    const contentWindow = previewFrame.value?.contentWindow;
+    const requestId = [
+      previewFrameRequestId.value,
+      Date.now(),
+      ++previewDiagnosticsRequestSequence
+    ].join(":");
+    previewDiagnosticsBusy.value = true;
+    const response = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        previewDiagnosticsPendingRequests.delete(requestId);
+        reject(new Error("The proxied app did not return its diagnostics in time."));
+      }, PREVIEW_DIAGNOSTICS_TIMEOUT_MS);
+      previewDiagnosticsPendingRequests.set(requestId, {
+        reject,
+        resolve,
+        timeout
+      });
+    });
+    try {
+      contentWindow.postMessage({
+        requestId,
+        type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE
+      }, "*");
+      return await response;
+    } finally {
+      const pending = previewDiagnosticsPendingRequests.get(requestId);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        previewDiagnosticsPendingRequests.delete(requestId);
+      }
+      previewDiagnosticsBusy.value = false;
+    }
+  }
   
   function handlePreviewFrameLoad(event) {
     const frame = event?.currentTarget || null;
@@ -944,6 +1022,7 @@ function useVibe64LaunchControlsSurface(props) {
       });
       return;
     }
+    resetPreviewBridge("iframe-loaded");
     previewLoadedFrameRequestId.value = requestId;
     previewDebugLog("iframe.loaded", {
       requestId
@@ -1108,10 +1187,13 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   function isPreviewBridgeMessage(value = {}) {
-    return previewMessageType(value) === PREVIEW_LOCATION_MESSAGE_TYPE;
+    return [
+      PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+      PREVIEW_LOCATION_MESSAGE_TYPE
+    ].includes(previewMessageType(value));
   }
 
-  function handlePreviewLocationMessage(event) {
+  function handlePreviewBridgeMessage(event) {
     if (!isPreviewBridgeMessage(event?.data)) {
       return;
     }
@@ -1129,6 +1211,21 @@ function useVibe64LaunchControlsSurface(props) {
         origin: String(event?.origin || ""),
         reason: "origin_not_allowed"
       });
+      return;
+    }
+    previewBridgeVersion.value = Math.max(
+      previewBridgeVersion.value,
+      Math.max(0, Number(event?.data?.version) || 0)
+    );
+    if (previewMessageType(event.data) === PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE) {
+      const requestId = String(event.data?.requestId || "");
+      const pending = previewDiagnosticsPendingRequests.get(requestId);
+      if (!pending) {
+        return;
+      }
+      clearTimeout(pending.timeout);
+      previewDiagnosticsPendingRequests.delete(requestId);
+      pending.resolve(event.data?.diagnostics || {});
       return;
     }
     const frameUrl = previewMessageUrl(event.data);
@@ -1225,11 +1322,12 @@ function useVibe64LaunchControlsSurface(props) {
   });
   
   onMounted(() => {
-    window.addEventListener("message", handlePreviewLocationMessage);
+    window.addEventListener("message", handlePreviewBridgeMessage);
   });
   
   onBeforeUnmount(() => {
-    window.removeEventListener("message", handlePreviewLocationMessage);
+    window.removeEventListener("message", handlePreviewBridgeMessage);
+    rejectPreviewDiagnosticsRequests();
   });
 
   return {
@@ -1274,9 +1372,12 @@ function useVibe64LaunchControlsSurface(props) {
     previewCheckAgainVisible,
     previewDisplayedAddress,
     previewDisplayedUrl,
+    previewDiagnosticsAvailable,
+    previewDiagnosticsBusy,
     previewEmbedUnavailableReason,
     previewEmptyText,
     previewFrame,
+    previewFrameLoaded,
     previewFrameRequestId,
     previewIssue,
     previewIssueVisible,
@@ -1314,6 +1415,7 @@ function useVibe64LaunchControlsSurface(props) {
     recoverEmbeddedPreview,
     reloadPreview,
     retryLaunchStatus,
+    requestPreviewDiagnostics,
     resetPreviewAddressDraft,
     savePreviewOptions,
     submitPreviewRouteDialog,

@@ -310,6 +310,10 @@ function clearAttachments() {
   return true;
 }
 
+async function attachFiles(files = []) {
+  return attachments.uploadFiles(files);
+}
+
 async function handleFileInputChange(event = {}) {
   await attachments.uploadFiles(event?.target?.files);
   if (event?.target) {
@@ -350,6 +354,7 @@ watch(() => [
 ], queueResizeTextarea);
 
 defineExpose({
+  attachFiles,
   clearAttachments,
   openFilePicker
 });

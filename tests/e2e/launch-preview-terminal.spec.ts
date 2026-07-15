@@ -51,6 +51,212 @@ test("@preview-lifecycle renders through the proxy and displays the target URL",
   ).toBeVisible();
 });
 
+test("@preview-lifecycle attaches multiple visible preview frames and stops each shared tab stream", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as typeof window & { __vibe64PreviewCaptureCalls?: number }).__vibe64PreviewCaptureCalls = 0;
+    (window as typeof window & { __vibe64PreviewCaptureTracks?: MediaStreamTrack[] }).__vibe64PreviewCaptureTracks = [];
+    Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+      configurable: true,
+      value: async () => {
+        (window as typeof window & { __vibe64PreviewCaptureCalls?: number }).__vibe64PreviewCaptureCalls =
+          Number((window as typeof window & { __vibe64PreviewCaptureCalls?: number }).__vibe64PreviewCaptureCalls || 0) + 1;
+        const canvas = document.createElement("canvas");
+        canvas.height = window.innerHeight;
+        canvas.width = window.innerWidth;
+        const context = canvas.getContext("2d");
+        const captureStream = canvas.captureStream(30);
+        const track = captureStream.getVideoTracks()[0];
+        (window as typeof window & { __vibe64PreviewCaptureTracks?: MediaStreamTrack[] })
+          .__vibe64PreviewCaptureTracks?.push(track);
+        let frame = 0;
+        const paintFrame = () => {
+          if (track.readyState === "ended") {
+            return;
+          }
+          if (context) {
+            context.fillStyle = frame % 2 === 0 ? "#102030" : "#102031";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          frame += 1;
+          window.requestAnimationFrame(paintFrame);
+        };
+        paintFrame();
+        return captureStream;
+      }
+    });
+  });
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page, {
+    previewResponseDelayMs: 800
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`, {
+    waitUntil: "domcontentloaded"
+  });
+
+  const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
+  const composerTools = page.locator(".vibe64-workflow-control-form__composer-tools");
+  const captureButton = composerTools.getByRole("button", {
+    name: "Attach visible preview"
+  });
+  await expect(
+    page.locator(".vibe64-launch-controls__toolbar").getByRole("button", {
+      name: "Attach visible preview"
+    })
+  ).toHaveCount(0);
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toBeVisible();
+  await expect(captureButton).toHaveCount(0);
+  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
+    .toBeVisible();
+  await expect(captureButton).toBeVisible();
+  await expect(composerTools.getByRole("button", {
+    name: "Composer menu"
+  })).toBeVisible();
+
+  await captureButton.click();
+  await expect(page.locator(".studio-autopilot-prompt-textarea__attachment")).toHaveCount(1);
+  await captureButton.click();
+  await expect(page.locator(".studio-autopilot-prompt-textarea__attachment")).toHaveCount(2);
+  expect(launchSession.getAttachmentUploads()).toHaveLength(2);
+  expect(launchSession.getAttachmentUploads().every((upload) => (
+    upload.contentType === "image/png" &&
+    /^vibe64-preview-.*\.png$/u.test(upload.fileName) &&
+    upload.dataBase64.length > 0
+  ))).toBe(true);
+  expect(await page.evaluate(() => ({
+    calls: Number((window as typeof window & { __vibe64PreviewCaptureCalls?: number }).__vibe64PreviewCaptureCalls || 0),
+    trackStates: ((window as typeof window & { __vibe64PreviewCaptureTracks?: MediaStreamTrack[] })
+      .__vibe64PreviewCaptureTracks || []).map((track) => track.readyState)
+  }))).toEqual({
+    calls: 2,
+    trackStates: ["ended", "ended"]
+  });
+
+  await previewFrame.evaluate((frame) => {
+    frame.style.transform = "translateX(-200vw)";
+  });
+  await expect(captureButton).toHaveCount(0);
+  await previewFrame.evaluate((frame) => {
+    frame.style.transform = "";
+  });
+  await expect(captureButton).toBeVisible();
+
+  await page.getByRole("tab", {
+    name: "Dashboard"
+  }).click();
+  await expect(captureButton).toHaveCount(0);
+  await page.getByRole("tab", {
+    name: "Preview"
+  }).click();
+  await expect(captureButton).toBeVisible();
+});
+
+test("@preview-lifecycle attaches isolated proxied-app console and network diagnostics", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page);
+  await page.route("http://127.0.0.1:49000/api/diagnostics", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        message: "validation failed"
+      }),
+      contentType: "application/json",
+      headers: {
+        "x-preview-diagnostic": "captured"
+      },
+      status: 422
+    });
+  });
+  await page.route("http://127.0.0.1:49000/assets/routine-resource.svg*", async (route) => {
+    await route.fulfill({
+      body: "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>",
+      contentType: "image/svg+xml",
+      status: 200
+    });
+  });
+  await page.route("http://127.0.0.1:49000/assets/missing-resource.svg", async (route) => {
+    await route.fulfill({
+      body: "not found",
+      contentType: "text/plain",
+      status: 404
+    });
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
+    .toBeVisible();
+  await page.evaluate(() => {
+    console.error("studio-console-must-not-be-attached");
+  });
+  await page.frameLocator(".vibe64-launch-controls__preview-frame").locator("body").evaluate(async () => {
+    console.log("proxied-console-log", {
+      answer: 42
+    });
+    console.error("proxied-console-error");
+    const response = await fetch("/api/diagnostics", {
+      body: JSON.stringify({
+        accountId: 7
+      }),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    });
+    await response.text();
+    const loadImage = (src: string) => new Promise<void>((resolve) => {
+      const image = document.createElement("img");
+      image.addEventListener("error", () => {
+        image.remove();
+        resolve();
+      }, { once: true });
+      image.addEventListener("load", () => {
+        image.remove();
+        resolve();
+      }, { once: true });
+      image.src = src;
+      document.body.append(image);
+    });
+    await Promise.all(Array.from({ length: 275 }, (_, index) => (
+      loadImage(`/assets/routine-resource.svg?index=${index}`)
+    )));
+    await loadImage("/assets/missing-resource.svg");
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+  });
+
+  await page.getByRole("button", {
+    name: "Composer menu"
+  }).click();
+  const attachDiagnostics = page.getByRole("button", {
+    name: "Attach console & network"
+  });
+  await expect(attachDiagnostics).toBeVisible();
+  await attachDiagnostics.click();
+  await expect(page.locator(".studio-autopilot-prompt-textarea__attachment")).toHaveCount(1);
+  await expect.poll(() => launchSession.getAttachmentUploads().length).toBe(1);
+
+  const [upload] = launchSession.getAttachmentUploads();
+  const diagnostics = Buffer.from(upload.dataBase64, "base64").toString("utf8");
+  expect(upload.contentType).toBe("text/plain");
+  expect(upload.fileName).toMatch(/^vibe64-preview-diagnostics-.*\.log$/u);
+  expect(diagnostics).toContain("## Console");
+  expect(diagnostics).toContain("proxied-console-log {\"answer\":42}");
+  expect(diagnostics).toContain("proxied-console-error");
+  expect(diagnostics).toContain("## Network");
+  expect(diagnostics).toContain("POST http://127.0.0.1:4103/api/diagnostics");
+  expect(diagnostics).toContain("422");
+  expect(diagnostics).toContain("{\"accountId\":7}");
+  expect(diagnostics).toContain("{\"message\":\"validation failed\"}");
+  expect(diagnostics).toContain("GET http://127.0.0.1:4103/assets/missing-resource.svg");
+  expect(diagnostics).toContain("Resource failed to load");
+  expect(diagnostics).not.toContain("routine-resource.svg");
+  const suppressedResourceCount = diagnostics.match(/Routine passive resource entries omitted: (\d+)/u);
+  expect(Number(suppressedResourceCount?.[1] || 0)).toBeGreaterThanOrEqual(275);
+  expect(diagnostics).not.toContain("studio-console-must-not-be-attached");
+  expect(diagnostics).not.toContain("VIBE64_SESSION_DEBUG");
+  expect(diagnostics).not.toContain("vibe64_preview_token");
+});
+
 test("@preview-lifecycle address bar navigates within the preview and goes back", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
@@ -935,6 +1141,11 @@ async function mockLaunchSession(page: Page, {
   const sourceEditor = sourceEditorFiles ? createSourceEditorMock(sourceEditorFiles) : null;
   const queuedSourceExplanationResponses = [...sourceExplanationResponses];
   const launchStartPayloads: unknown[] = [];
+  const attachmentUploads: Array<{
+    contentType: string;
+    dataBase64: string;
+    fileName: string;
+  }> = [];
   const sequencedLaunchStatuses = Array.isArray(launchStatusSequence) ? launchStatusSequence : [];
   let launchStarted = sequencedLaunchStatuses.length > 0
     ? Boolean((sequencedLaunchStatuses[0] as { activeTerminal?: unknown })?.activeTerminal)
@@ -1025,6 +1236,29 @@ async function mockLaunchSession(page: Page, {
       });
       return;
     }
+    if (method === "POST" && url.pathname.endsWith("/agent-attachments")) {
+      const payload = request.postDataJSON() as {
+        contentType?: string;
+        dataBase64?: string;
+        fileName?: string;
+      };
+      const attachment = {
+        contentType: String(payload.contentType || ""),
+        dataBase64: String(payload.dataBase64 || ""),
+        fileName: String(payload.fileName || "attachment")
+      };
+      attachmentUploads.push(attachment);
+      await fulfillJson(route, {
+        attachmentId: `attachment-${attachmentUploads.length}`,
+        contentType: attachment.contentType,
+        expiresInMs: 300_000,
+        fileName: attachment.fileName,
+        ok: true,
+        path: `/tmp/vibe64-attachments/${attachment.fileName}`,
+        size: Buffer.from(attachment.dataBase64, "base64").length
+      });
+      return;
+    }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/tree")) {
       await fulfillJson(route, sourceEditor.readTree({
         limit: Number(url.searchParams.get("limit") || 20),
@@ -1108,6 +1342,9 @@ async function mockLaunchSession(page: Page, {
     },
     getLaunchStartPayloads() {
       return launchStartPayloads;
+    },
+    getAttachmentUploads() {
+      return [...attachmentUploads];
     },
     getLaunchStatusRequestCount() {
       return launchStatusReadCount;
