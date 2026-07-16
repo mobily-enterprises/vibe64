@@ -5274,6 +5274,8 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
           providerThreadId: threadId,
           providerTurnId: turnId,
           state: "finalizing",
+          stepId: "maintenance_conversation",
+          stepStatus: "awaiting_agent_result",
           updatedAt: "2000-01-01T00:00:00.000Z",
           workflowResultContract
         })
@@ -5760,6 +5762,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       stateRoot,
       status: "active",
       stepMachine: {
+        from: "ready",
         status: "awaiting_agent_result"
       },
       targetRoot

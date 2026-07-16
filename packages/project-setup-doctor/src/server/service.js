@@ -99,6 +99,11 @@ import {
   normalizeWorkflowRepositoryProfile,
   workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
+import {
+  PROJECT_SETUP_KIND_INITIALIZATION,
+  PROJECT_SETUP_KIND_SEED,
+  projectSetupSessionKind
+} from "@local/vibe64-core/shared/projectSetup";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
 const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
@@ -108,7 +113,6 @@ const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
 const PROJECT_BOOTSTRAP_REPOSITORY_SOURCES = new Set([
   "github-created"
 ]);
-const SEED_APPLICATION_WORKFLOW_DEFINITION_ID = "seed_application";
 const PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
 const PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL = WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
@@ -352,27 +356,52 @@ async function sortedDirectoryNames(root = "") {
   }
 }
 
-async function readSeedSessionBootstrapState(projectRuntimeRoot = "") {
+async function readProjectSetupSessionState(projectRuntimeRoot = "", expectedKind = "") {
   const activeSessionsRoot = path.join(projectRuntimeRoot, "sessions", "active");
   const sessionIds = await sortedDirectoryNames(activeSessionsRoot);
   for (const sessionId of sessionIds) {
     const sessionRoot = path.join(activeSessionsRoot, sessionId);
     const metadataRoot = path.join(sessionRoot, "metadata");
-    const workflowDefinition = normalizeSetupText(
-      await readTextFile(path.join(metadataRoot, "workflow_definition"))
-    );
-    if (workflowDefinition !== SEED_APPLICATION_WORKFLOW_DEFINITION_ID) {
+    const [workflowDefinition, workSource] = await Promise.all([
+      readTextFile(path.join(metadataRoot, "workflow_definition")),
+      readTextFile(path.join(metadataRoot, "work_source"))
+    ]);
+    const kind = projectSetupSessionKind({
+      metadata: {
+        workflow_definition: normalizeSetupText(workflowDefinition),
+        work_source: normalizeSetupText(workSource)
+      }
+    });
+    if (kind !== normalizeSetupText(expectedKind)) {
       continue;
     }
     const status = normalizeSetupText(await readTextFile(path.join(sessionRoot, "status"))) || "active";
     const currentStep = normalizeSetupText(await readTextFile(path.join(sessionRoot, "current_step")));
     return {
       currentStep,
+      kind,
       sessionId,
       status
     };
   }
   return null;
+}
+
+function initializationReadiness(session = {}) {
+  const needsAttention = session.status === "blocked";
+  return {
+    initializationSessionId: session.sessionId,
+    initializationSessionStatus: session.status,
+    initializationSessionStep: session.currentStep,
+    label: needsAttention ? "Initialization needs attention" : "Initialization in progress",
+    progressText: needsAttention
+      ? `Initialization session ${session.sessionId} needs attention before it can commit the Vibe64 project config.`
+      : `Initialization session ${session.sessionId} is preparing the Vibe64 project config for its first commit.`,
+    ready: false,
+    reason: needsAttention ? "initialization_needs_attention" : "initialization_in_progress",
+    state: "waiting",
+    title: needsAttention ? "Initialization needs attention" : "Initialization in progress"
+  };
 }
 
 function seedBootstrapReadiness(seedSession = null) {
@@ -2258,7 +2287,10 @@ function createService({
             commit = await runGitCache(gitDir, ["rev-parse", "--verify", `${ref}^{commit}`]);
           } catch (error) {
             if (projectUsesBootstrapRepository(context.project) && await gitCacheRefIsMissing(gitDir, ref)) {
-              const seedSession = await readSeedSessionBootstrapState(context.projectRuntimeRoot);
+              const seedSession = await readProjectSetupSessionState(
+                context.projectRuntimeRoot,
+                PROJECT_SETUP_KIND_SEED
+              );
               context.committedBaselineDeferred = true;
               context.committedBaselineRef = ref;
               context.readiness = seedBootstrapReadiness(seedSession);
@@ -2357,6 +2389,22 @@ function createService({
           }
           const projectType = projectTypeResponse?.projectType || {};
           if (projectType.ready !== true) {
+            if (projectType.errorCode === "vibe64_committed_project_type_missing") {
+              const initializationSession = await readProjectSetupSessionState(
+                context.projectRuntimeRoot,
+                PROJECT_SETUP_KIND_INITIALIZATION
+              );
+              if (initializationSession) {
+                context.readiness = initializationReadiness(initializationSession);
+                return pendingCheck({
+                  id: "committed-config",
+                  label: "Committed Vibe64 config",
+                  expected: "Committed Vibe64 project config is readable from committed state.",
+                  observed: `Initialization session ${initializationSession.sessionId} has not committed vibe64.project.json yet.`,
+                  explanation: "Project Setup will read the config after the initialization workflow commits its source-owned Vibe64 files."
+                });
+              }
+            }
             return blockedCheck({
               id: "committed-config",
               label: "Committed Vibe64 config",

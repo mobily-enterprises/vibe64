@@ -44,7 +44,8 @@
     "./server/runtimeConfig": "./src/server/runtimeConfig.js",
     "./server/runtimeToolchain": "./src/server/runtimeToolchain.js",
     "./server/envUserValues": "./src/server/envUserValues.js",
-    "./shared": "./src/shared/index.js"
+    "./shared": "./src/shared/index.js",
+    "./shared/projectSetup": "./src/shared/projectSetup.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",

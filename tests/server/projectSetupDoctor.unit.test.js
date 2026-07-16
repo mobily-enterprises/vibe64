@@ -775,6 +775,102 @@ test("Project Setup reads catalog Git cache from the project record git cache ro
   });
 });
 
+test("Project Setup waits for active existing-app initialization to commit project config", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await withTemporaryRoot(async (sourceRepo) => {
+      await createCommittedGitRepository(sourceRepo);
+      const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+      await mkdir(path.dirname(gitCacheRepository), {
+        recursive: true
+      });
+      const clone = spawnSync("git", ["clone", "--bare", sourceRepo, gitCacheRepository], {
+        encoding: "utf8"
+      });
+      assert.equal(clone.status, 0, clone.stderr || clone.stdout);
+
+      const project = await createManagedBootstrapProject(projectRoot, {
+        defaultBranch: "main",
+        repositorySource: "github-imported",
+        slug: "existing-app"
+      });
+      const initializationSessionId = "2026-07-15_15-50-10";
+      const initializationSessionRoot = path.join(
+        projectRoot,
+        "sessions",
+        "active",
+        initializationSessionId
+      );
+      await mkdir(path.join(initializationSessionRoot, "metadata"), {
+        recursive: true
+      });
+      await Promise.all([
+        writeFile(path.join(initializationSessionRoot, "status"), "active\n", "utf8"),
+        writeFile(path.join(initializationSessionRoot, "current_step"), "existing_application_reviewed\n", "utf8"),
+        writeFile(path.join(initializationSessionRoot, "metadata", "work_source"), "initialization\n", "utf8"),
+        writeFile(
+          path.join(initializationSessionRoot, "metadata", "workflow_definition"),
+          "initialize_existing_application\n",
+          "utf8"
+        )
+      ]);
+      let readCommittedProjectConfigCalls = 0;
+      const service = createService({
+        projectService: {
+          currentProjectRuntimeRoot() {
+            return projectRoot;
+          },
+          currentProjectSourceRoot() {
+            return "";
+          },
+          currentTargetRoot() {
+            return projectRoot;
+          },
+          async listProjects() {
+            return {
+              currentProject: project,
+              hasSelection: true,
+              ok: true,
+              projects: [project],
+              targetRoot: projectRoot
+            };
+          },
+          async readCommittedProjectConfig() {
+            readCommittedProjectConfigCalls += 1;
+            throw new Error("Uncommitted initialization config must not be read as committed state.");
+          },
+          async readCommittedProjectType() {
+            return {
+              ok: true,
+              projectType: {
+                errorCode: "vibe64_committed_project_type_missing",
+                message: "Committed vibe64.project.json is missing.",
+                ready: false,
+                status: "missing"
+              }
+            };
+          },
+          selectedProject: project
+        }
+      });
+
+      const status = await service.streamStatus({
+        emit() {}
+      });
+
+      assert.equal(status.ready, false);
+      assert.equal(status.currentStageId, "committed-config");
+      assert.equal(status.readiness?.reason, "initialization_in_progress");
+      assert.equal(status.readiness?.initializationSessionId, initializationSessionId);
+      assert.equal(readCommittedProjectConfigCalls, 0);
+      assert.equal(status.stages.find((stage) => stage.id === "committed-config")?.status, "pending");
+      assert.match(
+        status.stages.find((stage) => stage.id === "committed-config")?.observed || "",
+        new RegExp(initializationSessionId, "u")
+      );
+    });
+  });
+});
+
 test("Project Setup reports seed required instead of blocked for an empty Vibe64-created repo", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await createEmptyBareGitCache(projectRoot);

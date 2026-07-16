@@ -3930,6 +3930,7 @@ function createCodexTerminalController({
 
       const visibleText = finalResult?.conversationText || assistantText;
       if (visibleText && codexAppServerTurnAcceptsPlainAgentResponse(session, threadId, turnId)) {
+        const run = codexAppServerAgentRun(session);
         const applied = await applyCodexAppServerAgentResult(
           runtime,
           session,
@@ -3937,8 +3938,8 @@ function createCodexTerminalController({
             fields: {},
             kind: "ready",
             source: "codex",
-            stepId: normalizeText(session.currentStep),
-            stepStatus: normalizeText(session.stepMachine?.from || session.stepMachine?.status)
+            stepId: normalizeText(run?.stepId),
+            stepStatus: normalizeText(run?.stepStatus)
           },
           visibleText,
           threadId,
