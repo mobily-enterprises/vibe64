@@ -1,17 +1,25 @@
-const JSKIT_AUTH_PROVIDER_CONFIG = "jskit_auth_provider";
-const JSKIT_AUTH_LOCAL_BACKEND_CONFIG = "jskit_auth_local_backend";
-const JSKIT_SUPABASE_PROJECT_URL_CONFIG = "jskit_supabase_project_url";
-const JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG = "jskit_supabase_publishable_key";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { isPlainObject } from "@local/vibe64-core/server/core";
 
+const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
+const JSKIT_USER_MODE_CONFIG = "jskit_users";
+const JSKIT_USER_MODE_USERS = "users";
+const JSKIT_USER_MODE_NONE = "none";
+
+const JSKIT_AUTH_PROVIDER_NONE = "none";
 const JSKIT_AUTH_PROVIDER_LOCAL = "local";
 const JSKIT_AUTH_PROVIDER_SUPABASE = "supabase";
 const JSKIT_AUTH_LOCAL_BACKEND_FILE = "file";
 const JSKIT_AUTH_LOCAL_BACKEND_DB = "db";
-const JSKIT_APP_AUTH_ENVIRONMENT_DEV = "dev";
-const JSKIT_APP_AUTH_ENVIRONMENT_PROD = "prod";
 const JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY = "jskitAppAuth";
 
+const JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE = "@jskit-ai/auth-provider-local-core";
+const JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE = "@jskit-ai/auth-provider-local-db-core";
+const JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE = "@jskit-ai/auth-provider-supabase-core";
+
 const JSKIT_AUTH_PROVIDERS = Object.freeze([
+  JSKIT_AUTH_PROVIDER_NONE,
   JSKIT_AUTH_PROVIDER_LOCAL,
   JSKIT_AUTH_PROVIDER_SUPABASE
 ]);
@@ -21,191 +29,202 @@ const JSKIT_AUTH_LOCAL_BACKENDS = Object.freeze([
   JSKIT_AUTH_LOCAL_BACKEND_DB
 ]);
 
-const JSKIT_LOCAL_AUTH_CONDITION = Object.freeze({
-  equals: JSKIT_AUTH_PROVIDER_LOCAL,
-  field: JSKIT_AUTH_PROVIDER_CONFIG
-});
+const JSKIT_USER_MODES = Object.freeze([
+  JSKIT_USER_MODE_USERS,
+  JSKIT_USER_MODE_NONE
+]);
 
-const JSKIT_SUPABASE_CONDITION = Object.freeze({
-  equals: JSKIT_AUTH_PROVIDER_SUPABASE,
-  field: JSKIT_AUTH_PROVIDER_CONFIG
-});
+const JSKIT_USER_CONFIG_FIELDS = Object.freeze([
+  {
+    defaultValue: JSKIT_USER_MODE_USERS,
+    description: "Whether this app has people who sign in. Vibe64 uses local JSKIT accounts; their storage follows the selected database runtime.",
+    id: JSKIT_USER_MODE_CONFIG,
+    label: "User accounts",
+    options: [
+      {
+        description: "People have accounts and sign in to the app.",
+        label: "Users",
+        value: JSKIT_USER_MODE_USERS
+      },
+      {
+        description: "Anyone can use the app without signing in.",
+        label: "No users",
+        value: JSKIT_USER_MODE_NONE
+      }
+    ],
+    sectionId: "jskit_auth",
+    sectionLabel: "JSKIT authentication",
+    type: "select"
+  }
+]);
 
 function configValues(projectConfig = {}) {
-  return projectConfig?.values && typeof projectConfig.values === "object"
+  return isPlainObject(projectConfig?.values)
     ? projectConfig.values
     : projectConfig;
 }
 
-function normalizeJskitAuthProvider(value = "", {
-  fallback = JSKIT_AUTH_PROVIDER_LOCAL
-} = {}) {
+function normalizeChoice(value, choices, fallback) {
   const normalized = String(value || "").trim().toLowerCase();
-  return JSKIT_AUTH_PROVIDERS.includes(normalized)
-    ? normalized
-    : fallback;
+  return choices.includes(normalized) ? normalized : fallback;
 }
 
-function normalizeJskitAuthLocalBackend(value = "", {
-  fallback = JSKIT_AUTH_LOCAL_BACKEND_FILE
-} = {}) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return JSKIT_AUTH_LOCAL_BACKENDS.includes(normalized)
-    ? normalized
-    : fallback;
+function jskitDatabaseRuntime(projectConfig = {}) {
+  const value = String(configValues(projectConfig)?.[JSKIT_DATABASE_RUNTIME_CONFIG] || "").trim().toLowerCase();
+  return ["none", "mariadb", "postgres"].includes(value) ? value : "mariadb";
 }
 
-function normalizeJskitAppAuthEnvironment(value = "", {
-  fallback = JSKIT_APP_AUTH_ENVIRONMENT_DEV
-} = {}) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return [
-    JSKIT_APP_AUTH_ENVIRONMENT_DEV,
-    JSKIT_APP_AUTH_ENVIRONMENT_PROD
-  ].includes(normalized)
-    ? normalized
-    : fallback;
+function jskitUserMode(projectConfig = {}) {
+  return normalizeChoice(
+    configValues(projectConfig)?.[JSKIT_USER_MODE_CONFIG],
+    JSKIT_USER_MODES,
+    JSKIT_USER_MODE_USERS
+  );
 }
 
-function jskitProjectAppAuthConfig(projectConfig = {}, {
-  environment = JSKIT_APP_AUTH_ENVIRONMENT_DEV
-} = {}) {
-  const values = configValues(projectConfig);
-  const provider = normalizeJskitAuthProvider(values?.[JSKIT_AUTH_PROVIDER_CONFIG]);
-  return {
-    environment: normalizeJskitAppAuthEnvironment(environment),
-    localBackend: normalizeJskitAuthLocalBackend(values?.[JSKIT_AUTH_LOCAL_BACKEND_CONFIG]),
-    provider,
-    supabaseProjectUrl: String(values?.[JSKIT_SUPABASE_PROJECT_URL_CONFIG] || "").trim(),
-    supabasePublishableKey: String(values?.[JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG] || "").trim()
-  };
+function jskitManagedDatabaseEnabled(projectConfig = {}) {
+  return jskitDatabaseRuntime(projectConfig) === "mariadb";
 }
 
-function jskitLocalAuthConfigUsesDatabase(projectConfig = {}) {
-  const auth = jskitProjectAppAuthConfig(projectConfig);
-  return auth.provider === JSKIT_AUTH_PROVIDER_LOCAL &&
-    auth.localBackend === JSKIT_AUTH_LOCAL_BACKEND_DB;
-}
-
-function jskitAppAuthConfigFields() {
-  return [
-    {
-      defaultValue: JSKIT_AUTH_PROVIDER_LOCAL,
-      description: "Authentication provider JSKIT should prepare when the generated app needs sign-in. Local uses JSKIT username/password auth; Supabase is optional and configured by the JSKIT adapter.",
-      id: JSKIT_AUTH_PROVIDER_CONFIG,
-      label: "Auth provider",
-      options: [
-        {
-          description: "Use JSKIT local username/password auth when the generated app needs sign-in.",
-          label: "Local",
-          value: JSKIT_AUTH_PROVIDER_LOCAL
-        },
-        {
-          description: "Use Supabase Auth. Configure its URL and publishable key in project Config before seeding or running login-backed workflows.",
-          label: "Supabase",
-          value: JSKIT_AUTH_PROVIDER_SUPABASE
-        }
-      ],
-      sectionId: "jskit_auth",
-      sectionLabel: "JSKIT authentication",
-      type: "select"
-    },
-    {
-      defaultValue: JSKIT_AUTH_LOCAL_BACKEND_FILE,
-      description: "Storage backend for JSKIT local username/password auth. File stores credentials under the app; Database stores them in the Vibe64-managed database.",
-      id: JSKIT_AUTH_LOCAL_BACKEND_CONFIG,
-      label: "Local auth backend",
-      options: [
-        {
-          description: "Use JSKIT local auth with file-backed storage.",
-          label: "File",
-          value: JSKIT_AUTH_LOCAL_BACKEND_FILE
-        },
-        {
-          description: "Use JSKIT local auth with database-backed storage.",
-          label: "Database",
-          value: JSKIT_AUTH_LOCAL_BACKEND_DB
-        }
-      ],
-      requiredWhen: JSKIT_LOCAL_AUTH_CONDITION,
-      sectionId: "jskit_auth",
-      sectionLabel: "JSKIT authentication",
-      type: "select",
-      visibleWhen: JSKIT_LOCAL_AUTH_CONDITION
-    },
-    {
-      defaultValue: "",
-      description: "Supabase Project URL used only when JSKIT auth provider is Supabase.",
-      id: JSKIT_SUPABASE_PROJECT_URL_CONFIG,
-      label: "Supabase URL",
-      requiredWhen: JSKIT_SUPABASE_CONDITION,
-      scope: "local",
-      sectionId: "jskit_auth",
-      sectionLabel: "JSKIT authentication",
-      type: "string",
-      visibleWhen: JSKIT_SUPABASE_CONDITION
-    },
-    {
-      defaultValue: "",
-      description: "Supabase publishable key used only when JSKIT auth provider is Supabase. Do not paste a service-role key here.",
-      id: JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG,
-      label: "Supabase publishable key",
-      requiredWhen: JSKIT_SUPABASE_CONDITION,
-      scope: "local",
-      sectionId: "jskit_auth",
-      sectionLabel: "JSKIT authentication",
-      sensitive: true,
-      type: "string",
-      visibleWhen: JSKIT_SUPABASE_CONDITION
+async function readOptionalJson(filePath = "") {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
     }
-  ];
+    if (error instanceof SyntaxError) {
+      const invalidJson = new Error(`Invalid JSON in JSKIT app state: ${filePath}`);
+      invalidJson.code = "vibe64_invalid_jskit_app_state";
+      throw invalidJson;
+    }
+    throw error;
+  }
 }
 
-function normalizeJskitSupabaseAppAuth(input = {}) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+async function inspectJskitAppAuthSource(targetRoot = "") {
+  const root = String(targetRoot || "").trim();
+  const lock = root
+    ? await readOptionalJson(path.join(root, ".jskit", "lock.json"))
+    : null;
+  if (!lock) {
+    return {
+      available: false,
+      provider: JSKIT_AUTH_PROVIDER_NONE,
+      supabase: {}
+    };
+  }
+  const installedPackages = isPlainObject(lock.installedPackages)
+    ? lock.installedPackages
+    : {};
+  const supabaseInstalled = Object.hasOwn(installedPackages, JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE);
+  const localInstalled = Object.hasOwn(installedPackages, JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE) ||
+    Object.hasOwn(installedPackages, JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE);
+  const provider = supabaseInstalled
+    ? JSKIT_AUTH_PROVIDER_SUPABASE
+    : localInstalled
+      ? JSKIT_AUTH_PROVIDER_LOCAL
+      : JSKIT_AUTH_PROVIDER_NONE;
+  const supabaseOptions = installedPackages[JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE]?.options;
+  const normalizedSupabaseOptions = isPlainObject(supabaseOptions)
+    ? supabaseOptions
+    : {};
   return {
-    projectRef: String(source.projectRef || source.ref || "").trim(),
-    publishableKey: String(source.publishableKey || "").trim(),
-    url: String(source.url || "").trim()
+    available: true,
+    provider,
+    supabase: {
+      publishableKey: String(normalizedSupabaseOptions["auth-supabase-publishable-key"] || "").trim(),
+      url: String(normalizedSupabaseOptions["auth-supabase-url"] || "").trim()
+    }
   };
+}
+
+function jskitAppAuthFromProjectState({
+  projectConfig = {},
+  sourceAuth = null
+} = {}) {
+  const sourceAvailable = sourceAuth?.available === true;
+  const configuredUserMode = jskitUserMode(projectConfig);
+  const provider = sourceAvailable
+    ? normalizeChoice(sourceAuth.provider, JSKIT_AUTH_PROVIDERS, JSKIT_AUTH_PROVIDER_NONE)
+    : configuredUserMode === JSKIT_USER_MODE_USERS
+      ? JSKIT_AUTH_PROVIDER_LOCAL
+      : JSKIT_AUTH_PROVIDER_NONE;
+  const installedUserMode = provider === JSKIT_AUTH_PROVIDER_NONE
+    ? JSKIT_USER_MODE_NONE
+    : JSKIT_USER_MODE_USERS;
+  return {
+    localBackend: jskitDatabaseRuntime(projectConfig) === "none"
+      ? JSKIT_AUTH_LOCAL_BACKEND_FILE
+      : JSKIT_AUTH_LOCAL_BACKEND_DB,
+    provider,
+    supabase: {
+      publishableKey: String(sourceAuth?.supabase?.publishableKey || "").trim(),
+      url: String(sourceAuth?.supabase?.url || "").trim()
+    },
+    userMode: sourceAvailable ? installedUserMode : configuredUserMode
+  };
+}
+
+async function resolveJskitProjectAppAuth({
+  projectConfig = {},
+  sourceAuth,
+  targetRoot = ""
+} = {}) {
+  const inspectedSource = sourceAuth === undefined
+    ? await inspectJskitAppAuthSource(targetRoot)
+    : sourceAuth;
+  return jskitAppAuthFromProjectState({
+    projectConfig,
+    sourceAuth: inspectedSource
+  });
 }
 
 function jskitAppAuthEnvironment(input = {}) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const provider = normalizeJskitAuthProvider(source.provider);
-  const appAuth = {
-    environment: normalizeJskitAppAuthEnvironment(source.environment),
-    localBackend: normalizeJskitAuthLocalBackend(source.localBackend),
-    provider,
-    source: String(source.source || "").trim(),
-    supabase: normalizeJskitSupabaseAppAuth(source.supabase)
-  };
+  const source = isPlainObject(input) ? input : {};
+  const supabase = isPlainObject(source.supabase)
+    ? source.supabase
+    : {};
   return {
-    [JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY]: appAuth
+    [JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY]: {
+      localBackend: normalizeChoice(
+        source.localBackend,
+        JSKIT_AUTH_LOCAL_BACKENDS,
+        JSKIT_AUTH_LOCAL_BACKEND_FILE
+      ),
+      provider: normalizeChoice(
+        source.provider,
+        JSKIT_AUTH_PROVIDERS,
+        JSKIT_AUTH_PROVIDER_NONE
+      ),
+      supabase: {
+        publishableKey: String(supabase.publishableKey || "").trim(),
+        url: String(supabase.url || "").trim()
+      }
+    }
   };
 }
 
 export {
-  JSKIT_APP_AUTH_ENVIRONMENT_DEV,
-  JSKIT_APP_AUTH_ENVIRONMENT_PROD,
   JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
-  JSKIT_AUTH_LOCAL_BACKEND_CONFIG,
   JSKIT_AUTH_LOCAL_BACKEND_DB,
   JSKIT_AUTH_LOCAL_BACKEND_FILE,
-  JSKIT_AUTH_LOCAL_BACKENDS,
-  JSKIT_AUTH_PROVIDER_CONFIG,
   JSKIT_AUTH_PROVIDER_LOCAL,
+  JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE,
+  JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE,
+  JSKIT_AUTH_PROVIDER_NONE,
   JSKIT_AUTH_PROVIDER_SUPABASE,
-  JSKIT_AUTH_PROVIDERS,
-  JSKIT_LOCAL_AUTH_CONDITION,
-  JSKIT_SUPABASE_CONDITION,
-  JSKIT_SUPABASE_PROJECT_URL_CONFIG,
-  JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG,
-  jskitAppAuthConfigFields,
+  JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE,
+  JSKIT_DATABASE_RUNTIME_CONFIG,
+  JSKIT_USER_MODE_CONFIG,
+  JSKIT_USER_MODE_NONE,
+  JSKIT_USER_MODE_USERS,
+  JSKIT_USER_CONFIG_FIELDS,
+  inspectJskitAppAuthSource,
   jskitAppAuthEnvironment,
-  jskitLocalAuthConfigUsesDatabase,
-  jskitProjectAppAuthConfig,
-  normalizeJskitAppAuthEnvironment,
-  normalizeJskitAuthLocalBackend,
-  normalizeJskitAuthProvider
+  jskitDatabaseRuntime,
+  jskitManagedDatabaseEnabled,
+  jskitAppAuthFromProjectState,
+  jskitUserMode,
+  resolveJskitProjectAppAuth
 };

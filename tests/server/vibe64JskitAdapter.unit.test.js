@@ -17,12 +17,17 @@ import {
   writeRuntimeLock
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
-  JSKIT_AUTH_LOCAL_BACKEND_CONFIG,
   JSKIT_AUTH_LOCAL_BACKEND_DB,
   JSKIT_AUTH_LOCAL_BACKEND_FILE,
-  JSKIT_AUTH_PROVIDER_CONFIG,
   JSKIT_AUTH_PROVIDER_LOCAL,
-  JSKIT_AUTH_PROVIDER_SUPABASE
+  JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE,
+  JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE,
+  JSKIT_AUTH_PROVIDER_NONE,
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE,
+  JSKIT_USER_MODE_CONFIG,
+  JSKIT_USER_MODE_NONE,
+  JSKIT_USER_MODE_USERS
 } from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   PREVIEW_PROXY_HOST_ENV,
@@ -147,7 +152,9 @@ function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
-async function createJskitProject(root) {
+async function createJskitProject(root, {
+  installedPackages = {}
+} = {}) {
   await Promise.all([
     writeProjectFile(root, "package.json", JSON.stringify({
       name: "example-jskit-app",
@@ -159,7 +166,10 @@ async function createJskitProject(root) {
     writeProjectFile(root, "config/public.js", "export default {};\n"),
     writeProjectFile(root, "src/main.js", "console.log('app');\n"),
     writeProjectFile(root, "packages/main/package.descriptor.mjs", "export default {};\n"),
-    writeProjectFile(root, ".jskit/lock.json", "{}\n"),
+    writeProjectFile(root, ".jskit/lock.json", JSON.stringify({
+      lockVersion: 1,
+      installedPackages
+    }, null, 2)),
     writeProjectFile(root, ".jskit/APP_BLUEPRINT.md", "# App blueprint\n")
   ]);
 }
@@ -247,10 +257,10 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.ui_verification_contract, /\.jskit\/verification\/ui\.json/u);
     assert.match(promptContext.ui_verification_contract, /does not start the app by itself/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mariadb/u);
-    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
-    assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_LOCAL);
-    assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_NONE);
+    assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_NONE);
+    assert.equal(promptContext.app_user_mode, JSKIT_USER_MODE_NONE);
+    assert.match(promptContext.app_auth_contract, /does not have user accounts or app login/u);
     assert.equal(Object.hasOwn(promptContext, "environment_blueprint"), false);
     assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
     assert.equal(promptContext.valid_jskit_markers, "true");
@@ -354,8 +364,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     });
 
     assert.equal(promptContext.database_runtime, "mariadb");
-    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
-    assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_NONE);
+    assert.match(promptContext.app_auth_contract, /does not have user accounts or app login/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mariadb/u);
     assert.match(promptContext.database_contract, /Never create migration files directly/u);
     assert.match(promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
@@ -392,13 +402,16 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.match(seedPromptContext.seed_recipe_contract, /preserve any completed root scaffold/u);
       assert.match(seedPromptContext.seed_recipe_contract, /Do not read broad JSKIT manuals/u);
       assert.match(seedPromptContext.seed_recipe_contract, /Use the exact mapped seed commands first/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /user mode, database runtime/u);
       assert.match(seedPromptContext.seed_deslop_contract, /full Vibe64 deslop pass/u);
       assert.match(seedPromptContext.seed_deslop_contract, /broad guide\/catalog\/manual exploration/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /project is configured for local username\/password login/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Ask whether people sign in with accounts or can use the app without logging in/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Do not collect Supabase Project URL\/key/u);
+      assert.equal(seedPromptContext.app_user_mode, JSKIT_USER_MODE_USERS);
+      assert.match(seedPromptContext.seed_issue_guidance, /Configured user mode: users/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /local username\/password login with database-backed storage/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask whether people sign in/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Supabase is a later upgrade, not an initial seed option/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Sign-in: People should sign in with accounts/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Sign-in: People should sign in with accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
@@ -423,13 +436,16 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /submitOnSelect/u);
       assert.match(seedPromptContext.seed_module_inventory, /auth-local bundle/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-local-core/u);
-      assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
+      assert.doesNotMatch(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/assistant-runtime/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/workspaces-core/u);
       assert.match(seedPromptContext.seed_issue_guidance, /@jskit-ai\/create-app <app-name> --target \. --force/u);
       assert.match(seedPromptContext.seed_issue_guidance, /--playwright-version "\$VIBE64_PLAYWRIGHT_VERSION"/u);
       assert.match(seedPromptContext.seed_issue_guidance, /npx jskit add bundle auth-local/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Install the configured database once/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Install persistent user accounts/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /local, run `npx jskit add bundle auth-base`/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /auth-provider-supabase-core/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
       assert.match(seedPromptContext.seed_issue_guidance, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not include `npx jskit list`/u);
@@ -446,22 +462,51 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.database_runtime, "none");
+      assert.equal(seedPromptContext.app_user_mode, JSKIT_USER_MODE_USERS);
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: none/u);
       assert.match(seedPromptContext.seed_issue_guidance, /No database does not block local username\/password login/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Do not use Supabase unless JSKIT project configuration explicitly selects Supabase/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Skip the teams\/workspaces question/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /file-backed storage/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
+    });
+
+    await withTemporaryRoot(async (unseededPublicRoot) => {
+      const seedPromptContext = await adapter.getPromptContext({
+        config: {
+          values: {
+            [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_NONE,
+            jskit_database_runtime: "none"
+          }
+        },
+        targetRoot: unseededPublicRoot
+      });
+
+      assert.equal(seedPromptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_NONE);
+      assert.equal(seedPromptContext.app_user_mode, JSKIT_USER_MODE_NONE);
+      assert.match(seedPromptContext.seed_issue_guidance, /Configured user mode: no users/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not install authentication, users, or workspaces packages/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /npx jskit add bundle auth-local/u);
     });
   });
 });
 
-test("jskit adapter describes Supabase auth without collecting credentials in the seed conversation", async () => {
+test("jskit adapter infers an installed Supabase provider from JSKIT source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot, {
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE]: {
+          options: {
+            "auth-supabase-publishable-key": "pk_source",
+            "auth-supabase-url": "https://source.supabase.co"
+          }
+        }
+      }
+    });
     const adapter = createJskitTargetAdapter();
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
+          [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_NONE,
           jskit_database_runtime: "mariadb"
         }
       },
@@ -470,26 +515,23 @@ test("jskit adapter describes Supabase auth without collecting credentials in th
 
     assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_SUPABASE);
     assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_SUPABASE);
-    assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /Configured app login provider: Supabase/u);
+    assert.equal(promptContext.app_user_mode, JSKIT_USER_MODE_USERS);
+    assert.match(promptContext.app_auth_contract, /Installed app login provider: Supabase/u);
     assert.match(promptContext.app_auth_contract, /user owns Supabase project setup/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_URL/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_PUBLISHABLE_KEY/u);
-    assert.match(promptContext.seed_issue_guidance, /configured for Supabase login/u);
-    assert.match(promptContext.seed_issue_guidance, /Supabase URL and publishable key come from JSKIT project configuration/u);
-    assert.match(promptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
-    assert.doesNotMatch(promptContext.seed_issue_guidance, /syncs them/u);
-    assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
+    assert.match(promptContext.app_auth_contract, /Runtime Config/u);
+    assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
   });
 });
 
-test("jskit adapter explains login setup choices when app auth is not configured", async () => {
+test("jskit seed uses the configured user mode without asking for an auth implementation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const adapter = createJskitTargetAdapter();
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+          [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
           jskit_database_runtime: "mariadb"
         }
       },
@@ -497,36 +539,39 @@ test("jskit adapter explains login setup choices when app auth is not configured
     });
 
     assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(promptContext.app_auth_local_backend, JSKIT_AUTH_LOCAL_BACKEND_DB);
     assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
     assert.match(promptContext.app_auth_contract, /Do not ask for Supabase credentials/u);
-    assert.match(promptContext.seed_issue_guidance, /configured for local username\/password login/u);
-    assert.match(promptContext.seed_issue_guidance, /use JSKIT local auth by default/u);
-    assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
+    assert.match(promptContext.seed_issue_guidance, /Configured user mode: users/u);
+    assert.match(promptContext.seed_issue_guidance, /Do not ask whether people sign in or which auth provider\/backend to use/u);
+    assert.match(promptContext.seed_issue_guidance, /Install local login with `npx jskit add bundle auth-local`/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /auth-provider-supabase-core/u);
   });
 });
 
-test("jskit adapter explains database-backed local auth as managed database backed", async () => {
+test("jskit derives local auth storage from the database runtime", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const adapter = createJskitTargetAdapter();
+    const config = {
+      values: {
+        [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
+        jskit_database_runtime: "none"
+      }
+    };
     const promptContext = await adapter.getPromptContext({
-      config: {
-        values: {
-          [JSKIT_AUTH_LOCAL_BACKEND_CONFIG]: JSKIT_AUTH_LOCAL_BACKEND_DB,
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
-          jskit_database_runtime: "none"
-        }
-      },
+      config,
       targetRoot
+    });
+    const requirements = await adapter.getRuntimeRequirements({
+      config
     });
 
     assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
-    assert.equal(promptContext.app_auth_local_backend, JSKIT_AUTH_LOCAL_BACKEND_DB);
-    assert.match(promptContext.app_auth_contract, /database-backed storage/u);
-    assert.match(promptContext.app_auth_contract, /AUTH_LOCAL_BACKEND=db/u);
-    assert.match(promptContext.seed_issue_guidance, /Configured database for local auth: mariadb/u);
-    assert.match(promptContext.seed_issue_guidance, /database-runtime-mysql/u);
-    assert.match(promptContext.seed_issue_guidance, /before local auth/u);
-    assert.doesNotMatch(promptContext.seed_issue_guidance, /Skip the teams\/workspaces question/u);
+    assert.equal(promptContext.app_auth_local_backend, JSKIT_AUTH_LOCAL_BACKEND_FILE);
+    assert.match(promptContext.app_auth_contract, /file-backed storage/u);
+    assert.match(promptContext.seed_issue_guidance, /Configured database for this seed: none/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /database-runtime-mysql/u);
+    assert.deepEqual(requirements.map((requirement) => requirement.id), ["nodejs-22"]);
   });
 });
 
@@ -540,9 +585,12 @@ test("jskit adapter uses stable config fields regardless of target package ident
     const missingPackageDefaults = await adapter.getDefaultConfig({
       targetRoot
     });
-    assert.equal(missingPackageDefaults[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], JSKIT_AUTH_LOCAL_BACKEND_FILE);
+    assert.equal(missingPackageDefaults[JSKIT_USER_MODE_CONFIG], JSKIT_USER_MODE_USERS);
     assert.equal(missingPackageDefaults.jskit_database_runtime, "mariadb");
-
+    assert.deepEqual(missingPackageFields.map((field) => field.id), [
+      JSKIT_USER_MODE_CONFIG,
+      "jskit_database_runtime"
+    ]);
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64"
     }, null, 2));
@@ -558,8 +606,116 @@ test("jskit adapter uses stable config fields regardless of target package ident
       missingPackageFields.map((field) => field.id)
     );
     assert.equal(vibe64Defaults.jskit_database_runtime, "mariadb");
-    assert.equal(vibe64Defaults[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], JSKIT_AUTH_LOCAL_BACKEND_FILE);
+    assert.equal(vibe64Defaults[JSKIT_USER_MODE_CONFIG], JSKIT_USER_MODE_USERS);
   });
+});
+
+test("jskit reads foundation auth from installed packages without changing the Users setup default", async () => {
+  const adapter = createJskitTargetAdapter();
+  const foundations = [
+    {
+      backend: JSKIT_AUTH_LOCAL_BACKEND_FILE,
+      databaseRuntime: "none",
+      installedPackages: {},
+      provider: JSKIT_AUTH_PROVIDER_NONE,
+      userMode: JSKIT_USER_MODE_NONE
+    },
+    {
+      backend: JSKIT_AUTH_LOCAL_BACKEND_FILE,
+      databaseRuntime: "none",
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE]: {}
+      },
+      provider: JSKIT_AUTH_PROVIDER_LOCAL,
+      userMode: JSKIT_USER_MODE_USERS
+    },
+    {
+      backend: JSKIT_AUTH_LOCAL_BACKEND_DB,
+      databaseRuntime: "mariadb",
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE]: {},
+        [JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE]: {}
+      },
+      provider: JSKIT_AUTH_PROVIDER_LOCAL,
+      userMode: JSKIT_USER_MODE_USERS
+    },
+    {
+      backend: JSKIT_AUTH_LOCAL_BACKEND_DB,
+      databaseRuntime: "mariadb",
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE]: {},
+        [JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE]: {},
+        "@jskit-ai/workspaces-core": {}
+      },
+      provider: JSKIT_AUTH_PROVIDER_LOCAL,
+      userMode: JSKIT_USER_MODE_USERS
+    }
+  ];
+
+  for (const foundation of foundations) {
+    await withTemporaryRoot(async (targetRoot) => {
+      await createJskitProject(targetRoot, {
+        installedPackages: foundation.installedPackages
+      });
+      const defaults = await adapter.getDefaultConfig({
+        targetRoot
+      });
+      const promptContext = await adapter.getPromptContext({
+        config: {
+          values: {
+            jskit_database_runtime: foundation.databaseRuntime
+          }
+        },
+        targetRoot
+      });
+
+      assert.equal(defaults[JSKIT_USER_MODE_CONFIG], JSKIT_USER_MODE_USERS);
+      assert.equal(promptContext.app_auth_provider, foundation.provider);
+      assert.equal(promptContext.app_auth_local_backend, foundation.backend);
+      assert.equal(promptContext.app_user_mode, foundation.userMode);
+    });
+  }
+});
+
+test("jskit keeps the database selection authoritative for installed local auth storage", async () => {
+  const adapter = createJskitTargetAdapter();
+  const cases = [
+    {
+      databaseRuntime: "none",
+      expectedBackend: JSKIT_AUTH_LOCAL_BACKEND_FILE,
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_LOCAL_DB_PACKAGE]: {},
+        [JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE]: {}
+      }
+    },
+    {
+      databaseRuntime: "mariadb",
+      expectedBackend: JSKIT_AUTH_LOCAL_BACKEND_DB,
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_LOCAL_PACKAGE]: {}
+      }
+    }
+  ];
+
+  for (const testCase of cases) {
+    await withTemporaryRoot(async (targetRoot) => {
+      await createJskitProject(targetRoot, {
+        installedPackages: testCase.installedPackages
+      });
+      const promptContext = await adapter.getPromptContext({
+        config: {
+          values: {
+            [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
+            jskit_database_runtime: testCase.databaseRuntime
+          }
+        },
+        targetRoot
+      });
+
+      assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_LOCAL);
+      assert.equal(promptContext.app_auth_local_backend, testCase.expectedBackend);
+    });
+  }
 });
 
 test("jskit adapter allows Studio self-targeting only for the Vibe64 package", async () => {
@@ -1354,6 +1510,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
     assert.match(startupScript, /vibe64_jskit_agent_runs_root=.*\/sessions\/active\/jskit_dev_launch\/agent-runs/u);
     assert.match(startupScript, /vibe64_jskit_record_server_fingerprint/u);
+    assert.match(startupScript, /vibe64_jskit_read_server_fingerprint/u);
     assert.match(startupScript, /vibe64_jskit_server_files_changed/u);
     assert.match(startupScript, /vibe64_jskit_restart_backend/u);
     assert.match(startupScript, /Restarting JSKIT backend after server-side files changed/u);
@@ -1366,6 +1523,9 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.doesNotMatch(startupScript, /Restarting JSKIT dev server after agent work finished/u);
     assert.match(startupScript, /stat\.mtimeMs/u);
     assert.match(startupScript, /stat\.size/u);
+    assert.equal(spec.commandPreview.match(/function normalizeLaunchRestartPath/gu)?.length, 1);
+    assert.equal(spec.commandPreview.match(/function launchRestartGlobToRegExp/gu)?.length, 1);
+    assert.doesNotMatch(startupScript, /function globRegex/u);
     assert.match(startupScript, /src\/\*\*\/server\/\*\*/u);
     assert.doesNotMatch(startupScript, /vibe64_jskit_watch_agent_pause/u);
     assert.doesNotMatch(startupScript, /kill -STOP/u);

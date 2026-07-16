@@ -4,13 +4,14 @@ import {
   RUNTIME_CONFIG_SCOPES,
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
+import { isPlainObject } from "@local/vibe64-core/server/core";
 import {
   JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
-  JSKIT_AUTH_LOCAL_BACKEND_DB,
   JSKIT_AUTH_LOCAL_BACKEND_FILE,
   JSKIT_AUTH_PROVIDER_LOCAL,
+  JSKIT_AUTH_PROVIDER_NONE,
   JSKIT_AUTH_PROVIDER_SUPABASE,
-  jskitLocalAuthConfigUsesDatabase
+  jskitManagedDatabaseEnabled
 } from "./appAuthConfig.js";
 
 import {
@@ -21,7 +22,6 @@ import {
   jskitMariaDbHostPort
 } from "./setupMariaDbRuntime.js";
 
-const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_LOCAL_APP_PUBLIC_URL = "http://localhost:3000";
 const JSKIT_APP_AUTH_RUNTIME_ENV = Object.freeze({
   localBackend: "AUTH_LOCAL_BACKEND",
@@ -34,24 +34,14 @@ const JSKIT_APP_AUTH_RUNTIME_ENV = Object.freeze({
   supabaseUrl: "AUTH_SUPABASE_URL"
 });
 const JSKIT_RESERVED_USER_ENV_KEYS = Object.freeze([
-  "AUTH_LOCAL_BACKEND",
-  "AUTH_LOCAL_FILE_PRODUCTION_ACK",
-  "AUTH_LOCAL_RECOVERY_DEV_OUTPUT",
-  "AUTH_LOCAL_SESSION_SECRET",
-  "AUTH_LOCAL_STORE_DIR",
+  JSKIT_APP_AUTH_RUNTIME_ENV.localBackend,
+  JSKIT_APP_AUTH_RUNTIME_ENV.localFileProductionAck,
+  JSKIT_APP_AUTH_RUNTIME_ENV.localRecoveryDevOutput,
+  JSKIT_APP_AUTH_RUNTIME_ENV.localSessionSecret,
+  JSKIT_APP_AUTH_RUNTIME_ENV.localStoreDir,
   "AUTH_PROFILE_MODE",
-  "AUTH_PROVIDER",
-  "AUTH_SUPABASE_PUBLISHABLE_KEY",
-  "AUTH_SUPABASE_URL",
-  "JSKIT_AUTH_ENVIRONMENT",
-  "JSKIT_AUTH_MODE",
-  "JSKIT_AUTH_PROVIDER",
-  "JSKIT_AUTH_SOURCE",
-  "JSKIT_AUTH_SUPABASE_PROJECT_REF",
-  "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY",
-  "JSKIT_AUTH_SUPABASE_URL"
+  JSKIT_APP_AUTH_RUNTIME_ENV.provider
 ]);
-const JSKIT_SUPABASE_AUTH_PROVIDER = "supabase";
 const JSKIT_APP_RUNTIME_CONFIG_TARGETS = Object.freeze([
   RUNTIME_CONFIG_TARGETS.CHECKS,
   RUNTIME_CONFIG_TARGETS.COMMAND,
@@ -62,40 +52,13 @@ const JSKIT_APP_RUNTIME_CONFIG_TARGETS = Object.freeze([
 const JSKIT_LOCAL_AUTH_STORE_DIR = ".jskit/auth";
 const JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT = "log";
 
-function configValue(config = {}, key = "", fallback = "") {
-  return String(config?.values?.[key] ?? fallback).trim();
-}
-
-function jskitDatabaseRuntime(projectConfig = {}) {
-  return configValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb";
-}
-
-function jskitLocalAuthBackend(projectEnvironment = {}) {
-  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  return String(appAuth.localBackend || JSKIT_AUTH_LOCAL_BACKEND_FILE).trim() || JSKIT_AUTH_LOCAL_BACKEND_FILE;
-}
-
-function jskitLocalAuthUsesDatabase(projectEnvironment = {}) {
-  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  return appAuth.provider === JSKIT_AUTH_PROVIDER_LOCAL &&
-    jskitLocalAuthBackend(projectEnvironment) === JSKIT_AUTH_LOCAL_BACKEND_DB;
-}
-
-function jskitConfigNeedsManagedMariaDb({
-  projectConfig = {},
-  projectEnvironment = {}
-} = {}) {
-  return jskitDatabaseRuntime(projectConfig) === "mariadb" ||
-    jskitLocalAuthConfigUsesDatabase(projectConfig) ||
-    jskitLocalAuthUsesDatabase(projectEnvironment);
-}
-
 function runtimeRecord({
   key = "",
   owner = RUNTIME_CONFIG_OWNERS.VIBE64,
   requiredFor = [],
   scope = RUNTIME_CONFIG_SCOPES.DEV,
   source = "",
+  secret,
   targets = JSKIT_APP_RUNTIME_CONFIG_TARGETS,
   value = "",
   valuePresent
@@ -108,6 +71,9 @@ function runtimeRecord({
     source,
     targets,
     value,
+    ...(secret === undefined ? {} : {
+      secret: secret === true
+    }),
     ...(valuePresent === undefined ? {} : {
       valuePresent
     })
@@ -116,15 +82,11 @@ function runtimeRecord({
 
 function jskitManagedDatabaseRuntimeConfigRecords({
   projectConfig = {},
-  projectEnvironment = {},
   scope = RUNTIME_CONFIG_SCOPES.DEV,
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  if (!jskitConfigNeedsManagedMariaDb({
-    projectConfig,
-    projectEnvironment
-  })) {
+  if (!jskitManagedDatabaseEnabled(projectConfig)) {
     return [];
   }
   const requiredFor = [
@@ -134,51 +96,39 @@ function jskitManagedDatabaseRuntimeConfigRecords({
     RUNTIME_CONFIG_PHASES.SERVER
   ];
   const source = "jskit-managed-mariadb";
+  const databaseRecord = (record) => runtimeRecord({
+    ...record,
+    requiredFor,
+    scope,
+    source
+  });
   return [
-    runtimeRecord({
+    databaseRecord({
       key: "DB_CLIENT",
-      requiredFor,
-      scope,
-      source,
       value: "mysql2"
     }),
-    runtimeRecord({
+    databaseRecord({
       key: "DB_HOST",
-      requiredFor,
-      scope,
-      source,
       value: JSKIT_MARIADB_HOST
     }),
-    runtimeRecord({
+    databaseRecord({
       key: "DB_NAME",
-      requiredFor,
-      scope,
-      source,
       value: jskitMariaDbDatabaseName(targetRoot)
     }),
-    runtimeRecord({
+    databaseRecord({
       key: "DB_PASSWORD",
-      requiredFor,
-      scope,
-      source,
       value: jskitMariaDbAppPassword(targetRoot, {
         serviceDataRoot
       })
     }),
-    runtimeRecord({
+    databaseRecord({
       key: "DB_PORT",
-      requiredFor,
-      scope,
-      source,
       value: jskitMariaDbHostPort(targetRoot, {
         serviceDataRoot
       })
     }),
-    runtimeRecord({
+    databaseRecord({
       key: "DB_USER",
-      requiredFor,
-      scope,
-      source,
       value: JSKIT_MARIADB_APP_USER
     })
   ];
@@ -199,112 +149,87 @@ function jskitAppPublicUrlRuntimeConfigRecord({
   });
 }
 
-function jskitAppAuthProjectEnvironment(projectEnvironment = {}) {
-  const appAuth = projectEnvironment?.[JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY];
-  return appAuth && typeof appAuth === "object" && !Array.isArray(appAuth)
-    ? appAuth
-    : {};
-}
-
-function jskitAppAuthOwner(projectEnvironment = {}) {
-  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  return appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE
-    ? RUNTIME_CONFIG_OWNERS.USER
-    : RUNTIME_CONFIG_OWNERS.VIBE64;
-}
-
-function jskitAppAuthSource(projectEnvironment = {}) {
-  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  if (appAuth.provider === JSKIT_AUTH_PROVIDER_LOCAL) {
-    return "jskit-local-auth";
-  }
-  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE) {
-    return "jskit-supabase-auth";
-  }
-  return "jskit-auth";
-}
-
 function jskitAppAuthRuntimeConfigRecords({
   projectEnvironment = {},
   scope = RUNTIME_CONFIG_SCOPES.DEV
 } = {}) {
-  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  const owner = jskitAppAuthOwner(projectEnvironment);
-  const source = jskitAppAuthSource(projectEnvironment);
+  const candidate = projectEnvironment?.[JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY];
+  const appAuth = isPlainObject(candidate) ? candidate : {};
   const requiredFor = [
     RUNTIME_CONFIG_PHASES.PREVIEW,
     RUNTIME_CONFIG_PHASES.SERVER
   ];
   const provider = String(appAuth.provider || "").trim();
-  const localBackend = jskitLocalAuthBackend(projectEnvironment);
-  const supabase = appAuth.supabase && typeof appAuth.supabase === "object" && !Array.isArray(appAuth.supabase)
-    ? appAuth.supabase
-    : {};
-  const supabaseUrl = String(supabase.url || "").trim();
-  const supabasePublishableKey = String(supabase.publishableKey || "").trim();
-  if (!provider) {
+  if (!provider || provider === JSKIT_AUTH_PROVIDER_NONE) {
     return [];
   }
-  const authRecords = [
-    {
-      key: JSKIT_APP_AUTH_RUNTIME_ENV.provider,
-      value: provider
-    }
-  ];
+  const source = provider === JSKIT_AUTH_PROVIDER_LOCAL
+    ? "jskit-local-auth"
+    : "jskit-supabase-auth";
+  const authRecord = (record) => runtimeRecord({
+    ...record,
+    requiredFor,
+    scope,
+    source
+  });
+  const authRecords = [authRecord({
+    key: JSKIT_APP_AUTH_RUNTIME_ENV.provider,
+    value: provider
+  })];
   if (provider === JSKIT_AUTH_PROVIDER_LOCAL) {
-    authRecords.push({
+    const localBackend = String(appAuth.localBackend || JSKIT_AUTH_LOCAL_BACKEND_FILE).trim() ||
+      JSKIT_AUTH_LOCAL_BACKEND_FILE;
+    authRecords.push(authRecord({
       key: JSKIT_APP_AUTH_RUNTIME_ENV.localBackend,
       value: localBackend
-    });
+    }));
     if (localBackend === JSKIT_AUTH_LOCAL_BACKEND_FILE) {
-      authRecords.push({
+      authRecords.push(authRecord({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.localStoreDir,
         value: JSKIT_LOCAL_AUTH_STORE_DIR
-      });
+      }));
     }
     if (scope === RUNTIME_CONFIG_SCOPES.DEV) {
-      authRecords.push({
+      authRecords.push(authRecord({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.localRecoveryDevOutput,
         value: JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT
-      });
+      }));
     } else {
-      authRecords.push({
+      authRecords.push(authRecord({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.localSessionSecret,
+        secret: true,
         value: "",
         valuePresent: false
-      });
+      }));
       if (localBackend === JSKIT_AUTH_LOCAL_BACKEND_FILE) {
-        authRecords.push({
+        authRecords.push(authRecord({
           key: JSKIT_APP_AUTH_RUNTIME_ENV.localFileProductionAck,
           value: "true"
-        });
+        }));
       }
     }
   }
-  if (provider === JSKIT_SUPABASE_AUTH_PROVIDER) {
+  if (provider === JSKIT_AUTH_PROVIDER_SUPABASE) {
+    const supabase = isPlainObject(appAuth.supabase) ? appAuth.supabase : {};
+    const supabaseUrl = String(supabase.url || "").trim();
+    const supabasePublishableKey = String(supabase.publishableKey || "").trim();
     authRecords.push(
-      {
+      authRecord({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl,
-        value: supabaseUrl
-      },
-      {
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        value: supabaseUrl,
+        valuePresent: Boolean(supabaseUrl)
+      }),
+      authRecord({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey,
-        value: supabasePublishableKey
-      }
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        secret: true,
+        value: supabasePublishableKey,
+        valuePresent: Boolean(supabasePublishableKey)
+      })
     );
   }
-  return authRecords.map((record) => ({
-    ...runtimeRecord({
-      key: record.key,
-      owner,
-      requiredFor,
-      scope,
-      source,
-      value: record.value,
-      valuePresent: record.valuePresent
-    }),
-    editable: false
-  }));
+  return authRecords;
 }
 
 function createJskitRuntimeConfigProfile() {
@@ -327,7 +252,6 @@ function createJskitRuntimeConfigProfile() {
     } = {}) => [
       ...jskitManagedDatabaseRuntimeConfigRecords({
         projectConfig,
-        projectEnvironment,
         scope,
         serviceDataRoot,
         targetRoot
@@ -345,12 +269,7 @@ function createJskitRuntimeConfigProfile() {
 
 export {
   JSKIT_APP_AUTH_RUNTIME_ENV,
-  JSKIT_DATABASE_RUNTIME_CONFIG,
-  JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT,
   JSKIT_LOCAL_AUTH_STORE_DIR,
-  JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,
-  jskitConfigNeedsManagedMariaDb,
-  jskitAppAuthRuntimeConfigRecords,
   jskitManagedDatabaseRuntimeConfigRecords
 };

@@ -14,10 +14,10 @@ import {
   createJskitTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/index.js";
 import {
-  JSKIT_AUTH_PROVIDER_CONFIG,
-  JSKIT_AUTH_PROVIDER_SUPABASE,
-  JSKIT_SUPABASE_PROJECT_URL_CONFIG,
-  JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG
+  JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE,
+  JSKIT_USER_MODE_CONFIG,
+  JSKIT_USER_MODE_NONE,
+  JSKIT_USER_MODE_USERS
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/appAuthConfig.js";
 import {
   jskitMariaDbHostPort
@@ -168,28 +168,75 @@ test("JSKIT adapter provides deployment publish plan and production database env
   }
 });
 
-test("JSKIT adapter marks deployment Supabase auth values as user-owned", async () => {
-  const adapter = createJskitTargetAdapter();
-  const environment = await adapter.getDeploymentEnvironment({
-    config: {
-      values: {
-        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
-        [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://prodref.supabase.co",
-        [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_prod",
-        jskit_database_runtime: "none"
+test("JSKIT adapter derives deployment Supabase auth from installed source", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-supabase-deploy-"));
+  try {
+    await writeJson(path.join(root, ".jskit", "lock.json"), {
+      lockVersion: 1,
+      installedPackages: {
+        [JSKIT_AUTH_PROVIDER_SUPABASE_PACKAGE]: {
+          options: {
+            "auth-supabase-publishable-key": "pk_prod",
+            "auth-supabase-url": "https://prodref.supabase.co"
+          }
+        }
       }
-    },
-    deployment: {},
-    targetRoot: "/tmp/v64-jskit-supabase-auth"
-  });
-  const supabaseUrl = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_URL");
-  const supabaseKey = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_PUBLISHABLE_KEY");
+    });
+    const adapter = createJskitTargetAdapter();
+    const environment = await adapter.getDeploymentEnvironment({
+      config: {
+        values: {
+          [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_NONE,
+          jskit_database_runtime: "none"
+        }
+      },
+      deployment: {},
+      targetRoot: root
+    });
+    const supabaseUrl = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_URL");
+    const supabaseKey = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_PUBLISHABLE_KEY");
 
-  assert.equal(environment.services.find((service) => service.id === "database").status, "not_required");
-  assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");
-  assert.equal(supabaseUrl.owner, "user");
-  assert.equal(supabaseKey.owner, "user");
-  assert.equal(supabaseKey.sensitive, true);
+    assert.equal(environment.services.find((service) => service.id === "database").status, "not_required");
+    assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");
+    assert.equal(supabaseUrl.owner, "user");
+    assert.equal(supabaseUrl.value, "https://prodref.supabase.co");
+    assert.equal(supabaseKey.owner, "user");
+    assert.equal(supabaseKey.sensitive, true);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("JSKIT adapter does not invent deployment auth for public source", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-public-deploy-"));
+  try {
+    await writeJson(path.join(root, ".jskit", "lock.json"), {
+      lockVersion: 1,
+      installedPackages: {}
+    });
+    const adapter = createJskitTargetAdapter();
+    const environment = await adapter.getDeploymentEnvironment({
+      config: {
+        values: {
+          [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
+          jskit_database_runtime: "none"
+        }
+      },
+      deployment: {},
+      targetRoot: root
+    });
+
+    assert.equal(environment.appEntries.some((entry) => entry.name.startsWith("AUTH_")), false);
+    assert.equal(environment.services.find((service) => service.id === "app_auth").status, "not_required");
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
 });
 
 test("Laravel adapter provides deployment publish plan and managed DB env", async () => {

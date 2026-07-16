@@ -20,6 +20,7 @@ import {
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeRepositoryMode
 } from "@local/vibe64-core/server/projectRepository";
+import { isPlainObject } from "@local/vibe64-core/server/core";
 import {
   resolveProjectGitCacheRoot
 } from "@local/vibe64-core/server/projectState";
@@ -40,6 +41,27 @@ const PROJECT_TEMPLATE_IGNORED_LOCAL_ENTRIES = new Set([
 
 const projectTemplateLocks = new Map();
 
+const JSKIT_PUBLIC_PROJECT_CONFIG = Object.freeze({
+  github_pr_merge_method: "merge",
+  jskit_database_runtime: "none",
+  jskit_users: "none"
+});
+const JSKIT_ACCOUNTS_PROJECT_CONFIG = Object.freeze({
+  github_pr_merge_method: "squash",
+  jskit_database_runtime: "none",
+  jskit_users: "users"
+});
+const JSKIT_DATABASE_PROJECT_CONFIG = Object.freeze({
+  github_pr_merge_method: "squash",
+  jskit_database_runtime: "mariadb",
+  jskit_users: "users"
+});
+const JSKIT_WORKSPACES_PROJECT_CONFIG = Object.freeze({
+  github_pr_merge_method: "merge",
+  jskit_database_runtime: "mariadb",
+  jskit_users: "users"
+});
+
 const PROJECT_TEMPLATES = Object.freeze([
   projectTemplate({
     accent: "sky",
@@ -49,6 +71,7 @@ const PROJECT_TEMPLATES = Object.freeze([
     id: "jskit-public",
     name: "Public",
     order: 10,
+    projectConfig: JSKIT_PUBLIC_PROJECT_CONFIG,
     repository: "vibe64-dev/jskit-seed-public",
     tagline: "A public experience for everyone"
   }),
@@ -60,6 +83,7 @@ const PROJECT_TEMPLATES = Object.freeze([
     id: "jskit-accounts",
     name: "Accounts",
     order: 20,
+    projectConfig: JSKIT_ACCOUNTS_PROJECT_CONFIG,
     repository: "vibe64-dev/jskit-seed-accounts",
     tagline: "A private space for every person"
   }),
@@ -71,6 +95,7 @@ const PROJECT_TEMPLATES = Object.freeze([
     id: "jskit-database",
     name: "Database",
     order: 30,
+    projectConfig: JSKIT_DATABASE_PROJECT_CONFIG,
     repository: "vibe64-dev/jskit-seed-database",
     tagline: "Personal accounts with lasting data"
   }),
@@ -82,6 +107,7 @@ const PROJECT_TEMPLATES = Object.freeze([
     id: "jskit-workspaces",
     name: "Workspaces",
     order: 40,
+    projectConfig: JSKIT_WORKSPACES_PROJECT_CONFIG,
     repository: "vibe64-dev/jskit-seed-workspaces",
     tagline: "A shared place for teams to work"
   })
@@ -102,6 +128,7 @@ function projectTemplate(value = {}) {
     kind: normalizeText(value.kind) || "foundation",
     name: normalizeText(value.name),
     order: Number.isFinite(Number(value.order)) ? Number(value.order) : 0,
+    projectConfig: Object.freeze({ ...value.projectConfig }),
     ref: normalizeText(value.ref) || "refs/heads/main",
     repository,
     repositoryUrl: normalizeText(value.repositoryUrl) || `https://github.com/${repository}`,
@@ -499,6 +526,15 @@ function parseTemplateJson(text = "", fileName = "") {
   }
 }
 
+function projectConfigMatchesTemplate(projectConfig = {}, expectedConfig = {}) {
+  if (!isPlainObject(projectConfig)) {
+    return false;
+  }
+  const expectedEntries = Object.entries(expectedConfig);
+  return Object.keys(projectConfig).length === expectedEntries.length &&
+    expectedEntries.every(([key, value]) => projectConfig[key] === value);
+}
+
 async function validateTemplateSource(template, repositoryPath, options = {}) {
   const [seedText, projectText, sourceRevision] = await Promise.all([
     readTemplateGitFile(repositoryPath, PROJECT_TEMPLATE_SOURCE_FILE, options),
@@ -525,11 +561,12 @@ async function validateTemplateSource(template, repositoryPath, options = {}) {
   if (
     project.schema !== "vibe64.project" ||
     project.schemaVersion !== 1 ||
-    normalizeText(project.projectType) !== "jskit"
+    normalizeText(project.projectType) !== "jskit" ||
+    !projectConfigMatchesTemplate(project.config, template.projectConfig)
   ) {
     throw templateError(
       "vibe64_project_template_project_config_invalid",
-      `${template.name} does not contain a valid committed JSKIT project configuration.`
+      `${template.name} does not contain its trusted committed JSKIT project configuration.`
     );
   }
   return {

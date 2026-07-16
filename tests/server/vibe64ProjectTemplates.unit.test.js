@@ -23,6 +23,11 @@ import {
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
+const TEST_PROJECT_CONFIG = Object.freeze({
+  github_pr_merge_method: "squash",
+  jskit_database_runtime: "none",
+  jskit_users: "none"
+});
 
 async function git(cwd, args = []) {
   const result = await execFileAsync("git", args, {
@@ -33,6 +38,7 @@ async function git(cwd, args = []) {
 
 async function createSeedRepository(root, {
   id = "jskit-test",
+  projectConfig = TEST_PROJECT_CONFIG,
   repository = "local/jskit-test"
 } = {}) {
   await mkdir(root, {
@@ -53,12 +59,7 @@ async function createSeedRepository(root, {
     schema: "vibe64.project",
     schemaVersion: 1,
     projectType: "jskit",
-    config: {
-      github_pr_merge_method: "squash",
-      jskit_auth_local_backend: "file",
-      jskit_auth_provider: "local",
-      jskit_database_runtime: "none"
-    }
+    config: projectConfig
   }, null, 2)}\n`, "utf8");
   await git(root, ["add", "-A"]);
   await git(root, [
@@ -83,6 +84,7 @@ function testTemplate(seedRoot, overrides = {}) {
     id: "jskit-test",
     name: "Test",
     order: 1,
+    projectConfig: TEST_PROJECT_CONFIG,
     repository: "local/jskit-test",
     repositoryUrl: "https://example.invalid/local/jskit-test",
     tagline: "A useful test project",
@@ -169,6 +171,43 @@ test("project templates materialize an empty local source as one new root commit
     });
     assert.equal(after.eligible, false);
     assert.equal(after.code, "vibe64_project_template_destination_not_empty");
+  });
+});
+
+test("project templates reject seed manifests outside the trusted setup contract", async () => {
+  await withTemporaryRoot(async (root) => {
+    const seedRoot = path.join(root, "seed");
+    const sourceRoot = path.join(root, "project");
+    const runtimeRoot = path.join(root, "runtime");
+    await createSeedRepository(seedRoot, {
+      projectConfig: {
+        github_pr_merge_method: "squash",
+        jskit_database_runtime: "none"
+      }
+    });
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+
+    await assert.rejects(
+      () => applyProjectTemplate({
+        project: {
+          repository: {
+            defaultBranch: "main",
+            mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+          },
+          repositoryMode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+        },
+        projectRuntimeRoot: runtimeRoot,
+        sourceRoot,
+        targetRoot: sourceRoot,
+        templateId: "jskit-test",
+        templates: [testTemplate(seedRoot)]
+      }),
+      {
+        code: "vibe64_project_template_project_config_invalid"
+      }
+    );
   });
 });
 

@@ -177,7 +177,7 @@ test("runtime config imports user values from generated dotenv without shadowing
     "APP_PUBLIC_URL=http://localhost:3000",
     "DB_HOST=evil.example",
     "HOME_ASSISTANT_AI_API_KEY=secret",
-    "JSKIT_AUTH_SUPABASE_URL=https://stale.supabase.co",
+    "PACKAGE_RESERVED_URL=https://package.example",
     "PUBLIC_TEXT=\"hello world\"",
     "VIBE64_INTERNAL=skip",
     "VITE_PUBLIC_FLAG=yes",
@@ -200,7 +200,7 @@ test("runtime config imports user values from generated dotenv without shadowing
   ], {
     publicEnvPrefixes: ["VITE_"],
     scope: RUNTIME_CONFIG_SCOPES.DEV,
-    userValueReservedKeys: ["JSKIT_AUTH_SUPABASE_URL"]
+    userValueReservedKeys: ["PACKAGE_RESERVED_URL"]
   });
 
   assert.deepEqual(values, {

@@ -4,6 +4,7 @@
   "projectType": "jskit",
   "config": {
     "github_pr_merge_method": "squash",
-    "jskit_database_runtime": "none"
+    "jskit_database_runtime": "none",
+    "jskit_users": "none"
   }
 }
