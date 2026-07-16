@@ -1,7 +1,7 @@
 <template>
   <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
-    <header class="studio-screen__header d-flex flex-column flex-md-row ga-3 align-md-end justify-space-between">
-      <div>
+    <header class="studio-screen__header d-flex ga-3 justify-space-between">
+      <div class="studio-screen__heading">
         <h1 class="studio-screen__title">{{ pageTitle }}</h1>
         <p v-if="pageLede" class="text-body-2 text-medium-emphasis mb-0 studio-screen__lede">{{ pageLede }}</p>
       </div>
@@ -347,9 +347,21 @@ const {
   min-width: 0;
 }
 
+.studio-screen__header {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.studio-screen__heading {
+  flex: 1 1 16rem;
+  min-width: min(16rem, 100%);
+}
+
 .studio-screen__actions {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
   white-space: nowrap;
 }
 
