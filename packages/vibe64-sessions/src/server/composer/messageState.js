@@ -97,6 +97,7 @@ function composerMessageRequests(source = {}) {
         messageId,
         operationOutcome: "",
         originId: normalizeText(request.originId),
+        promptTemplateId: normalizeText(request.promptTemplateId),
         retriedAt: "",
         retryable: null,
         state: COMPOSER_MESSAGE_STATES.ACCEPTED,
@@ -221,6 +222,7 @@ function composerMessageBatch(requests = []) {
     request.displayFields?.message ||
     request.message
   )).join("\n\n");
+  const promptTemplateId = normalizeText(first.promptTemplateId);
   return {
     ...first,
     displayFields: {
@@ -233,7 +235,12 @@ function composerMessageBatch(requests = []) {
     },
     message,
     messageIds: messages.map((request) => request.messageId),
-    messages
+    messages,
+    promptTemplateId: promptTemplateId && messages.every((request) => (
+      normalizeText(request.promptTemplateId) === promptTemplateId
+    ))
+      ? promptTemplateId
+      : ""
   };
 }
 
@@ -270,6 +277,7 @@ async function acceptComposerMessage(runtime, sessionId = "", input = {}) {
     message: normalizeText(input?.message || input?.text),
     messageId: normalizeText(input?.messageId || input?.composerSubmissionId),
     originId: normalizeText(input?.originId),
+    promptTemplateId: normalizeText(input?.promptTemplateId),
     submittedAt: new Date().toISOString(),
     vibe64User: composerMessageVibe64User(input?.vibe64User)
   };

@@ -12,10 +12,30 @@ import {
   writeState
 } from "./workflowStepMachineHelpers.js";
 
+const PROMPT_START_RECOVERY_STATUSES = Object.freeze([
+  STEP_STATUS.DONE,
+  STEP_STATUS.FAILED,
+  STEP_STATUS.READY,
+  STEP_STATUS.WAITING_FOR_INPUT
+]);
+
 function workflowStepMachine(runtime = null, stepId = "") {
   return typeof runtime?.workflowStepMachineForStep === "function"
     ? runtime.workflowStepMachineForStep(stepId)
     : null;
+}
+
+function preservedStepStateDetails(state = {}) {
+  const {
+    at: _at,
+    from: _from,
+    schemaVersion: _schemaVersion,
+    source: _source,
+    status: _status,
+    stepId: _stepId,
+    ...details
+  } = state;
+  return details;
 }
 
 function currentStepResultContractValue(value, session = {}) {
@@ -222,20 +242,11 @@ async function returnControlFromAgentWait(runtime, session = {}, {
   if (normalizeText(state.status) !== STEP_STATUS.AWAITING_AGENT_RESULT) {
     return false;
   }
-  const {
-    at: _previousAt,
-    from: _previousFrom,
-    schemaVersion: _previousSchemaVersion,
-    source: _previousSource,
-    status: _previousStatus,
-    stepId: _previousStepId,
-    ...previousDetails
-  } = state;
   await writeState({
     runtime,
     session
   }, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-    ...previousDetails,
+    ...preservedStepStateDetails(state),
     from: STEP_STATUS.AWAITING_AGENT_RESULT,
     message: normalizeText(inputPrompt),
     source: "system_recovery"
@@ -268,6 +279,35 @@ async function recordStepMachineActionFinished(runtime, session = {}, actionId =
   });
 }
 
+async function recoverFailedPromptActionStart(runtime, session = {}, {
+  message = "The Codex prompt could not be prepared. Retry this step."
+} = {}) {
+  const machine = workflowStepMachine(runtime, session.currentStep);
+  if (!machine) {
+    return false;
+  }
+  const state = await readState({
+    runtime,
+    session
+  }, machine);
+  if (normalizeText(state.status) !== STEP_STATUS.AWAITING_AGENT_RESULT) {
+    return false;
+  }
+  const recordedStatus = normalizeText(state.from);
+  const previousStatus = PROMPT_START_RECOVERY_STATUSES.includes(recordedStatus)
+    ? recordedStatus
+    : STEP_STATUS.READY;
+  await writeState({
+    runtime,
+    session
+  }, machine, machineState(previousStatus, {
+    ...preservedStepStateDetails(state),
+    message: normalizeText(message),
+    source: "prompt_start_recovery"
+  }));
+  return true;
+}
+
 export {
   STEP_STATUS,
   applyStepMachineView,
@@ -276,6 +316,7 @@ export {
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
   recordStepMachineActionStarted,
+  recoverFailedPromptActionStart,
   recoverStuckStepMachineExecution,
   returnControlFromAgentWait,
   saveStepMachineInput

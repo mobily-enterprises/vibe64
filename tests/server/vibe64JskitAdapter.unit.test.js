@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -67,6 +67,28 @@ const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
 const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
 const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 const JSKIT_PROMPT_ROOT = fileURLToPath(new URL("../../packages/vibe64-adapters/src/server/adapters/jskit/prompts", import.meta.url));
+const PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER = "0".repeat(64);
+
+async function runtimePreviewAuthEnvironment(spec, {
+  sessionRoot,
+  terminalId = "unit-terminal"
+} = {}) {
+  const fingerprintEnv = spec.env();
+  assert.equal(fingerprintEnv.AUTH_DEV_BYPASS_SECRET, PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER);
+
+  const env = spec.env({
+    id: terminalId
+  });
+  assert.match(env.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
+  assert.notEqual(env.AUTH_DEV_BYPASS_SECRET, PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER);
+  assert.equal(env.VIBE64_PREVIEW_AUTH_PROFILE_FILE, undefined);
+
+  const secretPath = path.join(sessionRoot, "runtime", "preview-auth", terminalId, "exchange-secret");
+  assert.equal(await readFile(secretPath, "utf8"), env.AUTH_DEV_BYPASS_SECRET);
+  assert.equal((await stat(path.dirname(secretPath))).mode & 0o777, 0o700);
+  assert.equal((await stat(secretPath)).mode & 0o777, 0o600);
+  return env;
+}
 
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -667,8 +689,9 @@ test("jskit Vibe64 self-target uses host execution with shared project roots and
     const args = spec.args({
       id: terminalId
     });
-    const env = spec.env({
-      id: terminalId
+    const env = await runtimePreviewAuthEnvironment(spec, {
+      sessionRoot,
+      terminalId
     });
     assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "unit-owner");
     assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], projectsRoot);
@@ -684,12 +707,7 @@ test("jskit Vibe64 self-target uses host execution with shared project roots and
     assert.equal(Number(previewProxyPortEnd), Number(previewProxyPortStart) + 99);
     assert.equal(env.CODEX_HOME, undefined);
     assert.notEqual(selfTargetSystemRoot, parentSystemRoot);
-    assert.match(env.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
-    assert.match(env.VIBE64_PREVIEW_AUTH_PROFILE_FILE, /\/profile\.json$/u);
-    assert.equal(path.dirname(env.VIBE64_PREVIEW_AUTH_PROFILE_FILE), path.join(sessionRoot, "runtime", "preview-auth", terminalId));
     const startupScript = args.at(-1);
-    const authIndex = startupScript.indexOf("Preparing preview auth user.");
-    assert.notEqual(authIndex, -1);
     assert.doesNotMatch(startupScript, /previewAuthCookieName/u);
     assert.doesNotMatch(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
@@ -1227,15 +1245,11 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const args = spec.args({
       id: "unit-terminal"
     });
-    const previewAuthEnv = spec.env({
-      id: "unit-terminal"
+    const previewAuthEnv = await runtimePreviewAuthEnvironment(spec, {
+      sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId)
     });
     assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
-    assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
-    const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
-    assert.match(profilePath, /\/profile\.json$/u);
-    assert.equal(path.dirname(profilePath), path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "runtime", "preview-auth", "unit-terminal"));
     assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
     assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
@@ -1244,18 +1258,15 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
-    const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const serverIndex = startupScript.indexOf("npm run server");
     assert.notEqual(buildIndex, -1);
     assert.notEqual(migrateIndex, -1);
-    assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
     assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
     assert.doesNotMatch(startupScript, /Preparing JSKIT managed database/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
     assert.ok(buildIndex < migrateIndex);
-    assert.ok(migrateIndex < previewAuthIndex);
-    assert.ok(previewAuthIndex < serverIndex);
+    assert.ok(migrateIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
     assert.match(startupScript, /fetch\(href/u);
@@ -1284,13 +1295,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
               jskit_database_runtime: "mariadb"
             }
           },
-          serviceDataRoot,
-          vibe64User: {
-            email: "Owner@Example.COM",
-            github: {
-              login: "repo-owner"
-            }
-          }
+          serviceDataRoot
         },
         launchTargetId: "dev",
         session: {
@@ -1321,15 +1326,11 @@ test("jskit dev launch starts backend and Vite together", async () => {
     const args = spec.args({
       id: "unit-terminal"
     });
-    const previewAuthEnv = spec.env({
-      id: "unit-terminal"
+    const previewAuthEnv = await runtimePreviewAuthEnvironment(spec, {
+      sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId)
     });
     assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
-    assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
-    const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
-    assert.match(profilePath, /\/profile\.json$/u);
-    assert.equal(path.dirname(profilePath), path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "runtime", "preview-auth", "unit-terminal"));
     assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
     assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
@@ -1341,15 +1342,12 @@ test("jskit dev launch starts backend and Vite together", async () => {
       new RegExp(`VIBE64_JSKIT_BACKEND_PORT=\\\\?"?${spec.metadata.backendPort}`, "u")
     );
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
-    const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const startStackIndex = startupScript.indexOf("trap cleanup_vibe64_jskit_dev EXIT INT TERM\nvibe64_jskit_start_stack");
     assert.notEqual(migrateIndex, -1);
-    assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(startStackIndex, -1);
     assert.doesNotMatch(startupScript, /Preparing JSKIT managed database/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
-    assert.ok(migrateIndex < previewAuthIndex);
-    assert.ok(previewAuthIndex < startStackIndex);
+    assert.ok(migrateIndex < startStackIndex);
     assert.match(startupScript, /npm run server/u);
     assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
@@ -1381,12 +1379,6 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
     assert.match(startupScript, /fetch\(href/u);
     assert.match(startupScript, /Launch target did not become ready at/u);
-    assert.match(startupScript, /JSKIT_PREVIEW_AUTH_PROVIDER=vibe64-preview/u);
-    assert.match(startupScript, /JSKIT_PREVIEW_AUTH_PROVIDER_USER_SID=vibe64:owner@example\.com/u);
-    assert.match(startupScript, /JSKIT_PREVIEW_USER_EMAIL=owner@example\.com/u);
-    assert.match(startupScript, /JSKIT_PREVIEW_USER_USERNAME=repo-owner/u);
-    assert.match(startupScript, /npx --no-install jskit app prepare-preview-user --ensure-workspace=true/u);
-    assert.doesNotMatch(startupScript, /const findByEmail/u);
     } finally {
       spec?.releasePortReservation?.();
     }

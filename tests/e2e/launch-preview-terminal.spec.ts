@@ -5,6 +5,9 @@ import type { AddressInfo } from "node:net";
 import {
   injectLaunchPreviewBridge
 } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
+import {
+  PREVIEW_IDENTITY_CONTROL_PATH
+} from "../../packages/vibe64-core/src/server/previewAuth.js";
 
 import {
   BASE_URL,
@@ -21,6 +24,19 @@ const TARGET_APP_URL = "http://127.0.0.1:4103/home";
 const PROXY_APP_URL = "http://127.0.0.1:49000/home";
 type SourceExplanationPayload = Record<string, unknown>;
 type SourceExplanationResponse = unknown[] | ((payload: SourceExplanationPayload) => unknown[]);
+type PreviewIdentitySelection = {
+  displayName?: string;
+  email?: string;
+  mode: string;
+};
+type PreviewIdentityExchangeResult = {
+  code?: string;
+  error?: string;
+  identity?: Record<string, unknown> | null;
+  ok?: boolean;
+  signedOut?: boolean;
+  status?: number;
+};
 
 async function openSessionDashboardTool(page: Page, label: string) {
   await page.getByRole("tab", {
@@ -49,6 +65,133 @@ test("@preview-lifecycle renders through the proxy and displays the target URL",
   await expect(
     page.locator(".studio-home-shell-preview-toolbar-host .vibe64-launch-controls__toolbar")
   ).toBeVisible();
+});
+
+test("@preview-identity switches between real app identities and Guest without restarting", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page, {
+    previewIdentity: previewIdentityCapability(),
+    previewIdentityExchange: (selection) => ({
+      identity: selection.mode === "guest"
+        ? null
+        : {
+            email: selection.email,
+            userId: selection.mode === "viewer" ? "app-user-viewer" : "app-user-custom",
+            username: selection.mode === "viewer" ? "Ada App" : "Grace App"
+          },
+      ok: true
+    }),
+    previewIdentityExchangeDelayMs: 500
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  const identityButton = page.getByRole("button", {
+    name: /Previewing as|Switching preview identity/u
+  });
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toContainText(
+    "Opening preview as"
+  );
+  await expect(identityButton).toHaveAttribute(
+    "aria-label",
+    "Previewing as You — ada@example.com"
+  );
+  await expect(page.locator(".vibe64-launch-controls__preview-overlay")).toHaveCount(0);
+
+  await identityButton.click();
+  await page.locator(".vibe64-launch-controls__identity-menu")
+    .getByText("Guest", { exact: true })
+    .click();
+  await expect(identityButton).toHaveAttribute("aria-label", "Previewing as Guest");
+
+  await identityButton.click();
+  await page.locator(".vibe64-launch-controls__identity-menu")
+    .getByText("Another app user…", { exact: true })
+    .click();
+  await page.getByLabel("Application user email").fill("GRACE@EXAMPLE.COM");
+  await page.getByRole("button", { name: "Preview as user" }).click();
+  await expect(identityButton).toHaveAttribute(
+    "aria-label",
+    "Previewing as Grace App — grace@example.com"
+  );
+
+  expect(launchSession.getPreviewIdentitySelections()).toEqual([
+    {
+      displayName: "Ada Viewer",
+      email: "ada@example.com",
+      mode: "viewer"
+    },
+    {
+      mode: "guest"
+    },
+    {
+      email: "grace@example.com",
+      mode: "email"
+    }
+  ]);
+  expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
+});
+
+test("@preview-identity exposes exact app errors and remains recoverable on mobile", async ({ page }) => {
+  await page.setViewportSize({
+    height: 844,
+    width: 390
+  });
+  await mockLaunchTerminalSocket(page);
+  const launchSession = await mockLaunchSession(page, {
+    previewIdentity: previewIdentityCapability(),
+    previewIdentityExchange: (selection) => {
+      if (selection.email === "missing@example.com") {
+        return {
+          code: "auth_user_not_found",
+          error: "User not found.",
+          ok: false,
+          signedOut: true,
+          status: 404
+        };
+      }
+      return {
+        identity: {
+          email: selection.email,
+          userId: "app-user-viewer",
+          username: "Ada App"
+        },
+        ok: true
+      };
+    }
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  await page.getByRole("button", { name: "Show project" }).click();
+  await page.getByRole("button", { name: "Show preview controls" }).click();
+
+  const identityButton = page.getByRole("button", {
+    name: "Previewing as You — ada@example.com"
+  });
+  await expect(identityButton).toBeVisible();
+  await identityButton.click();
+  await page.locator(".vibe64-launch-controls__identity-menu")
+    .getByText("Another app user…", { exact: true })
+    .click();
+  await page.getByLabel("Application user email").fill("missing@example.com");
+  await page.getByRole("button", { name: "Preview as user" }).click();
+
+  await expect(page.getByText("User not found.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", {
+    name: "Preview identity failed: User not found."
+  })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", {
+    name: "Preview identity failed: User not found."
+  }).click();
+  await page.locator(".vibe64-launch-controls__identity-menu")
+    .getByText("You", { exact: true })
+    .click();
+  await expect(page.getByRole("button", {
+    name: "Previewing as You — ada@example.com"
+  })).toBeVisible();
+
+  expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
 });
 
 test("@preview-lifecycle attaches multiple visible preview frames and stops each shared tab stream", async ({ page }) => {
@@ -1117,6 +1260,9 @@ async function mockLaunchSession(page: Page, {
   launchStatusSequence = null,
   launchTerminalDelayMs = 0,
   previewBootstrapToken = "",
+  previewIdentity = null,
+  previewIdentityExchange = null,
+  previewIdentityExchangeDelayMs = 0,
   previewResponseDelayMs = 0,
   session = sessionPayload(),
   sessionList = null,
@@ -1130,6 +1276,9 @@ async function mockLaunchSession(page: Page, {
   launchStatusSequence?: unknown[] | null;
   launchTerminalDelayMs?: number;
   previewBootstrapToken?: string;
+  previewIdentity?: Record<string, unknown> | null;
+  previewIdentityExchange?: ((selection: PreviewIdentitySelection) => PreviewIdentityExchangeResult) | null;
+  previewIdentityExchangeDelayMs?: number;
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
@@ -1141,6 +1290,8 @@ async function mockLaunchSession(page: Page, {
   const sourceEditor = sourceEditorFiles ? createSourceEditorMock(sourceEditorFiles) : null;
   const queuedSourceExplanationResponses = [...sourceExplanationResponses];
   const launchStartPayloads: unknown[] = [];
+  const previewIdentityGrants = new Map<string, PreviewIdentitySelection>();
+  const previewIdentitySelections: PreviewIdentitySelection[] = [];
   const attachmentUploads: Array<{
     contentType: string;
     dataBase64: string;
@@ -1154,6 +1305,7 @@ async function mockLaunchSession(page: Page, {
   let launchStatusReadCount = 0;
   let launchStatusSequenceIndex = 0;
   let previewLoadCount = 0;
+  let previewIdentityGrantSequence = 0;
   const previewServer = previewBootstrapToken
     ? await startPreviewAppServer({
         bootstrapToken: previewBootstrapToken,
@@ -1175,11 +1327,12 @@ async function mockLaunchSession(page: Page, {
       return initialLaunchStatus;
     }
     return launchStatusPayload(launchStarted
-      ? { launchTargetPreviewOptions, previewHref }
+      ? { launchTargetPreviewOptions, previewHref, previewIdentity }
       : {
           activeTerminal: null,
           launchTargetPreviewOptions,
-          previewHref
+          previewHref,
+          previewIdentity
         });
   }
   function sessionForRequest(pathname: string) {
@@ -1212,8 +1365,24 @@ async function mockLaunchSession(page: Page, {
         ok: true,
         ...launchStatusPayload({
           launchTargetPreviewOptions,
-          previewHref
+          previewHref,
+          previewIdentity
         }).activeTerminal
+      });
+      return;
+    }
+    if (method === "POST" && url.pathname.endsWith("/preview-identity")) {
+      const requestedIdentity = normalizePreviewIdentitySelection(
+        request.postDataJSON(),
+        previewIdentity
+      );
+      const grant = `preview-identity-grant-${++previewIdentityGrantSequence}`;
+      previewIdentityGrants.set(grant, requestedIdentity);
+      previewIdentitySelections.push(requestedIdentity);
+      await fulfillJson(route, {
+        grant,
+        ok: true,
+        requestedIdentity
       });
       return;
     }
@@ -1322,6 +1491,40 @@ async function mockLaunchSession(page: Page, {
   });
   if (!previewServer) {
     await page.route("http://127.0.0.1:49000/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() === "POST" && url.pathname === PREVIEW_IDENTITY_CONTROL_PATH) {
+        const grant = String((request.postDataJSON() as { grant?: string })?.grant || "");
+        const selection = previewIdentityGrants.get(grant);
+        if (!selection) {
+          await fulfillJson(route, {
+            code: "vibe64_preview_identity_grant_invalid",
+            error: "Preview identity grant is missing or invalid.",
+            ok: false
+          }, {
+            status: 403
+          });
+          return;
+        }
+        previewIdentityGrants.delete(grant);
+        if (previewIdentityExchangeDelayMs > 0) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, previewIdentityExchangeDelayMs);
+          });
+        }
+        const result = previewIdentityExchange?.(selection) || {
+          identity: selection.mode === "guest" ? null : {
+            email: selection.email,
+            userId: "app-user",
+            username: selection.displayName || selection.email
+          },
+          ok: true
+        };
+        await fulfillJson(route, result, {
+          status: result.status || (result.ok === false ? 400 : 200)
+        });
+        return;
+      }
       previewLoadCount += 1;
       if (previewResponseDelayMs > 0) {
         await new Promise((resolve) => {
@@ -1357,8 +1560,50 @@ async function mockLaunchSession(page: Page, {
     },
     getPreviewLoadCount() {
       return previewServer?.getLoadCount() || previewLoadCount;
+    },
+    getPreviewIdentitySelections() {
+      return [...previewIdentitySelections];
     }
   };
+}
+
+function previewIdentityCapability() {
+  return {
+    available: true,
+    defaultMode: "viewer",
+    disabledReason: "",
+    viewer: {
+      displayName: "Ada Viewer",
+      email: "ada@example.com"
+    }
+  };
+}
+
+function normalizePreviewIdentitySelection(
+  value: unknown,
+  capability: Record<string, unknown> | null
+): PreviewIdentitySelection {
+  const selection = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const mode = String(selection.mode || "viewer");
+  if (mode === "viewer") {
+    const viewer = capability?.viewer && typeof capability.viewer === "object" && !Array.isArray(capability.viewer)
+      ? capability.viewer as Record<string, unknown>
+      : {};
+    return {
+      displayName: String(viewer.displayName || viewer.email || ""),
+      email: String(viewer.email || "").trim().toLowerCase(),
+      mode
+    };
+  }
+  if (mode === "email") {
+    return {
+      email: String(selection.email || "").trim().toLowerCase(),
+      mode
+    };
+  }
+  return { mode: "guest" };
 }
 
 function escapeRegExp(value: string) {
@@ -2039,6 +2284,7 @@ function launchStatusPayload(options: {
   activeTerminal?: unknown;
   launchTargetPreviewOptions?: unknown[];
   previewHref?: string;
+  previewIdentity?: Record<string, unknown> | null;
 } = {}) {
   const launchTargetPreviewOptions = options.launchTargetPreviewOptions || [];
   const previewHref = options.previewHref || PROXY_APP_URL;
@@ -2076,6 +2322,7 @@ function launchStatusPayload(options: {
       devLaunchTarget
     ],
     ok: true,
+    ...(options.previewIdentity ? { previewIdentity: options.previewIdentity } : {}),
     openTarget: {
       available: true,
       href: TARGET_APP_URL,
@@ -2270,10 +2517,15 @@ function sourceEditorExplanationPayload(payload: SourceExplanationPayload = {}, 
   };
 }
 
-async function fulfillJson(route: Route, payload: unknown) {
+async function fulfillJson(route: Route, payload: unknown, {
+  status = 200
+}: {
+  status?: number;
+} = {}) {
   await route.fulfill({
     body: JSON.stringify(payload),
-    contentType: "application/json"
+    contentType: "application/json",
+    status
   });
 }
 

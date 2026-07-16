@@ -459,15 +459,6 @@ function previewStartStdout(summary = {}, {
   ].join("\n") + "\n";
 }
 
-function launchInputFromStatus(status = {}) {
-  const lastLaunchTarget = isRecord(status.lastLaunchTarget) ? status.lastLaunchTarget : {};
-  if (isRecord(lastLaunchTarget.launchInput)) {
-    return lastLaunchTarget.launchInput;
-  }
-  const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
-  return isRecord(activeMetadata.launchInput) ? activeMetadata.launchInput : {};
-}
-
 function launchTargetIdFromStatus(status = {}) {
   const lastLaunchTarget = isRecord(status.lastLaunchTarget) ? status.lastLaunchTarget : {};
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
@@ -689,7 +680,7 @@ function createAgentPreviewCommandService({
     if (ensuring && typeof launchTarget.ensurePreview !== "function") {
       return finish(responseError("Vibe64 managed preview startup is not available.", "vibe64_agent_preview_command_ensure_unavailable"));
     }
-    if (!ensuring && typeof launchTarget.startTerminal !== "function") {
+    if (!ensuring && typeof launchTarget.restartPreview !== "function") {
       return finish(responseError("Vibe64 preview restart is not available.", "vibe64_agent_preview_command_restart_unavailable"));
     }
 
@@ -697,25 +688,7 @@ function createAgentPreviewCommandService({
     if (ensuring) {
       started = await launchTarget.ensurePreview(sessionId);
     } else {
-      const beforeStatus = await launchTarget.launchStatus(sessionId);
-      if (beforeStatus?.ok === false) {
-        return finish({
-          ...beforeStatus,
-          exitCode: 1,
-          stderr: `${beforeStatus.error || "Vibe64 preview status failed."}\n`
-        });
-      }
-      const launchTargetId = launchTargetIdFromStatus(beforeStatus);
-      if (!launchTargetId) {
-        return finish(responseError("No managed Vibe64 preview has been started for this session.", "vibe64_agent_preview_command_no_launch_target", {
-          exitCode: 1
-        }));
-      }
-      started = await launchTarget.startTerminal(sessionId, {
-        forceRestart: true,
-        launchInput: launchInputFromStatus(beforeStatus),
-        launchTargetId
-      });
+      started = await launchTarget.restartPreview(sessionId);
     }
     if (started?.ok === false) {
       return finish({

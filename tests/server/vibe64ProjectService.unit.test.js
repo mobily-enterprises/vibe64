@@ -13,6 +13,7 @@ import {
   projectEnvUserValuesInputValidator
 } from "../../packages/vibe64-project/src/server/inputSchemas.js";
 import {
+  VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   createCoreWorkflowRegistry
 } from "@local/vibe64-runtime/server";
@@ -27,6 +28,9 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import {
+  PROJECT_APPLICATION_MODE_EXISTING
+} from "../../packages/vibe64-core/src/server/projectApplication.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
@@ -1034,6 +1038,61 @@ test("Vibe64 project service reads bootstrap config when active session sources 
   });
 });
 
+test("Vibe64 project service requires initialization for an explicitly existing application", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "existing-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        fullName: "example/existing-app"
+      }),
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
+      slug: "existing-app"
+    });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
+    const requestContext = {
+      projectRecordPath: projectContext.projectRecordPathForSlug("existing-app"),
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
+      projectsRoot,
+      slug: "existing-app",
+      targetRoot: projectRoot
+    };
+    const service = createService({
+      projectContext
+    });
+
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectType({
+      projectType: "jskit",
+      sessionId: "before-initialization"
+    }));
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      sessionId: "before-initialization",
+      values: {
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mariadb"
+      }
+    }));
+
+    const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
+    const creationOptions = await runtime.workflowDefinitionCreationOptions();
+
+    assert.equal(creationOptions.initializationRequired, true);
+    assert.equal(creationOptions.seedRequired, false);
+    assert.equal(creationOptions.mode, "initialization_required");
+    assert.equal(
+      creationOptions.defaultWorkflowDefinition,
+      VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR
+    );
+  });
+});
+
 test("Vibe64 project service stores zero-source online setup as temporary bootstrap metadata", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -2014,10 +2073,10 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.equal(env.AUTH_PROVIDER, "supabase");
     assert.equal(env.AUTH_SUPABASE_URL, "https://devref.supabase.co");
     assert.equal(env.AUTH_SUPABASE_PUBLISHABLE_KEY, "pk_dev");
-    assert.equal(env.AUTH_DEV_BYPASS_ENABLED, "true");
-    assert.match(env.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
-    assert.equal(env.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
-    assert.equal(env.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
+    assert.equal(env.AUTH_DEV_BYPASS_ENABLED, undefined);
+    assert.equal(env.AUTH_DEV_BYPASS_SECRET, undefined);
+    assert.equal(env.AUTH_DEV_ACCESS_TTL_SECONDS, undefined);
+    assert.equal(env.AUTH_DEV_REFRESH_TTL_SECONDS, undefined);
     assert.equal(env.DB_CLIENT, "mysql2");
     assert.equal(env.DB_HOST, "127.0.0.1");
     assert.equal(env.DB_USER, JSKIT_MARIADB_APP_USER);
@@ -2053,8 +2112,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.match(rootEnv, /AUTH_PROVIDER=supabase/u);
     assert.match(rootEnv, /AUTH_SUPABASE_URL=https:\/\/devref\.supabase\.co/u);
     assert.match(rootEnv, /AUTH_SUPABASE_PUBLISHABLE_KEY=pk_dev/u);
-    assert.match(rootEnv, /AUTH_DEV_BYPASS_ENABLED=true/u);
-    assert.match(rootEnv, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
+    assert.doesNotMatch(rootEnv, /AUTH_DEV_BYPASS_/u);
     assert.match(rootEnv, /DB_NAME=target_/u);
     assert.doesNotMatch(rootEnv, /AUTH_PROFILE_MODE/u);
     assert.doesNotMatch(rootEnv, /JSKIT_AUTH_SUPABASE_/u);

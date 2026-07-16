@@ -19,8 +19,7 @@ import {
   resolveStudioProjectsRoot
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
-  JSKIT_PREVIEW_AUTH_KIND,
-  PREVIEW_AUTH_PROFILE
+  JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
   shellQuote
@@ -155,55 +154,6 @@ const JSKIT_BUILT_RESTART_ON_CHANGE = Object.freeze({
 	    ".git/**"
 	  ])
 	});
-
-function previewAuthProfileSeed(vibe64User = null) {
-  const email = String(vibe64User?.email || "").trim().toLowerCase();
-  if (!email) {
-    return PREVIEW_AUTH_PROFILE;
-  }
-  const username = String(vibe64User?.github?.login || email.split("@")[0] || PREVIEW_AUTH_PROFILE.username)
-    .trim()
-    .toLowerCase();
-  const displayName = String(vibe64User?.displayName || vibe64User?.name || username || email).trim();
-  return {
-    ...PREVIEW_AUTH_PROFILE,
-    email,
-    username,
-    displayName,
-    authProvider: "vibe64-preview",
-    authProviderUserSid: `vibe64:${email}`
-  };
-}
-
-function jskitPreviewUserEnvironmentCommandPrefix(vibe64User = null) {
-  const profile = previewAuthProfileSeed(vibe64User);
-  const env = {
-    JSKIT_PREVIEW_AUTH_PROVIDER: profile.authProvider,
-    JSKIT_PREVIEW_AUTH_PROVIDER_USER_SID: profile.authProviderUserSid,
-    JSKIT_PREVIEW_USER_DISPLAY_NAME: profile.displayName,
-    JSKIT_PREVIEW_USER_EMAIL: profile.email,
-    JSKIT_PREVIEW_USER_USERNAME: profile.username
-  };
-  return Object.entries(env)
-    .filter(([, value]) => String(value || "").trim())
-    .map(([key, value]) => `${key}=${shellQuote(value)}`)
-    .join(" ");
-}
-
-function createJskitPreviewAuthProfileCommand({
-  vibe64User = null
-} = {}) {
-  const envPrefix = jskitPreviewUserEnvironmentCommandPrefix(vibe64User);
-  return [
-    envPrefix,
-    "npx",
-    "--no-install",
-    "jskit",
-    "app",
-    "prepare-preview-user",
-    "--ensure-workspace=true"
-  ].filter(Boolean).join(" ");
-}
 
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
   try {
@@ -848,8 +798,6 @@ function createJskitDevCommand({
   backendPort = DEFAULT_DEV_BACKEND_PORT,
   frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
   migrationCommand = "",
-  previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
-  previewAuthProfileLabel = "Preparing preview auth user.",
   startupArgs = []
 } = {}) {
   const backendCommandWithArgs = jskitManagedPreviewServerRuntimeCommandWithStartupArgs(backendCommand, startupArgs, {
@@ -857,7 +805,6 @@ function createJskitDevCommand({
   });
   const frontendRuntimeCommand = jskitRuntimeCommand(frontendCommand);
   const migrationRuntimeCommand = jskitRuntimeCommand(migrationCommand);
-  const previewAuthRuntimeCommand = jskitRuntimeCommand(previewAuthProfileCommand);
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
@@ -873,8 +820,6 @@ function createJskitDevCommand({
           migrationRuntimeCommand
         ]
       : []),
-    `printf '\\n[studio] ${previewAuthProfileLabel.replaceAll("'", "'\\''")}\\n'`,
-    previewAuthRuntimeCommand,
     "cleanup_vibe64_jskit_dev() {",
     "  vibe64_jskit_stop_frontend",
     "  vibe64_jskit_stop_backend",
@@ -1263,7 +1208,6 @@ async function createJskitBuiltLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
-  vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
@@ -1276,13 +1220,6 @@ async function createJskitBuiltLaunchDescriptor({
       }
     : null;
   const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
-  const previewAuthProfileCommand = {
-    command: jskitRuntimeCommand(createJskitPreviewAuthProfileCommand({
-      vibe64User
-    })),
-    label: "Preparing preview auth user.",
-    networkEnv: true
-  };
 
   return {
     commands: config.buildCommand || config.serverCommand
@@ -1295,7 +1232,6 @@ async function createJskitBuiltLaunchDescriptor({
               }
             : null,
           migrationCommand,
-          previewAuthProfileCommand,
           config.serverCommand
             ? {
                 command: jskitManagedPreviewServerRuntimeCommandWithStartupArgs(config.serverCommand, startupArgs, {
@@ -1308,7 +1244,6 @@ async function createJskitBuiltLaunchDescriptor({
         ].filter(Boolean)
       : [
           migrationCommand,
-          previewAuthProfileCommand,
           {
             command: jskitManagedPreviewServerRuntimeCommandWithStartupArgs(config.testrunCommand, startupArgs, {
               separator: "--"
@@ -1324,7 +1259,6 @@ async function createJskitBuiltLaunchDescriptor({
       databaseHost,
       migrationCommand: config.migrationCommand,
       runtimeNamespace: config.runtimeNamespace,
-      previewAuthProfileCommand: "enabled",
       serverCommand: config.serverCommand,
       selfTarget: config.selfTarget,
       selfTargetSource: config.selfTargetSource,
@@ -1347,7 +1281,6 @@ async function createJskitDevLaunchDescriptor({
   databaseHost = "",
   launchInput = {},
   selfTarget = null,
-  vibe64User = null,
   workdir = "",
   worktreePath = ""
 } = {}) {
@@ -1360,10 +1293,6 @@ async function createJskitDevLaunchDescriptor({
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
       migrationCommand: config.migrationCommand,
-      previewAuthProfileCommand: createJskitPreviewAuthProfileCommand({
-        vibe64User
-      }),
-      previewAuthProfileLabel: "Preparing preview auth user.",
       startupArgs
     }),
     env: jskitManagedPreviewEnv(selfTarget),
@@ -1377,7 +1306,6 @@ async function createJskitDevLaunchDescriptor({
       mode: "dev",
       runtimeNamespace: config.runtimeNamespace,
       serverRestartCheck: agentRunsRoot ? "active-agent-runs" : "",
-      previewAuthProfileCommand: "enabled",
       selfTarget: config.selfTarget,
       selfTargetSource: config.selfTargetSource,
       ...jskitSelfTargetMetadata(selfTarget)
@@ -1523,7 +1451,6 @@ async function createJskitLaunchTargetTerminalSpec({
           databaseHost,
           launchInput,
           selfTarget,
-          vibe64User: context.vibe64User || null,
           workdir: launchWorktreePath,
           worktreePath: launchWorktreePath
         });

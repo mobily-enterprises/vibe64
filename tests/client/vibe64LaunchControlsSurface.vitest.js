@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  defaultPreviewIdentityMode,
   launchPreviewAddressNavigationUrl,
   launchPreviewEmptyText,
   launchPreviewFrameUrl,
   previewFrameLifecycleIdentity,
+  previewIdentityFromExchange,
+  previewIdentityLabelText,
+  previewIdentityLifecycleIdentity,
+  previewIdentityTitleText,
+  previewLoadingOverlayShouldShow,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,
@@ -291,6 +297,87 @@ describe("Vibe64 launch controls surface", () => {
       src: "https://preview.example.test/settings?vibe64_preview_token=first",
       terminalSessionId: "terminal-2"
     }));
+  });
+
+  it("resets preview identity state only when its project, session, terminal, or app route changes", () => {
+    const lifecycle = {
+      launchTargetId: "dev",
+      previewBaseUrl: "https://preview.example.test/settings?vibe64_preview_token=first",
+      projectSlug: "catalog",
+      sessionId: "session-1",
+      terminalSessionId: "terminal-1"
+    };
+
+    expect(previewIdentityLifecycleIdentity(lifecycle)).toBe(previewIdentityLifecycleIdentity({
+      ...lifecycle,
+      previewBaseUrl: "https://preview.example.test/settings?vibe64_preview_token=second"
+    }));
+    expect(previewIdentityLifecycleIdentity(lifecycle)).not.toBe(previewIdentityLifecycleIdentity({
+      ...lifecycle,
+      terminalSessionId: "terminal-2"
+    }));
+    expect(previewIdentityLifecycleIdentity(lifecycle)).not.toBe(previewIdentityLifecycleIdentity({
+      ...lifecycle,
+      sessionId: "session-2"
+    }));
+  });
+
+  it("presents confirmed, switching, guest, and recoverable failure identity states", () => {
+    const viewer = {
+      email: "ada@example.com",
+      mode: "viewer"
+    };
+    expect(previewIdentityLabelText({ identity: viewer })).toBe("You — ada@example.com");
+    expect(previewIdentityLabelText({ identity: { mode: "guest" } })).toBe("Guest");
+    expect(previewIdentityLabelText({
+      identity: {
+        email: "grace@example.com",
+        mode: "email",
+        username: "Grace"
+      }
+    })).toBe("Grace — grace@example.com");
+    expect(previewIdentityTitleText({ busy: true })).toBe("Switching preview identity…");
+    expect(previewIdentityTitleText({
+      error: "User not found.",
+      identity: { mode: "guest" }
+    })).toBe("Preview identity failed: User not found.");
+    expect(previewLoadingOverlayShouldShow({
+      identityBusy: true,
+      loadedFrameRequestId: 4,
+      previewFrameRequestId: 4,
+      previewUrl: "https://preview.example.test/home"
+    })).toBe(true);
+    expect(defaultPreviewIdentityMode({
+      capability: { defaultMode: "viewer" },
+      viewer: { email: "ada@example.com" }
+    })).toBe("viewer");
+    expect(defaultPreviewIdentityMode({
+      capability: { defaultMode: "viewer" }
+    })).toBe("guest");
+  });
+
+  it("uses the application's canonical identity after exchange without changing the selected mode", () => {
+    expect(previewIdentityFromExchange({
+      identity: {
+        email: " ADA@EXAMPLE.COM ",
+        userId: "user-7",
+        username: "Ada"
+      }
+    }, {
+      email: "requested@example.com",
+      mode: "viewer"
+    })).toEqual({
+      displayName: "Ada",
+      email: "ada@example.com",
+      mode: "viewer",
+      userId: "user-7",
+      username: "Ada"
+    });
+    expect(previewIdentityFromExchange({}, {
+      mode: "guest"
+    })).toEqual({
+      mode: "guest"
+    });
   });
 
   it("stores preview location as a host-independent route", () => {

@@ -325,6 +325,14 @@
         <span>{{ thinkingLabel }}</span>
       </div>
 
+      <Vibe64SessionRecoveryNotice
+        v-if="sessionRecovery"
+        :error="sessionRecoveryError"
+        :recovery="sessionRecovery"
+        :resolving-key="sessionRecoveryResolvingKey"
+        @resolve="resolveSessionRecovery"
+      />
+
       <div
         class="studio-autopilot__runtime-status"
         :class="{ 'studio-autopilot__runtime-status--empty': !runtimeStatusVisible }"
@@ -811,6 +819,7 @@ import Vibe64Terminal from "@/components/studio/Vibe64Terminal.vue";
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
 import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
+import Vibe64SessionRecoveryNotice from "@/components/studio/vibe64-session/Vibe64SessionRecoveryNotice.vue";
 import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vibe64StepInputDisplayFields.vue";
@@ -922,6 +931,7 @@ const {
   returnToCommandFailureRecovery,
   requestAgentInterrupt,
   requestCommandAiFix,
+  resolveSessionRecovery,
   resendOptimisticComposerTurn,
   loadMoreChatTurns,
   reloadChatPane,
@@ -942,6 +952,9 @@ const {
   selectedControlValues,
   selectedWorkflowButtonControls,
   sessionId,
+  sessionRecovery,
+  sessionRecoveryError,
+  sessionRecoveryResolvingKey,
   sessionConfigEditable,
   sessionSourceRoot,
   sessionGithubActor,

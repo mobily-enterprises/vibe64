@@ -3,6 +3,7 @@ import {
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
   launchTargetInputValidator,
+  previewIdentityInputValidator,
   projectToolFixInputValidator,
   projectToolRunInputValidator,
   sessionTerminalFixInputValidator,
@@ -14,6 +15,7 @@ import {
   ACTION_START_PROJECT_TOOL_FIX,
   ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_OPEN_LAUNCH_TARGET,
+  ACTION_SELECT_PREVIEW_IDENTITY,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
   ACTION_UPLOAD_AGENT_ATTACHMENT
@@ -130,8 +132,8 @@ function registerRoutes(
     summary: "Read Vibe64 launch target status."
   }, (request) => {
     return terminalService().launchTargetStatus(request.params.sessionId, {
-      publicHost: firstForwardedHeader(request.headers?.["x-forwarded-host"]) || request.headers?.host || "",
-      publicProtocol: firstForwardedHeader(request.headers?.["x-forwarded-proto"]) || request.protocol || ""
+      ...requestPublicRouting(request),
+      vibe64User: request.vibe64User || null
     });
   });
 
@@ -146,6 +148,19 @@ function registerRoutes(
     actionId: ACTION_OPEN_LAUNCH_TARGET,
     buildInput: sessionInput,
     summary: "Open the latest Vibe64 launch target."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/preview-identity", {
+    actionId: ACTION_SELECT_PREVIEW_IDENTITY,
+    body: previewIdentityInputValidator,
+    buildInput(request) {
+      return withVibe64User(request, {
+        ...routes.requestBody(request),
+        ...requestPublicRouting(request),
+        sessionId: request.params.sessionId
+      });
+    },
+    summary: "Select the application identity for this preview browser."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/command-terminal", {
@@ -285,6 +300,13 @@ function withVibe64User(request, input = {}) {
 function firstForwardedHeader(value = "") {
   const rawValue = Array.isArray(value) ? value[0] : value;
   return String(rawValue || "").split(",")[0]?.trim() || "";
+}
+
+function requestPublicRouting(request = {}) {
+  return {
+    publicHost: firstForwardedHeader(request.headers?.["x-forwarded-host"]) || request.headers?.host || "",
+    publicProtocol: firstForwardedHeader(request.headers?.["x-forwarded-proto"]) || request.protocol || ""
+  };
 }
 
 function firstRequestValue(value = "") {

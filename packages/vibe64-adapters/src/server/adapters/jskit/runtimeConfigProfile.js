@@ -5,9 +5,6 @@ import {
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  jskitDevAuthEnvironment
-} from "@local/vibe64-core/server/previewAuth";
-import {
   JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
   JSKIT_AUTH_LOCAL_BACKEND_DB,
   JSKIT_AUTH_LOCAL_BACKEND_FILE,
@@ -60,12 +57,6 @@ const JSKIT_APP_RUNTIME_CONFIG_TARGETS = Object.freeze([
   RUNTIME_CONFIG_TARGETS.COMMAND,
   RUNTIME_CONFIG_TARGETS.ENV_FILE,
   RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET,
-  RUNTIME_CONFIG_TARGETS.SERVER
-]);
-const JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS = Object.freeze([
-  RUNTIME_CONFIG_TARGETS.CHECKS,
-  RUNTIME_CONFIG_TARGETS.COMMAND,
-  RUNTIME_CONFIG_TARGETS.ENV_FILE,
   RUNTIME_CONFIG_TARGETS.SERVER
 ]);
 const JSKIT_LOCAL_AUTH_STORE_DIR = ".jskit/auth";
@@ -316,34 +307,6 @@ function jskitAppAuthRuntimeConfigRecords({
   }));
 }
 
-function jskitDevAuthRuntimeConfigRecords({
-  scope = RUNTIME_CONFIG_SCOPES.DEV,
-  targetRoot = ""
-} = {}) {
-  if (scope !== RUNTIME_CONFIG_SCOPES.DEV) {
-    return [];
-  }
-  const requiredFor = [
-    RUNTIME_CONFIG_PHASES.PREVIEW,
-    RUNTIME_CONFIG_PHASES.SERVER
-  ];
-  const environment = jskitDevAuthEnvironment({
-    targetRoot
-  });
-  return Object.entries(environment).map(([key, value]) => ({
-    ...runtimeRecord({
-      key,
-      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
-      requiredFor,
-      scope,
-      source: "jskit-dev-auth",
-      targets: JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS,
-      value
-    }),
-    editable: false
-  }));
-}
-
 function createJskitRuntimeConfigProfile() {
   return {
     id: "jskit",
@@ -375,10 +338,6 @@ function createJskitRuntimeConfigProfile() {
       ...jskitAppAuthRuntimeConfigRecords({
         projectEnvironment,
         scope
-      }),
-      ...jskitDevAuthRuntimeConfigRecords({
-        scope,
-        targetRoot
       })
     ]
   };
@@ -393,6 +352,5 @@ export {
   createJskitRuntimeConfigProfile,
   jskitConfigNeedsManagedMariaDb,
   jskitAppAuthRuntimeConfigRecords,
-  jskitDevAuthRuntimeConfigRecords,
   jskitManagedDatabaseRuntimeConfigRecords
 };

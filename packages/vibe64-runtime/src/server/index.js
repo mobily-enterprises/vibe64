@@ -1,4 +1,5 @@
 export * from "./coreProjectTools.js";
+export * from "./coreSessionRecovery.js";
 export * from "./agentTurnResults.js";
 export * from "./agentProviders.js";
 export * from "./codexAppServerProvider.js";
@@ -10,6 +11,7 @@ export * from "./runtime.js";
 export * from "./sessionDebugLog.js";
 export * from "./sessionDebugLogCore.js";
 export * from "./sessionLifecycle.js";
+export * from "./sessionRecovery.js";
 export * from "./sessionStore.js";
 export * from "./sessionWorktreeArchive.js";
 export * from "./setupReadiness.js";
@@ -25,3 +27,4 @@ export * from "./workflowRegistry.js";
 export * from "./workflowStepFactories.js";
 export * from "./workflowStepMachineHelpers.js";
 export * from "./workflowStepMachines.js";
+export * from "./workflowSetupRecovery.js";

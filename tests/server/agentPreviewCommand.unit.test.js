@@ -353,9 +353,9 @@ test("agent preview command ensures the managed preview and waits for readiness"
   });
 });
 
-test("agent preview command restarts the managed launch target with saved input", async () => {
+test("agent preview command delegates restart to the managed launch controller", async () => {
   const sessionId = "preview-command-session";
-  const startCalls = [];
+  const restartCalls = [];
   const statuses = [
     {
       activeTerminal: {
@@ -425,11 +425,8 @@ test("agent preview command restarts the managed launch target with saved input"
         statusIndex += 1;
         return status;
       },
-      async startTerminal(receivedSessionId, input) {
-        startCalls.push({
-          input,
-          sessionId: receivedSessionId
-        });
+      async restartPreview(receivedSessionId) {
+        restartCalls.push(receivedSessionId);
         return {
           id: "launch-terminal-2",
           ok: true
@@ -450,18 +447,7 @@ test("agent preview command restarts the managed launch target with saved input"
 
   assert.equal(result.ok, true);
   assert.equal(result.exitCode, 0);
-  assert.deepEqual(startCalls, [
-    {
-      input: {
-        forceRestart: true,
-        launchInput: {
-          workspaceSlug: "demo"
-        },
-        launchTargetId: "jskit-dev"
-      },
-      sessionId
-    }
-  ]);
+  assert.deepEqual(restartCalls, [sessionId]);
   assert.deepEqual(JSON.parse(result.stdout), {
     currentPage: null,
     diagnostics: null,

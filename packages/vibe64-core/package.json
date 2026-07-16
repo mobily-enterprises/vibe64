@@ -33,6 +33,7 @@
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",
     "./server/vibe64MembershipStore": "./src/server/vibe64MembershipStore.js",
     "./server/projectState": "./src/server/projectState.js",
+    "./server/projectApplication": "./src/server/projectApplication.js",
     "./server/projectBootstrapConfig": "./src/server/projectBootstrapConfig.js",
     "./server/projectManifest": "./src/server/projectManifest.js",
     "./server/projectRuntimeOpenState": "./src/server/projectRuntimeOpenState.js",

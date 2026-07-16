@@ -109,6 +109,34 @@ test("composer message batches preserve each durable message while combining pro
   );
 });
 
+test("composer message batches retain a prompt template only when every message selected it", async () => {
+  const runtime = testRuntime();
+  for (const [messageId, promptTemplateId] of [
+    ["template-1", "core.sync_with_remote"],
+    ["template-2", "core.sync_with_remote"]
+  ]) {
+    await acceptComposerMessage(runtime, runtime.session.sessionId, {
+      composerSubmissionId: messageId,
+      message: messageId,
+      promptTemplateId
+    });
+  }
+
+  assert.equal(
+    composerMessageBatch(pendingComposerMessages(runtime.session)).promptTemplateId,
+    "core.sync_with_remote"
+  );
+
+  await acceptComposerMessage(runtime, runtime.session.sessionId, {
+    composerSubmissionId: "free-text",
+    message: "Free text"
+  });
+  assert.equal(
+    composerMessageBatch(pendingComposerMessages(runtime.session)).promptTemplateId,
+    ""
+  );
+});
+
 test("composer message batches never combine messages owned by different users", async () => {
   const runtime = testRuntime();
   for (const [messageId, message, username] of [

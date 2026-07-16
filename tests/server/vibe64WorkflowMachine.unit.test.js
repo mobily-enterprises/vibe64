@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   VIBE64_SESSION_STATUS,
+  VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   Vibe64SessionRuntime,
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
@@ -1902,6 +1903,9 @@ test("vibe64 workflow definition groups expand named sequences and conditionals"
 
 test("vibe64 workflow definitions are ordered step lists with self-contained step metadata", () => {
   const bigFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  const initializeExistingApplication = coreWorkflowForDefinition(
+    VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR
+  );
   const seedApplication = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
   const nonCommitMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 
@@ -2014,6 +2018,36 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
     "local_session_finished"
   ]);
   assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
+
+  assert.deepEqual(initializeExistingApplication.steps.map((step) => step.id), [
+    "session_created",
+    "source_created",
+    "dependencies_installed",
+    "existing_application_reviewed",
+    "changes_committed",
+    "create_and_merge_pull_request",
+    "session_finished"
+  ]);
+  const existingApplicationReview = initializeExistingApplication.steps.find((step) => (
+    step.id === "existing_application_reviewed"
+  ));
+  assert.equal(existingApplicationReview.label, "Review existing app");
+  assert.deepEqual(existingApplicationReview.presentation.stop.screen.sections, [
+    "launch_controls",
+    "response_preview"
+  ]);
+  assert.equal(
+    existingApplicationReview.presentation.stop.intents.find((intent) => intent.id === "continue_step")?.label,
+    "Continue initialization"
+  );
+  assert.match(
+    existingApplicationReview.presentation.automation.action.input.conversationRequest,
+    /managed browser/u
+  );
+  assert.equal(
+    typeof initializeExistingApplication.intentHandlers.create_and_merge_pull_request.merge_and_sync,
+    "function"
+  );
 });
 
 test("vibe64 workflow creation options are filtered by repository profile", () => {
@@ -2068,6 +2102,28 @@ test("vibe64 workflow creation options are filtered by repository profile", () =
       workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
     }).defaultWorkflowDefinition,
     VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION
+  );
+
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      initializationRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+    }).defaultWorkflowDefinition,
+    VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR
+  );
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      initializationRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+    }).defaultWorkflowDefinition,
+    VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT
+  );
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      initializationRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+    }).defaultWorkflowDefinition,
+    VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE
   );
 });
 
@@ -2608,6 +2664,77 @@ test("vibe64 runtime selects the seed definition when the adapter says seeding i
     assert.equal(await runtime.store.readMetadataValue("seed_definition", "issue_word"), "");
     assert.ok(session.stepDefinitions.some((step) => step.id === "seed_application_defined"));
     assert.equal(session.stepDefinitions.some((step) => step.id === "issue_file_created"), false);
+  });
+});
+
+test("vibe64 runtime requires the existing-application initialization workflow", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        initializationRequired: true,
+        seedRequired: false,
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      }
+    });
+
+    const options = await runtime.workflowDefinitionCreationOptions();
+    assert.equal(options.mode, "initialization_required");
+    assert.equal(options.requiredWorkflowDefinition.label, "Initialize existing app");
+
+    await assert.rejects(
+      () => runtime.createSession({
+        workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+      }),
+      {
+        code: "vibe64_initialization_workflow_required"
+      }
+    );
+
+    const session = await runtime.createSession({
+      sessionId: "initialize_existing"
+    });
+    assert.equal(session.workflowId, VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR);
+    assert.equal(session.metadata.work_source, "initialization");
+    assert.equal(session.sessionName, "initializing");
+  });
+});
+
+test("failed prompt preparation restores the setup review instead of stranding it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      actionHandlers: {
+        agent_conversation: async () => {
+          const error = new Error("Required prompt context is missing.");
+          error.code = "vibe64_unknown_prompt_token";
+          throw error;
+        }
+      },
+      targetRoot,
+      workflowCreationBaseline: {
+        initializationRequired: true,
+        seedRequired: false
+      }
+    });
+    await runtime.createSession({
+      initialStep: "existing_application_reviewed",
+      metadata: sourceMetadata(targetRoot, "prompt_recovery"),
+      sessionId: "prompt_recovery"
+    });
+
+    await assert.rejects(
+      () => runtime.runAction("prompt_recovery", "agent_conversation", {
+        conversationRequest: "Inspect the application."
+      }),
+      /Required prompt context is missing/u
+    );
+
+    const recovered = await runtime.getSession("prompt_recovery");
+    assert.equal(recovered.stepMachine.status, "ready");
+    assert.equal(
+      recovered.actions.find((action) => action.id === "agent_conversation")?.enabled,
+      true
+    );
   });
 });
 

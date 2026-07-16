@@ -9,6 +9,7 @@ import {
   sessionInspectInputValidator,
   sessionIntentInputValidator,
   sessionListInputValidator,
+  sessionRecoveryInputValidator,
   sessionRewindInputValidator,
   sessionTerminalFailureFixInputValidator
 } from "./inputSchemas.js";
@@ -25,6 +26,7 @@ const ACTION_RUN_SESSION_INTENT = "feature.vibe64-sessions.intent.run";
 const ACTION_ADVANCE_SESSION = "feature.vibe64-sessions.advance";
 const ACTION_ABANDON_SESSION = "feature.vibe64-sessions.abandon";
 const ACTION_RECOVER_STUCK_SESSION_STEP = "feature.vibe64-sessions.step.stuck.recover";
+const ACTION_RESOLVE_SESSION_RECOVERY = "feature.vibe64-sessions.recovery.resolve";
 const ACTION_RETURN_AGENT_CONTROL = "feature.vibe64-sessions.agent-control.return";
 const ACTION_REWIND_SESSION = "feature.vibe64-sessions.rewind";
 
@@ -306,6 +308,30 @@ const featureActions = Object.freeze([
     }
   },
   {
+    id: ACTION_RESOLVE_SESSION_RECOVERY,
+    version: 1,
+    kind: "command",
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"],
+    input: sessionRecoveryInputValidator,
+    output: null,
+    idempotency: "optional",
+    audit: {
+      actionName: ACTION_RESOLVE_SESSION_RECOVERY
+    },
+    observability: {},
+    async execute(input, context, deps) {
+      void context;
+      return deps.featureService.resolveSessionRecovery(input.sessionId, {
+        issueId: input.issueId,
+        optionId: input.optionId,
+        originId: input.originId || "",
+        signature: input.signature,
+        vibe64User: input.vibe64User || null
+      });
+    }
+  },
+  {
     id: ACTION_RETURN_AGENT_CONTROL,
     version: 1,
     kind: "command",
@@ -360,6 +386,7 @@ export {
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_RECOVER_STUCK_SESSION_STEP,
+  ACTION_RESOLVE_SESSION_RECOVERY,
   ACTION_RETURN_AGENT_CONTROL,
   ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_ACTION,

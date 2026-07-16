@@ -187,6 +187,8 @@ function useVibe64SessionWorkflow({
       goNext: workflow.actions.goNext,
       recoverStuckStep: workflow.actions.recoverStuckStep,
       recoverStuckStepCommand: workflow.actions.recoverStuckStepCommand,
+      resolveSessionRecovery: workflow.actions.resolveSessionRecovery,
+      resolveSessionRecoveryCommand: workflow.actions.resolveSessionRecoveryCommand,
       rewindToStep: workflow.actions.rewindToStep,
       runAction: workflow.actions.runAction,
       runActionById: workflow.actions.runActionById,

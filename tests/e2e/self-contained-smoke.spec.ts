@@ -424,9 +424,9 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       }
     ]
   ]);
-  const postApiPayloads = new Map<string, unknown>([
+  const writeApiPayloads = new Map<string, unknown>([
     [
-      "/api/vibe64/project-runtime/open",
+      "POST /api/vibe64/project-runtime/open",
       {
         ok: true,
         runtime: {
@@ -438,7 +438,13 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       }
     ],
     [
-      "/api/vibe64/project-runtime/close",
+      "POST /api/vibe64/project-runtime/close",
+      {
+        ok: true
+      }
+    ],
+    [
+      "PUT /api/vibe64/sessions/current",
       {
         ok: true
       }
@@ -467,8 +473,9 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       return;
     }
 
-    if (method === "POST" && postApiPayloads.has(apiPathname)) {
-      await fulfillJson(route, postApiPayloads.get(apiPathname));
+    const writeRequestKey = `${method} ${apiPathname}`;
+    if (writeApiPayloads.has(writeRequestKey)) {
+      await fulfillJson(route, writeApiPayloads.get(writeRequestKey));
       return;
     }
 

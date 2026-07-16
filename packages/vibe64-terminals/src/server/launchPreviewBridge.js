@@ -2,9 +2,14 @@ import {
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+  PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
+  PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
   PREVIEW_QUERY_MESSAGE_TYPE
 } from "../shared/launchPreviewProtocol.js";
+import {
+  PREVIEW_IDENTITY_CONTROL_PATH
+} from "@local/vibe64-core/server/previewAuth";
 
 function launchPreviewBridgeScript({
   debug = false,
@@ -14,6 +19,9 @@ function launchPreviewBridgeScript({
     debug: debug === true,
     diagnosticsRequestMessageType: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
     diagnosticsResponseMessageType: PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+    identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
+    identityRequestMessageType: PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
+    identityResponseMessageType: PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
     locationMessageType: PREVIEW_LOCATION_MESSAGE_TYPE,
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
@@ -617,6 +625,55 @@ function launchPreviewBridgeScript({
       publishLocation("query", {
         force: true
       });
+      return;
+    }
+    if (event.data?.type === config.identityRequestMessageType) {
+      const requestId = String(event.data?.requestId || "");
+      const grant = String(event.data?.grant || "");
+      void (async () => {
+        let payload = {};
+        try {
+          const response = await originalFetch.call(window, config.identityControlPath, {
+            body: JSON.stringify({ grant }),
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: {
+              "content-type": "application/json"
+            },
+            method: "POST"
+          });
+          try {
+            payload = await response.json();
+          } catch {
+            payload = {};
+          }
+          if (!response.ok || payload?.ok === false) {
+            throw Object.assign(new Error(String(
+              payload?.error || "Preview identity exchange failed."
+            )), {
+              code: String(payload?.code || "vibe64_preview_identity_exchange_failed"),
+              signedOut: payload?.signedOut === true
+            });
+          }
+          window.parent.postMessage({
+            identity: payload?.identity || null,
+            ok: true,
+            requestId,
+            type: config.identityResponseMessageType,
+            version: config.version
+          }, "*");
+        } catch (error) {
+          window.parent.postMessage({
+            code: String(error?.code || "vibe64_preview_identity_exchange_failed"),
+            error: String(error?.message || error || "Preview identity exchange failed."),
+            ok: false,
+            requestId,
+            signedOut: error?.signedOut === true,
+            type: config.identityResponseMessageType,
+            version: config.version
+          }, "*");
+        }
+      })();
       return;
     }
     if (event.data?.type === config.diagnosticsRequestMessageType) {

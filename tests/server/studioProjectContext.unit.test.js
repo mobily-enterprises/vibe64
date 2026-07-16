@@ -27,6 +27,9 @@ import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  PROJECT_APPLICATION_MODE_EXISTING
+} from "../../packages/vibe64-core/src/server/projectApplication.js";
+import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
@@ -682,6 +685,7 @@ test("Studio project context lists and reads managed Git catalog records", async
     });
 
     const created = await context.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       repository: {
         mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
         defaultBranch: "main"
@@ -690,6 +694,7 @@ test("Studio project context lists and reads managed Git catalog records", async
     });
 
     assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(created.project.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
     assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
     assert.equal(created.project.githubRepository, undefined);
 
@@ -697,6 +702,7 @@ test("Studio project context lists and reads managed Git catalog records", async
 
     assert.deepEqual(listed.projects.map((project) => project.slug), ["managed-app"]);
     assert.equal(listed.projects[0].repository.mode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(listed.projects[0].applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
     assert.equal(listed.projects[0].repository.defaultBranch, "main");
     assert.equal(listed.projects[0].repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
     assert.equal(listed.projects[0].workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
@@ -707,6 +713,7 @@ test("Studio project context lists and reads managed Git catalog records", async
     });
 
     assert.equal(read.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(read.project.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
     assert.equal(read.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
     assert.equal(read.project.githubRepository, undefined);
   });

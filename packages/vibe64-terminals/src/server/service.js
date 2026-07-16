@@ -1121,6 +1121,10 @@ function createService({
       return launchTarget.openLaunchTarget(sessionId);
     },
 
+    selectPreviewIdentity(sessionId, input = {}, options = {}) {
+      return launchTarget.selectPreviewIdentity(sessionId, input, options);
+    },
+
     startAgentTerminal(sessionId, input = {}, options = {}) {
       return sessionAgent.startTerminal(sessionId, input, options);
     },

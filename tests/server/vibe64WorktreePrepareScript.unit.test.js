@@ -48,6 +48,9 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
+import {
+  PROJECT_APPLICATION_MODE_EXISTING
+} from "@local/vibe64-core/server/projectApplication";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function runCommand(command, args, {
@@ -166,6 +169,16 @@ async function createGitTarget(root) {
   ]);
   runGit(root, ["add", ".gitignore", "README.md"]);
   runGit(root, ["commit", "-m", "Initial commit"]);
+}
+
+async function writeCompleteJskitApplication(root) {
+  await Promise.all([
+    writeProjectFile(root, "package.json", "{}\n"),
+    writeProjectFile(root, "config/public.js", "export default {};\n"),
+    writeProjectFile(root, "src/main.js", "export {};\n"),
+    writeProjectFile(root, "packages/main/package.descriptor.mjs", "export default {};\n"),
+    writeProjectFile(root, ".jskit/lock.json", "{}\n")
+  ]);
 }
 
 test("adapters own the worktree preparation script", async () => {
@@ -579,12 +592,16 @@ test("create worktree materializes pending online bootstrap config into the sess
       recursive: true
     });
     await createGitTarget(sourceRoot);
+    await writeCompleteJskitApplication(sourceRoot);
+    runGit(sourceRoot, ["add", "package.json", "config/public.js", "src/main.js", "packages/main/package.descriptor.mjs", ".jskit/lock.json"]);
+    runGit(sourceRoot, ["commit", "-m", "Add existing JSKIT application"]);
     runCommand("git", ["init", "--bare", remoteRoot], {
       cwd: tempRoot
     });
     runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
     runGit(sourceRoot, ["push", "origin", "main"]);
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       bootstrapConfig: {
         projectType: "jskit",
         schemaVersion: 1,
@@ -606,7 +623,9 @@ test("create worktree materializes pending online bootstrap config into the sess
     const sourcePath = testSessionSourcePath(targetRoot, "bootstrap-config");
     const resultFile = path.join(tempRoot, "command-result.tsv");
     const session = {
-      metadata: githubSessionMetadata(),
+      metadata: githubSessionMetadata({
+        work_source: "initialization"
+      }),
       sessionId: "bootstrap-config",
       sessionRoot,
       targetRoot
@@ -644,7 +663,66 @@ test("create worktree materializes pending online bootstrap config into the sess
     assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
+    assert.equal(projectRecord.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
     assert.equal(projectRecord.bootstrapConfig, undefined);
+  });
+});
+
+test("create worktree refuses to seed over a complete existing application", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitTarget(targetRoot);
+    const projectRecordPath = path.join(targetRoot, "project.json");
+    await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+      bootstrapConfig: {
+        projectType: "jskit",
+        schemaVersion: 1,
+        status: "pending",
+        values: {}
+      }
+    }, null, 2)}\n`);
+    const sessionId = "seed-source-conflict";
+    const sessionRoot = path.join(targetRoot, "sessions", "active", sessionId);
+    const sourcePath = testSessionSourcePath(targetRoot, sessionId);
+    await writeCompleteJskitApplication(sourcePath);
+    const session = {
+      metadata: localSourceSessionMetadata({
+        work_source: "seed"
+      }),
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const adapter = createJskitTargetAdapter();
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
+      projectRecordPath,
+      projectLocalRoot: targetRoot,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
+      runtime: {
+        adapter
+      },
+      session,
+      targetRoot
+    });
+
+    await assert.rejects(
+      spec.applySuccessFacts({
+        facts: {
+          source_path: sourcePath
+        },
+        session
+      }),
+      {
+        code: "vibe64_new_application_source_conflict"
+      }
+    );
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig.status, "pending");
+    await assert.rejects(
+      readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
   });
 });
 

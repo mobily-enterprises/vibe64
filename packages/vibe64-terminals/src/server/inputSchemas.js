@@ -277,6 +277,20 @@ const launchTargetFields = {
   }
 };
 
+const previewIdentityFields = {
+  email: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  mode: {
+    type: "string",
+    enum: ["viewer", "email", "guest"],
+    noTrim: false,
+    required: true
+  }
+};
+
 const terminalControlTextFields = {
   originId: {
     type: "string",
@@ -395,6 +409,34 @@ const launchTargetActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const previewIdentityInputValidator = deepFreeze({
+  schema: createSchema(previewIdentityFields),
+  mode: "patch"
+});
+
+const previewIdentityActionInputValidator = deepFreeze({
+  schema: createSchema({
+    ...previewIdentityFields,
+    publicHost: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    publicProtocol: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    sessionId: sessionIdField,
+    vibe64User: {
+      type: "object",
+      additionalProperties: true,
+      required: false
+    }
+  }),
+  mode: "patch"
+});
+
 const terminalControlTextInputValidator = deepFreeze({
   schema: createSchema(terminalControlTextFields),
   mode: "patch"
@@ -420,6 +462,8 @@ export {
   launchTargetActionInputValidator,
   launchTargetInputValidator,
   openLaunchTargetActionInputValidator,
+  previewIdentityActionInputValidator,
+  previewIdentityInputValidator,
   fixCodexReportInputValidator,
   projectToolFixActionInputValidator,
   projectToolFixInputValidator,

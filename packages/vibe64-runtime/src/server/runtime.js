@@ -42,6 +42,7 @@ import {
 import {
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   DEFAULT_WORKFLOW_REPOSITORY_PROFILE,
+  initializationWorkflowDefinitionIdForRepositoryProfile,
   normalizeWorkflowDefinitionId,
   normalizeWorkflowDefinitionIdForRepositoryProfile,
   workflowDefinition,
@@ -58,6 +59,7 @@ import {
   currentStepPromptInputInstruction,
   recordStepMachineActionFinished,
   recordStepMachineActionStarted,
+  recoverFailedPromptActionStart,
   recoverStuckStepMachineExecution,
   returnControlFromAgentWait,
   saveStepMachineInput
@@ -84,6 +86,12 @@ import {
 import {
   coreComposerTemplates
 } from "./composerMenuTemplates.js";
+import {
+  createCoreSessionRecoveryCoordinator
+} from "./coreSessionRecovery.js";
+import {
+  SESSION_RECOVERY_CAPABILITY_WORKFLOW_PROGRESS
+} from "./sessionRecovery.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -1004,6 +1012,33 @@ function visiblePromptForPromptAction(action = {}, input = {}) {
     normalizeText(action.label || action.promptId || action.id);
 }
 
+function actionWithComposerTemplate(action = {}, session = {}, templateId = "") {
+  const normalizedTemplateId = normalizeText(templateId);
+  if (!normalizedTemplateId) {
+    return action;
+  }
+  const template = (Array.isArray(session.adapter?.composerMenuItems)
+    ? session.adapter.composerMenuItems
+    : []).find((item) => (
+    normalizeText(item?.id) === normalizedTemplateId &&
+    normalizeText(item?.kind || "template") === "template" &&
+    item?.enabled !== false &&
+    item?.visible !== false
+  ));
+  if (!template) {
+    throw vibe64Error(
+      "That composer prompt is no longer available for this session.",
+      "vibe64_composer_prompt_template_not_available"
+    );
+  }
+  return {
+    ...action,
+    label: normalizeText(template.label || action.label),
+    promptId: normalizeText(template.promptId || action.promptId),
+    systemPromptId: normalizeText(template.systemPromptId || action.systemPromptId)
+  };
+}
+
 class Vibe64SessionRuntime {
   constructor({
     actionReadiness = undefined,
@@ -1021,7 +1056,8 @@ class Vibe64SessionRuntime {
     targetRoot = process.cwd(),
     workflow = null,
     workflowCreationBaseline = null,
-    workflowRegistry = createCoreWorkflowRegistry()
+    workflowRegistry = createCoreWorkflowRegistry(),
+    sessionRecovery = createCoreSessionRecoveryCoordinator()
   } = {}) {
     this.actionHandlers = {
       ...actionHandlers
@@ -1050,6 +1086,9 @@ class Vibe64SessionRuntime {
     this.workflowCreationBaseline = isPlainObject(workflowCreationBaseline)
       ? workflowCreationBaseline
       : null;
+    this.sessionRecovery = sessionRecovery && typeof sessionRecovery.inspect === "function"
+      ? sessionRecovery
+      : createCoreSessionRecoveryCoordinator();
     this.store = store || createVibe64SessionStore({
       clock,
       projectLocalRoot: this.stateRoot,
@@ -1142,6 +1181,7 @@ class Vibe64SessionRuntime {
   }
 
   async sessionView(session, {
+    includeRecovery = true,
     sessionAdapter = undefined
   } = {}) {
     const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
@@ -1158,7 +1198,48 @@ class Vibe64SessionRuntime {
         workflowRegistry: this.workflowRegistry
       })
     };
-    return applyWorkflowPresentation(await applyStepMachineView(this, sessionView));
+    const presentedSession = applyWorkflowPresentation(await applyStepMachineView(this, sessionView));
+    if (!includeRecovery) {
+      return presentedSession;
+    }
+    const recovery = await this.sessionRecovery.inspect({
+      runtime: this,
+      session: presentedSession
+    });
+    if (!recovery) {
+      return presentedSession;
+    }
+    const workflowProgressBlocked = recovery.issues.some((issue) => (
+      Array.isArray(issue.blockedCapabilities) &&
+      issue.blockedCapabilities.includes(SESSION_RECOVERY_CAPABILITY_WORKFLOW_PROGRESS)
+    ));
+    if (!workflowProgressBlocked) {
+      return {
+        ...presentedSession,
+        recovery
+      };
+    }
+    const recoveryDisabledReason = "Choose how to recover this session before continuing its workflow.";
+    const next = presentedSession.next
+      ? {
+          ...presentedSession.next,
+          disabledReason: recoveryDisabledReason,
+          enabled: false
+        }
+      : presentedSession.next;
+    return {
+      ...presentedSession,
+      next,
+      presentation: {
+        ...presentedSession.presentation,
+        auto: {
+          ...presentedSession.presentation?.auto,
+          nextOperation: null
+        },
+        next
+      },
+      recovery
+    };
   }
 
   sessionSummaryView(session = {}) {
@@ -1267,11 +1348,16 @@ class Vibe64SessionRuntime {
       input.metadata?.workflow_definition
     );
     const creation = await this.workflowDefinitionCreationOptionsForInput(input);
-    if (creation.seedRequired) {
+    if (creation.requiredWorkflowDefinition) {
       if (requestedDefinitionId && requestedDefinitionId !== creation.defaultWorkflowDefinition) {
+        const initializationRequired = creation.initializationRequired === true;
         throw vibe64Error(
-          "The first Vibe64 session must seed the application before other workflow definitions can be selected.",
-          "vibe64_seed_workflow_required"
+          initializationRequired
+            ? "The first Vibe64 session must initialize the existing application before other workflows can be selected."
+            : "The first Vibe64 session must seed the application before other workflows can be selected.",
+          initializationRequired
+            ? "vibe64_initialization_workflow_required"
+            : "vibe64_seed_workflow_required"
         );
       }
       return creation.defaultWorkflowDefinition;
@@ -1285,9 +1371,15 @@ class Vibe64SessionRuntime {
         workflowRegistry: this.workflowRegistry
       });
       if (definition.userSelectable !== true) {
+        const initializationWorkflow = normalizedDefinitionId ===
+          initializationWorkflowDefinitionIdForRepositoryProfile(creation.workflowRepositoryProfile);
         throw vibe64Error(
-          "The seed workflow is only available before the application has been seeded.",
-          "vibe64_seed_workflow_not_available"
+          initializationWorkflow
+            ? "The initialization workflow is only available before the existing application has been initialized."
+            : "The seed workflow is only available before the application has been seeded.",
+          initializationWorkflow
+            ? "vibe64_initialization_workflow_not_available"
+            : "vibe64_seed_workflow_not_available"
         );
       }
       return normalizedDefinitionId;
@@ -1317,8 +1409,13 @@ class Vibe64SessionRuntime {
     return facts?.workflow?.seedRequired === true;
   }
 
+  workflowInitializationRequired() {
+    return this.workflowCreationBaseline?.initializationRequired === true;
+  }
+
   async workflowDefinitionCreationOptionsForInput(input = {}) {
     return workflowDefinitionCreationOptions({
+      initializationRequired: this.workflowInitializationRequired(),
       seedRequired: await this.workflowSeedRequired(),
       workflowRegistry: this.workflowRegistry,
       workflowRepositoryProfile: this.workflowRepositoryProfileForSessionInput(input)
@@ -1741,7 +1838,9 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async runAction(sessionId, actionId, input = {}) {
+  async runAction(sessionId, actionId, input = {}, {
+    promptTemplateId = ""
+  } = {}) {
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("server.runtime.runAction.start", {
       actionId,
@@ -1784,7 +1883,11 @@ class Vibe64SessionRuntime {
 
         await recordStepMachineActionStarted(this, session, action.id);
         const actionSession = await this.runActionSessionView(session.sessionId);
-        const actionAfterStart = currentAction(actionSession, normalizedActionId) || action;
+        const actionAfterStart = actionWithComposerTemplate(
+          currentAction(actionSession, normalizedActionId) || action,
+          actionSession,
+          promptTemplateId
+        );
 
         vibe64SessionDebugLog("server.runtime.runAction.handler.start", {
           ...vibe64SessionDebugSummary(actionSession),
@@ -1792,13 +1895,32 @@ class Vibe64SessionRuntime {
           actionType: String(actionAfterStart.type || "")
         });
         const actionInput = await privateSafeActionInput(this, actionSession, actionAfterStart, input);
-        const handlerResult = await this.actionHandler(actionAfterStart.id)({
-          action: actionAfterStart,
-          input: actionInput,
-          runtime: this,
-          session: actionSession,
-          store: this.store
-        });
+        let handlerResult;
+        try {
+          handlerResult = await this.actionHandler(actionAfterStart.id)({
+            action: actionAfterStart,
+            input: actionInput,
+            runtime: this,
+            session: actionSession,
+            store: this.store
+          });
+        } catch (error) {
+          if (actionAfterStart.type === "prompt") {
+            try {
+              await recoverFailedPromptActionStart(this, actionSession, {
+                message: String(error?.message || error || "The Codex prompt could not be prepared.")
+              });
+            } catch (recoveryError) {
+              vibe64SessionDebugLog("server.runtime.runAction.promptRecovery.error", {
+                actionId: actionAfterStart.id,
+                error: vibe64SessionDebugError(recoveryError),
+                originalError: vibe64SessionDebugError(error),
+                sessionId: actionSession.sessionId
+              });
+            }
+          }
+          throw error;
+        }
         const actionResult = await this.store.writeActionResult(
           actionSession.sessionId,
           actionAfterStart.id,
@@ -2011,6 +2133,49 @@ class Vibe64SessionRuntime {
         error: vibe64SessionDebugError(error),
         requestedStepId: stepId,
         sessionId
+      });
+      throw error;
+    }
+  }
+
+  async resolveSessionRecovery(sessionId, input = {}) {
+    const startedAtMs = Date.now();
+    const resolutionFields = {
+      issueId: normalizeText(input?.issueId),
+      optionId: normalizeText(input?.optionId),
+      sessionId
+    };
+    vibe64SessionDebugLog("server.runtime.resolveSessionRecovery.start", {
+      ...resolutionFields
+    });
+    try {
+      return await this.store.mutateSession(sessionId, async () => {
+        const session = await this.sessionView(await this.store.readSession(sessionId), {
+          includeRecovery: false
+        });
+        if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+          throw vibe64Error(
+            "Closed Vibe64 sessions cannot be recovered.",
+            "vibe64_closed_session_recovery"
+          );
+        }
+        await this.sessionRecovery.resolve({
+          runtime: this,
+          session
+        }, input);
+        const recoveredSession = await this.getSession(sessionId);
+        vibe64SessionDebugLog("server.runtime.resolveSessionRecovery.done", {
+          ...vibe64SessionDebugSummary(recoveredSession),
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          ...resolutionFields
+        });
+        return recoveredSession;
+      });
+    } catch (error) {
+      vibe64SessionDebugLog("server.runtime.resolveSessionRecovery.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
+        ...resolutionFields
       });
       throw error;
     }

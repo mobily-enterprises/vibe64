@@ -24,6 +24,7 @@ export * from "./serviceOwnedTerminalRoutes.js";
 export * from "./terminalWebSocketRoutes.js";
 export * from "./vibe64MembershipStore.js";
 export * from "./projectState.js";
+export * from "./projectApplication.js";
 export * from "./projectBootstrapConfig.js";
 export * from "./projectManifest.js";
 export * from "./projectRuntimeOpenState.js";

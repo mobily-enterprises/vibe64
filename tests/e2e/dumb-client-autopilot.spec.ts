@@ -217,6 +217,199 @@ test.describe("Autopilot dumb client contract", () => {
     })).toHaveCount(0);
   });
 
+  test("asks before recovering a mismatched session and keeps its composer usable", async ({ page }) => {
+    const recoveryRequests: Record<string, unknown>[] = [];
+    const messageRequests: Record<string, unknown>[] = [];
+    const intents = [
+      {
+        dispatchRoute: "session-message",
+        enabled: true,
+        id: "talk_to_codex",
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What do you want to ask Codex?",
+            name: "conversationRequest"
+          }
+        ],
+        label: "Ask Codex",
+        style: "primary"
+      }
+    ];
+    const session = sessionPayload({
+      currentStep: "seed_application_defined",
+      currentStepDefinition: {
+        id: "seed_application_defined",
+        label: "Describe starter app"
+      },
+      intents,
+      metadata: {
+        work_source: "seed"
+      },
+      next: {
+        disabledReason: "Choose how to recover this session before continuing its workflow.",
+        enabled: false,
+        label: "Next step",
+        stepId: "dependencies_installed",
+        visible: true
+      },
+      presentation: {
+        auto: {
+          nextOperation: null
+        },
+        intents,
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex",
+          sections: [],
+          title: "Describe starter app"
+        },
+        step: {
+          id: "seed_application_defined",
+          label: "Describe starter app",
+          status: "ready"
+        }
+      },
+      recovery: {
+        issues: [
+          {
+            blockedCapabilities: ["workflow_progress"],
+            code: "vibe64_session_setup_classification_mismatch",
+            evidence: [
+              { label: "Saved workflow", value: "Create a new app" },
+              { label: "Starting repository", value: "Existing application" },
+              { label: "Starting commit", value: "85b4dcaccb24" }
+            ],
+            explanation: "This session was saved as a new-app setup, but the repository's starting commit already contains a complete application.",
+            id: "workflow_setup_classification",
+            options: [
+              {
+                description: "Use initialization while preserving the source clone, branch, and working files.",
+                id: "switch_workflow",
+                label: "Switch to initialize existing app",
+                recommended: true,
+                style: "primary"
+              },
+              {
+                description: "Keep the current setup for this exact mismatch.",
+                id: "keep_current_workflow",
+                label: "Keep current setup",
+                recommended: false,
+                style: "secondary"
+              }
+            ],
+            signature: "setup-mismatch-signature",
+            title: "Saved setup no longer matches the repository"
+          }
+        ],
+        kind: "session_recovery",
+        message: "Vibe64 found that saved session state no longer agrees with the project or runtime state it depends on. Your work has not been changed. Review the details and choose how this session should continue.",
+        signature: "recovery-view-signature",
+        title: "This session needs your decision"
+      },
+      stepDefinitions: [
+        {
+          done: true,
+          id: "source_created",
+          label: "Create session clone",
+          status: "done"
+        },
+        {
+          id: "seed_application_defined",
+          label: "Describe starter app",
+          status: "current"
+        }
+      ],
+      stepMachine: {
+        status: "ready",
+        stepId: "seed_application_defined"
+      },
+      workflowId: "seed_application"
+    });
+    await mockVibe64Session(page, session, {
+      onAgentMessage: (body) => {
+        messageRequests.push(body);
+      },
+      onRecovery: (body) => {
+        recoveryRequests.push(body);
+        delete session.recovery;
+        Object.assign(session, {
+          currentStep: "dependencies_installed",
+          currentStepDefinition: {
+            id: "dependencies_installed",
+            label: "Install dependencies"
+          },
+          metadata: {
+            work_source: "initialization"
+          },
+          presentation: {
+            auto: {
+              nextOperation: null
+            },
+            intents,
+            screen: {
+              kind: "conversation",
+              primaryIntentId: "talk_to_codex",
+              sections: [],
+              title: "Install dependencies"
+            },
+            step: {
+              id: "dependencies_installed",
+              label: "Install dependencies",
+              status: "ready"
+            }
+          },
+          stepDefinitions: [
+            {
+              done: true,
+              id: "source_created",
+              label: "Create session clone",
+              status: "done"
+            },
+            {
+              id: "dependencies_installed",
+              label: "Install dependencies",
+              status: "current"
+            }
+          ],
+          stepMachine: {
+            status: "ready",
+            stepId: "dependencies_installed"
+          },
+          workflowId: "initialize_existing_application"
+        });
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const recovery = page.locator(".session-recovery");
+    await expect(recovery.getByRole("heading", { name: "This session needs your decision" })).toBeVisible();
+    await expect(recovery.getByRole("heading", { name: "Saved setup no longer matches the repository" })).toBeVisible();
+    await expect(recovery.getByText("Existing application", { exact: true })).toBeVisible();
+    const composer = page.locator(".studio-autopilot__composer");
+    const input = composer.getByRole("textbox", { name: "What do you want to ask Codex?" });
+    await input.fill("Keep this draft through recovery.");
+
+    await recovery.getByRole("button", { name: "Switch to initialize existing app" }).click();
+
+    await expect.poll(() => recoveryRequests).toEqual([
+      {
+        issueId: "workflow_setup_classification",
+        optionId: "switch_workflow",
+        signature: "setup-mismatch-signature"
+      }
+    ]);
+    await expect(recovery).toHaveCount(0);
+    await expectCurrentAutopilotStep(page, "Install dependencies");
+    await expect(input).toHaveValue("Keep this draft through recovery.");
+    await expect(input).toBeEnabled();
+    await composer.locator(".vibe64-workflow-control-form__inline-submit").click();
+    await expect.poll(() => messageRequests.map((request) => request.message)).toEqual([
+      "Keep this draft through recovery."
+    ]);
+  });
+
   test("routes workspace menu shortcuts and JSKIT dashboard subpages", async ({ page }) => {
     await mockVibe64Session(page, sessionPayload());
 
@@ -1056,7 +1249,7 @@ test.describe("Autopilot dumb client contract", () => {
           ]
         }));
       },
-      onCommandTerminalClose: () => {
+      onCommandTerminalStart: () => {
         session.next = {
           disabledReason: "",
           enabled: true,
@@ -1090,8 +1283,6 @@ test.describe("Autopilot dumb client contract", () => {
           status: "done",
           stepId: "server_step"
         };
-      },
-      onCommandTerminalStart: () => {
         return {
           commandPreview: "echo test",
           exitCode: 0,
@@ -1110,12 +1301,7 @@ test.describe("Autopilot dumb client contract", () => {
   });
 
   test("keeps a running Autopilot command alive when switching sessions", async ({ page }) => {
-    await mockCommandTerminalSocketThatExits(page, {
-      delayMs: 2000,
-      exitCode: 1,
-      output: "install failed\n"
-    });
-    let commandTerminalCloses = 0;
+    let commandTerminalExits = 0;
     let commandTerminalStarts = 0;
     const stepInputs: unknown[] = [];
     const commandSession = sessionPayload({
@@ -1169,6 +1355,60 @@ test.describe("Autopilot dumb client contract", () => {
         stepId: "dependencies_installed"
       }
     });
+    function markCommandFailed() {
+      commandTerminalExits += 1;
+      Object.assign(commandSession, {
+        presentation: {
+          ...(commandSession.presentation as Record<string, unknown>),
+          auto: {
+            nextOperation: {
+              executable: false,
+              kind: "wait",
+              reason: "Resolve the install command failure before continuing."
+            }
+          },
+          screen: {
+            input: {
+              fields: [
+                {
+                  kind: "textarea",
+                  label: "Retry note",
+                  name: "response",
+                  required: false
+                }
+              ],
+              kind: "command_failure_response",
+              prompt: "Install dependencies failed with exit code 1.",
+              submitKind: "user_response",
+              submitLabel: "Retry command",
+              submitTarget: "current-step-input",
+              title: "Install command needs attention"
+            },
+            kind: "input",
+            message: "Install dependencies failed with exit code 1.",
+            sections: [],
+            title: "Install command needs attention"
+          },
+          step: {
+            id: "dependencies_installed",
+            label: "Install dependencies",
+            status: "waiting_for_input"
+          }
+        },
+        stepMachine: {
+          from: "attempting_execution",
+          message: "Install dependencies failed with exit code 1.",
+          status: "waiting_for_input",
+          stepId: "dependencies_installed"
+        }
+      });
+    }
+    await mockCommandTerminalSocketThatExits(page, {
+      delayMs: 2000,
+      exitCode: 1,
+      onExit: markCommandFailed,
+      output: "install failed\n"
+    });
     const otherSession = sessionPayload({
       presentation: {
         auto: {
@@ -1193,54 +1433,6 @@ test.describe("Autopilot dumb client contract", () => {
       sessionName: "Beta"
     });
     await mockVibe64Session(page, commandSession, {
-      onCommandTerminalClose: () => {
-        commandTerminalCloses += 1;
-        Object.assign(commandSession, {
-          presentation: {
-            ...(commandSession.presentation as Record<string, unknown>),
-            auto: {
-              nextOperation: {
-                executable: false,
-                kind: "wait",
-                reason: "Resolve the install command failure before continuing."
-              }
-            },
-            screen: {
-              input: {
-                fields: [
-                  {
-                    kind: "textarea",
-                    label: "Retry note",
-                    name: "response",
-                    required: false
-                  }
-                ],
-                kind: "command_failure_response",
-                prompt: "Install dependencies failed with exit code 1.",
-                submitKind: "user_response",
-                submitLabel: "Retry command",
-                submitTarget: "current-step-input",
-                title: "Install command needs attention"
-              },
-              kind: "input",
-              message: "Install dependencies failed with exit code 1.",
-              sections: [],
-              title: "Install command needs attention"
-            },
-            step: {
-              id: "dependencies_installed",
-              label: "Install dependencies",
-              status: "waiting_for_input"
-            }
-          },
-          stepMachine: {
-            from: "attempting_execution",
-            message: "Install dependencies failed with exit code 1.",
-            status: "waiting_for_input",
-            stepId: "dependencies_installed"
-          }
-        });
-      },
       onCommandTerminalStart: () => {
         commandTerminalStarts += 1;
         return {
@@ -1286,22 +1478,23 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await expect(page.locator(".studio-autopilot__command-spy-title", {
+    await expect(page.locator(".vibe64-terminal-surface__title", {
       hasText: "Command running."
     })).toBeVisible();
 
     await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Beta" }).click();
     await page.waitForTimeout(30);
-    expect(commandTerminalCloses).toBe(0);
+    expect(commandTerminalExits).toBe(0);
     await expect(page.locator(".studio-ai-sessions__tab:visible", { hasText: "Beta" }))
       .toHaveClass(/studio-ai-sessions__tab--active/u);
-    await expect.poll(() => commandTerminalCloses).toBe(1);
+    await expect.poll(() => commandTerminalExits).toBe(1);
 
     await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Alpha" }).click();
-    await expect(page.locator(".studio-autopilot__command-spy-title", {
-      hasText: "Command needs attention."
+    await page.reload();
+    await expect(page.getByRole("heading", {
+      name: "Install command needs attention"
     })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Fix" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fix it with Codex" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry command" })).toBeVisible();
     await expect(page.getByLabel("Retry note")).toBeVisible();
 
@@ -4390,6 +4583,7 @@ async function mockVibe64Session(
     onAgentMessage = () => undefined,
     onConversationLogRead = () => undefined,
     onIntent = () => undefined,
+    onRecovery = () => undefined,
     onSessionRead = () => undefined,
     onStepInput = () => undefined,
     onAgentTerminalStart = () => undefined,
@@ -4410,6 +4604,7 @@ async function mockVibe64Session(
     onAgentMessage?: (body?: Record<string, unknown>) => unknown | Promise<unknown>;
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
+    onRecovery?: (body: Record<string, unknown>) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
     onStepInput?: (body: unknown) => void;
     sessionDetails?: Record<string, unknown>[] | null;
@@ -4433,6 +4628,14 @@ async function mockVibe64Session(
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
+    if (method === "PUT" && url.pathname.endsWith("/current")) {
+      const body = requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>;
+      await fulfillJson(route, {
+        ok: true,
+        sessionId: String(body.sessionId || "")
+      });
+      return;
+    }
     if (method === "POST" && url.pathname.endsWith("/agent-terminal")) {
       const agentTerminal = onAgentTerminalStart();
       await fulfillJson(route, {
@@ -4486,6 +4689,14 @@ async function mockVibe64Session(
     }
     if (method === "POST" && url.pathname.endsWith("/advance")) {
       onAdvance();
+      await fulfillJson(route, {
+        ok: true,
+        ...session
+      });
+      return;
+    }
+    if (method === "POST" && url.pathname.endsWith("/recovery")) {
+      onRecovery(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         ok: true,
         ...session
@@ -4738,8 +4949,10 @@ async function mockCommandTerminalSocketThatReconnects(page: Page) {
 async function mockCommandTerminalSocketThatExits(page: Page, {
   delayMs = 0,
   exitCode = 0,
+  onExit = () => undefined,
   output = "Server command output."
 } = {}) {
+  await page.exposeFunction("__vibe64CommandTerminalExited", onExit);
   await page.addInitScript(({ delayMs: exitDelayMs, exitCode: commandExitCode, output: commandOutput }) => {
     const OriginalWebSocket = window.WebSocket;
 
@@ -4772,7 +4985,10 @@ async function mockCommandTerminalSocketThatExits(page: Page, {
               type: "snapshot"
             })
           }));
-          window.setTimeout(() => {
+          window.setTimeout(async () => {
+            await (window as unknown as {
+              __vibe64CommandTerminalExited: () => Promise<void>;
+            }).__vibe64CommandTerminalExited();
             this.dispatchEvent(new MessageEvent("message", {
               data: JSON.stringify({
                 exitCode: commandExitCode,

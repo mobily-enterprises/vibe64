@@ -160,13 +160,15 @@ async function createCommittedGitSourceReader({
   committedConfig = {}
 } = {}) {
   const gitDir = normalizeText(committedConfig.gitDir);
-  if (!gitDir) {
+  const sourceRoot = normalizeText(committedConfig.sourceRoot);
+  if (!gitDir && !sourceRoot) {
     const error = new Error("Committed Git source is unavailable for workflow inspection.");
     error.code = "vibe64_committed_project_source_unavailable";
     throw error;
   }
 
-  const resolvedGitDir = path.resolve(gitDir);
+  const resolvedGitDir = gitDir ? path.resolve(gitDir) : "";
+  const cwd = sourceRoot ? path.resolve(sourceRoot) : path.dirname(resolvedGitDir);
   const revision = normalizeText(committedConfig.commit || committedConfig.ref) || "HEAD";
   const treeOutput = await runGit([
     "ls-tree",
@@ -175,7 +177,7 @@ async function createCommittedGitSourceReader({
     "-z",
     revision
   ], {
-    cwd: path.dirname(resolvedGitDir),
+    cwd,
     gitDir: resolvedGitDir
   });
   const paths = new Set(String(treeOutput || "").split("\0").filter(Boolean));
@@ -189,7 +191,7 @@ async function createCommittedGitSourceReader({
         return null;
       }
       return runGit(["show", `${revision}:${normalizedPath}`], {
-        cwd: path.dirname(resolvedGitDir),
+        cwd,
         gitDir: resolvedGitDir
       });
     }

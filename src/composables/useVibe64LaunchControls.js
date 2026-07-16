@@ -11,6 +11,7 @@ import {
   VIBE64_SURFACE_ID,
   vibe64LaunchTargetsPath,
   vibe64LaunchTargetsQueryKey,
+  vibe64PreviewIdentityPath,
   vibe64LaunchTerminalPath,
   vibe64LaunchTerminalStopPath,
   vibe64SessionPreviewStatePath
@@ -801,6 +802,28 @@ function useVibe64LaunchControls({
     writeMethod: "DELETE"
   });
 
+  const selectPreviewIdentityCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: vibe64PreviewIdentityPath(sessionsApiPath.value, context.sessionId)
+    }),
+    buildRawPayload: (_model, { context }) => ({
+      ...(context.email ? { email: context.email } : {}),
+      mode: context.mode
+    }),
+    fallbackRunError: "Preview identity could not be selected.",
+    messages: {
+      error: "Preview identity could not be selected."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.preview-identity.select",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
   const status = computed(() => launchTargetsResource.data.value || {});
   const launchStatusLoadError = computed(() => launchStatusErrorText({
     error: launchTargetsResource.query?.error?.value || null,
@@ -808,6 +831,17 @@ function useVibe64LaunchControls({
     path: launchTargetsPath.value
   }));
   const preview = computed(() => launchPreviewFromStatus(status.value));
+  const previewIdentity = computed(() => {
+    const value = status.value.previewIdentity;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : {
+          available: false,
+          defaultMode: "guest",
+          disabledReason: "",
+          viewer: null
+        };
+  });
   const previewState = computed(() => preview.value.state);
   const previewMessage = computed(() => preview.value.message);
   const previewHref = computed(() => preview.value.href);
@@ -1174,6 +1208,22 @@ function useVibe64LaunchControls({
       });
       return false;
     }
+  }
+
+  function requestPreviewIdentityGrant({
+    email = "",
+    mode = "viewer"
+  } = {}) {
+    if (!sessionId.value || previewIdentity.value.available !== true) {
+      throw new Error(
+        previewIdentity.value.disabledReason || "This preview does not support application identity switching."
+      );
+    }
+    return selectPreviewIdentityCommand.run({
+      email: String(email || "").trim(),
+      mode: String(mode || "viewer").trim(),
+      sessionId: sessionId.value
+    });
   }
 
   useRealtimeEvent({
@@ -1657,6 +1707,7 @@ function useVibe64LaunchControls({
     previewCanShowLog,
     previewCanStart,
     previewHref,
+    previewIdentity,
     previewMessage,
     previewState,
     previewTargetDisabledReason,
@@ -1666,6 +1717,7 @@ function useVibe64LaunchControls({
     terminalPreviewProxyPending,
     previewInputIsRemembered,
     publishPreviewState,
+    requestPreviewIdentityGrant,
     refresh,
     restartTerminal,
     retryTerminal,

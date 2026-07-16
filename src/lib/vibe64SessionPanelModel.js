@@ -24,6 +24,11 @@ import {
   DEFAULT_MAX_OPEN_SESSIONS
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
+  PROJECT_SETUP_KIND_SEED,
+  projectSetupSessionActiveMessage,
+  projectSetupSessionKind
+} from "@local/vibe64-core/shared";
+import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 
@@ -38,31 +43,23 @@ function visibleVibe64Sessions(sessions = []) {
 }
 
 function vibe64SessionUsesSeedWorkflow(session = {}) {
-  const metadata = session.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
-    ? session.metadata
-    : {};
-  const workflowId = String(
-    session.workflowId ||
-      session.workflowDefinition?.id ||
-      metadata.workflow_definition ||
-      ""
-  ).trim();
-  return workflowId === "seed_application" ||
-    String(metadata.work_source || "").trim() === "seed";
+  return projectSetupSessionKind(session) === PROJECT_SETUP_KIND_SEED;
 }
 
-function activeVibe64SeedSession(sessions = []) {
+function vibe64SessionUsesProjectSetupWorkflow(session = {}) {
+  return Boolean(projectSetupSessionKind(session));
+}
+
+function activeVibe64ProjectSetupSession(sessions = []) {
   return (Array.isArray(sessions) ? sessions : []).find((session) => (
     isOpenVibe64Session(session) &&
-    vibe64SessionUsesSeedWorkflow(session)
+    vibe64SessionUsesProjectSetupWorkflow(session)
   )) || null;
 }
 
-function activeVibe64SeedSessionMessage(session = {}) {
+function activeVibe64ProjectSetupSessionMessage(session = {}) {
   const sessionId = String(session?.sessionId || session?.id || "").trim();
-  return sessionId
-    ? `Session ${sessionId} is already seeding this project. Finish or abandon that seed session before creating another session.`
-    : "This project is already being seeded. Finish or abandon the seed session before creating another session.";
+  return projectSetupSessionActiveMessage(sessionId);
 }
 
 function vibe64SessionLimits({
@@ -260,14 +257,15 @@ function shortVibe64SessionId(sessionId = "") {
 }
 
 export {
-  activeVibe64SeedSession,
-  activeVibe64SeedSessionMessage,
+  activeVibe64ProjectSetupSession,
+  activeVibe64ProjectSetupSessionMessage,
   vibe64ActionIcon,
   blockingVibe64SessionPageError,
   vibe64ComposerHandoffFromSession,
   vibe64SessionFacts,
   vibe64SessionLimits,
   vibe64SessionUsesSeedWorkflow,
+  vibe64SessionUsesProjectSetupWorkflow,
   buildVibe64AutopilotNavigationSteps,
   buildVibe64TimelineSteps,
   commandMessage,

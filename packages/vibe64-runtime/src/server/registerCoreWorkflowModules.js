@@ -12,6 +12,9 @@ import {
   coreLifecycleWorkflowModule
 } from "./workflowModules/coreLifecycle.js";
 import {
+  coreInitializationWorkflowModule
+} from "./workflowModules/coreInitialization.js";
+import {
   coreMaintenanceWorkflowModule
 } from "./workflowModules/coreMaintenance.js";
 
@@ -21,6 +24,7 @@ const coreWorkflowStepFactoryModules = Object.freeze([
 
 const coreWorkflowModules = Object.freeze([
   coreLifecycleWorkflowModule,
+  coreInitializationWorkflowModule,
   coreCodingWorkflowModule,
   coreMaintenanceWorkflowModule
 ]);

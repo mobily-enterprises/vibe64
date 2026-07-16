@@ -132,6 +132,10 @@ function vibe64LaunchTargetsPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/launch-targets");
 }
 
+function vibe64PreviewIdentityPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/preview-identity");
+}
+
 function vibe64LaunchTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
   return vibe64SessionPath(
     sessionsApiPath,
@@ -343,6 +347,7 @@ export {
   vibe64LaunchTargetOpenPath,
   vibe64LaunchTargetsPath,
   vibe64LaunchTargetsQueryKey,
+  vibe64PreviewIdentityPath,
   vibe64LaunchTerminalPath,
   vibe64LaunchTerminalStopPath,
   vibe64ProjectToolFixPath,

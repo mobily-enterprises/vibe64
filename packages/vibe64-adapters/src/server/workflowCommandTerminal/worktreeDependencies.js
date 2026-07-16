@@ -7,8 +7,14 @@ import {
 } from "@local/vibe64-execution/server";
 import {
   pathExists,
-  normalizeText
+  normalizeText,
+  vibe64Error
 } from "@local/vibe64-core/server/core";
+import {
+  PROJECT_SETUP_KIND_INITIALIZATION,
+  PROJECT_SETUP_KIND_SEED,
+  projectSetupSessionKind
+} from "@local/vibe64-core/shared";
 import {
   buildRuntimeLock,
   readRuntimeLock,
@@ -588,6 +594,11 @@ async function materializeProjectConfigInSessionSourceAsync({
   metadata = {},
   session = {}
 } = {}) {
+  await validateApplicationSourceForSetupWorkflow({
+    context,
+    metadata,
+    session
+  });
   await copySelectedSourceConfigToSessionSource({
     context,
     metadata,
@@ -598,6 +609,42 @@ async function materializeProjectConfigInSessionSourceAsync({
     metadata,
     session
   });
+}
+
+async function validateApplicationSourceForSetupWorkflow({
+  context = {},
+  metadata = {},
+  session = {}
+} = {}) {
+  const setupKind = projectSetupSessionKind(session);
+  if (!setupKind) {
+    return;
+  }
+  const sourcePath = normalizeText(metadata.source_path);
+  const adapter = context.runtime?.adapter;
+  if (!sourcePath || !adapter) {
+    return;
+  }
+  const facts = await adapter.inspect({
+    config: context.runtime?.projectConfig || {},
+    runtime: context.runtime,
+    session,
+    store: context.runtime?.store,
+    targetRoot: sourcePath
+  });
+  const applicationPresent = facts?.workflow?.seedRequired === false;
+  if (setupKind === PROJECT_SETUP_KIND_SEED && applicationPresent) {
+    throw vibe64Error(
+      "This repository was marked as needing a new application, but it already contains a complete application. Nothing was scaffolded. Add it as an existing application instead.",
+      "vibe64_new_application_source_conflict"
+    );
+  }
+  if (setupKind === PROJECT_SETUP_KIND_INITIALIZATION && !applicationPresent) {
+    throw vibe64Error(
+      "This repository was marked as containing an existing application, but the selected adapter could not recognize a complete application. Nothing was initialized. Check the application type or add it as a new application instead.",
+      "vibe64_existing_application_not_detected"
+    );
+  }
 }
 
 async function copySelectedSourceConfigToSessionSource({

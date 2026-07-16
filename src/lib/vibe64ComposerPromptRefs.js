@@ -96,7 +96,7 @@ function expandComposerPromptText(text = "", refs = []) {
   let expanded = String(text || "");
   for (const ref of refs) {
     const block = promptTemplateBlock(ref);
-    if (!block) {
+    if (!block || expanded.includes(block)) {
       continue;
     }
     if (expanded.trim() === String(ref.displayText || "").trim()) {
@@ -139,6 +139,7 @@ function expandedComposerPromptSubmissionOptions(options = {}, {
   const visibleText = String(displayFields.conversationRequest || fields.conversationRequest || sourceText);
   return {
     ...sourceOptions,
+    ...(refs.length === 1 ? { promptTemplateId: refs[0].id } : {}),
     ...(Object.hasOwn(sourceOptions, "message") ? { message: expandedText } : {}),
     displayFields: {
       ...displayFields,

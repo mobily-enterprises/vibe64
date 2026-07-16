@@ -3,13 +3,14 @@ import crypto from "node:crypto";
 import {
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
-  VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
+  projectSetupSessionActiveMessage,
+  projectSetupSessionKind,
   VIBE64_ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
 import {
@@ -1623,7 +1624,10 @@ async function startComposerMessageTurn(terminalService, coordinator, {
   let actionSession = await runtime.runAction(
     sessionId,
     messageActionId,
-    batch.fields
+    batch.fields,
+    {
+      promptTemplateId: batch.promptTemplateId
+    }
   );
   const conversationTurn = await recordComposerMessageRequests(runtime, sessionId, batch.messages);
   if (conversationTurn) {
@@ -1801,6 +1805,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         message: batch.message,
         messages: batch.messages.map((request) => request.message),
         originId: batch.originId,
+        ...(batch.promptTemplateId ? { promptTemplateId: batch.promptTemplateId } : {}),
         text: batch.message,
         ...(batch.vibe64User ? { vibe64User: batch.vibe64User } : {})
       }, {
@@ -2148,23 +2153,10 @@ function sessionLimits(sessions = [], {
   };
 }
 
-function sessionWorkflowDefinitionId(session = {}) {
-  return normalizedInputText(
-    session.workflowId ||
-    session.workflowDefinition?.id ||
-    session.metadata?.workflow_definition
-  );
-}
-
-function sessionUsesSeedWorkflow(session = {}) {
-  return sessionWorkflowDefinitionId(session) === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION ||
-    normalizedInputText(session.metadata?.work_source) === "seed";
-}
-
-function activeSeedSession(sessions = []) {
+function activeProjectSetupSession(sessions = []) {
   return (Array.isArray(sessions) ? sessions : []).find((session) => (
     isOpenVibe64Session(session) &&
-    sessionUsesSeedWorkflow(session)
+    projectSetupSessionKind(session)
   )) || null;
 }
 
@@ -2415,41 +2407,35 @@ async function workflowCreationOptions(runtime) {
 
 async function sessionCreationState(runtime, sessions = []) {
   const workflow = await workflowCreationOptions(runtime);
-  const seedSession = activeSeedSession(sessions) || (workflow.seedRequired ? firstOpenSession(sessions) : null);
-  const seedSessionId = normalizedInputText(seedSession?.sessionId || seedSession?.id);
-  const seedSessionActive = Boolean(seedSession);
+  const setupRequired = Boolean(workflow.requiredWorkflowDefinition);
+  const setupSession = activeProjectSetupSession(sessions) || (setupRequired ? firstOpenSession(sessions) : null);
+  const setupSessionId = normalizedInputText(setupSession?.sessionId || setupSession?.id);
+  const setupSessionActive = Boolean(setupSession);
   const limits = sessionLimits(sessions, {
-    maxOpenSessions: workflow.seedRequired ? 1 : MAX_OPEN_VIBE64_SESSIONS
+    maxOpenSessions: setupRequired ? 1 : MAX_OPEN_VIBE64_SESSIONS
   });
   const limitReached = limits.openSessionCount >= limits.maxOpenSessions;
-  const disabledReason = seedSessionActive
-    ? activeSeedSessionMessage(seedSessionId)
+  const disabledReason = setupSessionActive
+    ? projectSetupSessionActiveMessage(setupSessionId)
     : limitReached
       ? sessionLimitMessage(limits, workflow)
       : "";
   return {
     creation: {
       ...workflow,
-      canCreate: !seedSessionActive && !limitReached,
-      disabledCode: seedSessionActive ? "seed_session_active" : limitReached ? "open_session_limit" : "",
+      canCreate: !setupSessionActive && !limitReached,
+      disabledCode: setupSessionActive ? "project_setup_session_active" : limitReached ? "open_session_limit" : "",
       disabledReason,
-      seedSessionActive,
-      seedSessionId
+      setupSessionActive,
+      setupSessionId
     },
     limits
   };
 }
 
-function activeSeedSessionMessage(sessionId = "") {
-  const normalizedSessionId = normalizedInputText(sessionId);
-  return normalizedSessionId
-    ? `Session ${normalizedSessionId} is already seeding this project. Finish or abandon that seed session before creating another session.`
-    : "This project is already being seeded. Finish or abandon the seed session before creating another session.";
-}
-
 function sessionLimitMessage(limits = {}, workflow = {}) {
-  if (workflow.seedRequired) {
-    return "The first Vibe64 session must seed the application. Finish or abandon the current seed session before creating another session.";
+  if (workflow.requiredWorkflowDefinition) {
+    return `The required ${workflow.requiredWorkflowDefinition.label || "project setup"} workflow must finish before another session can be created.`;
   }
   return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
 }
@@ -2477,7 +2463,7 @@ function blockedSessionCreationResponse({
 }
 
 function selectableWorkflowDefinitionIds(creation = {}) {
-  if (creation.seedRequired) {
+  if (creation.requiredWorkflowDefinition) {
     return [creation.defaultWorkflowDefinition].filter(Boolean);
   }
   return (Array.isArray(creation.workflowDefinitions) ? creation.workflowDefinitions : [])
@@ -2491,8 +2477,8 @@ function selectedWorkflowDefinitionId(input = {}, creation = {}) {
   const allowedDefinitionIds = new Set(selectableWorkflowDefinitionIds(creation));
   if (!definitionId || !allowedDefinitionIds.has(definitionId)) {
     return {
-      error: creation.seedRequired
-        ? "The first Vibe64 session must seed the application, so no other workflow definition can be selected yet."
+      error: creation.requiredWorkflowDefinition
+        ? `The ${creation.requiredWorkflowDefinition.label || "required project setup"} workflow must finish before another workflow can be selected.`
         : "Choose one of the available workflow definitions before creating a session.",
       definitionId: ""
     };
@@ -2509,7 +2495,7 @@ function sessionCreationPlan({
   input = {},
   limits = {}
 } = {}) {
-  if (creation.disabledCode === "seed_session_active") {
+  if (creation.disabledCode === "project_setup_session_active") {
     return {
       blockedCode: creation.disabledCode,
       response: blockedSessionCreationResponse({
@@ -2517,7 +2503,7 @@ function sessionCreationPlan({
         existingOpenSessions,
         limits,
         code: creation.disabledCode,
-        message: creation.disabledReason || "This project is already being seeded."
+        message: creation.disabledReason || "This project is already being set up."
       })
     };
   }
@@ -3008,6 +2994,7 @@ function createService({
         },
         message,
         originId: input?.originId,
+        promptTemplateId: input?.promptTemplateId,
         vibe64User: input?.vibe64User
       });
       if (request.state === COMPOSER_MESSAGE_STATES.CANCELLED) {
@@ -3586,6 +3573,48 @@ function createService({
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
             sessionId
+          });
+          throw error;
+        }
+      });
+    },
+
+    async resolveSessionRecovery(sessionId, input = {}) {
+      const startedAtMs = Date.now();
+      const resolutionFields = {
+        issueId: normalizedInputText(input?.issueId),
+        optionId: normalizedInputText(input?.optionId),
+        sessionId
+      };
+      vibe64SessionDebugLog("server.service.resolveSessionRecovery.start", {
+        ...resolutionFields
+      });
+      return sessionResult(async () => {
+        try {
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-recovery",
+            runtime,
+            sessionId,
+            terminalService
+          });
+          await terminalService?.closeSessionNonAgentTerminals?.(sessionId);
+          const session = await runtime.resolveSessionRecovery(sessionId, input);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session, {
+            runtime
+          });
+          vibe64SessionDebugLog("server.service.resolveSessionRecovery.done", {
+            ...sessionServiceDebugResponse(enrichedSession),
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            ...resolutionFields
+          });
+          return enrichedSession;
+        } catch (error) {
+          vibe64SessionDebugLog("server.service.resolveSessionRecovery.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
+            ...resolutionFields
           });
           throw error;
         }

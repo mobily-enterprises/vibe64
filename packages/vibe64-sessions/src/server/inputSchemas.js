@@ -88,6 +88,11 @@ const agentMessageInputValidator = deepFreeze({
       noTrim: false,
       required: false
     },
+    promptTemplateId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
     text: {
       type: "string",
       noTrim: false,
@@ -431,6 +436,34 @@ const sessionRewindInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const sessionRecoveryInputValidator = deepFreeze({
+  schema: createSchema({
+    issueId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    ...originInputSchema,
+    optionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    signature: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    ...vibe64UserInputSchema
+  }),
+  mode: "patch"
+});
+
 export {
   agentMessageCancelInputValidator,
   agentTurnInterruptInputValidator,
@@ -445,6 +478,7 @@ export {
   sessionInspectInputValidator,
   sessionIntentInputValidator,
   sessionListInputValidator,
+  sessionRecoveryInputValidator,
   sessionRewindInputValidator,
   sessionTerminalFailureFixInputValidator
 };

@@ -32,6 +32,10 @@ import {
   normalizeProjectBootstrapConfig
 } from "./projectBootstrapConfig.js";
 import {
+  projectApplicationMetadataFromInput,
+  projectApplicationView
+} from "./projectApplication.js";
+import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -284,6 +288,7 @@ function workspaceProjectRecord({
     ...(normalizeProjectBootstrapConfig(metadata?.bootstrapConfig)
       ? { bootstrapConfig: normalizeProjectBootstrapConfig(metadata.bootstrapConfig) }
       : {}),
+    ...projectApplicationView(metadata),
     ...repositoryFields,
     gitCacheRoot: resolvedPath
       ? resolveProjectGitCacheRoot({
@@ -333,8 +338,10 @@ function projectMetadataFromInput(input = {}, {
   const repositoryMetadata = projectRepositoryMetadataFromInput(input, {
     defaultMode: defaultRepositoryMode
   });
+  const applicationMetadata = projectApplicationMetadataFromInput(input);
   const bootstrapConfig = normalizeProjectBootstrapConfig(input?.bootstrapConfig);
   return {
+    ...applicationMetadata,
     ...repositoryMetadata,
     ...(bootstrapConfig ? { bootstrapConfig } : {})
   };

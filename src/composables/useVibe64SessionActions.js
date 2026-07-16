@@ -255,6 +255,31 @@ function useVibe64SessionActions({
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
+  const resolveSessionRecoveryCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => ({
+      ...vibe64RealtimeOriginPayload(),
+      issueId: String(context?.issueId || ""),
+      optionId: String(context?.optionId || ""),
+      signature: String(context?.signature || "")
+    }),
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: vibe64SessionPath(resolvedSessionsApiPath.value, context?.sessionId, "/recovery")
+    }),
+    fallbackRunError: "Vibe64 session recovery could not be applied.",
+    messages: {
+      error: "Vibe64 session recovery could not be applied."
+    },
+    onRunSuccess: (response) => {
+      onSessionResponse(response);
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.sessions.recovery",
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
 
   const rewindCommand = useCommand({
     access: "never",
@@ -330,6 +355,7 @@ function useVibe64SessionActions({
     runIntentCommand.isRunning ||
     advanceCommand.isRunning ||
     recoverStuckStepCommand.isRunning ||
+    resolveSessionRecoveryCommand.isRunning ||
     rewindCommand.isRunning
   ));
   const error = computed(() => {
@@ -337,6 +363,7 @@ function useVibe64SessionActions({
       commandMessage(runIntentCommand, "error") ||
       commandMessage(advanceCommand, "error") ||
       commandMessage(recoverStuckStepCommand, "error") ||
+      commandMessage(resolveSessionRecoveryCommand, "error") ||
       commandMessage(rewindCommand, "error") ||
       "";
   });
@@ -352,6 +379,7 @@ function useVibe64SessionActions({
       runIntentCommand,
       advanceCommand,
       recoverStuckStepCommand,
+      resolveSessionRecoveryCommand,
       rewindCommand
     ]) {
       command.message = "";
@@ -462,6 +490,24 @@ function useVibe64SessionActions({
       });
       throw error;
     }
+  }
+
+  async function resolveSessionRecovery({
+    issueId = "",
+    optionId = "",
+    sessionId = unref(selectedSessionId),
+    signature = ""
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId || !issueId || !optionId || !signature) {
+      return null;
+    }
+    return resolveSessionRecoveryCommand.run({
+      issueId,
+      optionId,
+      sessionId: normalizedSessionId,
+      signature
+    });
   }
 
   async function runIntentById({
@@ -686,6 +732,8 @@ function useVibe64SessionActions({
     goNext,
     recoverStuckStep,
     recoverStuckStepCommand,
+    resolveSessionRecovery,
+    resolveSessionRecoveryCommand,
     rewindCommand,
     rewindToStep,
     runAction,

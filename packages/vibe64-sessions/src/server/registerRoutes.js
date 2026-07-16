@@ -9,6 +9,7 @@ import {
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_RECOVER_STUCK_SESSION_STEP,
+  ACTION_RESOLVE_SESSION_RECOVERY,
   ACTION_RETURN_AGENT_CONTROL,
   ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_ACTION,
@@ -216,6 +217,17 @@ function registerRoutes(
     actionId: ACTION_RECOVER_STUCK_SESSION_STEP,
     buildInput: sessionInput,
     summary: "Recover an Vibe64 session step stuck in command execution."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/recovery", {
+    actionId: ACTION_RESOLVE_SESSION_RECOVERY,
+    buildInput(request) {
+      return withVibe64User(request, {
+        ...routes.requestBody(request),
+        sessionId: request.params.sessionId
+      });
+    },
+    summary: "Apply a user-confirmed Vibe64 session recovery."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-control/return", {

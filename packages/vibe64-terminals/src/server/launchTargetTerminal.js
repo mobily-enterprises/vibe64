@@ -37,8 +37,15 @@ import {
   VIBE64_PUBLIC_USER_DOMAIN_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
+  createPreviewIdentityGrant,
   normalizePreviewAuthKind,
-  previewAuthProfilePath
+  PREVIEW_IDENTITY_LOGIN_OPERATION,
+  PREVIEW_IDENTITY_LOGOUT_OPERATION,
+  previewAuthIdentityAvailable,
+  previewAuthRequiresIdentitySecret,
+  previewAuthProfilePath,
+  previewAuthSecretPath,
+  readPreviewAuthSecret
 } from "@local/vibe64-core/server/previewAuth";
 import {
   claimSessionWorkflowDriver,
@@ -708,11 +715,16 @@ function managedPreviewUnavailableMessage(launchTargets = []) {
 
 function managedPreviewLaunchPlan({
   launchTargets = [],
-  previewStatus = {}
+  previewStatus = {},
+  restart = false,
+  savedLaunchTarget = null
 } = {}) {
   const activeTerminal = previewStatus.activeTerminal || null;
   const previewState = String(previewStatus.preview?.state || "").trim();
-  if (previewState === "ready" || (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))) {
+  if (!restart && (
+    previewState === "ready" ||
+    (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))
+  )) {
     return {
       ready: true,
       terminal: activeTerminal || {
@@ -722,16 +734,29 @@ function managedPreviewLaunchPlan({
   }
 
   const activeMetadata = activeTerminal?.metadata || {};
-  const lastLaunchTarget = previewStatus.lastLaunchTarget || {};
+  const lastLaunchTarget = previewStatus.lastLaunchTarget || savedLaunchTarget || {};
   const previousTargetId = normalizeLaunchTargetId(
     lastLaunchTarget.id || activeMetadata.launchTargetId
   );
+  if (restart && !previousTargetId) {
+    return {
+      code: "vibe64_preview_not_started",
+      error: "No managed Vibe64 preview has been started for this session.",
+      ready: false
+    };
+  }
   const previousTarget = findLaunchTarget(launchTargets, previousTargetId);
+  if (restart && (!previousTarget || previousTarget.available === false)) {
+    return {
+      error: previousTarget?.disabledReason || "The previous managed preview launch target is no longer available.",
+      ready: false
+    };
+  }
   const launchTarget = (
     previousTarget && previousTarget.available !== false
       ? previousTarget
       : null
-  ) || managedPreviewTarget(launchTargets);
+  ) || (restart ? null : managedPreviewTarget(launchTargets));
   if (!launchTarget) {
     return {
       error: managedPreviewUnavailableMessage(launchTargets),
@@ -741,7 +766,7 @@ function managedPreviewLaunchPlan({
 
   const reusingPreviousTarget = launchTarget.id === previousTargetId;
   return {
-    forceRestart: launchTerminalIsRunning(activeTerminal || {}),
+    forceRestart: restart || launchTerminalIsRunning(activeTerminal || {}),
     launchInput: reusingPreviousTarget
       ? normalizeLaunchInput(lastLaunchTarget.launchInput || activeMetadata.launchInput)
       : {},
@@ -900,7 +925,8 @@ function openTargetFromLaunchPreview(preview = {}, openTarget = null) {
 
 function launchStatusResponseFromPreviewStatus({
   launchTargets = [],
-  previewStatus = {}
+  previewStatus = {},
+  vibe64User = null
 } = {}) {
   const preview = normalizeLaunchPreview(previewStatus.preview || {});
   const previewTarget = previewTargetFromLaunchPreview(preview);
@@ -912,6 +938,11 @@ function launchStatusResponseFromPreviewStatus({
     }) : null,
     launchTargets,
     preview,
+    previewIdentity: previewIdentityCapability({
+      preview,
+      terminal: previewStatus.activeTerminal,
+      vibe64User
+    }),
     previewTarget,
     lastLaunchTarget: previewStatus.lastLaunchTarget || null,
     openTarget: openTargetFromLaunchPreview(preview, previewStatus.openTarget || null)
@@ -956,19 +987,127 @@ function previewAuthForLaunchTerminal(terminal = {}, {
   if (!kind) {
     return null;
   }
+  const requiresIdentitySecret = previewAuthRequiresIdentitySecret({ kind });
+  let secret = "";
+  try {
+    secret = requiresIdentitySecret
+      ? readPreviewAuthSecret(previewAuthSecretPath({
+          sessionRoot: metadata.sessionRoot,
+          terminalSessionId: terminal.id
+        }))
+      : "";
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.previewIdentity.secretReadError", {
+      error: vibe64SessionDebugError(error),
+      sessionId,
+      terminalSessionId: String(terminal.id || "")
+    }, {
+      level: "warn"
+    });
+    return null;
+  }
+  if (requiresIdentitySecret && !secret) {
+    return null;
+  }
   return {
     kind,
     profilePath: previewAuthProfilePath({
       sessionRoot: metadata.sessionRoot,
-      targetRoot: metadata.targetRoot || metadata.runRoot || "",
-      sessionId,
       terminalSessionId: terminal.id
     }),
+    projectScope: String(metadata.projectScope || terminalProjectScopeKey()).trim(),
+    secret,
     sessionId,
     sessionRoot: String(metadata.sessionRoot || ""),
     targetHref,
     targetRoot: String(metadata.targetRoot || metadata.runRoot || ""),
     terminalSessionId: String(terminal.id || "")
+  };
+}
+
+function previewIdentityViewer(vibe64User = null) {
+  const email = String(vibe64User?.email || "").trim().toLowerCase();
+  if (!email) {
+    return null;
+  }
+  return {
+    displayName: String(
+      vibe64User?.displayName || vibe64User?.name || vibe64User?.username || email
+    ).trim() || email,
+    email
+  };
+}
+
+function previewIdentityCapability({
+  preview = {},
+  terminal = null,
+  vibe64User = null
+} = {}) {
+  const viewer = previewIdentityViewer(vibe64User);
+  const previewReady = ["ready", "stale"].includes(String(preview.state || "")) && Boolean(preview.href);
+  const previewAuthKind = normalizePreviewAuthKind(terminal?.metadata?.previewAuth);
+  const identitySupported = previewAuthIdentityAvailable({
+    kind: previewAuthKind
+  });
+  const previewAuth = previewAuthForLaunchTerminal(terminal || {}, {
+    sessionId: terminal?.metadata?.sessionId || "",
+    targetHref: preview.targetHref || ""
+  });
+  const available = previewReady && previewAuthIdentityAvailable(previewAuth || {});
+  return {
+    available,
+    defaultMode: viewer ? "viewer" : "guest",
+    disabledReason: available
+      ? ""
+      : !previewReady
+        ? String(preview.message || "Run the preview before selecting an application identity.")
+        : identitySupported
+          ? "Preview identity authorization is unavailable. Restart the preview."
+          : "This preview does not support application identity switching.",
+    viewer
+  };
+}
+
+function previewIdentitySelection(input = {}) {
+  const mode = String(input.mode || "viewer").trim();
+  if (!["viewer", "email", "guest"].includes(mode)) {
+    const error = new Error("Preview identity mode is invalid.");
+    error.code = "vibe64_preview_identity_mode_invalid";
+    throw error;
+  }
+  if (mode === "guest") {
+    return {
+      requestedIdentity: {
+        mode: "guest"
+      },
+      selection: {
+        operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+      }
+    };
+  }
+  const viewer = previewIdentityViewer(input.vibe64User);
+  const email = mode === "viewer"
+    ? String(viewer?.email || "")
+    : String(input.email || "").trim().toLowerCase();
+  if (!email) {
+    const error = new Error(
+      mode === "viewer"
+        ? "The signed-in Vibe64 user does not have an email address to match."
+        : "Enter an existing application user's email address."
+    );
+    error.code = "vibe64_preview_identity_email_missing";
+    throw error;
+  }
+  return {
+    requestedIdentity: {
+      displayName: mode === "viewer" ? viewer?.displayName || email : "",
+      email,
+      mode
+    },
+    selection: {
+      email,
+      operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    }
   };
 }
 
@@ -1754,14 +1893,55 @@ function createLaunchTargetTerminalController({
         });
         return launchStatusResponseFromPreviewStatus({
           launchTargets,
-          previewStatus
+          previewStatus,
+          vibe64User: options.vibe64User || null
         });
+      });
+    },
+
+    async selectPreviewIdentity(sessionId, input = {}, options = {}) {
+      return vibe64Result(async () => {
+        const status = await controller.launchStatus(sessionId, {
+          ...options,
+          vibe64User: input.vibe64User || null
+        });
+        if (status?.ok === false) {
+          const error = new Error(status.error || "Preview identity is unavailable.");
+          error.code = status.code || "vibe64_preview_identity_unavailable";
+          throw error;
+        }
+        if (!["ready", "stale"].includes(String(status.preview?.state || ""))) {
+          const error = new Error(status.preview?.message || "Run the preview before selecting an identity.");
+          error.code = "vibe64_preview_identity_preview_not_ready";
+          throw error;
+        }
+        const previewAuth = previewAuthForLaunchTerminal(status.activeTerminal || {}, {
+          sessionId,
+          targetHref: status.preview.targetHref
+        });
+        if (!previewAuthIdentityAvailable(previewAuth || {})) {
+          const error = new Error("This preview does not support application identity switching.");
+          error.code = "vibe64_preview_identity_unsupported";
+          throw error;
+        }
+        const identity = previewIdentitySelection(input);
+        return {
+          grant: createPreviewIdentityGrant(previewAuth, identity.selection),
+          ok: true,
+          requestedIdentity: identity.requestedIdentity
+        };
       });
     },
 
     ensurePreview(sessionId) {
       return controller.startTerminal(sessionId, {
         ensurePreview: true
+      });
+    },
+
+    restartPreview(sessionId) {
+      return controller.startTerminal(sessionId, {
+        restartPreview: true
       });
     },
 
@@ -1812,7 +1992,10 @@ function createLaunchTargetTerminalController({
         let launchTargetId = normalizeLaunchTargetId(input.launchTargetId);
         let launchTargets = null;
         let workflowDriverOriginId = String(input.originId || "").trim();
-        if (input.ensurePreview === true) {
+        const managedPreviewOperation = input.ensurePreview === true || input.restartPreview === true;
+        if (managedPreviewOperation) {
+          const restartPreview = input.restartPreview === true;
+          const savedLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
           workflowDriverOriginId ||= workflowDriverFromSession(context.session).originId;
           launchTargets = await listLaunchTargets(context);
           const previewStatus = await resolveLaunchPreviewStatus({
@@ -1828,13 +2011,16 @@ function createLaunchTargetTerminalController({
           });
           const launchPlan = managedPreviewLaunchPlan({
             launchTargets,
-            previewStatus
+            previewStatus,
+            restart: restartPreview,
+            savedLaunchTarget
           });
           if (launchPlan.ready) {
             return launchPlan.terminal;
           }
           if (launchPlan.error) {
             return {
+              ...(launchPlan.code ? { code: launchPlan.code } : {}),
               error: launchPlan.error,
               ok: false
             };

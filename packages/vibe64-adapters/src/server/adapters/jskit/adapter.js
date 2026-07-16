@@ -465,6 +465,7 @@ function jskitPromptContext({
   config = {},
   markers = [],
   packageJson = {},
+  session = null,
   targetRoot = ""
 } = {}) {
   const resolvedBlueprintPath = blueprintPath || (targetRoot
@@ -475,6 +476,7 @@ function jskitPromptContext({
   const appAuth = jskitProjectAppAuthConfig(config);
   const authContract = jskitAuthContract(config);
   const seedRequired = !allMarkersExist(markers);
+  const seedWorkflowActive = normalizeText(session?.metadata?.work_source) === "seed";
   return {
     adapter: "jskit",
     blueprint_exists: String(Boolean(blueprintExists)),
@@ -494,7 +496,7 @@ function jskitPromptContext({
     package_name: normalizeText(packageJson.name),
     placement_contract: JSKIT_PLACEMENT_CONTRACT,
     scripts: packageScripts(packageJson).join(", "),
-    ...(seedRequired
+    ...(seedRequired || seedWorkflowActive
       ? {
         seed_deslop_contract: JSKIT_SEED_DESLOP_CONTRACT,
         seed_issue_guidance: jskitSeedIssueGuidance(databaseRuntime, config),

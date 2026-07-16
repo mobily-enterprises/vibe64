@@ -17,19 +17,33 @@ import {
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID
 } from "./workflowModules/coreCoding.js";
+import {
+  VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS
+} from "./workflowModules/coreInitialization.js";
 
 const DEFAULT_WORKFLOW_REPOSITORY_PROFILE = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
 
-const featureWorkflowDefinitionIdsByRepositoryProfile = Object.freeze({
-  [WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR]: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-  [WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT]: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE,
-  [WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE]: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE
+const WORKFLOW_FAMILY = Object.freeze({
+  FEATURE: "feature",
+  INITIALIZATION: "initialization",
+  SEED: "seed"
 });
-
-const seedWorkflowDefinitionIdsByRepositoryProfile = Object.freeze({
-  [WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR]: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
-  [WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT]: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION,
-  [WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE]: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION
+const workflowDefinitionIdsByFamily = Object.freeze({
+  [WORKFLOW_FAMILY.FEATURE]: Object.freeze({
+    [WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR]: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+    [WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT]: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE,
+    [WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE]: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE
+  }),
+  [WORKFLOW_FAMILY.INITIALIZATION]: Object.freeze({
+    [WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR]: VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR,
+    [WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT]: VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT,
+    [WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE]: VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE
+  }),
+  [WORKFLOW_FAMILY.SEED]: Object.freeze({
+    [WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR]: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+    [WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT]: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION,
+    [WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE]: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION
+  })
 });
 
 function registryOrDefault(workflowRegistry = null) {
@@ -56,16 +70,22 @@ function workflowDefinitionSupportsRepositoryProfile(definition = {}, workflowRe
   return workflowDefinitionRepositoryProfiles(definition).includes(normalizedProfile);
 }
 
-function featureWorkflowDefinitionIdForRepositoryProfile(workflowRepositoryProfile = "") {
+function workflowDefinitionIdForRepositoryProfile(family, workflowRepositoryProfile = "") {
   const normalizedProfile = workflowRepositoryProfileOrDefault(workflowRepositoryProfile);
-  return featureWorkflowDefinitionIdsByRepositoryProfile[normalizedProfile] ||
-    featureWorkflowDefinitionIdsByRepositoryProfile[DEFAULT_WORKFLOW_REPOSITORY_PROFILE];
+  const definitionIds = workflowDefinitionIdsByFamily[family];
+  return definitionIds[normalizedProfile] || definitionIds[DEFAULT_WORKFLOW_REPOSITORY_PROFILE];
+}
+
+function featureWorkflowDefinitionIdForRepositoryProfile(workflowRepositoryProfile = "") {
+  return workflowDefinitionIdForRepositoryProfile(WORKFLOW_FAMILY.FEATURE, workflowRepositoryProfile);
 }
 
 function seedWorkflowDefinitionIdForRepositoryProfile(workflowRepositoryProfile = "") {
-  const normalizedProfile = workflowRepositoryProfileOrDefault(workflowRepositoryProfile);
-  return seedWorkflowDefinitionIdsByRepositoryProfile[normalizedProfile] ||
-    seedWorkflowDefinitionIdsByRepositoryProfile[DEFAULT_WORKFLOW_REPOSITORY_PROFILE];
+  return workflowDefinitionIdForRepositoryProfile(WORKFLOW_FAMILY.SEED, workflowRepositoryProfile);
+}
+
+function initializationWorkflowDefinitionIdForRepositoryProfile(workflowRepositoryProfile = "") {
+  return workflowDefinitionIdForRepositoryProfile(WORKFLOW_FAMILY.INITIALIZATION, workflowRepositoryProfile);
 }
 
 function normalizeWorkflowDefinitionId(definitionId = "", {
@@ -123,34 +143,64 @@ function workflowDefinitionDisplayOrder(definition = {}) {
   return Number.isFinite(order) ? order : 1000;
 }
 
+function workflowDefinitionSummary(definition = {}) {
+  return {
+    description: definition.description,
+    id: definition.id,
+    label: definition.label
+  };
+}
+
+function requiredWorkflowCreationOptions({
+  family,
+  workflowRepositoryProfile,
+  workflowRegistry
+} = {}) {
+  const workflowDefinitionId = workflowDefinitionIdForRepositoryProfile(
+    family,
+    workflowRepositoryProfile
+  );
+  const initializationRequired = family === WORKFLOW_FAMILY.INITIALIZATION;
+  const seedRequired = family === WORKFLOW_FAMILY.SEED;
+  return {
+    defaultWorkflowDefinition: workflowDefinitionId,
+    initializationRequired,
+    mode: initializationRequired ? "initialization_required" : "seed_required",
+    requiredWorkflowDefinition: workflowDefinitionSummary(workflowDefinition(workflowDefinitionId, {
+      workflowRegistry
+    })),
+    seedRequired,
+    workflowRepositoryProfile,
+    workflowDefinitions: []
+  };
+}
+
 function workflowDefinitionCreationOptions({
+  initializationRequired = false,
   seedRequired = false,
   workflowRepositoryProfile = "",
   workflowRegistry = null
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
   const normalizedProfile = workflowRepositoryProfileOrDefault(workflowRepositoryProfile);
-  if (seedRequired) {
-    const workflowDefinitionId = seedWorkflowDefinitionIdForRepositoryProfile(normalizedProfile);
-    const definition = workflowDefinition(workflowDefinitionId, {
-      workflowRegistry: registry
+  if (initializationRequired) {
+    return requiredWorkflowCreationOptions({
+      family: WORKFLOW_FAMILY.INITIALIZATION,
+      workflowRegistry: registry,
+      workflowRepositoryProfile: normalizedProfile
     });
-    return {
-      defaultWorkflowDefinition: workflowDefinitionId,
-      mode: "seed_required",
-      requiredWorkflowDefinition: {
-        description: definition.description,
-        id: definition.id,
-        label: definition.label
-      },
-      seedRequired: true,
-      workflowRepositoryProfile: normalizedProfile,
-      workflowDefinitions: []
-    };
+  }
+  if (seedRequired) {
+    return requiredWorkflowCreationOptions({
+      family: WORKFLOW_FAMILY.SEED,
+      workflowRegistry: registry,
+      workflowRepositoryProfile: normalizedProfile
+    });
   }
   const defaultWorkflowDefinition = featureWorkflowDefinitionIdForRepositoryProfile(normalizedProfile);
   return {
     defaultWorkflowDefinition,
+    initializationRequired: false,
     mode: "select",
     requiredWorkflowDefinition: null,
     seedRequired: false,
@@ -162,21 +212,19 @@ function workflowDefinitionCreationOptions({
         return workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
           String(left.label || "").localeCompare(String(right.label || ""));
       })
-      .map((definition) => ({
-        description: definition.description,
-        id: definition.id,
-        label: definition.label
-      }))
+      .map(workflowDefinitionSummary)
   };
 }
 
 export {
+  VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
   DEFAULT_WORKFLOW_REPOSITORY_PROFILE,
   featureWorkflowDefinitionIdForRepositoryProfile,
+  initializationWorkflowDefinitionIdForRepositoryProfile,
   seedWorkflowDefinitionIdForRepositoryProfile,
   normalizeWorkflowDefinitionId,
   normalizeWorkflowDefinitionIdForRepositoryProfile,

@@ -931,6 +931,7 @@ async function markPromptActionStarted(context = {}, machine = {}, actionId = ""
     case STEP_STATUS.FAILED:
     case STEP_STATUS.WAITING_FOR_INPUT:
       await writeState(context, machine, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
+        from: state.status,
         response: state.response,
         source: state.source
       }));
@@ -940,7 +941,9 @@ async function markPromptActionStarted(context = {}, machine = {}, actionId = ""
       return;
     case STEP_STATUS.DONE:
       if (restartDone) {
-        await writeState(context, machine, machineState(STEP_STATUS.AWAITING_AGENT_RESULT));
+        await writeState(context, machine, machineState(STEP_STATUS.AWAITING_AGENT_RESULT, {
+          from: state.status
+        }));
       }
       return;
     default:

@@ -48,7 +48,8 @@ describe("vibe64ComposerPromptRefs", () => {
       },
       fields: {
         conversationRequest: "[Prompt: Deslop]\nFull prompt."
-      }
+      },
+      promptTemplateId: "deslop"
     });
   });
 
@@ -71,7 +72,8 @@ describe("vibe64ComposerPromptRefs", () => {
       },
       fields: {
         conversationRequest: "Please review this.\n\n[Prompt: Deslop]\nFull prompt."
-      }
+      },
+      promptTemplateId: "deslop"
     });
   });
 
@@ -94,7 +96,8 @@ describe("vibe64ComposerPromptRefs", () => {
       },
       fields: {
         conversationRequest: "[Prompt: Deslop]\nFull prompt."
-      }
+      },
+      promptTemplateId: "deslop"
     });
   });
 
@@ -124,7 +127,27 @@ describe("vibe64ComposerPromptRefs", () => {
       },
       fields: {
         conversationRequest: "Please review this.\n\n[Prompt: Deslop]\nSelected prompt."
-      }
+      },
+      promptTemplateId: "selected-deslop"
     });
+  });
+
+  it("does not expand an already expanded prompt block twice", () => {
+    const promptRef = promptTemplateRefForItem({
+      id: "deslop",
+      label: "Deslop",
+      text: "Full prompt."
+    });
+    const once = expandedComposerPromptSubmissionOptions({
+      fields: {
+        conversationRequest: "Prompt: Deslop"
+      }
+    }, {
+      promptRefs: [promptRef]
+    });
+
+    expect(expandedComposerPromptSubmissionOptions(once, {
+      promptRefs: [promptRef]
+    })).toEqual(once);
   });
 });

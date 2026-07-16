@@ -92,6 +92,25 @@ async function readProjectRecordMetadata(projectRecordPath = "") {
   return filePath ? readJsonFile(filePath) : {};
 }
 
+async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) {
+  const filePath = normalizeText(projectRecordPath);
+  if (!filePath) {
+    throw new Error("Updating project metadata requires a project record path.");
+  }
+  const current = await readProjectRecordMetadata(filePath);
+  const next = typeof update === "function"
+    ? update(current)
+    : {
+        ...current,
+        ...(isPlainObject(update) ? update : {})
+      };
+  if (!isPlainObject(next)) {
+    throw new TypeError("Project metadata updates must produce an object.");
+  }
+  await writeJsonFile(filePath, next);
+  return next;
+}
+
 async function saveProjectBootstrapConfig({
   projectRecordPath = "",
   projectType = "",
@@ -103,12 +122,12 @@ async function saveProjectBootstrapConfig({
     error.code = "vibe64_project_bootstrap_record_required";
     throw error;
   }
-  const metadata = await readProjectRecordMetadata(filePath);
-  const updated = projectMetadataWithBootstrapConfig(metadata, {
-    projectType,
-    values
-  });
-  await writeJsonFile(filePath, updated);
+  const updated = await updateProjectRecordMetadata(filePath, (metadata) => (
+    projectMetadataWithBootstrapConfig(metadata, {
+      projectType,
+      values
+    })
+  ));
   return pendingProjectBootstrapConfig(updated);
 }
 
@@ -126,7 +145,7 @@ async function consumeProjectBootstrapConfig({
     return null;
   }
   void sessionId;
-  await writeJsonFile(filePath, projectMetadataWithoutBootstrapConfig(metadata));
+  await updateProjectRecordMetadata(filePath, projectMetadataWithoutBootstrapConfig);
   return bootstrapConfig;
 }
 
@@ -139,5 +158,6 @@ export {
   pendingProjectBootstrapConfig,
   projectMetadataWithBootstrapConfig,
   readProjectRecordMetadata,
-  saveProjectBootstrapConfig
+  saveProjectBootstrapConfig,
+  updateProjectRecordMetadata
 };

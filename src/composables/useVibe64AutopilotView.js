@@ -324,6 +324,43 @@ function useVibe64AutopilotView(props, emit) {
       ? settings
       : null;
   });
+  const sessionRecovery = computed(() => {
+    const recovery = props.session?.recovery;
+    return recovery && Array.isArray(recovery.issues) && recovery.issues.length
+      ? recovery
+      : null;
+  });
+  const sessionRecoveryResolvingKey = ref("");
+  const sessionRecoveryError = ref("");
+
+  async function resolveSessionRecovery({
+    issueId = "",
+    optionId = "",
+    signature = ""
+  } = {}) {
+    if (!issueId || !optionId || !signature || sessionRecoveryResolvingKey.value) {
+      return false;
+    }
+    sessionRecoveryResolvingKey.value = `${issueId}:${optionId}`;
+    sessionRecoveryError.value = "";
+    try {
+      const response = await props.actions?.resolveSessionRecovery?.({
+        issueId,
+        optionId,
+        sessionId: props.session?.sessionId,
+        signature
+      });
+      await props.refreshSessionData();
+      return response !== false;
+    } catch (error) {
+      sessionRecoveryError.value = String(
+        error?.message || error || "Vibe64 session recovery could not be applied."
+      );
+      return false;
+    } finally {
+      sessionRecoveryResolvingKey.value = "";
+    }
+  }
   const {
     canDispatchNextOperation,
     clearFailure,
@@ -2288,7 +2325,8 @@ function useVibe64AutopilotView(props, emit) {
         composerSubmissionId: runOptions.composerSubmissionId,
         displayFields: Object.keys(displayFields).length ? displayFields : fields,
         fields,
-        message
+        message,
+        promptTemplateId: runOptions.promptTemplateId
       }) !== false;
     }
     if (!sourceAction) {
@@ -2731,6 +2769,7 @@ function useVibe64AutopilotView(props, emit) {
     returnToCommandFailureRecovery,
     requestAgentInterrupt,
     requestCommandAiFix,
+    resolveSessionRecovery,
     resendOptimisticComposerTurn,
     loadMoreChatTurns,
     reloadChatPane,
@@ -2756,6 +2795,9 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlValues,
     selectedScreenControlVisible,
     sessionId,
+    sessionRecovery,
+    sessionRecoveryError,
+    sessionRecoveryResolvingKey,
     sessionConfigEditable,
     sessionConfigSourceReady,
     sessionSourceRoot,

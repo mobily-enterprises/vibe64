@@ -60,3 +60,5 @@ export {
   normalizeVibe64ComposerMenuGroupPath
 };
 export * from "./logging.js";
+export * from "./projectApplication.js";
+export * from "./projectSetup.js";

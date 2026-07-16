@@ -37,6 +37,11 @@ import {
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
+  JSKIT_PREVIEW_AUTH_KIND,
+  previewAuthSecretPath,
+  verifyPreviewIdentityGrant
+} from "@local/vibe64-core/server/previewAuth";
+import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
@@ -598,7 +603,7 @@ test("launch terminal start writes session-readable preview diagnostics before a
   });
 });
 
-test("launch controller ensures an initial managed preview without a prior UI launch", async () => {
+test("launch controller owns managed preview ensure and restart authority", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-ensure-initial-preview";
     const session = {
@@ -610,7 +615,7 @@ test("launch controller ensures an initial managed preview without a prior UI la
       sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
-    const specTargetIds = [];
+    const specInputs = [];
     const terminalRequests = [];
     const controller = createLaunchTargetTerminalController({
       projectService: {
@@ -618,8 +623,11 @@ test("launch controller ensures an initial managed preview without a prior UI la
         async createRuntime() {
           return {
             adapter: {
-              async createLaunchTargetTerminalSpec({ launchTargetId }) {
-                specTargetIds.push(launchTargetId);
+              async createLaunchTargetTerminalSpec({ launchInput, launchTargetId }) {
+                specInputs.push({
+                  launchInput,
+                  launchTargetId
+                });
                 return {
                   args: ["-lc", "npm run dev"],
                   command: "bash",
@@ -678,13 +686,42 @@ test("launch controller ensures an initial managed preview without a prior UI la
       }
     });
 
-    const terminal = await controller.ensurePreview(sessionId);
+    const launchInput = {
+      workspaceSlug: "demo"
+    };
+    const missingOrigin = await controller.startTerminal(sessionId, {
+      launchTargetId: "dev"
+    });
+    const ensured = await controller.ensurePreview(sessionId);
+    const started = await controller.startTerminal(sessionId, testWorkflowInput({
+      forceRestart: true,
+      launchInput,
+      launchTargetId: "dev"
+    }));
+    const restarted = await controller.restartPreview(sessionId);
 
-    assert.equal(terminal.ok, true, JSON.stringify(terminal, null, 2));
-    assert.equal(terminal.id, "ensured-preview-terminal");
-    assert.deepEqual(specTargetIds, ["dev"]);
-    assert.equal(terminalRequests.length, 1);
-    assert.equal(terminalRequests[0].terminal.metadata.launchTargetId, "dev");
+    assert.equal(missingOrigin.ok, false);
+    assert.equal(missingOrigin.code, "vibe64_workflow_driver_origin_required");
+    assert.equal(ensured.ok, true, JSON.stringify(ensured, null, 2));
+    assert.equal(ensured.id, "ensured-preview-terminal");
+    assert.equal(started.ok, true, JSON.stringify(started, null, 2));
+    assert.equal(restarted.ok, true, JSON.stringify(restarted, null, 2));
+    assert.deepEqual(specInputs, [
+      {
+        launchInput: {},
+        launchTargetId: "dev"
+      },
+      {
+        launchInput,
+        launchTargetId: "dev"
+      },
+      {
+        launchInput,
+        launchTargetId: "dev"
+      }
+    ]);
+    assert.equal(terminalRequests.length, 3);
+    assert.deepEqual(terminalRequests[2].terminal.metadata.launchInput, launchInput);
   });
 });
 
@@ -1230,6 +1267,137 @@ test("launch status repairs a running preview from retained readiness-marker out
   } finally {
     await controller.closeAllForSession(sessionId);
   }
+});
+
+test("launch preview identity grants use the trusted viewer and active terminal scope", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-preview-identity";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const targetHref = "http://127.0.0.1:4100/app";
+    const projectScope = "project:preview-identity";
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      metadata: {
+        launchReady: true,
+        launchTargetId: "dev",
+        launchTargetLabel: "Run app",
+        openTarget: {
+          href: targetHref,
+          kind: "url",
+          label: "Open browser"
+        },
+        previewAuth: JSKIT_PREVIEW_AUTH_KIND,
+        projectScope,
+        sessionId,
+        sessionRoot,
+        targetRoot,
+        targetUrl: targetHref
+      },
+      namespace
+    });
+    assert.equal(terminal.ok, true);
+
+    const secret = "c".repeat(64);
+    const secretPath = previewAuthSecretPath({
+      sessionRoot,
+      terminalSessionId: terminal.id
+    });
+    await mkdir(path.dirname(secretPath), {
+      mode: 0o700,
+      recursive: true
+    });
+    await writeFile(secretPath, secret, {
+      mode: 0o600
+    });
+
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        async createRuntime() {
+          return {
+            adapter: {
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return {
+                id: sessionId,
+                metadata: {},
+                sessionId,
+                sessionRoot,
+                targetRoot
+              };
+            },
+            projectConfig: {}
+          };
+        }
+      }
+    });
+    const vibe64User = {
+      displayName: "Ada Lovelace",
+      email: " ADA@EXAMPLE.COM "
+    };
+
+    try {
+      const status = await controller.launchStatus(sessionId, {
+        vibe64User
+      });
+      assert.equal(status.ok, true);
+      assert.equal(status.preview.state, "ready");
+      assert.deepEqual(status.previewIdentity, {
+        available: true,
+        defaultMode: "viewer",
+        disabledReason: "",
+        viewer: {
+          displayName: "Ada Lovelace",
+          email: "ada@example.com"
+        }
+      });
+
+      const selection = await controller.selectPreviewIdentity(sessionId, {
+        mode: "viewer",
+        vibe64User
+      });
+      assert.equal(selection.ok, true);
+      assert.deepEqual(selection.requestedIdentity, {
+        displayName: "Ada Lovelace",
+        email: "ada@example.com",
+        mode: "viewer"
+      });
+      const verified = verifyPreviewIdentityGrant(selection.grant, {
+        kind: JSKIT_PREVIEW_AUTH_KIND,
+        projectScope,
+        secret,
+        sessionId,
+        targetHref,
+        targetRoot,
+        terminalSessionId: terminal.id
+      });
+      assert.deepEqual(verified.selection, {
+        email: "ada@example.com",
+        operation: "login-as"
+      });
+
+      const missingViewer = await controller.selectPreviewIdentity(sessionId, {
+        mode: "viewer",
+        vibe64User: null
+      });
+      assert.equal(missingViewer.ok, false);
+      assert.equal(missingViewer.code, "vibe64_preview_identity_email_missing");
+    } finally {
+      await controller.closeAllForSession(sessionId);
+    }
+  });
 });
 
 test("launch status stays starting when retained output has no readiness marker", async () => {

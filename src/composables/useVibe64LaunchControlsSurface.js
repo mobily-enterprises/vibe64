@@ -11,6 +11,8 @@ import {
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+  PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
+  PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE
@@ -46,6 +48,7 @@ const PREVIEW_DISPLAY_QUERY_PARAMS = Object.freeze([
   PREVIEW_PROXY_TOKEN_QUERY_PARAM
 ]);
 const PREVIEW_DIAGNOSTICS_TIMEOUT_MS = 3000;
+const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
 
 function previewUrlWithoutDisplayParams(value = "") {
   const text = String(value || "").trim();
@@ -197,16 +200,184 @@ function previewFrameLifecycleIdentity({
   src = "",
   terminalSessionId = ""
 } = {}) {
-  const canonicalSrc = previewUrlWithoutDisplayParams(src);
-  if (!canonicalSrc) {
-    return "";
-  }
-  return [
+  return previewLifecycleIdentity([
     String(sessionId || "").trim(),
     String(launchTargetId || "").trim(),
-    String(terminalSessionId || "").trim(),
-    canonicalSrc
-  ].join("\u0000");
+    String(terminalSessionId || "").trim()
+  ], src);
+}
+
+function previewIdentityLifecycleIdentity({
+  launchTargetId = "",
+  previewBaseUrl = "",
+  projectSlug = "",
+  sessionId = "",
+  terminalSessionId = ""
+} = {}) {
+  return previewLifecycleIdentity([
+    String(projectSlug || "").trim(),
+    String(sessionId || "").trim(),
+    String(launchTargetId || "").trim(),
+    String(terminalSessionId || "").trim()
+  ], previewBaseUrl);
+}
+
+function previewLifecycleIdentity(parts = [], url = "") {
+  const canonicalUrl = previewUrlWithoutDisplayParams(url);
+  return canonicalUrl
+    ? [...parts, canonicalUrl].join("\u0000")
+    : "";
+}
+
+function previewIdentityLabelText({
+  busy = false,
+  identity = null
+} = {}) {
+  if (busy) {
+    return "Switching identity";
+  }
+  if (!identity) {
+    return "Identity not confirmed";
+  }
+  if (identity.mode === "guest") {
+    return "Guest";
+  }
+  if (identity.mode === "viewer") {
+    return `You — ${identity.email}`;
+  }
+  return identity.username
+    ? `${identity.username} — ${identity.email}`
+    : identity.email;
+}
+
+function previewIdentityTitleText({
+  busy = false,
+  error = "",
+  identity = null
+} = {}) {
+  if (busy) {
+    return "Switching preview identity…";
+  }
+  const message = String(error || "").trim();
+  return message
+    ? `Preview identity failed: ${message}`
+    : `Previewing as ${previewIdentityLabelText({ identity })}`;
+}
+
+function previewIdentityFromExchange(exchangeResult = {}, requestedIdentity = {}) {
+  if (requestedIdentity.mode === "guest") {
+    return {
+      mode: "guest"
+    };
+  }
+  const identity = exchangeResult?.identity && typeof exchangeResult.identity === "object"
+    ? exchangeResult.identity
+    : {};
+  const email = String(identity.email || requestedIdentity.email || "").trim().toLowerCase();
+  return {
+    displayName: String(
+      identity.username || requestedIdentity.displayName || email
+    ).trim() || email,
+    email,
+    mode: requestedIdentity.mode,
+    userId: String(identity.userId || "").trim(),
+    username: String(identity.username || "").trim()
+  };
+}
+
+function previewLoadingOverlayShouldShow({
+  identityBusy = false,
+  loadedFrameRequestId = 0,
+  previewFrameRequestId = 0,
+  previewUrl = ""
+} = {}) {
+  return Boolean(identityBusy || previewOpeningOverlayVisible({
+    loadedFrameRequestId,
+    previewFrameRequestId,
+    previewUrl
+  }));
+}
+
+function defaultPreviewIdentityMode({
+  capability = null,
+  viewer = null
+} = {}) {
+  return capability?.defaultMode === "viewer" && viewer
+    ? "viewer"
+    : "guest";
+}
+
+function createPreviewBridgeRequestRegistry() {
+  const pendingRequests = new Map();
+  let sequence = 0;
+
+  function take(requestId = "") {
+    const pending = pendingRequests.get(requestId);
+    if (!pending) {
+      return null;
+    }
+    clearTimeout(pending.timeout);
+    pendingRequests.delete(requestId);
+    return pending;
+  }
+
+  function reject(requestId, error) {
+    const pending = take(requestId);
+    pending?.reject(error);
+    return Boolean(pending);
+  }
+
+  function rejectAll(message = "The application preview changed.") {
+    for (const requestId of [...pendingRequests.keys()]) {
+      reject(requestId, new Error(message));
+    }
+  }
+
+  function request({
+    frameRequestId = 0,
+    message = {},
+    targetWindow = null,
+    timeoutMessage = "The application preview did not respond in time.",
+    timeoutMs = 3000
+  } = {}) {
+    if (!targetWindow || typeof targetWindow.postMessage !== "function") {
+      return Promise.reject(new Error("The application preview is not ready."));
+    }
+    const requestId = [frameRequestId, Date.now(), ++sequence].join(":");
+    const response = new Promise((resolve, rejectRequest) => {
+      const timeout = setTimeout(() => {
+        pendingRequests.delete(requestId);
+        rejectRequest(new Error(timeoutMessage));
+      }, timeoutMs);
+      pendingRequests.set(requestId, {
+        reject: rejectRequest,
+        resolve,
+        timeout
+      });
+    });
+    try {
+      targetWindow.postMessage({
+        ...message,
+        requestId
+      }, "*");
+    } catch (error) {
+      reject(requestId, error);
+    }
+    return response;
+  }
+
+  function resolve(requestId, value) {
+    const pending = take(requestId);
+    pending?.resolve(value);
+    return Boolean(pending);
+  }
+
+  return Object.freeze({
+    reject,
+    rejectAll,
+    request,
+    resolve
+  });
 }
 
 function previewUrlForDebug(value = "") {
@@ -335,9 +506,11 @@ function useVibe64LaunchControlsSurface(props) {
     previewCanRestart,
     previewCanShowLog,
     previewCanStart,
+    previewIdentity: previewIdentityCapability,
     previewMessage,
     previewState,
     publishPreviewState,
+    requestPreviewIdentityGrant,
     refresh: refreshLaunchTargets,
     restartTerminal,
     retryTerminal,
@@ -380,9 +553,18 @@ function useVibe64LaunchControlsSurface(props) {
   ));
   const previewFrame = ref(null);
   const previewBridgeVersion = ref(0);
+  const previewBridgeRequests = createPreviewBridgeRequestRegistry();
   const previewDiagnosticsBusy = ref(false);
-  const previewDiagnosticsPendingRequests = new Map();
-  let previewDiagnosticsRequestSequence = 0;
+  const previewIdentityBusy = ref(false);
+  const previewIdentityCurrent = ref(null);
+  const previewIdentityCustomEmail = ref("");
+  const previewIdentityDialogError = ref("");
+  const previewIdentityDialogVisible = ref(false);
+  const previewIdentityError = ref("");
+  const previewIdentityRequested = ref(null);
+  let previewIdentityAutomaticAttempt = "";
+  let previewIdentityLifecycle = "";
+  let previewIdentityReloadRequestId = 0;
   const previewFrameRequest = ref({
     id: 0,
     identity: "",
@@ -494,6 +676,30 @@ function useVibe64LaunchControlsSurface(props) {
     ["ready", "stale"].includes(previewState.value) &&
     previewBaseUrl.value
   ));
+  const previewIdentityAvailable = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewIdentityCapability.value?.available === true
+  ));
+  const previewIdentityLifecycleKey = computed(() => previewIdentityLifecycleIdentity({
+    launchTargetId: activeLaunchTarget.value?.id || terminal.value?.metadata?.launchTargetId,
+    previewBaseUrl: previewBaseUrl.value,
+    projectSlug: projectSlug.value,
+    sessionId: props.session?.sessionId,
+    terminalSessionId: terminalSessionId.value
+  }));
+  const previewIdentityViewer = computed(() => {
+    const viewer = previewIdentityCapability.value?.viewer;
+    return viewer && typeof viewer === "object" && !Array.isArray(viewer) ? viewer : null;
+  });
+  const previewIdentityLabel = computed(() => previewIdentityLabelText({
+    busy: previewIdentityBusy.value,
+    identity: previewIdentityCurrent.value
+  }));
+  const previewIdentityTitle = computed(() => previewIdentityTitleText({
+    busy: previewIdentityBusy.value,
+    error: previewIdentityError.value,
+    identity: previewIdentityCurrent.value
+  }));
   const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
   const previewUrl = computed(() => previewFrameRequest.value.src);
   const previewFrameLoaded = computed(() => Boolean(
@@ -539,26 +745,35 @@ function useVibe64LaunchControlsSurface(props) {
     return "";
   });
   const launchStatusChipTitle = computed(() => launchStatusText.value || launchStatusChipText.value);
-  const previewLoadingOverlayVisible = computed(() => previewOpeningOverlayVisible({
+  const previewLoadingOverlayVisible = computed(() => previewLoadingOverlayShouldShow({
+    identityBusy: previewIdentityBusy.value,
     loadedFrameRequestId: previewLoadedFrameRequestId.value,
     previewFrameRequestId: previewFrameRequestId.value,
     previewUrl: previewUrl.value
   }));
-  const previewInFlightText = computed(() => launchPreviewInFlightText({
-    activeLaunchTarget: activeLaunchTarget.value,
-    embeddedStartTarget: embeddedStartTarget.value,
-    launchStarting: launchStarting.value,
-    launchStatusText: launchStatusText.value,
-    loading: loading.value,
-    operationBusy: operationBusy.value,
-    previewDisplayedAddress: previewDisplayedAddress.value,
-    previewEmbedUnavailableReason: previewEmbedUnavailableReason.value,
-    previewLoadingOverlayVisible: previewLoadingOverlayVisible.value,
-    previewUrl: previewUrl.value,
-    terminalCanRestart: terminalCanRestart.value,
-    terminalCanRetry: terminalCanRetry.value,
-    terminalIsRunning: terminalIsRunning.value
-  }));
+  const previewInFlightText = computed(() => {
+    if (previewIdentityBusy.value) {
+      const requested = previewIdentityRequested.value;
+      return requested?.mode === "guest"
+        ? "Signing out of the preview…"
+        : `Opening preview as ${requested?.email || "the selected user"}…`;
+    }
+    return launchPreviewInFlightText({
+      activeLaunchTarget: activeLaunchTarget.value,
+      embeddedStartTarget: embeddedStartTarget.value,
+      launchStarting: launchStarting.value,
+      launchStatusText: launchStatusText.value,
+      loading: loading.value,
+      operationBusy: operationBusy.value,
+      previewDisplayedAddress: previewDisplayedAddress.value,
+      previewEmbedUnavailableReason: previewEmbedUnavailableReason.value,
+      previewLoadingOverlayVisible: previewLoadingOverlayVisible.value,
+      previewUrl: previewUrl.value,
+      terminalCanRestart: terminalCanRestart.value,
+      terminalCanRetry: terminalCanRetry.value,
+      terminalIsRunning: terminalIsRunning.value
+    });
+  });
   const previewIssue = computed(() => launchPreviewIssue({
     message: previewMessage.value,
     state: previewState.value
@@ -674,18 +889,10 @@ function useVibe64LaunchControlsSurface(props) {
     }));
   }
 
-  function rejectPreviewDiagnosticsRequests(message = "Preview diagnostics are no longer available.") {
-    for (const pending of previewDiagnosticsPendingRequests.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error(message));
-    }
-    previewDiagnosticsPendingRequests.clear();
-    previewDiagnosticsBusy.value = false;
-  }
-
   function resetPreviewBridge(reason = "") {
     previewBridgeVersion.value = 0;
-    rejectPreviewDiagnosticsRequests();
+    previewBridgeRequests.rejectAll("The application preview changed.");
+    previewDiagnosticsBusy.value = false;
     previewDebugLog("bridge.reset", {
       reason
     });
@@ -737,6 +944,9 @@ function useVibe64LaunchControlsSurface(props) {
       identity: nextIdentity,
       src: nextSrc
     };
+    if (previewIdentityReloadRequestId > 0) {
+      previewIdentityReloadRequestId = previewFrameRequest.value.id;
+    }
     previewDebugLog("frame.requested", {
       force,
       reason,
@@ -975,38 +1185,167 @@ function useVibe64LaunchControlsSurface(props) {
     if (!previewDiagnosticsAvailable.value) {
       throw new Error("Preview diagnostics are not available for the current app page.");
     }
-    const contentWindow = previewFrame.value?.contentWindow;
-    const requestId = [
-      previewFrameRequestId.value,
-      Date.now(),
-      ++previewDiagnosticsRequestSequence
-    ].join(":");
     previewDiagnosticsBusy.value = true;
-    const response = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        previewDiagnosticsPendingRequests.delete(requestId);
-        reject(new Error("The proxied app did not return its diagnostics in time."));
-      }, PREVIEW_DIAGNOSTICS_TIMEOUT_MS);
-      previewDiagnosticsPendingRequests.set(requestId, {
-        reject,
-        resolve,
-        timeout
-      });
-    });
     try {
-      contentWindow.postMessage({
-        requestId,
-        type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE
-      }, "*");
-      return await response;
+      return await previewBridgeRequests.request({
+        frameRequestId: previewFrameRequestId.value,
+        message: {
+          type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE
+        },
+        targetWindow: previewFrame.value?.contentWindow,
+        timeoutMessage: "The proxied app did not return its diagnostics in time.",
+        timeoutMs: PREVIEW_DIAGNOSTICS_TIMEOUT_MS
+      });
     } finally {
-      const pending = previewDiagnosticsPendingRequests.get(requestId);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        previewDiagnosticsPendingRequests.delete(requestId);
-      }
       previewDiagnosticsBusy.value = false;
     }
+  }
+
+  function requestPreviewIdentityExchange(grant = "") {
+    if (!previewFrameLoaded.value) {
+      return Promise.reject(new Error("The application preview is not ready to switch identity."));
+    }
+    return previewBridgeRequests.request({
+      frameRequestId: previewFrameRequestId.value,
+      message: {
+        grant: String(grant || ""),
+        type: PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE
+      },
+      targetWindow: previewFrame.value?.contentWindow,
+      timeoutMessage: "The application preview did not complete the identity exchange in time.",
+      timeoutMs: PREVIEW_IDENTITY_TIMEOUT_MS
+    });
+  }
+
+  function completePreviewIdentityTransition() {
+    previewIdentityBusy.value = false;
+    previewIdentityRequested.value = null;
+    previewIdentityReloadRequestId = 0;
+  }
+
+  function resetPreviewIdentityState() {
+    completePreviewIdentityTransition();
+    previewIdentityCurrent.value = null;
+    previewIdentityCustomEmail.value = "";
+    previewIdentityDialogError.value = "";
+    previewIdentityDialogVisible.value = false;
+    previewIdentityError.value = "";
+  }
+
+  function reloadPreviewForIdentity(reason = "identity-changed") {
+    const requested = requestPreviewFrame({
+      force: true,
+      reason
+    });
+    if (!requested) {
+      completePreviewIdentityTransition();
+      return false;
+    }
+    previewIdentityReloadRequestId = previewFrameRequestId.value;
+    return true;
+  }
+
+  async function selectPreviewIdentity(selection = {}, {
+    automatic = false
+  } = {}) {
+    if (previewIdentityBusy.value || !previewIdentityAvailable.value) {
+      return false;
+    }
+    const mode = String(selection.mode || "viewer").trim();
+    const requested = {
+      ...(selection.email ? { email: String(selection.email).trim().toLowerCase() } : {}),
+      mode
+    };
+    previewIdentityBusy.value = true;
+    previewIdentityError.value = "";
+    previewIdentityDialogError.value = "";
+    previewIdentityRequested.value = requested;
+    try {
+      const grantResult = await requestPreviewIdentityGrant(requested);
+      const grant = String(grantResult?.grant || "").trim();
+      if (!grant || grantResult?.ok === false) {
+        throw new Error(
+          String(grantResult?.error || "Vibe64 could not authorize the preview identity exchange.")
+        );
+      }
+      const requestedIdentity = grantResult.requestedIdentity || requested;
+      previewIdentityRequested.value = requestedIdentity;
+      const exchangeResult = await requestPreviewIdentityExchange(grant);
+      previewIdentityCurrent.value = previewIdentityFromExchange(exchangeResult, requestedIdentity);
+      previewIdentityDialogVisible.value = false;
+      reloadPreviewForIdentity("identity-selected");
+      return true;
+    } catch (error) {
+      const message = String(error?.message || error || "Preview identity exchange failed.");
+      previewIdentityError.value = message;
+      if (!automatic && mode === "email") {
+        previewIdentityDialogError.value = message;
+      }
+      if (error?.signedOut === true) {
+        previewIdentityCurrent.value = {
+          mode: "guest"
+        };
+        previewIdentityRequested.value = {
+          mode: "guest"
+        };
+        reloadPreviewForIdentity("identity-exchange-signed-out");
+      } else {
+        completePreviewIdentityTransition();
+      }
+      return false;
+    }
+  }
+
+  function selectPreviewViewer() {
+    return selectPreviewIdentity({
+      mode: "viewer"
+    });
+  }
+
+  function selectPreviewGuest() {
+    return selectPreviewIdentity({
+      mode: "guest"
+    });
+  }
+
+  function openPreviewIdentityDialog() {
+    previewIdentityCustomEmail.value = "";
+    previewIdentityDialogError.value = "";
+    previewIdentityDialogVisible.value = true;
+  }
+
+  function submitPreviewIdentityDialog() {
+    const email = String(previewIdentityCustomEmail.value || "").trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      previewIdentityDialogError.value = "Enter an existing application user's email address.";
+      return false;
+    }
+    return selectPreviewIdentity({
+      email,
+      mode: "email"
+    });
+  }
+
+  function beginDefaultPreviewIdentity() {
+    const lifecycle = previewIdentityLifecycleKey.value;
+    if (
+      !lifecycle ||
+      !previewIdentityAvailable.value ||
+      previewIdentityAutomaticAttempt === lifecycle
+    ) {
+      return false;
+    }
+    previewIdentityAutomaticAttempt = lifecycle;
+    const defaultMode = defaultPreviewIdentityMode({
+      capability: previewIdentityCapability.value,
+      viewer: previewIdentityViewer.value
+    });
+    void selectPreviewIdentity({
+      mode: defaultMode
+    }, {
+      automatic: true
+    });
+    return true;
   }
   
   function handlePreviewFrameLoad(event) {
@@ -1028,6 +1367,11 @@ function useVibe64LaunchControlsSurface(props) {
       requestId
     });
     requestPreviewState();
+    if (requestId === previewIdentityReloadRequestId) {
+      completePreviewIdentityTransition();
+      return;
+    }
+    beginDefaultPreviewIdentity();
   }
   
   async function forceStartEmbeddedPreview() {
@@ -1189,6 +1533,7 @@ function useVibe64LaunchControlsSurface(props) {
   function isPreviewBridgeMessage(value = {}) {
     return [
       PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
+      PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
       PREVIEW_LOCATION_MESSAGE_TYPE
     ].includes(previewMessageType(value));
   }
@@ -1217,15 +1562,26 @@ function useVibe64LaunchControlsSurface(props) {
       previewBridgeVersion.value,
       Math.max(0, Number(event?.data?.version) || 0)
     );
-    if (previewMessageType(event.data) === PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE) {
+    const messageType = previewMessageType(event.data);
+    if (messageType === PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE) {
       const requestId = String(event.data?.requestId || "");
-      const pending = previewDiagnosticsPendingRequests.get(requestId);
-      if (!pending) {
-        return;
+      previewBridgeRequests.resolve(requestId, event.data?.diagnostics || {});
+      return;
+    }
+    if (messageType === PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE) {
+      const requestId = String(event.data?.requestId || "");
+      if (event.data?.ok === true) {
+        previewBridgeRequests.resolve(requestId, {
+          identity: event.data?.identity || null
+        });
+      } else {
+        previewBridgeRequests.reject(requestId, Object.assign(new Error(String(
+          event.data?.error || "Preview identity exchange failed."
+        )), {
+          code: String(event.data?.code || "vibe64_preview_identity_exchange_failed"),
+          signedOut: event.data?.signedOut === true
+        }));
       }
-      clearTimeout(pending.timeout);
-      previewDiagnosticsPendingRequests.delete(requestId);
-      pending.resolve(event.data?.diagnostics || {});
       return;
     }
     const frameUrl = previewMessageUrl(event.data);
@@ -1246,6 +1602,26 @@ function useVibe64LaunchControlsSurface(props) {
       });
     }
   }
+
+  watch(previewIdentityLifecycleKey, (lifecycle) => {
+    if (lifecycle === previewIdentityLifecycle) {
+      return;
+    }
+    previewIdentityLifecycle = lifecycle;
+    previewIdentityAutomaticAttempt = "";
+    resetPreviewIdentityState();
+    previewBridgeRequests.rejectAll("The active application preview changed.");
+    previewDiagnosticsBusy.value = false;
+  }, {
+    flush: "sync",
+    immediate: true
+  });
+
+  watch(previewIdentityAvailable, (available) => {
+    if (available && previewFrameLoaded.value) {
+      beginDefaultPreviewIdentity();
+    }
+  });
   
   watch(previewLocationStorageKey, (storageKey, previousStorageKey) => {
     if (storageKey === previousStorageKey) {
@@ -1327,7 +1703,7 @@ function useVibe64LaunchControlsSurface(props) {
   
   onBeforeUnmount(() => {
     window.removeEventListener("message", handlePreviewBridgeMessage);
-    rejectPreviewDiagnosticsRequests();
+    previewBridgeRequests.rejectAll("The application preview closed.");
   });
 
   return {
@@ -1379,6 +1755,16 @@ function useVibe64LaunchControlsSurface(props) {
     previewFrame,
     previewFrameLoaded,
     previewFrameRequestId,
+    previewIdentityAvailable,
+    previewIdentityBusy,
+    previewIdentityCurrent,
+    previewIdentityCustomEmail,
+    previewIdentityDialogError,
+    previewIdentityDialogVisible,
+    previewIdentityError,
+    previewIdentityLabel,
+    previewIdentityTitle,
+    previewIdentityViewer,
     previewIssue,
     previewIssueVisible,
     previewInFlightText,
@@ -1412,12 +1798,16 @@ function useVibe64LaunchControlsSurface(props) {
     copyPreviewUrl,
     openPreviewRoute,
     openPreviewOptions,
+    openPreviewIdentityDialog,
     recoverEmbeddedPreview,
     reloadPreview,
     retryLaunchStatus,
     requestPreviewDiagnostics,
     resetPreviewAddressDraft,
     savePreviewOptions,
+    selectPreviewGuest,
+    selectPreviewViewer,
+    submitPreviewIdentityDialog,
     submitPreviewRouteDialog,
     submitPreviewAddress,
     restartTerminal,
@@ -1636,10 +2026,16 @@ function launchToolbarDockShouldShow({
 }
 
 export {
+  defaultPreviewIdentityMode,
   launchPreviewAddressNavigationUrl,
   launchPreviewEmptyText,
   launchPreviewFrameUrl,
   previewFrameLifecycleIdentity,
+  previewIdentityFromExchange,
+  previewIdentityLabelText,
+  previewIdentityLifecycleIdentity,
+  previewIdentityTitleText,
+  previewLoadingOverlayShouldShow,
   launchPreviewIssue,
   launchPreviewInFlightText,
   launchPreviewNotice,

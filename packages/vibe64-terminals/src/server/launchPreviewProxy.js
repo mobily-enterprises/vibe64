@@ -33,9 +33,13 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  PREVIEW_IDENTITY_CONTROL_PATH,
+  PREVIEW_IDENTITY_LOGOUT_OPERATION,
   normalizePreviewAuthKind,
   previewAuthCookieNames,
-  previewAuthCookieHeader
+  previewAuthCookieHeader,
+  previewAuthIdentityExchange,
+  verifyPreviewIdentityGrant
 } from "@local/vibe64-core/server/previewAuth";
 import {
   vibe64SessionDebugDurationMs,
@@ -58,9 +62,12 @@ const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
+const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
+const PREVIEW_IDENTITY_RESPONSE_BODY_LIMIT_BYTES = 256 * 1024;
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
+const consumedPreviewIdentityGrantNonces = new Map();
 
 function normalizePreviewTargetHref(value = "") {
   const text = String(value || "").trim();
@@ -428,12 +435,307 @@ function bindPreviewProxySocketPair(left, right, {
   return closeBoth;
 }
 
-async function requestBody(request) {
+async function readStreamBuffer(stream, {
+  maxBytes = 0,
+  tooLargeError = () => new Error("Stream is too large.")
+} = {}) {
   const chunks = [];
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  let totalBytes = 0;
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (maxBytes > 0 && totalBytes > maxBytes) {
+      throw tooLargeError();
+    }
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks);
+}
+
+function requestBody(request, {
+  maxBytes = 0
+} = {}) {
+  return readStreamBuffer(request, {
+    maxBytes,
+    tooLargeError: () => previewIdentityProxyError(
+      "Preview identity request is too large.",
+      "vibe64_preview_identity_request_too_large",
+      413
+    )
+  });
+}
+
+async function previewIdentityRequestGrant(request) {
+  const contentLength = Number(request.headers?.["content-length"] || 0);
+  if (Number.isFinite(contentLength) && contentLength > PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES) {
+    throw previewIdentityProxyError(
+      "Preview identity request is too large.",
+      "vibe64_preview_identity_request_too_large",
+      413
+    );
+  }
+  const body = await requestBody(request, {
+    maxBytes: PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES
+  });
+  let payload;
+  try {
+    payload = JSON.parse(body.toString("utf8"));
+  } catch {
+    throw previewIdentityProxyError(
+      "Preview identity request is invalid.",
+      "vibe64_preview_identity_request_invalid",
+      400
+    );
+  }
+  const grant = String(payload?.grant || "").trim();
+  if (!grant) {
+    throw previewIdentityProxyError(
+      "Preview identity grant is required.",
+      "vibe64_preview_identity_grant_missing",
+      400
+    );
+  }
+  return grant;
+}
+
+function previewIdentityProxyError(message, code, statusCode = 400) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function previewIdentityErrorPayload(error = {}, {
+  signedOut = false
+} = {}) {
+  return {
+    code: String(error.code || "vibe64_preview_identity_exchange_failed"),
+    error: String(error.message || error || "Preview identity exchange failed."),
+    ok: false,
+    signedOut: signedOut === true
+  };
+}
+
+function writePreviewIdentityJson(response, statusCode, payload = {}, setCookie = []) {
+  const body = JSON.stringify(payload);
+  const headers = {
+    "Cache-Control": "no-store",
+    "Connection": "close",
+    "Content-Length": Buffer.byteLength(body),
+    "Content-Type": "application/json; charset=utf-8"
+  };
+  if (setCookie.length > 0) {
+    headers["Set-Cookie"] = setCookie;
+  }
+  response.writeHead(statusCode, headers);
+  response.end(body);
+}
+
+function previewIdentityUpstreamError(payload = {}, statusCode = 502) {
+  const fieldErrors = payload?.details?.fieldErrors || payload?.fieldErrors || {};
+  const fieldMessage = Object.values(
+    fieldErrors && typeof fieldErrors === "object" && !Array.isArray(fieldErrors) ? fieldErrors : {}
+  ).find(Boolean);
+  const firstError = Array.isArray(payload?.errors) ? payload.errors.find(Boolean) : null;
+  const firstErrorMessage = typeof firstError === "string" ? firstError : firstError?.message;
+  const message = String(
+    fieldMessage ||
+    firstErrorMessage ||
+    payload?.error ||
+    payload?.message ||
+    "Application preview identity exchange failed."
+  ).trim();
+  return previewIdentityProxyError(
+    message,
+    String(firstError?.code || payload?.code || "vibe64_preview_identity_upstream_rejected"),
+    Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 502
+  );
+}
+
+function responseSetCookieHeaders(response = {}) {
+  const value = response.headers?.["set-cookie"] || response.headers?.["Set-Cookie"] || [];
+  return (Array.isArray(value) ? value : [value]).map(String).filter(Boolean);
+}
+
+function previewIdentityResult(payload = {}, selection = {}) {
+  if (selection.operation === PREVIEW_IDENTITY_LOGOUT_OPERATION) {
+    return {
+      identity: null,
+      ok: true
+    };
+  }
+  const email = String(payload.email || selection.email || "").trim().toLowerCase();
+  return {
+    identity: {
+      email,
+      userId: String(payload.userId || "").trim(),
+      username: String(payload.username || "").trim()
+    },
+    ok: true
+  };
+}
+
+function createPreviewIdentityGrantConsumer(previewAuth = {}) {
+  return function consume(grant = "") {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    for (const [nonce, expiresAt] of consumedPreviewIdentityGrantNonces) {
+      if (expiresAt <= nowSeconds) {
+        consumedPreviewIdentityGrantNonces.delete(nonce);
+      }
+    }
+    const verified = verifyPreviewIdentityGrant(grant, previewAuth, {
+      nowSeconds
+    });
+    if (consumedPreviewIdentityGrantNonces.has(verified.nonce)) {
+      throw previewIdentityProxyError(
+        "Preview identity grant has already been used.",
+        "vibe64_preview_identity_grant_replayed",
+        409
+      );
+    }
+    consumedPreviewIdentityGrantNonces.set(verified.nonce, verified.expiresAt);
+    return verified.selection;
+  };
+}
+
+async function proxyPreviewIdentityExchange(request, response, {
+  connectOrigin = "",
+  consumeIdentityGrant,
+  previewAuth = null,
+  proxyOrigin = "",
+  targetHost = "",
+  targetOrigin = "",
+  token = "",
+  tracker = null
+} = {}) {
+  const setCookie = [];
+  let signedOut = false;
+  try {
+    if (typeof consumeIdentityGrant !== "function") {
+      throw previewIdentityProxyError(
+        "This preview does not support identity switching.",
+        "vibe64_preview_identity_unsupported",
+        404
+      );
+    }
+    const grant = await previewIdentityRequestGrant(request);
+    const selection = consumeIdentityGrant(grant);
+    const exchange = previewAuthIdentityExchange(previewAuth || {}, selection);
+    for (const prerequisite of Array.isArray(exchange.before) ? exchange.before : []) {
+      const prerequisiteResult = await requestPreviewIdentityTarget(prerequisite, {
+        connectOrigin,
+        previewAuth,
+        proxyOrigin,
+        request,
+        targetHost,
+        targetOrigin,
+        tracker
+      });
+      setCookie.push(...prerequisiteResult.setCookie);
+      if (!prerequisiteResult.ok) {
+        throw previewIdentityUpstreamError(
+          prerequisiteResult.payload,
+          prerequisiteResult.statusCode
+        );
+      }
+      signedOut = true;
+    }
+    const result = await requestPreviewIdentityTarget(exchange, {
+      connectOrigin,
+      previewAuth,
+      proxyOrigin,
+      request,
+      targetHost,
+      targetOrigin,
+      tracker
+    });
+    setCookie.push(...result.setCookie);
+    if (!result.ok) {
+      throw previewIdentityUpstreamError(result.payload, result.statusCode);
+    }
+    writePreviewIdentityJson(
+      response,
+      200,
+      previewIdentityResult(result.payload, selection),
+      [
+        ...setCookie,
+        previewTokenCookie(token, { proxyOrigin })
+      ]
+    );
+  } catch (error) {
+    writePreviewIdentityJson(
+      response,
+      Number(error?.statusCode || 400),
+      previewIdentityErrorPayload(error, {
+        signedOut
+      }),
+      setCookie
+    );
+  }
+}
+
+async function requestPreviewIdentityTarget(exchange = {}, {
+  connectOrigin = "",
+  previewAuth = null,
+  proxyOrigin = "",
+  request = null,
+  targetHost = "",
+  targetOrigin = "",
+  tracker = null
+} = {}) {
+  const upstreamOrigin = new URL(connectOrigin || targetOrigin);
+  const targetUrl = new URL(exchange.path, upstreamOrigin);
+  const method = String(exchange.method || "").trim().toUpperCase();
+  if (targetUrl.origin !== upstreamOrigin.origin || method !== "POST") {
+    throw previewIdentityProxyError(
+      "Preview identity provider returned an invalid upstream exchange.",
+      "vibe64_preview_identity_provider_invalid",
+      500
+    );
+  }
+  const body = Buffer.from(JSON.stringify(exchange.body || {}));
+  const headers = proxyRequestHeaders(request?.headers || {}, targetUrl, {
+    previewAuth,
+    proxyOrigin,
+    targetHost
+  });
+  delete headers.origin;
+  delete headers.referer;
+  for (const name of Object.keys(headers)) {
+    if (name.startsWith("sec-fetch-")) {
+      delete headers[name];
+    }
+  }
+  headers.accept = "application/json";
+  for (const [name, value] of Object.entries(exchange.headers || {})) {
+    headers[String(name).trim().toLowerCase()] = String(value);
+  }
+  headers["content-length"] = String(body.length);
+  headers["content-type"] = "application/json";
+  const upstream = await requestPreviewTarget(targetUrl, {
+    body,
+    headers,
+    method,
+    tracker
+  });
+  const responseText = await streamText(upstream, {
+    maxBytes: PREVIEW_IDENTITY_RESPONSE_BODY_LIMIT_BYTES
+  });
+  let payload;
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    payload = {
+      message: String(responseText || "").trim().slice(0, 1000)
+    };
+  }
+  const statusCode = Number(upstream.statusCode || 502);
+  return {
+    ok: statusCode >= 200 && statusCode < 300 && payload?.ok !== false,
+    payload,
+    setCookie: responseSetCookieHeaders(upstream),
+    statusCode
+  };
 }
 
 function responseHeaders(response, {
@@ -692,6 +994,7 @@ function queryParamName(rawName = "") {
 
 async function proxyPreviewRequest(request, response, {
   connectOrigin = "",
+  consumeIdentityGrant = null,
   previewAuth = null,
   proxyOrigin = "",
   tracker = null,
@@ -737,6 +1040,27 @@ async function proxyPreviewRequest(request, response, {
       ...requestDetails,
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       location
+    });
+    return;
+  }
+  if (requestUrl.pathname === PREVIEW_IDENTITY_CONTROL_PATH) {
+    if (String(request.method || "GET").toUpperCase() !== "POST") {
+      writePreviewIdentityJson(response, 405, {
+        code: "vibe64_preview_identity_method_not_allowed",
+        error: "Preview identity exchange requires POST.",
+        ok: false
+      });
+      return;
+    }
+    await proxyPreviewIdentityExchange(request, response, {
+      connectOrigin,
+      consumeIdentityGrant,
+      previewAuth,
+      proxyOrigin,
+      targetHost,
+      targetOrigin,
+      token,
+      tracker
     });
     return;
   }
@@ -855,12 +1179,17 @@ function requestPreviewTarget(targetUrl, {
   });
 }
 
-async function streamText(stream) {
-  const chunks = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+async function streamText(stream, {
+  maxBytes = 0
+} = {}) {
+  return (await readStreamBuffer(stream, {
+    maxBytes,
+    tooLargeError: () => previewIdentityProxyError(
+      "Application preview identity response is too large.",
+      "vibe64_preview_identity_response_too_large",
+      502
+    )
+  })).toString("utf8");
 }
 
 function pipePreviewResponseBody(body, response) {
@@ -1400,10 +1729,14 @@ async function startLaunchPreviewProxy({
   };
   const connectOrigin = connectUrl.origin;
   const tokenHash = previewTokenHash(token, tokenScope);
+  const consumeIdentityGrant = previewAuth
+    ? createPreviewIdentityGrantConsumer(previewAuth)
+    : null;
   let proxyOrigin = "";
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
       connectOrigin,
+      consumeIdentityGrant,
       previewAuth,
       proxyOrigin,
       tracker,
@@ -1485,6 +1818,7 @@ function normalizePreviewAuth(value = {}, {
     kind,
     profilePath: String(value.profilePath || ""),
     projectScope: String(value.projectScope || ""),
+    secret: String(value.secret || ""),
     sessionId: String(value.sessionId || ""),
     sessionRoot: String(value.sessionRoot || ""),
     targetHref: String(value.targetHref || targetHref || ""),
@@ -1501,6 +1835,9 @@ function previewAuthFingerprint(value = null) {
     value.kind,
     value.profilePath,
     value.projectScope,
+    value.secret
+      ? crypto.createHash("sha256").update(String(value.secret)).digest("hex")
+      : "",
     value.sessionId,
     value.sessionRoot,
     value.targetHref,

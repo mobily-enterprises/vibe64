@@ -10,13 +10,14 @@ import {
 } from "@mdi/js";
 
 import {
-  activeVibe64SeedSession,
-  activeVibe64SeedSessionMessage,
+  activeVibe64ProjectSetupSession,
+  activeVibe64ProjectSetupSessionMessage,
   blockingVibe64SessionPageError,
   vibe64ActionIcon,
   vibe64ComposerHandoffFromSession,
   vibe64SessionLimits,
   vibe64SessionUsesSeedWorkflow,
+  vibe64SessionUsesProjectSetupWorkflow,
   buildVibe64AutopilotNavigationSteps,
   buildVibe64TimelineSteps,
   currentStepDisabledReason,
@@ -57,12 +58,31 @@ describe("Vibe64 session panel model", () => {
         id: "big_feature"
       }
     })).toBe(false);
-    expect(activeVibe64SeedSession([
+    expect(vibe64SessionUsesProjectSetupWorkflow(seedSession)).toBe(true);
+    expect(activeVibe64ProjectSetupSession([
       { sessionId: "old-seed", metadata: { workflow_definition: "seed_application" }, status: "finished" },
       { sessionId: "feature-session", metadata: { workflow_definition: "big_feature" }, status: "active" },
       seedSession
     ])).toEqual(seedSession);
-    expect(activeVibe64SeedSessionMessage(seedSession)).toContain("seed-session");
+    expect(activeVibe64ProjectSetupSessionMessage(seedSession)).toContain("seed-session");
+  });
+
+  it("locks project creation while existing-app initialization is active", () => {
+    const initializationSession = {
+      metadata: {
+        work_source: "initialization"
+      },
+      sessionId: "initialize-session",
+      status: "active"
+    };
+
+    expect(vibe64SessionUsesSeedWorkflow(initializationSession)).toBe(false);
+    expect(vibe64SessionUsesProjectSetupWorkflow(initializationSession)).toBe(true);
+    expect(activeVibe64ProjectSetupSession([
+      { sessionId: "feature-session", metadata: { work_source: "description" }, status: "active" },
+      initializationSession
+    ])).toEqual(initializationSession);
+    expect(activeVibe64ProjectSetupSessionMessage(initializationSession)).toContain("initialize-session");
   });
 
   it("shows only blocking session page load errors", () => {

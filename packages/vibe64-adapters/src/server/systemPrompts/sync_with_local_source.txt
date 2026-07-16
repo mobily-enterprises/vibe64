@@ -29,5 +29,5 @@ Fast path first:
 
 Verification and report:
 - Run focused non-interactive source checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification.
-- Do not run broad verification, UI/runtime verification, preview restarts, dev-server restarts, login flows, or auth-user preparation from this sync action.
+- Do not run broad verification, UI/runtime verification, preview restarts, dev-server restarts, or login flows from this sync action.
 - Always report in plain language first, then include a collapsed `<details>` section with starting and final session/opened-repo commits, commands run, files committed, checks run, and blockers.

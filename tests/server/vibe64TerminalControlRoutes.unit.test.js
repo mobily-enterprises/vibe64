@@ -6,6 +6,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
   ACTION_RUN_PROJECT_TOOL,
+  ACTION_SELECT_PREVIEW_IDENTITY,
   ACTION_START_COMMAND_TERMINAL
 } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
@@ -235,6 +236,24 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
             toolId: "unit-tool"
           }),
           path: `${apiRouteBase}/vibe64/tools/:toolId/run`
+        },
+        {
+          actionId: ACTION_SELECT_PREVIEW_IDENTITY,
+          body: {
+            mode: "viewer",
+            vibe64User: spoofedUser
+          },
+          expectedInput: {
+            mode: "viewer",
+            publicHost: "",
+            publicProtocol: "",
+            sessionId: "session-1",
+            vibe64User: serverUser
+          },
+          params: routeProjectParams({
+            sessionId: "session-1"
+          }),
+          path: `${apiRouteBase}/vibe64/sessions/:sessionId/preview-identity`
         }
       ];
 

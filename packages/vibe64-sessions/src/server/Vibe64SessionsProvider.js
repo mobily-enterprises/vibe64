@@ -90,6 +90,10 @@ class Vibe64SessionsProvider {
             reason: "session-step-recovered",
             operation: "updated"
           })],
+          resolveSessionRecovery: [vibe64SessionChangedServiceEvent({
+            reason: "session-recovery-resolved",
+            operation: "updated"
+          })],
           returnAgentControl: [vibe64SessionChangedServiceEvent({
             reason: "session-agent-control-returned"
           })],

@@ -39,6 +39,7 @@
           />
 
           <button
+            aria-label="Show preview controls"
             class="vibe64-launch-controls__mobile-expand"
             type="button"
             title="Show preview controls"
@@ -165,6 +166,72 @@
           </form>
 
           <div class="vibe64-launch-controls__secondary-actions">
+            <v-menu
+              v-if="previewIdentityAvailable"
+              location="bottom end"
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  :aria-label="previewIdentityTitle"
+                  :color="previewIdentityError ? 'error' : undefined"
+                  :icon="mdiAccountSwitchOutline"
+                  :loading="previewIdentityBusy"
+                  size="small"
+                  :title="previewIdentityTitle"
+                  variant="text"
+                />
+              </template>
+
+              <v-card class="vibe64-launch-controls__identity-menu">
+                <v-card-item
+                  :prepend-icon="mdiAccountCircleOutline"
+                  subtitle="Application preview identity"
+                  :title="previewIdentityLabel"
+                />
+
+                <v-divider />
+
+                <v-list density="compact">
+                  <v-list-item
+                    v-if="previewIdentityViewer"
+                    :active="previewIdentityCurrent?.mode === 'viewer'"
+                    :disabled="previewIdentityBusy"
+                    :prepend-icon="mdiAccountCircleOutline"
+                    :subtitle="previewIdentityViewer.email"
+                    title="You"
+                    @click="selectPreviewViewer"
+                  />
+                  <v-list-item
+                    :active="previewIdentityCurrent?.mode === 'guest'"
+                    :disabled="previewIdentityBusy"
+                    :prepend-icon="mdiAccountOffOutline"
+                    subtitle="Use the app signed out"
+                    title="Guest"
+                    @click="selectPreviewGuest"
+                  />
+                  <v-list-item
+                    :active="previewIdentityCurrent?.mode === 'email'"
+                    :disabled="previewIdentityBusy"
+                    :prepend-icon="mdiAccountPlusOutline"
+                    subtitle="The app user must already exist"
+                    title="Another app user…"
+                    @click="openPreviewIdentityDialog"
+                  />
+                </v-list>
+
+                <v-alert
+                  v-if="previewIdentityError"
+                  class="vibe64-launch-controls__identity-error"
+                  density="compact"
+                  type="error"
+                  variant="tonal"
+                >
+                  {{ previewIdentityError }}
+                </v-alert>
+              </v-card>
+            </v-menu>
+
             <div
               v-if="launchToolbarDockVisible"
               class="vibe64-launch-controls__dock"
@@ -535,6 +602,61 @@
     />
 
     <v-dialog
+      v-model="previewIdentityDialogVisible"
+      max-width="520"
+    >
+      <v-card class="vibe64-launch-controls__identity-card">
+        <v-card-title>Preview as another app user</v-card-title>
+
+        <v-card-text>
+          <p>
+            Enter an existing application user's email. Vibe64 will not create
+            the user or change their roles, workspace, or application data.
+          </p>
+
+          <v-text-field
+            v-model="previewIdentityCustomEmail"
+            autofocus
+            autocomplete="off"
+            density="comfortable"
+            label="Application user email"
+            type="email"
+            variant="outlined"
+            @keydown.enter.prevent="submitPreviewIdentityDialog"
+          />
+
+          <v-alert
+            v-if="previewIdentityDialogError"
+            density="compact"
+            type="error"
+            variant="tonal"
+          >
+            {{ previewIdentityDialogError }}
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            :disabled="previewIdentityBusy"
+            variant="text"
+            @click="previewIdentityDialogVisible = false"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            :loading="previewIdentityBusy"
+            variant="flat"
+            @click="submitPreviewIdentityDialog"
+          >
+            Preview as user
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
       v-model="previewOptionsDialogVisible"
       max-width="520"
     >
@@ -655,6 +777,10 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
+  mdiAccountCircleOutline,
+  mdiAccountOffOutline,
+  mdiAccountPlusOutline,
+  mdiAccountSwitchOutline,
   mdiAlertCircleOutline,
   mdiArrowLeft,
   mdiChevronLeft,
@@ -779,6 +905,7 @@ const {
   movePreviewToolbar,
   openAction,
   operationBusy,
+  openPreviewIdentityDialog,
   openPreviewRoute,
   openPreviewOptions,
   previewBaseUrl,
@@ -798,6 +925,16 @@ const {
   previewFrame,
   previewFrameLoaded,
   previewFrameRequestId,
+  previewIdentityAvailable,
+  previewIdentityBusy,
+  previewIdentityCurrent,
+  previewIdentityCustomEmail,
+  previewIdentityDialogError,
+  previewIdentityDialogVisible,
+  previewIdentityError,
+  previewIdentityLabel,
+  previewIdentityTitle,
+  previewIdentityViewer,
   previewIssue,
   previewIssueVisible,
   previewInFlightText,
@@ -831,7 +968,10 @@ const {
   requestPreviewDiagnostics,
   resetPreviewAddressDraft,
   savePreviewOptions,
+  selectPreviewGuest,
+  selectPreviewViewer,
   submitPreviewAddress,
+  submitPreviewIdentityDialog,
   submitPreviewRouteDialog,
   restartTerminal,
   retryTerminal,
@@ -1204,6 +1344,27 @@ onBeforeUnmount(() => {
 .vibe64-launch-controls__route-menu {
   max-width: min(24rem, 92vw);
   min-width: min(14rem, 92vw);
+}
+
+.vibe64-launch-controls__identity-menu {
+  max-width: min(25rem, calc(100vw - 1.5rem));
+  min-width: min(19rem, calc(100vw - 1.5rem));
+}
+
+.vibe64-launch-controls__identity-error {
+  margin: 0 0.75rem 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-launch-controls__identity-card :deep(.v-card-text) {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.vibe64-launch-controls__identity-card p {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .vibe64-launch-controls__attention-button {

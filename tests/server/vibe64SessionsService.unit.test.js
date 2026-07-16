@@ -6,6 +6,7 @@ import {
   Vibe64SessionRuntime,
   VIBE64_AGENT_RUN_STATE,
   VIBE64_CONNECTION_PURPOSE_SESSION,
+  VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS,
   VIBE64_SESSION_STATUS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
@@ -6744,11 +6745,48 @@ test("session list blocks new sessions while a seed session is active after seed
 
   assert.equal(result.ok, true);
   assert.equal(result.creation.seedRequired, false);
-  assert.equal(result.creation.seedSessionActive, true);
-  assert.equal(result.creation.seedSessionId, "seed-session");
+  assert.equal(result.creation.setupSessionActive, true);
+  assert.equal(result.creation.setupSessionId, "seed-session");
   assert.equal(result.creation.canCreate, false);
-  assert.equal(result.creation.disabledCode, "seed_session_active");
+  assert.equal(result.creation.disabledCode, "project_setup_session_active");
   assert.match(result.creation.disabledReason, /seed-session/u);
+});
+
+test("session list blocks new sessions while existing-app initialization is active", async () => {
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessions() {
+            return [
+              {
+                metadata: {
+                  work_source: "initialization",
+                  workflow_definition: VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS.GITHUB_PR
+                },
+                sessionId: "initialization-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.listSessions();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.creation.setupSessionActive, true);
+  assert.equal(result.creation.setupSessionId, "initialization-session");
+  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.creation.disabledCode, "project_setup_session_active");
 });
 
 test("session creation blocks non-seed definitions while seeding is required", async () => {
@@ -7102,8 +7140,8 @@ test("session creation blocks a second open seed session", async () => {
   const result = await service.createSession();
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, "seed_session_active");
-  assert.equal(result.creation.seedSessionActive, true);
+  assert.equal(result.errors[0].code, "project_setup_session_active");
+  assert.equal(result.creation.setupSessionActive, true);
   assert.equal(result.limits.maxOpenSessions, 1);
   assert.equal(createSessionCalled, false);
 });
@@ -7155,11 +7193,11 @@ test("session creation blocks any new session while a seed session is active", a
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, "seed_session_active");
+  assert.equal(result.errors[0].code, "project_setup_session_active");
   assert.match(result.errors[0].message, /seed-session/u);
   assert.equal(result.creation.seedRequired, false);
   assert.equal(result.creation.canCreate, false);
-  assert.equal(result.creation.seedSessionActive, true);
+  assert.equal(result.creation.setupSessionActive, true);
   assert.equal(createSessionCalled, false);
 });
 
