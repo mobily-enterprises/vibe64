@@ -184,6 +184,65 @@ test("Studio Setup Playwright browser check rejects a revision directory with th
   }
 });
 
+test("Studio Setup Playwright browser check ignores trailing version whitespace", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "vibe64-playwright-version-whitespace-"));
+  const fakeBin = path.join(root, "bin");
+  const chromium = path.join(root, "chromium-9876", "chrome-linux", "chrome");
+  const headlessShell = path.join(
+    root,
+    "chromium_headless_shell-9876",
+    "chrome-linux",
+    "headless_shell"
+  );
+  try {
+    mkdirSync(fakeBin, {
+      recursive: true
+    });
+    mkdirSync(path.dirname(chromium), {
+      recursive: true
+    });
+    mkdirSync(path.dirname(headlessShell), {
+      recursive: true
+    });
+    writeFileSync(path.join(fakeBin, "playwright"), [
+      "#!/usr/bin/env bash",
+      "printf 'browser: chromium version 123.4.5.6\\n'",
+      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
+      ""
+    ].join("\n"));
+    writeFileSync(chromium, [
+      "#!/usr/bin/env bash",
+      "if [ \"${1:-}\" = \"--version\" ]; then",
+      "  printf 'Chromium 123.4.5.6 \\n'",
+      "else",
+      "  printf '<h1>vibe64-playwright-ok</h1>\\n'",
+      "fi",
+      ""
+    ].join("\n"));
+    writeFileSync(headlessShell, "#!/usr/bin/env bash\nprintf 'Chromium 123.4.5.6\\n'\n");
+    chmodSync(path.join(fakeBin, "playwright"), 0o755);
+    chmodSync(chromium, 0o755);
+    chmodSync(headlessShell, 0o755);
+
+    const commandArgs = playwrightBrowserLaunchCommandArgs();
+    const result = spawnSync(commandArgs[0], commandArgs.slice(1), {
+      encoding: "utf8",
+      env: {
+        PATH: `${fakeBin}:/usr/bin:/bin`,
+        PLAYWRIGHT_BROWSERS_PATH: root
+      }
+    });
+
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+    assert.match(result.stdout, /Playwright browser launched:/u);
+  } finally {
+    rmSync(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("Studio Setup doctor commands use the gateway shared Playwright runtime env", async () => {
   const result = await runDoctorGatewayCommand(process.execPath, [
     "-e",

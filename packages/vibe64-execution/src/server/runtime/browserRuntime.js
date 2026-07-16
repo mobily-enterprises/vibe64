@@ -60,7 +60,7 @@ function playwrightBrowserLaunchCheckScript() {
     "fi",
     "reported_chromium_version() {",
     "  local executable=\"$1\"",
-    "  \"$executable\" --version 2>/dev/null | sed -n 's/^\\(Chromium\\|Google Chrome\\)[[:space:]]*//p' | head -n 1",
+    "  \"$executable\" --version 2>/dev/null | sed -n 's/^\\(Chromium\\|Google Chrome\\)[[:space:]]*//p' | sed 's/[[:space:]]*$//' | head -n 1",
     "}",
     "browser_version=\"$(reported_chromium_version \"$browser\")\"",
     "headless_shell_version=\"$(reported_chromium_version \"$headless_shell\")\"",
