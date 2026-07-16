@@ -27,8 +27,8 @@ import {
   JSKIT_DATABASE_RUNTIME_CONFIG
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
 import {
-  JSKIT_AUTH_PROVIDER_CONFIG,
-  JSKIT_AUTH_PROVIDER_LOCAL
+  JSKIT_USER_MODE_CONFIG,
+  JSKIT_USER_MODE_USERS
 } from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
@@ -475,7 +475,7 @@ test("create worktree materializes selected local source config into the session
         projectType: "node-web",
         config: {
           github_pr_merge_method: "merge",
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
+          test_setting: "kept"
         }
       }, null, 2)),
       writeProjectFile(targetRoot, "vibe64.runtime-lock.json", "{\"schema\":\"test-runtime-lock\"}\n")
@@ -514,7 +514,7 @@ test("create worktree materializes selected local source config into the session
     const manifest = JSON.parse(await readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"));
     assert.equal(manifest.projectType, "node-web");
     assert.equal(manifest.config.github_pr_merge_method, "merge");
-    assert.equal(manifest.config[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(manifest.config.test_setting, "kept");
     const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"));
     assert.deepEqual(runtimeLock, {
       schema: "test-runtime-lock"
@@ -609,7 +609,7 @@ test("create worktree materializes pending online bootstrap config into the sess
         values: {
           github_pr_merge_method: "squash",
           [JSKIT_DATABASE_RUNTIME_CONFIG]: "mariadb",
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
+          [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS
         }
       },
       ...githubProjectRecord({
@@ -658,7 +658,7 @@ test("create worktree materializes pending online bootstrap config into the sess
     assert.equal(manifest.projectType, "jskit");
     assert.equal(manifest.config.github_pr_merge_method, "squash");
     assert.equal(manifest.config[JSKIT_DATABASE_RUNTIME_CONFIG], "mariadb");
-    assert.equal(manifest.config[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(manifest.config[JSKIT_USER_MODE_CONFIG], JSKIT_USER_MODE_USERS);
     const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"));
     assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     await assertNoGitAlternates(sourcePath);

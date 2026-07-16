@@ -37,6 +37,11 @@ import {
   VIBE64_PUBLIC_USER_DOMAIN_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
+  launchRestartRulesMatcher,
+  normalizeLaunchRestartPath,
+  normalizeLaunchRestartRules
+} from "@local/vibe64-core/server/launchRestartRules";
+import {
   createPreviewIdentityGrant,
   normalizePreviewAuthKind,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
@@ -225,39 +230,6 @@ function serializeLaunchInputMetadata(input = {}) {
   return JSON.stringify(normalizeLaunchInput(input));
 }
 
-function normalizeRestartPath(relativePath = "") {
-  return String(relativePath || "")
-    .replace(/\\/gu, "/")
-    .replace(/^\.\/+/u, "")
-    .replace(/^\/+/u, "")
-    .trim();
-}
-
-function normalizeRestartPattern(pattern = "") {
-  const normalized = normalizeRestartPath(pattern);
-  return normalized.endsWith("/") ? `${normalized}**` : normalized;
-}
-
-function normalizeLaunchRestartRules(input = {}) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const include = (Array.isArray(source.include) ? source.include : [])
-    .map(normalizeRestartPattern)
-    .filter(Boolean);
-  if (include.length < 1) {
-    return null;
-  }
-  const exclude = (Array.isArray(source.exclude) ? source.exclude : [])
-    .map(normalizeRestartPattern)
-    .filter(Boolean);
-  return {
-    exclude,
-    include,
-    label: String(source.label || "server-side files").trim() || "server-side files",
-    reason: String(source.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED).trim() || LAUNCH_RESTART_REASON_SOURCE_CHANGED,
-    version: 1
-  };
-}
-
 function normalizeLaunchRestartBaseline(input = null) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const rules = normalizeLaunchRestartRules(source.rules);
@@ -283,55 +255,10 @@ function serializeLaunchRestartBaseline(input = null) {
   return baseline ? JSON.stringify(baseline) : "";
 }
 
-function escapeRegExpChar(character = "") {
-  return /[\\^$+?.()|[\]{}]/u.test(character) ? `\\${character}` : character;
-}
-
-function restartGlobToRegExp(pattern = "") {
-  const normalized = normalizeRestartPattern(pattern);
-  let source = "^";
-  for (let index = 0; index < normalized.length; index += 1) {
-    const character = normalized[index];
-    if (character === "*") {
-      if (normalized[index + 1] === "*") {
-        if (normalized[index + 2] === "/") {
-          source += "(?:.*/)?";
-          index += 2;
-          continue;
-        }
-        source += ".*";
-        index += 1;
-      } else {
-        source += "[^/]*";
-      }
-      continue;
-    }
-    source += escapeRegExpChar(character);
-  }
-  return new RegExp(`${source}$`, "u");
-}
-
-function restartPathMatchesPattern(relativePath = "", pattern = "") {
-  const normalizedPath = normalizeRestartPath(relativePath);
-  const normalizedPattern = normalizeRestartPattern(pattern);
-  if (!normalizedPath || !normalizedPattern) {
-    return false;
-  }
-  return restartGlobToRegExp(normalizedPattern).test(normalizedPath);
-}
-
-function restartPathMatchesRules(relativePath = "", rules = null) {
-  if (!rules?.include?.length) {
-    return false;
-  }
-  return rules.include.some((pattern) => restartPathMatchesPattern(relativePath, pattern)) &&
-    !rules.exclude.some((pattern) => restartPathMatchesPattern(relativePath, pattern));
-}
-
 function parseNullSeparatedPaths(output = "") {
   return String(output || "")
     .split("\0")
-    .map(normalizeRestartPath)
+    .map(normalizeLaunchRestartPath)
     .filter(Boolean);
 }
 
@@ -393,7 +320,7 @@ async function gitIsWorkTree(root = "", options = {}) {
 
 async function changedPathsFromGit(root = "", args = [], rules = null, options = {}) {
   const output = await gitOutputOrEmpty(root, args, options);
-  return parseNullSeparatedPaths(output).filter((relativePath) => restartPathMatchesRules(relativePath, rules));
+  return parseNullSeparatedPaths(output).filter(launchRestartRulesMatcher(rules));
 }
 
 async function dirtyRestartPaths(root = "", rules = null, options = {}) {
@@ -411,7 +338,7 @@ function pathInsideOrEqual(rootPath = "", candidatePath = "") {
 }
 
 async function fileContentSignature(root = "", relativePath = "") {
-  const absolutePath = path.resolve(root, normalizeRestartPath(relativePath));
+  const absolutePath = path.resolve(root, normalizeLaunchRestartPath(relativePath));
   if (!pathInsideOrEqual(root, absolutePath)) {
     return "outside";
   }
@@ -450,7 +377,7 @@ function dirtyEntrySignatureMap(entries = []) {
   const signatures = new Map();
   for (const entry of entries) {
     const [relativePath = "", signature = ""] = String(entry || "").split("\t");
-    const normalizedPath = normalizeRestartPath(relativePath);
+    const normalizedPath = normalizeLaunchRestartPath(relativePath);
     if (normalizedPath && signature) {
       signatures.set(normalizedPath, signature);
     }
@@ -459,7 +386,7 @@ function dirtyEntrySignatureMap(entries = []) {
 }
 
 async function contentChangedSinceLaunchDirtyState(root = "", relativePath = "", launchDirtySignatures = new Map()) {
-  const launchSignature = launchDirtySignatures.get(normalizeRestartPath(relativePath));
+  const launchSignature = launchDirtySignatures.get(normalizeLaunchRestartPath(relativePath));
   if (!launchSignature) {
     return true;
   }

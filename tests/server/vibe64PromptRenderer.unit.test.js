@@ -298,6 +298,9 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /vibe64-preview browser eval/u);
   assert.match(briefing, /real Playwright `browser`, `context`, and `page`/u);
   assert.match(briefing, /automatically recovers a killed preview or browser worker/u);
+  assert.match(briefing, /Codex's internal managed browser has its own application session/u);
+  assert.match(briefing, /separate from the user's visible Preview/u);
+  assert.match(briefing, /When reporting authentication state, always name the browser explicitly/u);
   assert.match(briefing, /vibe64-playwright test/u);
   assert.match(briefing, /exact managed browser version/u);
   assert.match(briefing, /automatically ensure the current managed preview/u);
@@ -327,6 +330,34 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /Never start another development server/u);
   assert.match(briefing, /even if a different port appears free/u);
   assert.match(briefing, /Do not work around it by spinning up another server/u);
+});
+
+test("novice workflow briefing keeps all visible communication simple", () => {
+  const briefing = promptSessionBriefing({
+    session: {
+      sessionId: "guided-session",
+      targetRoot: "/workspace/example",
+      workflowDefinition: {
+        creationAudience: "novice"
+      }
+    }
+  });
+
+  assert.match(briefing, /Simple communication profile:/u);
+  assert.match(briefing, /live thought and progress updates/u);
+  assert.match(briefing, /Use short, concrete sentences/u);
+  assert.match(briefing, /Avoid implementation jargon/u);
+
+  const standardBriefing = promptSessionBriefing({
+    session: {
+      sessionId: "expert-session",
+      targetRoot: "/workspace/example",
+      workflowDefinition: {
+        creationAudience: "expert"
+      }
+    }
+  });
+  assert.doesNotMatch(standardBriefing, /Simple communication profile:/u);
 });
 
 test("vibe64 prompt renderer ignores project-home prompt overrides without a session source", async () => {

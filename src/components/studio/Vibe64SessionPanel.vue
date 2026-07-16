@@ -155,6 +155,7 @@
         :project-pane="projectPane"
         :save-project-config="props.saveProjectConfig"
         :saving-project-config="props.savingProjectConfig"
+        :toolbar-sessions="toolbar.sessions"
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"
         @toolbar-controls-ready="setRuntimeToolbarControls"

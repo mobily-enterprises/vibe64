@@ -40,7 +40,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions", {
     actionId: ACTION_LIST_SESSIONS,
-    buildInput: sessionsQueryInput,
+    buildInput: (request) => withVibe64User(request, sessionsQueryInput(request)),
     summary: "List Vibe64 sessions."
   });
 
@@ -66,6 +66,14 @@ function registerRoutes(
     actionId: ACTION_INSPECT_SESSION_DIFF,
     buildInput: sessionDiffInput(routes),
     summary: "Inspect an Vibe64 session clone diff."
+  });
+
+  routes.serviceRoute("GET", "/sessions/:sessionId/source-safety", {
+    summary: "Inspect whether Vibe64 session work is committed and, when required, pushed."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").inspectSessionSourceSafety(
+      request.params.sessionId
+    );
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {

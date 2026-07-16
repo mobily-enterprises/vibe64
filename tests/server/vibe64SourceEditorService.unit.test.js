@@ -175,7 +175,7 @@ test("source editor exposes source-owned Vibe64 manifests and optional control d
     extraFiles: [
       {
         path: "vibe64.project.json",
-        text: "{\"schema\":\"vibe64.project\",\"schemaVersion\":1,\"projectType\":\"jskit\",\"config\":{\"jskit_auth_provider\":\"local\"}}\n"
+        text: "{\"schema\":\"vibe64.project\",\"schemaVersion\":1,\"projectType\":\"jskit\",\"config\":{\"jskit_users\":\"users\"}}\n"
       },
       {
         path: "vibe64.runtime-lock.json",

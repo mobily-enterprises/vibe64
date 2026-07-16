@@ -14,7 +14,7 @@
       class="studio-ai-session-details-pane__empty"
       rounded="lg"
     >
-      <h3>Session Details</h3>
+      <h3>Technical details</h3>
       <p>Session details will appear here once this session has data.</p>
     </v-sheet>
   </section>

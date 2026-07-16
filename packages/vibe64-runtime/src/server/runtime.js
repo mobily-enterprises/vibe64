@@ -1415,6 +1415,7 @@ class Vibe64SessionRuntime {
 
   async workflowDefinitionCreationOptionsForInput(input = {}) {
     return workflowDefinitionCreationOptions({
+      creationAudience: input.creationAudience,
       initializationRequired: this.workflowInitializationRequired(),
       seedRequired: await this.workflowSeedRequired(),
       workflowRegistry: this.workflowRegistry,
@@ -1426,8 +1427,8 @@ class Vibe64SessionRuntime {
     return (await this.workflowDefinitionCreationOptionsForInput(input)).defaultWorkflowDefinition;
   }
 
-  async workflowDefinitionCreationOptions() {
-    return this.workflowDefinitionCreationOptionsForInput();
+  async workflowDefinitionCreationOptions(input = {}) {
+    return this.workflowDefinitionCreationOptionsForInput(input);
   }
 
   async writeInitialSessionArtifacts(sessionId = "", workflowDefinitionId = "") {

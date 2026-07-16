@@ -182,6 +182,7 @@ function agentPreviewBrowserWorkerSource({
   contractVersion = "1",
   controlHealthFailureLimit = 4,
   controlHealthIntervalMs = 15_000,
+  identityControlPath = "",
   idleTimeoutMs = 5 * 60 * 1000,
   playwrightModulePath = ""
 } = {}) {
@@ -201,13 +202,14 @@ const workerToken = String(process.env.VIBE64_PREVIEW_BROWSER_WORKER_TOKEN || ""
 const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
 const playwrightModulePath = ${JSON.stringify(String(playwrightModulePath || ""))};
+const identityControlPath = ${JSON.stringify(String(identityControlPath || ""))};
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
 const idleTimeoutMs = ${Number(idleTimeoutMs) || 5 * 60 * 1000};
 const requestLimitBytes = 1024 * 1024;
 const controlHealthIntervalMs = ${Number(controlHealthIntervalMs) || 15_000};
 const controlHealthFailureLimit = ${Number(controlHealthFailureLimit) || 4};
 
-if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !controlToken || !sessionId || !playwrightModulePath) {
+if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !controlToken || !sessionId || !playwrightModulePath || !identityControlPath) {
   process.stderr.write("Vibe64 managed browser worker configuration is incomplete.\\n");
   process.exit(64);
 }
@@ -223,7 +225,8 @@ let browser = null;
 let context = null;
 let page = null;
 let previewUrl = "";
-let previewIdentity = "";
+let previewInstance = "";
+let applicationIdentity = null;
 let commandQueue = Promise.resolve();
 let closing = false;
 let lastUsedAt = Date.now();
@@ -428,9 +431,10 @@ function statusPayload() {
     contractVersion,
     connected: Boolean(browser?.isConnected?.()),
     contextReady: Boolean(context),
+    applicationIdentity,
     pageReady: Boolean(page && !page.isClosed()),
     pid: process.pid,
-    previewIdentity,
+    previewInstance,
     started: Boolean(browser),
     url: safeUrl(page && !page.isClosed() ? page.url() : previewUrl)
   };
@@ -441,6 +445,9 @@ async function closeBrowser() {
   page = null;
   context = null;
   browser = null;
+  applicationIdentity = null;
+  previewInstance = "";
+  previewUrl = "";
   if (currentBrowser) {
     await currentBrowser.close().catch(() => null);
   }
@@ -448,11 +455,11 @@ async function closeBrowser() {
 }
 
 async function ensureBrowser(url = "", {
-  identity = "",
+  instance = "",
   reset = false
 } = {}) {
   const requestedUrl = String(url || "").trim();
-  const requestedIdentity = String(identity || "").trim();
+  const requestedInstance = String(instance || "").trim();
   if (!requestedUrl) {
     throw new Error("The managed preview URL is unavailable.");
   }
@@ -462,7 +469,7 @@ async function ensureBrowser(url = "", {
     !context ||
     !page ||
     page.isClosed() ||
-    (requestedIdentity && previewIdentity && requestedIdentity !== previewIdentity)
+    (requestedInstance && previewInstance && requestedInstance !== previewInstance)
   ) {
     await closeBrowser();
     try {
@@ -472,7 +479,7 @@ async function ensureBrowser(url = "", {
       context = await browser.newContext();
       page = await context.newPage();
       previewUrl = requestedUrl;
-      previewIdentity = requestedIdentity;
+      previewInstance = requestedInstance;
       await page.goto(requestedUrl, {
         waitUntil: "load"
       });
@@ -483,6 +490,65 @@ async function ensureBrowser(url = "", {
     }
   }
   return statusPayload();
+}
+
+async function selectApplicationIdentity(input = {}) {
+  await ensureBrowser(input.previewUrl, {
+    instance: input.previewInstance
+  });
+  const grant = String(input.grant || "").trim();
+  if (!grant) {
+    throw new Error("A preview identity grant is required.");
+  }
+  const response = await context.request.post(
+    new URL(identityControlPath, page.url()).toString(),
+    {
+      data: { grant },
+      failOnStatusCode: false
+    }
+  );
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  if (!response.ok() || payload?.ok === false) {
+    if (payload?.signedOut === true) {
+      applicationIdentity = {
+        mode: "guest"
+      };
+      await page.reload({ waitUntil: "load" }).catch(() => null);
+    }
+    const error = new Error(String(
+      payload?.error || "Preview identity exchange failed."
+    ));
+    error.code = String(payload?.code || "vibe64_preview_identity_exchange_failed");
+    throw error;
+  }
+  const requestedIdentity = input.requestedIdentity && typeof input.requestedIdentity === "object"
+    ? input.requestedIdentity
+    : {};
+  const mode = String(requestedIdentity.mode || "").trim();
+  const identity = payload?.identity && typeof payload.identity === "object"
+    ? payload.identity
+    : {};
+  applicationIdentity = mode === "guest"
+    ? { mode: "guest" }
+    : {
+        displayName: String(
+          identity.username || requestedIdentity.displayName || identity.email || requestedIdentity.email || ""
+        ).trim(),
+        email: String(identity.email || requestedIdentity.email || "").trim().toLowerCase(),
+        mode: mode === "viewer" ? "you" : mode,
+        userId: String(identity.userId || "").trim(),
+        username: String(identity.username || "").trim()
+      };
+  await page.reload({ waitUntil: "load" });
+  return {
+    identity: applicationIdentity,
+    url: safeUrl(page.url())
+  };
 }
 
 async function waitForScreenshotReady() {
@@ -556,7 +622,7 @@ async function runCommand(input = {}) {
   }
   if (command === "ensure") {
     return ensureBrowser(input.previewUrl, {
-      identity: input.previewIdentity
+      instance: input.previewInstance
     });
   }
   if (command === "reset") {
@@ -564,25 +630,28 @@ async function runCommand(input = {}) {
       delete state[key];
     }
     return ensureBrowser(input.previewUrl, {
-      identity: input.previewIdentity,
+      instance: input.previewInstance,
       reset: true
     });
   }
   if (command === "reconnect") {
     return ensureBrowser(input.previewUrl, {
-      identity: input.previewIdentity,
+      instance: input.previewInstance,
       reset: true
     });
   }
+  if (command === "identity") {
+    return selectApplicationIdentity(input);
+  }
   if (command === "eval") {
     await ensureBrowser(input.previewUrl, {
-      identity: input.previewIdentity
+      instance: input.previewInstance
     });
     return evaluateCode(input);
   }
   if (command === "screenshot") {
     await ensureBrowser(input.previewUrl, {
-      identity: input.previewIdentity
+      instance: input.previewInstance
     });
     const outputPath = outputPathFromInput(input);
     if (!outputPath) {

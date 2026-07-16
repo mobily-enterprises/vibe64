@@ -14,6 +14,9 @@ import {
 } from "@local/vibe64-core/shared";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
+  WORKFLOW_CREATION_AUDIENCE
+} from "../workflowCreationAudience.js";
+import {
   HUMAN_INPUT_RESPONSE_ARTIFACT,
   ISSUE_BODY_ARTIFACT,
   ISSUE_TITLE_ARTIFACT,
@@ -76,8 +79,10 @@ const moduleId = "core.coding";
 const VIBE64_WORKFLOW_DEFINITION_IDS = deepFreeze({
   BIG_FEATURE: "big_feature",
   CANONICAL_GIT_FEATURE: "canonical_git_feature",
+  CANONICAL_GIT_GUIDED_FEATURE: "canonical_git_guided_feature",
   CANONICAL_GIT_SEED_APPLICATION: "canonical_git_seed_application",
   LOCAL_SOURCE_FEATURE: "local_source_feature",
+  LOCAL_SOURCE_GUIDED_FEATURE: "local_source_guided_feature",
   LOCAL_SOURCE_SEED_APPLICATION: "local_source_seed_application",
   SEED_APPLICATION: "seed_application"
 });
@@ -846,6 +851,7 @@ function seedApplicationWorkflowDefinition({
 }
 
 function featureWorkflowDefinition({
+  creationAudience = WORKFLOW_CREATION_AUDIENCE.EXPERT,
   description = "Plan, build, review, and share changes from a new issue or existing PR.",
   id = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
   issueStepId = ISSUE_FILE_STEP_ID,
@@ -853,6 +859,7 @@ function featureWorkflowDefinition({
   workflowRepositoryProfiles = GITHUB_PR_WORKFLOW_PROFILES
 } = {}) {
   return defineWorkflow({
+    creationAudience,
     description,
     displayOrder: 20,
     id,
@@ -882,6 +889,20 @@ function featureWorkflowDefinition({
   });
 }
 
+function noviceFeatureWorkflowDefinition({
+  id,
+  workflowRepositoryProfiles
+} = {}) {
+  return featureWorkflowDefinition({
+    creationAudience: WORKFLOW_CREATION_AUDIENCE.NOVICE,
+    description: "Build one focused improvement with guidance, review it, and finish it safely.",
+    id,
+    issueStepId: WORK_FILE_STEP_ID,
+    label: "Build or improve my app",
+    workflowRepositoryProfiles
+  });
+}
+
 const coreCodingWorkflowDefinitions = deepFreeze([
   seedApplicationWorkflowDefinition(),
   seedApplicationWorkflowDefinition({
@@ -905,6 +926,14 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     id: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE,
     issueStepId: WORK_FILE_STEP_ID,
     label: "Work locally",
+    workflowRepositoryProfiles: LOCAL_SOURCE_WORKFLOW_PROFILES
+  }),
+  noviceFeatureWorkflowDefinition({
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE,
+    workflowRepositoryProfiles: CANONICAL_GIT_WORKFLOW_PROFILES
+  }),
+  noviceFeatureWorkflowDefinition({
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_GUIDED_FEATURE,
     workflowRepositoryProfiles: LOCAL_SOURCE_WORKFLOW_PROFILES
   })
 ]);

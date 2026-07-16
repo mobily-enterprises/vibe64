@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  WORKFLOW_CREATION_AUDIENCE,
   VIBE64_SESSION_STATUS,
   VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
@@ -2060,6 +2061,10 @@ test("vibe64 workflow creation options are filtered by repository profile", () =
   const localOptions = workflowDefinitionCreationOptions({
     workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
   });
+  const noviceCanonicalOptions = workflowDefinitionCreationOptions({
+    creationAudience: WORKFLOW_CREATION_AUDIENCE.NOVICE,
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+  });
 
   assert.equal(githubOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
   assert.equal(githubOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
@@ -2080,6 +2085,14 @@ test("vibe64 workflow creation options are filtered by repository profile", () =
   assert.deepEqual(localOptions.workflowDefinitions.map((definition) => definition.id), [
     maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
     VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE
+  ]);
+
+  assert.equal(
+    noviceCanonicalOptions.defaultWorkflowDefinition,
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+  );
+  assert.deepEqual(noviceCanonicalOptions.workflowDefinitions.map((definition) => definition.id), [
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
   ]);
 
   assert.equal(
@@ -2753,6 +2766,17 @@ test("vibe64 runtime selects workflow definitions from the repository profile ba
     assert.deepEqual(canonicalOptions.workflowDefinitions.map((definition) => definition.id), [
       maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
       VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE
+    ]);
+
+    const noviceOptions = await canonicalRuntime.workflowDefinitionCreationOptions({
+      creationAudience: WORKFLOW_CREATION_AUDIENCE.NOVICE
+    });
+    assert.equal(
+      noviceOptions.defaultWorkflowDefinition,
+      VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+    );
+    assert.deepEqual(noviceOptions.workflowDefinitions.map((definition) => definition.id), [
+      VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
     ]);
 
     await assert.rejects(

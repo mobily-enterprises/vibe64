@@ -11,6 +11,9 @@ import {
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 import {
+  useVibe64SessionSourceSafety
+} from "@/composables/useVibe64SessionSourceSafety.js";
+import {
   useVibe64SessionViewSync
 } from "@/composables/useVibe64SessionViewSync.js";
 
@@ -63,6 +66,10 @@ function useVibe64SessionPanel(props, emit) {
       emit("title-change", title);
     }
   });
+  const sourceSafety = useVibe64SessionSourceSafety({
+    sessions: sessionData.sessions,
+    sessionsApiPath: sessionData.sessionsApiPath
+  });
 
   const selection = proxyRefs({
     isClosed: sessionData.isSelectedSessionClosed,
@@ -73,6 +80,7 @@ function useVibe64SessionPanel(props, emit) {
     runtimeStateBySessionId,
     selectedSession: selection.selectedSession,
     selectedSessionId: selection.selectedSessionId,
+    sourceSafetyForSession: sourceSafety.statusForSession,
     sessions: sessionData.sessions.value || []
   }));
   const toolbar = proxyRefs({
@@ -348,6 +356,7 @@ function sessionPanelToolbarSessions({
   runtimeStateBySessionId = {},
   selectedSession = null,
   selectedSessionId = "",
+  sourceSafetyForSession = null,
   sessions = []
 } = {}) {
   const normalizedSelectedSessionId = String(selectedSessionId || "").trim();
@@ -366,12 +375,13 @@ function sessionPanelToolbarSessions({
       runtimeState?.agentThinking ||
       sessionRecordHasActiveAgentWork(sourceSession)
     );
-    if (Boolean(session?.agentThinking) === agentThinking) {
-      return session;
-    }
+    const sourceSafety = typeof sourceSafetyForSession === "function"
+      ? sourceSafetyForSession(sessionId)
+      : null;
     return {
       ...session,
-      agentThinking
+      agentThinking,
+      ...(sourceSafety ? { sourceSafety } : {})
     };
   });
 }

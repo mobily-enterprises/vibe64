@@ -249,6 +249,14 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const sessionFacts = computed(() => vibe64SessionFacts(selectedSession.value || {}));
   const timelineSteps = computed(() => buildVibe64TimelineSteps(selectedSession.value));
   const autopilotNavigationSteps = computed(() => buildVibe64AutopilotNavigationSteps(selectedSession.value));
+  const toolbarSessions = computed(() => (
+    props.toolbarSessions?.length
+      ? props.toolbarSessions
+      : unref(props.sessionData.sessions) || []
+  ));
+  const sourceSafety = computed(() => (
+    toolbarSessions.value.find((session) => session?.sessionId === props.sessionId)?.sourceSafety || {}
+  ));
   const sessionScopedData = {
     canCreateSession: props.sessionData.canCreateSession,
     clearSelectedSession: props.sessionData.clearSelectedSession,
@@ -267,6 +275,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionList: props.sessionData.sessionList,
     sessions: props.sessionData.sessions,
     sessionsApiPath: props.sessionData.sessionsApiPath,
+    sourceSafety,
     shortSessionId: props.sessionData.shortSessionId,
     statusColor: props.sessionData.statusColor,
     statusLabel: props.sessionData.statusLabel,
@@ -414,7 +423,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     activeAgentThinking: autopilotInteractionLocked.value,
     selectedSession: selectedSession.value,
     selectedSessionId: selectedSessionId.value,
-    sessions: unref(props.sessionData.sessions) || []
+    sessions: toolbarSessions.value
   }));
   const autopilotSessionToolbar = proxyRefs({
     canCreateSession: props.sessionData.canCreateSession,

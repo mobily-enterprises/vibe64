@@ -21,6 +21,10 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import {
+  launchRestartRulesMatcher,
+  launchRestartRulesMatcherSource
+} from "../../packages/vibe64-core/src/server/launchRestartRules.js";
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);
@@ -58,6 +62,29 @@ async function createLaunchSpecFixture() {
     targetRoot: worktree
   };
 }
+
+test("serialized launch restart rules use the canonical matcher", () => {
+  const generatedMatcherFactory = Function(
+    `"use strict";\n${launchRestartRulesMatcherSource()}\nreturn vibe64LaunchRestartRulesMatcher;`
+  )();
+  const rules = {
+    exclude: ["node_modules/**", ".git/**"],
+    include: ["src/**/*.server.js", "server/**", ".env.*"]
+  };
+  const canonicalMatcher = launchRestartRulesMatcher(rules);
+  const generatedMatcher = generatedMatcherFactory(rules);
+  const paths = [
+    "src/direct.server.js",
+    "src/nested/direct.server.js",
+    "src/page.js",
+    "server/routes/index.js",
+    ".env.local",
+    "node_modules/server/index.js",
+    ".git/server/index.js"
+  ];
+
+  assert.deepEqual(paths.map(generatedMatcher), paths.map(canonicalMatcher));
+});
 
 function createSpec({
   preferredPort,

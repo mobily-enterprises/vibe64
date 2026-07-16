@@ -8,6 +8,9 @@ import {
   sanitizeLogText
 } from "@local/vibe64-core/server/logging";
 import {
+  PREVIEW_IDENTITY_CONTROL_PATH
+} from "@local/vibe64-core/server/previewAuth";
+import {
   vibe64ErrorResponse,
   vibe64StatusCode
 } from "@local/vibe64-core/server/serverResponses";
@@ -31,8 +34,13 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "6";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "7";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
+const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
+  "/agent-preview-command/health",
+  "/agent-preview-command/identity",
+  "/agent-preview-command/run"
+]);
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
 const DEFAULT_PREVIEW_WAIT_TIMEOUT_MS = 90_000;
@@ -182,6 +190,7 @@ function usageText() {
     "  vibe64-preview screenshot [--output <path>]",
     "  vibe64-preview browser ensure",
     "  vibe64-preview browser eval < playwright-code.js",
+    "  vibe64-preview browser identity <you|guest|existing-user-email>",
     "  vibe64-preview browser screenshot [--output <path>]",
     "  vibe64-preview browser status",
     "  vibe64-preview browser reset",
@@ -522,6 +531,72 @@ function createAgentPreviewCommandService({
   readSessionUiState = readSessionUiSyncStateForSession
 } = {}) {
   const browserWorkers = new Map();
+  const sessionViewers = new Map();
+
+  function registerViewer(sessionId = "", vibe64User = null) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const email = normalizeText(vibe64User?.email).toLowerCase();
+    if (!normalizedSessionId) {
+      return false;
+    }
+    if (!email) {
+      sessionViewers.delete(normalizedSessionId);
+      return false;
+    }
+    sessionViewers.set(normalizedSessionId, {
+      displayName: normalizeText(
+        vibe64User?.displayName || vibe64User?.name || vibe64User?.username || email
+      ) || email,
+      email
+    });
+    return true;
+  }
+
+  async function authorizeBrowserIdentity(sessionId = "", identity = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    const requested = normalizeText(identity);
+    const reservedIdentity = requested.toLowerCase();
+    if (!normalizedSessionId) {
+      return responseError(
+        "Vibe64 preview command session id is required.",
+        "vibe64_agent_preview_command_session_required"
+      );
+    }
+    if (!requested) {
+      return responseError(
+        "Choose you, guest, or an existing application user's email address.",
+        "vibe64_agent_preview_identity_required"
+      );
+    }
+    if (!launchTarget || typeof launchTarget.selectPreviewIdentity !== "function") {
+      return responseError(
+        "Vibe64 preview identity control is not available.",
+        "vibe64_agent_preview_identity_unavailable"
+      );
+    }
+    if (reservedIdentity === "you") {
+      const viewer = sessionViewers.get(normalizedSessionId);
+      if (!viewer) {
+        return responseError(
+          "The Vibe64 user who authorized this agent turn is unavailable. Send the agent a new message, then retry.",
+          "vibe64_agent_preview_viewer_unavailable"
+        );
+      }
+      return launchTarget.selectPreviewIdentity(normalizedSessionId, {
+        mode: "viewer",
+        vibe64User: viewer
+      });
+    }
+    if (reservedIdentity === "guest") {
+      return launchTarget.selectPreviewIdentity(normalizedSessionId, {
+        mode: "guest"
+      });
+    }
+    return launchTarget.selectPreviewIdentity(normalizedSessionId, {
+      email: requested,
+      mode: "email"
+    });
+  }
 
   function registerBrowserWorker(sessionId = "", descriptor = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -543,6 +618,7 @@ function createAgentPreviewCommandService({
     const normalizedSessionId = normalizeText(sessionId);
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     browserWorkers.delete(normalizedSessionId);
+    sessionViewers.delete(normalizedSessionId);
     let closed = 0;
     for (const descriptor of sessionWorkers.values()) {
       await closeRegisteredBrowserWorker(descriptor);
@@ -736,8 +812,10 @@ function createAgentPreviewCommandService({
   }
 
   return Object.freeze({
+    authorizeBrowserIdentity,
     closeAllForSession,
     registerBrowserWorker,
+    registerViewer,
     releaseControlForSession,
     run
   });
@@ -1065,28 +1143,34 @@ async function ensureAgentPreviewCommandServer({
     });
     const server = http.createServer(async (request, response) => {
       try {
-        if (request.method === "POST" && request.url === "/agent-preview-command/health") {
-          const input = await readRequestJson(request);
-          if (!verifyRequestToken(input, token) || normalizeText(input.sessionId) !== normalizeText(sessionId)) {
-            sendJson(response, 403, responseError("Vibe64 preview command token is invalid.", "vibe64_agent_preview_command_token_invalid"));
-            return;
-          }
+        if (request.method !== "POST" || !AGENT_PREVIEW_COMMAND_ROUTES.has(request.url)) {
+          sendJson(response, 404, responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"));
+          return;
+        }
+        const input = await readRequestJson(request);
+        if (!verifyRequestToken(input, token) || normalizeText(input.sessionId) !== normalizeText(sessionId)) {
+          sendJson(response, 403, responseError("Vibe64 preview command token is invalid.", "vibe64_agent_preview_command_token_invalid"));
+          return;
+        }
+        if (request.url === "/agent-preview-command/health") {
           sendJson(response, 200, {
             ok: true,
             sessionId: normalizeText(sessionId)
           });
           return;
         }
-        if (request.method === "POST" && request.url === "/agent-preview-command/run") {
-          const input = await readRequestJson(request);
-          if (!verifyRequestToken(input, token)) {
-            sendJson(response, 403, responseError("Vibe64 preview command token is invalid.", "vibe64_agent_preview_command_token_invalid"));
-            return;
-          }
+        if (request.url === "/agent-preview-command/identity") {
+          const payload = await commandService.authorizeBrowserIdentity(
+            sessionId,
+            input.identity
+          );
+          sendJson(response, vibe64StatusCode(payload), payload);
+          return;
+        }
+        if (request.url === "/agent-preview-command/run") {
           sendJson(response, 200, await commandService.run(input));
           return;
         }
-        sendJson(response, 404, responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"));
       } catch (error) {
         const payload = vibe64ErrorResponse(error, {
           fallbackCode: "vibe64_agent_preview_command_request_failed",
@@ -1187,6 +1271,7 @@ async function prepareAgentPreviewCommand({
       contractVersion: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
       controlHealthFailureLimit: browserControlHealthFailureLimit,
       controlHealthIntervalMs: browserControlHealthIntervalMs,
+      identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
       idleTimeoutMs: browserIdleTimeoutMs,
       playwrightModulePath
     }),

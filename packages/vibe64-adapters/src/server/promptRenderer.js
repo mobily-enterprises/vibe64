@@ -21,6 +21,13 @@ const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
 const PROMPT_WORK_PROFILE_STANDARD = "standard";
 const PROMPT_WORK_PROFILE_SEED = "seed";
+const NOVICE_WORKFLOW_CREATION_AUDIENCE = "novice";
+const SIMPLE_COMMUNICATION_POLICY = [
+  "Simple communication profile:",
+  "Keep all user-visible communication especially simple, including live thought and progress updates, status messages, reasoning summaries, questions, and final answers.",
+  "Use short, concrete sentences. Introduce one decision at a time. Avoid implementation jargon and internal machinery unless the user asks for technical detail.",
+  "Do not narrate speculative investigation. Say what you know, what you are doing now, and what the user needs to decide."
+].join("\n");
 const SEED_PROMPT_CONTEXT_BRIEFING_HIDDEN_KEYS = new Set([
   "agent_guide_contract",
   "generator_discovery_commands",
@@ -271,6 +278,10 @@ function normalizePromptContext(context = {}) {
       stepMachine: isPlainObject(context.session?.stepMachine) ? context.session.stepMachine : null,
       status: normalizeText(context.session?.status),
       targetRoot: normalizeText(context.session?.targetRoot),
+      workflowCreationAudience: normalizeText(
+        context.session?.workflowCreationAudience ||
+        context.session?.workflowDefinition?.creationAudience
+      ),
       sourcePath: sessionSourcePath(context.session || {})
     }
   };
@@ -292,7 +303,8 @@ function sessionPromptContext(session = {}) {
     stateRoot: session.stateRoot,
     stepMachine: session.stepMachine,
     status: session.status,
-    targetRoot: session.targetRoot
+    targetRoot: session.targetRoot,
+    workflowCreationAudience: session.workflowDefinition?.creationAudience
   };
 }
 
@@ -355,6 +367,8 @@ function managedPreviewPolicyInstruction() {
     "- Never claim that the application is black, blank, obscured, or visually broken when the capture luminance and dark-pixel percentage contradict that claim. If the image-viewing tool appears to contradict the capture facts, run `sha256sum` on the same `outputPath`, confirm it still matches `sha256`, and reopen that exact file once without taking another screenshot. Any remaining or intermittent disagreement is an image-handoff failure; report it as such and do not blame the application.",
     "- For browser work that needs interaction, use the persistent managed browser: send JavaScript on stdin to `vibe64-preview browser eval`. The script receives the real Playwright `browser`, `context`, and `page` objects plus persistent `state`; use the ordinary Playwright API directly. The page, cookies, tabs, and state survive across commands in this session.",
     "- Use `vibe64-preview browser ensure` to start or reconnect it without requiring the user to open it first, `vibe64-preview browser status` to inspect it, and `vibe64-preview browser reset` only when a clean context is intentional. Vibe64 automatically recovers a killed preview or browser worker and reattaches when the managed preview process changes.",
+    "- Codex's internal managed browser has its own application session, separate from the user's visible Preview. Use `vibe64-preview browser identity you` to sign it in as the Vibe64 user who authorized the turn, `vibe64-preview browser identity <existing-user-email>` to inspect another real application user, or `vibe64-preview browser identity guest` to sign it out. These commands never change the user's visible Preview.",
+    "- When reporting authentication state, always name the browser explicitly: say `Codex's internal managed browser is signed in as <identity>` or `Codex's internal managed browser is signed out`. Never say only that `the application` or `the preview` is signed in, and never imply that the internal browser's identity is also active in the user's visible Preview.",
     "- Treat the returned `endpoints.agent`, `terminal`, and `currentPage` as authoritative. Use `vibe64-preview status --json` to refresh them. When the user says “this page”, use `currentPage.agentUrl` and `currentPage.route`.",
     "- `currentPage` can be absent until a browser has visited the preview. For browser verification, navigate to `endpoints.agent.url`; do not treat an unobserved current page as a missing preview.",
     "- `vibe64-preview` owns interactive Playwright and already has its matching Chromium. Never use `npx playwright`, project `require(\"playwright\")`, `playwright install`, another browser CLI, or any browser download for inspection or interaction.",
@@ -557,6 +571,9 @@ function briefingSessionDiagnostics(session = {}) {
 
 function promptSessionBriefing(contextInput = {}) {
   const context = normalizePromptContext(contextInput);
+  const simpleCommunicationPolicy = context.session.workflowCreationAudience === NOVICE_WORKFLOW_CREATION_AUDIENCE
+    ? SIMPLE_COMMUNICATION_POLICY
+    : "";
   const codeIndexPath = normalizeText(context.session.metadata?.code_index_path);
   const codeIndexPolicy = codeIndexPath
     ? [
@@ -568,6 +585,8 @@ function promptSessionBriefing(contextInput = {}) {
     "Vibe64 session briefing",
     "",
     "This briefing is sent once at the start of this Codex session. Keep using it for later Vibe64 prompts in the same session instead of asking for or rediscovering these static setup facts.",
+    "",
+    simpleCommunicationPolicy,
     "",
     "Fixed session paths:",
     `- session id: ${context.session.id}`,

@@ -100,18 +100,37 @@ function writePayload(payload = {}) {
   }
 }
 
-async function remoteCommand(args = []) {
+async function controlRequest(requestPath, input = {}) {
   const response = await requestSocket({
     body: {
-      args,
-      cwd: process.cwd(),
+      ...input,
       sessionId,
       token: controlToken
     },
-    requestPath: "/agent-preview-command/run",
+    requestPath,
     socketPath: controlSocketPath
   });
   return parsedResponse(response);
+}
+
+async function remoteCommand(args = []) {
+  return controlRequest("/agent-preview-command/run", {
+    args,
+    cwd: process.cwd()
+  });
+}
+
+async function authorizeBrowserIdentity(identity = "") {
+  const payload = await controlRequest("/agent-preview-command/identity", {
+    identity
+  });
+  if (payload.ok === false) {
+    throw new Error(payload.error || "Vibe64 could not authorize the preview identity exchange.");
+  }
+  if (!String(payload.grant || "").trim()) {
+    throw new Error("Vibe64 preview identity authorization did not return a grant.");
+  }
+  return payload;
 }
 
 async function readStdin() {
@@ -157,7 +176,7 @@ async function previewSession() {
     throw new Error("Managed preview inspection URL is unavailable.");
   }
   return {
-    previewIdentity: [status.launchTargetId, status.terminal?.id].filter(Boolean).join(":"),
+    previewInstance: [status.launchTargetId, status.terminal?.id].filter(Boolean).join(":"),
     previewUrl
   };
 }
@@ -550,6 +569,19 @@ try {
     }
     if (browserCommand === "ensure" || browserCommand === "reset") {
       printJson(await interactiveCommand(browserCommand));
+      process.exit(0);
+    }
+    if (browserCommand === "identity") {
+      const identity = String(browserArgs[0] || "").trim();
+      if (!identity || browserArgs.length !== 1) {
+        fail("Usage: vibe64-preview browser identity <you|guest|existing-user-email>", 64);
+      }
+      const session = await previewSession();
+      const authorization = await authorizeBrowserIdentity(identity);
+      printJson(await interactiveCommand("identity", {
+        grant: authorization.grant,
+        requestedIdentity: authorization.requestedIdentity
+      }, session));
       process.exit(0);
     }
     if (browserCommand === "eval") {

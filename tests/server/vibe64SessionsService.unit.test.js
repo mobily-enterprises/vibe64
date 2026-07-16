@@ -3,6 +3,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  WORKFLOW_CREATION_AUDIENCE,
   Vibe64SessionRuntime,
   VIBE64_AGENT_RUN_STATE,
   VIBE64_CONNECTION_PURPOSE_SESSION,
@@ -35,8 +36,8 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  JSKIT_AUTH_PROVIDER_CONFIG,
-  JSKIT_AUTH_PROVIDER_LOCAL
+  JSKIT_USER_MODE_CONFIG,
+  JSKIT_USER_MODE_USERS
 } from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   _testing as coreMaintenanceTesting
@@ -597,6 +598,31 @@ function readySetupServices() {
     connectionSetupService: readyService,
     projectSetupService: readyService,
     studioSetupService: readyService
+  };
+}
+
+function noviceSetupServices() {
+  const services = readySetupServices();
+  return {
+    ...services,
+    connectionSetupService: {
+      async getStatus(input = {}) {
+        return Array.isArray(input.providerIds) && input.providerIds.includes("github")
+          ? {
+              connections: [
+                {
+                  connected: false,
+                  id: "github"
+                }
+              ],
+              ok: true,
+              ready: true
+            }
+          : {
+              ready: true
+            };
+      }
+    }
   };
 }
 
@@ -6144,6 +6170,109 @@ test("session list exposes selectable workflow definitions after seeding", async
   assert.equal(result.limits.maxOpenSessions, 3);
 });
 
+test("session list gives users without GitHub the novice creation catalog and one-session limit", async () => {
+  const creationAudienceInputs = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessions() {
+            return ["one", "two", "three"].map((suffix) => ({
+              metadata: {
+                workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE
+              },
+              sessionId: `expert-created-session-${suffix}`,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            }));
+          },
+          async workflowDefinitionCreationOptions(input = {}) {
+            creationAudienceInputs.push(input.creationAudience);
+            return workflowDefinitionCreationOptions({
+              creationAudience: input.creationAudience,
+              workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+            });
+          }
+        };
+      }
+    },
+    setupServices: noviceSetupServices()
+  });
+
+  const result = await service.listSessions({
+    vibe64User: {
+      username: "novice"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.sessions.map((session) => session.sessionId), [
+    "expert-created-session-one",
+    "expert-created-session-two",
+    "expert-created-session-three"
+  ]);
+  assert.deepEqual(result.creation.workflowDefinitions.map((definition) => definition.id), [
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+  ]);
+  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.creation.disabledCode, "open_session_limit");
+  assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(result.limits.openSessionCount, 3);
+  assert.deepEqual(creationAudienceInputs, [WORKFLOW_CREATION_AUDIENCE.NOVICE]);
+});
+
+test("session creation applies the novice limit on the server", async () => {
+  let createSessionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async createSession() {
+            createSessionCalled = true;
+            return {
+              sessionId: "second-session"
+            };
+          },
+          async listSessions() {
+            return [
+              {
+                sessionId: "active-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions(input = {}) {
+            return workflowDefinitionCreationOptions({
+              creationAudience: input.creationAudience,
+              workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: noviceSetupServices()
+  });
+
+  const result = await service.createSession({
+    vibe64User: {
+      username: "novice"
+    },
+    workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, "open_session_limit");
+  assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(createSessionCalled, false);
+});
+
 test("session list can read sessions before a source config session is selected", async () => {
   const createRuntimeOptions = [];
   const service = createService({
@@ -6228,7 +6357,7 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
     await runWithProjectRequestContext(requestContext, () => projectService.saveProjectConfig({
       sessionId: "pre-source-session",
       values: {
-        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+        [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
         github_pr_merge_method: "merge",
         jskit_database_runtime: "mariadb"
       }

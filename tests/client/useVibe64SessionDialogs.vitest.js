@@ -178,4 +178,30 @@ describe("useVibe64SessionDialogs", () => {
     finishRefresh();
     await abandonPromise;
   });
+
+  it("refreshes independent source safety before showing abandon confirmation", () => {
+    const refreshSourceSafety = vi.fn(async () => null);
+    const dialogs = useVibe64SessionDialogs({
+      activeActionId: ref(""),
+      clearSelectedSession: vi.fn(),
+      isSelectedSessionClosed: ref(false),
+      refreshSessionData: vi.fn(async () => null),
+      runActionCommand: {
+        run: vi.fn()
+      },
+      selectedSessionId: ref("session-1"),
+      selectedSessionTitle: ref("Session one"),
+      sessionsApiPath: ref("/api/app/project/example/vibe64/sessions"),
+      sourceSafety: ref({
+        refresh: refreshSourceSafety,
+        unsafe: true
+      })
+    });
+
+    dialogs.abandon.request();
+
+    expect(dialogs.abandon.open.value).toBe(true);
+    expect(refreshSourceSafety).toHaveBeenCalledTimes(1);
+    expect(dialogs.abandon.sourceSafety.value.unsafe).toBe(true);
+  });
 });

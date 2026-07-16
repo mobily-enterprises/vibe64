@@ -1,5 +1,8 @@
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
+  WORKFLOW_CREATION_AUDIENCE
+} from "../workflowCreationAudience.js";
+import {
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
@@ -131,6 +134,7 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
 
 const coreMaintenanceWorkflowDefinitions = [
   {
+    creationAudience: WORKFLOW_CREATION_AUDIENCE.EXPERT,
     description: "Run ad hoc local work without commit, pull request, or merge steps.",
     displayOrder: 10,
     id: workflowDefinitionIds.NON_COMMIT_MAINTENANCE,

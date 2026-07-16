@@ -1171,6 +1171,12 @@ function createCodexTerminalController({
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerNotificationTasks = new Map();
 
+  function rememberAgentPreviewViewer(sessionId = "", vibe64User = null) {
+    return vibe64User
+      ? agentPreviewCommand?.registerViewer?.(sessionId, vibe64User) === true
+      : false;
+  }
+
   function createRuntimeForSession(sessionId = "") {
     return projectService.createRuntime({
       input: {
@@ -6482,6 +6488,7 @@ function createCodexTerminalController({
         error: "Codex prompt handoff is empty."
       };
     }
+    rememberAgentPreviewViewer(sessionId, vibe64User);
 
     const context = await codexAppServerSessionContext(sessionId, {
       runtime: providedRuntime,
@@ -7318,6 +7325,7 @@ function createCodexTerminalController({
   }
 
   async function startCodexAppServerTerminal(sessionId, input = {}) {
+    rememberAgentPreviewViewer(sessionId, input?.vibe64User);
     const runtime = await createRuntimeForSession(sessionId);
     await claimSessionWorkflowDriver(runtime, sessionId, {
       originId: input?.originId || "",
@@ -7550,6 +7558,7 @@ function createCodexTerminalController({
     }
     const workdir = terminalWorktreePath(session) || targetRoot;
     const vibe64User = input?.vibe64User || input?.request?.vibe64User || null;
+    rememberAgentPreviewViewer(normalizedSessionId, vibe64User);
     let driverResult;
     try {
       driverResult = await claimSessionWorkflowDriver(runtime, normalizedSessionId, {
@@ -7602,6 +7611,7 @@ function createCodexTerminalController({
         refreshRecommended: false
       };
     }
+    rememberAgentPreviewViewer(sessionId, input?.vibe64User);
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
       return context;
@@ -8025,11 +8035,12 @@ function createCodexTerminalController({
       });
     },
 
-    async ensureThread(sessionId) {
+    async ensureThread(sessionId, options = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
+        rememberAgentPreviewViewer(sessionId, options?.vibe64User);
         return ensureCodexAppServerThreadReady(sessionId);
       });
     },

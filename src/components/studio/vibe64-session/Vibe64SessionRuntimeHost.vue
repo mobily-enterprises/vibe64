@@ -120,6 +120,10 @@ const props = defineProps({
   savingProjectConfig: {
     default: false,
     type: Boolean
+  },
+  toolbarSessions: {
+    default: () => [],
+    type: Array
   }
 });
 

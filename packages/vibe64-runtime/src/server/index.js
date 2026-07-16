@@ -19,6 +19,7 @@ export * from "./terminalFailureFixRequest.js";
 export * from "./workflow.js";
 export * from "./workflowArtifacts.js";
 export * from "./workflowConditions.js";
+export * from "./workflowCreationAudience.js";
 export * from "./workflowDefinitionComposers.js";
 export * from "./workflowDefinitionBuilders.js";
 export * from "./workflowMachine.js";

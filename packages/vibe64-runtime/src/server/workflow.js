@@ -20,6 +20,11 @@ import {
 import {
   VIBE64_INITIALIZATION_WORKFLOW_DEFINITION_IDS
 } from "./workflowModules/coreInitialization.js";
+import {
+  WORKFLOW_CREATION_AUDIENCE,
+  normalizeWorkflowCreationAudience,
+  workflowDefinitionSupportsCreationAudience
+} from "./workflowCreationAudience.js";
 
 const DEFAULT_WORKFLOW_REPOSITORY_PROFILE = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
 
@@ -176,6 +181,7 @@ function requiredWorkflowCreationOptions({
 }
 
 function workflowDefinitionCreationOptions({
+  creationAudience = WORKFLOW_CREATION_AUDIENCE.EXPERT,
   initializationRequired = false,
   seedRequired = false,
   workflowRepositoryProfile = "",
@@ -183,6 +189,7 @@ function workflowDefinitionCreationOptions({
 } = {}) {
   const registry = registryOrDefault(workflowRegistry);
   const normalizedProfile = workflowRepositoryProfileOrDefault(workflowRepositoryProfile);
+  const normalizedCreationAudience = normalizeWorkflowCreationAudience(creationAudience);
   if (initializationRequired) {
     return requiredWorkflowCreationOptions({
       family: WORKFLOW_FAMILY.INITIALIZATION,
@@ -197,7 +204,18 @@ function workflowDefinitionCreationOptions({
       workflowRepositoryProfile: normalizedProfile
     });
   }
-  const defaultWorkflowDefinition = featureWorkflowDefinitionIdForRepositoryProfile(normalizedProfile);
+  const workflowDefinitions = Object.values(registry.workflowDefinitionsById())
+    .filter((definition) => definition.userSelectable === true)
+    .filter((definition) => workflowDefinitionSupportsRepositoryProfile(definition, normalizedProfile))
+    .filter((definition) => workflowDefinitionSupportsCreationAudience(definition, normalizedCreationAudience))
+    .sort((left, right) => {
+      return workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
+        String(left.label || "").localeCompare(String(right.label || ""));
+    });
+  const preferredWorkflowDefinition = featureWorkflowDefinitionIdForRepositoryProfile(normalizedProfile);
+  const defaultWorkflowDefinition = workflowDefinitions.some((definition) => definition.id === preferredWorkflowDefinition)
+    ? preferredWorkflowDefinition
+    : workflowDefinitions[0]?.id || "";
   return {
     defaultWorkflowDefinition,
     initializationRequired: false,
@@ -205,14 +223,7 @@ function workflowDefinitionCreationOptions({
     requiredWorkflowDefinition: null,
     seedRequired: false,
     workflowRepositoryProfile: normalizedProfile,
-    workflowDefinitions: Object.values(registry.workflowDefinitionsById())
-      .filter((definition) => definition.userSelectable === true)
-      .filter((definition) => workflowDefinitionSupportsRepositoryProfile(definition, normalizedProfile))
-      .sort((left, right) => {
-        return workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
-          String(left.label || "").localeCompare(String(right.label || ""));
-      })
-      .map(workflowDefinitionSummary)
+    workflowDefinitions: workflowDefinitions.map(workflowDefinitionSummary)
   };
 }
 

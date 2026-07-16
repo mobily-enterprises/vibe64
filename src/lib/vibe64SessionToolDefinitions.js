@@ -48,15 +48,15 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiInformationOutline,
     id: "session-details",
-    label: "Session",
+    label: "Technical details",
     order: 400,
     routeSegment: "session",
-    title: "Show active session details"
+    title: "Show technical session details"
   },
   {
     icon: mdiFileCompare,
     id: "diff",
-    label: "Diff",
+    label: "Changes",
     order: 500,
     routeSegment: "diff",
     title: "Review changes in the session clone"

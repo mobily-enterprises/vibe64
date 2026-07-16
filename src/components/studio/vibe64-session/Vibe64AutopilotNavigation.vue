@@ -11,6 +11,30 @@
     ]"
     aria-label="Autopilot progress"
   >
+    <div
+      v-if="summaryLayout"
+      class="studio-autopilot-nav__summary"
+    >
+      <button
+        :aria-expanded="mobileStepsOpen"
+        class="studio-autopilot-nav__summary-stage"
+        type="button"
+        @click="toggleMobileSteps"
+      >
+        <span class="studio-autopilot-nav__summary-copy">
+          <span class="studio-autopilot-nav__summary-kicker">Current stage</span>
+          <strong class="studio-autopilot-nav__summary-label">
+            {{ currentStepLabel }}
+          </strong>
+          <span class="studio-autopilot-nav__summary-meta">
+            {{ mobileToggleLabel }}<template v-if="statusLabel"> · {{ statusLabel }}</template>
+          </span>
+        </span>
+        <v-icon :icon="mobileStepsOpen ? mdiChevronUp : mdiChevronDown" size="18" />
+      </button>
+      <slot name="actions" />
+    </div>
+
     <v-btn
       v-if="railLayout"
       class="studio-autopilot-nav__mobile-toggle"
@@ -22,7 +46,10 @@
       {{ mobileToggleLabel }}
     </v-btn>
 
-    <div class="studio-autopilot-nav__content">
+    <div
+      v-show="!summaryLayout || mobileStepsOpen"
+      class="studio-autopilot-nav__content"
+    >
       <ol class="studio-autopilot-nav__steps">
         <li
           v-for="step in steps"
@@ -53,6 +80,12 @@
                   aria-hidden="true"
                 >
                   <v-icon :icon="mdiCheck" size="10" />
+                </span>
+                <span
+                  v-if="summaryLayout"
+                  class="studio-autopilot-nav__step-label"
+                >
+                  {{ step.label || step.id }}
                 </span>
               </span>
             </template>
@@ -137,6 +170,10 @@ const props = defineProps({
   steps: {
     default: () => [],
     type: Array
+  },
+  statusLabel: {
+    default: "",
+    type: String
   }
 });
 const emit = defineEmits(["rewind"]);
@@ -146,9 +183,13 @@ const pendingStep = ref(null);
 const confirmationOpen = ref(false);
 
 const railLayout = computed(() => props.layout === "rail");
+const summaryLayout = computed(() => props.layout === "summary");
 const currentStep = computed(() => props.steps.find((step) => step.current) || props.steps[0] || null);
 const currentStepIndex = computed(() => Math.max(0, props.steps.findIndex((step) => step.id === currentStep.value?.id)));
 const mobileToggleLabel = computed(() => `Step ${currentStepIndex.value + 1} of ${props.steps.length}`);
+const currentStepLabel = computed(() => String(
+  currentStep.value?.label || currentStep.value?.description || currentStep.value?.id || "Session ready"
+).trim());
 
 function toggleMobileSteps() {
   mobileStepsOpen.value = !mobileStepsOpen.value;
@@ -215,6 +256,62 @@ watch(currentStepIndex, () => {
   display: none;
 }
 
+.studio-autopilot-nav__summary {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.studio-autopilot-nav__summary-stage {
+  align-items: center;
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  border: 1px solid rgba(var(--v-theme-outline), 0.22);
+  border-radius: 9px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.6rem;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.studio-autopilot-nav__summary-stage:hover,
+.studio-autopilot-nav__summary-stage:focus-visible {
+  background: rgba(var(--v-theme-primary), 0.07);
+  border-color: rgba(var(--v-theme-primary), 0.36);
+  outline: none;
+}
+
+.studio-autopilot-nav__summary-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.studio-autopilot-nav__summary-kicker,
+.studio-autopilot-nav__summary-meta {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.studio-autopilot-nav__summary-kicker {
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.studio-autopilot-nav__summary-label {
+  font-size: 0.88rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .studio-autopilot-nav__content {
   align-items: center;
   display: grid;
@@ -271,6 +368,34 @@ watch(currentStepIndex, () => {
   justify-content: center;
   outline: none;
   position: relative;
+}
+
+.studio-autopilot-nav__step-label {
+  color: inherit;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-autopilot-nav--summary .studio-autopilot-nav__content {
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 9px;
+  max-height: min(18rem, 42vh);
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+
+.studio-autopilot-nav--summary .studio-autopilot-nav__steps {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-autopilot-nav--summary .studio-autopilot-nav__step-hitbox {
+  flex: 1 1 auto;
+  gap: 0.45rem;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .studio-autopilot-nav__step-hitbox:focus-visible {

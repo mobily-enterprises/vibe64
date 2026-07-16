@@ -73,6 +73,7 @@ function useVibe64SessionWorkflow({
     selectSessionId,
     sessionList,
     sessionsApiPath,
+    sourceSafety,
     updateCurrentSessionCommand = {}
   } = sessionData;
 
@@ -149,6 +150,7 @@ function useVibe64SessionWorkflow({
     runActionCommand: workflow.actions.runActionCommand,
     selectedSessionId,
     selectedSessionTitle,
+    sourceSafety,
     sessionsApiPath
   });
 

@@ -24,10 +24,44 @@
           class="studio-autopilot__nav"
           :busy="navigationBusy"
           :executing="workflowExecuting"
-          layout="icons"
+          layout="summary"
+          :status-label="dashboardSessionContext.activeSessionNav.statusLabel"
           :steps="autopilotSteps"
           @rewind="rewindToAutopilotStep"
-        />
+        >
+          <template #actions>
+            <v-menu location="bottom end">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  :icon="mdiDotsHorizontal"
+                  size="small"
+                  title="Session menu"
+                  type="button"
+                  variant="text"
+                />
+              </template>
+              <v-list density="compact" nav>
+                <v-list-item
+                  v-for="tool in sessionHeaderTools"
+                  :key="tool.id"
+                  :disabled="tool.disabled"
+                  :prepend-icon="tool.icon"
+                  :subtitle="tool.disabled ? tool.title : ''"
+                  :title="tool.label"
+                  @click="openSessionHeaderTool(tool)"
+                />
+                <v-divider />
+                <v-list-item
+                  :disabled="sessionAbandonDisabled"
+                  :prepend-icon="mdiClose"
+                  title="Abandon session"
+                  @click="requestSessionAbandon"
+                />
+              </v-list>
+            </v-menu>
+          </template>
+        </Vibe64AutopilotNavigation>
       </div>
 
       <Teleport
@@ -811,7 +845,8 @@
 </template>
 
 <script setup>
-import { defineAsyncComponent, nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUpdate, onUpdated, ref, watch } from "vue";
+import { mdiDotsHorizontal } from "@mdi/js";
 import Vibe64BackgroundTasks from "@/components/studio/vibe64-session/Vibe64BackgroundTasks.vue";
 import Vibe64AutopilotNavigation from "@/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -988,6 +1023,29 @@ const {
   workflowButtonControls,
   workflowExecuting
 } = useVibe64AutopilotView(props, emit);
+
+const sessionHeaderTools = computed(() => [
+  "editor",
+  "diff",
+  "session-details"
+].map((toolId) => dashboardSessionContext.value.activeSessionNav.tools.find((tool) => tool.id === toolId))
+  .filter(Boolean));
+const sessionAbandonDisabled = computed(() => Boolean(
+  props.sessionSelectionClosed ||
+  props.sessionAbandon?.command?.isRunning
+));
+
+function openSessionHeaderTool(tool = {}) {
+  if (!tool.disabled) {
+    dashboardSessionContext.value.activeSessionNav.selectTool?.(tool.id);
+  }
+}
+
+function requestSessionAbandon() {
+  if (!sessionAbandonDisabled.value) {
+    props.sessionAbandon?.request?.();
+  }
+}
 
 function saveSessionProjectConfig(values = {}) {
   if (typeof props.saveProjectConfig === "function") {

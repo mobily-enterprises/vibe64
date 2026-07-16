@@ -148,6 +148,28 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(placementSource).toContain("id: `vibe64.active-session.${tool.id}`");
   });
 
+  it("presents session progress plainly with a compact tools menu", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const navigationSource = fs.readFileSync(
+      path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotNavigation.vue"),
+      "utf8"
+    );
+    const toolDefinitionSource = fs.readFileSync(
+      path.resolve("src/lib/vibe64SessionToolDefinitions.js"),
+      "utf8"
+    );
+
+    expect(componentSource).toContain("layout=\"summary\"");
+    expect(componentSource).toContain(":status-label=\"dashboardSessionContext.activeSessionNav.statusLabel\"");
+    expect(componentSource).toContain("title=\"Session menu\"");
+    expect(toolDefinitionSource).toContain("label: \"Changes\"");
+    expect(toolDefinitionSource).toContain("label: \"Technical details\"");
+    expect(componentSource).toContain("title=\"Abandon session\"");
+    expect(navigationSource).toContain("Current stage");
+    expect(navigationSource).toContain("{{ mobileToggleLabel }}");
+    expect(navigationSource).toContain("{{ statusLabel }}");
+  });
+
   it("keeps the GitHub command actor in the project header chrome", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const panelSource = fs.readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");

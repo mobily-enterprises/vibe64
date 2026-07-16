@@ -13,6 +13,9 @@ import {
   agentPreviewWrapperSource
 } from "../../packages/vibe64-execution/src/server/index.js";
 import {
+  PREVIEW_IDENTITY_CONTROL_PATH
+} from "../../packages/vibe64-core/src/server/previewAuth.js";
+import {
   AGENT_PREVIEW_COMMAND_NAME,
   VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
@@ -113,6 +116,7 @@ async function createFakePlaywrightRuntime(runtimeRoot) {
   await writeFile(path.join(playwrightModule, "index.js"), `
 const { spawn } = require("node:child_process");
 const screenshotBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==", "base64");
+const identityControlPath = ${JSON.stringify(PREVIEW_IDENTITY_CONTROL_PATH)};
 let launchCount = 0;
 exports.chromium = {
   async launch() {
@@ -134,7 +138,45 @@ exports.chromium = {
         for (const page of pages) page.closed = true;
       },
       async newContext() {
-        return {
+        let selectedIdentity = null;
+        const context = {
+          request: {
+            async post(url, options) {
+              if (new URL(url).pathname !== identityControlPath) {
+                throw new Error("Managed browser used the wrong identity control path.");
+              }
+              const grant = String(options?.data?.grant || "");
+              if (grant === "grant:rejected-after-logout") {
+                selectedIdentity = null;
+                return {
+                  async json() {
+                    return {
+                      code: "preview_identity_rejected",
+                      error: "The requested preview user does not exist.",
+                      ok: false,
+                      signedOut: true
+                    };
+                  },
+                  ok() { return false; }
+                };
+              }
+              const email = grant.startsWith("grant:") ? grant.slice("grant:".length) : "";
+              selectedIdentity = email === "guest" ? null : {
+                email,
+                userId: "fake-user-id",
+                username: email.split("@")[0]
+              };
+              return {
+                async json() {
+                  return {
+                    identity: selectedIdentity,
+                    ok: true
+                  };
+                },
+                ok() { return true; }
+              };
+            }
+          },
           pages() { return [...pages]; },
           async newPage() {
             const page = {
@@ -149,6 +191,12 @@ exports.chromium = {
                   throw new Error("Managed preview navigation did not wait for page load.");
                 }
                 this.currentUrl = url;
+                this.loadState = "load";
+              },
+              async reload(options) {
+                if (options?.waitUntil !== "load") {
+                  throw new Error("Managed preview identity reload did not wait for page load.");
+                }
                 this.loadState = "load";
               },
               async waitForLoadState(state) {
@@ -211,6 +259,7 @@ exports.chromium = {
             return page;
           }
         };
+        return context;
       }
     };
   }
@@ -223,6 +272,7 @@ exports.chromium = {
 }
 
 function createReadyPreviewCommandService({
+  selectPreviewIdentity = null,
   previewUrl,
   terminalId = () => "launch-terminal"
 } = {}) {
@@ -249,10 +299,81 @@ function createReadyPreviewCommandService({
             href: previewUrl
           }
         };
+      },
+      async selectPreviewIdentity(sessionId, input) {
+        if (typeof selectPreviewIdentity !== "function") {
+          return {
+            code: "preview_identity_not_configured",
+            error: "Preview identity selection is not configured for this test.",
+            ok: false
+          };
+        }
+        return selectPreviewIdentity(sessionId, input);
       }
     }
   });
 }
+
+test("agent preview identity authorization binds you to the trusted Vibe64 viewer", async () => {
+  const sessionId = "preview-identity-session";
+  const selections = [];
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus() {
+        return {};
+      },
+      async selectPreviewIdentity(receivedSessionId, input) {
+        selections.push({
+          input,
+          sessionId: receivedSessionId
+        });
+        return {
+          grant: "private-grant",
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.equal(command.registerViewer(sessionId, {
+    displayName: "Ada Lovelace",
+    email: "ADA@EXAMPLE.COM"
+  }), true);
+  assert.equal((await command.authorizeBrowserIdentity(sessionId, "you")).ok, true);
+  assert.equal((await command.authorizeBrowserIdentity(sessionId, "guest")).ok, true);
+  assert.equal((await command.authorizeBrowserIdentity(sessionId, "grace@example.com")).ok, true);
+  assert.deepEqual(selections, [
+    {
+      input: {
+        mode: "viewer",
+        vibe64User: {
+          displayName: "Ada Lovelace",
+          email: "ada@example.com"
+        }
+      },
+      sessionId
+    },
+    {
+      input: {
+        mode: "guest"
+      },
+      sessionId
+    },
+    {
+      input: {
+        email: "grace@example.com",
+        mode: "email"
+      },
+      sessionId
+    }
+  ]);
+
+  await command.closeAllForSession(sessionId);
+  const missingViewer = await command.authorizeBrowserIdentity(sessionId, "you");
+  assert.equal(missingViewer.ok, false);
+  assert.equal(missingViewer.code, "vibe64_agent_preview_viewer_unavailable");
+  assert.equal(selections.length, 3);
+});
 
 test("agent preview command ensures the managed preview and waits for readiness", async () => {
   const sessionId = "preview-command-ensure-session";
@@ -613,7 +734,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "6");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "7");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -638,6 +759,141 @@ test("agent preview wrapper forwards command input over the private session sock
     ]);
     assert.equal(receivedInput.sessionId, "wrapper-session");
   } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed preview browser selects real application identities inside its own context", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-identity-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const previewUrl = "https://preview.example.test/home?vibe64_preview_token=identity-token";
+  const sessionId = "browser-identity-session";
+  const selections = [];
+  const commandService = createReadyPreviewCommandService({
+    previewUrl,
+    async selectPreviewIdentity(receivedSessionId, input) {
+      selections.push({
+        input,
+        sessionId: receivedSessionId
+      });
+      if (input.mode === "guest") {
+        return {
+          grant: "grant:guest",
+          ok: true,
+          requestedIdentity: {
+            mode: "guest"
+          }
+        };
+      }
+      const email = input.mode === "viewer" ? input.vibe64User.email : input.email;
+      return {
+        grant: email === "missing@example.com"
+          ? "grant:rejected-after-logout"
+          : `grant:${email}`,
+        ok: true,
+        requestedIdentity: {
+          displayName: input.mode === "viewer" ? input.vibe64User.displayName : "",
+          email,
+          mode: input.mode
+        }
+      };
+    }
+  });
+  commandService.registerViewer(sessionId, {
+    displayName: "Ada Lovelace",
+    email: "ada@example.com"
+  });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    const prepared = await prepareAgentPreviewCommand({
+      commandService,
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      sessionId,
+      wrapperHostDir: root
+    });
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+
+    const asViewer = await execFileAsync(prepared.hostWrapperPath, [
+      "browser",
+      "identity",
+      "you"
+    ], {
+      env: commandEnv
+    });
+    assert.doesNotMatch(asViewer.stdout, /grant:/u);
+    assert.deepEqual(JSON.parse(asViewer.stdout).identity, {
+      displayName: "ada",
+      email: "ada@example.com",
+      mode: "you",
+      userId: "fake-user-id",
+      username: "ada"
+    });
+
+    const asExistingUser = JSON.parse((await execFileAsync(prepared.hostWrapperPath, [
+      "browser",
+      "identity",
+      "grace@example.com"
+    ], {
+      env: commandEnv
+    })).stdout);
+    assert.deepEqual(asExistingUser.identity, {
+      displayName: "grace",
+      email: "grace@example.com",
+      mode: "email",
+      userId: "fake-user-id",
+      username: "grace"
+    });
+
+    await assert.rejects(
+      execFileAsync(prepared.hostWrapperPath, [
+        "browser",
+        "identity",
+        "missing@example.com"
+      ], {
+        env: commandEnv
+      }),
+      /The requested preview user does not exist\./u
+    );
+    const afterRejectedLogin = JSON.parse((await execFileAsync(
+      prepared.hostWrapperPath,
+      ["browser", "status"],
+      { env: commandEnv }
+    )).stdout);
+    assert.deepEqual(afterRejectedLogin.applicationIdentity, {
+      mode: "guest"
+    });
+
+    const asGuest = JSON.parse((await execFileAsync(prepared.hostWrapperPath, [
+      "browser",
+      "identity",
+      "guest"
+    ], {
+      env: commandEnv
+    })).stdout);
+    assert.deepEqual(asGuest.identity, {
+      mode: "guest"
+    });
+    assert.equal(selections.length, 4);
+    assert.deepEqual(selections[0], {
+      input: {
+        mode: "viewer",
+        vibe64User: {
+          displayName: "Ada Lovelace",
+          email: "ada@example.com"
+        }
+      },
+      sessionId
+    });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
     await rm(root, {
       force: true,
       recursive: true
@@ -838,7 +1094,7 @@ test("managed preview browser persists interaction state and recovers killed bro
     const status = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "status"], {
       env: commandEnv
     })).stdout);
-    assert.equal(status.previewIdentity, "dev:launch-terminal-2");
+    assert.equal(status.previewInstance, "dev:launch-terminal-2");
     assert.equal(status.running, true);
 
     process.kill(recoveredMetadata.pid, "SIGKILL");
@@ -892,6 +1148,7 @@ test("managed preview browser replaces and cleans up a stale worker contract", a
     await Promise.all([
       writeExecutable(prepared.hostBrowserWorkerPath, agentPreviewBrowserWorkerSource({
         contractVersion: staleContractVersion,
+        identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
         playwrightModulePath: runtime.playwrightModule
       })),
       writeExecutable(prepared.hostWrapperPath, agentPreviewWrapperSource({

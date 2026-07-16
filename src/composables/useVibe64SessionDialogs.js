@@ -34,6 +34,7 @@ function useVibe64SessionDialogs({
   runActionCommand,
   selectedSessionId,
   selectedSessionTitle,
+  sourceSafety = null,
   sessionsApiPath
 } = {}) {
   const abandonDialogOpen = ref(false);
@@ -47,6 +48,7 @@ function useVibe64SessionDialogs({
   const inputDialogSubmitting = ref(false);
   const inputDialogValues = ref({});
   const resolvedSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || ""));
+  const abandonSourceSafety = computed(() => readRefOrGetterValue(sourceSafety) || {});
 
   const {
     clearDiffDialog,
@@ -131,6 +133,7 @@ function useVibe64SessionDialogs({
     abandonDialogSessionId.value = unref(selectedSessionId);
     abandonDialogSessionTitle.value = unref(selectedSessionTitle);
     abandonDialogOpen.value = true;
+    void abandonSourceSafety.value?.refresh?.();
   }
 
   function cancelAbandonSession() {
@@ -141,7 +144,12 @@ function useVibe64SessionDialogs({
   }
 
   async function confirmAbandonSession() {
-    if (!abandonDialogSessionId.value || abandonClosingSessionId.value || abandonCommand.isRunning) {
+    if (
+      !abandonDialogSessionId.value ||
+      abandonClosingSessionId.value ||
+      abandonCommand.isRunning ||
+      abandonSourceSafety.value?.loading
+    ) {
       return;
     }
     const sessionId = abandonDialogSessionId.value;
@@ -229,7 +237,8 @@ function useVibe64SessionDialogs({
       open: abandonDialogOpen,
       request: requestAbandonSelectedSession,
       sessionId: abandonDialogSessionId,
-      sessionTitle: abandonDialogSessionTitle
+      sessionTitle: abandonDialogSessionTitle,
+      sourceSafety: abandonSourceSafety
     },
     busy,
     clear,

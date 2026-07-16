@@ -123,6 +123,48 @@ test("session list route forwards the requested archive filter", async () => {
   });
 });
 
+test("session list route forwards the logged-in user for creation policy", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "GET",
+        path: `${apiRouteBase}/vibe64/sessions`
+      });
+      let executedAction = null;
+      const vibe64User = {
+        username: "merc"
+      };
+      await route.handler({
+        params: routeProjectParams(),
+        query: {},
+        vibe64User,
+        async executeAction(action) {
+          executedAction = action;
+          return {
+            ok: true,
+            sessions: []
+          };
+        }
+      }, testReply());
+
+      assert.deepEqual(executedAction, {
+        actionId: ACTION_LIST_SESSIONS,
+        input: {
+          archive: "",
+          vibe64User
+        }
+      });
+    });
+  });
+});
+
 test("current session route forwards the selected session id", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
@@ -277,6 +319,49 @@ test("session conversation log route forwards the session id", async () => {
         sessionId: "session-1"
       }
     });
+    });
+  });
+});
+
+test("session source-safety route reads repository state without dispatching workflow action", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = testRouteApp();
+      const make = app.make.bind(app);
+      app.make = (token) => token === "feature.vibe64-sessions.service"
+        ? {
+            async inspectSessionSourceSafety(sessionId) {
+              calls.push(sessionId);
+              return {
+                ok: true,
+                sessionId,
+                unsafe: true
+              };
+            }
+          }
+        : make(token);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const route = findRegisteredRoute(app, {
+        method: "GET",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-safety`
+      });
+      assert.ok(route);
+
+      const reply = testReply();
+      await route.handler({
+        params: routeProjectParams({
+          sessionId: "session-1"
+        })
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, ["session-1"]);
     });
   });
 });

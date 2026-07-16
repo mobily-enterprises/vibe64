@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 
 import {
+  WORKFLOW_CREATION_AUDIENCE,
+  VIBE64_CONNECTION_PURPOSE_SESSION,
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
@@ -45,6 +47,7 @@ import {
   terminalFailureFixRequestForSession
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
+import { inspectSessionSourceSafety } from "./sessionSourceSafety.js";
 import {
   createComposerHandoffCoordinator
 } from "./composer/handoffCoordinator.js";
@@ -74,6 +77,7 @@ import {
 } from "./composer/messageState.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 3;
+const NOVICE_MAX_OPEN_VIBE64_SESSIONS = 1;
 const AGENT_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
 const AGENT_TURN_RESULT_MISSING_MESSAGE = "The assistant finished this turn, but Vibe64 did not receive its result text. Retry the step.";
@@ -2398,21 +2402,56 @@ function publicSessionServiceResponse(response = {}, options = {}) {
     : response;
 }
 
-async function workflowCreationOptions(runtime) {
-  if (typeof runtime?.workflowDefinitionCreationOptions === "function") {
-    return runtime.workflowDefinitionCreationOptions();
-  }
-  return workflowDefinitionCreationOptions();
+function githubConnectionFromStatus(status = {}) {
+  const connections = Array.isArray(status.connections) ? status.connections : [];
+  return connections.find((connection) => String(connection?.id || "").trim() === "github") || null;
 }
 
-async function sessionCreationState(runtime, sessions = []) {
-  const workflow = await workflowCreationOptions(runtime);
+async function sessionWorkflowCreationAudience(setupServices = {}, input = {}) {
+  const vibe64User = input?.vibe64User || null;
+  const connectionSetupService = setupServices.connectionSetupService;
+  if (!vibe64User || typeof connectionSetupService?.getStatus !== "function") {
+    return WORKFLOW_CREATION_AUDIENCE.EXPERT;
+  }
+  try {
+    const status = await connectionSetupService.getStatus({
+      providerIds: ["github"],
+      purpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+      vibe64User
+    });
+    const github = status?.ok === false ? null : githubConnectionFromStatus(status);
+    return github && github.connected !== true
+      ? WORKFLOW_CREATION_AUDIENCE.NOVICE
+      : WORKFLOW_CREATION_AUDIENCE.EXPERT;
+  } catch {
+    return WORKFLOW_CREATION_AUDIENCE.EXPERT;
+  }
+}
+
+async function workflowCreationOptions(runtime, creationAudience) {
+  if (typeof runtime?.workflowDefinitionCreationOptions === "function") {
+    return runtime.workflowDefinitionCreationOptions({
+      creationAudience
+    });
+  }
+  return workflowDefinitionCreationOptions({
+    creationAudience
+  });
+}
+
+async function sessionCreationState(runtime, sessions = [], {
+  creationAudience = WORKFLOW_CREATION_AUDIENCE.EXPERT
+} = {}) {
+  const workflow = await workflowCreationOptions(runtime, creationAudience);
   const setupRequired = Boolean(workflow.requiredWorkflowDefinition);
   const setupSession = activeProjectSetupSession(sessions) || (setupRequired ? firstOpenSession(sessions) : null);
   const setupSessionId = normalizedInputText(setupSession?.sessionId || setupSession?.id);
   const setupSessionActive = Boolean(setupSession);
+  const audienceMaxOpenSessions = creationAudience === WORKFLOW_CREATION_AUDIENCE.NOVICE
+    ? NOVICE_MAX_OPEN_VIBE64_SESSIONS
+    : MAX_OPEN_VIBE64_SESSIONS;
   const limits = sessionLimits(sessions, {
-    maxOpenSessions: setupRequired ? 1 : MAX_OPEN_VIBE64_SESSIONS
+    maxOpenSessions: setupRequired ? 1 : audienceMaxOpenSessions
   });
   const limitReached = limits.openSessionCount >= limits.maxOpenSessions;
   const disabledReason = setupSessionActive
@@ -2436,6 +2475,9 @@ async function sessionCreationState(runtime, sessions = []) {
 function sessionLimitMessage(limits = {}, workflow = {}) {
   if (workflow.requiredWorkflowDefinition) {
     return `The required ${workflow.requiredWorkflowDefinition.label || "project setup"} workflow must finish before another session can be created.`;
+  }
+  if (limits.maxOpenSessions === NOVICE_MAX_OPEN_VIBE64_SESSIONS) {
+    return "This project already has an active session. Finish or abandon it before starting another.";
   }
   return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
 }
@@ -3279,8 +3321,11 @@ function createService({
           const projectType = await projectService.requireProjectType();
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           const runtime = await projectService.createRuntime();
+          const creationAudience = await sessionWorkflowCreationAudience(setupServices, input);
           const existingOpenSessions = await listOpenSessionSummaries(runtime);
-          const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions);
+          const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions, {
+            creationAudience
+          });
           vibe64SessionDebugLog("server.service.createSession.creationState", {
             canCreate: creation.canCreate === true,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3505,6 +3550,15 @@ function createService({
       });
     },
 
+    async inspectSessionSourceSafety(sessionId) {
+      return sessionResult(async () => {
+        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+        return inspectSessionSourceSafety(await runtime.getSession(sessionId));
+      }, {
+        publicResponse: false
+      });
+    },
+
     async buildTerminalFailureFixRequest(sessionId, input = {}) {
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.start", {
@@ -3671,7 +3725,10 @@ function createService({
           const openSessions = isOpenSessionList(options)
             ? sessions
             : await listOpenSessionSummaries(runtime);
-          const creationState = await sessionCreationState(runtime, openSessions);
+          const creationAudience = await sessionWorkflowCreationAudience(setupServices, input);
+          const creationState = await sessionCreationState(runtime, openSessions, {
+            creationAudience
+          });
           const response = sessionListResponse(sessions, creationState);
           vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
