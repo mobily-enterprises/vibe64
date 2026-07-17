@@ -937,6 +937,29 @@ test.describe("Autopilot dumb client contract", () => {
     ]);
   });
 
+  test("keeps three starting-point choices and Send on one composer row", async ({ page }) => {
+    const session = workSourceSession();
+    const visibleIntents = (session.intents as Array<Record<string, unknown>>)
+      .filter((intent) => intent.id !== "use_existing_pr");
+    session.intents = visibleIntents;
+    (session.presentation as Record<string, unknown>).intents = visibleIntents;
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    await expect(page.getByRole("button", { exact: true, name: "New issue" })).toBeVisible();
+
+    const controlBoxes = await Promise.all([
+      page.getByRole("button", { exact: true, name: "New issue" }).boundingBox(),
+      page.getByRole("button", { exact: true, name: "Existing issue" }).boundingBox(),
+      page.getByRole("button", { exact: true, name: "No issue" }).boundingBox(),
+      page.locator(".vibe64-workflow-control-form__inline-submit").boundingBox()
+    ]);
+    expect(controlBoxes.every(Boolean)).toBe(true);
+    const rowCenters = controlBoxes.map((box) => Number(box?.y || 0) + (Number(box?.height || 0) / 2));
+
+    expect(Math.max(...rowCenters) - Math.min(...rowCenters)).toBeLessThanOrEqual(3);
+  });
+
   test("advances immediately after selecting a starting point", async ({ page }) => {
     const intentRequests: unknown[] = [];
     const session = workSourceSession();

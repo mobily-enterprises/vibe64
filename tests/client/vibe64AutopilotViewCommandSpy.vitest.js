@@ -434,21 +434,23 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(submitFromButton).not.toContain("clearAttachments");
   });
 
-  it("keeps inline steer and submit controls dimensionally stable", () => {
+  it("keeps inline submit and workflow controls compact without clipping labels", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
 
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit)");
     expect(source).toContain("border-radius: 8px !important;");
     expect(source).toContain("height: 2.4rem !important;");
     expect(source).toContain("min-height: 2.4rem !important;");
-    expect(source).toContain("min-width: 5.4rem !important;");
-    expect(source).toContain("width: 5.4rem !important;");
+    expect(source).toContain("min-width: 4.6rem !important;");
+    expect(source).toContain("width: 4.6rem !important;");
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label)");
+    expect(source).toContain("flex-basis: auto;");
+    expect(source).toContain("width: auto !important;");
+    expect(source).toContain("flex: 1 1 0;");
     expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn)");
-    expect(source).toContain("min-width: max-content;");
-    expect(source).toContain("width: max-content;");
+    expect(source).toContain("padding-inline: 0.44rem;");
     expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content)");
-    expect(source).toContain("text-overflow: clip;");
+    expect(source).toContain("text-overflow: ellipsis;");
   });
 
   it("keeps primary workflow buttons readable on hover", () => {

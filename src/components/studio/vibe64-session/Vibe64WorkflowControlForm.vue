@@ -1022,7 +1022,7 @@ defineExpose({
 .vibe64-workflow-control-form__composer-toolbar {
   align-items: center;
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   order: 1;
   pointer-events: auto;
@@ -1208,30 +1208,6 @@ defineExpose({
   padding-inline: 0.64rem;
 }
 
-.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
-  flex: 0 0 auto;
-  max-width: 100%;
-  min-width: max-content;
-  width: max-content;
-}
-
-.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {
-  min-width: max-content;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: nowrap;
-}
-
-.vibe64-workflow-control-form__workflow-actions--compact {
-  gap: 0.28rem;
-}
-
-.vibe64-workflow-control-form__workflow-actions--compact :deep(.v-btn) {
-  font-size: 0.82rem;
-  min-height: 2rem;
-  padding-inline: 0.46rem;
-}
-
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn:hover),
 .vibe64-workflow-control-form__workflow-actions :deep(.v-btn:hover) {
   background: rgba(var(--v-theme-primary), 0.14) !important;
@@ -1293,16 +1269,16 @@ defineExpose({
 .vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit) {
   align-self: center;
   border-radius: 8px !important;
-  flex: 0 0 5.4rem;
+  flex: 0 0 4.6rem;
   gap: 0.36rem;
   height: 2.4rem !important;
   justify-self: end;
   letter-spacing: 0;
   min-height: 2.4rem !important;
-  min-width: 5.4rem !important;
+  min-width: 4.6rem !important;
   order: 2;
   padding-inline: 0.72rem;
-  width: 5.4rem !important;
+  width: 4.6rem !important;
 }
 
 .vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel) {
@@ -1325,8 +1301,11 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label) {
+  flex-basis: auto;
   font-size: 0.86rem;
   font-weight: 600;
+  min-width: 5.4rem !important;
+  width: auto !important;
 }
 
 .vibe64-workflow-control-form__inline-submit--interrupt {
@@ -1349,20 +1328,32 @@ defineExpose({
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
   flex: 0 1 auto;
+  font-size: 0.86rem;
   max-width: min(10.5rem, 100%);
   min-height: 2.15rem;
   min-width: 0;
-  padding-inline: 0.64rem;
+  padding-inline: 0.44rem;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__prepend) {
-  margin-inline-end: 0.24rem;
+  margin-inline-end: 0.18rem;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vibe64-workflow-control-form__workflow-actions--compact {
+  gap: 0.2rem;
+}
+
+.vibe64-workflow-control-form__workflow-actions--compact :deep(.v-btn) {
+  font-size: 0.82rem;
+  min-height: 2rem;
+  padding-inline: 0.36rem;
 }
 
 .vibe64-workflow-control-form--sticky-actions .vibe64-workflow-control-form__actions {
