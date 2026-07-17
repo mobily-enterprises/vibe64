@@ -162,6 +162,7 @@ const agentTaskControlInputValidator = originOnlyInputValidator;
 
 const sessionListInputValidator = deepFreeze({
   schema: createSchema({
+    ...vibe64UserInputSchema,
     archive: {
       type: "string",
       noTrim: false,

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ACTION_INSPECT_SESSION,
+  ACTION_LIST_SESSIONS,
   ACTION_RUN_SESSION_ACTION,
   ACTION_UPDATE_CURRENT_SESSION,
   featureActions
@@ -13,6 +14,26 @@ function featureAction(actionId = "") {
   assert.ok(action, `Expected feature action ${actionId} to be registered.`);
   return action;
 }
+
+test("session list action accepts the trusted user added by the hosted route", () => {
+  const action = featureAction(ACTION_LIST_SESSIONS);
+  const vibe64User = {
+    username: "merc"
+  };
+
+  const result = action.input.schema[action.input.mode]({
+    archive: "",
+    vibe64User
+  });
+
+  assert.deepEqual(result, {
+    errors: {},
+    validatedObject: {
+      archive: "",
+      vibe64User
+    }
+  });
+});
 
 test("session action command omits absent agent settings", async () => {
   const action = featureAction(ACTION_RUN_SESSION_ACTION);
