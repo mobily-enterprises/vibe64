@@ -267,14 +267,12 @@ test("project templates push one root commit to an empty GitHub-backed destinati
         gitCacheRoot,
         githubRepository: {
           cloneUrl: remotePath,
-          defaultBranch: "",
           fullName: "local/destination"
         },
         repository: {
           defaultBranch: "main",
           github: {
             cloneUrl: remotePath,
-            defaultBranch: "",
             fullName: "local/destination"
           },
           mode: PROJECT_REPOSITORY_MODE_GITHUB
@@ -340,11 +338,18 @@ test("project template eligibility rejects source, history, and active sessions"
     assert.equal(activeSession.eligible, false);
     assert.equal(activeSession.code, "vibe64_project_template_active_sessions");
 
+    const importedRoot = path.join(root, "imported");
+    await createSeedRepository(importedRoot);
     const importedGithub = await projectTemplateEligibility({
+      checkGithubRemote: true,
       project: {
-        githubRepository: {
+        repository: {
           defaultBranch: "main",
-          fullName: "local/imported"
+          github: {
+            cloneUrl: importedRoot,
+            fullName: "local/imported"
+          },
+          mode: PROJECT_REPOSITORY_MODE_GITHUB
         },
         repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB
       },
@@ -370,6 +375,7 @@ test("concurrent project template requests serialize and only one can commit", a
       project: {
         gitCacheRoot,
         repository: {
+          defaultBranch: "main",
           mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
         },
         repositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT

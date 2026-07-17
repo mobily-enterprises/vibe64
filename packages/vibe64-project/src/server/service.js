@@ -1042,7 +1042,11 @@ function createService({
     if (projectType.errorCode !== "vibe64_committed_project_git_cache_missing") {
       return null;
     }
-    return await currentProjectApplicationMode() === PROJECT_APPLICATION_MODE_NEW
+    const metadata = await readProjectRecordMetadata(projectRecordPath(currentTargetRoot()));
+    return (
+      await currentProjectApplicationMode() === PROJECT_APPLICATION_MODE_NEW ||
+      pendingProjectBootstrapConfig(metadata)
+    )
       ? null
       : projectType;
   }

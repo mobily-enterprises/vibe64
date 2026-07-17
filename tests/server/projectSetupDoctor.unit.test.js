@@ -40,6 +40,7 @@ import {
   githubCliFailureDetails
 } from "@local/setup-doctor-core/server/githubCliAuth";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -699,10 +700,13 @@ test("Project Setup reads catalog Git cache from the project record git cache ro
         assert.equal(clone.status, 0, clone.stderr || clone.stdout);
         const projectRecordPath = path.join(runtimeRoot, "project.json");
         await writeFile(projectRecordPath, JSON.stringify({
-          githubRepository: {
+          repository: {
             defaultBranch: "main",
-            fullName: "example/catalog-app",
-            url: "https://github.com/example/catalog-app"
+            github: {
+              fullName: "example/catalog-app",
+              url: "https://github.com/example/catalog-app"
+            },
+            mode: PROJECT_REPOSITORY_MODE_GITHUB
           }
         }), "utf8");
         const project = {
@@ -712,6 +716,15 @@ test("Project Setup reads catalog Git cache from the project record git cache ro
             fullName: "example/catalog-app",
             url: "https://github.com/example/catalog-app"
           },
+          repository: {
+            defaultBranch: "main",
+            github: {
+              fullName: "example/catalog-app",
+              url: "https://github.com/example/catalog-app"
+            },
+            mode: PROJECT_REPOSITORY_MODE_GITHUB
+          },
+          repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB,
           projectRecordPath,
           projectLocalRoot: runtimeRoot,
           projectRoot: sourceRoot,
