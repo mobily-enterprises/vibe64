@@ -668,6 +668,147 @@ test("create worktree materializes pending online bootstrap config into the sess
   });
 });
 
+test("create worktree retires stale bootstrap metadata when the session source is authoritative", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const projectRecordPath = path.join(targetRoot, "project.json");
+    const sessionId = "source-authority";
+    const sourcePath = testSessionSourcePath(targetRoot, sessionId);
+    const manifestText = `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "node-web",
+      config: {
+        github_pr_merge_method: "squash",
+        node_web_client_library: "auto"
+      }
+    }, null, 2)}\n`;
+    await Promise.all([
+      writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+        bootstrapConfig: {
+          projectType: "jskit",
+          schemaVersion: 1,
+          status: "pending",
+          values: {
+            github_pr_merge_method: "merge",
+            jskit_database_runtime: "mariadb"
+          }
+        }
+      }, null, 2)}\n`),
+      writeProjectFile(sourcePath, "package.json", `${JSON.stringify({
+        name: "vibe64-online",
+        scripts: {
+          dev: "node ./bin/vibe64-online.js dev"
+        }
+      }, null, 2)}\n`),
+      writeProjectFile(sourcePath, "vibe64.project.json", manifestText)
+    ]);
+
+    const session = {
+      metadata: localSourceSessionMetadata({
+        work_source: "initialization"
+      }),
+      sessionId,
+      sessionRoot: path.join(targetRoot, "sessions", "active", sessionId),
+      targetRoot
+    };
+    const adapter = createGenericNodeWebTargetAdapter();
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
+      projectLocalRoot: targetRoot,
+      projectRecordPath,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
+      runtime: {
+        adapter
+      },
+      session,
+      targetRoot
+    });
+
+    await spec.applySuccessFacts({
+      facts: {
+        source_path: sourcePath
+      },
+      session
+    });
+
+    assert.equal(await readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"), manifestText);
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig, undefined);
+  });
+});
+
+test("create worktree rejects a bootstrap adapter mismatch before writing source config", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const projectRecordPath = path.join(targetRoot, "project.json");
+    const sessionId = "bootstrap-adapter-mismatch";
+    const sourcePath = testSessionSourcePath(targetRoot, sessionId);
+    await Promise.all([
+      writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+        bootstrapConfig: {
+          projectType: "jskit",
+          schemaVersion: 1,
+          status: "pending",
+          values: {
+            github_pr_merge_method: "merge",
+            jskit_database_runtime: "mariadb"
+          }
+        }
+      }, null, 2)}\n`),
+      writeProjectFile(sourcePath, "package.json", `${JSON.stringify({
+        name: "vibe64-online",
+        scripts: {
+          dev: "node ./bin/vibe64-online.js dev"
+        }
+      }, null, 2)}\n`)
+    ]);
+
+    const session = {
+      metadata: localSourceSessionMetadata({
+        work_source: "initialization"
+      }),
+      sessionId,
+      sessionRoot: path.join(targetRoot, "sessions", "active", sessionId),
+      targetRoot
+    };
+    const adapter = createGenericNodeWebTargetAdapter();
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
+      projectLocalRoot: targetRoot,
+      projectRecordPath,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
+      runtime: {
+        adapter
+      },
+      session,
+      targetRoot
+    });
+
+    await assert.rejects(
+      spec.applySuccessFacts({
+        facts: {
+          source_path: sourcePath
+        },
+        session
+      }),
+      {
+        code: "vibe64_project_bootstrap_adapter_mismatch"
+      }
+    );
+    await assert.rejects(
+      readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    await assert.rejects(
+      readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig.projectType, "jskit");
+  });
+});
+
 test("create worktree refuses to seed over a complete existing application", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);

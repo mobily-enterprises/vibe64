@@ -48,6 +48,7 @@ import {
   recordCommandFactScript
 } from "../workflowCommandFacts.js";
 import {
+  configValuesFromInput,
   createVibe64ProjectConfigStore
 } from "../configStore.js";
 import {
@@ -763,6 +764,21 @@ async function materializeBootstrapConfigInSessionSourceAsync({
   const sourceContractRoot = resolveSourceConfigRoot({
     sourceRoot: sourcePath
   });
+  const sourceManifest = await readProjectManifest({
+    sourceContractRoot
+  });
+  if (sourceManifest?.projectType) {
+    await consumeProjectBootstrapConfig({
+      projectRecordPath
+    });
+    return null;
+  }
+  if (bootstrapConfig.projectType !== adapter.id) {
+    throw vibe64Error(
+      `Pending ${bootstrapConfig.projectType || "(missing)"} setup does not match the active ${adapter.id || "(missing)"} adapter.`,
+      "vibe64_project_bootstrap_adapter_mismatch"
+    );
+  }
   const projectTypeStore = createVibe64ProjectTypeStore({
     sourceContractRoot,
     targetRoot: sourcePath
@@ -772,13 +788,15 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     sourceContractRoot,
     targetRoot: sourcePath
   });
+  const definition = {
+    adapterFields: await adapter.getConfigFields(configContext),
+    adapterLabel: adapter.label,
+    defaultValues: await adapter.getDefaultConfig(configContext)
+  };
+  configValuesFromInput(definition, bootstrapConfig.values);
   await projectTypeStore.writeProjectType(bootstrapConfig.projectType);
   const projectConfig = await projectConfigStore.saveConfig({
-    definition: {
-      adapterFields: await adapter.getConfigFields(configContext),
-      adapterLabel: adapter.label,
-      defaultValues: await adapter.getDefaultConfig(configContext)
-    },
+    definition,
     values: bootstrapConfig.values
   });
   if (typeof adapter.getRuntimeRequirements === "function") {
@@ -796,8 +814,7 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     });
   }
   await consumeProjectBootstrapConfig({
-    projectRecordPath,
-    sessionId: session.sessionId
+    projectRecordPath
   });
   return bootstrapConfig;
 }

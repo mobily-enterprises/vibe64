@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -13,16 +13,38 @@ import {
   GENERIC_NODE_WEB_VIBE64_COMMANDS,
   GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG,
   createGenericNodeWebLaunchDescriptor,
+  createGenericNodeWebLaunchTargetTerminalSpec,
   createGenericNodeWebTargetAdapter,
   listGenericNodeWebLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/node-web/index";
+import {
+  PREVIEW_PROXY_HOST_ENV,
+  PREVIEW_PROXY_PORT_END_ENV,
+  PREVIEW_PROXY_PORT_START_ENV,
+  PREVIEW_PROXY_PUBLIC_HOST_ENV
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import {
+  VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_SYSTEM_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   createGenericNodeWebSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/node-web/setupDoctorPlugin";
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  sourceMetadata,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
+
+const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
+const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
+const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -363,6 +385,149 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [
       startupArgsPreviewOption()
     ]);
+  });
+});
+
+test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
+  await withTemporaryRoot(async (root) => {
+    const onlineRoot = path.join(root, "vibe64-online");
+    const publicProjectRoot = path.join(root, "public-vibe64");
+    const publicSessionRoot = path.join(publicProjectRoot, "sessions", "active", "public-session");
+    const publicSourceRoot = path.join(publicProjectRoot, "sessions", "selected", "source");
+    const sessionRoot = path.join(projectRuntimeRoot(onlineRoot), "sessions", "active", "online-session");
+    const onlineStateRoot = path.join(sessionRoot, "runtime", "vibe64-online-child");
+    await Promise.all([
+      writeProjectFile(onlineRoot, "package.json", JSON.stringify({
+        name: "vibe64-online",
+        scripts: {
+          dev: "node ./bin/vibe64-online.js dev",
+          start: "node ./bin/vibe64-online.js start"
+        }
+      }, null, 2)),
+      writeProjectFile(path.join(publicSessionRoot, "source"), "package.json", JSON.stringify({
+        name: "vibe64"
+      }, null, 2))
+    ]);
+    await symlink(path.join("active", "public-session"), path.join(publicProjectRoot, "sessions", "selected"));
+
+    const session = {
+      metadata: {
+        dependencies_installed: "yes",
+        source_path: onlineRoot
+      },
+      sessionId: "online-session",
+      sessionRoot,
+      targetRoot: onlineRoot
+    };
+    assert.deepEqual(await listGenericNodeWebLaunchTargets({ session }), [
+      {
+        defaultDisplay: "minimized",
+        defaultPreview: true,
+        id: "online",
+        label: "Run Vibe64 Online",
+        previewOptions: [
+          {
+            defaultValue: "",
+            description: "Stable selected-session source path for the public Vibe64 project this app should compose.",
+            id: "publicSourceRoot",
+            label: "Public Vibe64 source root",
+            placeholder: "/var/lib/vibe64/<workspace>/projects/vibe64/sessions/selected/source",
+            type: "text"
+          }
+        ]
+      }
+    ]);
+
+    const missing = await createGenericNodeWebLaunchTargetTerminalSpec({
+      launchTargetId: "online",
+      session,
+      targetRoot: onlineRoot
+    });
+    assert.equal(missing.ok, false);
+    assert.equal(
+      missing.message,
+      "Set the public Vibe64 source root in preview options before running Vibe64 Online."
+    );
+
+    const spec = await createGenericNodeWebLaunchTargetTerminalSpec({
+      launchInput: {
+        values: {
+          publicSourceRoot
+        }
+      },
+      launchTargetId: "online",
+      session,
+      targetRoot: onlineRoot
+    });
+    try {
+      assert.equal(spec.ok, true);
+      assert.equal(spec.cwd, onlineRoot);
+      assert.deepEqual(spec.allowedRoots, [publicSourceRoot]);
+      assert.equal(spec.metadata.adapterId, "node-web");
+      assert.equal(spec.metadata.urlPath, "/app");
+      assert.match(spec.metadata.targetUrl, /\/app$/u);
+      assert.equal(spec.metadata.publicSourceRoot, publicSourceRoot);
+      assert.equal(spec.metadata.stateRoot, onlineStateRoot);
+      assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
+      assert.equal(spec.restartOnChange.label, "Vibe64 Online source files");
+      assert.deepEqual(spec.restartOnChange.include, ["**"]);
+      assert.ok(spec.restartOnChange.exclude.includes(".vibe64-online-generated/**"));
+      const env = spec.env({
+        id: "unit-terminal"
+      });
+      assert.equal(env[VIBE64_PUBLIC_SOURCE_ROOT_ENV], publicSourceRoot);
+      assert.equal(env[VIBE64_ONLINE_STATE_ROOT_ENV], onlineStateRoot);
+      assert.equal(env[VIBE64_SYSTEM_ROOT_ENV], path.join(onlineStateRoot, "system"));
+      assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "unit-owner");
+      assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], undefined);
+      assert.equal(env[VIBE64_SERVICE_DATA_ROOT_ENV], undefined);
+      assert.equal(env[PREVIEW_PROXY_HOST_ENV], "127.0.0.1");
+      assert.equal(env[PREVIEW_PROXY_PUBLIC_HOST_ENV], "127.0.0.1");
+      assert.match(env[PREVIEW_PROXY_PORT_START_ENV], /^\d+$/u);
+      assert.match(env[PREVIEW_PROXY_PORT_END_ENV], /^\d+$/u);
+      assertNodeRuntimeCommand(spec.commandPreview, "npm run dev");
+    } finally {
+      spec.releasePortReservation?.();
+    }
+  });
+});
+
+test("Vibe64 Online launch rejects a non-Vibe64 public source root", async () => {
+  await withTemporaryRoot(async (root) => {
+    const onlineRoot = path.join(root, "vibe64-online");
+    const wrongPublicRoot = path.join(root, "wrong-public-root");
+    await Promise.all([
+      writeProjectFile(onlineRoot, "package.json", JSON.stringify({
+        name: "vibe64-online",
+        scripts: {
+          dev: "node ./bin/vibe64-online.js dev"
+        }
+      }, null, 2)),
+      writeProjectFile(wrongPublicRoot, "package.json", JSON.stringify({
+        name: "not-vibe64"
+      }, null, 2))
+    ]);
+
+    const spec = await createGenericNodeWebLaunchTargetTerminalSpec({
+      launchInput: {
+        values: {
+          publicSourceRoot: wrongPublicRoot
+        }
+      },
+      launchTargetId: "online",
+      session: {
+        metadata: {
+          source_path: onlineRoot
+        },
+        targetRoot: onlineRoot
+      },
+      targetRoot: onlineRoot
+    });
+    assert.equal(spec.ok, false);
+    assert.equal(
+      spec.message,
+      "Public Vibe64 source root must point to a vibe64 checkout. Found not-vibe64."
+    );
   });
 });
 

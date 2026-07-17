@@ -132,8 +132,7 @@ async function saveProjectBootstrapConfig({
 }
 
 async function consumeProjectBootstrapConfig({
-  projectRecordPath = "",
-  sessionId = ""
+  projectRecordPath = ""
 } = {}) {
   const filePath = normalizeText(projectRecordPath);
   if (!filePath) {
@@ -144,7 +143,6 @@ async function consumeProjectBootstrapConfig({
   if (!bootstrapConfig) {
     return null;
   }
-  void sessionId;
   await updateProjectRecordMetadata(filePath, projectMetadataWithoutBootstrapConfig);
   return bootstrapConfig;
 }

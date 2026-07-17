@@ -56,6 +56,9 @@ import {
   jskitAppAuthEnvironment
 } from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
+  GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG
+} from "@local/vibe64-adapters/server/adapters/node-web/index";
+import {
   JSKIT_MARIADB_APP_USER,
   jskitMariaDbAppPassword
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
@@ -1235,6 +1238,92 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.bootstrap, true);
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mariadb");
+  });
+});
+
+test("source-backed setup retires a stale bootstrap adapter selection", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        fullName: "example/vibe64-online"
+      }),
+      slug: "vibe64-online"
+    });
+    const targetRoot = path.join(projectsRoot, "vibe64-online");
+    const projectLocalRoot = projectContext.projectLocalRootForTarget(targetRoot);
+    const projectRecordPath = projectContext.projectRecordPathForTarget(targetRoot);
+    const projectSessionSourceRoot = projectContext.projectSessionSourceRootForTarget(targetRoot);
+    const requestContext = {
+      projectLocalRoot,
+      projectRecordPath,
+      projectSessionSourceRoot,
+      projectsRoot,
+      slug: "vibe64-online",
+      targetRoot
+    };
+    const service = createService({
+      projectContext
+    });
+
+    const bootstrap = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "jskit",
+      sessionId: "adapter-transition",
+      values: {
+        [JSKIT_USER_MODE_CONFIG]: JSKIT_USER_MODE_USERS,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mariadb"
+      }
+    }));
+    assert.equal(bootstrap.ok, true);
+    assert.equal(bootstrap.config.bootstrap, true);
+
+    const sourceRoot = await createSessionSourceFixture({
+      projectLocalRoot,
+      projectSessionSourceRoot,
+      sessionId: "adapter-transition"
+    });
+    await writePackageJson(sourceRoot, {
+      name: "vibe64-online",
+      scripts: {
+        dev: "node ./bin/vibe64-online.js dev"
+      }
+    });
+
+    const saved = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "node-web",
+      sessionId: "adapter-transition",
+      values: {
+        [GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG]: "auto",
+        github_pr_merge_method: "squash"
+      }
+    }));
+    assert.equal(saved.ok, true);
+    assert.equal(saved.config.bootstrap, undefined);
+    assert.equal(saved.config.projectType, "node-web");
+
+    const manifest = JSON.parse(await readFile(path.join(sourceRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.projectType, "node-web");
+    assert.deepEqual(manifest.config, {
+      github_pr_merge_method: "squash",
+      [GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG]: "auto"
+    });
+    const runtimeLock = JSON.parse(await readFile(path.join(sourceRoot, "vibe64.runtime-lock.json"), "utf8"));
+    assert.equal(runtimeLock.adapter.id, "node-web");
+    assert.equal(runtimeLock.project.projectType, "node-web");
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig, undefined);
+
+    const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime({
+      sessionId: "adapter-transition"
+    }));
+    assert.equal(runtime.adapter.id, "node-web");
+    assert.equal(runtime.projectConfig.projectType, "node-web");
   });
 });
 

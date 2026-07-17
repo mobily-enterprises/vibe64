@@ -68,9 +68,6 @@ import {
 } from "./vibe64TestHelpers.js";
 
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
-const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
-const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
-const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 const JSKIT_PROMPT_ROOT = fileURLToPath(new URL("../../packages/vibe64-adapters/src/server/adapters/jskit/prompts", import.meta.url));
 const PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER = "0".repeat(64);
 
@@ -994,60 +991,9 @@ test("jskit launch targets expose startup argument preview options", async () =>
   });
 });
 
-test("jskit launch targets expose explicit Vibe64 Online child launch options", async () => {
+test("jskit does not claim the Vibe64 Online package", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
-      name: "vibe64-online",
-      scripts: {
-        dev: "node ./bin/vibe64-online.js dev"
-      }
-    }, null, 2));
-
-    const launchTargets = await listJskitLaunchTargets({
-      session: {
-        metadata: {
-          dependencies_installed: "yes",
-          source_path: targetRoot
-        },
-        targetRoot
-      }
-    });
-
-    assert.deepEqual(launchTargets, [
-      {
-        defaultDisplay: "minimized",
-        defaultPreview: true,
-        id: "online",
-        label: "Run Vibe64 Online",
-        previewOptions: [
-          {
-            defaultValue: "",
-            description: "Absolute path to the public Vibe64 checkout this Vibe64 Online session should compose from.",
-            id: "publicSourceRoot",
-            label: "Public Vibe64 source root",
-            placeholder: "/var/lib/vibe64/sas/projects/vibe64/sessions/active/<session>/source",
-            type: "text"
-          }
-        ]
-      }
-    ]);
-  });
-});
-
-test("jskit Vibe64 Online launch requires and passes an explicit public source root", async () => {
-  await withTemporaryRoot(async (root) => {
-    const publicRoot = path.join(root, "public-vibe64");
-    const onlineRoot = path.join(root, "vibe64-online");
-    const sessionRoot = path.join(projectRuntimeRoot(onlineRoot), "sessions", "active", "online-self-target");
-    const onlineStateRoot = path.join(sessionRoot, "runtime", "vibe64-online-child");
-    await writeProjectFile(publicRoot, "package.json", JSON.stringify({
-      name: "vibe64",
-      scripts: {
-        dev: "vite",
-        server: "node server.js"
-      }
-    }, null, 2));
-    await writeProjectFile(onlineRoot, "package.json", JSON.stringify({
       name: "vibe64-online",
       scripts: {
         dev: "node ./bin/vibe64-online.js dev"
@@ -1057,58 +1003,19 @@ test("jskit Vibe64 Online launch requires and passes an explicit public source r
     const session = {
       metadata: {
         dependencies_installed: "yes",
-        source_path: onlineRoot
+        source_path: targetRoot
       },
-      sessionId: "online-self-target",
-      sessionRoot,
-      targetRoot: onlineRoot
+      targetRoot
     };
-
-    const missing = await createJskitLaunchTargetTerminalSpec({
-      launchTargetId: "online",
-      session,
-      targetRoot: onlineRoot
-    });
-    assert.equal(missing.ok, false);
-    assert.equal(
-      missing.message,
-      "Set the public Vibe64 source root in preview options before running Vibe64 Online."
-    );
+    assert.deepEqual(await listJskitLaunchTargets({ session }), []);
 
     const spec = await createJskitLaunchTargetTerminalSpec({
-      launchInput: {
-        values: {
-          publicSourceRoot: publicRoot
-        }
-      },
       launchTargetId: "online",
       session,
-      targetRoot: onlineRoot
+      targetRoot
     });
-
-    assert.equal(spec.ok, true);
-    assert.equal(spec.cwd, onlineRoot);
-    assert.deepEqual(spec.allowedRoots, [publicRoot]);
-    assert.equal(spec.metadata.urlPath, "/app");
-    assert.match(spec.metadata.targetUrl, /\/app$/u);
-    assert.equal(spec.metadata.publicSourceRoot, publicRoot);
-    assert.equal(spec.metadata.vibe64OnlineChildPublicSourceRoot, publicRoot);
-    assert.equal(spec.metadata.vibe64OnlineChildStateRoot, onlineStateRoot);
-    assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
-    const env = spec.env({
-      id: "unit-terminal"
-    });
-    assert.equal(env[VIBE64_PUBLIC_SOURCE_ROOT_ENV], publicRoot);
-    assert.equal(env[VIBE64_ONLINE_STATE_ROOT_ENV], onlineStateRoot);
-    assert.equal(env[VIBE64_SYSTEM_ROOT_ENV], path.join(onlineStateRoot, "system"));
-    assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "unit-owner");
-    assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], undefined);
-    assert.equal(env[VIBE64_SERVICE_DATA_ROOT_ENV], undefined);
-    assert.equal(env[PREVIEW_PROXY_HOST_ENV], "127.0.0.1");
-    assert.equal(env[PREVIEW_PROXY_PUBLIC_HOST_ENV], "127.0.0.1");
-    assert.match(env[PREVIEW_PROXY_PORT_START_ENV], /^\d+$/u);
-    assert.match(env[PREVIEW_PROXY_PORT_END_ENV], /^\d+$/u);
-    assert.match(spec.commandPreview, /npm run dev/u);
+    assert.equal(spec.ok, false);
+    assert.equal(spec.message, "Unknown JSKIT launch target: online.");
   });
 });
 

@@ -66,6 +66,7 @@ import {
   projectApplicationView
 } from "@local/vibe64-core/server/projectApplication";
 import {
+  consumeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
   readProjectRecordMetadata,
   saveProjectBootstrapConfig
@@ -432,6 +433,15 @@ function createService({
       return null;
     }
     return pendingProjectBootstrapConfig(await readProjectRecordMetadata(projectRecordPath(targetRootValue)));
+  }
+
+  async function consumeProjectBootstrapConfigForTarget(targetRootValue = currentTargetRoot()) {
+    if (!targetRootValue || !targetRootIsProjectHome(targetRootValue)) {
+      return null;
+    }
+    return consumeProjectBootstrapConfig({
+      projectRecordPath: projectRecordPath(targetRootValue)
+    });
   }
 
   function projectRuntimeConfigPathsForTarget(targetRootValue = currentTargetRoot()) {
@@ -1163,6 +1173,7 @@ function createService({
       return readProjectTypeState(input);
     }
     await projectTypeStore.writeProjectType(projectType);
+    await consumeProjectBootstrapConfigForTarget();
     return readProjectTypeState(input);
   }
 
@@ -2586,6 +2597,7 @@ function createService({
     if (projectType.draft === true) {
       await projectTypeStore.writeProjectType(projectType.projectType);
     }
+    await consumeProjectBootstrapConfigForTarget();
     const response = configResponse({
       adapter,
       config,

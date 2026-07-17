@@ -17,6 +17,12 @@ import {
   launchTargetWithStartupArgsOption,
   startupArgsFromLaunchInput
 } from "../../launchPreviewOptions.js";
+import {
+  VIBE64_ONLINE_LAUNCH_TARGET_ID,
+  createVibe64OnlineLaunchTargetTerminalSpec,
+  isVibe64OnlinePackage,
+  vibe64OnlineLaunchTarget
+} from "./vibe64OnlineLaunch.js";
 
 function launchTarget(id, label) {
   return launchTargetWithStartupArgsOption({
@@ -37,6 +43,9 @@ async function listGenericNodeWebLaunchTargets({
   const packageJson = worktreePath ? await readPackageJson(worktreePath) : null;
   if (!packageJson) {
     return [];
+  }
+  if (isVibe64OnlinePackage(packageJson)) {
+    return [vibe64OnlineLaunchTarget(packageJson)].filter(Boolean);
   }
   const scripts = preferredLaunchScriptNames(packageJson);
   return [
@@ -140,6 +149,14 @@ function createGenericNodeWebLaunchTargetTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
+  if (launchTargetId === VIBE64_ONLINE_LAUNCH_TARGET_ID) {
+    return createVibe64OnlineLaunchTargetTerminalSpec({
+      context,
+      launchInput,
+      session,
+      targetRoot
+    });
+  }
   if (!["built", "dev", "preview", "start"].includes(launchTargetId)) {
     return {
       ok: false,
