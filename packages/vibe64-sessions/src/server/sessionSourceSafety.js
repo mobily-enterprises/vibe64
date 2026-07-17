@@ -238,11 +238,8 @@ function sourceSafetyChangeUnits({
 
 function sourceSafetySeverity(changeUnits = 0) {
   const units = Math.max(0, Number(changeUnits) || 0);
-  if (units < 1) {
-    return 0;
-  }
-  const ratio = Math.log10(Math.max(1, units)) / Math.log10(MAX_SOURCE_SAFETY_CHANGE_UNITS);
-  return Math.round(Math.min(1, Math.max(0, ratio)) * 100);
+  const ratio = Math.min(1, units / MAX_SOURCE_SAFETY_CHANGE_UNITS);
+  return Math.round(ratio * 100);
 }
 
 function unavailableSourceSafety(session = {}) {

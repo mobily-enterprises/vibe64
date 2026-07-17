@@ -116,7 +116,8 @@ test("Git-backed safety remains unsafe after commit and clears after push", asyn
     assert.equal(committed.hasUnpushedCommits, true);
     assert.equal(committed.unpushedCommitCount, 1);
     assert.ok(committed.changedLineCount >= 80);
-    assert.ok(committed.severity > 50);
+    assert.ok(committed.severity > 0);
+    assert.ok(committed.severity < 50);
     assert.equal(committed.unsafe, true);
 
     await git(sourceRoot, ["push", "origin", "main"]);
@@ -132,11 +133,12 @@ test("Git-backed safety remains unsafe after commit and clears after push", asyn
   }
 });
 
-test("source-safety heat starts at yellow and rises toward red", () => {
+test("source-safety heat uses the full change-unit range before reaching red", () => {
   assert.equal(sourceSafetySeverity(0), 0);
   assert.equal(sourceSafetySeverity(1), 0);
-  assert.ok(sourceSafetySeverity(25) > sourceSafetySeverity(2));
-  assert.ok(sourceSafetySeverity(250) > sourceSafetySeverity(25));
+  assert.equal(sourceSafetySeverity(25), 5);
+  assert.equal(sourceSafetySeverity(192), 38);
+  assert.equal(sourceSafetySeverity(250), 50);
   assert.equal(sourceSafetySeverity(500), 100);
   assert.equal(sourceSafetySeverity(5_000), 100);
 });

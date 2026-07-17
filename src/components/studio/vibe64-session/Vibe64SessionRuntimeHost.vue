@@ -30,6 +30,7 @@
       :sessions-api-path="sessionData.sessionsApiPath"
       :session-selection-closed="selection.isClosed"
       :session-toolbar="autopilotSessionToolbar"
+      :source-safety="sourceSafety"
       :save-project-config="props.saveProjectConfig"
       :saving-project-config="props.savingProjectConfig"
       :send-agent-message="sendAgentMessage"
@@ -166,6 +167,7 @@ const {
   selection,
   setAutopilotBusy,
   sendAgentMessage,
+  sourceSafety,
   timeline
 } = useVibe64SessionRuntimeHost(props, emit);
 </script>

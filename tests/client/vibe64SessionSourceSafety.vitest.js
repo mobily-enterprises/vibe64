@@ -50,6 +50,9 @@ describe("Vibe64 session source safety presentation", () => {
     const yellow = sourceSafetyMarkStyle({
       severity: 0
     });
+    const moderate = sourceSafetyMarkStyle({
+      severity: 38
+    });
     const orange = sourceSafetyMarkStyle({
       severity: 50
     });
@@ -58,6 +61,7 @@ describe("Vibe64 session source safety presentation", () => {
     });
 
     expect(yellow["--vibe64-source-safety-color"]).toContain("hsl(48 ");
+    expect(moderate["--vibe64-source-safety-color"]).toContain("hsl(30 ");
     expect(orange["--vibe64-source-safety-color"]).toContain("hsl(24 ");
     expect(red["--vibe64-source-safety-color"]).toContain("hsl(0 ");
   });

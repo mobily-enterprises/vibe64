@@ -268,6 +268,10 @@ const vibe64AutopilotViewProps = {
     default: () => ({}),
     type: Object
   },
+  sourceSafety: {
+    default: () => ({}),
+    type: Object
+  },
   saveProjectConfig: {
     default: null,
     type: Function

@@ -70,6 +70,10 @@
           @rewind="rewindToAutopilotStep"
         >
           <template #actions>
+            <Vibe64SessionSourceSafetyButton
+              :session-label="dashboardSessionContext.activeSessionNav.label"
+              :source-safety="props.sourceSafety"
+            />
             <v-menu location="bottom end">
               <template #activator="{ props: menuProps }">
                 <v-btn
@@ -919,6 +923,7 @@ import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64
 import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
 import Vibe64SessionRecoveryNotice from "@/components/studio/vibe64-session/Vibe64SessionRecoveryNotice.vue";
 import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
+import Vibe64SessionSourceSafetyButton from "@/components/studio/vibe64-session/Vibe64SessionSourceSafetyButton.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vibe64StepInputDisplayFields.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";

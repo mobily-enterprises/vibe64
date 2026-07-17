@@ -11,6 +11,7 @@ const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64S
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
 const projectPagePath = path.resolve("src/pages/app/project/[slug].vue");
 const sessionCurrentStepPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue");
+const sessionSourceSafetyButtonPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionSourceSafetyButton.vue");
 const sessionToolbarPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
@@ -168,6 +169,36 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(navigationSource).toContain("Current stage");
     expect(navigationSource).toContain("{{ mobileToggleLabel }}");
     expect(navigationSource).toContain("{{ statusLabel }}");
+  });
+
+  it("keeps source state visible on session tabs and puts its action beside the current step", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const runtimeHostSource = fs.readFileSync(
+      path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue"),
+      "utf8"
+    );
+    const sourceSafetyButtonSource = fs.readFileSync(sessionSourceSafetyButtonPath, "utf8");
+    const toolbarSource = fs.readFileSync(sessionToolbarPath, "utf8");
+    const navigationActions = componentSource.match(/<template #actions>[\s\S]*?<\/template>/u)?.[0] || "";
+
+    expect(navigationActions).toContain("<Vibe64SessionSourceSafetyButton");
+    expect(navigationActions.indexOf("<Vibe64SessionSourceSafetyButton")).toBeLessThan(
+      navigationActions.indexOf("<v-menu")
+    );
+    expect(runtimeHostSource).toContain(":source-safety=\"sourceSafety\"");
+    expect(sourceSafetyButtonSource).toContain(":prepend-icon=\"mdiSourceCommit\"");
+    expect(sourceSafetyButtonSource).toContain("{{ buttonText }}");
+    expect(sourceSafetyButtonSource).toContain("const buttonText = computed(() => sourceSafetyButtonLabel(props.sourceSafety));");
+    expect(sourceSafetyButtonSource).toContain("const buttonDisabled = computed(() => !unsafe.value || promptPending.value);");
+    expect(sourceSafetyButtonSource).toContain("return unsafe.value ? undefined : \"success\";");
+    expect(sourceSafetyButtonSource).toContain("unsafe.value ? sourceSafetyMarkStyle(props.sourceSafety) : undefined");
+    expect(sourceSafetyButtonSource).toContain("<Vibe64SessionSourceSafetyDialog");
+    expect(toolbarSource).toContain("<span\n            class=\"studio-ai-sessions__status-dot\"");
+    expect(toolbarSource).toContain("'studio-ai-sessions__status-dot--unsafe': sessionSourceSafetyUnsafe(sessionItem)");
+    expect(toolbarSource).toContain(":style=\"sessionSourceSafetyStyle(sessionItem)\"");
+    expect(toolbarSource).toContain("sourceSafetyMarkStyle(sessionItem.sourceSafety)");
+    expect(toolbarSource).not.toContain("requestSourceSafetyConfirmation");
+    expect(toolbarSource).not.toContain("Vibe64SessionSourceSafetyDialog");
   });
 
   it("keeps the GitHub command actor in the project header chrome", () => {

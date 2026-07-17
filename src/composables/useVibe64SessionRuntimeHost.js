@@ -868,6 +868,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     selection,
     setAutopilotBusy,
     sendAgentMessage,
+    sourceSafety,
     requestAgentTask,
     timeline
   };

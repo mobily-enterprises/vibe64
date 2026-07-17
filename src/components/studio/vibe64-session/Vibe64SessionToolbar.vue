@@ -17,30 +17,14 @@
         @click="toolbar.selectSession(sessionItem.sessionId)"
       >
         <span class="studio-ai-sessions__tab-main">
-          <v-tooltip
-            :disabled="!sessionSourceSafetyUnsafe(sessionItem)"
-            location="bottom"
-            :open-delay="400"
-            :text="sessionSourceSafetyTitle(sessionItem)"
-          >
-            <template #activator="{ props: tooltipProps }">
-              <component
-                :is="sessionSourceSafetyUnsafe(sessionItem) ? 'button' : 'span'"
-                :aria-label="sessionSourceSafetyAriaLabel(sessionItem)"
-                class="studio-ai-sessions__status-dot"
-                :class="[
-                  `studio-ai-sessions__status-dot--${sessionItem.status}`,
-                  {
-                    'studio-ai-sessions__status-dot--unsafe': sessionSourceSafetyUnsafe(sessionItem)
-                  }
-                ]"
-                :style="sessionSourceSafetyStyle(sessionItem)"
-                :type="sessionSourceSafetyUnsafe(sessionItem) ? 'button' : undefined"
-                v-bind="tooltipProps"
-                @click.stop="requestSourceSafetyConfirmation(sessionItem)"
-              />
-            </template>
-          </v-tooltip>
+          <span
+            class="studio-ai-sessions__status-dot"
+            :class="[
+              `studio-ai-sessions__status-dot--${sessionItem.status}`,
+              { 'studio-ai-sessions__status-dot--unsafe': sessionSourceSafetyUnsafe(sessionItem) }
+            ]"
+            :style="sessionSourceSafetyStyle(sessionItem)"
+          />
           <span class="studio-ai-sessions__tab-label">{{ sessionTabLabel(sessionItem) }}</span>
         </span>
         <span
@@ -73,28 +57,17 @@
       <slot name="after-sessions" />
     </div>
   </div>
-
-  <Vibe64SessionSourceSafetyDialog
-    :open="sourceSafetyConfirmationOpen"
-    :session-label="sourceSafetyConfirmationLabel"
-    :source-safety="sourceSafetyConfirmation"
-    @cancel="cancelSourceSafetyConfirmation"
-    @confirm="confirmSourceSafetyPrompt"
-  />
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import {
   mdiClose
 } from "@mdi/js";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
-import Vibe64SessionSourceSafetyDialog from "@/components/studio/vibe64-session/Vibe64SessionSourceSafetyDialog.vue";
 import {
-  sourceSafetyButtonLabel,
   sourceSafetyIsUnsafe,
-  sourceSafetyMarkStyle,
-  sourceSafetyStatusTitle
+  sourceSafetyMarkStyle
 } from "@/lib/vibe64SessionSourceSafety.js";
 
 const props = defineProps({
@@ -131,7 +104,6 @@ const props = defineProps({
     type: Number
   }
 });
-const sourceSafetyConfirmationSessionId = ref("");
 
 function sessionTabLabel(sessionItem = {}) {
   const sessionName = String(sessionItem.sessionName || sessionItem.metadata?.issue_word || "").trim();
@@ -139,6 +111,16 @@ function sessionTabLabel(sessionItem = {}) {
     return sessionName;
   }
   return props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
+}
+
+function sessionSourceSafetyUnsafe(sessionItem = {}) {
+  return sourceSafetyIsUnsafe(sessionItem?.sourceSafety);
+}
+
+function sessionSourceSafetyStyle(sessionItem = {}) {
+  return sessionSourceSafetyUnsafe(sessionItem)
+    ? sourceSafetyMarkStyle(sessionItem.sourceSafety)
+    : undefined;
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
@@ -163,75 +145,6 @@ const visibleSessions = computed(() => {
     allSessions.value[selectedIndex]
   ];
 });
-const sourceSafetyConfirmationSession = computed(() => (
-  allSessions.value.find((sessionItem) => (
-    sessionItem.sessionId === sourceSafetyConfirmationSessionId.value
-  )) || null
-));
-const sourceSafetyConfirmation = computed(() => (
-  sessionSourceSafety(sourceSafetyConfirmationSession.value || {})
-));
-const sourceSafetyConfirmationOpen = computed(() => Boolean(
-  sourceSafetyConfirmationSessionId.value &&
-  sourceSafetyIsUnsafe(sourceSafetyConfirmation.value)
-));
-const sourceSafetyConfirmationLabel = computed(() => (
-  sessionTabLabel(sourceSafetyConfirmationSession.value || {})
-));
-
-function sessionSourceSafety(sessionItem = {}) {
-  return sessionItem?.sourceSafety || {};
-}
-
-function sessionSourceSafetyUnsafe(sessionItem = {}) {
-  return sourceSafetyIsUnsafe(sessionSourceSafety(sessionItem));
-}
-
-function sessionSourceSafetyStyle(sessionItem = {}) {
-  return sessionSourceSafetyUnsafe(sessionItem)
-    ? sourceSafetyMarkStyle(sessionSourceSafety(sessionItem))
-    : undefined;
-}
-
-function sessionSourceSafetyTitle(sessionItem = {}) {
-  return sessionSourceSafetyUnsafe(sessionItem)
-    ? sourceSafetyStatusTitle(sessionSourceSafety(sessionItem))
-    : undefined;
-}
-
-function sessionSourceSafetyAriaLabel(sessionItem = {}) {
-  if (!sessionSourceSafetyUnsafe(sessionItem)) {
-    return undefined;
-  }
-  return `${sourceSafetyButtonLabel(sessionSourceSafety(sessionItem))} ${sessionTabLabel(sessionItem)} work`;
-}
-
-function requestSourceSafetyConfirmation(sessionItem = {}) {
-  const sourceSafety = sessionSourceSafety(sessionItem);
-  if (!sourceSafetyIsUnsafe(sourceSafety) || sourceSafety.prompting || sourceSafety.promptSent) {
-    return false;
-  }
-  sourceSafetyConfirmationSessionId.value = String(sessionItem.sessionId || "");
-  return true;
-}
-
-function cancelSourceSafetyConfirmation() {
-  if (!sourceSafetyConfirmation.value.prompting) {
-    sourceSafetyConfirmationSessionId.value = "";
-  }
-}
-
-async function confirmSourceSafetyPrompt() {
-  const sourceSafety = sourceSafetyConfirmation.value;
-  if (!sourceSafetyIsUnsafe(sourceSafety) || sourceSafety.prompting || sourceSafety.promptSent) {
-    return false;
-  }
-  const accepted = await sourceSafety.prompt?.();
-  if (accepted) {
-    sourceSafetyConfirmationSessionId.value = "";
-  }
-  return accepted || false;
-}
 </script>
 
 <style scoped>
@@ -394,20 +307,11 @@ async function confirmSourceSafetyPrompt() {
 }
 
 .studio-ai-sessions__status-dot--unsafe {
-  border: 0;
   background: var(--vibe64-source-safety-color);
   box-shadow:
     0 0 0 0.18rem rgba(var(--v-theme-surface), 0.92),
     0 0 0 0.31rem var(--vibe64-source-safety-color);
   contain: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.studio-ai-sessions__status-dot--unsafe:hover,
-.studio-ai-sessions__status-dot--unsafe:focus-visible {
-  outline: 2px solid var(--vibe64-source-safety-color);
-  outline-offset: 3px;
 }
 
 @keyframes studio-ai-sessions-thinking-pulse {
@@ -474,7 +378,6 @@ async function confirmSourceSafetyPrompt() {
     align-items: stretch;
     flex-direction: column;
   }
-
 }
 
 @media (hover: none), (pointer: coarse) {
