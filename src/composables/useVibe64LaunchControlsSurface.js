@@ -494,6 +494,7 @@ function useVibe64LaunchControlsSurface(props) {
     expandTerminal,
     launchActions,
     launchButtonsDisabled,
+    launchError,
     launchInputForTarget,
     launchStatusAttempt,
     launchStarting,
@@ -639,10 +640,20 @@ function useVibe64LaunchControlsSurface(props) {
   const previewLocationStorageKey = computed(() => props.embeddedPreview && props.session
     ? launchPreviewLocationStorageKey(props.session, projectSlug.value)
     : "");
-  const previewOptionsTarget = computed(() => embeddedAutoStartTarget.value || activeLaunchTarget.value || null);
+  const previewOptionsTarget = computed(() => (
+    embeddedAutoStartTarget.value || activeLaunchTarget.value || embeddedStartTarget.value || null
+  ));
   const previewOptions = computed(() => previewOptionsForTarget(previewOptionsTarget.value));
   const previewOptionsAvailable = computed(() => previewOptions.value.length > 0);
-  const previewOptionsPrimaryLabel = computed(() => terminalIsRunning.value ? "Save and restart preview" : "Save");
+  const previewOptionsAttentionVisible = computed(() => Boolean(
+    props.embeddedPreview && launchError.value && previewOptionsAvailable.value
+  ));
+  const previewOptionsPrimaryLabel = computed(() => {
+    if (terminalIsRunning.value) {
+      return "Save and restart preview";
+    }
+    return launchError.value ? "Save and start preview" : "Save";
+  });
   const previewRoutes = computed(() => previewRoutesForTarget(previewOptionsTarget.value));
   const previewRoutesAvailable = computed(() => previewRoutes.value.length > 0);
   const previewRouteDialogPath = computed(() => {
@@ -775,6 +786,7 @@ function useVibe64LaunchControlsSurface(props) {
     });
   });
   const previewIssue = computed(() => launchPreviewIssue({
+    launchError: launchError.value,
     message: previewMessage.value,
     state: previewState.value
   }));
@@ -783,6 +795,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewIssue.value
   ));
   const previewNotice = computed(() => launchPreviewNotice({
+    launchError: launchError.value,
     message: previewMessage.value,
     state: previewState.value
   }));
@@ -1438,8 +1451,13 @@ function useVibe64LaunchControlsSurface(props) {
     );
     previewOptionsDialogVisible.value = false;
     if (restart && terminalIsRunning.value) {
-      await restartTerminal();
-      return true;
+      return restartTerminal();
+    }
+    if (restart && launchError.value && props.embeddedPreview) {
+      return run(target, {
+        applyDefaultDisplay: false,
+        forceRestart: true
+      });
     }
     return true;
   }
@@ -1720,6 +1738,7 @@ function useVibe64LaunchControlsSurface(props) {
     expandPreviewToolbar,
     launchActions,
     launchButtonsDisabled,
+    launchError,
     launchStatusAttempt,
     launchStatusChipText,
     launchStatusChipTitle,
@@ -1771,6 +1790,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewLoadingOverlayVisible,
     previewMessage,
     previewOptions,
+    previewOptionsAttentionVisible,
     previewOptionsAvailable,
     previewOptionsDialogVisible,
     previewOptionsFormValues,
@@ -1961,10 +1981,18 @@ function previewOpeningOverlayVisible({
 }
 
 function launchPreviewIssue({
+  launchError = "",
   message = "",
   state = "idle"
 } = {}) {
+  const operationError = String(launchError || "").trim();
   const text = String(message || "").trim();
+  if (operationError) {
+    return {
+      message: operationError,
+      title: "Preview could not be started"
+    };
+  }
   if (state === "stale") {
     return {
       message: text || "Server-side app files changed after this preview started. Restart preview to run the current code.",
@@ -1987,14 +2015,16 @@ function launchPreviewIssue({
 }
 
 function launchPreviewNotice({
+  launchError = "",
   message = "",
   state = "idle"
 } = {}) {
   const issue = launchPreviewIssue({
+    launchError,
     message,
     state
   });
-  if (state === "stale") {
+  if (state === "stale" && !String(launchError || "").trim()) {
     return null;
   }
   if (issue) {

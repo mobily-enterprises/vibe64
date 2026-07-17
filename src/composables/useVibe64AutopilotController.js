@@ -186,6 +186,19 @@ function sessionStillApplyingCommand(session = {}) {
   return currentCommandPresentation(session).applying === true;
 }
 
+function commandActionIdsMatch(leftActionId = "", rightActionId = "") {
+  const left = String(leftActionId || "").trim();
+  const right = String(rightActionId || "").trim();
+  return !left || !right || left === right;
+}
+
+function serverAppliesCommandAction(session = {}, actionId = "") {
+  if (!sessionStillApplyingCommand(session)) {
+    return false;
+  }
+  return commandActionIdsMatch(session?.currentCommandLifecycle?.actionId, actionId);
+}
+
 function serverNoLongerPresentsCommand(previousOperation = {}, session = {}) {
   const nextOperation = currentOperation(session);
   if (!operationCanDispatch(nextOperation)) {
@@ -201,7 +214,7 @@ function serverPresentsCommandFailureInput(session = {}) {
   return String(currentScreen(session).input?.kind || "") === "command_failure_response";
 }
 
-function serverPresentsCommandOperationForResult(session = {}, result = {}) {
+function serverPresentsCommandOperation(session = {}, actionId = "") {
   const operation = currentOperation(session);
   if (!operationCanDispatch(operation)) {
     return false;
@@ -209,18 +222,21 @@ function serverPresentsCommandOperationForResult(session = {}, result = {}) {
   if (String(operation.route || "") !== OPERATION_ROUTES.COMMAND_TERMINAL) {
     return false;
   }
-  const resultActionId = String(result?.actionId || "").trim();
-  const operationActionId = String(operation.actionId || "").trim();
-  return !resultActionId || !operationActionId || resultActionId === operationActionId;
+  return commandActionIdsMatch(operation.actionId, actionId);
+}
+
+function serverOwnsCommandAction(session = {}, actionId = "") {
+  return serverAppliesCommandAction(session, actionId) ||
+    serverPresentsCommandOperation(session, actionId);
 }
 
 function clientCommandResultStillRelevant(result = {}, session = {}) {
   if (!result) {
     return false;
   }
-  return sessionStillApplyingCommand(session) ||
+  return serverAppliesCommandAction(session, result.actionId) ||
     serverPresentsCommandFailureInput(session) ||
-    serverPresentsCommandOperationForResult(session, result);
+    serverPresentsCommandOperation(session, result.actionId);
 }
 
 function resultSessionId(result = {}) {
@@ -312,6 +328,18 @@ function useVibe64AutopilotController({
     return rawCommandResultForCurrentSession.value || serverCommandResult.value || null;
   });
   const rawCommandRunning = computed(() => readRefOrGetterValue(commandRunner.running) === true);
+  const observedCommandActionId = computed(() => String(
+    readRefOrGetterValue(commandRunner.activeActionId) || ""
+  ).trim());
+  const observedCommandSessionId = computed(() => String(
+    readRefOrGetterValue(commandRunner.activeSessionId) || ""
+  ).trim());
+  const commandObserverOutlivedServerExecution = computed(() => Boolean(
+    rawCommandRunning.value &&
+    observedCommandActionId.value &&
+    observedCommandSessionId.value === currentSessionId.value &&
+    !serverOwnsCommandAction(currentSession.value, observedCommandActionId.value)
+  ));
   const commandSessionId = computed(() => (
     resultSessionId(effectiveCommandResult.value) ||
     String(readRefOrGetterValue(commandRunner.activeSessionId) || activeCommandSessionId.value || "")
@@ -1031,6 +1059,20 @@ function useVibe64AutopilotController({
       });
       lastDispatchedOperationKey.value = "";
     }
+  });
+
+  watch(commandObserverOutlivedServerExecution, (outlived) => {
+    if (!outlived || typeof commandRunner.detachCommandObserver !== "function") {
+      return;
+    }
+    vibe64SessionDebugLog("client.autopilot.commandTerminal.detachCompletedObserver", {
+      ...vibe64SessionDebugSummary(currentSession.value || {}),
+      actionId: observedCommandActionId.value,
+      observerSessionId: observedCommandSessionId.value
+    });
+    commandRunner.detachCommandObserver();
+  }, {
+    flush: "sync"
   });
 
   return {

@@ -178,6 +178,25 @@ describe("Vibe64 launch controls surface", () => {
     });
   });
 
+  it("surfaces launch request failures before server preview state exists", () => {
+    const launchError = "Set the public Vibe64 source root in preview options before running Vibe64 Online.";
+
+    expect(launchPreviewIssue({
+      launchError,
+      state: "idle"
+    })).toEqual({
+      message: launchError,
+      title: "Preview could not be started"
+    });
+    expect(launchPreviewNotice({
+      launchError,
+      state: "idle"
+    })).toEqual({
+      message: launchError,
+      title: "Preview could not be started"
+    });
+  });
+
   it("surfaces stale server-side preview recovery as non-blocking attention", () => {
     expect(launchPreviewNotice({
       message: "Server-side app files changed after this preview started. Restart preview to run the current code.",

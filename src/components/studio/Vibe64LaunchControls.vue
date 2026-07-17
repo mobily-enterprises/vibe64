@@ -419,6 +419,15 @@
 
                 <v-card-actions class="vibe64-launch-controls__attention-actions">
                   <v-btn
+                    v-if="previewOptionsAttentionVisible"
+                    :prepend-icon="mdiCogOutline"
+                    size="small"
+                    variant="tonal"
+                    @click="openPreviewOptions"
+                  >
+                    Preview options
+                  </v-btn>
+                  <v-btn
                     v-if="previewCanShowLog"
                     :prepend-icon="mdiConsoleLine"
                     size="small"
@@ -500,6 +509,15 @@
         <strong>{{ previewNotice.title }}</strong>
         <span>{{ previewNotice.message }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
+          <v-btn
+            v-if="previewOptionsAttentionVisible"
+            :prepend-icon="mdiCogOutline"
+            size="small"
+            variant="tonal"
+            @click="openPreviewOptions"
+          >
+            Preview options
+          </v-btn>
           <v-btn
             v-if="previewRecoveryVisible"
             color="primary"
@@ -940,6 +958,7 @@ const {
   previewInFlightText,
   previewLoadingOverlayVisible,
   previewOptions,
+  previewOptionsAttentionVisible,
   previewOptionsAvailable,
   previewOptionsDialogVisible,
   previewOptionsFormValues,

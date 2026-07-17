@@ -9,8 +9,8 @@ import {
   envRecord
 } from "../normalize.js";
 import {
-  commandCallerEnv
-} from "../env/callerEnv.js";
+  resolveCommandEnv
+} from "../env/resolveCommandEnv.js";
 import {
   startTerminalSession
 } from "./terminalSessions.js";
@@ -42,6 +42,7 @@ function ptyHelperPayloadPath(root = "") {
 
 function terminalSessionInputForRequest(request = {}, {
   actor,
+  baseEnv,
   cwd,
   env
 } = {}) {
@@ -51,13 +52,21 @@ function terminalSessionInputForRequest(request = {}, {
       args: request.args,
       command: request.command,
       cwd,
-      env: terminalEnvForRequest(request, env)
+      env: terminalEnvForRequest(request, {
+        actor,
+        baseEnv,
+        policyEnv: env
+      })
     };
   }
   return {
     args: (input = {}) => {
       const payloadPath = ptyHelperPayloadPath(terminal.helperPayloadRoot);
-      const payloadEnv = terminalEnvForRequest(request, env);
+      const payloadEnv = terminalEnvForRequest(request, {
+        actor,
+        baseEnv,
+        policyEnv: env
+      });
       const payloadArgs = typeof request.args === "function"
         ? request.args(input)
         : request.args;
@@ -86,21 +95,30 @@ function terminalSessionInputForRequest(request = {}, {
   };
 }
 
-function terminalEnvForRequest(request = {}, policyEnv = {}) {
+function terminalEnvForRequest(request = {}, {
+  actor = {},
+  baseEnv = {},
+  policyEnv = {}
+} = {}) {
   if (typeof request.envFactory !== "function") {
     return policyEnv;
   }
   return (input = {}) => {
-    const dynamicEnv = commandCallerEnv(envRecord(request.envFactory(input)), request);
-    return {
-      ...dynamicEnv,
-      ...policyEnv
-    };
+    return resolveCommandEnv({
+      actor,
+      baseEnv,
+      request: {
+        ...request,
+        env: envRecord(request.envFactory(input)),
+        envFactory: null
+      }
+    });
   };
 }
 
 async function runPtyCommand(request = {}, {
   actor,
+  baseEnv,
   cwd,
   env
 } = {}) {
@@ -108,6 +126,7 @@ async function runPtyCommand(request = {}, {
     const terminal = request.terminal || {};
     const sessionInput = terminalSessionInputForRequest(request, {
       actor,
+      baseEnv: baseEnv || env,
       cwd,
       env
     });

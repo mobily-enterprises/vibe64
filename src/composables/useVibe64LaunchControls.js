@@ -652,6 +652,7 @@ function useVibe64LaunchControls({
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
   const operationBusy = ref(false);
+  const launchError = ref("");
   const launchStarting = ref(false);
   const terminalExpanded = ref(false);
   const autoStartKey = ref("");
@@ -1100,6 +1101,7 @@ function useVibe64LaunchControls({
       terminalExpanded.value = launchTarget.defaultDisplay !== "minimized";
     }
     launchStarting.value = true;
+    launchError.value = "";
     operationBusy.value = true;
     const normalizedAutoStartAttemptKey = String(autoStartAttemptKey || "").trim();
     if (normalizedAutoStartAttemptKey) {
@@ -1128,7 +1130,10 @@ function useVibe64LaunchControls({
         scopeKey: startedScopeKey
       });
       return true;
-    } catch {
+    } catch (error) {
+      launchError.value = String(
+        error?.message || startTerminalCommand.message || "Launch target could not be started."
+      ).trim();
       return false;
     } finally {
       launchStarting.value = false;
@@ -1498,6 +1503,7 @@ function useVibe64LaunchControls({
   watch(launchScopeKey, () => {
     attachedTerminalId = "";
     autoStartKey.value = "";
+    launchError.value = "";
     previewInputOverrides.value = {};
     launchStatusAttempt.value = 0;
     launchStatusAttemptLoading = false;
@@ -1694,6 +1700,7 @@ function useVibe64LaunchControls({
     expandTerminal,
     launchActions,
     launchButtonsDisabled,
+    launchError,
     launchInputForTarget,
     launchStatusAttempt,
     launchStarting,

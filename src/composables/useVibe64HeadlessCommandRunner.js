@@ -152,6 +152,7 @@ function useVibe64HeadlessCommandRunner({
   const runStartCommandTerminal = typeof startCommandTerminal === "function"
     ? startCommandTerminal
     : terminalCommands.startCommandTerminal;
+  const activeActionId = ref("");
   const activeSessionId = ref("");
   const running = ref(false);
   const lastResult = ref(null);
@@ -163,12 +164,9 @@ function useVibe64HeadlessCommandRunner({
   let reconnectAttempt = 0;
   let reconnectTimer = null;
   let resolveCommandCompletion = null;
-  let resolveObserverDetach;
+  let resolvePendingStartDetach = null;
   let stopRequested = false;
   let terminalStreamFailure = null;
-  const observerDetachSignal = new Promise((resolve) => {
-    resolveObserverDetach = () => resolve(COMMAND_OBSERVER_DETACHED);
-  });
 
   const terminal = useVibe64Terminal({
     driver: createWebSocketTerminalDriver({
@@ -260,8 +258,9 @@ function useVibe64HeadlessCommandRunner({
       });
     }
 
-    running.value = true;
+    activeActionId.value = actionId;
     activeSessionId.value = normalizedSessionId;
+    running.value = true;
     lastResult.value = null;
     activeTerminal = null;
     activeAction = action;
@@ -278,6 +277,9 @@ function useVibe64HeadlessCommandRunner({
     });
 
     try {
+      const observerDetachSignal = new Promise((resolve) => {
+        resolvePendingStartDetach = () => resolve(COMMAND_OBSERVER_DETACHED);
+      });
       const response = await Promise.race([
         runStartCommandTerminal(normalizedSessionId, {
           actionId,
@@ -325,6 +327,7 @@ function useVibe64HeadlessCommandRunner({
       const terminalSessionId = terminalSessionIdFromStartResponse(response);
       const claimedAction = attached ? actionFromCommandClaim(response, action) : action;
       activeAction = claimedAction;
+      activeActionId.value = terminalActionId(claimedAction);
       const session = attached
         ? terminalSnapshotFromStartResponse(response, terminalSessionId)
         : response;
@@ -392,12 +395,14 @@ function useVibe64HeadlessCommandRunner({
       lastResult.value = result;
       return result;
     } finally {
+      resolvePendingStartDetach = null;
       resolveCommandCompletion = null;
       await closeActiveTerminal({
         deleteSession: terminal.terminalStatus.value === "exited" || stopRequested
       });
       running.value = false;
       activeAction = null;
+      activeActionId.value = "";
       stopRequested = false;
     }
   }
@@ -474,6 +479,17 @@ function useVibe64HeadlessCommandRunner({
     return true;
   }
 
+  function detachCommandObserver() {
+    if (!running.value) {
+      return false;
+    }
+    clearTerminalReconnect();
+    terminal.closeTerminalSocket();
+    resolvePendingStartDetach?.();
+    settleCommand("detached");
+    return true;
+  }
+
   function clearResult() {
     lastResult.value = null;
     activeSessionId.value = "";
@@ -496,17 +512,19 @@ function useVibe64HeadlessCommandRunner({
 
   registerUnmountCleanup(() => {
     disposed = true;
-    clearTerminalReconnect();
-    terminal.closeTerminalSocket();
-    resolveObserverDetach();
-    settleCommand("detached");
+    if (!detachCommandObserver()) {
+      clearTerminalReconnect();
+      terminal.closeTerminalSocket();
+    }
   });
 
   return {
+    activeActionId,
     activeSessionId,
     clearResult,
     closeActiveTerminal,
     commandPreview: terminal.terminalCommandPreview,
+    detachCommandObserver,
     lastResult,
     output: terminal.terminalOutput,
     runCommandAction,

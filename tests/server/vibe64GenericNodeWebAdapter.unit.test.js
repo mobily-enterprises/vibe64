@@ -43,7 +43,11 @@ import {
 } from "./vibe64TestHelpers.js";
 
 const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
+const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
+const VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV = "VIBE64_ONLINE_COMPOSED_APP_ROOT";
 const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
+const VIBE64_RELEASE_GENERATION_ENV = "VIBE64_RELEASE_GENERATION";
+const VIBE64_RESTART_STATE_ROOT_ENV = "VIBE64_RESTART_STATE_ROOT";
 const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -396,6 +400,7 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
     const publicSourceRoot = path.join(publicProjectRoot, "sessions", "selected", "source");
     const sessionRoot = path.join(projectRuntimeRoot(onlineRoot), "sessions", "active", "online-session");
     const onlineStateRoot = path.join(sessionRoot, "runtime", "vibe64-online-child");
+    const onlineComposedAppRoot = path.join(onlineStateRoot, "app");
     await Promise.all([
       writeProjectFile(onlineRoot, "package.json", JSON.stringify({
         name: "vibe64-online",
@@ -462,11 +467,12 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
     try {
       assert.equal(spec.ok, true);
       assert.equal(spec.cwd, onlineRoot);
-      assert.deepEqual(spec.allowedRoots, [publicSourceRoot]);
+      assert.deepEqual(spec.allowedRoots, [publicSourceRoot, onlineStateRoot]);
       assert.equal(spec.metadata.adapterId, "node-web");
       assert.equal(spec.metadata.urlPath, "/app");
       assert.match(spec.metadata.targetUrl, /\/app$/u);
       assert.equal(spec.metadata.publicSourceRoot, publicSourceRoot);
+      assert.equal(spec.metadata.composedAppRoot, onlineComposedAppRoot);
       assert.equal(spec.metadata.stateRoot, onlineStateRoot);
       assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
       assert.equal(spec.restartOnChange.label, "Vibe64 Online source files");
@@ -475,12 +481,16 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
       const env = spec.env({
         id: "unit-terminal"
       });
+      assert.equal(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV], path.join(onlineStateRoot, "attachments"));
+      assert.equal(env[VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV], onlineComposedAppRoot);
       assert.equal(env[VIBE64_PUBLIC_SOURCE_ROOT_ENV], publicSourceRoot);
       assert.equal(env[VIBE64_ONLINE_STATE_ROOT_ENV], onlineStateRoot);
+      assert.equal(env[VIBE64_RELEASE_GENERATION_ENV], "");
+      assert.equal(env[VIBE64_RESTART_STATE_ROOT_ENV], path.join(onlineStateRoot, "instance-restarts"));
       assert.equal(env[VIBE64_SYSTEM_ROOT_ENV], path.join(onlineStateRoot, "system"));
       assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "unit-owner");
-      assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], undefined);
-      assert.equal(env[VIBE64_SERVICE_DATA_ROOT_ENV], undefined);
+      assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], "");
+      assert.equal(env[VIBE64_SERVICE_DATA_ROOT_ENV], "");
       assert.equal(env[PREVIEW_PROXY_HOST_ENV], "127.0.0.1");
       assert.equal(env[PREVIEW_PROXY_PUBLIC_HOST_ENV], "127.0.0.1");
       assert.match(env[PREVIEW_PROXY_PORT_START_ENV], /^\d+$/u);

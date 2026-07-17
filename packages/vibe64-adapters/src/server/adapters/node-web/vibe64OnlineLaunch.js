@@ -1,6 +1,8 @@
 import path from "node:path";
 
 import {
+  VIBE64_PROJECTS_ROOT_ENV,
+  VIBE64_SERVICE_DATA_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -29,8 +31,12 @@ const VIBE64_ONLINE_LAUNCH_TARGET_ID = "online";
 const VIBE64_ONLINE_PACKAGE_NAME = "vibe64-online";
 const VIBE64_PACKAGE_NAME = "vibe64";
 const VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID = "publicSourceRoot";
+const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
+const VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV = "VIBE64_ONLINE_COMPOSED_APP_ROOT";
 const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
 const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
+const VIBE64_RELEASE_GENERATION_ENV = "VIBE64_RELEASE_GENERATION";
+const VIBE64_RESTART_STATE_ROOT_ENV = "VIBE64_RESTART_STATE_ROOT";
 const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
 const VIBE64_INSTANCE_ENV = "VIBE64_INSTANCE";
 const VIBE64_ONLINE_RESTART_ON_CHANGE = Object.freeze({
@@ -135,22 +141,26 @@ async function createVibe64OnlineLaunchDescriptor({
     launchPort
   });
   const identityEnv = inheritedRuntimeIdentityEnv(process.env);
+  const composedAppRoot = stateRoot ? path.join(stateRoot, "app") : "";
   return {
-    allowedRoots: [publicSourceRoot],
+    allowedRoots: [publicSourceRoot, stateRoot].filter(Boolean),
     command: runScriptCommand(packageManager.name, "dev"),
     env: {
       ...identityEnv,
+      [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: stateRoot ? path.join(stateRoot, "attachments") : "",
+      [VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV]: composedAppRoot,
+      [VIBE64_ONLINE_STATE_ROOT_ENV]: stateRoot,
+      [VIBE64_PROJECTS_ROOT_ENV]: "",
       [VIBE64_PUBLIC_SOURCE_ROOT_ENV]: publicSourceRoot,
-      ...(stateRoot
-        ? {
-            [VIBE64_ONLINE_STATE_ROOT_ENV]: stateRoot,
-            [VIBE64_SYSTEM_ROOT_ENV]: path.join(stateRoot, "system")
-          }
-        : {}),
+      [VIBE64_RELEASE_GENERATION_ENV]: "",
+      [VIBE64_RESTART_STATE_ROOT_ENV]: stateRoot ? path.join(stateRoot, "instance-restarts") : "",
+      [VIBE64_SERVICE_DATA_ROOT_ENV]: "",
+      [VIBE64_SYSTEM_ROOT_ENV]: stateRoot ? path.join(stateRoot, "system") : "",
       ...previewProxy.env
     },
     metadata: {
       commandSource: "package_json_dev_script",
+      composedAppRoot,
       mode: "vibe64-online-dev",
       packageManager: packageManager.name,
       previewProxyPortRange: `${previewProxy.portRange.start}-${previewProxy.portRange.end}`,

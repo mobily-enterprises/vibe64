@@ -1687,6 +1687,40 @@ test("execution gateway pty mode preserves terminal env factories under gateway 
   }
 });
 
+test("execution gateway dynamic PTY env overrides inherited non-policy env", async () => {
+  const namespace = `v64-exec-pty-env-override-${Date.now()}`;
+  const result = await runVibe64Command({
+    args: [
+      "-e",
+      "console.log('DYNAMIC_OVERRIDE:' + process.env.DYNAMIC_OVERRIDE)"
+    ],
+    baseEnv: {
+      DYNAMIC_OVERRIDE: "inherited"
+    },
+    command: process.execPath,
+    env: () => ({
+      DYNAMIC_OVERRIDE: "launch-spec"
+    }),
+    mode: "pty",
+    purpose: "preview",
+    terminal: {
+      namespace
+    }
+  });
+
+  try {
+    assert.equal(result.ok, true, result.output);
+    const snapshot = await waitForTerminalOutput(result.id, namespace, "DYNAMIC_OVERRIDE:");
+    assert.match(snapshot.output, /DYNAMIC_OVERRIDE:launch-spec/u);
+  } finally {
+    if (result.id) {
+      await closeTerminalSession(result.id, {
+        namespace
+      });
+    }
+  }
+});
+
 test("execution gateway rejects function args outside pty mode", async () => {
   const result = await runVibe64Command({
     args: () => ["-e", "console.log('nope')"],

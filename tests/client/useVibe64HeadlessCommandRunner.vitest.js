@@ -410,6 +410,40 @@ describe("useVibe64HeadlessCommandRunner", () => {
     expect(runner.running.value).toBe(false);
   });
 
+  it("detaches a stale observer without stopping the server command", async () => {
+    const { closeCommandTerminal, runner } = commandRunnerFixture({
+      startResponse: {
+        output: "installing\n"
+      },
+      terminalSessionId: "terminal-observer"
+    });
+    const firstResult = runCreateSource(runner);
+    const firstSocket = await waitForSocketCount(1);
+
+    expect(runner.detachCommandObserver()).toBe(true);
+    await expect(firstResult).resolves.toMatchObject({
+      code: "vibe64_command_observer_detached",
+      ok: false
+    });
+    expect(firstSocket.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(closeCommandTerminal).not.toHaveBeenCalled();
+    expect(runner.running.value).toBe(false);
+
+    const secondResult = runCreateSource(runner);
+    const secondSocket = await waitForSocketCount(2);
+    secondSocket.sendMessage({
+      exitCode: 0,
+      status: "exited",
+      type: "status"
+    });
+
+    await expect(secondResult).resolves.toMatchObject({
+      actionId: "create_source",
+      ok: true
+    });
+    expect(closeCommandTerminal).toHaveBeenCalledWith("session-1", "terminal-observer");
+  });
+
   it("detaches on component unmount without stopping the server command", async () => {
     const { app, closeCommandTerminal, runner } = commandRunnerFixture({
       mounted: true,

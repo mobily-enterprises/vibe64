@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   useVibe64AutopilotController
@@ -300,6 +300,9 @@ describe("useVibe64AutopilotController", () => {
 
     expect(context.controller.screenState.value.kind).toBe("command");
     expect(context.controller.commandResult.value.ok).toBe(false);
+    expect(context.session.value.currentStep).toBe("step_a");
+    expect(context.actions.advanceSession).not.toHaveBeenCalled();
+    expect(context.actions.runActionById).not.toHaveBeenCalled();
 
     context.commandFails.value = false;
     await context.controller.retry();
@@ -490,6 +493,38 @@ describe("useVibe64AutopilotController", () => {
     expect(context.controller.commandResult.value).toBe(null);
   });
 
+  it("detaches a stale terminal observer after the server completes the command", async () => {
+    const context = createControllerContext({
+      operation: commandTerminalOperation()
+    });
+    context.commandRunner.activeActionId.value = "cmd_action";
+    context.commandRunner.activeSessionId.value = "session-1";
+    context.commandRunner.running.value = true;
+    await nextTick();
+
+    expect(context.commandRunner.detachCommandObserver).not.toHaveBeenCalled();
+
+    context.session.value = sessionView({
+      screen: {
+        kind: "ready",
+        title: "Command completed"
+      },
+      stepId: "step_b",
+      stepMachine: {
+        status: "ready",
+        stepId: "step_b"
+      }
+    });
+    await nextTick();
+
+    expect(context.commandRunner.detachCommandObserver).toHaveBeenCalledTimes(1);
+    expect(context.controller.commandRunning.value).toBe(false);
+    expect(context.controller.screenState.value).toMatchObject({
+      kind: "ready",
+      title: "Command completed"
+    });
+  });
+
   it("continues through a server-provided follow-up operation after command success", async () => {
     const context = createControllerContext({
       commandCompletesWithServerAdvance: true,
@@ -674,6 +709,8 @@ function createControllerContext({
   };
 
   const commandRunner = {
+    activeActionId: ref(""),
+    activeSessionId: ref(""),
     commandPreview,
     lastResult: commandResult,
     output: commandOutput,
@@ -683,6 +720,10 @@ function createControllerContext({
       commandPreview.value = "";
       commandOutput.value = "";
       commandRunning.value = false;
+    }),
+    detachCommandObserver: vi.fn(() => {
+      commandRunning.value = false;
+      return true;
     }),
     runCommandAction: vi.fn(async ({ action = {}, advanceOnSuccess = false } = {}) => {
       if (commandStartConflict) {

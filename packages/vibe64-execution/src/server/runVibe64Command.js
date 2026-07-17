@@ -37,12 +37,13 @@ async function runVibe64Command(input = {}) {
   try {
     const request = normalizeVibe64CommandRequest(input);
     const actor = await resolveVibe64CommandActor(request);
+    const baseEnv = {
+      ...process.env,
+      ...request.baseEnv
+    };
     const env = resolveCommandEnv({
       actor,
-      baseEnv: {
-        ...process.env,
-        ...request.baseEnv
-      },
+      baseEnv,
       request
     });
     assertActorHomeEnv(actor, env);
@@ -54,6 +55,7 @@ async function runVibe64Command(input = {}) {
     if (request.mode === "pty") {
       return runPtyCommand(request, {
         actor,
+        baseEnv,
         cwd,
         env
       });
