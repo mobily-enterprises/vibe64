@@ -300,6 +300,27 @@ async function readCommittedConfigFromGit({
       ref
     });
   } catch {
+    try {
+      const firstRef = normalizeText(await runGit([
+        "for-each-ref",
+        "--count=1",
+        "--format=%(refname)"
+      ], {
+        cwd,
+        gitDir
+      }));
+      if (!firstRef) {
+        return readCommittedProjectConfigFromText({
+          gitDir,
+          manifestText: null,
+          ref,
+          sourceRoot,
+          sourceType
+        });
+      }
+    } catch {
+      // The configured-ref error below is the actionable repository result.
+    }
     return committedConfigUnavailable(
       "vibe64_committed_project_git_ref_unavailable",
       "Committed project config could not be read because the configured Git ref is unavailable.",
@@ -387,12 +408,13 @@ async function readCommittedProjectConfigFromSource({
 }
 
 function committedProjectConfigRefFromMetadata(metadata = {}) {
-  const explicitRef = normalizeText(metadata?.committedConfigRef || metadata?.sourceRef || metadata?.gitRef);
-  if (explicitRef) {
-    return explicitRef;
+  const defaultBranch = normalizeText(metadata?.repository?.defaultBranch);
+  if (!defaultBranch) {
+    const error = new Error("Project repository metadata does not define a default branch.");
+    error.code = "vibe64_committed_project_repository_metadata_invalid";
+    throw error;
   }
-  const defaultBranch = normalizeText(metadata?.repository?.defaultBranch || metadata?.repository?.github?.defaultBranch);
-  return defaultBranch ? `refs/heads/${defaultBranch}` : "HEAD";
+  return `refs/heads/${defaultBranch}`;
 }
 
 async function readCommittedProjectConfigFromGitCache({

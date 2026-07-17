@@ -32,10 +32,6 @@ import {
   normalizeProjectBootstrapConfig
 } from "./projectBootstrapConfig.js";
 import {
-  projectApplicationMetadataFromInput,
-  projectApplicationView
-} from "./projectApplication.js";
-import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -44,6 +40,16 @@ import {
   projectRepositoryMetadataFromInput,
   projectRepositoryView
 } from "./projectRepository.js";
+import {
+  consumeProjectOneOffFlag,
+  readProjectOneOffFlag,
+  writeProjectOneOffFlag
+} from "./projectOneOffFlags.js";
+import {
+  PROJECT_APPLICATION_MODE_NEW,
+  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+  normalizeProjectApplicationMode
+} from "./projectApplication.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
@@ -274,6 +280,7 @@ function localProjectKeyFromTargetRoot(targetRoot = "") {
 }
 
 function workspaceProjectRecord({
+  applicationMode = "",
   metadata = {},
   projectRecordPath = "",
   path: projectPath = "",
@@ -285,10 +292,12 @@ function workspaceProjectRecord({
   const resolvedPath = normalizeRoot(projectPath);
   const repositoryFields = projectRepositoryView(metadata);
   return {
+    ...(normalizeProjectApplicationMode(applicationMode)
+      ? { applicationMode: normalizeProjectApplicationMode(applicationMode) }
+      : {}),
     ...(normalizeProjectBootstrapConfig(metadata?.bootstrapConfig)
       ? { bootstrapConfig: normalizeProjectBootstrapConfig(metadata.bootstrapConfig) }
       : {}),
-    ...projectApplicationView(metadata),
     ...repositoryFields,
     gitCacheRoot: resolvedPath
       ? resolveProjectGitCacheRoot({
@@ -333,15 +342,15 @@ function projectMetadataPath(projectRecordPath = "") {
 }
 
 function projectMetadataFromInput(input = {}, {
+  defaultRepositoryBranch = "",
   defaultRepositoryMode = ""
 } = {}) {
   const repositoryMetadata = projectRepositoryMetadataFromInput(input, {
+    defaultBranch: defaultRepositoryBranch,
     defaultMode: defaultRepositoryMode
   });
-  const applicationMetadata = projectApplicationMetadataFromInput(input);
   const bootstrapConfig = normalizeProjectBootstrapConfig(input?.bootstrapConfig);
   return {
-    ...applicationMetadata,
     ...repositoryMetadata,
     ...(bootstrapConfig ? { bootstrapConfig } : {})
   };
@@ -352,9 +361,6 @@ async function readJsonFile(filePath = "") {
     return JSON.parse(await readFile(filePath, "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return {};
-    }
-    if (error instanceof SyntaxError) {
       return {};
     }
     throw error;
@@ -368,7 +374,18 @@ async function readProjectMetadata({
   if (!metadataPath) {
     return {};
   }
-  return readJsonFile(metadataPath);
+  const metadata = await readJsonFile(metadataPath);
+  if (Object.keys(metadata).length === 0) {
+    return {};
+  }
+  const unsupportedFields = Object.keys(metadata)
+    .filter((field) => !["bootstrapConfig", "repository"].includes(field));
+  if (unsupportedFields.length > 0) {
+    const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
+    error.code = "vibe64_project_metadata_field_unsupported";
+    throw error;
+  }
+  return projectMetadataFromInput(metadata);
 }
 
 async function writeProjectMetadata(projectRecordPath = "", metadata = {}, options = {}) {
@@ -404,7 +421,14 @@ async function workspaceProjectRecordForPath({
   const runtime = await readProjectRuntimeOpenState({
     projectLocalRoot: projectRuntimeRoot || resolvedPath
   });
+  const applicationMode = projectRuntimeRoot
+    ? await readProjectOneOffFlag({
+        name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+        projectRuntimeRoot
+      })
+    : "";
   return workspaceProjectRecord({
+    applicationMode,
     metadata,
     projectRecordPath,
     path: resolvedPath,
@@ -453,9 +477,7 @@ async function githubRepositoryFromGitRemotes(projectPath = "") {
   }
 
   const originUrl = await runGit(projectPath, ["remote", "get-url", "origin"]);
-  const originRepository = githubRepositoryFromRemoteUrl(originUrl, {
-    remoteName: "origin"
-  });
+  const originRepository = githubRepositoryFromRemoteUrl(originUrl);
   if (originRepository) {
     return originRepository;
   }
@@ -467,9 +489,7 @@ async function githubRepositoryFromGitRemotes(projectPath = "") {
     .filter((remoteName) => remoteName !== "origin");
   const githubRepositories = [];
   for (const remoteName of remoteNames) {
-    const repository = githubRepositoryFromRemoteUrl(await runGit(projectPath, ["remote", "get-url", remoteName]), {
-      remoteName
-    });
+    const repository = githubRepositoryFromRemoteUrl(await runGit(projectPath, ["remote", "get-url", remoteName]));
     if (repository && !githubRepositories.some((existing) => existing.fullName === repository.fullName)) {
       githubRepositories.push(repository);
     }
@@ -477,9 +497,7 @@ async function githubRepositoryFromGitRemotes(projectPath = "") {
   return githubRepositories.length === 1 ? githubRepositories[0] : null;
 }
 
-function githubRepositoryFromRemoteUrl(remoteUrl = "", {
-  remoteName = ""
-} = {}) {
+function githubRepositoryFromRemoteUrl(remoteUrl = "") {
   const parsed = parseGithubRemote(remoteUrl);
   if (!parsed) {
     return null;
@@ -487,12 +505,10 @@ function githubRepositoryFromRemoteUrl(remoteUrl = "", {
   return {
     canPush: false,
     cloneUrl: `https://github.com/${parsed.fullName}.git`,
-    defaultBranch: "",
     fullName: parsed.fullName,
     isPrivate: false,
     name: parsed.name,
     owner: parsed.owner,
-    source: remoteName ? `git-remote:${remoteName}` : "git-remote",
     url: `https://github.com/${parsed.fullName}`,
     viewerPermission: "",
     visibility: ""
@@ -934,6 +950,7 @@ function createStudioProjectContext({
       });
     }
     const metadata = projectMetadataFromInput(input, {
+      defaultRepositoryBranch: PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
       defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
     });
     if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
@@ -1017,6 +1034,40 @@ function createStudioProjectContext({
     };
   }
 
+  function workspaceProjectOneOffFlagOptions(input = {}) {
+    const slug = projectSlugFromInput(input);
+    return {
+      name: input?.flag || input?.flagName || input?.key,
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug)
+    };
+  }
+
+  async function writeWorkspaceProjectOneOffFlag(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+    const slug = projectSlugFromInput(input);
+    await ensureProjectStateForSlug(slug);
+    return writeProjectOneOffFlag({
+      ...workspaceProjectOneOffFlagOptions(input),
+      value: input?.value
+    });
+  }
+
+  async function readWorkspaceProjectOneOffFlag(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+    return readProjectOneOffFlag(workspaceProjectOneOffFlagOptions(input));
+  }
+
+  async function consumeWorkspaceProjectOneOffFlag(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
+    return consumeProjectOneOffFlag(workspaceProjectOneOffFlagOptions(input));
+  }
+
   async function selectWorkspaceProject(input = {}) {
     if (!projectCatalogEnabled) {
       throw projectCatalogUnavailableError();
@@ -1044,6 +1095,11 @@ function createStudioProjectContext({
     }
 
     const created = await createWorkspaceProjectRecord(input);
+    await writeWorkspaceProjectOneOffFlag({
+      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+      slug: created.project.slug,
+      value: PROJECT_APPLICATION_MODE_NEW
+    });
     selectedTargetRoot = created.project.projectRoot;
     selectionSource = "workspace";
     return listProjects();
@@ -1061,6 +1117,7 @@ function createStudioProjectContext({
   return Object.freeze({
     createWorkspaceProject,
     createWorkspaceProjectRecord,
+    consumeWorkspaceProjectOneOffFlag,
     get projectsRoot() {
       return projectsRoot;
     },
@@ -1096,9 +1153,11 @@ function createStudioProjectContext({
     listProjects,
     listWorkspaceProjects,
     readWorkspaceProject,
+    readWorkspaceProjectOneOffFlag,
     requireSelectedTargetRoot,
     selectWorkspaceProject,
     updateWorkspaceProjectMetadata,
+    writeWorkspaceProjectOneOffFlag,
     projectRecordPathForSlug,
     projectRecordPathForTarget,
     projectLocalRootForSlug,

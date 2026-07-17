@@ -27,7 +27,8 @@ import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  PROJECT_APPLICATION_MODE_EXISTING
+  PROJECT_APPLICATION_MODE_EXISTING,
+  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
 } from "../../packages/vibe64-core/src/server/projectApplication.js";
 import {
   writeProjectRuntimeOpenState
@@ -529,7 +530,7 @@ test("Studio project context resolves GitHub capability from explicit target rem
     assert.equal(originListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
     assert.equal(originListed.currentProject.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
     assert.equal(originListed.currentProject.githubRepository.fullName, "example/origin-target");
-    assert.equal(originListed.currentProject.githubRepository.source, "git-remote:origin");
+    assert.equal(originListed.currentProject.githubRepository.source, undefined);
 
     const singleNonOriginTarget = path.join(root, "single-non-origin-target");
     await createGitProject(singleNonOriginTarget, {
@@ -545,7 +546,7 @@ test("Studio project context resolves GitHub capability from explicit target rem
     assert.equal(singleNonOriginListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
     assert.equal(singleNonOriginListed.currentProject.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
     assert.equal(singleNonOriginListed.currentProject.githubRepository.fullName, "example/single-non-origin-target");
-    assert.equal(singleNonOriginListed.currentProject.githubRepository.source, "git-remote:upstream");
+    assert.equal(singleNonOriginListed.currentProject.githubRepository.source, undefined);
 
     const ambiguousTarget = path.join(root, "ambiguous-target");
     await createGitProject(ambiguousTarget, {
@@ -568,10 +569,9 @@ test("Studio project context resolves GitHub capability from explicit target rem
 test("Project repository view reads GitHub metadata only from repository contract", () => {
   const currentView = projectRepositoryView({
     repository: {
+      defaultBranch: "main",
       github: {
-        defaultBranch: "main",
-        fullName: "example/current-app",
-        source: "project-record"
+        fullName: "example/current-app"
       },
       mode: PROJECT_REPOSITORY_MODE_GITHUB
     }
@@ -641,6 +641,7 @@ test("Studio project context reads project records and ignores source config as 
     await Promise.all([
       writeTestFile(recordPath, `${JSON.stringify({
         repository: {
+          defaultBranch: "main",
           github: {
             fullName: "example/canonical-app"
           },
@@ -685,16 +686,20 @@ test("Studio project context lists and reads managed Git catalog records", async
     });
 
     const created = await context.createWorkspaceProjectRecord({
-      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       repository: {
         mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
         defaultBranch: "main"
       },
       slug: "managed-app"
     });
+    await context.writeWorkspaceProjectOneOffFlag({
+      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+      slug: "managed-app",
+      value: PROJECT_APPLICATION_MODE_EXISTING
+    });
 
     assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
-    assert.equal(created.project.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
+    assert.equal(created.project.applicationMode, undefined);
     assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
     assert.equal(created.project.githubRepository, undefined);
 
@@ -741,7 +746,7 @@ test("Studio project context defaults new catalog records to managed Git metadat
     assert.deepEqual(record, {
       repository: {
         mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-        defaultBranch: ""
+        defaultBranch: "main"
       }
     });
   });

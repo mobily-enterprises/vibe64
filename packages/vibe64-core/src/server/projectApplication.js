@@ -1,6 +1,4 @@
 import {
-  isPlainObject,
-  normalizeText,
   vibe64Error
 } from "./core.js";
 import {
@@ -8,6 +6,8 @@ import {
   PROJECT_APPLICATION_MODE_NEW,
   normalizeProjectApplicationMode
 } from "../shared/projectApplication.js";
+
+const PROJECT_APPLICATION_MODE_ONE_OFF_FLAG = "application-mode";
 
 function requireProjectApplicationMode(value = "") {
   const mode = normalizeProjectApplicationMode(value);
@@ -20,25 +20,10 @@ function requireProjectApplicationMode(value = "") {
   return mode;
 }
 
-function projectApplicationMetadataFromInput(input = {}) {
-  const source = isPlainObject(input) ? input : {};
-  const value = normalizeText(source.applicationMode);
-  return value
-    ? { applicationMode: requireProjectApplicationMode(value) }
-    : {};
-}
-
-function projectApplicationView(metadata = {}) {
-  const source = isPlainObject(metadata) ? metadata : {};
-  const applicationMode = normalizeProjectApplicationMode(source.applicationMode);
-  return applicationMode ? { applicationMode } : {};
-}
-
 export {
   PROJECT_APPLICATION_MODE_EXISTING,
   PROJECT_APPLICATION_MODE_NEW,
+  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
   normalizeProjectApplicationMode,
-  projectApplicationMetadataFromInput,
-  projectApplicationView,
   requireProjectApplicationMode
 };

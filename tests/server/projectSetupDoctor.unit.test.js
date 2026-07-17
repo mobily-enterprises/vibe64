@@ -43,6 +43,10 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  PROJECT_APPLICATION_MODE_EXISTING,
+  PROJECT_APPLICATION_MODE_NEW
+} from "@local/vibe64-core/server/projectApplication";
+import {
   checkRemoteSync,
   createService,
   ghRepoCreateScript,
@@ -136,21 +140,21 @@ async function createEmptyBareGitCache(projectRoot) {
 }
 
 async function createManagedBootstrapProject(projectRoot, {
+  applicationMode = PROJECT_APPLICATION_MODE_NEW,
   defaultBranch = "",
-  repositorySource = "github-created",
   slug = "bootstrap-app"
 } = {}) {
   const projectRecordPath = path.join(projectRoot, "project.json");
   const githubRepository = {
     defaultBranch,
     fullName: `example/${slug}`,
-    source: repositorySource,
     url: `https://github.com/example/${slug}`
   };
   await writeFile(projectRecordPath, JSON.stringify({
     githubRepository
   }), "utf8");
   return {
+    applicationMode,
     githubRepository,
     projectRecordPath,
     projectLocalRoot: projectRoot,
@@ -789,8 +793,8 @@ test("Project Setup waits for active existing-app initialization to commit proje
       assert.equal(clone.status, 0, clone.stderr || clone.stdout);
 
       const project = await createManagedBootstrapProject(projectRoot, {
+        applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
         defaultBranch: "main",
-        repositorySource: "github-imported",
         slug: "existing-app"
       });
       const initializationSessionId = "2026-07-15_15-50-10";

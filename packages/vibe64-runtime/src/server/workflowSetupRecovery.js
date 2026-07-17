@@ -8,14 +8,6 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
-  PROJECT_APPLICATION_MODE_EXISTING,
-  PROJECT_APPLICATION_MODE_NEW
-} from "@local/vibe64-core/server/projectApplication";
-import {
-  readProjectRecordMetadata,
-  updateProjectRecordMetadata
-} from "@local/vibe64-core/server/projectBootstrapConfig";
-import {
   PROJECT_SETUP_KIND_INITIALIZATION,
   PROJECT_SETUP_KIND_SEED,
   projectSetupSessionKind
@@ -138,9 +130,6 @@ function workflowRecoveryTarget(runtime, session = {}, expectedKind = "") {
   });
   const transition = safeWorkflowTransition(runtime, session, workflowDefinitionId);
   return {
-    applicationMode: switchToInitialization
-      ? PROJECT_APPLICATION_MODE_EXISTING
-      : PROJECT_APPLICATION_MODE_NEW,
     metadataNames: [...new Set([
       ...Object.keys(currentDefinition.initialMetadata || {}),
       ...Object.keys(targetDefinition.initialMetadata || {}),
@@ -241,7 +230,6 @@ function createWorkflowSetupRecoveryProvider() {
         return null;
       }
       const target = issue.details.target;
-      const projectMetadata = await readProjectRecordMetadata(runtime.projectRecordPath);
       return {
         artifacts: {
           issue_word: await runtime.store.readArtifact(session.sessionId, "issue_word"),
@@ -249,7 +237,6 @@ function createWorkflowSetupRecoveryProvider() {
         },
         currentStep: session.currentStep,
         metadata: Object.fromEntries(target.metadataNames.map((name) => [name, session.metadata?.[name]])),
-        projectApplicationMode: projectMetadata.applicationMode,
         promptContextSnapshot: session.promptContextSnapshot,
         stepStates: Object.fromEntries(await Promise.all(target.stepIds.map(async (stepId) => (
           [stepId, await runtime.store.readStepState(session.sessionId, stepId)]
@@ -280,9 +267,6 @@ function createWorkflowSetupRecoveryProvider() {
       await runtime.store.deletePromptContextSnapshot(session.sessionId);
       await runtime.store.writeCurrentStep(session.sessionId, target.transition.targetStepId);
       await runtime.writeInitialSessionArtifacts(session.sessionId, target.workflowDefinitionId);
-      await updateProjectRecordMetadata(runtime.projectRecordPath, {
-        applicationMode: target.applicationMode
-      });
       return {
         message: `Switched this session to “${target.targetDefinition.label}”. The source clone, branch, completed source preparation, and working files were preserved.`
       };
@@ -302,19 +286,7 @@ function createWorkflowSetupRecoveryProvider() {
       }
       await Promise.all([
         runtime.store.writeCurrentStep(session.sessionId, snapshot.currentStep),
-        restoreArtifacts(runtime.store, session.sessionId, snapshot.artifacts),
-        updateProjectRecordMetadata(runtime.projectRecordPath, (metadata) => {
-          const {
-            applicationMode: _applicationMode,
-            ...rest
-          } = metadata;
-          return snapshot.projectApplicationMode
-            ? {
-                ...rest,
-                applicationMode: snapshot.projectApplicationMode
-              }
-            : rest;
-        })
+        restoreArtifacts(runtime.store, session.sessionId, snapshot.artifacts)
       ]);
     }
   });

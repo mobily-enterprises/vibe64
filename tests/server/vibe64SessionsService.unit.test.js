@@ -33,6 +33,10 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
+  PROJECT_APPLICATION_MODE_NEW,
+  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
+} from "../../packages/vibe64-core/src/server/projectApplication.js";
+import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -6321,6 +6325,7 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
     });
     await projectContext.createWorkspaceProjectRecord({
       repository: {
+        defaultBranch: "main",
         github: {
           fullName: "example/clicky"
         },
@@ -6328,10 +6333,17 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
       },
       slug: "clicky"
     });
+    await projectContext.writeWorkspaceProjectOneOffFlag({
+      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+      slug: "clicky",
+      value: PROJECT_APPLICATION_MODE_NEW
+    });
     const projectRoot = path.join(projectsRoot, "clicky");
+    const projectRuntimeRoot = projectContext.projectRuntimeRootForSlug("clicky");
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectLocalRoot: projectRuntimeRoot,
+      projectRecordPath: projectContext.projectRecordPathForSlug("clicky"),
+      projectRuntimeRoot,
       projectsRoot,
       slug: "clicky",
       targetRoot: projectRoot
@@ -7193,7 +7205,6 @@ test("session creation freezes GitHub repository profile metadata", async () => 
               defaultBranch: "main",
               github: {
                 fullName: "example/github-app",
-                source: "project-record",
                 url: "https://github.com/example/github-app"
               }
             }
@@ -7220,16 +7231,20 @@ test("session creation freezes GitHub repository profile metadata", async () => 
   assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_GITHUB);
   assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
   assert.equal(createdInput.metadata.github_repository, "example/github-app");
-  assert.equal(createdInput.metadata.github_repository_source, "project-record");
+  assert.equal(createdInput.metadata.github_repository_source, undefined);
   assert.equal(createdInput.metadata.github_repository_url, "https://github.com/example/github-app");
   assert.equal(createdInput.metadata.github_issue_mode, undefined);
   assert.equal(result.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
 });
 
 test("session creation is gated by session readiness, not project setup diagnostics", async () => {
+  let applicationModeConsumed = 0;
   let selectedWorkflowDefinitionId = "";
   const service = createService({
     projectService: {
+      async consumeProjectApplicationMode() {
+        applicationModeConsumed += 1;
+      },
       async createRuntime() {
         return {
           async advance(sessionId) {
@@ -7281,14 +7296,19 @@ test("session creation is gated by session readiness, not project setup diagnost
   });
 
   assert.equal(result.ok, true);
+  assert.equal(applicationModeConsumed, 1);
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 });
 
 test("session creation blocks a second open seed session", async () => {
+  let applicationModeConsumed = 0;
   let createSessionCalled = false;
   const service = createService({
     projectService: {
+      async consumeProjectApplicationMode() {
+        applicationModeConsumed += 1;
+      },
       async createRuntime() {
         return {
           async createSession() {
@@ -7300,6 +7320,9 @@ test("session creation blocks a second open seed session", async () => {
           async listSessions() {
             return [
               {
+                metadata: {
+                  workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+                },
                 sessionId: "seed-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE
               }
@@ -7330,6 +7353,7 @@ test("session creation blocks a second open seed session", async () => {
   assert.equal(result.errors[0].code, "project_setup_session_active");
   assert.equal(result.creation.setupSessionActive, true);
   assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(applicationModeConsumed, 1);
   assert.equal(createSessionCalled, false);
 });
 

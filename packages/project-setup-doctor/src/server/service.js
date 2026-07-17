@@ -100,6 +100,10 @@ import {
   workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  PROJECT_APPLICATION_MODE_NEW,
+  normalizeProjectApplicationMode
+} from "@local/vibe64-core/server/projectApplication";
+import {
   PROJECT_SETUP_KIND_INITIALIZATION,
   PROJECT_SETUP_KIND_SEED,
   projectSetupSessionKind
@@ -110,9 +114,6 @@ const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
 const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
-const PROJECT_BOOTSTRAP_REPOSITORY_SOURCES = new Set([
-  "github-created"
-]);
 const PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
 const PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL = WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
@@ -312,19 +313,14 @@ function normalizeSetupText(value = "") {
 }
 
 function projectUsesBootstrapRepository(project = {}) {
-  const source = normalizeSetupText(project.githubRepository?.source || project.repository?.source);
   if (normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
     return true;
   }
-  return PROJECT_BOOTSTRAP_REPOSITORY_SOURCES.has(source);
+  return normalizeProjectApplicationMode(project.applicationMode) === PROJECT_APPLICATION_MODE_NEW;
 }
 
 function projectRepositoryDefaultBranch(project = {}) {
-  return normalizeSetupText(
-    project.repository?.defaultBranch ||
-    project.githubRepository?.defaultBranch ||
-    project.repository?.github?.defaultBranch
-  );
+  return normalizeSetupText(project.repository?.defaultBranch);
 }
 
 async function gitCacheRefIsMissing(gitDir = "", ref = "") {
@@ -2286,11 +2282,20 @@ function createService({
           try {
             commit = await runGitCache(gitDir, ["rev-parse", "--verify", `${ref}^{commit}`]);
           } catch (error) {
-            if (projectUsesBootstrapRepository(context.project) && await gitCacheRefIsMissing(gitDir, ref)) {
+            if (await gitCacheRefIsMissing(gitDir, ref)) {
               const seedSession = await readProjectSetupSessionState(
                 context.projectRuntimeRoot,
                 PROJECT_SETUP_KIND_SEED
               );
+              if (!projectUsesBootstrapRepository(context.project) && !seedSession) {
+                return blockedCheck({
+                  id: "git-cache",
+                  label: "Git cache",
+                  expected: "The project Git cache can resolve the committed project ref.",
+                  observed: String(error?.stderr || error?.message || error),
+                  explanation: "Fetch or repair the project Git cache before project-level setup is ready."
+                });
+              }
               context.committedBaselineDeferred = true;
               context.committedBaselineRef = ref;
               context.readiness = seedBootstrapReadiness(seedSession);

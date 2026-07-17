@@ -48,9 +48,6 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
-import {
-  PROJECT_APPLICATION_MODE_EXISTING
-} from "@local/vibe64-core/server/projectApplication";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function runCommand(command, args, {
@@ -601,7 +598,6 @@ test("create worktree materializes pending online bootstrap config into the sess
     runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
     runGit(sourceRoot, ["push", "origin", "main"]);
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
-      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       bootstrapConfig: {
         projectType: "jskit",
         schemaVersion: 1,
@@ -663,7 +659,7 @@ test("create worktree materializes pending online bootstrap config into the sess
     assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
-    assert.equal(projectRecord.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
+    assert.equal(projectRecord.applicationMode, undefined);
     assert.equal(projectRecord.bootstrapConfig, undefined);
   });
 });

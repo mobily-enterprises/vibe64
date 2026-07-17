@@ -74,12 +74,10 @@ function normalizeProjectGithubRepository(value = {}) {
   return {
     canPush: input.canPush === true,
     cloneUrl: normalizeText(input.cloneUrl),
-    defaultBranch: normalizeText(input.defaultBranch),
     fullName: normalizedFullName,
     isPrivate: input.isPrivate === true,
     name: name || normalizedFullName.split("/").pop() || "",
     owner: owner || normalizedFullName.split("/")[0] || "",
-    source: normalizeText(input.source),
     url: normalizeText(input.url),
     viewerPermission: normalizeText(input.viewerPermission).toUpperCase(),
     visibility: normalizeText(input.visibility).toLowerCase()
@@ -87,6 +85,7 @@ function normalizeProjectGithubRepository(value = {}) {
 }
 
 function normalizeProjectRepository(value = {}, {
+  fallbackDefaultBranch = "",
   fallbackMode = ""
 } = {}) {
   const input = isPlainObject(value) ? value : {};
@@ -98,7 +97,11 @@ function normalizeProjectRepository(value = {}, {
     return null;
   }
 
-  const defaultBranch = normalizeText(input.defaultBranch || github?.defaultBranch);
+  const defaultBranch = normalizeText(
+    input.defaultBranch ||
+    fallbackDefaultBranch ||
+    (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE ? PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH : "")
+  );
   if (mode === PROJECT_REPOSITORY_MODE_GITHUB) {
     if (!github) {
       return null;
@@ -106,10 +109,7 @@ function normalizeProjectRepository(value = {}, {
     return {
       mode,
       defaultBranch,
-      github: {
-        ...github,
-        defaultBranch: github.defaultBranch || defaultBranch
-      }
+      github
     };
   }
 
@@ -129,7 +129,10 @@ function projectRepositoryView(metadata = {}, {
   const repositoryMode = repository?.mode || "";
   const workflowRepositoryProfile = workflowRepositoryProfileForMode(repositoryMode);
   const githubRepository = repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB
-    ? normalizeProjectGithubRepository(repository.github)
+    ? {
+        ...normalizeProjectGithubRepository(repository.github),
+        defaultBranch: repository.defaultBranch
+      }
     : null;
   return {
     ...(repository ? { repository } : {}),
@@ -140,18 +143,50 @@ function projectRepositoryView(metadata = {}, {
 }
 
 function projectRepositoryMetadataFromInput(input = {}, {
+  defaultBranch = "",
   defaultMode = ""
 } = {}) {
   const source = isPlainObject(input) ? input : {};
+  if (Object.hasOwn(source, "applicationMode")) {
+    throw projectRepositoryMetadataError(
+      "vibe64_project_metadata_field_unsupported",
+      "Project applicationMode is creation input, not stored project metadata."
+    );
+  }
+  if (
+    Object.hasOwn(source.repository?.github || {}, "defaultBranch") ||
+    Object.hasOwn(source.repository?.github || {}, "source")
+  ) {
+    throw projectRepositoryMetadataError(
+      "vibe64_project_metadata_field_unsupported",
+      "GitHub project metadata must not duplicate the repository branch or store creation provenance."
+    );
+  }
   const repository = normalizeProjectRepository(source.repository, {
+    fallbackDefaultBranch: defaultBranch,
     fallbackMode: defaultMode
   });
   if (!repository) {
-    return {};
+    throw projectRepositoryMetadataError(
+      "vibe64_project_repository_missing",
+      "Vibe64 projects must have repository metadata."
+    );
+  }
+  if (!repository.defaultBranch) {
+    throw projectRepositoryMetadataError(
+      "vibe64_project_repository_default_branch_missing",
+      "Vibe64 project repositories must have an explicit default branch."
+    );
   }
   return {
     repository
   };
+}
+
+function projectRepositoryMetadataError(code = "", message = "") {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
 export {

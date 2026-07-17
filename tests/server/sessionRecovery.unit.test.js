@@ -9,10 +9,6 @@ import {
   FakeTargetAdapter
 } from "@local/vibe64-adapters/server";
 import {
-  PROJECT_APPLICATION_MODE_EXISTING,
-  PROJECT_APPLICATION_MODE_NEW
-} from "@local/vibe64-core/server/projectApplication";
-import {
   readProjectRecordMetadata
 } from "@local/vibe64-core/server/projectBootstrapConfig";
 import {
@@ -66,7 +62,6 @@ async function withRecoveryRuntime(callback, {
     runGit(sourceRoot, ["commit", "-m", "Initial application"]);
     const baseCommit = runGit(sourceRoot, ["rev-parse", "HEAD"]);
     await writeFile(projectRecordPath, `${JSON.stringify({
-      applicationMode: PROJECT_APPLICATION_MODE_NEW,
       repository: {
         defaultBranch: "main",
         mode: "github"
@@ -155,10 +150,9 @@ test("confirmed setup recovery switches workflow without replacing working files
     assert.deepEqual(recovered.completedSteps, ["session_created", "source_created"]);
     assert.equal(recovered.recovery, undefined);
     assert.equal(await readFile(path.join(sourceRoot, "local-work.txt"), "utf8"), "preserve me\n");
-    assert.equal(
-      (await readProjectRecordMetadata(projectRecordPath)).applicationMode,
-      PROJECT_APPLICATION_MODE_EXISTING
-    );
+    const projectMetadata = await readProjectRecordMetadata(projectRecordPath);
+    assert.equal(projectMetadata.applicationMode, undefined);
+    assert.equal(projectMetadata.unrelatedProjectMetadata, "preserve");
   });
 });
 
@@ -222,7 +216,7 @@ test("failed recovery acknowledgment rolls back only recovery-owned state", asyn
     assert.equal(restored.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
     assert.equal(restored.currentStep, "seed_application_defined");
     assert.equal(restored.recovery?.issues?.[0]?.id, WORKFLOW_SETUP_RECOVERY_ID);
-    assert.equal(projectMetadata.applicationMode, PROJECT_APPLICATION_MODE_NEW);
+    assert.equal(projectMetadata.applicationMode, undefined);
     assert.equal(projectMetadata.unrelatedProjectMetadata, "preserve");
   });
 });

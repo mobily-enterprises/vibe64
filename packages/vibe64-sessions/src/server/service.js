@@ -11,6 +11,8 @@ import {
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
+  PROJECT_SETUP_KIND_INITIALIZATION,
+  PROJECT_SETUP_KIND_SEED,
   projectSetupSessionActiveMessage,
   projectSetupSessionKind,
   VIBE64_ACTION_DISPATCH_ROUTES
@@ -2632,6 +2634,14 @@ function sessionCreationPlan({
   };
 }
 
+function creationMatchesSetupSession(creation = {}, session = {}) {
+  const setupKind = projectSetupSessionKind(session);
+  return (
+    (creation.seedRequired === true && setupKind === PROJECT_SETUP_KIND_SEED) ||
+    (creation.initializationRequired === true && setupKind === PROJECT_SETUP_KIND_INITIALIZATION)
+  );
+}
+
 function sessionProjectGithubMetadata(project = {}) {
   const repositoryView = projectRepositoryView(project);
   if (repositoryView.repositoryMode && repositoryView.repositoryMode !== PROJECT_REPOSITORY_MODE_GITHUB) {
@@ -2660,7 +2670,6 @@ function sessionProjectGithubMetadata(project = {}) {
   }
   return {
     github_repository: fullName,
-    github_repository_source: normalizedInputText(repository.source),
     github_repository_url: normalizedInputText(repository.url)
   };
 }
@@ -3447,6 +3456,17 @@ function createService({
             limits
           });
           if (creationPlan.response) {
+            if (
+              creationPlan.blockedCode === "project_setup_session_active" &&
+              creationMatchesSetupSession(
+                creation,
+                (creationPlan.response.sessions || []).find((session) => (
+                  normalizedInputText(session?.sessionId || session?.id) === creation.setupSessionId
+                ))
+              )
+            ) {
+              await projectService.consumeProjectApplicationMode?.();
+            }
             vibe64SessionDebugLog("server.service.createSession.blocked", {
               code: creationPlan.blockedCode,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3466,7 +3486,8 @@ function createService({
             session
           } = await createAndAdvanceWorkflowSession(runtime, projectType, definitionSelection.definitionId, {
             project: currentProject,
-            onCreated(createdSession) {
+            async onCreated(createdSession) {
+              await projectService.consumeProjectApplicationMode?.();
               vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
                 ...sessionServiceDebugResponse(createdSession),
                 durationMs: vibe64SessionDebugDurationMs(startedAtMs),

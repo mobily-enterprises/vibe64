@@ -29,7 +29,9 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
-  PROJECT_APPLICATION_MODE_EXISTING
+  PROJECT_APPLICATION_MODE_EXISTING,
+  PROJECT_APPLICATION_MODE_NEW,
+  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
 } from "../../packages/vibe64-core/src/server/projectApplication.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -68,12 +70,25 @@ const execFileAsync = promisify(execFile);
 const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
 
 function githubProjectRepositoryInput(github = {}) {
+  const {
+    defaultBranch = "main",
+    ...githubMetadata
+  } = github;
   return {
     repository: {
-      github,
+      defaultBranch,
+      github: githubMetadata,
       mode: PROJECT_REPOSITORY_MODE_GITHUB
     }
   };
+}
+
+async function writeProjectApplicationMode(projectContext, slug, value) {
+  await projectContext.writeWorkspaceProjectOneOffFlag({
+    flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+    slug,
+    value
+  });
 }
 
 async function writePackageJson(root, packageJson = {}) {
@@ -938,6 +953,7 @@ test("Vibe64 project service can create a source-optional runtime before selecti
       }),
       slug: "catalog-app"
     });
+    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "source"), {
       recursive: true
@@ -993,6 +1009,7 @@ test("Vibe64 project service reads bootstrap config when active session sources 
       }),
       slug: "catalog-app"
     });
+    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const service = createService({
       projectContext
     });
@@ -1054,9 +1071,9 @@ test("Vibe64 project service requires initialization for an explicitly existing 
       ...githubProjectRepositoryInput({
         fullName: "example/existing-app"
       }),
-      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       slug: "existing-app"
     });
+    await writeProjectApplicationMode(projectContext, "existing-app", PROJECT_APPLICATION_MODE_EXISTING);
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
     const requestContext = {
       projectRecordPath: projectContext.projectRecordPathForSlug("existing-app"),
@@ -1111,6 +1128,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       }),
       slug: "catalog-app"
     });
+    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const service = createService({
       projectContext
     });
@@ -1351,6 +1369,7 @@ test("Vibe64 project service keeps a config-only JSKIT Git cache in the seed wor
       }),
       slug: "catalog-app"
     });
+    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const projectRoot = path.join(projectsRoot, "catalog-app");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
@@ -1485,13 +1504,13 @@ test("Vibe64 project service reads existing GitHub project config without requir
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       ...githubProjectRepositoryInput({
         defaultBranch: "main",
         fullName: "example/existing-app"
       }),
       slug: "existing-app"
     });
+    await writeProjectApplicationMode(projectContext, "existing-app", PROJECT_APPLICATION_MODE_EXISTING);
     const projectRoot = path.join(projectsRoot, "existing-app");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
     const recordPath = projectContext.projectRecordPathForSlug("existing-app");

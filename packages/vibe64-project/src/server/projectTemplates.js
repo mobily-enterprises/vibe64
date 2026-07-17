@@ -186,11 +186,14 @@ function projectRepositoryMode(project = {}, sourceRoot = "") {
 }
 
 function projectDefaultBranch(project = {}) {
-  return normalizeText(
-    project.repository?.defaultBranch ||
-    project.repository?.github?.defaultBranch ||
-    project.githubRepository?.defaultBranch
-  ) || "main";
+  const branch = normalizeText(project.repository?.defaultBranch);
+  if (!branch) {
+    throw templateError(
+      "vibe64_project_repository_default_branch_missing",
+      "The project repository does not define a default branch."
+    );
+  }
+  return branch;
 }
 
 function projectGithubRepository(project = {}) {
@@ -443,10 +446,6 @@ async function projectTemplateEligibility({
     return canonicalEligibility;
   }
 
-  const github = projectGithubRepository(project);
-  if (normalizeText(github?.defaultBranch)) {
-    return eligibility(false, "vibe64_project_template_destination_not_empty", "This GitHub repository already contains source.");
-  }
   if (!checkGithubRemote) {
     return eligibility(true);
   }

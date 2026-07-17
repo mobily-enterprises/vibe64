@@ -27,6 +27,7 @@ export * from "./projectState.js";
 export * from "./projectApplication.js";
 export * from "./projectBootstrapConfig.js";
 export * from "./projectManifest.js";
+export * from "./projectOneOffFlags.js";
 export * from "./projectRuntimeOpenState.js";
 export * from "./projectRuntimeIdentity.js";
 export * from "./projectRealtimeEvents.js";
