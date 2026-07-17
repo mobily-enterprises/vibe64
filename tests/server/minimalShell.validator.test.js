@@ -111,12 +111,34 @@ test("latest JSKIT scaffold files are present at the app root", async () => {
   }
 });
 
-test("starter shell keeps the default CI workflow simple", async () => {
-  const workflowSource = await readFile(path.join(APP_ROOT, ".github", "workflows", "verify.yml"), "utf8");
+test("starter shell keeps the canonical JSKIT-managed CI workflow simple", async () => {
+  const workflowSource = await readFile(
+    path.join(APP_ROOT, ".github", "workflows", "jskit-verify.yml"),
+    "utf8"
+  );
 
+  assert.match(workflowSource, /Generated and managed by JSKIT/);
+  assert.match(workflowSource, /name: JSKIT Verify/);
   assert.match(workflowSource, /run: npm run verify/);
   assert.doesNotMatch(workflowSource, /jskit app verify --against/);
   assert.doesNotMatch(workflowSource, /jskit app verify-ui/);
+  await assert.rejects(
+    access(path.join(APP_ROOT, ".github", "workflows", "verify.yml")),
+    /ENOENT/
+  );
+});
+
+test("docs deployment follows successful JSKIT verification on main", async () => {
+  const workflowSource = await readFile(
+    path.join(APP_ROOT, ".github", "workflows", "deploy-docs.yml"),
+    "utf8"
+  );
+
+  assert.match(workflowSource, /workflows:\s*\n\s*- JSKIT Verify/u);
+  assert.match(workflowSource, /branches:\s*\n\s*- main/u);
+  assert.match(workflowSource, /workflow_run\.conclusion == 'success'/u);
+  assert.match(workflowSource, /workflow_run\.event == 'push'/u);
+  assert.match(workflowSource, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
 });
 
 test("starter shell does not include the app.manifest scaffold", async () => {

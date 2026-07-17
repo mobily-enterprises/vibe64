@@ -1,0 +1,29 @@
+# Generated and managed by JSKIT. Run `npx jskit app sync-ci` to regenerate.
+# Put application-specific CI in a separate workflow; edits to this file are not merged.
+name: JSKIT Verify
+on:
+  pull_request: null
+  push:
+    branches:
+      - main
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v4
+      - id: setup-node
+        name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - id: install-dependencies
+        name: Install dependencies
+        run: npm ci
+      - id: verify
+        name: Run verification
+        run: npm run verify

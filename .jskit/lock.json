@@ -21,7 +21,7 @@
       },
       "options": {},
       "installedAt": "2026-05-10T00:00:00.000Z",
-      "migrationSyncVersion": "0.1.116"
+      "migrationSyncVersion": "0.1.117"
     },
     "@local/main": {
       "packageId": "@local/main",
@@ -295,7 +295,7 @@
         "realtime-redis-url": ""
       },
       "installedAt": "2026-05-24T07:02:06.012Z",
-      "migrationSyncVersion": "0.1.115"
+      "migrationSyncVersion": "0.1.116"
     },
     "@local/vibe64-core": {
       "packageId": "@local/vibe64-core",
@@ -523,6 +523,12 @@
       "options": {},
       "installedAt": "2026-07-11T17:16:51.180Z",
       "migrationSyncVersion": "0.1.0"
+    }
+  },
+  "managed": {
+    "ciWorkflow": {
+      "path": ".github/workflows/jskit-verify.yml",
+      "hash": "d8538759edeac5c853091453cd16729f3ffac4335927f0adb765e9aea65cd87f"
     }
   }
 }
