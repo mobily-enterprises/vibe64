@@ -34,6 +34,9 @@ import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
+  committedProjectConfigRefFromMetadata
+} from "../../packages/vibe64-core/src/server/committedProjectConfig.js";
+import {
   resolveVibe64Roots
 } from "../../packages/vibe64-core/src/server/studioRoots.js";
 
@@ -80,6 +83,23 @@ async function createGitProject(projectRoot, remotes = {}) {
     await runGit(projectRoot, ["remote", "add", name, remoteUrl]);
   }
 }
+
+test("committed project config requires the canonical repository branch", () => {
+  assert.equal(committedProjectConfigRefFromMetadata({
+    repository: {
+      defaultBranch: "main"
+    }
+  }), "refs/heads/main");
+  assert.throws(() => committedProjectConfigRefFromMetadata({
+    repository: {
+      github: {
+        defaultBranch: "main"
+      }
+    }
+  }), {
+    code: "vibe64_committed_project_repository_metadata_invalid"
+  });
+});
 
 test("Studio project context starts without a selected project when no explicit target is provided", async () => {
   await withTemporaryRoot(async (root) => {
