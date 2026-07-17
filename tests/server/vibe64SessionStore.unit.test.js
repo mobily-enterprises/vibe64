@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, lstat, mkdir, readdir, readFile, readlink, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
-import { promisify } from "node:util";
 import test from "node:test";
 
 import {
@@ -23,7 +21,6 @@ import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
-const execFileAsync = promisify(execFile);
 const sessionStoreMutationWorker = new URL("./fixtures/sessionStoreMutationWorker.mjs", import.meta.url).pathname;
 
 function delay(ms) {
@@ -41,6 +38,78 @@ async function assertPathMissing(filePath) {
     () => access(filePath),
     (error) => error?.code === "ENOENT"
   );
+}
+
+function startSessionStoreMutationWorker(args) {
+  const child = fork(sessionStoreMutationWorker, args, {
+    silent: true
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  const completed = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(
+        `Session mutation worker exited with ${signal || `code ${code}`}: ${stderr.trim() || "no stderr"}`
+      ));
+    });
+  });
+  completed.catch(() => null);
+  return {
+    child,
+    completed,
+    stderr: () => stderr
+  };
+}
+
+function waitForSessionStoreMutationWorkerMessage(worker, type) {
+  return new Promise((resolve, reject) => {
+    function cleanup() {
+      worker.child.off("close", onClose);
+      worker.child.off("error", onError);
+      worker.child.off("message", onMessage);
+    }
+    function onClose(code, signal) {
+      cleanup();
+      reject(new Error(
+        `Session mutation worker exited before ${type} with ${signal || `code ${code}`}: ` +
+        `${worker.stderr().trim() || "no stderr"}`
+      ));
+    }
+    function onError(error) {
+      cleanup();
+      reject(error);
+    }
+    function onMessage(message) {
+      if (message?.type !== type) {
+        return;
+      }
+      cleanup();
+      resolve(message);
+    }
+    worker.child.on("close", onClose);
+    worker.child.on("error", onError);
+    worker.child.on("message", onMessage);
+  });
+}
+
+function sendSessionStoreMutationWorkerMessage(worker, message) {
+  return new Promise((resolve, reject) => {
+    worker.child.send(message, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 function projectLocalRoot(targetRoot) {
@@ -1151,43 +1220,50 @@ test("vibe64 session store serializes mutations across Node processes", async ()
     const projectStateRoot = projectLocalRoot(targetRoot);
     const firstEnteredPath = path.join(targetRoot, "first-entered");
     const secondEnteredPath = path.join(targetRoot, "second-entered");
-    const first = execFileAsync(process.execPath, [
-      sessionStoreMutationWorker,
-      projectStateRoot,
-      targetRoot,
-      "cross_process_mutation",
-      "first_process",
-      "300",
-      firstEnteredPath
-    ]);
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      try {
-        await access(firstEnteredPath);
-        break;
-      } catch {
-        await delay(10);
+    const workers = [];
+
+    try {
+      const first = startSessionStoreMutationWorker([
+        projectStateRoot,
+        targetRoot,
+        "cross_process_mutation",
+        "first_process",
+        firstEnteredPath,
+        "hold"
+      ]);
+      workers.push(first);
+      await waitForSessionStoreMutationWorkerMessage(first, "entered");
+      await assertPathExists(firstEnteredPath);
+
+      const second = startSessionStoreMutationWorker([
+        projectStateRoot,
+        targetRoot,
+        "cross_process_mutation",
+        "second_process",
+        secondEnteredPath,
+        "run"
+      ]);
+      workers.push(second);
+      await waitForSessionStoreMutationWorkerMessage(second, "mutation-requested");
+      await assertPathMissing(secondEnteredPath);
+
+      await sendSessionStoreMutationWorkerMessage(first, {
+        type: "release"
+      });
+      await Promise.all(workers.map((worker) => worker.completed));
+      await assertPathExists(secondEnteredPath);
+      const session = await store.readSession("cross_process_mutation");
+      assert.equal(session.metadata.first_process, "done");
+      assert.equal(session.metadata.second_process, "done");
+      assert.equal(session.revision, 3);
+    } finally {
+      for (const worker of workers) {
+        if (worker.child.exitCode == null && worker.child.signalCode == null) {
+          worker.child.kill();
+        }
       }
+      await Promise.allSettled(workers.map((worker) => worker.completed));
     }
-    await assertPathExists(firstEnteredPath);
-
-    const second = execFileAsync(process.execPath, [
-      sessionStoreMutationWorker,
-      projectStateRoot,
-      targetRoot,
-      "cross_process_mutation",
-      "second_process",
-      "0",
-      secondEnteredPath
-    ]);
-    await delay(100);
-    await assertPathMissing(secondEnteredPath);
-
-    await Promise.all([first, second]);
-    await assertPathExists(secondEnteredPath);
-    const session = await store.readSession("cross_process_mutation");
-    assert.equal(session.metadata.first_process, "done");
-    assert.equal(session.metadata.second_process, "done");
-    assert.equal(session.revision, 3);
   });
 });
 

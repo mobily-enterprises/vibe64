@@ -418,6 +418,10 @@ test("terminal sessions schedule detached idle cleanup for opted-in terminals", 
 
 test("terminal sessions prune exited records after detached idle cleanup", async () => {
   const namespace = `terminal-detached-exited-test-${crypto.randomUUID()}`;
+  let markExited = () => null;
+  const exited = new Promise((resolve) => {
+    markExited = resolve;
+  });
   const session = startTerminalSession({
     args: ["-e", ""],
     command: process.execPath,
@@ -425,13 +429,33 @@ test("terminal sessions prune exited records after detached idle cleanup", async
     detachedIdleTimeoutMs: 100,
     namespace
   });
+  const subscription = subscribeTerminalSession(session.id, (message) => {
+    if (message.type === "status" && message.status === "exited") {
+      markExited();
+    }
+  }, {
+    namespace
+  });
+  let unsubscribe = subscription.unsubscribe;
 
   try {
-    await waitFor(() => readTerminalSession(session.id, { namespace }).status === "exited", {
-      intervalMs: 5
+    assert.equal(subscription.ok, true);
+    await exited;
+    assert.equal(readTerminalSession(session.id, { namespace }).status, "exited");
+
+    unsubscribe();
+    unsubscribe = () => null;
+    const cleaned = await closeDetachedTerminalSessions({
+      namespace,
+      now: Date.now() + 100
     });
-    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
+    assert.deepEqual(cleaned, {
+      ok: true,
+      closed: 1
+    });
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
   } finally {
+    unsubscribe();
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
 });
