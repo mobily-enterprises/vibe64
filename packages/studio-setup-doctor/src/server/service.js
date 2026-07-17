@@ -16,9 +16,12 @@ import {
 } from "@local/vibe64-core/server/studioRoots";
 import {
   isValidPlaywrightBrowserLaunchOutput,
+  isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCommandArgs,
+  playwrightRuntimeVersionCommandArgs,
   runVibe64Command,
-  summarizePlaywrightBrowserLaunchOutput
+  summarizePlaywrightBrowserLaunchOutput,
+  summarizePlaywrightRuntimeOutput
 } from "@local/vibe64-execution/server";
 import {
   hardStopDoctorCheck as hardStopCheck,
@@ -233,13 +236,21 @@ function createStudioHostCommandDoctorPlugin() {
           toolId: "rg",
           explanation: "Codex uses rg for fast local codebase search."
         }),
-        runtimeToolCheck({
+        {
           id: "playwright",
           label: "Playwright",
-          packageId: "playwright",
-          toolId: "playwright",
-          explanation: "Studio uses Playwright for local UI verification."
-        }),
+          run() {
+            return checkHostCommand({
+              id: "playwright",
+              label: "Playwright",
+              commandArgs: playwrightRuntimeVersionCommandArgs(),
+              expected: "The managed Playwright CLI matches the active playwright/runtime.env contract.",
+              explanation: "Studio uses the Playwright version declared by the active managed runtime, not a separate hardcoded version.",
+              isValid: isValidPlaywrightRuntimeOutput,
+              summarizeOutput: summarizePlaywrightRuntimeOutput
+            });
+          }
+        },
         {
           id: "playwright-browser",
           label: "Playwright browser",
@@ -248,8 +259,8 @@ function createStudioHostCommandDoctorPlugin() {
               id: "playwright-browser",
               label: "Playwright browser",
               commandArgs: playwrightBrowserLaunchCommandArgs(),
-              expected: "A Playwright Chromium browser is installed and can launch from the Vibe64 runtime.",
-              explanation: "UI verification needs Chromium's native libraries and fonts, not only the Playwright command-line tool.",
+              expected: "The Chromium, headless shell, ffmpeg, and immutable store paths declared by playwright/runtime.env are installed and Chromium can launch.",
+              explanation: "UI verification follows the active managed runtime contract for every Playwright path and version.",
               isValid: isValidPlaywrightBrowserLaunchOutput,
               summarizeOutput: summarizePlaywrightBrowserLaunchOutput
             });
@@ -408,6 +419,8 @@ export {
   createStudioHostCommandDoctorPlugin,
   isStudioSetupReady,
   isValidPlaywrightBrowserLaunchOutput,
+  isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCommandArgs,
+  playwrightRuntimeVersionCommandArgs,
   createService
 };

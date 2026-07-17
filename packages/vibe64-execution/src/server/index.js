@@ -131,9 +131,13 @@ export {
 } from "./runtime/runtimePacks.js";
 export {
   isValidPlaywrightBrowserLaunchOutput,
+  isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
+  playwrightRuntimeVersionCheckScript,
+  playwrightRuntimeVersionCommandArgs,
   summarizePlaywrightBrowserLaunchOutput,
+  summarizePlaywrightRuntimeOutput,
   playwrightRuntimeEnv
 } from "./runtime/browserRuntime.js";
 export {

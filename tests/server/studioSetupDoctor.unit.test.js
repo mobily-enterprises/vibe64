@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,8 +18,10 @@ import {
   createStudioHostCommandDoctorPlugin,
   createService,
   isValidPlaywrightBrowserLaunchOutput,
+  isValidPlaywrightRuntimeOutput,
   isStudioSetupReady,
   playwrightBrowserLaunchCommandArgs,
+  playwrightRuntimeVersionCommandArgs,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
 import {
@@ -39,6 +42,91 @@ import {
 
 process.env.VIBE64_RUNTIME_NAMESPACE = "unit-owner";
 
+function writeExecutable(filePath, source) {
+  writeFileSync(filePath, source);
+  chmodSync(filePath, 0o755);
+}
+
+function createManagedPlaywrightFixture({
+  browserProduct = "Google Chrome for Testing",
+  browserVersion = "123.4.5.6",
+  chromiumRevision = "9876",
+  chromiumVersion = "123.4.5.6",
+  headlessShellVersion = "123.4.5.6",
+  playwrightCliVersion = "9.8.7",
+  playwrightVersion = "9.8.7",
+  root = mkdtempSync(path.join(tmpdir(), "vibe64-playwright-runtime-"))
+} = {}) {
+  const playwrightRuntime = path.join(root, "playwright");
+  const runtimeStore = path.join(root, "runtime-store");
+  const browsersStore = path.join(root, "browsers-store");
+  const chromium = path.join(
+    browsersStore,
+    `chromium-${chromiumRevision}`,
+    "chrome-linux",
+    "chrome"
+  );
+  const headlessShell = path.join(
+    browsersStore,
+    `chromium_headless_shell-${chromiumRevision}`,
+    "chrome-linux",
+    "headless_shell"
+  );
+  const ffmpeg = path.join(browsersStore, "ffmpeg-1234");
+
+  mkdirSync(path.join(playwrightRuntime), { recursive: true });
+  mkdirSync(path.join(runtimeStore, "bin"), { recursive: true });
+  mkdirSync(path.dirname(chromium), { recursive: true });
+  mkdirSync(path.dirname(headlessShell), { recursive: true });
+  mkdirSync(ffmpeg, { recursive: true });
+  symlinkSync(runtimeStore, path.join(playwrightRuntime, "runtime"), "dir");
+  symlinkSync("runtime/bin", path.join(playwrightRuntime, "bin"), "dir");
+  symlinkSync(browsersStore, path.join(playwrightRuntime, "browsers"), "dir");
+
+  writeExecutable(path.join(runtimeStore, "bin", "playwright"), [
+    "#!/usr/bin/env bash",
+    "if [ \"${1:-}\" = \"--version\" ]; then",
+    `  printf 'Version ${playwrightCliVersion}\\n'`,
+    "  exit 0",
+    "fi",
+    "printf 'Unexpected Playwright command: %s\\n' \"$*\" >&2",
+    "exit 64",
+    ""
+  ].join("\n"));
+  writeExecutable(chromium, [
+    "#!/usr/bin/env bash",
+    "if [ \"${1:-}\" = \"--version\" ]; then",
+    `  printf '${browserProduct} ${browserVersion}\\n'`,
+    "else",
+    "  printf '<h1>vibe64-playwright-ok</h1>\\n'",
+    "fi",
+    ""
+  ].join("\n"));
+  writeExecutable(headlessShell, [
+    "#!/usr/bin/env bash",
+    `printf 'Chromium ${headlessShellVersion}\\n'`,
+    ""
+  ].join("\n"));
+  writeFileSync(path.join(playwrightRuntime, "runtime.env"), [
+    `playwright_version=${playwrightVersion}`,
+    `chromium_revision=${chromiumRevision}`,
+    `chromium_version=${chromiumVersion}`,
+    "ffmpeg_revision=1234",
+    `release_contract_sha256=${"a".repeat(64)}`,
+    `runtime_store_path=${runtimeStore}`,
+    `browsers_store_path=${browsersStore}`,
+    ""
+  ].join("\n"));
+
+  return {
+    browsersPath: path.join(playwrightRuntime, "browsers"),
+    browsersStore,
+    chromium,
+    playwrightRuntime,
+    root
+  };
+}
+
 test("Studio Setup readiness requires every required check to pass", () => {
   assert.equal(isStudioSetupReady([
     { required: true, status: "pass" },
@@ -54,20 +142,30 @@ test("Studio Setup readiness requires every required check to pass", () => {
   ]), true);
 });
 
-test("Studio Setup Playwright browser check launches the CLI-matched browser revision", () => {
+test("Studio Setup Playwright checks follow the active managed runtime manifest", () => {
   const commandArgs = playwrightBrowserLaunchCommandArgs();
   assert.deepEqual(commandArgs.slice(0, 2), ["bash", "-c"]);
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH/u);
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH is required/u);
   assert.match(commandArgs[2], /must not resolve under \/home/u);
+  assert.match(commandArgs[2], /runtime_manifest="\$playwright_runtime\/runtime\.env"/u);
+  assert.match(commandArgs[2], /playwright_version/u);
+  assert.match(commandArgs[2], /chromium_revision/u);
+  assert.match(commandArgs[2], /chromium_version/u);
+  assert.match(commandArgs[2], /ffmpeg_revision/u);
+  assert.match(commandArgs[2], /release_contract_sha256/u);
+  assert.match(commandArgs[2], /runtime_store_path/u);
+  assert.match(commandArgs[2], /browsers_store_path/u);
   assert.doesNotMatch(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
   assert.doesNotMatch(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
   assert.doesNotMatch(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
-  assert.match(commandArgs[2], /playwright install --dry-run chromium/u);
+  assert.doesNotMatch(commandArgs[2], /playwright install/u);
+  assert.doesNotMatch(commandArgs[2], /browser:\[\[:space:\]\]\*chromium/u);
   assert.match(commandArgs[2], /expected_chromium/u);
   assert.match(commandArgs[2], /expected_chromium_version/u);
   assert.match(commandArgs[2], /find -H "\$expected_chromium"/u);
   assert.match(commandArgs[2], /chromium_headless_shell-/u);
+  assert.match(commandArgs[2], /ffmpeg-/u);
   assert.match(commandArgs[2], /reported_chromium_version/u);
   assert.match(commandArgs[2], /Chromium version mismatch/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
@@ -81,6 +179,15 @@ test("Studio Setup Playwright browser check launches the CLI-matched browser rev
     "libnss3.so => not found",
     "Playwright browser launched: /opt/vibe64/runtime-packs/playwright/browsers/chromium-1223/chrome-linux64/chrome"
   ].join("\n")), false);
+
+  const runtimeArgs = playwrightRuntimeVersionCommandArgs();
+  assert.deepEqual(runtimeArgs.slice(0, 2), ["bash", "-c"]);
+  assert.match(runtimeArgs[2], /Playwright runtime ready:/u);
+  assert.match(runtimeArgs[2], /runtime\.env/u);
+  assert.doesNotMatch(runtimeArgs[2], /1\.50/u);
+  assert.equal(isValidPlaywrightRuntimeOutput(
+    "Playwright runtime ready: Version 1.61.1; manifest /opt/vibe64/runtime-packs/playwright/runtime.env"
+  ), true);
 });
 
 test("Studio Setup Playwright browser check fails missing or invalid shared runtime", () => {
@@ -98,30 +205,21 @@ test("Studio Setup Playwright browser check fails missing or invalid shared runt
   assert.match(`${missing.stdout}${missing.stderr}`, /PLAYWRIGHT_BROWSERS_PATH is required/u);
 
   const homePath = run({
-    PLAYWRIGHT_BROWSERS_PATH: "/home/unit/.cache/ms-playwright"
+    PLAYWRIGHT_BROWSERS_PATH: "/home/unit/playwright/browsers"
   });
   assert.notEqual(homePath.status, 0);
   assert.match(`${homePath.stdout}${homePath.stderr}`, /must not resolve under \/home/u);
 
   const emptyRuntime = mkdtempSync(path.join(tmpdir(), "vibe64-empty-playwright-"));
   try {
-    const fakeBin = path.join(emptyRuntime, "bin");
-    const fakePlaywright = path.join(fakeBin, "playwright");
-    mkdirSync(fakeBin);
-    writeFileSync(fakePlaywright, [
-      "#!/usr/bin/env bash",
-      "printf 'browser: chromium version 123.4.5.6\\n'",
-      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
-      ""
-    ].join("\n"));
-    chmodSync(fakePlaywright, 0o755);
+    const browsersPath = path.join(emptyRuntime, "playwright", "browsers");
+    mkdirSync(browsersPath, { recursive: true });
     const empty = run({
       HOME: emptyRuntime,
-      PATH: `${fakeBin}:/usr/bin:/bin`,
-      PLAYWRIGHT_BROWSERS_PATH: emptyRuntime
+      PLAYWRIGHT_BROWSERS_PATH: browsersPath
     });
     assert.notEqual(empty.status, 0);
-    assert.match(`${empty.stdout}${empty.stderr}`, /Chromium revision expected at .*chromium-9876 is not installed/u);
+    assert.match(`${empty.stdout}${empty.stderr}`, /Managed Playwright runtime manifest is missing/u);
   } finally {
     rmSync(emptyRuntime, {
       force: true,
@@ -130,44 +228,80 @@ test("Studio Setup Playwright browser check fails missing or invalid shared runt
   }
 });
 
-test("Studio Setup Playwright browser check rejects a revision directory with the wrong binary version", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "vibe64-mismatched-playwright-"));
-  const fakeBin = path.join(root, "bin");
-  const chromium = path.join(root, "chromium-9876", "chrome-linux", "chrome");
-  const headlessShell = path.join(
-    root,
-    "chromium_headless_shell-9876",
-    "chrome-linux",
-    "headless_shell"
-  );
+test("Studio Setup Playwright version check uses runtime.env instead of the generic catalog", () => {
+  const matching = createManagedPlaywrightFixture({
+    playwrightCliVersion: "1.61.1",
+    playwrightVersion: "1.61.1"
+  });
+  const mismatched = createManagedPlaywrightFixture({
+    playwrightCliVersion: "1.60.0",
+    playwrightVersion: "1.61.1"
+  });
   try {
-    mkdirSync(fakeBin, {
-      recursive: true
+    const commandArgs = playwrightRuntimeVersionCommandArgs();
+    const run = (browsersPath) => spawnSync(commandArgs[0], commandArgs.slice(1), {
+      encoding: "utf8",
+      env: {
+        PATH: "/usr/bin:/bin",
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath
+      }
     });
-    mkdirSync(path.dirname(chromium), {
-      recursive: true
-    });
-    mkdirSync(path.dirname(headlessShell), {
-      recursive: true
-    });
-    writeFileSync(path.join(fakeBin, "playwright"), [
-      "#!/usr/bin/env bash",
-      "printf 'browser: chromium version 123.4.5.6\\n'",
-      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
-      ""
-    ].join("\n"));
-    writeFileSync(chromium, "#!/usr/bin/env bash\nprintf 'Chromium 999.0.0.0\\n'\n");
-    writeFileSync(headlessShell, "#!/usr/bin/env bash\nprintf 'Chromium 123.4.5.6\\n'\n");
-    chmodSync(path.join(fakeBin, "playwright"), 0o755);
-    chmodSync(chromium, 0o755);
-    chmodSync(headlessShell, 0o755);
+    const ready = run(matching.browsersPath);
+    assert.equal(ready.status, 0, `${ready.stdout}${ready.stderr}`);
+    assert.equal(isValidPlaywrightRuntimeOutput(ready.stdout), true);
+    assert.match(ready.stdout, /Version 1\.61\.1/u);
+    assert.match(ready.stdout, /playwright\/runtime\.env/u);
 
+    const mismatch = run(mismatched.browsersPath);
+    assert.notEqual(mismatch.status, 0);
+    assert.match(
+      `${mismatch.stdout}${mismatch.stderr}`,
+      /Managed Playwright version mismatch: expected 1\.61\.1, observed 1\.60\.0/u
+    );
+  } finally {
+    rmSync(matching.root, { force: true, recursive: true });
+    rmSync(mismatched.root, { force: true, recursive: true });
+  }
+});
+
+test("Studio Setup Playwright checks reject store paths that diverge from runtime.env", () => {
+  const fixture = createManagedPlaywrightFixture();
+  const unexpectedStore = path.join(fixture.root, "unexpected-browsers-store");
+  try {
+    mkdirSync(unexpectedStore);
+    rmSync(fixture.browsersPath);
+    symlinkSync(unexpectedStore, fixture.browsersPath, "dir");
+
+    const commandArgs = playwrightRuntimeVersionCommandArgs();
+    const result = spawnSync(commandArgs[0], commandArgs.slice(1), {
+      encoding: "utf8",
+      env: {
+        PATH: "/usr/bin:/bin",
+        PLAYWRIGHT_BROWSERS_PATH: fixture.browsersPath
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(
+      `${result.stdout}${result.stderr}`,
+      new RegExp(`Managed Playwright browser store mismatch: expected ${fixture.browsersStore}`, "u")
+    );
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+});
+
+test("Studio Setup Playwright browser check rejects a revision directory with the wrong binary version", () => {
+  const fixture = createManagedPlaywrightFixture({
+    browserVersion: "999.0.0.0"
+  });
+  try {
     const commandArgs = playwrightBrowserLaunchCommandArgs();
     const result = spawnSync(commandArgs[0], commandArgs.slice(1), {
       encoding: "utf8",
       env: {
-        PATH: `${fakeBin}:/usr/bin:/bin`,
-        PLAYWRIGHT_BROWSERS_PATH: root
+        PATH: "/usr/bin:/bin",
+        PLAYWRIGHT_BROWSERS_PATH: fixture.browsersPath
       }
     });
 
@@ -177,7 +311,7 @@ test("Studio Setup Playwright browser check rejects a revision directory with th
       /Chromium version mismatch: expected 123\.4\.5\.6, observed 999\.0\.0\.0/u
     );
   } finally {
-    rmSync(root, {
+    rmSync(fixture.root, {
       force: true,
       recursive: true
     });
@@ -185,58 +319,24 @@ test("Studio Setup Playwright browser check rejects a revision directory with th
 });
 
 test("Studio Setup Playwright browser check ignores trailing version whitespace", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "vibe64-playwright-version-whitespace-"));
-  const fakeBin = path.join(root, "bin");
-  const chromium = path.join(root, "chromium-9876", "chrome-linux", "chrome");
-  const headlessShell = path.join(
-    root,
-    "chromium_headless_shell-9876",
-    "chrome-linux",
-    "headless_shell"
-  );
+  const fixture = createManagedPlaywrightFixture({
+    browserVersion: "123.4.5.6 ",
+    headlessShellVersion: "123.4.5.6 "
+  });
   try {
-    mkdirSync(fakeBin, {
-      recursive: true
-    });
-    mkdirSync(path.dirname(chromium), {
-      recursive: true
-    });
-    mkdirSync(path.dirname(headlessShell), {
-      recursive: true
-    });
-    writeFileSync(path.join(fakeBin, "playwright"), [
-      "#!/usr/bin/env bash",
-      "printf 'browser: chromium version 123.4.5.6\\n'",
-      "printf '  Install location:    %s/chromium-9876\\n' \"$PLAYWRIGHT_BROWSERS_PATH\"",
-      ""
-    ].join("\n"));
-    writeFileSync(chromium, [
-      "#!/usr/bin/env bash",
-      "if [ \"${1:-}\" = \"--version\" ]; then",
-      "  printf 'Chromium 123.4.5.6 \\n'",
-      "else",
-      "  printf '<h1>vibe64-playwright-ok</h1>\\n'",
-      "fi",
-      ""
-    ].join("\n"));
-    writeFileSync(headlessShell, "#!/usr/bin/env bash\nprintf 'Chromium 123.4.5.6\\n'\n");
-    chmodSync(path.join(fakeBin, "playwright"), 0o755);
-    chmodSync(chromium, 0o755);
-    chmodSync(headlessShell, 0o755);
-
     const commandArgs = playwrightBrowserLaunchCommandArgs();
     const result = spawnSync(commandArgs[0], commandArgs.slice(1), {
       encoding: "utf8",
       env: {
-        PATH: `${fakeBin}:/usr/bin:/bin`,
-        PLAYWRIGHT_BROWSERS_PATH: root
+        PATH: "/usr/bin:/bin",
+        PLAYWRIGHT_BROWSERS_PATH: fixture.browsersPath
       }
     });
 
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     assert.match(result.stdout, /Playwright browser launched:/u);
   } finally {
-    rmSync(root, {
+    rmSync(fixture.root, {
       force: true,
       recursive: true
     });
