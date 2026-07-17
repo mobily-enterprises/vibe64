@@ -75,6 +75,7 @@ const INPUT_BEHAVIOR_KINDS = Object.freeze({
 const COMPOSER_MENU_ITEM_KINDS = Object.freeze(new Set([
   "action",
   "intent",
+  "task",
   "template"
 ]));
 const COMPOSER_MENU_MODES = Object.freeze(new Set([
@@ -177,7 +178,7 @@ function normalizeComposerMenuItem(session = {}, item = {}, {
   if (!id || !label) {
     return null;
   }
-  if (kind === "template" && !text) {
+  if (["task", "template"].includes(kind) && !text) {
     return null;
   }
   if (kind === "action" && !actionId) {

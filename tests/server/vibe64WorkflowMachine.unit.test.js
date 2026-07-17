@@ -937,7 +937,8 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(createHandover?.text || "", /Do not change files, commit, push, merge, close the session/u);
     assert.match(createHandover?.text || "", /Recommended next prompt/u);
     assert.match(createHandover?.text || "", /Adapter rendered prompt: fallback/u);
-    assert.equal(syncWithRemote?.kind, "template");
+    assert.equal(syncWithRemote?.kind, "task");
+    assert.equal(syncWithRemote?.mode, "submit");
     assert.equal(syncWithRemote?.source, "core");
     assert.equal(syncWithRemote?.group, "Git");
     assert.match(syncWithRemote?.text || "", /Sync code with GitHub/u);

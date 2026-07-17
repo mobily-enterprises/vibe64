@@ -15,8 +15,8 @@
       class="vibe64-composer-prompt-menu-item__text-button"
       :disabled="disabled"
       type="button"
-      :title="`Insert full text for ${item.label}`"
-      :aria-label="`Insert full text for ${item.label}`"
+      :title="`Add ${item.label} prompt to the main chat`"
+      :aria-label="`Add ${item.label} prompt to the main chat`"
       @click="$emit('insert-text', item)"
     >
       <v-icon :icon="mdiTextBoxOutline" size="18" />
@@ -33,6 +33,9 @@ import {
 import {
   presentationIconForToken
 } from "@/lib/vibe64PresentationControls.js";
+import {
+  composerMenuItemCanInsertText
+} from "@/lib/vibe64ComposerPromptRefs.js";
 
 defineEmits([
   "insert-text",
@@ -51,10 +54,7 @@ const props = defineProps({
 });
 
 const itemIcon = computed(() => presentationIconForToken(props.item.icon, mdiFileDocumentOutline));
-const canInsertText = computed(() => (
-  String(props.item.kind || "template") === "template" &&
-  Boolean(String(props.item.text || "").trim())
-));
+const canInsertText = computed(() => composerMenuItemCanInsertText(props.item));
 </script>
 
 <style scoped>

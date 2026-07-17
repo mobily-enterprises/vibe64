@@ -49,6 +49,10 @@ import {
 import { inspectSessionDiff } from "./sessionDiff.js";
 import { inspectSessionSourceSafety } from "./sessionSourceSafety.js";
 import {
+  createAgentTaskCoordinator,
+  publicAgentTask
+} from "./agentTaskCoordinator.js";
+import {
   createComposerHandoffCoordinator
 } from "./composer/handoffCoordinator.js";
 import {
@@ -1707,6 +1711,7 @@ async function settleComposerMessageRequests(runtime, sessionId = "", requests =
 
 async function drainComposerMessages(terminalService, coordinator, publishSessionChanged, {
   assertDeliveryReady = async () => null,
+  agentTaskCoordinator = null,
   runtime = null,
   session = null
 } = {}) {
@@ -1753,6 +1758,11 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
           runtime,
           sessionId,
           "session-agent-message-delivered"
+        );
+        await agentTaskCoordinator?.markHandoffsDelivered?.(
+          runtime,
+          sessionId,
+          handoffMessages.flatMap((message) => message.taskHandoffIds)
         );
         continue;
       }
@@ -1985,6 +1995,11 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
       sessionId,
       "session-agent-message-delivered"
     );
+    await agentTaskCoordinator?.markHandoffsDelivered?.(
+      runtime,
+      sessionId,
+      batch.taskHandoffIds
+    );
     vibe64SessionDebugLog("server.service.composerMessage.delivery.done", {
       deliveryMode: normalizedInputText(result.deliveryMode),
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -2203,6 +2218,7 @@ const PUBLIC_SESSION_RESPONSE_FIELDS = new Set([
   "actionResults",
   "adapter",
   "agentRuns",
+  "agentTask",
   "backgroundTasks",
   "composerHandoff",
   "composerMessages",
@@ -2353,6 +2369,7 @@ function publicSessionResponse(session = {}, options = {}) {
     actionAttempts: _actionAttempts,
     actionAttemptsRoot: _actionAttemptsRoot,
     agentRunsRoot: _agentRunsRoot,
+    agentTasksRoot: _agentTasksRoot,
     promptContextSnapshot: _promptContextSnapshot,
     ...publicSession
   } = session;
@@ -2380,6 +2397,9 @@ function publicSessionResponse(session = {}, options = {}) {
         COMPOSER_MESSAGE_AGENT_RUN_ID
       ].includes(normalizedInputText(run?.id)))
       .map(publicAgentRun);
+  }
+  if (isPlainObject(session.agentTask)) {
+    publicSession.agentTask = publicAgentTask(session.agentTask);
   }
   if (Array.isArray(session.backgroundTasks)) {
     publicSession.backgroundTasks = publicBackgroundTaskList(session.backgroundTasks);
@@ -2813,6 +2833,26 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
   const normalizedSetupOptions = normalizeSetupOptions(setupOptions);
+  const agentTaskCoordinator = createAgentTaskCoordinator({
+    inspectSourceSafety: inspectSessionSourceSafety,
+    mainConversationBusy: (session) => (
+      sessionAwaitsAgentResult(session) ||
+      sessionHasActiveAgentWork(session) ||
+      pendingComposerMessages(session).length > 0 ||
+      inputFlagEnabled(session.metadata?.terminal_active)
+    ),
+    prepareWriteTask: ({ input, runtime, sessionId }) => (
+      claimWorkflowDriverAndRecordGitCommandActor({
+        input,
+        reason: `agent-task:${normalizedInputText(input.taskId || input.definitionId)}`,
+        runtime,
+        sessionId,
+        terminalService
+      })
+    ),
+    publishSessionChanged,
+    terminalService
+  });
   const composerHandoffCoordinator = createComposerHandoffCoordinator({
     activate: ({ runtime, session, state }) => transitionComposerHandoff(
       runtime,
@@ -2835,6 +2875,7 @@ function createService({
       publishSessionChanged,
       {
         ...input,
+        agentTaskCoordinator,
         assertDeliveryReady: ({ batch, turnOwnership }) => {
           if (turnOwnership?.reusable === true) {
             return null;
@@ -2849,6 +2890,15 @@ function createService({
       }
     )
   });
+
+  async function runAgentTaskOperation(sessionId, operation, input = undefined) {
+    const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+    return operation({
+      ...(input === undefined ? {} : { input }),
+      runtime,
+      sessionId
+    });
+  }
 
   async function queueComposerInterrupt(sessionId = "", input = {}) {
     const afterSubmissionId = normalizedInputText(input?.afterSubmissionId);
@@ -3025,20 +3075,52 @@ function createService({
         };
       }
       const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
-      const request = await acceptComposerMessage(runtime, normalizedSessionId, {
-        afterSubmissionId: input?.afterSubmissionId,
-        agentSettings: agentSettingsInput(input),
-        composerSubmissionId: messageId,
-        displayFields: input?.displayFields,
-        fields: {
-          ...objectValue(input?.fields),
-          conversationRequest: message
-        },
-        message,
-        originId: input?.originId,
-        promptTemplateId: input?.promptTemplateId,
-        vibe64User: input?.vibe64User
-      });
+      const exclusive = await agentTaskCoordinator.runMainWriteExclusive(
+        runtime,
+        normalizedSessionId,
+        async (session) => {
+          const prepared = session.agentTask
+            ? await agentTaskCoordinator.prepareMainMessage(
+                runtime,
+                normalizedSessionId,
+                message,
+                pendingComposerMessages(session).flatMap((request) => request.taskHandoffIds)
+              )
+            : {
+                message,
+                taskIds: []
+              };
+          return acceptComposerMessage(runtime, normalizedSessionId, {
+            afterSubmissionId: input?.afterSubmissionId,
+            agentSettings: agentSettingsInput(input),
+            composerSubmissionId: messageId,
+            displayFields: {
+              ...objectValue(input?.displayFields),
+              conversationRequest: normalizedInputText(
+                input?.displayFields?.conversationRequest ||
+                input?.displayFields?.message ||
+                message
+              )
+            },
+            fields: {
+              ...objectValue(input?.fields),
+              conversationRequest: prepared.message
+            },
+            message: prepared.message,
+            originId: input?.originId,
+            promptTemplateId: input?.promptTemplateId,
+            taskHandoffIds: prepared.taskIds,
+            vibe64User: input?.vibe64User
+          });
+        }
+      );
+      if (!exclusive.acquired) {
+        return exclusive.value;
+      }
+      const request = exclusive.value;
+      if (request?.ok === false) {
+        return request;
+      }
       if (request.state === COMPOSER_MESSAGE_STATES.CANCELLED) {
         return {
           code: "vibe64_agent_message_cancelled",
@@ -3069,6 +3151,29 @@ function createService({
         queued: request.state === "accepted",
         sessionId: normalizedSessionId
       };
+    },
+
+    async startAgentTask(sessionId, input = {}) {
+      return runAgentTaskOperation(
+        sessionId,
+        agentTaskCoordinator.start,
+        {
+          ...input,
+          agentSettings: agentSettingsInput(input)
+        }
+      );
+    },
+
+    async sendAgentTaskMessage(sessionId, input = {}) {
+      return runAgentTaskOperation(sessionId, agentTaskCoordinator.sendMessage, input);
+    },
+
+    async finishAgentTask(sessionId) {
+      return runAgentTaskOperation(sessionId, agentTaskCoordinator.finish);
+    },
+
+    async stopAgentTask(sessionId) {
+      return runAgentTaskOperation(sessionId, agentTaskCoordinator.stop);
     },
 
     async readComposerDraft(sessionId, input = {}) {
@@ -3437,6 +3542,13 @@ function createService({
             sessionId
           }, normalizedSetupOptions);
           let runtimeSession = await runtime.getSession(sessionId);
+          if (runtimeSession.agentTask) {
+            await agentTaskCoordinator.reconcile({
+              runtime,
+              sessionId
+            });
+            runtimeSession = await runtime.getSession(sessionId);
+          }
           const handoffBeforeResume = composerHandoffSnapshot(runtimeSession);
           const resumeTask = composerHandoffCoordinator.resume({
             runtime,
@@ -3765,13 +3877,6 @@ function createService({
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await describeAgentProvider(terminalService, agentSettings);
-          await claimWorkflowDriverAndRecordGitCommandActor({
-            input,
-            reason: `session-action:${actionId}`,
-            runtime,
-            sessionId,
-            terminalService
-          });
           const observedAcceptedSession = await observeAcceptedSessionAction(
             runtime,
             sessionId,
@@ -3800,15 +3905,28 @@ function createService({
           if (alreadyClosedSession) {
             return alreadyClosedSession;
           }
-          if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
-            sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
-              eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+          const exclusive = await agentTaskCoordinator.runMainWriteExclusive(runtime, sessionId, async () => {
+            await claimWorkflowDriverAndRecordGitCommandActor({
+              input,
+              reason: `session-action:${actionId}`,
+              runtime,
+              sessionId,
+              terminalService
             });
-            await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
-              eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
-            });
+            if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
+              sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
+                eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+              });
+              await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+                eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+              });
+            }
+            return runtime.runAction(sessionId, actionId, workflowInput);
+          });
+          if (!exclusive.acquired || exclusive.value?.ok === false) {
+            return exclusive.value;
           }
-          let session = await runtime.runAction(sessionId, actionId, workflowInput);
+          let session = exclusive.value;
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
             input: displayInput || session.actionResult?.input || workflowInput
@@ -3917,13 +4035,6 @@ function createService({
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await describeAgentProvider(terminalService, agentSettings);
-          await claimWorkflowDriverAndRecordGitCommandActor({
-            input,
-            reason: `session-intent:${intentId}`,
-            runtime,
-            sessionId,
-            terminalService
-          });
           const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
           if (observedUserMessageSession) {
             vibe64SessionDebugLog("server.service.runSessionIntent.blocked", {
@@ -3947,15 +4058,28 @@ function createService({
           if (alreadyClosedSession) {
             return alreadyClosedSession;
           }
-          if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
-            sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
-              eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+          const exclusive = await agentTaskCoordinator.runMainWriteExclusive(runtime, sessionId, async () => {
+            await claimWorkflowDriverAndRecordGitCommandActor({
+              input,
+              reason: `session-intent:${intentId}`,
+              runtime,
+              sessionId,
+              terminalService
             });
-            await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
-              eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
-            });
+            if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
+              sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
+                eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+              });
+              await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+                eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+              });
+            }
+            return runtime.runIntent(sessionId, intentId, workflowInput);
+          });
+          if (!exclusive.acquired || exclusive.value?.ok === false) {
+            return exclusive.value;
           }
-          let session = await runtime.runIntent(sessionId, intentId, workflowInput);
+          let session = exclusive.value;
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
             input: displayInput || session.actionResult?.input || workflowInput

@@ -43,7 +43,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps the composer as one surface across selected and passive modes", () => {
     const source = fs.readFileSync(componentPath, "utf8");
-    const composerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const composerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="!agentTaskActive && composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
     const timelineBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlTimelineFormVisible"[\s\S]*?\/>/u)?.[0] || "";
     const scriptBlock = source.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
 
@@ -76,7 +76,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("keeps full prompt text insertion explicit instead of the default prompt action", () => {
     const viewSource = fs.readFileSync(componentPath, "utf8");
     const formSource = fs.readFileSync(workflowControlFormPath, "utf8");
-    const composerBlock = viewSource.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const composerBlock = viewSource.match(/<Vibe64WorkflowControlForm\n\s+v-if="!agentTaskActive && composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
 
     expect(composerBlock).toContain("@composer-menu-item=\"activateComposerMenuItem\"");
     expect(composerBlock).toContain("@composer-menu-item-text=\"insertComposerMenuItemText\"");
@@ -88,7 +88,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("renders conversation timeline controls in the chat flow", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
-    const conversationBlock = componentSource.match(/<article\n\s+v-if="conversationTimelineControlVisible"[\s\S]*?<\/article>/u)?.[0] || "";
+    const conversationBlock = componentSource.match(/<article\n\s+v-if="!agentTaskActive && conversationTimelineControlVisible"[\s\S]*?<\/article>/u)?.[0] || "";
     const scriptBlock = componentSource.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
 
     expect(conversationBlock).toContain("studio-autopilot__conversation-control");
@@ -262,9 +262,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const conversationLogBlock = componentSource.match(/<Vibe64ConversationLog[\s\S]*?\/>/u)?.[0] || "";
 
     expect(conversationLogBlock).toContain(":visible=\"conversationLogVisible\"");
-    expect(conversationLogBlock).toContain(":has-more-before=\"conversationLog.hasMoreBefore\"");
-    expect(conversationLogBlock).toContain(":loading-more=\"conversationLog.loadingMore\"");
-    expect(conversationLogBlock).toContain(":load-more-error=\"conversationLog.loadMoreError\"");
+    expect(conversationLogBlock).toContain(":has-more-before=\"agentTaskActive ? false : conversationLog.hasMoreBefore\"");
+    expect(conversationLogBlock).toContain(":loading-more=\"agentTaskActive ? false : conversationLog.loadingMore\"");
+    expect(conversationLogBlock).toContain(":load-more-error=\"agentTaskActive ? '' : conversationLog.loadMoreError\"");
     expect(conversationLogBlock).toContain("@load-more=\"loadMoreChatTurns\"");
     expect(composableSource).toContain("const conversationLogVisible = computed(() => Boolean(");
     expect(composableSource).toContain("async function loadMoreChatTurns()");

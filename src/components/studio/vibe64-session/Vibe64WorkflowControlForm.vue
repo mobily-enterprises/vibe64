@@ -377,9 +377,9 @@
       max-width="420"
     >
       <v-card>
-        <v-card-title>Insert full prompt text?</v-card-title>
+        <v-card-title>{{ insertTemplateTextDialogTitle }}</v-card-title>
         <v-card-text>
-          This will paste the full {{ insertTemplateTextDialogLabel }} prompt into the message.
+          This will paste the full {{ insertTemplateTextDialogLabel }} prompt into the main chat.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -396,7 +396,7 @@
             variant="flat"
             @click="confirmInsertComposerMenuItemText"
           >
-            Insert text
+            Add to chat
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -427,6 +427,9 @@ import {
 import {
   composerMenuGroupsForItems
 } from "@/lib/vibe64ComposerMenuGroups.js";
+import {
+  composerMenuItemCanInsertText
+} from "@/lib/vibe64ComposerPromptRefs.js";
 import {
   visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
@@ -680,6 +683,11 @@ const attachmentToolDisabled = computed(() => Boolean(
 const insertTemplateTextDialogLabel = computed(() => (
   String(insertTemplateTextDialogItem.value?.label || "selected").trim() || "selected"
 ));
+const insertTemplateTextDialogTitle = computed(() => (
+  String(insertTemplateTextDialogItem.value?.kind || "") === "task"
+    ? "Add task prompt to main chat?"
+    : "Insert full prompt text?"
+));
 
 function inlineSubmitForField(field = {}) {
   return Boolean(
@@ -770,7 +778,7 @@ function composerMenuItemDisabled(item = {}) {
   if (item.enabled === false) {
     return true;
   }
-  return String(item.kind || "") === "template" && fieldsDisabled.value;
+  return ["task", "template"].includes(String(item.kind || "")) && fieldsDisabled.value;
 }
 
 function selectComposerMenuItem(item = {}) {
@@ -792,10 +800,6 @@ function requestInsertComposerMenuItemText(item = {}) {
   insertTemplateTextDialogItem.value = item;
   insertTemplateTextDialogOpen.value = true;
   return true;
-}
-
-function composerMenuItemCanInsertText(item = {}) {
-  return String(item.kind || "template") === "template" && String(item.text || "").trim();
 }
 
 function closeInsertTemplateTextDialog() {

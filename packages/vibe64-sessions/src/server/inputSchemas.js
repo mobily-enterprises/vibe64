@@ -102,12 +102,14 @@ const agentMessageInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const agentMessageCancelInputValidator = deepFreeze({
+const originOnlyInputValidator = deepFreeze({
   schema: createSchema({
     ...originInputSchema
   }),
   mode: "patch"
 });
+
+const agentMessageCancelInputValidator = originOnlyInputValidator;
 
 const agentTurnInterruptInputValidator = deepFreeze({
   schema: createSchema({
@@ -130,6 +132,33 @@ const agentTurnInterruptInputValidator = deepFreeze({
   }),
   mode: "patch"
 });
+
+const agentTaskStartInputValidator = deepFreeze({
+  schema: createSchema({
+    ...agentSettingsInputSchema,
+    ...originInputSchema,
+    taskId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const agentTaskMessageInputValidator = deepFreeze({
+  schema: createSchema({
+    ...originInputSchema,
+    message: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const agentTaskControlInputValidator = originOnlyInputValidator;
 
 const sessionListInputValidator = deepFreeze({
   schema: createSchema({
@@ -466,6 +495,9 @@ const sessionRecoveryInputValidator = deepFreeze({
 
 export {
   agentMessageCancelInputValidator,
+  agentTaskControlInputValidator,
+  agentTaskMessageInputValidator,
+  agentTaskStartInputValidator,
   agentTurnInterruptInputValidator,
   agentMessageInputValidator,
   currentSessionInputValidator,

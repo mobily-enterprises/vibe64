@@ -454,7 +454,7 @@ function normalizeComposerTemplate(template = {}, {
     icon: normalizeText(item.icon),
     id,
     input: composerTemplateInput(item.input || prompt.input),
-    kind: "template",
+    kind: normalizeText(item.kind) === "task" ? "task" : "template",
     label,
     mode: normalizeText(item.mode || "prefill"),
     order: Number.isFinite(item.order) ? item.order : 0,
@@ -1021,7 +1021,7 @@ function actionWithComposerTemplate(action = {}, session = {}, templateId = "") 
     ? session.adapter.composerMenuItems
     : []).find((item) => (
     normalizeText(item?.id) === normalizedTemplateId &&
-    normalizeText(item?.kind || "template") === "template" &&
+    ["task", "template"].includes(normalizeText(item?.kind || "template")) &&
     item?.enabled !== false &&
     item?.visible !== false
   ));

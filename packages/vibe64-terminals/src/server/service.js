@@ -57,6 +57,13 @@ import {
 import {
   vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
+import {
+  vibe64AgentTaskIsActive
+} from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AGENT_TASK_ACTIVE_RESULT,
+  runVibe64AgentWriteExclusive
+} from "@local/vibe64-runtime/server/agentWriteLock";
 
 const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
 const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
@@ -294,6 +301,33 @@ function createService({
       controller: codex
     })]
   });
+
+  async function runMainAgentWrite(sessionId = "", options = {}, operation) {
+    const runtime = options.runtime || await projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
+    const exclusive = await runVibe64AgentWriteExclusive(
+      runtime,
+      sessionId,
+      async () => {
+        const session = typeof runtime.getSession === "function"
+          ? await runtime.getSession(sessionId)
+          : options.session;
+        if (vibe64AgentTaskIsActive(session.agentTask)) {
+          return VIBE64_AGENT_TASK_ACTIVE_RESULT;
+        }
+        return operation({
+          ...options,
+          runtime,
+          session
+        });
+      }
+    );
+    return exclusive.value;
+  }
+
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
       const commandSourcePath = sessionSourcePath({
@@ -1008,7 +1042,17 @@ function createService({
     },
 
     deliverAgentPrompt(sessionId, handoff = {}, options = {}) {
-      return sessionAgent.deliverPrompt(sessionId, handoff, options);
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.deliverPrompt(sessionId, handoff, context)
+      ));
+    },
+
+    createAgentConversation(sessionId, input = {}, options = {}) {
+      return sessionAgent.createConversation(sessionId, input, options);
+    },
+
+    deleteAgentConversation(sessionId, input = {}, options = {}) {
+      return sessionAgent.deleteConversation(sessionId, input, options);
     },
 
     runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
@@ -1036,7 +1080,9 @@ function createService({
     },
 
     sendAgentMessage(sessionId, input = {}, options = {}) {
-      return sessionAgent.sendMessage(sessionId, input, options);
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.sendMessage(sessionId, input, context)
+      ));
     },
 
     injectGlobalCodexPrompt(handoff = {}) {
@@ -1095,6 +1141,10 @@ function createService({
       return sessionAgent.readTerminal(sessionId, terminalSessionId, options);
     },
 
+    readAgentConversation(sessionId, input = {}, options = {}) {
+      return sessionAgent.readConversation(sessionId, input, options);
+    },
+
     readCommandTerminal(sessionId, terminalSessionId, input = {}) {
       return command.readTerminal(sessionId, terminalSessionId, input);
     },
@@ -1126,7 +1176,17 @@ function createService({
     },
 
     startAgentTerminal(sessionId, input = {}, options = {}) {
-      return sessionAgent.startTerminal(sessionId, input, options);
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.startTerminal(sessionId, input, context)
+      ));
+    },
+
+    startAgentConversationTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.startConversationTurn(sessionId, input, options);
+    },
+
+    stopAgentConversation(sessionId, input = {}, options = {}) {
+      return sessionAgent.stopConversation(sessionId, input, options);
     },
 
     startGlobalCodexTerminal() {
@@ -1233,8 +1293,14 @@ function createService({
       return sessionAgent.uploadAttachment(sessionId, input, options);
     },
 
+    waitForAgentConversationTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.waitForConversationTurn(sessionId, input, options);
+    },
+
     writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
-      return sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, context)
+      ));
     },
 
     writeGlobalCodexTerminal(terminalSessionId, data) {

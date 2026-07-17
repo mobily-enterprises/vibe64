@@ -1,7 +1,10 @@
 <template>
   <section
     class="studio-autopilot"
-    :class="{ 'studio-autopilot--chat-collapsed': chatCollapsed }"
+    :class="{
+      'studio-autopilot--chat-collapsed': chatCollapsed,
+      'studio-autopilot--task': agentTaskActive
+    }"
   >
     <section
       class="studio-autopilot__chat-panel"
@@ -20,7 +23,44 @@
           />
         </div>
 
+        <div
+          v-if="agentTaskActive"
+          class="studio-autopilot__task-header"
+        >
+          <div class="studio-autopilot__task-title">
+            <span>Focused task</span>
+            <strong>{{ agentTask.label }}</strong>
+            <small>{{ agentTaskStatusLabel }}</small>
+          </div>
+          <div class="studio-autopilot__task-actions">
+            <v-btn
+              v-if="agentTaskWaiting"
+              :disabled="agentTaskRequestBusy"
+              :prepend-icon="mdiCheck"
+              size="x-small"
+              type="button"
+              variant="tonal"
+              @click="finishAgentTask"
+            >
+              Finish
+            </v-btn>
+            <v-btn
+              color="error"
+              :disabled="agentTaskRequestBusy"
+              :loading="agentTask.state === 'stopping'"
+              :prepend-icon="mdiStopCircleOutline"
+              size="x-small"
+              type="button"
+              variant="tonal"
+              @click="stopAgentTask"
+            >
+              Stop
+            </v-btn>
+          </div>
+        </div>
+
         <Vibe64AutopilotNavigation
+          v-else
           class="studio-autopilot__nav"
           :busy="navigationBusy"
           :executing="workflowExecuting"
@@ -92,16 +132,18 @@
       >
         <Vibe64ConversationLog
           class="studio-autopilot__conversation"
-          :error="conversationLog.error"
-          :has-more-before="conversationLog.hasMoreBefore"
-          :loading="conversationLog.loading"
-          :loading-more="conversationLog.loadingMore"
-          :load-more-error="conversationLog.loadMoreError"
+          :assistant-label="agentTaskActive ? 'Task assistant' : 'Codex'"
+          :error="agentTaskActive ? '' : conversationLog.error"
+          :has-more-before="agentTaskActive ? false : conversationLog.hasMoreBefore"
+          :loading="agentTaskActive ? false : conversationLog.loading"
+          :loading-more="agentTaskActive ? false : conversationLog.loadingMore"
+          :load-more-error="agentTaskActive ? '' : conversationLog.loadMoreError"
           :reloadable="chatReloadAvailable"
           :reloading="chatReloading"
           :scroll-key="conversationScrollKey"
           :source-root="sessionSourceRoot"
           :turns="chatTurns"
+          :variant="agentTaskActive ? 'task' : 'main'"
           :visible="conversationLogVisible"
           @cancel-turn="cancelOptimisticComposerTurnAndFocus"
           @edit-turn="editOptimisticComposerTurnAndFocus"
@@ -111,7 +153,7 @@
           @resend-turn="resendOptimisticComposerTurnAndFocus"
         />
 
-        <template v-if="reportPreviewVisible">
+        <template v-if="!agentTaskActive && reportPreviewVisible">
           <Vibe64ReportPreview
             class="studio-autopilot__artifact"
             :error="reportPreview.error"
@@ -192,7 +234,7 @@
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="!agentTaskActive">
           <article
             v-if="stepInputFormVisible"
             ref="timelineControlElement"
@@ -315,7 +357,7 @@
         </template>
 
         <article
-          v-if="conversationTimelineControlVisible"
+          v-if="!agentTaskActive && conversationTimelineControlVisible"
           ref="timelineControlElement"
           class="studio-autopilot__timeline-control studio-autopilot__conversation-control"
         >
@@ -398,7 +440,7 @@
         class="studio-autopilot__composer"
       >
         <div
-          v-if="statusActionsVisible && !passiveComposerSteeringModeActive"
+          v-if="!agentTaskActive && statusActionsVisible && !passiveComposerSteeringModeActive"
           class="studio-autopilot__status-actions"
         >
           <v-btn
@@ -440,7 +482,7 @@
         </div>
 
         <Vibe64WorkflowControlForm
-          v-if="composerControlComposerFormVisible"
+          v-if="!agentTaskActive && composerControlComposerFormVisible"
           :key="composerControlFormKey"
           ref="screenControlFormRef"
           :agent-controls-visible="composerControlAgentControlsVisible"
@@ -485,8 +527,29 @@
           @update-value="updateComposerControlValue"
         />
 
+        <Vibe64WorkflowControlForm
+          v-if="agentTaskActive"
+          :key="agentTask.id"
+          as-form
+          attach-textarea
+          :attachments-enabled="false"
+          :can-submit-selected-control="agentTaskCanSubmit"
+          :cancel-visible="false"
+          class="studio-autopilot__control-form studio-autopilot__task-form"
+          inline-submit
+          :input-disabled="agentTaskRunning"
+          :input-disabled-reason="agentTaskRunning ? 'Focused task is working…' : ''"
+          :running="agentTaskRequestBusy"
+          :selected-control="agentTaskControl"
+          :selected-control-fields="agentTaskControl.inputFields"
+          :selected-control-values="agentTaskValues"
+          :session-id="sessionId"
+          @submit="submitAgentTaskMessage"
+          @update-value="updateAgentTaskDraft"
+        />
+
         <div
-          v-if="bottomWorkflowActionsVisible"
+          v-if="!agentTaskActive && bottomWorkflowActionsVisible"
           class="studio-autopilot__actions studio-autopilot__screen-actions"
         >
           <v-btn
@@ -882,6 +945,15 @@ const {
   Vibe64SessionDiffPanel,
   activateComposerMenuItem,
   activateWorkflowButtonControl,
+  agentTask,
+  agentTaskActive,
+  agentTaskCanSubmit,
+  agentTaskControl,
+  agentTaskRequestBusy,
+  agentTaskRunning,
+  agentTaskStatusLabel,
+  agentTaskValues,
+  agentTaskWaiting,
   askCodexAboutCommandFailure,
   askCodexAboutSystemContext,
   askCodexAboutSourceEditorFile,
@@ -951,8 +1023,10 @@ const {
   fixDialogOpen,
   fixJob,
   fixTerminal,
+  finishAgentTask,
   insertComposerMenuItemText,
   mdiArrowLeft,
+  mdiCheck,
   mdiClose,
   mdiGithub,
   mdiRefresh,
@@ -1007,15 +1081,18 @@ const {
   stepInputFormVisible,
   stepInputTimelineDisplayFields,
   stopCommandAction,
+  stopAgentTask,
   stopScreenAction,
   stuckRecoveryAvailable,
   stuckRecoveryRunning,
   submitComposerControl,
+  submitAgentTaskMessage,
   submitSelectedAnswerChoice,
   submitScreenComposerControl,
   thinkingLabel,
   thinkingVisible,
   updateAgentSetting,
+  updateAgentTaskDraft,
   updateComposerControlValue,
   updateSelectedControlValue,
   useFreeTextForAnswerChoice,
@@ -1596,6 +1673,49 @@ watch([
   min-width: 0;
 }
 
+.studio-autopilot--task .studio-autopilot__chat-panel {
+  border-color: rgba(126, 87, 194, 0.42);
+  box-shadow: 0 0.75rem 2rem rgba(74, 42, 126, 0.12);
+}
+
+.studio-autopilot__task-header {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(126, 87, 194, 0.16), rgba(94, 53, 177, 0.07));
+  border: 1px solid rgba(126, 87, 194, 0.24);
+  border-radius: 10px;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+}
+
+.studio-autopilot__task-title {
+  display: grid;
+  min-width: 0;
+}
+
+.studio-autopilot__task-title span,
+.studio-autopilot__task-title small {
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.studio-autopilot__task-title strong {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-autopilot__task-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+}
+
 .studio-autopilot__session-tabs-row {
   align-items: center;
   display: flex;
@@ -1801,6 +1921,11 @@ watch([
   gap: 0.62rem;
   min-width: 0;
   width: 100%;
+}
+
+.studio-autopilot__task-form {
+  border-top: 1px solid rgba(126, 87, 194, 0.2);
+  padding-top: 0.2rem;
 }
 
 .studio-autopilot__screen-title {

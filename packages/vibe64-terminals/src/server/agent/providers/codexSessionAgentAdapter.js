@@ -70,11 +70,17 @@ function createCodexSessionAgentAdapter({
     async closeProject(_context, input = {}) {
       return controller.closeAllForProject(input);
     },
+    async createConversation(context, input = {}) {
+      return controller.createConversation(context.sessionId, input);
+    },
     async closeTerminal(context, input = {}) {
       return controller.closeTerminal(context.sessionId, input.terminalSessionId);
     },
     async deleteDetachedChatThread(context, input = {}) {
       return controller.deleteDetachedChatThread(context.sessionId, input);
+    },
+    async deleteConversation(context, input = {}) {
+      return controller.deleteConversation(context.sessionId, input);
     },
     async deliverPrompt(context, handoff = {}) {
       return normalizeCodexSessionResult(await controller.injectCodexPrompt(context.sessionId, handoff, {
@@ -112,6 +118,9 @@ function createCodexSessionAgentAdapter({
     async readTerminal(context, input = {}) {
       return controller.readTerminal(context.sessionId, input.terminalSessionId);
     },
+    async readConversation(context, input = {}) {
+      return controller.readConversation(context.sessionId, input);
+    },
     async resizeTerminal(context, input = {}) {
       return controller.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
     },
@@ -126,8 +135,21 @@ function createCodexSessionAgentAdapter({
         turnOwnership: context.turnOwnership
       }));
     },
+    async startConversationTurn(context, input = {}) {
+      return controller.startConversationTurn(context.sessionId, input);
+    },
+    async stopConversation(context, input = {}) {
+      return controller.stopConversation(context.sessionId, input);
+    },
     async streamDetachedChatTurn(context, input = {}) {
-      return controller.streamDetachedChatTurn(context.sessionId, input);
+      return controller.streamDetachedChatTurn(context.sessionId, input, {
+        onEvent: context.onEvent
+      });
+    },
+    async waitForConversationTurn(context, input = {}) {
+      return controller.waitForConversationTurn(context.sessionId, input, {
+        onEvent: context.onEvent
+      });
     },
     async subscribeTerminal(context, input = {}) {
       return controller.subscribeTerminal(context.sessionId, input.terminalSessionId, input.subscriber);

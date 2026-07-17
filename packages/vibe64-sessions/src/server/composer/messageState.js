@@ -65,6 +65,12 @@ function composerMessageVibe64User(source = null) {
   };
 }
 
+function composerMessageTaskHandoffIds(value = []) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map((taskId) => normalizeText(taskId))
+    .filter(Boolean))];
+}
+
 function composerMessageRequests(source = {}) {
   const run = composerMessageRun(source);
   const requests = new Map();
@@ -102,6 +108,7 @@ function composerMessageRequests(source = {}) {
         retryable: null,
         state: COMPOSER_MESSAGE_STATES.ACCEPTED,
         submittedAt: normalizeText(event.at || request.submittedAt),
+        taskHandoffIds: composerMessageTaskHandoffIds(request.taskHandoffIds),
         threadId: "",
         turnId: "",
         vibe64User: composerMessageVibe64User(request.vibe64User)
@@ -240,7 +247,10 @@ function composerMessageBatch(requests = []) {
       normalizeText(request.promptTemplateId) === promptTemplateId
     ))
       ? promptTemplateId
-      : ""
+      : "",
+    taskHandoffIds: composerMessageTaskHandoffIds(
+      messages.flatMap((request) => request.taskHandoffIds)
+    )
   };
 }
 
@@ -279,6 +289,7 @@ async function acceptComposerMessage(runtime, sessionId = "", input = {}) {
     originId: normalizeText(input?.originId),
     promptTemplateId: normalizeText(input?.promptTemplateId),
     submittedAt: new Date().toISOString(),
+    taskHandoffIds: composerMessageTaskHandoffIds(input?.taskHandoffIds),
     vibe64User: composerMessageVibe64User(input?.vibe64User)
   };
   if (

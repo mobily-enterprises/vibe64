@@ -29,6 +29,7 @@ function useVibe64ComposerPromptActions({
   rejectOptimisticTurn = () => null,
   runWorkflowControl = async () => false,
   setActiveDraftText = () => false,
+  startAgentTask = async () => false,
   startOptimisticTurn = () => null
 } = {}) {
   const promptRefs = ref([]);
@@ -126,6 +127,9 @@ function useVibe64ComposerPromptActions({
     const kind = String(item?.kind || "template").trim();
     if (kind === "template") {
       return attachPromptTemplate(item);
+    }
+    if (kind === "task") {
+      return startAgentTask(item);
     }
     if (kind === "action") {
       const action = actionById(item.actionId);

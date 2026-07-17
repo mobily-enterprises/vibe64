@@ -656,6 +656,7 @@ async function sendCodexAppServerPromptForSession({
   agentSettings = {},
   clientUserMessageId = "",
   contextRefresh = "",
+  outputSchema = null,
   provider,
   prompt = "",
   promptLabel = "",
@@ -670,7 +671,7 @@ async function sendCodexAppServerPromptForSession({
   if (!input) {
     throw new Error("Codex app-server prompt is empty.");
   }
-  const turn = await provider.sendTurn(threadId, input, {
+  const turnSettings = {
     ...codexAppServerTurnSettings({
       agentSettings,
       cwd: workdir
@@ -678,7 +679,11 @@ async function sendCodexAppServerPromptForSession({
     ...(normalizeAgentText(clientUserMessageId)
       ? { clientUserMessageId: normalizeAgentText(clientUserMessageId) }
       : {})
-  });
+  };
+  if (outputSchema && typeof outputSchema === "object" && !Array.isArray(outputSchema)) {
+    turnSettings.outputSchema = outputSchema;
+  }
+  const turn = await provider.sendTurn(threadId, input, turnSettings);
   return {
     input,
     turn

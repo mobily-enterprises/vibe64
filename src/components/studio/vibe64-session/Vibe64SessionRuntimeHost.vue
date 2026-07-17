@@ -33,6 +33,7 @@
       :save-project-config="props.saveProjectConfig"
       :saving-project-config="props.savingProjectConfig"
       :send-agent-message="sendAgentMessage"
+      :request-agent-task="requestAgentTask"
       :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
       @project-attention="emitProjectAttention"
@@ -159,6 +160,7 @@ const {
   humanInputResponsePreview,
   interruptAgentTurn,
   reportPreview,
+  requestAgentTask,
   review,
   selectedAgentTerminalId,
   selection,

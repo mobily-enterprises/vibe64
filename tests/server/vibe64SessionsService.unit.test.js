@@ -3243,7 +3243,7 @@ test("an assistant message recovers stale agent wait before starting a new workf
       message: "Give me the story of the Buddha."
     });
     let recoveredSession = null;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
       recoveredSession = await runtime.getSession(sessionId);
       const message = publicSessionResponse(recoveredSession).composerMessages.find(
         (candidate) => candidate.id === "stale-wait-message"
@@ -3251,7 +3251,7 @@ test("an assistant message recovers stale agent wait before starting a new workf
       if (message?.state === "delivered") {
         break;
       }
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     const message = publicSessionResponse(recoveredSession).composerMessages.find(

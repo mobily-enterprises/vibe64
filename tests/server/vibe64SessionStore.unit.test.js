@@ -104,6 +104,7 @@ test("vibe64 session store creates inspectable session state under the runtime r
     await assertPathExists(paths.statusPath);
     await assertPathExists(paths.metadataRoot);
     await assertPathExists(paths.agentRunsRoot);
+    await assertPathExists(paths.agentTasksRoot);
     await assertPathExists(paths.artifactsRoot);
     await assertPathExists(paths.backgroundTasksRoot);
     await assertPathExists(paths.commandLifecyclesRoot);
@@ -111,6 +112,47 @@ test("vibe64 session store creates inspectable session state under the runtime r
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
+  });
+});
+
+test("vibe64 session store persists the current focused task and keeps task history", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "agent_tasks"
+    });
+
+    await store.writeCurrentAgentTask("agent_tasks", {
+      createdAt: "2026-07-16T01:00:00.000Z",
+      id: "task-1",
+      label: "First task",
+      state: "completed",
+      turns: []
+    });
+    await store.writeCurrentAgentTask("agent_tasks", {
+      createdAt: "2026-07-16T02:00:00.000Z",
+      id: "task-2",
+      label: "Current task",
+      state: "running",
+      turns: [{
+        role: "user",
+        text: "Start"
+      }]
+    });
+    await store.writeAgentTask("agent_tasks", {
+      ...await store.readAgentTask("agent_tasks", "task-1"),
+      handoffPending: false
+    });
+
+    const session = await store.readSession("agent_tasks");
+    const tasks = await store.readAgentTasks("agent_tasks");
+
+    assert.equal(session.agentTask.id, "task-2");
+    assert.equal(session.agentTask.state, "running");
+    assert.deepEqual(tasks.map((task) => task.id), ["task-1", "task-2"]);
+    assert.equal(tasks[0].handoffPending, false);
   });
 });
 

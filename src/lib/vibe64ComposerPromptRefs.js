@@ -11,6 +11,11 @@ function promptTemplateText(item = {}) {
   return String(item?.text || "").trim();
 }
 
+function composerMenuItemCanInsertText(item = {}) {
+  return ["task", "template"].includes(String(item?.kind || "template")) &&
+    Boolean(promptTemplateText(item));
+}
+
 function promptTemplateLabel(item = {}) {
   return String(item?.label || item?.id || "Prompt").replace(/\s+/gu, " ").trim() || "Prompt";
 }
@@ -153,6 +158,7 @@ function expandedComposerPromptSubmissionOptions(options = {}, {
 }
 
 export {
+  composerMenuItemCanInsertText,
   expandedComposerPromptSubmissionOptions,
   promptTemplateDisplayText,
   promptTemplateRefForItem,

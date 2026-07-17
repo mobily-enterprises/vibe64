@@ -672,6 +672,105 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nFull deslop prompt.");
   });
 
+  it("starts focused task menu items without injecting their prompt into main chat", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const requestAgentTask = vi.fn(async () => true);
+    const sendAgentMessage = vi.fn(async () => true);
+    const props = viewProps({
+      requestAgentTask,
+      sendAgentMessage
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(await view.activateComposerMenuItem({
+      id: "core.sync_with_remote",
+      kind: "task",
+      label: "Sync code with GitHub",
+      text: "Full synchronization prompt."
+    })).toBe(true);
+    expect(requestAgentTask).toHaveBeenCalledWith(
+      "start",
+      {
+        agentSettings: {},
+        taskId: "core.sync_with_remote"
+      }
+    );
+    expect(sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.selectedControlValues.value.conversationRequest).toBe("");
+  });
+
+  it("keeps focused task prompt text available for explicit main-chat insertion", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+    view.updateSelectedControlValue("conversationRequest", "Discuss this first.");
+
+    expect(view.insertComposerMenuItemText({
+      kind: "task",
+      label: "Sync code with GitHub",
+      text: "Full synchronization prompt."
+    })).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe(
+      "Discuss this first.\n\nFull synchronization prompt."
+    );
+  });
+
+  it("renders and continues a focused task in the existing chat panel", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const requestAgentTask = vi.fn(async () => true);
+    const props = viewProps({
+      requestAgentTask
+    });
+    props.session.agentTask = {
+      id: "task-1",
+      label: "Sync code with GitHub",
+      state: "waiting",
+      turns: [{
+        at: "2026-07-16T01:00:00.000Z",
+        id: "0001",
+        role: "user",
+        text: "Sync code with GitHub"
+      }, {
+        at: "2026-07-16T01:01:00.000Z",
+        id: "0002",
+        role: "assistant",
+        text: "The branches diverged. Choose merge or rebase."
+      }]
+    };
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.agentTaskActive.value).toBe(true);
+    expect(view.chatTurns.value).toEqual([expect.objectContaining({
+      assistant: expect.objectContaining({
+        text: "The branches diverged. Choose merge or rebase."
+      }),
+      user: expect.objectContaining({
+        text: "Sync code with GitHub"
+      })
+    })]);
+    view.updateAgentTaskDraft("message", "Use a normal merge.");
+    expect(await view.submitAgentTaskMessage()).toBe(true);
+    expect(requestAgentTask).toHaveBeenCalledWith(
+      "message",
+      {
+        message: "Use a normal merge."
+      }
+    );
+    expect(view.agentTaskValues.value.message).toBe("");
+  });
+
   it("keeps Send cosmetic until the AI layer becomes steerable and accepts a queued follow-up", async () => {
     const {
       useVibe64AutopilotView

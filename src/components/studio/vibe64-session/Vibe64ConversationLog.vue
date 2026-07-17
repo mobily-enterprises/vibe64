@@ -2,6 +2,7 @@
   <section
     v-if="visible"
     class="studio-conversation-log"
+    :class="`studio-conversation-log--${variant}`"
     aria-label="Conversation history"
   >
     <v-btn
@@ -188,7 +189,7 @@
               <v-icon :icon="mdiRobotOutline" size="16" />
             </span>
             <div class="studio-conversation-log__message-header">
-              <span>Codex</span>
+              <span>{{ assistantLabel }}</span>
             </div>
           </div>
           <div class="studio-conversation-log__message studio-conversation-log__message--assistant">
@@ -250,6 +251,10 @@ import {
 } from "@/lib/vibe64ConversationThinkingText.js";
 
 const props = defineProps({
+  assistantLabel: {
+    default: "Codex",
+    type: String
+  },
   error: {
     default: "",
     type: String
@@ -289,6 +294,11 @@ const props = defineProps({
   turns: {
     default: () => [],
     type: Array
+  },
+  variant: {
+    default: "main",
+    validator: (value) => ["main", "task"].includes(value),
+    type: String
   },
   visible: {
     default: false,
@@ -808,6 +818,19 @@ watch(() => displayTurns.value[0]?.turnId || "", async (turnId, previousTurnId) 
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
   padding: 0;
+}
+
+.studio-conversation-log--task {
+  border-color: rgba(126, 87, 194, 0.32);
+}
+
+.studio-conversation-log--task .studio-conversation-log__avatar--assistant {
+  background: #7e57c2;
+}
+
+.studio-conversation-log--task .studio-conversation-log__message--user {
+  background: #eee8f8;
+  color: #2d2440;
 }
 
 .studio-conversation-log__thinking {

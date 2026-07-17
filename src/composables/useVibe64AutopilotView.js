@@ -78,6 +78,9 @@ import {
   useVibe64ComposerPromptActions
 } from "@/composables/vibe64-session/composer/useVibe64ComposerPromptActions.js";
 import {
+  useVibe64AgentTask
+} from "@/composables/vibe64-session/useVibe64AgentTask.js";
+import {
   useVibe64PassiveComposerSubmission
 } from "@/composables/vibe64-session/composer/useVibe64PassiveComposerSubmission.js";
 import {
@@ -209,6 +212,10 @@ const vibe64AutopilotViewProps = {
     default: async () => false,
     type: Function
   },
+  requestAgentTask: {
+    default: async () => false,
+    type: Function
+  },
   page: {
     default: () => ({}),
     type: Object
@@ -324,6 +331,23 @@ function useVibe64AutopilotView(props, emit) {
       ? settings
       : null;
   });
+  const {
+    agentTask,
+    agentTaskActive,
+    agentTaskCanSubmit,
+    agentTaskControl,
+    agentTaskRequestBusy,
+    agentTaskRunning,
+    agentTaskStatusLabel,
+    agentTaskTurns,
+    agentTaskValues,
+    agentTaskWaiting,
+    finishAgentTask,
+    startAgentTask,
+    stopAgentTask,
+    submitAgentTaskMessage,
+    updateAgentTaskDraft
+  } = useVibe64AgentTask(props);
   const sessionRecovery = computed(() => {
     const recovery = props.session?.recovery;
     return recovery && Array.isArray(recovery.issues) && recovery.issues.length
@@ -807,6 +831,9 @@ function useVibe64AutopilotView(props, emit) {
   const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_preview") && props.reportPreview?.visible));
   const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));
   const chatTurns = computed(() => {
+    if (agentTaskActive.value) {
+      return agentTaskTurns.value;
+    }
     const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
     const optimisticTurns = unmatchedOptimisticComposerTurns(turns, [
       ...(optimisticComposerTurn.value ? [optimisticComposerTurn.value] : []),
@@ -843,6 +870,7 @@ function useVibe64AutopilotView(props, emit) {
   const chatReloadAvailable = computed(() => Boolean(
     props.active &&
     props.session &&
+    !agentTaskActive.value &&
     (
       typeof props.refreshSessionData === "function" ||
       typeof props.conversationLog?.reload === "function"
@@ -859,6 +887,14 @@ function useVibe64AutopilotView(props, emit) {
     chatTimelineVisible.value
   ));
   const runtimeNoticeMessages = computed(() => [
+    agentTaskActive.value && agentTask.value?.error
+      ? {
+          icon: mdiAlertCircleOutline,
+          id: "agent-task-error",
+          text: String(agentTask.value.error),
+          tone: "error"
+        }
+      : null,
     composerHandoffPresentation.value.error
       ? {
           icon: mdiAlertCircleOutline,
@@ -899,6 +935,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const conversationScrollKey = computed(() => [
     sessionId.value,
+    agentTaskActive.value ? `task:${agentTask.value?.id || ""}` : "main",
     chatTimelineVisible.value ? "conversation-visible" : "conversation-hidden",
     selectedControl.value?.id || "",
     selectedControlFields.value.map((field) => field.name).join("|")
@@ -1359,6 +1396,14 @@ function useVibe64AutopilotView(props, emit) {
   }));
   const statusLaneVisible = computed(() => statusLane.value.visible);
   const statusLaneLabel = computed(() => statusLane.value.label);
+  const activeStatusLaneVisible = computed(() => (
+    agentTaskActive.value ? agentTaskRunning.value : statusLaneVisible.value
+  ));
+  const activeStatusLaneLabel = computed(() => (
+    agentTaskActive.value
+      ? `Working on ${String(agentTask.value?.label || "focused task")}…`
+      : statusLaneLabel.value
+  ));
   const composerControlInterruptDisabled = computed(() => composerControlModel.value.interruptDisabled);
   const composerControlInterruptVisible = computed(() => composerControlModel.value.interruptVisible);
   const composerInlineInterruptVisible = computed(() => Boolean(
@@ -1373,6 +1418,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const statusActionsVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
+    !agentTaskActive.value &&
     (
       statusAgentStopVisible.value ||
       screenStopAction.value ||
@@ -1397,6 +1443,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const sourceEditorAskCodexAvailable = computed(() => Boolean(
     composerVisible.value &&
+    !agentTaskActive.value &&
     composerControlFormVisible.value &&
     !composerControlInputDisabled.value &&
     !composerInputLocked.value &&
@@ -1422,6 +1469,7 @@ function useVibe64AutopilotView(props, emit) {
   const bottomComposerVisible = computed(() => Boolean(
     composerVisible.value &&
     (
+      agentTaskActive.value ||
       composerControlComposerFormVisible.value ||
       (
         statusActionsVisible.value &&
@@ -2155,6 +2203,7 @@ function useVibe64AutopilotView(props, emit) {
     rejectOptimisticTurn: markOptimisticComposerTurnFailed,
     runWorkflowControl,
     setActiveDraftText: setActiveComposerDraftText,
+    startAgentTask: (item) => startAgentTask(item, requestAgentSettings.value),
     startOptimisticTurn: (input = {}) => startOptimisticComposerTurn({
       ...input,
       ...(
@@ -2662,6 +2711,15 @@ function useVibe64AutopilotView(props, emit) {
     Vibe64SessionDiffPanel,
     activateControl,
     activateWorkflowButtonControl,
+    agentTask,
+    agentTaskActive,
+    agentTaskCanSubmit,
+    agentTaskControl,
+    agentTaskRequestBusy,
+    agentTaskRunning,
+    agentTaskStatusLabel,
+    agentTaskValues,
+    agentTaskWaiting,
     activeSessionTool,
     askCodexAboutCommandFailure,
     askCodexAboutSystemContext,
@@ -2739,6 +2797,7 @@ function useVibe64AutopilotView(props, emit) {
     fixDialogOpen,
     fixJob,
     fixTerminal,
+    finishAgentTask,
     insertComposerMenuItemText,
     inputFieldIsPrivate,
     mdiCheck,
@@ -2819,17 +2878,20 @@ function useVibe64AutopilotView(props, emit) {
     stepInputFormVisible,
     stepInputTimelineDisplayFields,
     stopCommandAction,
+    stopAgentTask,
     stopScreenAction,
     stuckRecoveryAvailable,
     stuckRecoveryRunning,
     submitComposerControl,
+    submitAgentTaskMessage,
     submitPassiveComposer,
     submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
-    thinkingLabel: statusLaneLabel,
-    thinkingVisible: statusLaneVisible,
+    thinkingLabel: activeStatusLaneLabel,
+    thinkingVisible: activeStatusLaneVisible,
     updateAgentSetting,
+    updateAgentTaskDraft,
     updateComposerControlValue,
     updatePassiveComposer,
     updateSelectedControlValue,

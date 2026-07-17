@@ -53,6 +53,13 @@ import {
 } from "@/lib/vibe64BrowserTabOrigin.js";
 
 const AGENT_MESSAGE_ACCEPT_TIMEOUT_MS = 10_000;
+const AGENT_TASK_ACCEPT_TIMEOUT_MS = 30_000;
+const AGENT_TASK_ACTION_PATHS = Object.freeze({
+  finish: "/finish",
+  message: "/message",
+  start: "",
+  stop: "/stop"
+});
 const LAUNCH_CONTROLS_STABILITY_DELAY_MS = 1000;
 
 function runtimeCapabilitiesState({
@@ -633,6 +640,55 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   }
 
+  async function requestAgentTask(action = "", input = {}) {
+    const sessionId = selectedSessionId.value || props.sessionId;
+    const suffix = AGENT_TASK_ACTION_PATHS[action];
+    if (!sessionId || suffix === undefined) {
+      return false;
+    }
+    const path = vibe64SessionPath(
+      readRefOrGetterValue(props.sessionData.sessionsApiPath),
+      sessionId,
+      `/agent-task${suffix}`
+    );
+    try {
+      const result = await getUsersWebHttpClient().request(path, {
+        body: agentTurnControlPayloadFromContext({
+          ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
+          sessionId
+        }),
+        method: "POST",
+        signal: AbortSignal.timeout(AGENT_TASK_ACCEPT_TIMEOUT_MS)
+      });
+      await props.sessionData.refreshSessionData().catch(() => null);
+      if (result?.ok === false) {
+        emit("page-error-change", {
+          error: String(result.error || "Focused task request failed."),
+          sessionId
+        });
+        return false;
+      }
+      emit("page-error-change", {
+        error: "",
+        sessionId
+      });
+      return true;
+    } catch (error) {
+      await props.sessionData.refreshSessionData().catch(() => null);
+      const message = String(error?.message || error || "Focused task request failed.");
+      emit("page-error-change", {
+        error: message,
+        sessionId
+      });
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentTask.error", {
+        error: message,
+        action,
+        sessionId,
+      });
+      return false;
+    }
+  }
+
   function sendAgentMessage(input = {}) {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
@@ -812,6 +868,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     selection,
     setAutopilotBusy,
     sendAgentMessage,
+    requestAgentTask,
     timeline
   };
 }

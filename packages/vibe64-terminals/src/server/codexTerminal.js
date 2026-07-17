@@ -49,8 +49,11 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
+  VIBE64_AGENT_WORKSPACE_WRITE_POLICY,
+  VIBE64_AGENT_TASK_RESULT_SCHEMA,
   effectiveVibe64AgentExecutionSettings,
-  effectiveVibe64AgentSettings
+  effectiveVibe64AgentSettings,
+  normalizeVibe64AgentTaskResult
 } from "@local/vibe64-runtime/shared";
 import {
   validateAgentTurnResult
@@ -6810,6 +6813,75 @@ function createCodexTerminalController({
     ].join("\n").trim();
   }
 
+  function codexAppServerTaskConversationInstructions(session = {}) {
+    return [
+      codexAppServerDeveloperInstructions(session),
+      "",
+      "Focused Vibe64 task instruction:",
+      "This is a temporary task conversation, separate from the main Vibe64 conversation.",
+      "You may edit the session worktree and run state-changing commands when they are required by the task.",
+      "Stay within the requested task. Do not start unrelated work or modify Vibe64 runtime/session state.",
+      "Every response uses the required task result shape.",
+      "Use kind=continue when you need a user decision or another follow-up turn.",
+      "Use kind=complete only after the task is actually finished, and provide a concise factual report for the main conversation."
+    ].join("\n").trim();
+  }
+
+  async function codexAppServerConversationContext(sessionId = "", input = {}) {
+    if (!codexAppServerPromptDeliveryEnabled) {
+      return codexAppServerControlDisabledResult();
+    }
+    const context = await codexAppServerSessionContext(sessionId);
+    if (context.ok === false) {
+      return context;
+    }
+    const {
+      runtime,
+      session,
+      targetRoot,
+      toolHomeSource,
+      workdir
+    } = context;
+    const provider = await ensureCodexAppServerDaemonForSession(
+      sessionId,
+      await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      })
+    );
+    const agentSettings = isRecord(input.agentSettings) ? input.agentSettings : {};
+    return {
+      ...context,
+      agentSettings,
+      provider
+    };
+  }
+
+  async function codexAppServerConversationThreadSettings(context = {}, input = {}) {
+    const promptSession = typeof context.runtime?.promptSessionForAction === "function"
+      ? await context.runtime.promptSessionForAction(context.session)
+      : context.session;
+    return codexAppServerThreadSettings({
+      agentSettings: context.agentSettings,
+      cwd: context.workdir,
+      developerInstructions: input.policy === VIBE64_AGENT_WORKSPACE_WRITE_POLICY
+        ? codexAppServerTaskConversationInstructions(promptSession)
+        : codexAppServerDetachedChatInstructions(promptSession)
+    });
+  }
+
+  function codexAppServerConversationResponse(text = "") {
+    const rawText = String(text || "").trim();
+    const outcome = normalizeVibe64AgentTaskResult(rawText);
+    return {
+      message: outcome?.message || rawText,
+      outcome,
+      rawText
+    };
+  }
+
   function createCodexAppServerDetachedTurnWatcher(provider = null, threadId = "", {
     onEvent = null,
     timeoutMs = CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
@@ -7015,6 +7087,167 @@ function createCodexTerminalController({
     return detachedCodexAppServerChatTurn(sessionId, input);
   }
 
+  async function createCodexAppServerConversation(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      const context = await codexAppServerConversationContext(sessionId, input);
+      if (context.ok === false) {
+        return context;
+      }
+      const threadSettings = await codexAppServerConversationThreadSettings(context, input);
+      const thread = await context.provider.startThread(threadSettings);
+      const conversationId = normalizeText(thread.id || thread.response?.thread?.id);
+      if (!conversationId) {
+        throw new Error("Codex app-server did not return a conversation id.");
+      }
+      return {
+        conversationId,
+        ok: true,
+        status: "ready"
+      };
+    });
+  }
+
+  async function startCodexAppServerConversationTurn(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      const conversationId = normalizeText(input.conversationId);
+      const prompt = normalizeText(input.message || input.prompt);
+      if (!conversationId || !prompt) {
+        return {
+          code: "vibe64_agent_conversation_turn_input_required",
+          error: "Assistant conversation turns require a conversation and message.",
+          ok: false
+        };
+      }
+      const workspaceWrite = input.policy === VIBE64_AGENT_WORKSPACE_WRITE_POLICY;
+      const context = await codexAppServerConversationContext(sessionId, input);
+      if (context.ok === false) {
+        return context;
+      }
+      const threadSettings = await codexAppServerConversationThreadSettings(context, input);
+      await context.provider.resumeThread(conversationId, threadSettings);
+      const delivery = await sendCodexAppServerPromptForSession({
+        agentSettings: context.agentSettings,
+        outputSchema: workspaceWrite ? VIBE64_AGENT_TASK_RESULT_SCHEMA : null,
+        prompt,
+        promptLabel: normalizeText(input.promptLabel) || "Focused Vibe64 task",
+        provider: context.provider,
+        threadId: conversationId,
+        workdir: context.workdir
+      });
+      const runId = normalizeText(delivery.turn?.id);
+      const status = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
+      if (!runId) {
+        throw new Error("Codex app-server accepted a conversation turn without returning its id.");
+      }
+      return {
+        conversationId,
+        ok: true,
+        runId,
+        status
+      };
+    });
+  }
+
+  async function readCodexAppServerConversation(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      const conversationId = normalizeText(input.conversationId);
+      if (!conversationId) {
+        return {
+          code: "vibe64_agent_conversation_id_required",
+          error: "Assistant conversation id is required.",
+          ok: false
+        };
+      }
+      const context = await codexAppServerConversationContext(sessionId, input);
+      if (context.ok === false) {
+        return context;
+      }
+      const thread = await context.provider.readThread(conversationId);
+      const runId = normalizeText(input.runId) || codexAppServerThreadTurnId(thread);
+      const status = codexAppServerThreadStatus(thread);
+      const text = runId
+        ? codexAppServerProviderThreadAssistantSegments(thread, runId)
+          .map((segment) => segment.text)
+          .join("\n\n")
+        : "";
+      return {
+        conversationId,
+        error: codexAppServerThreadError(thread),
+        ok: true,
+        runId,
+        status,
+        ...codexAppServerConversationResponse(text)
+      };
+    });
+  }
+
+  async function waitForCodexAppServerConversationTurn(sessionId, input = {}, {
+    onEvent = null
+  } = {}) {
+    return vibe64Result(async () => {
+      const conversationId = normalizeText(input.conversationId);
+      const runId = normalizeText(input.runId);
+      if (!conversationId || !runId) {
+        return {
+          code: "vibe64_agent_conversation_run_required",
+          error: "Waiting for an assistant conversation requires conversation and run ids.",
+          ok: false
+        };
+      }
+      const context = await codexAppServerConversationContext(sessionId, input);
+      if (context.ok === false) {
+        return context;
+      }
+      const watcher = createCodexAppServerDetachedTurnWatcher(context.provider, conversationId, {
+        onEvent,
+        timeoutMs: Number(input.timeoutMs || 0) > 0
+          ? Number(input.timeoutMs)
+          : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
+      });
+      const waitForResult = watcher.wait();
+      watcher.setTurnId(runId);
+      const current = await context.provider.readThread(conversationId);
+      const status = codexAppServerThreadStatus(current);
+      if (codexAppServerTurnStatusIsProviderFailure(status)) {
+        watcher.failNow(new Error(
+          codexAppServerThreadError(current) || `Codex app-server turn ${status}.`
+        ));
+      } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
+        await watcher.completeNow(status);
+      }
+      const result = await waitForResult;
+      return {
+        conversationId,
+        ok: true,
+        runId,
+        status: result.status || status || "completed",
+        ...codexAppServerConversationResponse(result.text)
+      };
+    });
+  }
+
+  async function stopCodexAppServerConversation(sessionId, input = {}) {
+    const result = await interruptDetachedCodexAppServerChatTurn(sessionId, {
+      threadId: input.conversationId,
+      turnId: input.runId
+    });
+    return {
+      ...result,
+      conversationId: normalizeText(input.conversationId),
+      runId: normalizeText(input.runId)
+    };
+  }
+
+  async function deleteCodexAppServerConversation(sessionId, input = {}) {
+    const result = await deleteDetachedCodexAppServerChatThread(sessionId, {
+      threadId: input.conversationId
+    });
+    return {
+      ...result,
+      conversationId: normalizeText(input.conversationId)
+    };
+  }
+
   async function streamDetachedCodexAppServerChatTurn(sessionId, input = {}, options = {}) {
     return detachedCodexAppServerChatTurn(sessionId, input, options);
   }
@@ -7039,33 +7272,16 @@ function createCodexTerminalController({
           ok: false
         };
       }
-      const context = await codexAppServerSessionContext(sessionId);
+      const context = await codexAppServerConversationContext(sessionId, input);
       if (context.ok === false) {
         return context;
       }
       const {
-        runtime,
-        session,
-        targetRoot,
-        toolHomeSource,
+        agentSettings,
+        provider,
         workdir
       } = context;
-      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
-        runtime,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      });
-      const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
-      const promptSession = typeof runtime.promptSessionForAction === "function"
-        ? await runtime.promptSessionForAction(session)
-        : session;
-      const agentSettings = isRecord(input.agentSettings) ? input.agentSettings : {};
-      const threadSettings = codexAppServerThreadSettings({
-        agentSettings,
-        cwd: workdir,
-        developerInstructions: codexAppServerDetachedChatInstructions(promptSession)
-      });
+      const threadSettings = await codexAppServerConversationThreadSettings(context, input);
       const requestedThreadId = normalizeText(input.threadId || input.codexSessionId);
       let thread = null;
       let replacedThreadId = "";
@@ -7199,26 +7415,11 @@ function createCodexTerminalController({
           status: "notFound"
         };
       }
-      const context = await codexAppServerSessionContext(sessionId);
+      const context = await codexAppServerConversationContext(sessionId, input);
       if (context.ok === false) {
         return context;
       }
-      const {
-        runtime,
-        session,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      } = context;
-      const provider = await ensureCodexAppServerDaemonForSession(
-        sessionId,
-        await codexAppServerRuntimeOptionsForSession(session, {
-          runtime,
-          targetRoot,
-          toolHomeSource,
-          workdir
-        })
-      );
+      const provider = context.provider;
       if (typeof provider.deleteThread !== "function") {
         return {
           code: "vibe64_codex_detached_thread_delete_unavailable",
@@ -7266,27 +7467,11 @@ function createCodexTerminalController({
           turnId
         });
       }
-      const context = await codexAppServerSessionContext(sessionId);
+      const context = await codexAppServerConversationContext(sessionId, input);
       if (context.ok === false) {
         return context;
       }
-      const {
-        runtime,
-        session,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      } = context;
-      const provider = await ensureCodexAppServerDaemonForSession(
-        sessionId,
-        await codexAppServerRuntimeOptionsForSession(session, {
-          runtime,
-          targetRoot,
-          toolHomeSource,
-          workdir
-        })
-      );
-      const result = await provider.interruptTurn(threadId, turnId);
+      const result = await context.provider.interruptTurn(threadId, turnId);
       const interruptFailure = codexAppServerInterruptFailure(result);
       if (interruptFailure) {
         return {
@@ -7950,6 +8135,14 @@ function createCodexTerminalController({
       });
     },
 
+    createConversation(sessionId, input = {}) {
+      return createCodexAppServerConversation(sessionId, input);
+    },
+
+    deleteConversation(sessionId, input = {}) {
+      return deleteCodexAppServerConversation(sessionId, input);
+    },
+
     readGlobalTerminal(terminalSessionId) {
       return vibe64Result(async () => {
         const targetRoot = await globalCodexTargetRoot(projectService);
@@ -7971,6 +8164,10 @@ function createCodexTerminalController({
           namespace: fixCodexTerminalNamespace(jobId)
         });
       });
+    },
+
+    readConversation(sessionId, input = {}) {
+      return readCodexAppServerConversation(sessionId, input);
     },
 
     readTerminal(sessionId, terminalSessionId) {
@@ -7997,8 +8194,20 @@ function createCodexTerminalController({
       return runDetachedCodexAppServerChatTurn(sessionId, input);
     },
 
+    startConversationTurn(sessionId, input = {}) {
+      return startCodexAppServerConversationTurn(sessionId, input);
+    },
+
+    stopConversation(sessionId, input = {}) {
+      return stopCodexAppServerConversation(sessionId, input);
+    },
+
     streamDetachedChatTurn(sessionId, input = {}, options = {}) {
       return streamDetachedCodexAppServerChatTurn(sessionId, input, options);
+    },
+
+    waitForConversationTurn(sessionId, input = {}, options = {}) {
+      return waitForCodexAppServerConversationTurn(sessionId, input, options);
     },
 
     deleteDetachedChatThread(sessionId, input = {}) {

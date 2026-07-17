@@ -18,6 +18,9 @@ import {
 import {
   agentMessageCancelInputValidator,
   agentMessageInputValidator,
+  agentTaskControlInputValidator,
+  agentTaskMessageInputValidator,
+  agentTaskStartInputValidator,
   agentTurnInterruptInputValidator
 } from "./inputSchemas.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
@@ -145,6 +148,46 @@ function registerRoutes(
     return app.make("feature.vibe64-sessions.service").cancelAgentMessage(
       request.params.sessionId,
       request.params.messageId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-task", {
+    body: agentTaskStartInputValidator,
+    summary: "Start a focused Vibe64 assistant task."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").startAgentTask(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-task/message", {
+    body: agentTaskMessageInputValidator,
+    summary: "Send a message to the active focused assistant task."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").sendAgentTaskMessage(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-task/finish", {
+    body: agentTaskControlInputValidator,
+    summary: "Finish the active focused assistant task."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").finishAgentTask(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-task/stop", {
+    body: agentTaskControlInputValidator,
+    summary: "Stop the active focused assistant task."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").stopAgentTask(
+      request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );
   });

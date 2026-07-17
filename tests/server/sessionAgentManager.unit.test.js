@@ -91,6 +91,62 @@ test("session agent manager gives every provider the active turn ownership contr
   assert.deepEqual(receivedContext.turnOwnership, turnOwnership);
 });
 
+test("session agent manager exposes focused conversations without provider-specific ids", async () => {
+  const calls = [];
+  const onEvent = () => null;
+  const manager = createSessionAgentManager({
+    adapters: [{
+      id: "future-provider",
+      transportId: "future-transport",
+      async createConversation(context, input) {
+        calls.push(["create", context, input]);
+        return {
+          conversationId: "opaque-conversation",
+          ok: true
+        };
+      },
+      async startConversationTurn(context, input) {
+        calls.push(["start", context, input]);
+        return {
+          ok: true,
+          runId: "opaque-run"
+        };
+      },
+      async waitForConversationTurn(context, input) {
+        calls.push(["wait", context, input]);
+        return {
+          message: "Done",
+          ok: true
+        };
+      }
+    }]
+  });
+  const options = {
+    agentSettings: {
+      providerId: "future-provider"
+    },
+    onEvent
+  };
+
+  const created = await manager.createConversation("session-1", {
+    policy: "workspace_write"
+  }, options);
+  const started = await manager.startConversationTurn("session-1", {
+    conversationId: created.conversationId,
+    message: "Do the task."
+  }, options);
+  const result = await manager.waitForConversationTurn("session-1", {
+    conversationId: created.conversationId,
+    runId: started.runId
+  }, options);
+
+  assert.equal(result.message, "Done");
+  assert.equal(result.providerId, "future-provider");
+  assert.deepEqual(calls.map(([name]) => name), ["create", "start", "wait"]);
+  assert.equal(calls[2][1].onEvent, onEvent);
+  assert.equal(calls[2][2].runId, "opaque-run");
+});
+
 test("session agent manager coalesces duplicate handoff deliveries", async () => {
   const gate = deferred();
   let deliveryCount = 0;

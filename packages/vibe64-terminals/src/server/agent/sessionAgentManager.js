@@ -143,6 +143,7 @@ function createSessionAgentManager({
     const context = {
       agentSettings: operationOptions.agentSettings,
       lifecycle: typeof operationOptions.lifecycle === "function" ? operationOptions.lifecycle : null,
+      onEvent: typeof operationOptions.onEvent === "function" ? operationOptions.onEvent : null,
       prepareHandoff: typeof operationOptions.prepareHandoff === "function"
         ? operationOptions.prepareHandoff
         : null,
@@ -222,12 +223,18 @@ function createSessionAgentManager({
     closeProject(input = {}, options = {}) {
       return callProviderAdapter("closeProject", input, options);
     },
+    createConversation(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("createConversation", sessionId, input, options);
+    },
     closeSession,
     closeTerminal(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("closeTerminal", sessionId, input, options);
     },
     deleteDetachedChatThread(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("deleteDetachedChatThread", sessionId, input, options);
+    },
+    deleteConversation(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("deleteConversation", sessionId, input, options);
     },
     describeProvider(options = {}) {
       const adapter = adapterFor(options);
@@ -262,6 +269,9 @@ function createSessionAgentManager({
         terminalSessionId
       }, options);
     },
+    readConversation(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("readConversation", sessionId, input, options);
+    },
     resizeTerminal(sessionId = "", terminalSessionId = "", size = {}, options = {}) {
       return callSessionAdapter("resizeTerminal", sessionId, {
         size,
@@ -280,8 +290,17 @@ function createSessionAgentManager({
     sendMessage(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("sendMessage", sessionId, input, options);
     },
+    startConversationTurn(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("startConversationTurn", sessionId, input, options);
+    },
+    stopConversation(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("stopConversation", sessionId, input, options);
+    },
     streamDetachedChatTurn(sessionId = "", input = {}, options = {}) {
       return callSessionAdapter("streamDetachedChatTurn", sessionId, input, options);
+    },
+    waitForConversationTurn(sessionId = "", input = {}, options = {}) {
+      return callSessionAdapter("waitForConversationTurn", sessionId, input, options);
     },
     subscribeTerminal(sessionId = "", terminalSessionId = "", subscriber = null, options = {}) {
       return callSessionAdapter("subscribeTerminal", sessionId, {

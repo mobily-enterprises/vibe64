@@ -614,6 +614,38 @@ test("codex app-server bridge sends turns with app-server text input only", asyn
   assert.equal(providerCalls[0].params.outputSchema, undefined);
 });
 
+test("codex app-server bridge applies an output schema only for focused task turns", async () => {
+  let params = null;
+  const outputSchema = {
+    properties: {
+      kind: {
+        enum: ["continue", "complete"],
+        type: "string"
+      }
+    },
+    required: ["kind"],
+    type: "object"
+  };
+  const provider = {
+    async sendTurn(_threadId, _input, turnParams) {
+      params = turnParams;
+      return {
+        id: "task-turn"
+      };
+    }
+  };
+
+  await sendCodexAppServerPromptForSession({
+    outputSchema,
+    prompt: "Do the focused task.",
+    provider,
+    threadId: "task-thread",
+    workdir: "/repo/worktree"
+  });
+
+  assert.equal(params.outputSchema, outputSchema);
+});
+
 test("codex app-server bridge advertises workflow results as a thread tool, not a turn output schema", () => {
   const settings = codexAppServerThreadStartSettings({
     cwd: "/repo/worktree"
