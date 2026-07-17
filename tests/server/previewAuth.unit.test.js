@@ -2,14 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  APPLICATION_PREVIEW_AUTH_KIND,
+  APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV,
+  APPLICATION_PREVIEW_IDENTITY_PATH,
+  APPLICATION_PREVIEW_IDENTITY_SECRET_ENV,
+  APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER,
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   normalizePreviewIdentitySelection,
   previewAuthEnvironment,
   previewAuthIdentityExchange,
+  previewAuthIdentityTypes,
   verifyPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 
@@ -42,15 +51,24 @@ test("JSKIT preview auth environment contains a random private exchange secret",
 
 test("preview identity selections normalize login and logout operations", () => {
   assert.deepEqual(normalizePreviewIdentitySelection({
-    email: " ADA@EXAMPLE.COM ",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: " ADA@EXAMPLE.COM "
+    }
   }), {
-    email: "ada@example.com",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    }
   });
   assert.deepEqual(normalizePreviewIdentitySelection({
-    email: "ignored@example.com",
-    operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+    operation: PREVIEW_IDENTITY_LOGOUT_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ignored@example.com"
+    }
   }), {
     operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
   });
@@ -63,8 +81,11 @@ test("preview identity selections normalize login and logout operations", () => 
 test("preview identity grants verify once scoped data remains unchanged", () => {
   const previewAuth = previewAuthFixture();
   const grant = createPreviewIdentityGrant(previewAuth, {
-    email: "ada@example.com",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    }
   }, {
     nowSeconds: 100,
     ttlSeconds: 30
@@ -76,16 +97,22 @@ test("preview identity grants verify once scoped data remains unchanged", () => 
   assert.equal(verified.expiresAt, 130);
   assert.match(verified.nonce, /^[A-Za-z0-9_-]+$/u);
   assert.deepEqual(verified.selection, {
-    email: "ada@example.com",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    }
   });
 });
 
 test("preview identity grants reject tampering, expiry, and scope mismatch", () => {
   const previewAuth = previewAuthFixture();
   const grant = createPreviewIdentityGrant(previewAuth, {
-    email: "ada@example.com",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    }
   }, {
     nowSeconds: 100,
     ttlSeconds: 10
@@ -118,8 +145,11 @@ test("preview identity grants require every project, session, target, and termin
   ]) {
     assert.throws(
       () => createPreviewIdentityGrant(previewAuthFixture({ [field]: "" }), {
-        email: "ada@example.com",
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+        operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+          value: "ada@example.com"
+        }
       }),
       /scope is incomplete/u
     );
@@ -129,8 +159,11 @@ test("preview identity grants require every project, session, target, and termin
 test("JSKIT identity exchange owns fixed upstream paths and the private header", () => {
   const previewAuth = previewAuthFixture();
   assert.deepEqual(previewAuthIdentityExchange(previewAuth, {
-    email: "ada@example.com",
-    operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    }
   }), {
     before: [
       {
@@ -147,5 +180,71 @@ test("JSKIT identity exchange owns fixed upstream paths and the private header",
     },
     method: "POST",
     path: "/api/dev-auth/login-as"
+  });
+});
+
+test("preview auth providers advertise only the identifier types they support", () => {
+  assert.deepEqual(previewAuthIdentityTypes({
+    kind: JSKIT_PREVIEW_AUTH_KIND
+  }), [
+    PREVIEW_IDENTITY_SELECTOR_EMAIL,
+    PREVIEW_IDENTITY_SELECTOR_USER_ID
+  ]);
+  assert.deepEqual(previewAuthIdentityTypes({
+    identityTypes: [PREVIEW_IDENTITY_SELECTOR_LOGIN],
+    kind: APPLICATION_PREVIEW_AUTH_KIND
+  }), [PREVIEW_IDENTITY_SELECTOR_LOGIN]);
+  assert.throws(() => previewAuthIdentityExchange(previewAuthFixture(), {
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+      value: "merc"
+    }
+  }), /does not support that application user identifier/u);
+});
+
+test("generic application preview auth uses a typed secret-protected exchange", () => {
+  const previewAuth = previewAuthFixture({
+    identityTypes: [PREVIEW_IDENTITY_SELECTOR_LOGIN],
+    kind: APPLICATION_PREVIEW_AUTH_KIND
+  });
+  assert.deepEqual(previewAuthEnvironment({
+    kind: APPLICATION_PREVIEW_AUTH_KIND,
+    secret: previewAuth.secret
+  }), {
+    [APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV]: "true",
+    [APPLICATION_PREVIEW_IDENTITY_SECRET_ENV]: previewAuth.secret
+  });
+  assert.deepEqual(previewAuthIdentityExchange(previewAuth, {
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+      value: "merc"
+    }
+  }), {
+    before: [
+      {
+        body: {
+          operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+        },
+        headers: {
+          [APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER]: previewAuth.secret
+        },
+        method: "POST",
+        path: APPLICATION_PREVIEW_IDENTITY_PATH
+      }
+    ],
+    body: {
+      operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+      selector: {
+        type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+        value: "merc"
+      }
+    },
+    headers: {
+      [APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER]: previewAuth.secret
+    },
+    method: "POST",
+    path: APPLICATION_PREVIEW_IDENTITY_PATH
   });
 });

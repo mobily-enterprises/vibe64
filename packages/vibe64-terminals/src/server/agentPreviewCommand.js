@@ -190,7 +190,7 @@ function usageText() {
     "  vibe64-preview screenshot [--output <path>]",
     "  vibe64-preview browser ensure",
     "  vibe64-preview browser eval < playwright-code.js",
-    "  vibe64-preview browser identity <you|guest|existing-user-email>",
+    "  vibe64-preview browser identity <you|guest|existing-user-identifier>",
     "  vibe64-preview browser screenshot [--output <path>]",
     "  vibe64-preview browser status",
     "  vibe64-preview browser reset",
@@ -536,18 +536,22 @@ function createAgentPreviewCommandService({
   function registerViewer(sessionId = "", vibe64User = null) {
     const normalizedSessionId = normalizeText(sessionId);
     const email = normalizeText(vibe64User?.email).toLowerCase();
+    const login = normalizeText(vibe64User?.username || vibe64User?.login);
+    const userId = normalizeText(vibe64User?.id || vibe64User?.userId);
     if (!normalizedSessionId) {
       return false;
     }
-    if (!email) {
+    if (!email && !login && !userId) {
       sessionViewers.delete(normalizedSessionId);
       return false;
     }
     sessionViewers.set(normalizedSessionId, {
       displayName: normalizeText(
-        vibe64User?.displayName || vibe64User?.name || vibe64User?.username || email
-      ) || email,
-      email
+        vibe64User?.displayName || vibe64User?.name || login || email || userId
+      ) || login || email || userId,
+      ...(email ? { email } : {}),
+      ...(login ? { login, username: login } : {}),
+      ...(userId ? { id: userId, userId } : {})
     });
     return true;
   }
@@ -564,7 +568,7 @@ function createAgentPreviewCommandService({
     }
     if (!requested) {
       return responseError(
-        "Choose you, guest, or an existing application user's email address.",
+        "Choose you, guest, or an existing application user's identifier.",
         "vibe64_agent_preview_identity_required"
       );
     }
@@ -593,8 +597,8 @@ function createAgentPreviewCommandService({
       });
     }
     return launchTarget.selectPreviewIdentity(normalizedSessionId, {
-      email: requested,
-      mode: "email"
+      identityValue: requested,
+      mode: "user"
     });
   }
 

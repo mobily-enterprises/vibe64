@@ -533,15 +533,23 @@ async function selectApplicationIdentity(input = {}) {
   const identity = payload?.identity && typeof payload.identity === "object"
     ? payload.identity
     : {};
+  const selector = identity.selector && typeof identity.selector === "object"
+    ? identity.selector
+    : requestedIdentity.selector && typeof requestedIdentity.selector === "object"
+      ? requestedIdentity.selector
+      : null;
   applicationIdentity = mode === "guest"
     ? { mode: "guest" }
     : {
         displayName: String(
-          identity.username || requestedIdentity.displayName || identity.email || requestedIdentity.email || ""
+          identity.displayName || identity.username || identity.login || requestedIdentity.displayName ||
+          selector?.value || ""
         ).trim(),
-        email: String(identity.email || requestedIdentity.email || "").trim().toLowerCase(),
+        email: String(identity.email || (selector?.type === "email" ? selector.value : "")).trim().toLowerCase(),
+        login: String(identity.login || (selector?.type === "login" ? selector.value : "")).trim(),
         mode: mode === "viewer" ? "you" : mode,
-        userId: String(identity.userId || "").trim(),
+        selector,
+        userId: String(identity.userId || (selector?.type === "user-id" ? selector.value : "")).trim(),
         username: String(identity.username || "").trim()
       };
   await page.reload({ waitUntil: "load" });

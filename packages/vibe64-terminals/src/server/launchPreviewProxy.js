@@ -564,10 +564,15 @@ function previewIdentityResult(payload = {}, selection = {}) {
       ok: true
     };
   }
-  const email = String(payload.email || selection.email || "").trim().toLowerCase();
+  const selector = selection.selector && typeof selection.selector === "object"
+    ? selection.selector
+    : {};
   return {
     identity: {
-      email,
+      displayName: String(payload.displayName || payload.name || "").trim(),
+      email: String(payload.email || (selector.type === "email" ? selector.value : "")).trim().toLowerCase(),
+      login: String(payload.login || (selector.type === "login" ? selector.value : "")).trim(),
+      selector,
       userId: String(payload.userId || "").trim(),
       username: String(payload.username || "").trim()
     },

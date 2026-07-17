@@ -24,10 +24,14 @@ const TARGET_APP_URL = "http://127.0.0.1:4103/home";
 const PROXY_APP_URL = "http://127.0.0.1:49000/home";
 type SourceExplanationPayload = Record<string, unknown>;
 type SourceExplanationResponse = unknown[] | ((payload: SourceExplanationPayload) => unknown[]);
+type PreviewIdentitySelector = {
+  type: "email" | "login" | "user-id";
+  value: string;
+};
 type PreviewIdentitySelection = {
   displayName?: string;
-  email?: string;
   mode: string;
+  selector?: PreviewIdentitySelector;
 };
 type PreviewIdentityExchangeResult = {
   code?: string;
@@ -75,9 +79,11 @@ test("@preview-identity switches between real app identities and Guest without r
       identity: selection.mode === "guest"
         ? null
         : {
-            email: selection.email,
+            email: selection.selector?.type === "email" ? selection.selector.value : "",
+            login: selection.selector?.type === "login" ? selection.selector.value : "",
+            selector: selection.selector,
             userId: selection.mode === "viewer" ? "app-user-viewer" : "app-user-custom",
-            username: selection.mode === "viewer" ? "Ada App" : "Grace App"
+            username: selection.mode === "viewer" ? "Ada App" : "Merc App"
           },
       ok: true
     }),
@@ -108,25 +114,65 @@ test("@preview-identity switches between real app identities and Guest without r
   await page.locator(".vibe64-launch-controls__identity-menu")
     .getByText("Another app user…", { exact: true })
     .click();
-  await page.getByLabel("Application user email").fill("GRACE@EXAMPLE.COM");
-  await page.getByRole("button", { name: "Preview as user" }).click();
+  const customIdentity = page.getByLabel("Application user identifier");
+  const previewAsUserButton = page.getByRole("button", { name: "Preview as user" });
+  await customIdentity.fill("merc");
+  await customIdentity.press("Tab");
+  await expect(previewAsUserButton).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(identityButton).toHaveAttribute(
     "aria-label",
-    "Previewing as Grace App — grace@example.com"
+    "Previewing as Merc App — merc"
+  );
+
+  await page.reload();
+  await expect(identityButton).toHaveAttribute(
+    "aria-label",
+    "Previewing as You — ada@example.com"
+  );
+  await identityButton.click();
+  const identityMenu = page.locator(".vibe64-launch-controls__identity-menu");
+  await expect(identityMenu.getByText("Recent app users", { exact: true })).toBeVisible();
+  await expect(identityMenu.getByText("Login name", { exact: true })).toBeVisible();
+  await identityMenu.getByText("merc", { exact: true }).click();
+  await expect(identityButton).toHaveAttribute(
+    "aria-label",
+    "Previewing as Merc App — merc"
   );
 
   expect(launchSession.getPreviewIdentitySelections()).toEqual([
     {
       displayName: "Ada Viewer",
-      email: "ada@example.com",
-      mode: "viewer"
+      mode: "viewer",
+      selector: {
+        type: "email",
+        value: "ada@example.com"
+      }
     },
     {
       mode: "guest"
     },
     {
-      email: "grace@example.com",
-      mode: "email"
+      mode: "user",
+      selector: {
+        type: "login",
+        value: "merc"
+      }
+    },
+    {
+      displayName: "Ada Viewer",
+      mode: "viewer",
+      selector: {
+        type: "email",
+        value: "ada@example.com"
+      }
+    },
+    {
+      mode: "user",
+      selector: {
+        type: "login",
+        value: "merc"
+      }
     }
   ]);
   expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
@@ -141,7 +187,7 @@ test("@preview-identity exposes exact app errors and remains recoverable on mobi
   const launchSession = await mockLaunchSession(page, {
     previewIdentity: previewIdentityCapability(),
     previewIdentityExchange: (selection) => {
-      if (selection.email === "missing@example.com") {
+      if (selection.selector?.value === "missing@example.com") {
         return {
           code: "auth_user_not_found",
           error: "User not found.",
@@ -152,7 +198,8 @@ test("@preview-identity exposes exact app errors and remains recoverable on mobi
       }
       return {
         identity: {
-          email: selection.email,
+          email: selection.selector?.type === "email" ? selection.selector.value : "",
+          selector: selection.selector,
           userId: "app-user-viewer",
           username: "Ada App"
         },
@@ -173,7 +220,7 @@ test("@preview-identity exposes exact app errors and remains recoverable on mobi
   await page.locator(".vibe64-launch-controls__identity-menu")
     .getByText("Another app user…", { exact: true })
     .click();
-  await page.getByLabel("Application user email").fill("missing@example.com");
+  await page.getByLabel("Application user identifier").fill("missing@example.com");
   await page.getByRole("button", { name: "Preview as user" }).click();
 
   await expect(page.getByText("User not found.", { exact: true })).toBeVisible();
@@ -1514,9 +1561,11 @@ async function mockLaunchSession(page: Page, {
         }
         const result = previewIdentityExchange?.(selection) || {
           identity: selection.mode === "guest" ? null : {
-            email: selection.email,
+            email: selection.selector?.type === "email" ? selection.selector.value : "",
+            login: selection.selector?.type === "login" ? selection.selector.value : "",
+            selector: selection.selector,
             userId: "app-user",
-            username: selection.displayName || selection.email
+            username: selection.displayName || selection.selector?.value
           },
           ok: true
         };
@@ -1572,9 +1621,13 @@ function previewIdentityCapability() {
     available: true,
     defaultMode: "viewer",
     disabledReason: "",
+    identityTypes: ["email", "login", "user-id"],
     viewer: {
       displayName: "Ada Viewer",
-      email: "ada@example.com"
+      selector: {
+        type: "email",
+        value: "ada@example.com"
+      }
     }
   };
 }
@@ -1591,19 +1644,56 @@ function normalizePreviewIdentitySelection(
     const viewer = capability?.viewer && typeof capability.viewer === "object" && !Array.isArray(capability.viewer)
       ? capability.viewer as Record<string, unknown>
       : {};
+    const selector = normalizePreviewIdentitySelector(viewer.selector);
     return {
-      displayName: String(viewer.displayName || viewer.email || ""),
-      email: String(viewer.email || "").trim().toLowerCase(),
-      mode
+      displayName: String(viewer.displayName || selector?.value || ""),
+      mode,
+      ...(selector ? { selector } : {})
     };
   }
-  if (mode === "email") {
+  if (mode === "user") {
+    const identityTypes = Array.isArray(capability?.identityTypes)
+      ? capability.identityTypes.map(String)
+      : ["email"];
+    const value = String(selection.identityValue || "").trim();
+    const explicitType = String(selection.identityType || "").trim();
+    const type = explicitType || (
+      value.includes("@") && identityTypes.includes("email")
+        ? "email"
+        : /^[1-9][0-9]*$/u.test(value) && identityTypes.includes("user-id")
+          ? "user-id"
+          : identityTypes.includes("login")
+            ? "login"
+            : identityTypes.includes("user-id")
+              ? "user-id"
+              : identityTypes[0]
+    );
+    const selector = normalizePreviewIdentitySelector({
+      type,
+      value
+    });
     return {
-      email: String(selection.email || "").trim().toLowerCase(),
-      mode
+      mode,
+      ...(selector ? { selector } : {})
     };
   }
   return { mode: "guest" };
+}
+
+function normalizePreviewIdentitySelector(value: unknown): PreviewIdentitySelector | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const source = value as Record<string, unknown>;
+  const type = String(source.type || "") as PreviewIdentitySelector["type"];
+  const rawValue = String(source.value || "").trim();
+  if (!["email", "login", "user-id"].includes(type) || !rawValue) {
+    return null;
+  }
+  return {
+    type,
+    value: type === "email" ? rawValue.toLowerCase() : rawValue
+  };
 }
 
 function escapeRegExp(value: string) {

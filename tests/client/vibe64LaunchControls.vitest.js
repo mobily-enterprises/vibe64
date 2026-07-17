@@ -12,6 +12,7 @@ import {
   launchPreviewFromStatus,
   launchPreviewLocationStorageKey,
   launchPreviewOptionsStorageKey,
+  launchPreviewRecentUsersStorageKey,
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
   LAUNCH_STATUS_RETRY_LIMIT,
@@ -494,6 +495,13 @@ describe("Vibe64 launch controls", () => {
       .not.toBe(launchPreviewLocationStorageKey(differentProject));
     expect(launchPreviewLocationStorageKey(firstSession, "alpha_1"))
       .not.toBe(launchPreviewLocationStorageKey(firstSession, "beta_2"));
+  });
+
+  it("stores recent preview users by project rather than Vibe64 user or session", () => {
+    expect(launchPreviewRecentUsersStorageKey("alpha_1"))
+      .toBe("vibe64:launch-preview-recent-users:project:alpha_1");
+    expect(launchPreviewRecentUsersStorageKey("alpha_1"))
+      .not.toBe(launchPreviewRecentUsersStorageKey("beta_2"));
   });
 
   it("stores preview options by project target and launch target", () => {

@@ -198,7 +198,7 @@
                     :active="previewIdentityCurrent?.mode === 'viewer'"
                     :disabled="previewIdentityBusy"
                     :prepend-icon="mdiAccountCircleOutline"
-                    :subtitle="previewIdentityViewer.email"
+                    :subtitle="previewIdentityViewer.selector?.value || previewIdentityViewer.email || previewIdentityViewer.login || previewIdentityViewer.userId"
                     title="You"
                     @click="selectPreviewViewer"
                   />
@@ -210,8 +210,21 @@
                     title="Guest"
                     @click="selectPreviewGuest"
                   />
+                  <v-list-subheader v-if="previewIdentityRecentUsers.length > 0">
+                    Recent app users
+                  </v-list-subheader>
                   <v-list-item
-                    :active="previewIdentityCurrent?.mode === 'email'"
+                    v-for="recentUser in previewIdentityRecentUsers"
+                    :key="`${recentUser.type}:${recentUser.value}`"
+                    :active="previewIdentityCurrent?.mode === 'user' && previewIdentityCurrent.selector?.type === recentUser.type && previewIdentityCurrent.selector?.value === recentUser.value"
+                    :disabled="previewIdentityBusy"
+                    :prepend-icon="mdiAccountCircleOutline"
+                    :subtitle="previewIdentityTypeLabel(recentUser.type)"
+                    :title="recentUser.value"
+                    @click="selectRecentPreviewIdentity(recentUser)"
+                  />
+                  <v-list-item
+                    :active="previewIdentityCurrent?.mode === 'user'"
                     :disabled="previewIdentityBusy"
                     :prepend-icon="mdiAccountPlusOutline"
                     subtitle="The app user must already exist"
@@ -628,17 +641,16 @@
 
         <v-card-text>
           <p>
-            Enter an existing application user's email. Vibe64 will not create
-            the user or change their roles, workspace, or application data.
+            {{ previewIdentityInputDescription }}
           </p>
 
           <v-text-field
-            v-model="previewIdentityCustomEmail"
+            v-model="previewIdentityCustomValue"
             autofocus
             autocomplete="off"
             density="comfortable"
-            label="Application user email"
-            type="email"
+            :label="previewIdentityInputLabel"
+            :type="previewIdentityInputType"
             variant="outlined"
             @keydown.enter.prevent="submitPreviewIdentityDialog"
           />
@@ -655,20 +667,23 @@
 
         <v-card-actions>
           <v-spacer />
+          <!-- Keep the primary action first in DOM focus order after the identifier field. -->
           <v-btn
-            :disabled="previewIdentityBusy"
-            variant="text"
-            @click="previewIdentityDialogVisible = false"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
+            class="vibe64-launch-controls__identity-submit"
             color="primary"
             :loading="previewIdentityBusy"
             variant="flat"
             @click="submitPreviewIdentityDialog"
           >
             Preview as user
+          </v-btn>
+          <v-btn
+            class="vibe64-launch-controls__identity-cancel"
+            :disabled="previewIdentityBusy"
+            variant="text"
+            @click="previewIdentityDialogVisible = false"
+          >
+            Cancel
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -946,12 +961,17 @@ const {
   previewIdentityAvailable,
   previewIdentityBusy,
   previewIdentityCurrent,
-  previewIdentityCustomEmail,
+  previewIdentityCustomValue,
   previewIdentityDialogError,
   previewIdentityDialogVisible,
   previewIdentityError,
+  previewIdentityInputDescription,
+  previewIdentityInputLabel,
+  previewIdentityInputType,
   previewIdentityLabel,
+  previewIdentityRecentUsers,
   previewIdentityTitle,
+  previewIdentityTypeLabel,
   previewIdentityViewer,
   previewIssue,
   previewIssueVisible,
@@ -988,6 +1008,7 @@ const {
   resetPreviewAddressDraft,
   savePreviewOptions,
   selectPreviewGuest,
+  selectRecentPreviewIdentity,
   selectPreviewViewer,
   submitPreviewAddress,
   submitPreviewIdentityDialog,
@@ -1384,6 +1405,14 @@ onBeforeUnmount(() => {
   color: rgba(var(--v-theme-on-surface), 0.72);
   line-height: 1.5;
   margin: 0;
+}
+
+.vibe64-launch-controls__identity-cancel {
+  order: 1;
+}
+
+.vibe64-launch-controls__identity-submit {
+  order: 2;
 }
 
 .vibe64-launch-controls__attention-button {

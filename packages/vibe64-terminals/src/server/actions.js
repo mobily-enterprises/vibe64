@@ -161,7 +161,8 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.selectPreviewIdentity(input.sessionId, {
-        email: input.email || "",
+        identityType: input.identityType || "",
+        identityValue: input.identityValue || "",
         mode: input.mode,
         vibe64User: input.vibe64User || null
       }, {

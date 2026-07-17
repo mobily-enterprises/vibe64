@@ -3,8 +3,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const JSKIT_PREVIEW_AUTH_KIND = "jskit-dev";
+const APPLICATION_PREVIEW_AUTH_KIND = "application-dev";
 const COOKIE_PROFILE_PREVIEW_AUTH_KIND = "cookie-profile";
 const VIBE64_SELF_PREVIEW_AUTH_KIND = "vibe64-self";
+const APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV = "VIBE64_PREVIEW_IDENTITY_ENABLED";
+const APPLICATION_PREVIEW_IDENTITY_PATH = "/api/dev-auth/preview-identity";
+const APPLICATION_PREVIEW_IDENTITY_SECRET_ENV = "VIBE64_PREVIEW_IDENTITY_SECRET";
+const APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER = "x-vibe64-preview-identity-secret";
 const JSKIT_DEV_AUTH_ACCESS_TTL_SECONDS = 60 * 60;
 const JSKIT_DEV_AUTH_REFRESH_TTL_SECONDS = 60 * 60 * 12;
 const JSKIT_DEV_AUTH_SECRET_HEADER = "x-jskit-dev-auth-secret";
@@ -14,6 +19,14 @@ const PREVIEW_IDENTITY_GRANT_TTL_SECONDS = 60;
 const PREVIEW_IDENTITY_GRANT_SECRET = crypto.randomBytes(32);
 const PREVIEW_IDENTITY_LOGIN_OPERATION = "login-as";
 const PREVIEW_IDENTITY_LOGOUT_OPERATION = "logout";
+const PREVIEW_IDENTITY_SELECTOR_EMAIL = "email";
+const PREVIEW_IDENTITY_SELECTOR_LOGIN = "login";
+const PREVIEW_IDENTITY_SELECTOR_USER_ID = "user-id";
+const PREVIEW_IDENTITY_SELECTOR_TYPES = Object.freeze([
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID
+]);
 const PREVIEW_IDENTITY_GRANT_SCOPE_KEYS = Object.freeze([
   "projectScope",
   "sessionId",
@@ -23,6 +36,7 @@ const PREVIEW_IDENTITY_GRANT_SCOPE_KEYS = Object.freeze([
 ]);
 const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 const PREVIEW_AUTH_KINDS = new Set([
+  APPLICATION_PREVIEW_AUTH_KIND,
   JSKIT_PREVIEW_AUTH_KIND,
   COOKIE_PROFILE_PREVIEW_AUTH_KIND,
   VIBE64_SELF_PREVIEW_AUTH_KIND
@@ -96,6 +110,24 @@ function previewAuthIdentityAvailable({ kind = "" } = {}) {
   return typeof previewAuthProvider(kind)?.identityExchange === "function";
 }
 
+function normalizePreviewIdentityTypes(value = []) {
+  const values = Array.isArray(value) ? value : [];
+  return [...new Set(values
+    .map((entry) => String(entry || "").trim())
+    .filter((entry) => PREVIEW_IDENTITY_SELECTOR_TYPES.includes(entry)))];
+}
+
+function previewAuthIdentityTypes({
+  identityTypes = [],
+  kind = ""
+} = {}) {
+  const supported = normalizePreviewIdentityTypes(previewAuthProvider(kind)?.identityTypes || []);
+  const requested = normalizePreviewIdentityTypes(identityTypes);
+  return Array.isArray(identityTypes) && identityTypes.length > 0
+    ? requested.filter((type) => supported.includes(type))
+    : supported;
+}
+
 function previewAuthRequiresIdentitySecret({ kind = "" } = {}) {
   return previewAuthProvider(kind)?.requiresIdentitySecret === true;
 }
@@ -112,9 +144,19 @@ function previewAuthIdentityExchange(previewAuth = {}, selection = {}) {
       "vibe64_preview_identity_unsupported"
     );
   }
+  const normalizedSelection = normalizePreviewIdentitySelection(selection);
+  if (
+    normalizedSelection.operation === PREVIEW_IDENTITY_LOGIN_OPERATION &&
+    !previewAuthIdentityTypes(previewAuth).includes(normalizedSelection.selector.type)
+  ) {
+    throw previewIdentityError(
+      "This preview does not support that application user identifier.",
+      "vibe64_preview_identity_selector_unsupported"
+    );
+  }
   return provider.identityExchange({
     previewAuth,
-    selection: normalizePreviewIdentitySelection(selection)
+    selection: normalizedSelection
   });
 }
 
@@ -126,6 +168,15 @@ function jskitDevAuthEnvironment({
     AUTH_DEV_BYPASS_SECRET: requirePreviewAuthSecret(secret),
     AUTH_DEV_ACCESS_TTL_SECONDS: String(JSKIT_DEV_AUTH_ACCESS_TTL_SECONDS),
     AUTH_DEV_REFRESH_TTL_SECONDS: String(JSKIT_DEV_AUTH_REFRESH_TTL_SECONDS)
+  };
+}
+
+function applicationPreviewAuthEnvironment({
+  secret = ""
+} = {}) {
+  return {
+    [APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV]: "true",
+    [APPLICATION_PREVIEW_IDENTITY_SECRET_ENV]: requirePreviewAuthSecret(secret)
   };
 }
 
@@ -161,14 +212,56 @@ function jskitPreviewIdentityExchange({
       }
     ],
     body: {
-      ...(selection.email ? { email: selection.email } : {}),
-      ...(selection.userId ? { userId: selection.userId } : {})
+      ...(selection.selector.type === PREVIEW_IDENTITY_SELECTOR_EMAIL
+        ? { email: selection.selector.value }
+        : {}),
+      ...(selection.selector.type === PREVIEW_IDENTITY_SELECTOR_USER_ID
+        ? { userId: selection.selector.value }
+        : {})
     },
     headers: {
       [JSKIT_DEV_AUTH_SECRET_HEADER]: requirePreviewAuthSecret(previewAuth.secret)
     },
     method: "POST",
     path: "/api/dev-auth/login-as"
+  };
+}
+
+function applicationPreviewIdentityExchange({
+  previewAuth = {},
+  selection = {}
+} = {}) {
+  const headers = {
+    [APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER]: requirePreviewAuthSecret(previewAuth.secret)
+  };
+  if (selection.operation === PREVIEW_IDENTITY_LOGOUT_OPERATION) {
+    return {
+      body: {
+        operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+      },
+      headers,
+      method: "POST",
+      path: APPLICATION_PREVIEW_IDENTITY_PATH
+    };
+  }
+  return {
+    before: [
+      {
+        body: {
+          operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+        },
+        headers,
+        method: "POST",
+        path: APPLICATION_PREVIEW_IDENTITY_PATH
+      }
+    ],
+    body: {
+      operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+      selector: selection.selector
+    },
+    headers,
+    method: "POST",
+    path: APPLICATION_PREVIEW_IDENTITY_PATH
   };
 }
 
@@ -207,11 +300,23 @@ function cookieProfilePreviewAuthCookieHeader({
 }
 
 const PREVIEW_AUTH_PROVIDERS = Object.freeze({
+  [APPLICATION_PREVIEW_AUTH_KIND]: Object.freeze({
+    cookieHeader: emptyPreviewAuthCookieHeader,
+    cookieNames: emptyPreviewAuthCookies,
+    environment: applicationPreviewAuthEnvironment,
+    identityExchange: applicationPreviewIdentityExchange,
+    identityTypes: PREVIEW_IDENTITY_SELECTOR_TYPES,
+    requiresIdentitySecret: true
+  }),
   [JSKIT_PREVIEW_AUTH_KIND]: Object.freeze({
     cookieHeader: emptyPreviewAuthCookieHeader,
     cookieNames: emptyPreviewAuthCookies,
     environment: jskitDevAuthEnvironment,
     identityExchange: jskitPreviewIdentityExchange,
+    identityTypes: Object.freeze([
+      PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      PREVIEW_IDENTITY_SELECTOR_USER_ID
+    ]),
     requiresIdentitySecret: true
   }),
   [COOKIE_PROFILE_PREVIEW_AUTH_KIND]: Object.freeze({
@@ -232,6 +337,50 @@ function previewAuthProvider(kind = "") {
   return PREVIEW_AUTH_PROVIDERS[normalizePreviewAuthKind(kind)] || null;
 }
 
+function normalizePreviewIdentitySelector(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const type = String(source.type || "").trim();
+  if (!PREVIEW_IDENTITY_SELECTOR_TYPES.includes(type)) {
+    throw previewIdentityError(
+      "Preview identity selector type is invalid.",
+      "vibe64_preview_identity_selector_type_invalid"
+    );
+  }
+  const rawValue = String(source.value || "").trim();
+  const normalizedValue = type === PREVIEW_IDENTITY_SELECTOR_EMAIL
+    ? rawValue.toLowerCase()
+    : rawValue;
+  if (!normalizedValue) {
+    throw previewIdentityError(
+      "Preview identity selector is missing.",
+      "vibe64_preview_identity_selector_missing"
+    );
+  }
+  if (
+    type === PREVIEW_IDENTITY_SELECTOR_EMAIL &&
+    (!normalizedValue.includes("@") || normalizedValue.length > 320)
+  ) {
+    throw previewIdentityError(
+      "Preview identity email is invalid.",
+      "vibe64_preview_identity_email_invalid"
+    );
+  }
+  if (type !== PREVIEW_IDENTITY_SELECTOR_EMAIL && normalizedValue.length > 256) {
+    throw previewIdentityError(
+      type === PREVIEW_IDENTITY_SELECTOR_LOGIN
+        ? "Preview identity login is invalid."
+        : "Preview identity user id is invalid.",
+      type === PREVIEW_IDENTITY_SELECTOR_LOGIN
+        ? "vibe64_preview_identity_login_invalid"
+        : "vibe64_preview_identity_user_id_invalid"
+    );
+  }
+  return {
+    type,
+    value: normalizedValue
+  };
+}
+
 function normalizePreviewIdentitySelection(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const operation = String(source.operation || PREVIEW_IDENTITY_LOGIN_OPERATION).trim();
@@ -241,32 +390,11 @@ function normalizePreviewIdentitySelection(value = {}) {
       "vibe64_preview_identity_operation_invalid"
     );
   }
-  const email = String(source.email || "").trim().toLowerCase();
-  const userId = String(source.userId || "").trim();
-  if (operation === PREVIEW_IDENTITY_LOGIN_OPERATION) {
-    if (!email && !userId) {
-      throw previewIdentityError(
-        "Preview identity requires a user id or email.",
-        "vibe64_preview_identity_missing"
-      );
-    }
-    if (email && (!email.includes("@") || email.length > 320)) {
-      throw previewIdentityError(
-        "Preview identity email is invalid.",
-        "vibe64_preview_identity_email_invalid"
-      );
-    }
-    if (userId.length > 256) {
-      throw previewIdentityError(
-        "Preview identity user id is invalid.",
-        "vibe64_preview_identity_user_id_invalid"
-      );
-    }
-  }
   return {
     operation,
-    ...(operation === PREVIEW_IDENTITY_LOGIN_OPERATION && email ? { email } : {}),
-    ...(operation === PREVIEW_IDENTITY_LOGIN_OPERATION && userId ? { userId } : {})
+    ...(operation === PREVIEW_IDENTITY_LOGIN_OPERATION
+      ? { selector: normalizePreviewIdentitySelector(source.selector) }
+      : {})
   };
 }
 
@@ -307,6 +435,15 @@ function createPreviewIdentityGrant(previewAuth = {}, selection = {}, {
     );
   }
   const normalizedSelection = normalizePreviewIdentitySelection(selection);
+  if (
+    normalizedSelection.operation === PREVIEW_IDENTITY_LOGIN_OPERATION &&
+    !previewAuthIdentityTypes(previewAuth).includes(normalizedSelection.selector.type)
+  ) {
+    throw previewIdentityError(
+      "This preview does not support that application user identifier.",
+      "vibe64_preview_identity_selector_unsupported"
+    );
+  }
   const normalizedTtlSeconds = Math.min(
     PREVIEW_IDENTITY_GRANT_TTL_SECONDS,
     Math.max(1, Math.floor(Number(ttlSeconds) || PREVIEW_IDENTITY_GRANT_TTL_SECONDS))
@@ -534,22 +671,33 @@ function normalizeCookiePreviewAuthCookie(value = {}, index = 0) {
 }
 
 export {
+  APPLICATION_PREVIEW_AUTH_KIND,
+  APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV,
+  APPLICATION_PREVIEW_IDENTITY_PATH,
+  APPLICATION_PREVIEW_IDENTITY_SECRET_ENV,
+  APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER,
   COOKIE_PROFILE_PREVIEW_AUTH_KIND,
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_TYPES,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   VIBE64_SELF_PREVIEW_AUTH_KIND,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   jskitDevAuthEnvironment,
   normalizePreviewAuthKind,
+  normalizePreviewIdentitySelector,
   normalizePreviewIdentitySelection,
   previewAuthCookieNames,
   previewAuthCookieHeader,
   previewAuthEnvironment,
   previewAuthIdentityAvailable,
   previewAuthIdentityExchange,
+  previewAuthIdentityTypes,
   previewAuthRequiresIdentitySecret,
   previewAuthProfilePath,
   previewAuthSecretPath,

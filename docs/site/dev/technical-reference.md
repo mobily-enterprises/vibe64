@@ -151,6 +151,44 @@ Normal local editor runs use `~/.local/state/vibe64`. Composed launchers can
 pass an explicit system root through their runtime profile; direct CLI runs do
 not treat `VIBE64_SYSTEM_ROOT` as a casual state-placement override.
 
+## Application Preview Identity
+
+Launch adapters can opt an application into generic preview identity switching
+with `previewAuth: "application-dev"`. The launch metadata may restrict the
+identifiers accepted by that application with `previewIdentityTypes`; supported
+values are `email`, `login`, and `user-id`.
+
+Vibe64 supplies the launched process with:
+
+```text
+VIBE64_PREVIEW_IDENTITY_ENABLED=true
+VIBE64_PREVIEW_IDENTITY_SECRET=<random per-launch secret>
+```
+
+The application implements `POST /api/dev-auth/preview-identity` and validates
+the secret from `x-vibe64-preview-identity-secret`. Login requests use a typed
+selector:
+
+```json
+{
+  "operation": "login-as",
+  "selector": {
+    "type": "login",
+    "value": "merc"
+  }
+}
+```
+
+Logout requests use `{ "operation": "logout" }`. A successful login creates
+the application's normal browser session and returns canonical, non-secret
+identity fields such as `displayName`, `email`, `login`, `userId`, and
+`username`. The application remains responsible for finding an existing user,
+rejecting missing or disabled users, and setting or clearing its own cookies.
+Vibe64 never creates users or changes their roles or application data.
+
+The endpoint must be disabled unless the enable flag and per-launch secret are
+present. It is a development-preview control, not a production sign-in API.
+
 ## Host Runtime Naming
 
 Runtime names and directories are deterministic, daemon-scoped, and

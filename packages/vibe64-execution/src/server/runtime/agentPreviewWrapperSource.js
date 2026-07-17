@@ -574,7 +574,7 @@ try {
     if (browserCommand === "identity") {
       const identity = String(browserArgs[0] || "").trim();
       if (!identity || browserArgs.length !== 1) {
-        fail("Usage: vibe64-preview browser identity <you|guest|existing-user-email>", 64);
+        fail("Usage: vibe64-preview browser identity <you|guest|existing-user-identifier>", 64);
       }
       const session = await previewSession();
       const authorization = await authorizeBrowserIdentity(identity);

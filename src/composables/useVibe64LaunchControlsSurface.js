@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
+  launchPreviewRecentUsersStorageKey,
   launchPreviewToolbarStorageKey,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreviewToolbarPosition,
@@ -44,6 +45,15 @@ import {
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
 
+const RECENT_PREVIEW_IDENTITY_LIMIT = 4;
+const PREVIEW_IDENTITY_TYPE_EMAIL = "email";
+const PREVIEW_IDENTITY_TYPE_LOGIN = "login";
+const PREVIEW_IDENTITY_TYPE_USER_ID = "user-id";
+const PREVIEW_IDENTITY_TYPES = Object.freeze([
+  PREVIEW_IDENTITY_TYPE_EMAIL,
+  PREVIEW_IDENTITY_TYPE_LOGIN,
+  PREVIEW_IDENTITY_TYPE_USER_ID
+]);
 const PREVIEW_DISPLAY_QUERY_PARAMS = Object.freeze([
   PREVIEW_PROXY_TOKEN_QUERY_PARAM
 ]);
@@ -242,12 +252,16 @@ function previewIdentityLabelText({
   if (identity.mode === "guest") {
     return "Guest";
   }
+  const selectorValue = String(
+    identity.selector?.value || identity.email || identity.login || identity.userId || ""
+  ).trim();
   if (identity.mode === "viewer") {
-    return `You — ${identity.email}`;
+    return selectorValue ? `You — ${selectorValue}` : "You";
   }
-  return identity.username
-    ? `${identity.username} — ${identity.email}`
-    : identity.email;
+  const name = String(identity.displayName || identity.username || "").trim();
+  return name && name !== selectorValue
+    ? `${name} — ${selectorValue}`
+    : selectorValue || "Selected user";
 }
 
 function previewIdentityTitleText({
@@ -264,6 +278,96 @@ function previewIdentityTitleText({
     : `Previewing as ${previewIdentityLabelText({ identity })}`;
 }
 
+function normalizePreviewIdentitySelector(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const type = String(source.type || "").trim();
+  const rawValue = String(source.value || "").trim();
+  if (!PREVIEW_IDENTITY_TYPES.includes(type) || !rawValue) {
+    return null;
+  }
+  const normalizedValue = type === PREVIEW_IDENTITY_TYPE_EMAIL
+    ? rawValue.toLowerCase()
+    : rawValue;
+  if (
+    (type === PREVIEW_IDENTITY_TYPE_EMAIL && (!normalizedValue.includes("@") || normalizedValue.length > 320)) ||
+    (type !== PREVIEW_IDENTITY_TYPE_EMAIL && normalizedValue.length > 256)
+  ) {
+    return null;
+  }
+  return {
+    type,
+    value: normalizedValue
+  };
+}
+
+function normalizeRecentPreviewIdentities(value = []) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const identities = [];
+  const seen = new Set();
+  for (const entry of value) {
+    const legacyEmail = typeof entry === "string" ? entry : "";
+    const selector = normalizePreviewIdentitySelector(legacyEmail
+      ? {
+          type: PREVIEW_IDENTITY_TYPE_EMAIL,
+          value: legacyEmail
+        }
+      : entry?.selector || entry);
+    if (!selector) {
+      continue;
+    }
+    const key = `${selector.type}\u0000${selector.value}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    identities.push(selector);
+    if (identities.length >= RECENT_PREVIEW_IDENTITY_LIMIT) {
+      break;
+    }
+  }
+  return identities;
+}
+
+function nextRecentPreviewIdentities(current = [], selector = {}) {
+  return normalizeRecentPreviewIdentities([
+    selector,
+    ...normalizeRecentPreviewIdentities(current)
+  ]);
+}
+
+function normalizePreviewIdentityTypes(value = []) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value
+    .map((type) => String(type || "").trim())
+    .filter((type) => PREVIEW_IDENTITY_TYPES.includes(type)))];
+}
+
+function previewIdentityTypeLabel(type = "") {
+  return {
+    [PREVIEW_IDENTITY_TYPE_EMAIL]: "Email",
+    [PREVIEW_IDENTITY_TYPE_LOGIN]: "Login name",
+    [PREVIEW_IDENTITY_TYPE_USER_ID]: "User ID"
+  }[String(type || "").trim()] || "User identifier";
+}
+
+function previewIdentityTypePhrase(identityTypes = []) {
+  const labels = identityTypes.map((type) => ({
+    [PREVIEW_IDENTITY_TYPE_EMAIL]: "email",
+    [PREVIEW_IDENTITY_TYPE_LOGIN]: "login name",
+    [PREVIEW_IDENTITY_TYPE_USER_ID]: "user ID"
+  }[type])).filter(Boolean);
+  if (labels.length < 2) {
+    return labels[0] || "identifier";
+  }
+  return labels.length === 2
+    ? labels.join(" or ")
+    : `${labels.slice(0, -1).join(", ")}, or ${labels.at(-1)}`;
+}
+
 function previewIdentityFromExchange(exchangeResult = {}, requestedIdentity = {}) {
   if (requestedIdentity.mode === "guest") {
     return {
@@ -273,15 +377,29 @@ function previewIdentityFromExchange(exchangeResult = {}, requestedIdentity = {}
   const identity = exchangeResult?.identity && typeof exchangeResult.identity === "object"
     ? exchangeResult.identity
     : {};
-  const email = String(identity.email || requestedIdentity.email || "").trim().toLowerCase();
+  const selector = normalizePreviewIdentitySelector(
+    identity.selector || requestedIdentity.selector
+  );
+  const email = String(identity.email || (selector?.type === PREVIEW_IDENTITY_TYPE_EMAIL
+    ? selector.value
+    : "")).trim().toLowerCase();
+  const login = String(identity.login || (selector?.type === PREVIEW_IDENTITY_TYPE_LOGIN
+    ? selector.value
+    : "")).trim();
+  const userId = String(identity.userId || (selector?.type === PREVIEW_IDENTITY_TYPE_USER_ID
+    ? selector.value
+    : "")).trim();
+  const username = String(identity.username || "").trim();
   return {
     displayName: String(
-      identity.username || requestedIdentity.displayName || email
-    ).trim() || email,
+      identity.displayName || username || requestedIdentity.displayName || selector?.value || ""
+    ).trim(),
     email,
+    login,
     mode: requestedIdentity.mode,
-    userId: String(identity.userId || "").trim(),
-    username: String(identity.username || "").trim()
+    selector,
+    userId,
+    username
   };
 }
 
@@ -558,10 +676,11 @@ function useVibe64LaunchControlsSurface(props) {
   const previewDiagnosticsBusy = ref(false);
   const previewIdentityBusy = ref(false);
   const previewIdentityCurrent = ref(null);
-  const previewIdentityCustomEmail = ref("");
+  const previewIdentityCustomValue = ref("");
   const previewIdentityDialogError = ref("");
   const previewIdentityDialogVisible = ref(false);
   const previewIdentityError = ref("");
+  const previewIdentityStoredRecentUsers = ref([]);
   const previewIdentityRequested = ref(null);
   let previewIdentityAutomaticAttempt = "";
   let previewIdentityLifecycle = "";
@@ -588,6 +707,9 @@ function useVibe64LaunchControlsSurface(props) {
   const previewToolbarExpanded = ref(false);
   const previewToolbarPosition = ref("center");
   const projectSlug = useVibe64ProjectSlug();
+  const previewIdentityRecentStorageKey = computed(() => (
+    launchPreviewRecentUsersStorageKey(projectSlug.value)
+  ));
   const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
   const embeddedTerminalVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -691,6 +813,37 @@ function useVibe64LaunchControlsSurface(props) {
     props.embeddedPreview &&
     previewIdentityCapability.value?.available === true
   ));
+  const previewIdentityTypes = computed(() => {
+    const configuredTypes = previewIdentityCapability.value?.identityTypes;
+    const advertisedTypes = normalizePreviewIdentityTypes(
+      configuredTypes
+    );
+    return Array.isArray(configuredTypes)
+      ? advertisedTypes
+      : [PREVIEW_IDENTITY_TYPE_EMAIL];
+  });
+  const previewIdentityRecentUsers = computed(() => {
+    const supportedTypes = new Set(previewIdentityTypes.value);
+    return previewIdentityStoredRecentUsers.value.filter((selector) => (
+      supportedTypes.has(selector.type)
+    ));
+  });
+  const previewIdentityInputLabel = computed(() => {
+    const [onlyType] = previewIdentityTypes.value;
+    return previewIdentityTypes.value.length === 1
+      ? `Application user ${previewIdentityTypeLabel(onlyType).toLowerCase()}`
+      : "Application user identifier";
+  });
+  const previewIdentityInputDescription = computed(() => (
+    `Enter an existing application user's ${previewIdentityTypePhrase(previewIdentityTypes.value)}. ` +
+    "Vibe64 will not create the user or change their roles, workspace, or application data."
+  ));
+  const previewIdentityInputType = computed(() => (
+    previewIdentityTypes.value.length === 1 &&
+    previewIdentityTypes.value[0] === PREVIEW_IDENTITY_TYPE_EMAIL
+      ? "email"
+      : "text"
+  ));
   const previewIdentityLifecycleKey = computed(() => previewIdentityLifecycleIdentity({
     launchTargetId: activeLaunchTarget.value?.id || terminal.value?.metadata?.launchTargetId,
     previewBaseUrl: previewBaseUrl.value,
@@ -767,7 +920,7 @@ function useVibe64LaunchControlsSurface(props) {
       const requested = previewIdentityRequested.value;
       return requested?.mode === "guest"
         ? "Signing out of the preview…"
-        : `Opening preview as ${requested?.email || "the selected user"}…`;
+        : `Opening preview as ${requested?.selector?.value || requested?.identityValue || "the selected user"}…`;
     }
     return launchPreviewInFlightText({
       activeLaunchTarget: activeLaunchTarget.value,
@@ -1236,10 +1389,25 @@ function useVibe64LaunchControlsSurface(props) {
     previewIdentityReloadRequestId = 0;
   }
 
+  function loadRecentPreviewIdentities() {
+    previewIdentityStoredRecentUsers.value = normalizeRecentPreviewIdentities(
+      readLocalStorageJson(previewIdentityRecentStorageKey.value, [])
+    );
+  }
+
+  function rememberRecentPreviewIdentity(selector = {}) {
+    const recentUsers = nextRecentPreviewIdentities(
+      previewIdentityStoredRecentUsers.value,
+      selector
+    );
+    previewIdentityStoredRecentUsers.value = recentUsers;
+    writeLocalStorageJson(previewIdentityRecentStorageKey.value, recentUsers);
+  }
+
   function resetPreviewIdentityState() {
     completePreviewIdentityTransition();
     previewIdentityCurrent.value = null;
-    previewIdentityCustomEmail.value = "";
+    previewIdentityCustomValue.value = "";
     previewIdentityDialogError.value = "";
     previewIdentityDialogVisible.value = false;
     previewIdentityError.value = "";
@@ -1265,10 +1433,18 @@ function useVibe64LaunchControlsSurface(props) {
       return false;
     }
     const mode = String(selection.mode || "viewer").trim();
-    const requested = {
-      ...(selection.email ? { email: String(selection.email).trim().toLowerCase() } : {}),
-      mode
-    };
+    const identityType = String(selection.identityType || "").trim();
+    const rawIdentityValue = String(selection.identityValue || "").trim();
+    const identityValue = identityType === PREVIEW_IDENTITY_TYPE_EMAIL
+      ? rawIdentityValue.toLowerCase()
+      : rawIdentityValue;
+    const requested = mode === "user"
+      ? {
+          ...(identityType ? { identityType } : {}),
+          identityValue,
+          mode
+        }
+      : { mode };
     previewIdentityBusy.value = true;
     previewIdentityError.value = "";
     previewIdentityDialogError.value = "";
@@ -1285,13 +1461,18 @@ function useVibe64LaunchControlsSurface(props) {
       previewIdentityRequested.value = requestedIdentity;
       const exchangeResult = await requestPreviewIdentityExchange(grant);
       previewIdentityCurrent.value = previewIdentityFromExchange(exchangeResult, requestedIdentity);
+      if (mode === "user") {
+        rememberRecentPreviewIdentity(
+          previewIdentityCurrent.value.selector || requestedIdentity.selector
+        );
+      }
       previewIdentityDialogVisible.value = false;
       reloadPreviewForIdentity("identity-selected");
       return true;
     } catch (error) {
       const message = String(error?.message || error || "Preview identity exchange failed.");
       previewIdentityError.value = message;
-      if (!automatic && mode === "email") {
+      if (!automatic && mode === "user") {
         previewIdentityDialogError.value = message;
       }
       if (error?.signedOut === true) {
@@ -1321,21 +1502,38 @@ function useVibe64LaunchControlsSurface(props) {
     });
   }
 
+  async function selectRecentPreviewIdentity(selector = {}) {
+    const recentSelector = normalizePreviewIdentitySelector(selector);
+    if (!recentSelector) {
+      return false;
+    }
+    previewIdentityCustomValue.value = recentSelector.value;
+    const selected = await selectPreviewIdentity({
+      identityType: recentSelector.type,
+      identityValue: recentSelector.value,
+      mode: "user"
+    });
+    if (!selected) {
+      previewIdentityDialogVisible.value = true;
+    }
+    return selected;
+  }
+
   function openPreviewIdentityDialog() {
-    previewIdentityCustomEmail.value = "";
+    previewIdentityCustomValue.value = "";
     previewIdentityDialogError.value = "";
     previewIdentityDialogVisible.value = true;
   }
 
   function submitPreviewIdentityDialog() {
-    const email = String(previewIdentityCustomEmail.value || "").trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      previewIdentityDialogError.value = "Enter an existing application user's email address.";
+    const identityValue = String(previewIdentityCustomValue.value || "").trim();
+    if (!identityValue) {
+      previewIdentityDialogError.value = `Enter an existing application user's ${previewIdentityTypePhrase(previewIdentityTypes.value)}.`;
       return false;
     }
     return selectPreviewIdentity({
-      email,
-      mode: "email"
+      identityValue,
+      mode: "user"
     });
   }
 
@@ -1635,6 +1833,13 @@ function useVibe64LaunchControlsSurface(props) {
     immediate: true
   });
 
+  watch(previewIdentityRecentStorageKey, () => {
+    loadRecentPreviewIdentities();
+  }, {
+    flush: "sync",
+    immediate: true
+  });
+
   watch(previewIdentityAvailable, (available) => {
     if (available && previewFrameLoaded.value) {
       beginDefaultPreviewIdentity();
@@ -1777,12 +1982,18 @@ function useVibe64LaunchControlsSurface(props) {
     previewIdentityAvailable,
     previewIdentityBusy,
     previewIdentityCurrent,
-    previewIdentityCustomEmail,
+    previewIdentityCustomValue,
     previewIdentityDialogError,
     previewIdentityDialogVisible,
     previewIdentityError,
+    previewIdentityInputDescription,
+    previewIdentityInputLabel,
+    previewIdentityInputType,
     previewIdentityLabel,
+    previewIdentityRecentUsers,
     previewIdentityTitle,
+    previewIdentityTypeLabel,
+    previewIdentityTypes,
     previewIdentityViewer,
     previewIssue,
     previewIssueVisible,
@@ -1826,6 +2037,7 @@ function useVibe64LaunchControlsSurface(props) {
     resetPreviewAddressDraft,
     savePreviewOptions,
     selectPreviewGuest,
+    selectRecentPreviewIdentity,
     selectPreviewViewer,
     submitPreviewIdentityDialog,
     submitPreviewRouteDialog,
@@ -2071,6 +2283,8 @@ export {
   launchPreviewNotice,
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
+  nextRecentPreviewIdentities,
+  normalizeRecentPreviewIdentities,
   previewOpeningOverlayVisible,
   previewAddressDisplayText,
   previewRouteFromUrl,

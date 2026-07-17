@@ -22,11 +22,16 @@ import {
   PREVIEW_PROXY_PORT_START_ENV
 } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
 import {
+  APPLICATION_PREVIEW_AUTH_KIND,
+  APPLICATION_PREVIEW_IDENTITY_PATH,
+  APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER,
   COOKIE_PROFILE_PREVIEW_AUTH_KIND,
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
   createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
@@ -880,10 +885,10 @@ test("launch preview proxy exchanges a one-use grant for native JSKIT cookies", 
         targetHref: previewAuth.targetHref,
         terminalSessionId: previewAuth.terminalSessionId
       });
-      const grant = createPreviewIdentityGrant(previewAuth, {
-        email: "alice@example.com",
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION
-      });
+      const grant = createPreviewIdentityGrant(
+        previewAuth,
+        previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, "alice@example.com")
+      );
       const controlUrl = previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH);
 
       const response = await fetch(controlUrl, {
@@ -902,7 +907,13 @@ test("launch preview proxy exchanges a one-use grant for native JSKIT cookies", 
       const payload = await response.json();
       assert.deepEqual(payload, {
         identity: {
+          displayName: "",
           email: "alice@example.com",
+          login: "",
+          selector: {
+            type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+            value: "alice@example.com"
+          },
           userId: "user-alice",
           username: "alice"
         },
@@ -933,6 +944,70 @@ test("launch preview proxy exchanges a one-use grant for native JSKIT cookies", 
       assert.equal(replay.status, 409);
       assert.match((await replay.json()).error, /already been used/u);
       assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 2);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("launch preview proxy exchanges a generic login selector through the application endpoint", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const previewAuth = {
+        ...jskitPreviewAuth(target.origin, "application-login"),
+        identityTypes: [PREVIEW_IDENTITY_SELECTOR_LOGIN],
+        kind: APPLICATION_PREVIEW_AUTH_KIND
+      };
+      const preview = await registry.ensure({
+        previewAuth,
+        sessionId: previewAuth.sessionId,
+        targetHref: previewAuth.targetHref,
+        terminalSessionId: previewAuth.terminalSessionId
+      });
+      const grant = createPreviewIdentityGrant(
+        previewAuth,
+        previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_LOGIN, "merc")
+      );
+      const response = await fetch(previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH), {
+        body: JSON.stringify({ grant }),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        identity: {
+          displayName: "Merc",
+          email: "",
+          login: "merc",
+          selector: {
+            type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+            value: "merc"
+          },
+          userId: "",
+          username: "merc"
+        },
+        ok: true
+      });
+      assert.match(response.headers.get("set-cookie") || "", /application_session=merc/u);
+      const exchangeRequests = target.requests.filter((request) => (
+        request.url === APPLICATION_PREVIEW_IDENTITY_PATH
+      ));
+      assert.equal(exchangeRequests.length, 2);
+      assert.deepEqual(JSON.parse(exchangeRequests[0].body), {
+        operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+      });
+      assert.equal(exchangeRequests[1].previewIdentitySecret, TEST_JSKIT_PREVIEW_AUTH_SECRET);
+      assert.deepEqual(JSON.parse(exchangeRequests[1].body), {
+        operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+          value: "merc"
+        }
+      });
     } finally {
       await registry.closeAll();
     }
@@ -976,10 +1051,10 @@ test("launch preview identity control requires preview authorization and a valid
       assert.equal(missingGrant.status, 400);
       assert.equal((await missingGrant.json()).code, "vibe64_preview_identity_grant_missing");
 
-      const validGrant = createPreviewIdentityGrant(previewAuth, {
-        email: "alice@example.com",
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION
-      });
+      const validGrant = createPreviewIdentityGrant(
+        previewAuth,
+        previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, "alice@example.com")
+      );
       const tamperedGrant = `${validGrant.slice(0, -1)}${validGrant.endsWith("a") ? "b" : "a"}`;
       const tampered = await fetch(controlUrl, {
         body: JSON.stringify({ grant: tamperedGrant }),
@@ -994,10 +1069,7 @@ test("launch preview identity control requires preview authorization and a valid
       const wrongScopeGrant = createPreviewIdentityGrant({
         ...previewAuth,
         terminalSessionId: "another-terminal"
-      }, {
-        email: "alice@example.com",
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION
-      });
+      }, previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, "alice@example.com"));
       const wrongScope = await fetch(controlUrl, {
         body: JSON.stringify({ grant: wrongScopeGrant }),
         headers: {
@@ -1025,10 +1097,10 @@ test("launch preview identity failure leaves the browser signed out with the exa
         targetHref: previewAuth.targetHref,
         terminalSessionId: previewAuth.terminalSessionId
       });
-      const grant = createPreviewIdentityGrant(previewAuth, {
-        email: "missing@example.com",
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION
-      });
+      const grant = createPreviewIdentityGrant(
+        previewAuth,
+        previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, "missing@example.com")
+      );
       const response = await fetch(previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH), {
         body: JSON.stringify({ grant }),
         headers: {
@@ -1138,8 +1210,7 @@ test("separate preview browsers can exchange different identities without shared
       const exchange = (email, browserCookie) => fetch(controlUrl, {
         body: JSON.stringify({
           grant: createPreviewIdentityGrant(previewAuth, {
-            email,
-            operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+            ...previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, email)
           })
         }),
         headers: {
@@ -1516,6 +1587,7 @@ async function withTargetServer(callback) {
       ifModifiedSince: request.headers["if-modified-since"] || "",
       ifNoneMatch: request.headers["if-none-match"] || "",
       method: request.method || "GET",
+      previewIdentitySecret: request.headers[APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER] || "",
       url: request.url || ""
     };
     requests.push(requestRecord);
@@ -1575,6 +1647,43 @@ async function withTargetServer(callback) {
         ok: true,
         userId: `user-${username}`,
         username
+      }));
+      return;
+    }
+    if (request.url === APPLICATION_PREVIEW_IDENTITY_PATH) {
+      requestRecord.body = await readRequestText(request);
+      if (requestRecord.previewIdentitySecret !== TEST_JSKIT_PREVIEW_AUTH_SECRET) {
+        response.writeHead(403, {
+          "Content-Type": "application/json"
+        });
+        response.end(JSON.stringify({
+          code: "preview_identity_exchange_unauthorized",
+          error: "Preview identity exchange is not authorized.",
+          ok: false
+        }));
+        return;
+      }
+      const input = JSON.parse(requestRecord.body || "{}");
+      if (input.operation === PREVIEW_IDENTITY_LOGOUT_OPERATION) {
+        response.writeHead(200, {
+          "Content-Type": "application/json",
+          "Set-Cookie": "application_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+        });
+        response.end(JSON.stringify({
+          ok: true
+        }));
+        return;
+      }
+      const login = String(input.selector?.value || "").trim();
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Set-Cookie": `application_session=${login}; Path=/; HttpOnly; SameSite=Lax`
+      });
+      response.end(JSON.stringify({
+        displayName: "Merc",
+        login,
+        ok: true,
+        username: login
       }));
       return;
     }
@@ -1793,6 +1902,16 @@ function jskitPreviewAuth(targetOrigin = "", suffix = "identity") {
     targetHref: `${targetOrigin}/home`,
     targetRoot: `/tmp/vibe64-preview-${suffix}`,
     terminalSessionId: `terminal-${suffix}`
+  };
+}
+
+function previewLoginSelection(type = PREVIEW_IDENTITY_SELECTOR_EMAIL, value = "") {
+  return {
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: {
+      type,
+      value
+    }
   };
 }
 

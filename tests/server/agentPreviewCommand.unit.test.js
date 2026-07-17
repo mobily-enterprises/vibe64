@@ -160,11 +160,17 @@ exports.chromium = {
                   ok() { return false; }
                 };
               }
-              const email = grant.startsWith("grant:") ? grant.slice("grant:".length) : "";
-              selectedIdentity = email === "guest" ? null : {
-                email,
+              const identityValue = grant.startsWith("grant:") ? grant.slice("grant:".length) : "";
+              const identityType = identityValue.includes("@") ? "email" : "login";
+              selectedIdentity = identityValue === "guest" ? null : {
+                email: identityType === "email" ? identityValue : "",
+                login: identityType === "login" ? identityValue : "",
+                selector: {
+                  type: identityType,
+                  value: identityValue
+                },
                 userId: "fake-user-id",
-                username: email.split("@")[0]
+                username: identityValue.split("@")[0]
               };
               return {
                 async json() {
@@ -341,7 +347,7 @@ test("agent preview identity authorization binds you to the trusted Vibe64 viewe
   }), true);
   assert.equal((await command.authorizeBrowserIdentity(sessionId, "you")).ok, true);
   assert.equal((await command.authorizeBrowserIdentity(sessionId, "guest")).ok, true);
-  assert.equal((await command.authorizeBrowserIdentity(sessionId, "grace@example.com")).ok, true);
+  assert.equal((await command.authorizeBrowserIdentity(sessionId, "merc")).ok, true);
   assert.deepEqual(selections, [
     {
       input: {
@@ -361,8 +367,8 @@ test("agent preview identity authorization binds you to the trusted Vibe64 viewe
     },
     {
       input: {
-        email: "grace@example.com",
-        mode: "email"
+        identityValue: "merc",
+        mode: "user"
       },
       sessionId
     }
@@ -788,16 +794,22 @@ test("managed preview browser selects real application identities inside its own
           }
         };
       }
-      const email = input.mode === "viewer" ? input.vibe64User.email : input.email;
+      const identityValue = input.mode === "viewer"
+        ? input.vibe64User.email
+        : input.identityValue;
+      const identityType = identityValue.includes("@") ? "email" : "login";
       return {
-        grant: email === "missing@example.com"
+        grant: identityValue === "missing@example.com"
           ? "grant:rejected-after-logout"
-          : `grant:${email}`,
+          : `grant:${identityValue}`,
         ok: true,
         requestedIdentity: {
           displayName: input.mode === "viewer" ? input.vibe64User.displayName : "",
-          email,
-          mode: input.mode
+          mode: input.mode,
+          selector: {
+            type: identityType,
+            value: identityValue
+          }
         }
       };
     }
@@ -832,7 +844,12 @@ test("managed preview browser selects real application identities inside its own
     assert.deepEqual(JSON.parse(asViewer.stdout).identity, {
       displayName: "ada",
       email: "ada@example.com",
+      login: "",
       mode: "you",
+      selector: {
+        type: "email",
+        value: "ada@example.com"
+      },
       userId: "fake-user-id",
       username: "ada"
     });
@@ -840,16 +857,21 @@ test("managed preview browser selects real application identities inside its own
     const asExistingUser = JSON.parse((await execFileAsync(prepared.hostWrapperPath, [
       "browser",
       "identity",
-      "grace@example.com"
+      "merc"
     ], {
       env: commandEnv
     })).stdout);
     assert.deepEqual(asExistingUser.identity, {
-      displayName: "grace",
-      email: "grace@example.com",
-      mode: "email",
+      displayName: "merc",
+      email: "",
+      login: "merc",
+      mode: "user",
+      selector: {
+        type: "login",
+        value: "merc"
+      },
       userId: "fake-user-id",
-      username: "grace"
+      username: "merc"
     });
 
     await assert.rejects(

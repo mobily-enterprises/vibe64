@@ -278,14 +278,20 @@ const launchTargetFields = {
 };
 
 const previewIdentityFields = {
-  email: {
+  identityType: {
+    type: "string",
+    enum: ["email", "login", "user-id"],
+    noTrim: false,
+    required: false
+  },
+  identityValue: {
     type: "string",
     noTrim: false,
     required: false
   },
   mode: {
     type: "string",
-    enum: ["viewer", "email", "guest"],
+    enum: ["viewer", "user", "guest"],
     noTrim: false,
     required: true
   }

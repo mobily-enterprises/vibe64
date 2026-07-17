@@ -44,9 +44,14 @@ import {
 import {
   createPreviewIdentityGrant,
   normalizePreviewAuthKind,
+  normalizePreviewIdentitySelector,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   previewAuthIdentityAvailable,
+  previewAuthIdentityTypes,
   previewAuthRequiresIdentitySecret,
   previewAuthProfilePath,
   previewAuthSecretPath,
@@ -937,6 +942,10 @@ function previewAuthForLaunchTerminal(terminal = {}, {
     return null;
   }
   return {
+    identityTypes: previewAuthIdentityTypes({
+      identityTypes: metadata.previewIdentityTypes,
+      kind
+    }),
     kind,
     profilePath: previewAuthProfilePath({
       sessionRoot: metadata.sessionRoot,
@@ -952,16 +961,29 @@ function previewAuthForLaunchTerminal(terminal = {}, {
   };
 }
 
-function previewIdentityViewer(vibe64User = null) {
+function previewIdentityViewer(vibe64User = null, identityTypes = []) {
   const email = String(vibe64User?.email || "").trim().toLowerCase();
-  if (!email) {
+  const login = String(vibe64User?.username || vibe64User?.login || "").trim();
+  const userId = String(vibe64User?.id || vibe64User?.userId || "").trim();
+  const selector = [
+    identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_EMAIL) && email
+      ? { type: PREVIEW_IDENTITY_SELECTOR_EMAIL, value: email }
+      : null,
+    identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_LOGIN) && login
+      ? { type: PREVIEW_IDENTITY_SELECTOR_LOGIN, value: login }
+      : null,
+    identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_USER_ID) && userId
+      ? { type: PREVIEW_IDENTITY_SELECTOR_USER_ID, value: userId }
+      : null
+  ].find(Boolean);
+  if (!selector) {
     return null;
   }
   return {
     displayName: String(
-      vibe64User?.displayName || vibe64User?.name || vibe64User?.username || email
-    ).trim() || email,
-    email
+      vibe64User?.displayName || vibe64User?.name || login || email || userId
+    ).trim() || selector.value,
+    selector
   };
 }
 
@@ -970,7 +992,6 @@ function previewIdentityCapability({
   terminal = null,
   vibe64User = null
 } = {}) {
-  const viewer = previewIdentityViewer(vibe64User);
   const previewReady = ["ready", "stale"].includes(String(preview.state || "")) && Boolean(preview.href);
   const previewAuthKind = normalizePreviewAuthKind(terminal?.metadata?.previewAuth);
   const identitySupported = previewAuthIdentityAvailable({
@@ -980,7 +1001,13 @@ function previewIdentityCapability({
     sessionId: terminal?.metadata?.sessionId || "",
     targetHref: preview.targetHref || ""
   });
-  const available = previewReady && previewAuthIdentityAvailable(previewAuth || {});
+  const identityTypes = previewAuthIdentityTypes(previewAuth || {
+    kind: previewAuthKind
+  });
+  const viewer = previewIdentityViewer(vibe64User, identityTypes);
+  const available = previewReady &&
+    identityTypes.length > 0 &&
+    previewAuthIdentityAvailable(previewAuth || {});
   return {
     available,
     defaultMode: viewer ? "viewer" : "guest",
@@ -989,15 +1016,69 @@ function previewIdentityCapability({
       : !previewReady
         ? String(preview.message || "Run the preview before selecting an application identity.")
         : identitySupported
-          ? "Preview identity authorization is unavailable. Restart the preview."
+          ? identityTypes.length < 1
+            ? "This preview does not advertise a supported application user identifier."
+            : "Preview identity authorization is unavailable. Restart the preview."
           : "This preview does not support application identity switching.",
+    identityTypes,
     viewer
   };
 }
 
-function previewIdentitySelection(input = {}) {
+function previewIdentityTypeDescription(identityTypes = []) {
+  const labels = identityTypes.map((type) => ({
+    [PREVIEW_IDENTITY_SELECTOR_EMAIL]: "email",
+    [PREVIEW_IDENTITY_SELECTOR_LOGIN]: "login name",
+    [PREVIEW_IDENTITY_SELECTOR_USER_ID]: "user ID"
+  }[type])).filter(Boolean);
+  if (labels.length < 2) {
+    return labels[0] || "user identifier";
+  }
+  return labels.length === 2
+    ? labels.join(" or ")
+    : `${labels.slice(0, -1).join(", ")}, or ${labels.at(-1)}`;
+}
+
+function inferredPreviewIdentitySelector({
+  identityType = "",
+  identityValue = ""
+} = {}, identityTypes = []) {
+  const value = String(identityValue || "").trim();
+  const explicitType = String(identityType || "").trim();
+  let type = explicitType;
+  if (!type && value.includes("@") && identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_EMAIL)) {
+    type = PREVIEW_IDENTITY_SELECTOR_EMAIL;
+  }
+  if (!type && /^[1-9][0-9]*$/u.test(value) && identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_USER_ID)) {
+    type = PREVIEW_IDENTITY_SELECTOR_USER_ID;
+  }
+  if (!type && identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_LOGIN)) {
+    type = PREVIEW_IDENTITY_SELECTOR_LOGIN;
+  }
+  if (!type && identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_USER_ID)) {
+    type = PREVIEW_IDENTITY_SELECTOR_USER_ID;
+  }
+  if (!type && identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_EMAIL)) {
+    type = PREVIEW_IDENTITY_SELECTOR_EMAIL;
+  }
+  if (!type || !identityTypes.includes(type)) {
+    const error = new Error(
+      `Enter an existing application user's ${previewIdentityTypeDescription(identityTypes)}.`
+    );
+    error.code = "vibe64_preview_identity_selector_unsupported";
+    throw error;
+  }
+  return normalizePreviewIdentitySelector({
+    type,
+    value
+  });
+}
+
+function previewIdentitySelection(input = {}, {
+  identityTypes = []
+} = {}) {
   const mode = String(input.mode || "viewer").trim();
-  if (!["viewer", "email", "guest"].includes(mode)) {
+  if (!["viewer", "user", "guest"].includes(mode)) {
     const error = new Error("Preview identity mode is invalid.");
     error.code = "vibe64_preview_identity_mode_invalid";
     throw error;
@@ -1012,28 +1093,26 @@ function previewIdentitySelection(input = {}) {
       }
     };
   }
-  const viewer = previewIdentityViewer(input.vibe64User);
-  const email = mode === "viewer"
-    ? String(viewer?.email || "")
-    : String(input.email || "").trim().toLowerCase();
-  if (!email) {
+  const viewer = previewIdentityViewer(input.vibe64User, identityTypes);
+  if (mode === "viewer" && !viewer) {
     const error = new Error(
-      mode === "viewer"
-        ? "The signed-in Vibe64 user does not have an email address to match."
-        : "Enter an existing application user's email address."
+      `The signed-in Vibe64 user does not have a supported ${previewIdentityTypeDescription(identityTypes)} to match.`
     );
-    error.code = "vibe64_preview_identity_email_missing";
+    error.code = "vibe64_preview_identity_viewer_missing";
     throw error;
   }
+  const selector = mode === "viewer"
+    ? viewer.selector
+    : inferredPreviewIdentitySelector(input, identityTypes);
   return {
     requestedIdentity: {
-      displayName: mode === "viewer" ? viewer?.displayName || email : "",
-      email,
-      mode
+      displayName: mode === "viewer" ? viewer.displayName : "",
+      mode,
+      selector
     },
     selection: {
-      email,
-      operation: PREVIEW_IDENTITY_LOGIN_OPERATION
+      operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+      selector
     }
   };
 }
@@ -1851,7 +1930,9 @@ function createLaunchTargetTerminalController({
           error.code = "vibe64_preview_identity_unsupported";
           throw error;
         }
-        const identity = previewIdentitySelection(input);
+        const identity = previewIdentitySelection(input, {
+          identityTypes: status.previewIdentity?.identityTypes || []
+        });
         return {
           grant: createPreviewIdentityGrant(previewAuth, identity.selection),
           ok: true,

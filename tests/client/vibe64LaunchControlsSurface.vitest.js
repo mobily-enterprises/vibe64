@@ -16,6 +16,8 @@ import {
   launchPreviewNotice,
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
+  nextRecentPreviewIdentities,
+  normalizeRecentPreviewIdentities,
   previewAddressDisplayText,
   previewOpeningOverlayVisible,
   previewRouteFromUrl,
@@ -179,7 +181,7 @@ describe("Vibe64 launch controls surface", () => {
   });
 
   it("surfaces launch request failures before server preview state exists", () => {
-    const launchError = "Set the public Vibe64 source root in preview options before running Vibe64 Online.";
+    const launchError = "Runtime config is missing required dev value(s) for preview, server: VIBE64_PUBLIC_SOURCE_ROOT.";
 
     expect(launchPreviewIssue({
       launchError,
@@ -351,7 +353,7 @@ describe("Vibe64 launch controls surface", () => {
     expect(previewIdentityLabelText({
       identity: {
         email: "grace@example.com",
-        mode: "email",
+        mode: "user",
         username: "Grace"
       }
     })).toBe("Grace — grace@example.com");
@@ -375,20 +377,62 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("guest");
   });
 
+  it("keeps the four most recent successful typed preview identities", () => {
+    expect(normalizeRecentPreviewIdentities([
+      " GRACE@EXAMPLE.COM ",
+      { type: "login", value: "merc" },
+      "grace@example.com",
+      "invalid",
+      null,
+      { selector: { type: "user-id", value: "user-7" } },
+      { type: "email", value: "ada@example.com" },
+      { type: "login", value: "fifth" }
+    ])).toEqual([
+      { type: "email", value: "grace@example.com" },
+      { type: "login", value: "merc" },
+      { type: "user-id", value: "user-7" },
+      { type: "email", value: "ada@example.com" }
+    ]);
+
+    expect(nextRecentPreviewIdentities([
+      { type: "login", value: "lin" },
+      { type: "email", value: "grace@example.com" },
+      { type: "user-id", value: "user-7" },
+      { type: "login", value: "pat" }
+    ], { type: "email", value: "GRACE@EXAMPLE.COM" })).toEqual([
+      { type: "email", value: "grace@example.com" },
+      { type: "login", value: "lin" },
+      { type: "user-id", value: "user-7" },
+      { type: "login", value: "pat" }
+    ]);
+  });
+
   it("uses the application's canonical identity after exchange without changing the selected mode", () => {
     expect(previewIdentityFromExchange({
       identity: {
         email: " ADA@EXAMPLE.COM ",
+        selector: {
+          type: "email",
+          value: "ada@example.com"
+        },
         userId: "user-7",
         username: "Ada"
       }
     }, {
-      email: "requested@example.com",
+      selector: {
+        type: "email",
+        value: "requested@example.com"
+      },
       mode: "viewer"
     })).toEqual({
       displayName: "Ada",
       email: "ada@example.com",
+      login: "",
       mode: "viewer",
+      selector: {
+        type: "email",
+        value: "ada@example.com"
+      },
       userId: "user-7",
       username: "Ada"
     });

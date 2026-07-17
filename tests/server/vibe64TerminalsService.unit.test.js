@@ -38,6 +38,8 @@ import {
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   JSKIT_PREVIEW_AUTH_KIND,
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID,
   previewAuthSecretPath,
   verifyPreviewIdentityGrant
 } from "@local/vibe64-core/server/previewAuth";
@@ -1358,9 +1360,16 @@ test("launch preview identity grants use the trusted viewer and active terminal 
         available: true,
         defaultMode: "viewer",
         disabledReason: "",
+        identityTypes: [
+          PREVIEW_IDENTITY_SELECTOR_EMAIL,
+          PREVIEW_IDENTITY_SELECTOR_USER_ID
+        ],
         viewer: {
           displayName: "Ada Lovelace",
-          email: "ada@example.com"
+          selector: {
+            type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+            value: "ada@example.com"
+          }
         }
       });
 
@@ -1371,8 +1380,11 @@ test("launch preview identity grants use the trusted viewer and active terminal 
       assert.equal(selection.ok, true);
       assert.deepEqual(selection.requestedIdentity, {
         displayName: "Ada Lovelace",
-        email: "ada@example.com",
-        mode: "viewer"
+        mode: "viewer",
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+          value: "ada@example.com"
+        }
       });
       const verified = verifyPreviewIdentityGrant(selection.grant, {
         kind: JSKIT_PREVIEW_AUTH_KIND,
@@ -1384,8 +1396,40 @@ test("launch preview identity grants use the trusted viewer and active terminal 
         terminalSessionId: terminal.id
       });
       assert.deepEqual(verified.selection, {
-        email: "ada@example.com",
-        operation: "login-as"
+        operation: "login-as",
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+          value: "ada@example.com"
+        }
+      });
+
+      const byUserId = await controller.selectPreviewIdentity(sessionId, {
+        identityValue: "app-user-42",
+        mode: "user"
+      });
+      assert.equal(byUserId.ok, true);
+      assert.deepEqual(byUserId.requestedIdentity, {
+        displayName: "",
+        mode: "user",
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_USER_ID,
+          value: "app-user-42"
+        }
+      });
+      assert.deepEqual(verifyPreviewIdentityGrant(byUserId.grant, {
+        kind: JSKIT_PREVIEW_AUTH_KIND,
+        projectScope,
+        secret,
+        sessionId,
+        targetHref,
+        targetRoot,
+        terminalSessionId: terminal.id
+      }).selection, {
+        operation: "login-as",
+        selector: {
+          type: PREVIEW_IDENTITY_SELECTOR_USER_ID,
+          value: "app-user-42"
+        }
       });
 
       const missingViewer = await controller.selectPreviewIdentity(sessionId, {
@@ -1393,7 +1437,7 @@ test("launch preview identity grants use the trusted viewer and active terminal 
         vibe64User: null
       });
       assert.equal(missingViewer.ok, false);
-      assert.equal(missingViewer.code, "vibe64_preview_identity_email_missing");
+      assert.equal(missingViewer.code, "vibe64_preview_identity_viewer_missing");
     } finally {
       await controller.closeAllForSession(sessionId);
     }

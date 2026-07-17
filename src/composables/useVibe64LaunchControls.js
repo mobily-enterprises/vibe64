@@ -111,6 +111,13 @@ function launchPreviewLocationStorageKey(session = {}, projectSlug = currentProj
   );
 }
 
+function launchPreviewRecentUsersStorageKey(projectSlug = currentProjectSlugFromLocation()) {
+  return vibe64ProjectScopedStorageKey(
+    "vibe64:launch-preview-recent-users",
+    projectSlug
+  );
+}
+
 function launchPreviewOptionsStorageKey(
   session = {},
   projectSlug = currentProjectSlugFromLocation(),
@@ -811,7 +818,8 @@ function useVibe64LaunchControls({
       path: vibe64PreviewIdentityPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
-      ...(context.email ? { email: context.email } : {}),
+      ...(context.identityType ? { identityType: context.identityType } : {}),
+      ...(context.identityValue ? { identityValue: context.identityValue } : {}),
       mode: context.mode
     }),
     fallbackRunError: "Preview identity could not be selected.",
@@ -1216,7 +1224,8 @@ function useVibe64LaunchControls({
   }
 
   function requestPreviewIdentityGrant({
-    email = "",
+    identityType = "",
+    identityValue = "",
     mode = "viewer"
   } = {}) {
     if (!sessionId.value || previewIdentity.value.available !== true) {
@@ -1224,8 +1233,11 @@ function useVibe64LaunchControls({
         previewIdentity.value.disabledReason || "This preview does not support application identity switching."
       );
     }
+    const normalizedIdentityType = String(identityType || "").trim();
+    const normalizedIdentityValue = String(identityValue || "").trim();
     return selectPreviewIdentityCommand.run({
-      email: String(email || "").trim(),
+      ...(normalizedIdentityType ? { identityType: normalizedIdentityType } : {}),
+      ...(normalizedIdentityValue ? { identityValue: normalizedIdentityValue } : {}),
       mode: String(mode || "viewer").trim(),
       sessionId: sessionId.value
     });
@@ -1780,6 +1792,7 @@ export {
   launchStatusRetryDelay,
   launchStatusShouldRetry,
   launchPreviewLocationStorageKey,
+  launchPreviewRecentUsersStorageKey,
   launchTargetsRealtimeShouldRefresh,
   launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,
