@@ -22,6 +22,7 @@ const RESERVED_CALLER_ENV_NAMES = new Set([
   "HOME",
   "LOGNAME",
   "PATH",
+  "TMPDIR",
   "USER",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",

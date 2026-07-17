@@ -60,6 +60,7 @@ const DEFAULT_PATH = [
 const MANAGED_USERNAME_PATTERN = /^[a-z][a-z0-9_-]{0,61}[a-z0-9]$/u;
 const VIBE64_GROUP = "vibe64";
 const DAEMON_USERNAME_PREFIX = "v64d_";
+const MANAGED_ROOT = "/var/lib/vibe64";
 const RESERVED_HUMAN_USERNAMES = new Set([
   "root"
 ]);
@@ -110,7 +111,7 @@ async function main() {
     operation,
     targetUser
   });
-  const env = helperChildEnv(payload.env || {}, targetUser);
+  const env = helperChildEnv(payload.env || {}, targetUser, owner.username);
   const args = Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
   const input = payload.inputBase64
     ? Buffer.from(String(payload.inputBase64), "base64")
@@ -717,6 +718,7 @@ function deploymentServiceUnit({
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `EnvironmentFile=${systemdUnitSafeValue(environmentFile)}`,
     `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
+    `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
     `ExecStart=${systemdUnitSafeValue(startScript)}`,
     "Restart=always",
     "RestartSec=3",
@@ -751,6 +753,7 @@ function managedServiceUnit({
     "SupplementaryGroups=vibe64 nix-users",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
+    `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
     `ExecStart=${systemdUnitSafeValue(startScript)}`,
     ...(normalizedProcessModel === "forking" ? [`PIDFile=${systemdUnitSafeValue(pidFile)}`] : []),
     "Restart=on-failure",
@@ -838,7 +841,15 @@ function workspaceFromDaemonUsername(username = "") {
     : username;
 }
 
-function helperChildEnv(input = {}, targetUser = {}) {
+function workspaceTempRoot(ownerUsername = "") {
+  return path.join(
+    MANAGED_ROOT,
+    workspaceFromDaemonUsername(safeUsername(ownerUsername)),
+    "tmp"
+  );
+}
+
+function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "") {
   const env = {
     PATH: DEFAULT_PATH,
     TERM: process.env.TERM || "xterm-256color"
@@ -855,5 +866,6 @@ function helperChildEnv(input = {}, targetUser = {}) {
   env.XDG_CACHE_HOME = path.join(targetUser.home, ".cache");
   env.XDG_CONFIG_HOME = path.join(targetUser.home, ".config");
   env.XDG_DATA_HOME = path.join(targetUser.home, ".local", "share");
+  env.TMPDIR = workspaceTempRoot(ownerUsername);
   return env;
 }

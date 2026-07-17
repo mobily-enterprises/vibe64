@@ -1557,17 +1557,19 @@ test("execution helper client preserves captured stdout and stderr", async () =>
   });
 });
 
-test("execution gateway rejects caller-owned HOME/PATH policy", async () => {
-  const result = await runVibe64Command({
-    command: process.execPath,
-    args: ["-e", ""],
-    env: {
-      HOME: "/tmp/not-allowed"
-    }
-  });
+test("execution gateway rejects caller-owned identity and temp policy", async () => {
+  for (const envName of ["HOME", "PATH", "TMPDIR"]) {
+    const result = await runVibe64Command({
+      command: process.execPath,
+      args: ["-e", ""],
+      env: {
+        [envName]: "/tmp/not-allowed"
+      }
+    });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_command_env_policy_reserved");
+    assert.equal(result.ok, false, envName);
+    assert.equal(result.code, "vibe64_command_env_policy_reserved", envName);
+  }
 });
 
 test("execution gateway rejects cwd outside allowed roots", async () => {

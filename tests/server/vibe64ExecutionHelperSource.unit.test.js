@@ -107,3 +107,16 @@ test("execution helper uses runuser instead of direct initgroups setuid flow", a
   assert.doesNotMatch(source, /process\.setuid/u);
   assert.doesNotMatch(source, /process\.setgid/u);
 });
+
+test("execution helper centrally assigns the shared workspace TMPDIR", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /const MANAGED_ROOT = "\/var\/lib\/vibe64"/u);
+  assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username\)/u);
+  assert.match(source, /env\.TMPDIR = workspaceTempRoot\(ownerUsername\)/u);
+  assert.equal(
+    source.match(/Environment=TMPDIR=\$\{systemdUnitSafeValue\(workspaceTempRoot\(owner\.username\)\)\}/gu)?.length,
+    2
+  );
+  assert.doesNotMatch(source, /actorTemp|FLOCK_PATH|mkdtemp/u);
+});
