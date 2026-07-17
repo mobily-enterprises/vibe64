@@ -2093,7 +2093,8 @@ test("vibe64 workflow creation options are filtered by repository profile", () =
     VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
   );
   assert.deepEqual(noviceCanonicalOptions.workflowDefinitions.map((definition) => definition.id), [
-    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE,
+    maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   ]);
 
   assert.equal(
@@ -2777,7 +2778,8 @@ test("vibe64 runtime selects workflow definitions from the repository profile ba
       VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
     );
     assert.deepEqual(noviceOptions.workflowDefinitions.map((definition) => definition.id), [
-      VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+      VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE,
+      maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     ]);
 
     await assert.rejects(

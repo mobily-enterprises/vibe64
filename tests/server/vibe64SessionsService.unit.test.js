@@ -6211,7 +6211,8 @@ test("session list gives users without GitHub the novice creation catalog and on
     "expert-created-session-three"
   ]);
   assert.deepEqual(result.creation.workflowDefinitions.map((definition) => definition.id), [
-    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_GUIDED_FEATURE,
+    maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   ]);
   assert.equal(result.creation.canCreate, false);
   assert.equal(result.creation.disabledCode, "open_session_limit");
@@ -7021,6 +7022,63 @@ test("session creation uses the selected workflow definition after seeding", asy
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.deepEqual(preparedSessions, []);
+});
+
+test("session creation lets novice users select free-form work", async () => {
+  let selectedWorkflowDefinitionId = "";
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            return {
+              ok: true,
+              sessionId,
+              workflowDefinition: {
+                id: selectedWorkflowDefinitionId
+              }
+            };
+          },
+          async createSession(input = {}) {
+            selectedWorkflowDefinitionId = input.workflowDefinition;
+            return {
+              sessionId: "novice-free-form"
+            };
+          },
+          async listSessions() {
+            return [];
+          },
+          async workflowDefinitionCreationOptions(input = {}) {
+            return workflowDefinitionCreationOptions({
+              creationAudience: input.creationAudience,
+              seedRequired: false,
+              workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: noviceSetupServices()
+  });
+
+  const result = await service.createSession({
+    vibe64User: {
+      username: "novice"
+    },
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 });
 
 test("session creation freezes managed Git repository profile metadata", async () => {

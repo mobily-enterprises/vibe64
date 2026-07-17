@@ -148,6 +148,10 @@ function workflowDefinitionDisplayOrder(definition = {}) {
   return Number.isFinite(order) ? order : 1000;
 }
 
+function workflowDefinitionAudienceOrder(definition = {}, creationAudience = "") {
+  return normalizeWorkflowCreationAudience(definition.creationAudience) === creationAudience ? 0 : 1;
+}
+
 function workflowDefinitionSummary(definition = {}) {
   return {
     description: definition.description,
@@ -209,7 +213,9 @@ function workflowDefinitionCreationOptions({
     .filter((definition) => workflowDefinitionSupportsRepositoryProfile(definition, normalizedProfile))
     .filter((definition) => workflowDefinitionSupportsCreationAudience(definition, normalizedCreationAudience))
     .sort((left, right) => {
-      return workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
+      return workflowDefinitionAudienceOrder(left, normalizedCreationAudience) -
+        workflowDefinitionAudienceOrder(right, normalizedCreationAudience) ||
+        workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
         String(left.label || "").localeCompare(String(right.label || ""));
     });
   const preferredWorkflowDefinition = featureWorkflowDefinitionIdForRepositoryProfile(normalizedProfile);

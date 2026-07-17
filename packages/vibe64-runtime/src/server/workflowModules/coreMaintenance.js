@@ -146,6 +146,7 @@ const coreMaintenanceWorkflowDefinitions = [
       work_anchor_type: "description",
       work_source: "description"
     },
+    noviceSelectable: true,
     sessionWord: "work",
     steps: [
       "session_created",

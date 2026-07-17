@@ -15,8 +15,9 @@ function normalizeWorkflowCreationAudience(value = "") {
 }
 
 function workflowDefinitionSupportsCreationAudience(definition = {}, audience = "") {
-  return normalizeWorkflowCreationAudience(definition.creationAudience) ===
-    normalizeWorkflowCreationAudience(audience);
+  const normalizedAudience = normalizeWorkflowCreationAudience(audience);
+  return normalizeWorkflowCreationAudience(definition.creationAudience) === normalizedAudience ||
+    (normalizedAudience === WORKFLOW_CREATION_AUDIENCE.NOVICE && definition.noviceSelectable === true);
 }
 
 export {
