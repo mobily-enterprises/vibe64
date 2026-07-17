@@ -83,6 +83,7 @@ function fakeProjectService({
   createRuntime: createRuntimeOverride = null,
   projectTypeReady = true,
   projectConfigEnvironment: projectConfigEnvironmentOverride = null,
+  projectRuntimeConfigEnvironment: projectRuntimeConfigEnvironmentOverride = null,
   selectedProject = {
     workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
   },
@@ -136,6 +137,11 @@ function fakeProjectService({
       return {
         VIBE64_PROJECT_MANIFEST: path.join(stateRoot, "vibe64.project.json")
       };
+    },
+    async projectRuntimeConfigEnvironment(input = {}) {
+      return typeof projectRuntimeConfigEnvironmentOverride === "function"
+        ? projectRuntimeConfigEnvironmentOverride(input)
+        : {};
     },
     async readProjectConfig() {
       return {
@@ -1017,6 +1023,73 @@ test("current-app rejects target script terminal starts before spawning unknown 
     });
     assert.equal(unknown.ok, false);
     assert.equal(unknown.errors[0].code, "invalid_target_script");
+  });
+});
+
+test("current-app passes development Env to Run-menu deploy scripts", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtimeConfigInputs = [];
+    const commandRequests = [];
+    const adapter = {
+      ...fakeAdapter(),
+      async createCurrentAppTargetScriptTerminalSpec() {
+        return {
+          args: ["-lc", "npm run deploy"],
+          command: "bash",
+          commandPreview: "npm run deploy",
+          ok: true
+        };
+      },
+      async listCurrentAppTargetScripts() {
+        return {
+          ok: true,
+          scripts: [
+            {
+              command: "npm run deploy",
+              label: "Deploy",
+              name: "deploy"
+            }
+          ]
+        };
+      }
+    };
+    const publicSourceRoot = "/var/lib/vibe64/merc/projects/vibe64/sessions/selected/source";
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter,
+        projectRuntimeConfigEnvironment(input) {
+          runtimeConfigInputs.push(input);
+          return {
+            VIBE64_PUBLIC_SOURCE_ROOT: publicSourceRoot
+          };
+        },
+        targetRoot
+      }),
+      runCommand: async (request) => {
+        commandRequests.push(request);
+        return {
+          id: "deploy-terminal",
+          ok: true
+        };
+      },
+      setupServices: readySetupServices()
+    });
+
+    const terminal = await service.startTargetScriptTerminal({
+      scriptId: "adapter:deploy"
+    });
+
+    assert.equal(terminal.ok, true);
+    assert.equal(runtimeConfigInputs.length, 1);
+    assert.deepEqual(runtimeConfigInputs[0].phases, ["deploy"]);
+    assert.equal(runtimeConfigInputs[0].sourcePath, targetRoot);
+    assert.equal(runtimeConfigInputs[0].target, "command");
+    assert.equal(commandRequests.length, 1);
+    assert.equal(
+      commandRequests[0].project.runtimeConfigEnv.VIBE64_PUBLIC_SOURCE_ROOT,
+      publicSourceRoot
+    );
   });
 });
 

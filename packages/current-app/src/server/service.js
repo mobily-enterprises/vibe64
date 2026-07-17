@@ -50,6 +50,9 @@ import {
 import {
   shellQuote
 } from "@local/vibe64-execution/server";
+import {
+  loadProjectExecutionEnvRecords
+} from "@local/vibe64-terminals/server/projectExecutionEnv";
 
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
@@ -469,6 +472,7 @@ function projectScriptTerminalSpec(script = {}, targetRoot = "") {
 function createService({
   appRoot = "",
   projectService,
+  runCommand = runVibe64Command,
   setupOptions = {},
   setupServices = {}
 } = {}) {
@@ -737,12 +741,6 @@ function createService({
     }));
   }
 
-  async function projectConfigEnvironment(input = {}) {
-    return typeof projectService.projectConfigEnvironment === "function"
-      ? projectService.projectConfigEnvironment(input)
-      : {};
-  }
-
   function requireAdapterMethodFromRuntime(runtime = {}, methodName = "") {
     const activeAdapter = runtime?.adapter;
     if (typeof activeAdapter?.[methodName] !== "function") {
@@ -787,13 +785,14 @@ function createService({
     };
   }
 
-  async function terminalSpecForScript(script, input = {}) {
-    const targetRoot = await targetRootForInput(input);
+  async function terminalSpecForScript(script, {
+    runtime = null,
+    targetRoot = ""
+  } = {}) {
     if (script.source === PROJECT_SCRIPT_SOURCE) {
       return projectScriptTerminalSpec(script, targetRoot);
     }
 
-    const runtime = await createRuntime(input);
     const createTerminalSpec = requireAdapterMethodFromRuntime(runtime, "createCurrentAppTargetScriptTerminalSpec");
     return createTerminalSpec({
       config: runtime.projectConfig,
@@ -977,7 +976,11 @@ function createService({
           return targetScriptError("invalid_target_script", `Unknown target script: ${scriptId}.`);
         }
 
-        const spec = await terminalSpecForScript(script, input);
+        const runtime = await createRuntime(input);
+        const spec = await terminalSpecForScript(script, {
+          runtime,
+          targetRoot
+        });
         if (spec?.ok === false) {
           return spec;
         }
@@ -988,22 +991,40 @@ function createService({
           );
         }
 
+        const sessionId = normalizeSessionId(input?.sessionId);
+        const session = sessionId && typeof runtime?.getSession === "function"
+          ? await runtime.getSession(sessionId)
+          : {};
+        const executionEnv = await loadProjectExecutionEnvRecords({
+          action: {
+            commandPreview: spec.commandPreview,
+            id: script.id,
+            label: script.label
+          },
+          projectService,
+          runCommand,
+          runtime,
+          session,
+          sourcePath: targetRoot,
+          spec,
+          target: "command",
+          targetRoot
+        });
         const namespace = targetScriptTerminalNamespace();
         if (spec.closeExisting !== false) {
           await closeTerminalSessionsForNamespace(namespace);
         }
-        const configEnv = await projectConfigEnvironment(input);
-        return runVibe64Command({
+        return runCommand({
           args: spec.args,
           command: spec.command,
           cwd: spec.cwd || targetRoot,
-          env: {
-            ...configEnv,
-            ...(spec.env || {})
-          },
+          env: spec.env || {},
           envPolicy: "project",
           mode: "pty",
           project: {
+            config: runtime?.projectConfig || {},
+            configEnv: executionEnv.projectConfigEnv,
+            runtimeConfigEnv: executionEnv.runtimeConfigEnv,
             targetRoot
           },
           purpose: "terminal",

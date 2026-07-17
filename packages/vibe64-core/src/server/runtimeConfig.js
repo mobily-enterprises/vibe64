@@ -240,6 +240,7 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
   const runtimeProfile = isPlainObject(profile) ? profile : {};
   const adapterId = normalizeText(runtimeProfile.id || context?.adapter?.id);
   const publicEnvPrefixes = normalizePublicEnvPrefixes(runtimeProfile.publicEnvPrefixes);
+  const userValueAllowedReservedKeys = normalizeRuntimeConfigKeySet(runtimeProfile.userValueAllowedReservedKeys);
   const userValueReservedKeys = normalizeRuntimeConfigKeySet(runtimeProfile.userValueReservedKeys);
   const records = mergeRuntimeConfigRecords([
     ...await runtimeConfigDefinitions(profile, context),
@@ -269,6 +270,7 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
     records,
     scope,
     target,
+    userValueAllowedReservedKeys,
     userValueReservedKeys,
     values: runtimeConfigEnv(records, {
       scope,

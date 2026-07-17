@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -395,25 +395,16 @@ test("generic Node web launch descriptor uses build and start package scripts", 
 test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
   await withTemporaryRoot(async (root) => {
     const onlineRoot = path.join(root, "vibe64-online");
-    const publicProjectRoot = path.join(root, "public-vibe64");
-    const publicSessionRoot = path.join(publicProjectRoot, "sessions", "active", "public-session");
-    const publicSourceRoot = path.join(publicProjectRoot, "sessions", "selected", "source");
     const sessionRoot = path.join(projectRuntimeRoot(onlineRoot), "sessions", "active", "online-session");
     const onlineStateRoot = path.join(sessionRoot, "runtime", "vibe64-online-child");
     const onlineComposedAppRoot = path.join(onlineStateRoot, "app");
-    await Promise.all([
-      writeProjectFile(onlineRoot, "package.json", JSON.stringify({
-        name: "vibe64-online",
-        scripts: {
-          dev: "node ./bin/vibe64-online.js dev",
-          start: "node ./bin/vibe64-online.js start"
-        }
-      }, null, 2)),
-      writeProjectFile(path.join(publicSessionRoot, "source"), "package.json", JSON.stringify({
-        name: "vibe64"
-      }, null, 2))
-    ]);
-    await symlink(path.join("active", "public-session"), path.join(publicProjectRoot, "sessions", "selected"));
+    await writeProjectFile(onlineRoot, "package.json", JSON.stringify({
+      name: "vibe64-online",
+      scripts: {
+        dev: "node ./bin/vibe64-online.js dev",
+        start: "node ./bin/vibe64-online.js start"
+      }
+    }, null, 2));
 
     const session = {
       metadata: {
@@ -429,37 +420,11 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
         defaultDisplay: "minimized",
         defaultPreview: true,
         id: "online",
-        label: "Run Vibe64 Online",
-        previewOptions: [
-          {
-            defaultValue: "",
-            description: "Stable selected-session source path for the public Vibe64 project this app should compose.",
-            id: "publicSourceRoot",
-            label: "Public Vibe64 source root",
-            placeholder: "/var/lib/vibe64/<workspace>/projects/vibe64/sessions/selected/source",
-            type: "text"
-          }
-        ]
+        label: "Run Vibe64 Online"
       }
     ]);
 
-    const missing = await createGenericNodeWebLaunchTargetTerminalSpec({
-      launchTargetId: "online",
-      session,
-      targetRoot: onlineRoot
-    });
-    assert.equal(missing.ok, false);
-    assert.equal(
-      missing.message,
-      "Set the public Vibe64 source root in preview options before running Vibe64 Online."
-    );
-
     const spec = await createGenericNodeWebLaunchTargetTerminalSpec({
-      launchInput: {
-        values: {
-          publicSourceRoot
-        }
-      },
       launchTargetId: "online",
       session,
       targetRoot: onlineRoot
@@ -467,11 +432,10 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
     try {
       assert.equal(spec.ok, true);
       assert.equal(spec.cwd, onlineRoot);
-      assert.deepEqual(spec.allowedRoots, [publicSourceRoot, onlineStateRoot]);
+      assert.deepEqual(spec.allowedRoots, [onlineStateRoot]);
       assert.equal(spec.metadata.adapterId, "node-web");
       assert.equal(spec.metadata.urlPath, "/app");
       assert.match(spec.metadata.targetUrl, /\/app$/u);
-      assert.equal(spec.metadata.publicSourceRoot, publicSourceRoot);
       assert.equal(spec.metadata.composedAppRoot, onlineComposedAppRoot);
       assert.equal(spec.metadata.stateRoot, onlineStateRoot);
       assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
@@ -483,7 +447,7 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
       });
       assert.equal(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV], path.join(onlineStateRoot, "attachments"));
       assert.equal(env[VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV], onlineComposedAppRoot);
-      assert.equal(env[VIBE64_PUBLIC_SOURCE_ROOT_ENV], publicSourceRoot);
+      assert.equal(env[VIBE64_PUBLIC_SOURCE_ROOT_ENV], undefined);
       assert.equal(env[VIBE64_ONLINE_STATE_ROOT_ENV], onlineStateRoot);
       assert.equal(env[VIBE64_RELEASE_GENERATION_ENV], "");
       assert.equal(env[VIBE64_RESTART_STATE_ROOT_ENV], path.join(onlineStateRoot, "instance-restarts"));
@@ -502,42 +466,40 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
   });
 });
 
-test("Vibe64 Online launch rejects a non-Vibe64 public source root", async () => {
+test("generic Node declares Vibe64 Online's public source as development Env", async () => {
   await withTemporaryRoot(async (root) => {
     const onlineRoot = path.join(root, "vibe64-online");
-    const wrongPublicRoot = path.join(root, "wrong-public-root");
-    await Promise.all([
-      writeProjectFile(onlineRoot, "package.json", JSON.stringify({
-        name: "vibe64-online",
-        scripts: {
-          dev: "node ./bin/vibe64-online.js dev"
-        }
-      }, null, 2)),
-      writeProjectFile(wrongPublicRoot, "package.json", JSON.stringify({
-        name: "not-vibe64"
-      }, null, 2))
-    ]);
+    await writeProjectFile(onlineRoot, "package.json", JSON.stringify({
+      name: "vibe64-online",
+      scripts: {
+        dev: "node ./bin/vibe64-online.js dev"
+      }
+    }, null, 2));
+    const adapter = createGenericNodeWebTargetAdapter();
 
-    const spec = await createGenericNodeWebLaunchTargetTerminalSpec({
-      launchInput: {
-        values: {
-          publicSourceRoot: wrongPublicRoot
-        }
-      },
-      launchTargetId: "online",
-      session: {
-        metadata: {
-          source_path: onlineRoot
-        },
-        targetRoot: onlineRoot
-      },
-      targetRoot: onlineRoot
+    const profile = await adapter.getRuntimeConfigProfile({
+      scope: "dev",
+      sourcePath: onlineRoot
     });
-    assert.equal(spec.ok, false);
-    assert.equal(
-      spec.message,
-      "Public Vibe64 source root must point to a vibe64 checkout. Found not-vibe64."
-    );
+    assert.equal(profile.id, "node-web-vibe64-online");
+    assert.deepEqual(profile.userValueAllowedReservedKeys, [VIBE64_PUBLIC_SOURCE_ROOT_ENV]);
+    assert.deepEqual(profile.definitions, [
+      {
+        key: VIBE64_PUBLIC_SOURCE_ROOT_ENV,
+        owner: "user",
+        requiredFor: ["deploy", "preview"],
+        scope: "dev",
+        secret: false,
+        source: "vibe64-online",
+        targets: ["command", "env-file", "launch-target"],
+        value: "",
+        valuePresent: false
+      }
+    ]);
+    assert.equal(await adapter.getRuntimeConfigProfile({
+      scope: "prod",
+      sourcePath: onlineRoot
+    }), null);
   });
 });
 

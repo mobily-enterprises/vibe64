@@ -7,6 +7,7 @@
     "./server/actions": "./src/server/actions.js",
     "./server/codexGitCommand": "./src/server/codexGitCommand.js",
     "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js",
+    "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js"
   },
   "dependencies": {

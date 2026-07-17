@@ -56,6 +56,9 @@ import {
   createGenericNodeWebLaunchDescriptor
 } from "./launchTargets.js";
 import {
+  vibe64OnlineRuntimeConfigProfile
+} from "./vibe64OnlineLaunch.js";
+import {
   commaList,
   configFiles,
   definitionList,
@@ -379,6 +382,17 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     return [
       "src"
     ];
+  }
+
+  async getRuntimeConfigProfile({
+    scope = "dev",
+    sourcePath = "",
+    targetRoot = ""
+  } = {}) {
+    const packageJson = await readPackageJson(sourcePath || targetRoot);
+    return vibe64OnlineRuntimeConfigProfile(packageJson || {}, {
+      scope
+    });
   }
 
   async createDeploymentPublishPlan({

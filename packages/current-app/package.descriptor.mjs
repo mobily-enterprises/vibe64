@@ -9,6 +9,7 @@ export default Object.freeze({
     "@local/vibe64-core",
     "@local/vibe64-runtime",
     "@local/vibe64-project",
+    "@local/vibe64-terminals",
     "@local/setup-doctor-core",
     "@local/vibe64-execution",
     "@local/studio-terminal-core",

@@ -65,6 +65,7 @@ import {
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
+const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
 
 function githubProjectRepositoryInput(github = {}) {
   return {
@@ -2607,6 +2608,102 @@ test("Vibe64 project service rejects Vibe64-reserved user Env keys", async () =>
       projectLocalRoot: targetRoot
     });
     assert.equal(userValues.records.some((record) => record.key === "VIBE64_DEPLOYMENT_PUBLIC_URL"), false);
+  });
+});
+
+test("Vibe64 project service accepts the declared Vibe64 Online development Env", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        fullName: "example/vibe64-online"
+      }),
+      slug: "vibe64-online"
+    });
+    const targetRoot = path.join(projectsRoot, "vibe64-online");
+    const projectLocalRoot = projectContext.projectLocalRootForTarget(targetRoot);
+    const projectSessionSourceRoot = projectContext.projectSessionSourceRootForTarget(targetRoot);
+    const sourceRoot = await createSessionSourceFixture({
+      projectLocalRoot,
+      projectSessionSourceRoot,
+      sessionId: "online-env"
+    });
+    await writePackageJson(sourceRoot, {
+      name: "vibe64-online",
+      scripts: {
+        dev: "node ./bin/vibe64-online.js dev"
+      }
+    });
+    const requestContext = {
+      projectLocalRoot,
+      projectRecordPath: projectContext.projectRecordPathForTarget(targetRoot),
+      projectSessionSourceRoot,
+      projectsRoot,
+      slug: "vibe64-online",
+      targetRoot
+    };
+    const service = createService({
+      projectContext
+    });
+
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "node-web",
+      sessionId: "online-env",
+      values: {
+        github_pr_merge_method: "merge",
+        [GENERIC_NODE_WEB_CLIENT_LIBRARY_CONFIG]: "auto"
+      }
+    }));
+
+    await assert.rejects(
+      () => runWithProjectRequestContext(requestContext, () => service.projectRuntimeConfigEnvironment({
+        materialize: false,
+        phase: RUNTIME_CONFIG_PHASES.DEPLOY,
+        sessionId: "online-env",
+        sourcePath: sourceRoot,
+        target: RUNTIME_CONFIG_TARGETS.COMMAND
+      })),
+      (error) => {
+        assert.equal(error.code, "vibe64_runtime_config_missing");
+        assert.match(error.message, /VIBE64_PUBLIC_SOURCE_ROOT/u);
+        return true;
+      }
+    );
+
+    const publicSourceRoot = "/var/lib/vibe64/merc/projects/vibe64/sessions/selected/source";
+    const saved = await runWithProjectRequestContext(requestContext, () => service.saveEnvUserValues({
+      environment: "dev",
+      sessionId: "online-env",
+      sourcePath: sourceRoot,
+      values: {
+        [VIBE64_PUBLIC_SOURCE_ROOT_ENV]: publicSourceRoot
+      }
+    }));
+    const previewEnv = await runWithProjectRequestContext(requestContext, () => service.projectRuntimeConfigEnvironment({
+      materialize: false,
+      phase: RUNTIME_CONFIG_PHASES.PREVIEW,
+      sessionId: "online-env",
+      sourcePath: sourceRoot,
+      target: RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET
+    }));
+    const productionSave = await runWithProjectRequestContext(requestContext, () => service.saveEnvUserValues({
+      environment: "prod",
+      sessionId: "online-env",
+      sourcePath: sourceRoot,
+      values: {
+        [VIBE64_PUBLIC_SOURCE_ROOT_ENV]: publicSourceRoot
+      }
+    }));
+
+    assert.equal(saved.ok, true);
+    assert.equal(previewEnv[VIBE64_PUBLIC_SOURCE_ROOT_ENV], publicSourceRoot);
+    assert.equal(productionSave.ok, false);
+    assert.equal(productionSave.errors[0].code, "vibe64_env_reserved_key");
   });
 });
 

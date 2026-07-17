@@ -19,6 +19,10 @@ const SERVER_LIKE_TERMINAL_TARGETS = new Set([
 ]);
 const COMMAND_RUNTIME_PHASE_HINTS = Object.freeze([
   {
+    pattern: /\bdeploy(?:ed|ing|ment|ments)?\b|\brelease(?:d|s|ing)?\b/iu,
+    phase: RUNTIME_CONFIG_PHASES.DEPLOY
+  },
+  {
     pattern: /\binstall(?:ing|ed)?\b|dependencies|node_modules/iu,
     phase: RUNTIME_CONFIG_PHASES.INSTALL
   },

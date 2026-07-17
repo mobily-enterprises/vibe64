@@ -45,6 +45,10 @@ export default Object.freeze({
         {
           subpath: "./server/service",
           summary: "Owns Codex and command terminal lifecycle, IO, and terminal result recording."
+        },
+        {
+          subpath: "./server/projectExecutionEnv",
+          summary: "Resolves project configuration and runtime Env for terminal commands."
         }
       ],
       containerTokens: {

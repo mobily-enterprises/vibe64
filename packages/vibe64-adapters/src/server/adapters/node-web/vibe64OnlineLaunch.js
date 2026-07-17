@@ -1,6 +1,12 @@
 import path from "node:path";
 
 import {
+  RUNTIME_CONFIG_OWNERS,
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_SCOPES,
+  RUNTIME_CONFIG_TARGETS
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_SERVICE_DATA_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
@@ -29,8 +35,6 @@ import {
 
 const VIBE64_ONLINE_LAUNCH_TARGET_ID = "online";
 const VIBE64_ONLINE_PACKAGE_NAME = "vibe64-online";
-const VIBE64_PACKAGE_NAME = "vibe64";
-const VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID = "publicSourceRoot";
 const VIBE64_CODEX_ATTACHMENTS_ROOT_ENV = "VIBE64_CODEX_ATTACHMENTS_ROOT";
 const VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV = "VIBE64_ONLINE_COMPOSED_APP_ROOT";
 const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
@@ -64,53 +68,39 @@ function vibe64OnlineLaunchTarget(packageJson = {}) {
     defaultDisplay: "minimized",
     defaultPreview: true,
     id: VIBE64_ONLINE_LAUNCH_TARGET_ID,
-    label: "Run Vibe64 Online",
-    previewOptions: [
-      {
-        defaultValue: "",
-        description: "Stable selected-session source path for the public Vibe64 project this app should compose.",
-        id: VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID,
-        label: "Public Vibe64 source root",
-        placeholder: "/var/lib/vibe64/<workspace>/projects/vibe64/sessions/selected/source",
-        type: "text"
-      }
-    ]
+    label: "Run Vibe64 Online"
   };
 }
 
-function launchInputTextValue(launchInput = {}, id = "") {
-  const values = launchInput?.values;
-  const value = values && typeof values === "object" && !Array.isArray(values)
-    ? values[id]
-    : "";
-  return String(value || "").trim();
-}
-
-async function validatePublicVibe64SourceRoot(launchInput = {}) {
-  const inputPath = launchInputTextValue(launchInput, VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID);
-  if (!inputPath) {
-    return {
-      ok: false,
-      message: "Set the public Vibe64 source root in preview options before running Vibe64 Online."
-    };
-  }
-  if (!path.isAbsolute(inputPath)) {
-    return {
-      ok: false,
-      message: "Public Vibe64 source root must be an absolute path."
-    };
-  }
-  const publicSourceRoot = path.resolve(inputPath);
-  const packageName = String((await readPackageJson(publicSourceRoot))?.name || "").trim();
-  if (packageName !== VIBE64_PACKAGE_NAME) {
-    return {
-      ok: false,
-      message: `Public Vibe64 source root must point to a ${VIBE64_PACKAGE_NAME} checkout. Found ${packageName || "(no package.json)"}.`
-    };
+function vibe64OnlineRuntimeConfigProfile(packageJson = {}, {
+  scope = RUNTIME_CONFIG_SCOPES.DEV
+} = {}) {
+  if (!isVibe64OnlinePackage(packageJson) || scope === RUNTIME_CONFIG_SCOPES.PROD) {
+    return null;
   }
   return {
-    ok: true,
-    publicSourceRoot
+    definitions: [
+      {
+        key: VIBE64_PUBLIC_SOURCE_ROOT_ENV,
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        requiredFor: [
+          RUNTIME_CONFIG_PHASES.DEPLOY,
+          RUNTIME_CONFIG_PHASES.PREVIEW
+        ],
+        scope: RUNTIME_CONFIG_SCOPES.DEV,
+        secret: false,
+        source: VIBE64_ONLINE_PACKAGE_NAME,
+        targets: [
+          RUNTIME_CONFIG_TARGETS.COMMAND,
+          RUNTIME_CONFIG_TARGETS.ENV_FILE,
+          RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET
+        ],
+        value: "",
+        valuePresent: false
+      }
+    ],
+    id: "node-web-vibe64-online",
+    userValueAllowedReservedKeys: [VIBE64_PUBLIC_SOURCE_ROOT_ENV]
   };
 }
 
@@ -127,7 +117,6 @@ function inheritedRuntimeIdentityEnv(env = process.env) {
 async function createVibe64OnlineLaunchDescriptor({
   launchPort = DEFAULT_WEB_LAUNCH_TARGET_PORT,
   packageJson = {},
-  publicSourceRoot = "",
   session = {},
   worktreePath = ""
 } = {}) {
@@ -143,7 +132,7 @@ async function createVibe64OnlineLaunchDescriptor({
   const identityEnv = inheritedRuntimeIdentityEnv(process.env);
   const composedAppRoot = stateRoot ? path.join(stateRoot, "app") : "";
   return {
-    allowedRoots: [publicSourceRoot, stateRoot].filter(Boolean),
+    allowedRoots: [stateRoot].filter(Boolean),
     command: runScriptCommand(packageManager.name, "dev"),
     env: {
       ...identityEnv,
@@ -151,7 +140,6 @@ async function createVibe64OnlineLaunchDescriptor({
       [VIBE64_ONLINE_COMPOSED_APP_ROOT_ENV]: composedAppRoot,
       [VIBE64_ONLINE_STATE_ROOT_ENV]: stateRoot,
       [VIBE64_PROJECTS_ROOT_ENV]: "",
-      [VIBE64_PUBLIC_SOURCE_ROOT_ENV]: publicSourceRoot,
       [VIBE64_RELEASE_GENERATION_ENV]: "",
       [VIBE64_RESTART_STATE_ROOT_ENV]: stateRoot ? path.join(stateRoot, "instance-restarts") : "",
       [VIBE64_SERVICE_DATA_ROOT_ENV]: "",
@@ -164,7 +152,6 @@ async function createVibe64OnlineLaunchDescriptor({
       mode: "vibe64-online-dev",
       packageManager: packageManager.name,
       previewProxyPortRange: `${previewProxy.portRange.start}-${previewProxy.portRange.end}`,
-      publicSourceRoot,
       runtimeNamespace: identityEnv[VIBE64_RUNTIME_NAMESPACE_ENV] || "",
       stateRoot
     },
@@ -177,7 +164,6 @@ async function createVibe64OnlineLaunchDescriptor({
 
 async function createVibe64OnlineLaunchTargetTerminalSpec({
   context = {},
-  launchInput = {},
   session = {},
   targetRoot = ""
 } = {}) {
@@ -196,10 +182,6 @@ async function createVibe64OnlineLaunchTargetTerminalSpec({
       message: "Vibe64 Online launch is only available for the vibe64-online package with a dev script."
     };
   }
-  const publicSource = await validatePublicVibe64SourceRoot(launchInput);
-  if (!publicSource.ok) {
-    return publicSource;
-  }
   return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "node-web",
     launchTarget: context.launchTarget || launchTarget,
@@ -207,7 +189,6 @@ async function createVibe64OnlineLaunchTargetTerminalSpec({
     resolveLaunch: ({ port, worktreePath: launchWorktreePath }) => createVibe64OnlineLaunchDescriptor({
       launchPort: port,
       packageJson,
-      publicSourceRoot: publicSource.publicSourceRoot,
       session,
       worktreePath: launchWorktreePath
     }),
@@ -221,5 +202,6 @@ export {
   createVibe64OnlineLaunchDescriptor,
   createVibe64OnlineLaunchTargetTerminalSpec,
   isVibe64OnlinePackage,
-  vibe64OnlineLaunchTarget
+  vibe64OnlineLaunchTarget,
+  vibe64OnlineRuntimeConfigProfile
 };

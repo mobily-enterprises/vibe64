@@ -1718,27 +1718,33 @@ function createService({
         envConfigSource: context.envConfigSource || envConfigSource
       });
     }
+    const runtimeConfigContext = {
+      ...context,
+      sourcePath: draftSourcePath(projectConfigInput) ||
+        normalizeText(context.envConfigSource?.sourceRoot || envConfigSource?.sourceRoot)
+    };
     const baseProjectEnvironment = committed
-      ? await committedProjectConfigEnvironmentState(context)
+      ? await committedProjectConfigEnvironmentState(runtimeConfigContext)
       : await projectConfigEnvironmentState(projectConfigInput);
     const projectEnvironment = {
       ...baseProjectEnvironment,
-      ...await projectRuntimeConfigEnvironmentResolverState(context)
+      ...await projectRuntimeConfigEnvironmentResolverState(runtimeConfigContext)
     };
     const userValues = await readEnvUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
     const resolvedServiceDataRoot = serviceDataRoot();
-    const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
-      ? await context.adapter.getRuntimeConfigProfile({
-          ...context,
+    const profile = runtimeConfigContext.adapter && typeof runtimeConfigContext.adapter.getRuntimeConfigProfile === "function"
+      ? await runtimeConfigContext.adapter.getRuntimeConfigProfile({
+          ...runtimeConfigContext,
           projectEnvironment,
+          scope: envInputScope(input),
           serviceDataRoot: resolvedServiceDataRoot,
           targetRoot: targetRootValue
         })
       : null;
     const config = await resolveRuntimeConfig(profile, {
-      ...context,
+      ...runtimeConfigContext,
       phase: input.phase,
       phases: input.phases,
       projectEnvironment,
@@ -1750,7 +1756,7 @@ function createService({
     });
     return {
       ...config,
-      envConfigSource: context.envConfigSource || envConfigSource || null,
+      envConfigSource: runtimeConfigContext.envConfigSource || envConfigSource || null,
       systemEnvironment: projectEnvironment
     };
   }
@@ -2310,7 +2316,10 @@ function createService({
         error.source = existingRecord.source;
         throw error;
       }
-      if (runtimeConfigKeyIsVibe64Reserved(normalizedKey)) {
+      if (
+        runtimeConfigKeyIsVibe64Reserved(normalizedKey) &&
+        !(config.userValueAllowedReservedKeys || []).includes(normalizedKey)
+      ) {
         const error = new Error(`${normalizedKey} is reserved for Vibe64 and cannot be saved as a user Env value.`);
         error.code = "vibe64_env_reserved_key";
         error.key = normalizedKey;
