@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -1473,6 +1473,152 @@ test("Vibe64 project service keeps a config-only JSKIT Git cache in the seed wor
     assert.equal(preSourceSessionRuntime.adapter.id, "jskit");
     assert.equal(preSourceSessionRuntime.projectConfig.bootstrap, true);
     assert.equal(preSourceSessionRuntime.projectConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("Vibe64 project service reads existing GitHub project config without requiring a Git cache", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
+      ...githubProjectRepositoryInput({
+        defaultBranch: "main",
+        fullName: "example/existing-app"
+      }),
+      slug: "existing-app"
+    });
+    const projectRoot = path.join(projectsRoot, "existing-app");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
+    const recordPath = projectContext.projectRecordPathForSlug("existing-app");
+    const vibe64User = {
+      gid: 1000,
+      home: path.join(root, "users", "owner"),
+      uid: 1000,
+      username: "owner"
+    };
+    const calls = [];
+    let readerResult = {
+      commit: "0123456789abcdef0123456789abcdef01234567",
+      found: true,
+      handled: true,
+      manifestText: `${JSON.stringify({
+        config: {
+          github_pr_merge_method: "merge",
+          jskit_database_runtime: "mariadb"
+        },
+        projectType: "jskit",
+        schema: "vibe64.project",
+        schemaVersion: 1
+      })}\n`,
+      ref: "refs/heads/main",
+      sourceType: "github"
+    };
+    let readerError = null;
+    const service = createService({
+      committedProjectConfigReader: {
+        async readCommittedProjectConfig(input = {}) {
+          calls.push(input);
+          if (readerError) {
+            throw readerError;
+          }
+          return readerResult;
+        }
+      },
+      projectContext
+    });
+    const requestContext = {
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
+      projectsRoot,
+      slug: "existing-app",
+      targetRoot: projectRoot,
+      vibe64User
+    };
+
+    const missingReader = await runWithProjectRequestContext(
+      requestContext,
+      () => createService({ projectContext }).readProjectType()
+    );
+    assert.equal(missingReader.ok, true);
+    assert.equal(missingReader.projectType.ready, false);
+    assert.equal(missingReader.projectType.status, "unavailable");
+    assert.equal(missingReader.projectType.errorCode, "vibe64_committed_project_git_cache_missing");
+
+    const valid = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(valid.ok, true);
+    assert.equal(valid.projectType.ready, true);
+    assert.equal(valid.projectType.projectType, "jskit");
+    assert.equal(valid.projectType.sourceType, "github");
+    assert.equal(valid.projectType.commit, readerResult.commit);
+    assert.equal(calls[0].metadata.repository.mode, PROJECT_REPOSITORY_MODE_GITHUB);
+    assert.equal(calls[0].ref, "refs/heads/main");
+    assert.deepEqual(calls[0].vibe64User, vibe64User);
+    await assert.rejects(() => access(path.join(projectRoot, "git-cache", "repository.git")), {
+      code: "ENOENT"
+    });
+
+    readerResult = {
+      commit: valid.projectType.commit,
+      found: false,
+      handled: true,
+      ref: "refs/heads/main",
+      sourceType: "github"
+    };
+    const missing = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(missing.ok, true);
+    assert.equal(missing.projectType.ready, false);
+    assert.equal(missing.projectType.status, "missing");
+    assert.equal(missing.projectType.errorCode, "vibe64_project_type_missing");
+
+    readerResult = {
+      commit: valid.projectType.commit,
+      found: true,
+      handled: true,
+      manifestText: "{broken json\n",
+      ref: "refs/heads/main",
+      sourceType: "github"
+    };
+    const malformed = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(malformed.ok, true);
+    assert.equal(malformed.projectType.ready, false);
+    assert.equal(malformed.projectType.status, "unavailable");
+    assert.equal(malformed.projectType.errorCode, "vibe64_committed_project_manifest_invalid");
+    assert.match(malformed.projectType.message, /invalid JSON/u);
+
+    readerResult = {
+      commit: valid.projectType.commit,
+      found: true,
+      handled: true,
+      manifestText: `${JSON.stringify({
+        config: {},
+        schema: "vibe64.project",
+        schemaVersion: 1
+      })}\n`,
+      ref: "refs/heads/main",
+      sourceType: "github"
+    };
+    const missingProjectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(missingProjectType.ok, true);
+    assert.equal(missingProjectType.projectType.ready, false);
+    assert.equal(missingProjectType.projectType.status, "unavailable");
+    assert.equal(missingProjectType.projectType.errorCode, "vibe64_committed_project_manifest_invalid");
+    assert.match(missingProjectType.projectType.message, /missing projectType/u);
+
+    readerError = Object.assign(new Error("GitHub is unavailable."), {
+      code: "github_unavailable"
+    });
+    const unreadable = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(unreadable.ok, true);
+    assert.equal(unreadable.projectType.ready, false);
+    assert.equal(unreadable.projectType.status, "unavailable");
+    assert.equal(unreadable.projectType.errorCode, "vibe64_committed_project_repository_unreadable");
+    assert.match(unreadable.projectType.message, /GitHub is unavailable/u);
   });
 });
 

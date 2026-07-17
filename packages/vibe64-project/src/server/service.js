@@ -88,6 +88,7 @@ import {
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,
   currentProjectTargetRoot,
+  currentProjectVibe64User,
   runWithResolvedProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
@@ -195,6 +196,19 @@ function projectTypeMessage(status = "", projectType = "") {
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const ENV_CONFIG_VIEW_BASELINE = "baseline";
 const ENV_CONFIG_VIEW_SESSION = "session";
+const COMMITTED_PROJECT_TYPE_SETUP_BLOCKING_ERRORS = new Set([
+  "vibe64_committed_project_git_ref_unavailable",
+  "vibe64_committed_project_manifest_invalid",
+  "vibe64_committed_project_repository_unreadable"
+]);
+
+function projectRecordRequiresCommittedConfig(metadata = {}) {
+  const existingRepository = (
+    normalizeProjectApplicationMode(metadata?.applicationMode) === PROJECT_APPLICATION_MODE_EXISTING ||
+    normalizeText(metadata?.repository?.github?.source) === "github-existing"
+  );
+  return existingRepository && !pendingProjectBootstrapConfig(metadata);
+}
 
 function selfTargetAutoSelectProjectRepro(env = process.env) {
   const selfTarget = /^(1|true|yes|on)$/iu.test(String(env?.[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV] || "").trim());
@@ -223,6 +237,7 @@ function projectSelectionSetupMetadata(runtimeProfile = null) {
 
 function createService({
   adapterServices = () => ({}),
+  committedProjectConfigReader = null,
   env = process.env,
   projectContext = null,
   projectConfigSavedHooks = [],
@@ -415,16 +430,19 @@ function createService({
 
   function committedProjectAdapterContext(targetRootValue = currentTargetRoot(), {
     sourceReadMode = "git",
-    sourceRoot = ""
+    sourceRoot = "",
+    vibe64User = currentProjectVibe64User()
   } = {}) {
     const sourceRootValue = String(sourceRoot || currentSourceRoot() || "").trim();
     return createVibe64CommittedProjectAdapterContext({
       adapterRegistry,
+      committedProjectConfigReader,
       projectRecordPath: projectRecordPath(targetRootValue),
       projectRuntimeRoot: projectRuntimeRoot(targetRootValue),
       sourceReadMode,
       sourceRoot: sourceRootValue,
-      targetRoot: sourceRootValue || targetRootValue
+      targetRoot: sourceRootValue || targetRootValue,
+      vibe64User
     });
   }
 
@@ -990,7 +1008,8 @@ function createService({
     try {
       return (await committedProjectAdapterContext(targetRootValue, {
         sourceReadMode: resolvedSource.sourceReadMode,
-        sourceRoot: resolvedSource.sourceRoot
+        sourceRoot: resolvedSource.sourceRoot,
+        vibe64User: input?.vibe64User || currentProjectVibe64User()
       }).readProjectType()).projectType;
     } catch (error) {
       if (!committedProjectConfigUnavailableError(error)) {
@@ -1016,7 +1035,17 @@ function createService({
       return null;
     }
     const projectType = await readCommittedProjectTypeState(input);
-    return projectType.ready === true ? projectType : null;
+    if (
+      projectType.ready === true ||
+      COMMITTED_PROJECT_TYPE_SETUP_BLOCKING_ERRORS.has(projectType.errorCode)
+    ) {
+      return projectType;
+    }
+    if (projectType.errorCode !== "vibe64_committed_project_git_cache_missing") {
+      return null;
+    }
+    const metadata = await readProjectRecordMetadata(projectRecordPath(currentTargetRoot()));
+    return projectRecordRequiresCommittedConfig(metadata) ? projectType : null;
   }
 
   async function resolveProjectSetupState(input = {}, {

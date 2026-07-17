@@ -26,6 +26,7 @@ async function resolveProjectRequestContext({
     resolvedProjectContext?.projectsRoot ||
     (resolvedProjectContext?.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
+  const vibe64User = request?.vibe64User || null;
   const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
   if (explicitContext) {
     await assertProjectDirectoryUsable(explicitContext.targetRoot);
@@ -34,7 +35,10 @@ async function resolveProjectRequestContext({
         recursive: true
       });
     }
-    return explicitContext;
+    return Object.freeze({
+      ...explicitContext,
+      vibe64User
+    });
   }
   if (resolvedProjectContext?.projectCatalogEnabled === false) {
     const error = new Error("Local editor mode only serves the selected project.");
@@ -77,7 +81,8 @@ async function resolveProjectRequestContext({
     sourceConfigRoot,
     sourceRoot,
     systemRoot: String(resolvedProjectContext?.systemRoot || "").trim(),
-    targetRoot
+    targetRoot,
+    vibe64User
   });
 }
 
@@ -155,6 +160,10 @@ function currentProjectRecordPath() {
   return String(currentProjectRequestContext()?.projectRecordPath || "").trim();
 }
 
+function currentProjectVibe64User() {
+  return currentProjectRequestContext()?.vibe64User || null;
+}
+
 function currentProjectScopeKey({
   fallback = "global"
 } = {}) {
@@ -207,6 +216,7 @@ export {
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,
   currentProjectTargetRoot,
+  currentProjectVibe64User,
   resolveProjectRequestContext,
   runWithResolvedProjectRequestContext,
   runWithProjectRequestContext,

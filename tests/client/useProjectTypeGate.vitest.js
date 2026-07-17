@@ -382,4 +382,33 @@ describe("useProjectTypeGate", () => {
 
     scope.stop();
   });
+
+  it("shows repository and manifest failures instead of the app-type chooser", async () => {
+    endpointMocks.projectTypeData.value = {
+      projectType: {
+        errorCode: "vibe64_committed_project_manifest_invalid",
+        message: "Committed vibe64.project.json contains invalid JSON.",
+        projectType: "",
+        ready: false,
+        status: "unavailable"
+      }
+    };
+
+    const scope = effectScope();
+    let gate;
+    scope.run(() => {
+      gate = useProjectTypeGate({
+        emit: () => null
+      });
+    });
+    await nextTick();
+
+    expect(gate.needsProjectType.value).toBe(false);
+    expect(gate.projectTemplateChooserVisible.value).toBe(false);
+    expect(gate.errorMessage.value).toBe("Committed vibe64.project.json contains invalid JSON.");
+    const templatesRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project templates");
+    expect(templatesRequest.enabled.value).toBe(false);
+
+    scope.stop();
+  });
 });

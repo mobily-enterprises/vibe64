@@ -807,13 +807,24 @@ test("project request context ensures catalog runtime root only", async () => {
       env: {},
       home: root
     });
+    const vibe64User = {
+      gid: 1001,
+      github: {
+        login: "owner"
+      },
+      home: path.join(root, "homes", "owner"),
+      role: "owner",
+      uid: 1001,
+      username: "owner"
+    };
 
     const context = await resolveProjectRequestContext({
       projectContext,
       request: {
         params: {
           slug: "direct-app"
-        }
+        },
+        vibe64User
       }
     });
 
@@ -821,6 +832,7 @@ test("project request context ensures catalog runtime root only", async () => {
     assert.equal(context.sourceRoot, "");
     assert.equal(context.projectLocalRoot, projectContext.projectLocalRootForSlug("direct-app"));
     assert.equal(context.projectRuntimeRoot, projectContext.projectRuntimeRootForSlug("direct-app"));
+    assert.equal(context.vibe64User, vibe64User);
     await access(context.projectRuntimeRoot);
     await assert.rejects(() => access(path.join(projectRoot, "state")), {
       code: "ENOENT"

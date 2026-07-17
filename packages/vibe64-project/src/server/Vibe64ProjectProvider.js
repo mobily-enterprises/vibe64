@@ -10,6 +10,9 @@ import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
 import {
+  VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE
+} from "@local/vibe64-core/server/committedProjectConfig";
+import {
   vibe64ProjectChangedServiceEvent
 } from "@local/vibe64-core/server/projectRealtimeEvents";
 import { featureActions } from "./actions.js";
@@ -37,8 +40,12 @@ class Vibe64ProjectProvider {
     app.service(
       VIBE64_PROJECT_SERVICE,
       (scope) => {
-        void scope;
+        const committedProjectConfigReader = typeof scope?.has === "function" &&
+          scope.has(VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE)
+          ? scope.make(VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE)
+          : null;
         return createService({
+          committedProjectConfigReader,
           env,
           projectContext
         });

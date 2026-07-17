@@ -52,8 +52,11 @@ function useProjectTypeGate({
   const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectTypeCacheKey.value) || null);
   const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
   const projectType = computed(() => projectTypeRecord.value?.projectType || {});
+  const projectTypeRequiresSelection = computed(() => (
+    projectType.value.ready !== true && projectType.value.status === "missing"
+  ));
   const projectTemplatesView = useStudioEndpointView({
-    enabled: computed(() => Boolean(projectTypeRecord.value?.projectType) && projectType.value.ready !== true),
+    enabled: computed(() => Boolean(projectTypeRecord.value?.projectType) && projectTypeRequiresSelection.value),
     fallbackLoadError: "Ready-made project templates could not load.",
     path: PROJECT_TEMPLATES_ENDPOINT,
     projectSlug,
@@ -162,7 +165,7 @@ function useProjectTypeGate({
     projectType: projectType.value
   }));
   const needsProjectType = computed(() => {
-    return projectTypeLoaded.value && projectType.value.ready !== true && !hasDraftProjectType.value;
+    return projectTypeLoaded.value && projectTypeRequiresSelection.value && !hasDraftProjectType.value;
   });
   const needsProjectConfig = computed(() => {
     return (hasDraftProjectType.value || projectType.value.ready === true) &&
@@ -196,8 +199,19 @@ function useProjectTypeGate({
     }
     return "";
   });
+  const projectTypeStateError = computed(() => {
+    if (!projectTypeLoaded.value || projectType.value.ready === true || projectTypeRequiresSelection.value) {
+      return "";
+    }
+    return String(
+      projectType.value.message ||
+      projectType.value.errorCode ||
+      "Committed project configuration could not be read."
+    );
+  });
   const errorMessage = computed(() => String(
     projectTypeView.loadError ||
+    projectTypeStateError.value ||
     projectConfigView.loadError ||
     projectTemplatesView.loadError ||
     applyTemplateError.value ||

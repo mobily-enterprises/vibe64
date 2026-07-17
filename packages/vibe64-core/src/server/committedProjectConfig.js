@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  isPlainObject,
   normalizeText,
   pathExists
 } from "./core.js";
@@ -16,12 +17,13 @@ import {
 } from "./projectState.js";
 import {
   VIBE64_PROJECT_MANIFEST_FILE,
-  normalizeProjectManifest
+  parseProjectManifestText
 } from "./projectManifest.js";
 
 const COMMITTED_PROJECT_TYPE_FIELD = "projectType";
 const COMMITTED_PROJECT_CONFIG_VALUES_DIR = VIBE64_PROJECT_MANIFEST_FILE;
 const COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY = "repository.git";
+const VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE = "feature.vibe64-project.committed-config-reader";
 
 function committedConfigUnavailable(code, message, extra = {}) {
   return Object.freeze({
@@ -146,14 +148,99 @@ async function readGitFile({
   gitDir = "",
   ref = "HEAD"
 } = {}) {
-  try {
-    return await runGit(["show", `${ref}:${gitObjectPath(filePath)}`], {
-      cwd,
-      gitDir
-    });
-  } catch {
+  const normalizedPath = gitObjectPath(filePath);
+  const treeEntry = normalizeText(await runGit([
+    "ls-tree",
+    "--name-only",
+    ref,
+    "--",
+    normalizedPath
+  ], {
+    cwd,
+    gitDir
+  }));
+  if (!treeEntry) {
     return null;
   }
+  return runGit(["show", `${ref}:${normalizedPath}`], {
+    cwd,
+    gitDir
+  });
+}
+
+function committedProjectManifestInvalid(message = "", extra = {}) {
+  return committedConfigUnavailable(
+    "vibe64_committed_project_manifest_invalid",
+    message || "Committed vibe64.project.json is invalid.",
+    extra
+  );
+}
+
+function readCommittedProjectConfigFromText({
+  commit = "",
+  gitDir = "",
+  manifestText = null,
+  ref = "",
+  sourceRoot = "",
+  sourceType = ""
+} = {}) {
+  const common = {
+    commit,
+    configRoot: VIBE64_PROJECT_MANIFEST_FILE,
+    gitDir,
+    ref,
+    sourceRoot,
+    sourceType
+  };
+  if (manifestText === null || manifestText === undefined) {
+    return committedConfigUnavailable(
+      "vibe64_committed_project_type_missing",
+      "Committed vibe64.project.json is missing. Choose the app type to configure this repository.",
+      common
+    );
+  }
+
+  let manifest;
+  try {
+    manifest = parseProjectManifestText(manifestText);
+  } catch (error) {
+    if (error?.code === "vibe64_project_manifest_object_required") {
+      return committedProjectManifestInvalid(
+        "Committed vibe64.project.json must contain a JSON object.",
+        common
+      );
+    }
+    if (error?.code === "vibe64_project_manifest_schema_unsupported") {
+      return committedProjectManifestInvalid(
+        "Committed vibe64.project.json uses an unsupported schema or schema version.",
+        common
+      );
+    }
+    return committedProjectManifestInvalid(
+      "Committed vibe64.project.json contains invalid JSON. Repair and commit the file before opening this project.",
+      common
+    );
+  }
+  if (!manifest.projectType) {
+    return committedProjectManifestInvalid(
+      "Committed vibe64.project.json is missing projectType. Repair and commit the file before opening this project.",
+      common
+    );
+  }
+  const configValues = Object.fromEntries([
+    [COMMITTED_PROJECT_TYPE_FIELD, manifest.projectType],
+    ...Object.entries(manifest.config || {})
+  ].sort(([left], [right]) => left.localeCompare(right)));
+
+  return committedConfigAvailable({
+    commit,
+    configRoot: VIBE64_PROJECT_MANIFEST_FILE,
+    configValues,
+    gitDir,
+    ref,
+    sourceRoot,
+    sourceType
+  });
 }
 
 async function createCommittedGitSourceReader({
@@ -226,16 +313,18 @@ async function readCommittedConfigFromGit({
   }
 
   const manifestPath = gitObjectPath(VIBE64_PROJECT_MANIFEST_FILE);
-  const manifestText = await readGitFile({
-    cwd,
-    filePath: manifestPath,
-    gitDir,
-    ref
-  });
-  if (!manifestText) {
+  let manifestText;
+  try {
+    manifestText = await readGitFile({
+      cwd,
+      filePath: manifestPath,
+      gitDir,
+      ref
+    });
+  } catch {
     return committedConfigUnavailable(
-      "vibe64_committed_project_type_missing",
-      "Committed vibe64.project.json is missing. Finish setup in a source session and commit the config.",
+      "vibe64_committed_project_repository_unreadable",
+      "Committed project config could not be read from the configured Git repository.",
       {
         commit,
         gitDir,
@@ -245,30 +334,10 @@ async function readCommittedConfigFromGit({
       }
     );
   }
-  const manifest = normalizeProjectManifest(JSON.parse(manifestText));
-  if (!manifest.projectType) {
-    return committedConfigUnavailable(
-      "vibe64_committed_project_type_missing",
-      "Committed vibe64.project.json is missing projectType. Finish setup in a source session and commit the config.",
-      {
-        commit,
-        gitDir,
-        ref,
-        sourceRoot,
-        sourceType
-      }
-    );
-  }
-  const configValues = Object.fromEntries([
-    [COMMITTED_PROJECT_TYPE_FIELD, manifest.projectType],
-    ...Object.entries(manifest.config || {})
-  ].sort(([left], [right]) => left.localeCompare(right)));
-
-  return committedConfigAvailable({
+  return readCommittedProjectConfigFromText({
     commit,
-    configRoot: manifestPath,
-    configValues,
     gitDir,
+    manifestText,
     ref,
     sourceRoot,
     sourceType
@@ -297,39 +366,14 @@ async function readCommittedProjectConfigFromSource({
   if (normalizeText(readMode) === "filesystem") {
     const manifestPath = path.join(resolvedSourceRoot, VIBE64_PROJECT_MANIFEST_FILE);
     if (!await pathExists(manifestPath)) {
-      return committedConfigUnavailable(
-        "vibe64_committed_project_type_missing",
-        "Committed vibe64.project.json is missing. Finish setup in a source session and commit the config.",
-        {
-          configRoot: VIBE64_PROJECT_MANIFEST_FILE,
-          ref: "",
-          sourceRoot: resolvedSourceRoot,
-          sourceType: "source-tree"
-        }
-      );
+      return readCommittedProjectConfigFromText({
+        manifestText: null,
+        sourceRoot: resolvedSourceRoot,
+        sourceType: "source-tree"
+      });
     }
-    const manifest = normalizeProjectManifest(JSON.parse(await readFile(manifestPath, "utf8")));
-    if (!manifest.projectType) {
-      return committedConfigUnavailable(
-        "vibe64_committed_project_type_missing",
-        "Committed vibe64.project.json is missing projectType. Finish setup in a source session and commit the config.",
-        {
-          configRoot: VIBE64_PROJECT_MANIFEST_FILE,
-          ref: "",
-          sourceRoot: resolvedSourceRoot,
-          sourceType: "source-tree"
-        }
-      );
-    }
-    const configValues = Object.fromEntries([
-      [COMMITTED_PROJECT_TYPE_FIELD, manifest.projectType],
-      ...Object.entries(manifest.config || {})
-    ].sort(([left], [right]) => left.localeCompare(right)));
-    return committedConfigAvailable({
-      commit: "",
-      configRoot: VIBE64_PROJECT_MANIFEST_FILE,
-      configValues,
-      ref: "",
+    return readCommittedProjectConfigFromText({
+      manifestText: await readFile(manifestPath, "utf8"),
       sourceRoot: resolvedSourceRoot,
       sourceType: "source-tree"
     });
@@ -352,6 +396,7 @@ function committedProjectConfigRefFromMetadata(metadata = {}) {
 }
 
 async function readCommittedProjectConfigFromGitCache({
+  metadata = null,
   projectRecordPath = "",
   projectRuntimeRoot = "",
   ref = "",
@@ -383,8 +428,10 @@ async function readCommittedProjectConfigFromGitCache({
       }
     );
   }
-  const metadata = await readProjectRecordMetadata(projectRecordPath);
-  const resolvedRef = normalizeText(ref) || committedProjectConfigRefFromMetadata(metadata);
+  const projectMetadata = isPlainObject(metadata)
+    ? metadata
+    : await readProjectRecordMetadata(projectRecordPath);
+  const resolvedRef = normalizeText(ref) || committedProjectConfigRefFromMetadata(projectMetadata);
   return readCommittedConfigFromGit({
     gitDir: gitCacheRepository,
     ref: resolvedRef,
@@ -392,13 +439,69 @@ async function readCommittedProjectConfigFromGitCache({
   });
 }
 
+async function readCommittedProjectConfigFromRepositoryReader({
+  committedProjectConfigReader = null,
+  metadata = {},
+  projectRecordPath = "",
+  projectRuntimeRoot = "",
+  ref = "",
+  targetRoot = "",
+  vibe64User = null
+} = {}) {
+  if (typeof committedProjectConfigReader?.readCommittedProjectConfig !== "function") {
+    return null;
+  }
+
+  let result;
+  try {
+    result = await committedProjectConfigReader.readCommittedProjectConfig({
+      metadata,
+      projectRecordPath,
+      projectRuntimeRoot,
+      ref: normalizeText(ref) || committedProjectConfigRefFromMetadata(metadata),
+      targetRoot,
+      vibe64User
+    });
+  } catch (error) {
+    if (normalizeText(error?.code).startsWith("vibe64_committed_project_")) {
+      throw error;
+    }
+    const wrapped = new Error(
+      `Committed project config could not be read from the repository: ${normalizeText(error?.message || error) || "repository read failed."}`
+    );
+    wrapped.code = "vibe64_committed_project_repository_unreadable";
+    wrapped.cause = error;
+    wrapped.details = {
+      causeCode: normalizeText(error?.code),
+      sourceType: "repository"
+    };
+    throw wrapped;
+  }
+  if (!result || result.handled !== true) {
+    return null;
+  }
+  if (result.found !== false && typeof result.manifestText !== "string") {
+    const error = new Error("Committed project repository reader returned no manifest contents.");
+    error.code = "vibe64_committed_project_repository_unreadable";
+    throw error;
+  }
+  return readCommittedProjectConfigFromText({
+    commit: normalizeText(result.commit),
+    manifestText: result.found === false ? null : result.manifestText,
+    ref: normalizeText(result.ref),
+    sourceType: normalizeText(result.sourceType) || "repository"
+  });
+}
+
 async function readCommittedProjectConfig({
+  committedProjectConfigReader = null,
   projectRecordPath = "",
   projectRuntimeRoot = "",
   ref = "",
   sourceReadMode = "git",
   sourceRoot = "",
-  targetRoot = ""
+  targetRoot = "",
+  vibe64User = null
 } = {}) {
   const resolvedSourceRoot = normalizeText(sourceRoot);
   if (resolvedSourceRoot) {
@@ -408,7 +511,21 @@ async function readCommittedProjectConfig({
       sourceRoot: resolvedSourceRoot
     });
   }
+  const metadata = await readProjectRecordMetadata(projectRecordPath);
+  const repositoryConfig = await readCommittedProjectConfigFromRepositoryReader({
+    committedProjectConfigReader,
+    metadata,
+    projectRecordPath,
+    projectRuntimeRoot,
+    ref,
+    targetRoot,
+    vibe64User
+  });
+  if (repositoryConfig) {
+    return repositoryConfig;
+  }
   return readCommittedProjectConfigFromGitCache({
+    metadata,
     projectRecordPath,
     projectRuntimeRoot,
     ref,
@@ -420,9 +537,11 @@ export {
   COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY,
   COMMITTED_PROJECT_CONFIG_VALUES_DIR,
   COMMITTED_PROJECT_TYPE_FIELD,
+  VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE,
   committedProjectConfigRefFromMetadata,
   createCommittedGitSourceReader,
   readCommittedProjectConfig,
   readCommittedProjectConfigFromGitCache,
+  readCommittedProjectConfigFromText,
   readCommittedProjectConfigFromSource
 };

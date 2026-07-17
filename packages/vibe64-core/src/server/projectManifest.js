@@ -106,6 +106,26 @@ function normalizeProjectManifest(value = {}) {
   };
 }
 
+function parseProjectManifestText(text = "") {
+  const rawManifest = JSON.parse(String(text));
+  if (!isPlainObject(rawManifest)) {
+    throw vibe64Error(
+      "Vibe64 project manifest must contain a JSON object.",
+      "vibe64_project_manifest_object_required"
+    );
+  }
+  if (
+    rawManifest.schema !== VIBE64_PROJECT_MANIFEST_SCHEMA ||
+    rawManifest.schemaVersion !== VIBE64_PROJECT_MANIFEST_SCHEMA_VERSION
+  ) {
+    throw vibe64Error(
+      "Vibe64 project manifest schema is not supported by this Vibe64 version.",
+      "vibe64_project_manifest_schema_unsupported"
+    );
+  }
+  return normalizeProjectManifest(rawManifest);
+}
+
 function stableJson(value = {}) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -119,17 +139,7 @@ async function readProjectManifest({
     sourceRoot
   });
   try {
-    const rawManifest = JSON.parse(await readFile(filePath, "utf8"));
-    if (
-      rawManifest?.schema !== VIBE64_PROJECT_MANIFEST_SCHEMA ||
-      rawManifest?.schemaVersion !== VIBE64_PROJECT_MANIFEST_SCHEMA_VERSION
-    ) {
-      throw vibe64Error(
-        "Vibe64 project manifest schema is not supported by this Vibe64 version.",
-        "vibe64_project_manifest_schema_unsupported"
-      );
-    }
-    return normalizeProjectManifest(rawManifest);
+    return parseProjectManifestText(await readFile(filePath, "utf8"));
   } catch (error) {
     if (isMissingPathError(error)) {
       return null;
@@ -185,6 +195,7 @@ export {
   VIBE64_SOURCE_CONTRACT_VIBE64_DIRS,
   normalizeProjectManifest,
   normalizeProjectManifestConfig,
+  parseProjectManifestText,
   projectContractRoot,
   projectManifestPath,
   projectRuntimeLockPath,

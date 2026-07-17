@@ -157,25 +157,29 @@ async function committedConfigValuesForDefinition(definition = {}, {
 
 function createVibe64CommittedProjectAdapterContext({
   adapterRegistry = createVibe64AdapterRegistry(),
+  committedProjectConfigReader = null,
   projectRecordPath = "",
   projectLocalRoot = "",
   projectRuntimeRoot = "",
   ref = "",
   sourceReadMode = "git",
   sourceRoot = "",
-  targetRoot = ""
+  targetRoot = "",
+  vibe64User = null
 } = {}) {
   const resolvedProjectLocalRoot = normalizeText(projectRuntimeRoot || projectLocalRoot);
   const resolvedTargetRoot = normalizeText(sourceRoot || targetRoot);
 
   async function readCommittedConfig() {
     return readCommittedProjectConfig({
+      committedProjectConfigReader,
       projectRecordPath,
       projectRuntimeRoot: resolvedProjectLocalRoot,
       ref,
       sourceReadMode,
       sourceRoot,
-      targetRoot
+      targetRoot,
+      vibe64User
     });
   }
 
