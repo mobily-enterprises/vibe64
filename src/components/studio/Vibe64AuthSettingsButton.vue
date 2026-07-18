@@ -109,15 +109,15 @@ const dialogOpen = ref(false);
 const selectedProviderId = ref("codex");
 const accounts = useVibe64Accounts();
 const statusLoaded = computed(() => {
-  return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
+  return Boolean(accounts.status.value && Array.isArray(accounts.status.value.accounts));
 });
 const allAccountRows = computed(() => {
-  return accountRowsForStatus(accounts.status, ["codex", "github"], {
+  return accountRowsForStatus(accounts.status.value, ["codex", "github"], {
     includeFallbackRows: false
   });
 });
 const selectedAccountRows = computed(() => {
-  return accountRowsForStatus(accounts.status, [selectedProviderId.value], {
+  return accountRowsForStatus(accounts.status.value, [selectedProviderId.value], {
     includeFallbackRows: true
   });
 });

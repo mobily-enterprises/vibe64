@@ -70,10 +70,10 @@ const accounts = useVibe64Accounts({
   client: props.accountsClient
 });
 const statusLoaded = computed(() => {
-  return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
+  return Boolean(accounts.status.value && Array.isArray(accounts.status.value.accounts));
 });
 const aiAccountRows = computed(() => {
-  const rows = Array.isArray(accounts.status?.accounts) ? accounts.status.accounts : [];
+  const rows = Array.isArray(accounts.status.value?.accounts) ? accounts.status.value.accounts : [];
   const codex = rows.find((account) => String(account.id || "") === "codex");
   return [
     aiProviderRow(codex || {

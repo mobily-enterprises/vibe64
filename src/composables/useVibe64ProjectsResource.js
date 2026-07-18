@@ -1,4 +1,4 @@
-import { computed, proxyRefs } from "vue";
+import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
@@ -52,7 +52,7 @@ function useVibe64ProjectsResource({
       : {};
   });
 
-  return proxyRefs({
+  return {
     currentProject,
     data: resource.data,
     isFetching: resource.isFetching,
@@ -66,7 +66,7 @@ function useVibe64ProjectsResource({
     resource,
     selfTargetAutoSelectProjectRepro,
     targetRoot
-  });
+  };
 }
 
 function normalizeText(value = "") {

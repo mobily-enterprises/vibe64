@@ -327,7 +327,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }));
 
   const actions = proxyRefs(sessionWorkflow.actions);
-  const agentTerminal = proxyRefs(sessionWorkflow.agentTerminal);
+  const agentTerminal = sessionWorkflow.agentTerminal;
   const commandTerminal = proxyRefs(sessionWorkflow.commandTerminal);
   const dialogs = {
     abandon: proxyRefs(sessionWorkflow.dialogs.abandon),

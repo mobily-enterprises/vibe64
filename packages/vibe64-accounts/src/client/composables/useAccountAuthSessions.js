@@ -1,4 +1,4 @@
-import { computed, proxyRefs, reactive, ref, unref } from "vue";
+import { computed, reactive, ref, unref } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   isVibe64BrowserFlagEnabled
@@ -88,8 +88,8 @@ function useAccountAuthSessions(
   });
   const logoutBusy = computed(() => Boolean(logoutAccountId.value));
   const errorMessage = computed(() => {
-    if (localError.value || accounts.loadError) {
-      return localError.value || accounts.loadError;
+    if (localError.value || unref(accounts.loadError)) {
+      return localError.value || unref(accounts.loadError);
     }
     return accounts.startAuthCommand?.messageType === "error"
       ? accounts.startAuthCommand.message
@@ -432,7 +432,7 @@ function useAccountAuthSessions(
     }
   }
 
-  return proxyRefs({
+  return {
     activeSessionFor,
     authCopyStatus,
     authLinkCopyStatus: authCopyStatus,
@@ -455,7 +455,7 @@ function useAccountAuthSessions(
     startDeviceAuth,
     startApiKeyAuth,
     stopPolling
-  });
+  };
 }
 
 function pollFailureBackoffMs(failureCount = 1, pollIntervalMs = DEFAULT_RECOVERY_POLL_INTERVAL_MS) {

@@ -73,7 +73,7 @@ function useAccountsSetup(props, emit) {
   const autoContinueVerificationActive = ref(false);
   const notifiedConnectedAccounts = new Set();
   const statusLoaded = computed(() => {
-    return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
+    return Boolean(accounts.status.value && Array.isArray(accounts.status.value.accounts));
   });
   const enabledProviderIds = computed(() => {
     return (Array.isArray(props.providerIds) ? props.providerIds : [])
@@ -81,7 +81,7 @@ function useAccountsSetup(props, emit) {
       .filter(Boolean);
   });
   const accountRows = computed(() => {
-    return accountRowsForStatus(accounts.status, enabledProviderIds.value, {
+    return accountRowsForStatus(accounts.status.value, enabledProviderIds.value, {
       includeFallbackRows: true
     });
   });
@@ -114,7 +114,7 @@ function useAccountsSetup(props, emit) {
     autoContinueVerificationActive.value = true;
     try {
       const result = await accounts.refresh();
-      const liveStatus = result?.data || accounts.status || null;
+      const liveStatus = result?.data || accounts.status.value || null;
       const liveRows = accountRowsForStatus(liveStatus, enabledProviderIds.value);
       if (!allRowsConnected(liveRows) || autoContinueStarted.value) {
         return;

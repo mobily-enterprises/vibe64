@@ -25,9 +25,9 @@
         <v-btn
           color="primary"
           variant="tonal"
-          :loading="accounts.isLoading"
+          :loading="accountsLoading"
           :prepend-icon="mdiRefresh"
-          @click="authSessions.refreshStatus"
+          @click="refreshStatus"
         >
           Refresh
         </v-btn>
@@ -64,7 +64,7 @@
     </v-alert>
 
     <v-progress-linear
-      v-if="accounts.isLoading && accountRows.length < 1"
+      v-if="accountsLoading && accountRows.length < 1"
       color="primary"
       height="6"
       indeterminate
@@ -124,7 +124,7 @@
               color="warning"
               variant="tonal"
               :disabled="!accountsReadyForActions || !accountActiveSession(account)?.id"
-              @click="authSessions.cancelSession(accountActiveSession(account))"
+              @click="cancelSession(accountActiveSession(account))"
             >
               Cancel login
             </v-btn>
@@ -173,9 +173,9 @@
           <v-btn
             color="warning"
             variant="tonal"
-            :disabled="!accountsReadyForActions || authSessions.authBusy || !account.connected"
-            :loading="authSessions.logoutAccountId === account.id"
-            @click="authSessions.logoutAccount(account.id)"
+            :disabled="!accountsReadyForActions || authBusy || !account.connected"
+            :loading="logoutAccountId === account.id"
+            @click="logoutAccount(account.id)"
           >
             Logout
           </v-btn>
@@ -183,7 +183,7 @@
             v-if="accountSupportsApiKeyAuth(account)"
             color="primary"
             variant="tonal"
-            :disabled="!accountsReadyForActions || authSessions.authBusy"
+            :disabled="!accountsReadyForActions || authBusy"
             @click="toggleApiKeyForm(account)"
           >
             Use OpenAI API key
@@ -295,7 +295,7 @@
                   :disabled="!accountsReadyForActions"
                   variant="tonal"
                   :prepend-icon="mdiContentCopy"
-                  @click="authSessions.copyAuthCode(accountActiveSession(account))"
+                  @click="copyAuthCode(accountActiveSession(account))"
                 >
                   <span class="accounts-setup__button-step">2</span>
                   <span>Copy one-time code</span>
@@ -306,7 +306,7 @@
                   :disabled="!accountsReadyForActions"
                   variant="tonal"
                   :prepend-icon="mdiOpenInNew"
-                  @click="authSessions.openAuthUrl(accountActiveSession(account))"
+                  @click="openAuthUrl(accountActiveSession(account))"
                 >
                   <span class="accounts-setup__button-step">3</span>
                   <span>Finalise authorization</span>
@@ -314,10 +314,10 @@
               </div>
 
               <p
-                v-if="authSessions.authCopyStatus[accountActiveSession(account)?.id]"
+                v-if="authCopyStatus[accountActiveSession(account)?.id]"
                 class="accounts-setup__copy-status"
               >
-                {{ authSessions.authCopyStatus[accountActiveSession(account).id] }}
+                {{ authCopyStatus[accountActiveSession(account).id] }}
               </p>
 
               <p class="accounts-setup__session-status">
@@ -459,24 +459,32 @@ const {
   accountRows,
   accountStatusMessage,
   accountSupportsApiKeyAuth,
+  accountsLoading,
   accountsReadyForActions,
   apiKeyFormVisible,
   apiKeyInput,
   apiKeyLoginDisabled,
   authSessionUserCode,
-  authSessions,
+  authBusy,
+  authCopyStatus,
   authTerminal,
   authTerminalAvailable,
   authTerminalError,
   authTerminalVisible,
+  cancelSession,
   closeAuthTerminal,
   codexAuthorizeStepVisible,
   codexSettingsStepVisible,
+  copyAuthCode,
   errorMessage,
   gitIdentityInput,
   loginOutputVisible,
+  logoutAccount,
+  logoutAccountId,
+  openAuthUrl,
   primaryAuthLabel,
   requiresGitIdentity,
+  refreshStatus,
   sessionStatusMessage,
   setCodexAuthStep,
   startAccountApiKeyAuth,

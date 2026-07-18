@@ -1,4 +1,4 @@
-import { computed, proxyRefs, ref } from "vue";
+import { computed, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
@@ -251,7 +251,7 @@ function useVibe64Accounts({
     });
   }
 
-  return proxyRefs({
+  return {
     cancelAuthSession,
     invalidateCapabilities,
     isLoading: statusResource.isLoading,
@@ -270,7 +270,7 @@ function useVibe64Accounts({
     status: statusResource.data,
     authSessionResource,
     statusResource
-  });
+  };
 }
 
 export {

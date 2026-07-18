@@ -97,7 +97,7 @@ describe("useAccountAuthSessions", () => {
     await authSessions.startDeviceAuth("codex");
     await expect(authSessions.pollAuthSessions()).rejects.toThrow("Account login session did not return status.");
 
-    expect(authSessions.localError).toBe("Account login session did not return status.");
+    expect(authSessions.localError.value).toBe("Account login session did not return status.");
     expect(accounts.readAuthSession).toHaveBeenCalledWith("auth-session-1");
   });
 
@@ -315,7 +315,7 @@ describe("useAccountAuthSessions", () => {
     await flushAsyncWork();
 
     expect(accounts.readAuthSession).toHaveBeenCalledTimes(1);
-    expect(authSessions.localError).toBe("Network request failed.");
+    expect(authSessions.localError.value).toBe("Network request failed.");
 
     pollTick();
     await flushAsyncWork();

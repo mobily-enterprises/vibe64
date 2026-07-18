@@ -106,10 +106,10 @@ function useVibe64AppPage() {
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
-  const projectLoadError = computed(() => projectSelection.loadError);
-  const projects = computed(() => projectSelection.projects);
-  const selfTargetAutoSelectProjectRepro = computed(() => projectSelection.selfTargetAutoSelectProjectRepro || {});
-  const targetRoot = computed(() => String(projectSelection.targetRoot || "").trim());
+  const projectLoadError = projectSelection.loadError;
+  const projects = projectSelection.projects;
+  const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
+  const targetRoot = computed(() => String(projectSelection.targetRoot.value || "").trim());
   const targetFolderName = computed(() => projectSlug.value || finalPathSegment(targetRoot.value));
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
@@ -214,7 +214,7 @@ function useVibe64AppPage() {
 
   watch(() => [
     projectSlug.value,
-    projectSelection.isLoading ? "loading" : "ready",
+    projectSelection.isLoading.value ? "loading" : "ready",
     selfTargetAutoSelectProjectRepro.value?.enabled === true ? "enabled" : "disabled",
     selfTargetAutoSelectProjectRepro.value?.selfTarget === true ? "self-target" : "normal",
     selfTargetAutoSelectProjectRepro.value?.projectSlug || "",
@@ -380,7 +380,7 @@ function useVibe64AppPage() {
     clearSelfTargetAutoSelectTimer();
     const targetProject = selfTargetAutoSelectProjectTarget({
       currentSlug: projectSlug.value,
-      loading: projectSelection.isLoading,
+      loading: projectSelection.isLoading.value,
       projects: sortedProjects.value,
       repro: selfTargetAutoSelectProjectRepro.value
     });

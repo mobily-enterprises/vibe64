@@ -20,15 +20,34 @@ function useProviderAccountsSetup(props) {
     accountRows.value.every((account) => account.connected === true)
   ));
   const gitIdentitySaveBusy = computed(() => props.accounts.saveGitIdentityCommand?.isRunning === true);
+  const accountsLoading = computed(() => Boolean(unref(props.accounts.isLoading)));
   const accountsReadyForActions = computed(() => {
-    return props.actionsEnabled === true && props.statusLoaded === true && !unref(props.accounts.isLoading);
+    return props.actionsEnabled === true && props.statusLoaded === true && !accountsLoading.value;
   });
-  const authSessions = useAccountAuthSessions(props.accounts, {
+  const {
+    activeSessionFor,
+    authBusy,
+    authCopyStatus,
+    authSessionNeedsTerminalAttention: sessionNeedsTerminalAttention,
+    cancelSession,
+    copyAuthCode,
+    errorMessage: authSessionErrorMessage,
+    localError,
+    loginDisabled,
+    logoutAccount,
+    logoutAccountId,
+    openAuthUrl,
+    refreshStatus,
+    startApiKeyAuth,
+    startBrowserAuth,
+    startDeviceAuth,
+    stopPolling
+  } = useAccountAuthSessions(props.accounts, {
     accountRows
   });
   const errorMessage = computed(() => {
-    if (authSessions.errorMessage) {
-      return authSessions.errorMessage;
+    if (authSessionErrorMessage.value) {
+      return authSessionErrorMessage.value;
     }
     return props.accounts.saveGitIdentityCommand?.messageType === "error"
       ? props.accounts.saveGitIdentityCommand.message
@@ -48,7 +67,7 @@ function useProviderAccountsSetup(props) {
       return null;
     }
     for (const account of accountRows.value) {
-      const session = authSessions.activeSessionFor(account.id);
+      const session = activeSessionFor(account.id);
       if (session?.id === authTerminalSessionId.value) {
         return session;
       }
@@ -64,7 +83,7 @@ function useProviderAccountsSetup(props) {
     if (account.connected === true) {
       return null;
     }
-    return authSessions.activeSessionFor(account.id);
+    return activeSessionFor(account.id);
   }
 
   function activeAuthSessions() {
@@ -119,7 +138,7 @@ function useProviderAccountsSetup(props) {
     if (requiresGitIdentity(account) && account.connected === true) {
       return gitIdentitySaveDisabled(account);
     }
-    return authSessions.loginDisabled(
+    return loginDisabled(
       account,
       requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
     );
@@ -128,7 +147,7 @@ function useProviderAccountsSetup(props) {
   function gitIdentitySaveDisabled(account = {}) {
     return !accountsReadyForActions.value ||
       gitIdentitySaveBusy.value ||
-      authSessions.loginDisabled(account, gitIdentityAuthOptions(account));
+      loginDisabled(account, gitIdentityAuthOptions(account));
   }
 
   function primaryAuthMode(account = {}) {
@@ -150,22 +169,22 @@ function useProviderAccountsSetup(props) {
     const mode = primaryAuthMode(account);
     const options = requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {};
     if (mode === "device") {
-      void authSessions.startDeviceAuth(account.id);
+      void startDeviceAuth(account.id);
       return;
     }
-    void authSessions.startBrowserAuth(account.id, options);
+    void startBrowserAuth(account.id, options);
   }
 
   async function saveGitIdentity(account = {}) {
     if (gitIdentitySaveDisabled(account)) {
       return;
     }
-    authSessions.localError = "";
+    localError.value = "";
     try {
       await props.accounts.saveGitIdentity(gitIdentityAuthOptions(account));
-      await authSessions.refreshStatus();
+      await refreshStatus();
     } catch (error) {
-      authSessions.localError = String(error?.message || error || "Git identity could not be saved.");
+      localError.value = String(error?.message || error || "Git identity could not be saved.");
     }
   }
 
@@ -211,7 +230,7 @@ function useProviderAccountsSetup(props) {
   }
 
   function apiKeyLoginDisabled(account = {}) {
-    return authSessions.authBusy || !apiKeyInput(account).value.trim();
+    return authBusy.value || !apiKeyInput(account).value.trim();
   }
 
   async function startAccountApiKeyAuth(account = {}) {
@@ -224,7 +243,7 @@ function useProviderAccountsSetup(props) {
       return;
     }
     try {
-      await authSessions.startApiKeyAuth(account.id, apiKey);
+      await startApiKeyAuth(account.id, apiKey);
     } finally {
       input.value = "";
     }
@@ -265,7 +284,7 @@ function useProviderAccountsSetup(props) {
   }
 
   function authSessionNeedsTerminalAttention(session = {}) {
-    return authSessions.authSessionNeedsTerminalAttention(session);
+    return sessionNeedsTerminalAttention(session);
   }
 
   function authTerminalAvailable(session = {}) {
@@ -373,7 +392,7 @@ function useProviderAccountsSetup(props) {
   }
 
   onBeforeUnmount(() => {
-    authSessions.stopPolling();
+    stopPolling();
     authTerminal.disposeTerminalUi();
   });
 
@@ -411,7 +430,7 @@ function useProviderAccountsSetup(props) {
 
   watch(
     () => accountRows.value
-      .map((account) => authSessions.activeSessionFor(account.id)?.id)
+      .map((account) => activeSessionFor(account.id)?.id)
       .filter(Boolean),
     (activeSessionIds) => {
       const activeSessionIdSet = new Set(activeSessionIds);
@@ -461,24 +480,32 @@ function useProviderAccountsSetup(props) {
     accountRows,
     accountStatusMessage,
     accountSupportsApiKeyAuth,
+    accountsLoading,
     accountsReadyForActions,
     apiKeyFormVisible,
     apiKeyInput,
     apiKeyLoginDisabled,
     authSessionUserCode,
-    authSessions,
+    authBusy,
+    authCopyStatus,
     authTerminal,
     authTerminalAvailable,
     authTerminalError,
     authTerminalVisible,
+    cancelSession,
     closeAuthTerminal,
     codexAuthorizeStepVisible,
     codexSettingsStepVisible,
+    copyAuthCode,
     errorMessage,
     gitIdentityInput,
     loginOutputVisible,
+    logoutAccount,
+    logoutAccountId,
+    openAuthUrl,
     primaryAuthLabel,
     requiresGitIdentity,
+    refreshStatus,
     sessionStatusMessage,
     setCodexAuthStep,
     startAccountApiKeyAuth,
