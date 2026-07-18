@@ -284,7 +284,7 @@ test("seed session briefing filters broad discovery contracts while preserving s
   assert.match(briefing, /Use npx jskit from the repository root/u);
 });
 
-test("session briefing makes the managed preview the only permitted app server", () => {
+test("session briefing keeps the primary preview canonical while permitting explicit reference apps", () => {
   const briefing = promptSessionBriefing({
     session: {
       sessionId: "preview-policy",
@@ -327,9 +327,15 @@ test("session briefing makes the managed preview the only permitted app server",
   assert.match(briefing, /vibe64-preview logs --lines 200/u);
   assert.match(briefing, /without requiring the user to open it first/u);
   assert.match(briefing, /do not treat an unobserved current page as a missing preview/u);
-  assert.match(briefing, /Never start another development server/u);
+  assert.match(briefing, /canonical server for the configured primary application/u);
+  assert.match(briefing, /distinct secondary application that the user explicitly asks you to run/u);
+  assert.match(briefing, /legacy app used for comparison/u);
+  assert.match(briefing, /navigate that browser to the auxiliary localhost URL/u);
+  assert.match(briefing, /never changes the user's visible Preview/u);
+  assert.match(briefing, /Do not start a duplicate copy/u);
   assert.match(briefing, /even if a different port appears free/u);
-  assert.match(briefing, /Do not work around it by spinning up another server/u);
+  assert.doesNotMatch(briefing, /Never start another development server/u);
+  assert.doesNotMatch(briefing, /only permitted app server/u);
 });
 
 test("novice workflow briefing keeps all visible communication simple", () => {

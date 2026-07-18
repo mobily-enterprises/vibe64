@@ -359,7 +359,9 @@ function agentResultRoutingBriefing() {
 
 function managedPreviewPolicyInstruction() {
   return [
-    "- For every app, UI, browser, or runtime diagnosis, use only the session's Vibe64-managed preview. Never start another development server, choose another port, or replace that preview.",
+    "- The session's Vibe64-managed preview is the canonical server for the configured primary application. Do not start a duplicate copy of that application on another port or replace its managed launch target.",
+    "- A distinct secondary application that the user explicitly asks you to run, such as a legacy app used for comparison, is not a duplicate preview. You may start that auxiliary server with its own documented project command while leaving the managed preview untouched. Bind it to loopback when the command supports host selection, and stop it when the requested inspection is complete unless the user asks to keep it running.",
+    "- Inspect an explicitly requested auxiliary application with Codex's existing internal managed browser: use `vibe64-preview browser eval` to navigate that browser to the auxiliary localhost URL. Do not start another browser or expose the auxiliary server as a Vibe64 launch target. Codex's browser navigation never changes the user's visible Preview.",
     "- A request only to view, inspect, or describe the current page is a direct visual-browser request. Immediately run `vibe64-preview screenshot`, read its JSON capture metadata, then inspect the immutable image at `outputPath` with the image-viewing tool. This one command idempotently ensures the preview and captures its authenticated current page with Vibe64's managed Playwright. Do this before reading AGENTS.md, project source, package manifests, or UI documentation.",
     "- An interaction request such as click, type, select, submit, back, or forward takes precedence over the initial-screenshot rule: do not capture before acting. Use one `vibe64-preview browser eval` call to perform the requested action and wait for the requested URL or visible element, then return the resulting URL, title, and relevant visible text.",
     "- Once the requested interaction is confirmed, report it and stop. Take exactly one post-action screenshot only when the user asked what the result looks like or when URL and DOM evidence are ambiguous. Do not use arbitrary fixed sleeps, repeat captures, or investigate unrelated transient frames.",
@@ -376,8 +378,8 @@ function managedPreviewPolicyInstruction() {
     "- Describe only what the rendered browser actually shows. Never infer page appearance from source code. If the browser renders a sign-in page, error, or blank screen, report that exact result instead of describing the intended page.",
     "- Read managed server output with `vibe64-preview logs --lines 200`. Do not launch a second server to obtain cleaner output.",
     "- Do not ask the user to start or open the preview. If `vibe64-preview ensure --wait --json` fails, report its diagnostics as the managed-preview blocker.",
-    "- Never substitute `npm run dev`, `npm start`, Vite, Next, JSKIT server commands, PHP development servers, or any other process that serves the app—even if a different port appears free.",
-    "- If `vibe64-preview` or its endpoint is unavailable, report that managed-preview blocker clearly. Do not work around it by spinning up another server."
+    "- For the configured primary application, never substitute `npm run dev`, `npm start`, Vite, Next, JSKIT server commands, PHP development servers, or another app-serving process as a workaround for the managed preview—even if a different port appears free.",
+    "- If `vibe64-preview` or its endpoint is unavailable, report that managed-preview blocker clearly. Do not work around it by starting a duplicate copy of the configured primary application."
   ].join("\n");
 }
 

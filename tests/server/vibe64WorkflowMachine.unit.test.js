@@ -4527,9 +4527,12 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /- current page title: Order 42/u);
     assert.match(prompt, /- current page Codex URL: http:\/\/vibe64-launch-agent:4103\/orders\/42\?tab=history/u);
     assert.match(prompt, /vibe64-preview ensure --wait --json/u);
-    assert.match(prompt, /Never start another development server/u);
+    assert.match(prompt, /canonical server for the configured primary application/u);
+    assert.match(prompt, /distinct secondary application that the user explicitly asks you to run/u);
+    assert.match(prompt, /navigate that browser to the auxiliary localhost URL/u);
+    assert.match(prompt, /Do not start a duplicate copy/u);
     assert.match(prompt, /even if a different port appears free/u);
-    assert.match(prompt, /Do not work around it by spinning up another server/u);
+    assert.doesNotMatch(prompt, /Never start another development server/u);
     assert.match(prompt, /- dependencies_installed: yes/u);
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);

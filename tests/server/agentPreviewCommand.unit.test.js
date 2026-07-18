@@ -320,6 +320,29 @@ function createReadyPreviewCommandService({
   });
 }
 
+test("agent preview help distinguishes duplicate previews from explicit reference apps", async () => {
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus() {
+        return {};
+      }
+    }
+  });
+
+  const result = await command.run({
+    args: ["--help"],
+    sessionId: "preview-help-session"
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.stdout, /canonical preview server for the configured primary application/u);
+  assert.match(result.stdout, /Do not start a duplicate copy/u);
+  assert.match(result.stdout, /distinct secondary application explicitly requested by the user/u);
+  assert.match(result.stdout, /legacy reference app/u);
+  assert.doesNotMatch(result.stdout, /only preview server the agent may use/u);
+  assert.doesNotMatch(result.stdout, /any other development server/u);
+});
+
 test("agent preview identity authorization binds you to the trusted Vibe64 viewer", async () => {
   const sessionId = "preview-identity-session";
   const selections = [];
@@ -1035,7 +1058,7 @@ test("agent preview wrapper captures the authenticated page with managed Playwri
   }
 });
 
-test("managed preview browser persists interaction state and recovers killed browser and preview processes", async () => {
+test("managed preview browser inspects auxiliary localhost apps and recovers killed processes", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-recovery-"));
   const runtimeRoot = path.join(root, "runtime-packs");
   const previewUrl = "https://preview.example.test/app?vibe64_preview_token=recovery-token";
@@ -1085,6 +1108,14 @@ test("managed preview browser persists interaction state and recovers killed bro
       count: 2,
       launchId: 1
     });
+
+    const auxiliaryUrl = "http://127.0.0.1:8181/view-jobs/11514";
+    const auxiliaryPage = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: `await page.goto(${JSON.stringify(auxiliaryUrl)}, { waitUntil: "load" }); return page.url();`
+    })).stdout);
+    assert.equal(auxiliaryPage.result, auxiliaryUrl);
+    assert.equal(auxiliaryPage.url, auxiliaryUrl);
 
     process.kill(firstMetadata.pid, "SIGKILL");
     await wait(100);

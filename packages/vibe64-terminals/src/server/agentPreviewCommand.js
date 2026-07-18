@@ -201,8 +201,9 @@ function usageText() {
     "  vibe64-playwright npm-run <package-script> [-- script arguments]",
     "",
     "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
-    "This is the only preview server the agent may use for this Vibe64 session.",
-    "Do not start npm, Vite, Next, JSKIT, or any other development server on another port."
+    "This is the canonical preview server for the configured primary application.",
+    "Do not start a duplicate copy of that application on another port.",
+    "A distinct secondary application explicitly requested by the user, such as a legacy reference app, may run separately without replacing this preview."
   ].join("\n") + "\n";
 }
 
