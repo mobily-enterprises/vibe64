@@ -47,6 +47,14 @@
           Cancel
         </v-btn>
         <v-btn
+          v-if="hasUncommittedChanges"
+          :disabled="sourceSafety.prompting"
+          variant="text"
+          @click="emit('view-changes')"
+        >
+          View changes
+        </v-btn>
+        <v-btn
           color="warning"
           :disabled="sourceSafety.prompting || sourceSafety.promptSent"
           :loading="sourceSafety.prompting"
@@ -64,6 +72,7 @@
 import { computed, useId } from "vue";
 import { mdiSourceCommit } from "@mdi/js";
 import {
+  sourceSafetyHasUncommittedChanges,
   sourceSafetyRequiresPush,
   sourceSafetyStatusSummary
 } from "@/lib/vibe64SessionSourceSafety.js";
@@ -83,12 +92,13 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["cancel", "confirm"]);
+const emit = defineEmits(["cancel", "confirm", "view-changes"]);
 const titleId = `vibe64-source-safety-dialog-${useId()}`;
+const hasUncommittedChanges = computed(() => sourceSafetyHasUncommittedChanges(props.sourceSafety));
 const requiresPush = computed(() => sourceSafetyRequiresPush(props.sourceSafety));
 const action = computed(() => requiresPush.value ? "commit and push" : "commit");
 const title = computed(() => requiresPush.value ? "Commit and push this work?" : "Commit this work?");
-const confirmLabel = computed(() => requiresPush.value ? "Send commit & push prompt" : "Send commit prompt");
+const confirmLabel = computed(() => requiresPush.value ? "Commit and push" : "Commit");
 
 function updateOpen(open) {
   if (open !== true) {

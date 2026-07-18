@@ -35,6 +35,7 @@
     :source-safety="sourceSafety"
     @cancel="cancelConfirmation"
     @confirm="confirmSourceSafetyPrompt"
+    @view-changes="viewChanges"
   />
 </template>
 
@@ -61,6 +62,7 @@ const props = defineProps({
   }
 });
 
+const emit = defineEmits(["view-changes"]);
 const confirmationRequested = ref(false);
 const unsafe = computed(() => sourceSafetyIsUnsafe(props.sourceSafety));
 const promptPending = computed(() => Boolean(
@@ -127,6 +129,14 @@ function cancelConfirmation() {
   if (!props.sourceSafety.prompting) {
     confirmationRequested.value = false;
   }
+}
+
+function viewChanges() {
+  if (props.sourceSafety.prompting) {
+    return;
+  }
+  confirmationRequested.value = false;
+  emit("view-changes");
 }
 
 async function confirmSourceSafetyPrompt() {

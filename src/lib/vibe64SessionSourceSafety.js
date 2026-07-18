@@ -6,6 +6,10 @@ function sourceSafetyRequiresPush(status = {}) {
   return status?.requiresPush === true;
 }
 
+function sourceSafetyHasUncommittedChanges(status = {}) {
+  return normalizedCount(status?.changedFileCount) > 0;
+}
+
 function sourceSafetyIsUnsafe(status = {}) {
   return Boolean(
     status?.initialized &&
@@ -43,7 +47,7 @@ function sourceSafetyStatusSummary(status = {}) {
   const changedFileCount = normalizedCount(status?.changedFileCount);
   const unpushedCommitCount = normalizedCount(status?.unpushedCommitCount);
   const details = [];
-  if (changedFileCount > 0) {
+  if (sourceSafetyHasUncommittedChanges(status)) {
     details.push(`${pluralizedCount(changedFileCount, "file")} not committed`);
   }
   if (sourceSafetyRequiresPush(status) && unpushedCommitCount > 0) {
@@ -72,7 +76,7 @@ function sourceSafetyDialogMessage(status = {}) {
   const changedFileCount = normalizedCount(status?.changedFileCount);
   const unpushedCommitCount = normalizedCount(status?.unpushedCommitCount);
   const parts = [];
-  if (changedFileCount > 0) {
+  if (sourceSafetyHasUncommittedChanges(status)) {
     parts.push(
       `${pluralizedCount(changedFileCount, "changed file")} still ${changedFileCount === 1 ? "needs" : "need"} to be committed`
     );
@@ -117,6 +121,7 @@ export {
   sourceSafetyDialogMessage,
   sourceSafetyDialogTitle,
   sourceSafetyDisplayPrompt,
+  sourceSafetyHasUncommittedChanges,
   sourceSafetyIsUnsafe,
   sourceSafetyMarkStyle,
   sourceSafetyPrompt,

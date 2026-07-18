@@ -12,6 +12,7 @@ const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vi
 const projectPagePath = path.resolve("src/pages/app/project/[slug].vue");
 const sessionCurrentStepPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue");
 const sessionSourceSafetyButtonPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionSourceSafetyButton.vue");
+const sessionSourceSafetyDialogPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionSourceSafetyDialog.vue");
 const sessionToolbarPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
@@ -178,6 +179,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
       "utf8"
     );
     const sourceSafetyButtonSource = fs.readFileSync(sessionSourceSafetyButtonPath, "utf8");
+    const sourceSafetyDialogSource = fs.readFileSync(sessionSourceSafetyDialogPath, "utf8");
     const toolbarSource = fs.readFileSync(sessionToolbarPath, "utf8");
     const navigationActions = componentSource.match(/<template #actions>[\s\S]*?<\/template>/u)?.[0] || "";
 
@@ -193,6 +195,12 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(sourceSafetyButtonSource).toContain("return unsafe.value ? undefined : \"success\";");
     expect(sourceSafetyButtonSource).toContain("unsafe.value ? sourceSafetyMarkStyle(props.sourceSafety) : undefined");
     expect(sourceSafetyButtonSource).toContain("<Vibe64SessionSourceSafetyDialog");
+    expect(sourceSafetyButtonSource).toContain("@view-changes=\"viewChanges\"");
+    expect(componentSource).toContain("@view-changes=\"dashboardSessionContext.activeSessionNav.selectTool('diff')\"");
+    expect(sourceSafetyDialogSource).toContain("v-if=\"hasUncommittedChanges\"");
+    expect(sourceSafetyDialogSource).toContain("View changes");
+    expect(sourceSafetyDialogSource).toContain("requiresPush.value ? \"Commit and push\" : \"Commit\"");
+    expect(sourceSafetyDialogSource).not.toContain("Send commit");
     expect(toolbarSource).toContain("<span\n            class=\"studio-ai-sessions__status-dot\"");
     expect(toolbarSource).toContain("'studio-ai-sessions__status-dot--unsafe': sessionSourceSafetyUnsafe(sessionItem)");
     expect(toolbarSource).toContain(":style=\"sessionSourceSafetyStyle(sessionItem)\"");

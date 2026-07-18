@@ -4,6 +4,7 @@ import {
   sourceSafetyButtonLabel,
   sourceSafetyMarkStyle,
   sourceSafetyDialogMessage,
+  sourceSafetyHasUncommittedChanges,
   sourceSafetyPrompt,
   sourceSafetyStatusSummary,
   sourceSafetyStatusTitle
@@ -19,6 +20,11 @@ describe("Vibe64 session source safety presentation", () => {
     };
 
     expect(sourceSafetyButtonLabel(status)).toBe("Commit");
+    expect(sourceSafetyHasUncommittedChanges(status)).toBe(true);
+    expect(sourceSafetyHasUncommittedChanges({
+      ...status,
+      changedFileCount: 0
+    })).toBe(false);
     expect(sourceSafetyStatusTitle(status)).toContain("2 files not committed");
     expect(sourceSafetyStatusSummary(status)).toBe("2 files not committed");
     expect(sourceSafetyDialogMessage({

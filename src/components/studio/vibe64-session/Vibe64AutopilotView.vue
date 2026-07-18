@@ -73,6 +73,7 @@
             <Vibe64SessionSourceSafetyButton
               :session-label="dashboardSessionContext.activeSessionNav.label"
               :source-safety="props.sourceSafety"
+              @view-changes="dashboardSessionContext.activeSessionNav.selectTool('diff')"
             />
             <v-menu location="bottom end">
               <template #activator="{ props: menuProps }">
