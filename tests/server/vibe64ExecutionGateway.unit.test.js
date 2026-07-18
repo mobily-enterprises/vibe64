@@ -1417,6 +1417,22 @@ test("execution gateway applies capture maxBuffer centrally", async () => {
   assert.equal(result.stdout.length, 1024);
 });
 
+test("execution gateway captures binary output without text decoding", async () => {
+  const expected = Buffer.from([0x00, 0xff, 0x80, 0x0a, 0x0d, 0x41]);
+  const result = await runVibe64Command({
+    command: process.execPath,
+    args: [
+      "-e",
+      `process.stdout.write(Buffer.from([${[...expected].join(",")}]))`
+    ],
+    outputEncoding: "base64"
+  });
+
+  assert.equal(result.ok, true, result.output);
+  assert.equal(result.stdout, expected.toString("base64"));
+  assert.deepEqual(Buffer.from(result.stdout, "base64"), expected);
+});
+
 test("execution gateway rejects an actor HOME mismatch", () => {
   assert.throws(() => assertActorHomeEnv({
     user: {
@@ -1488,6 +1504,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
       VIBE64_EXEC_HELPER_PATH: "/tmp/ignored-by-explicit-helper"
     },
     helperPath: "/tmp/vibe64-exec-helper",
+    outputEncoding: "base64",
     runCapture(command, args, options) {
       calls.push({
         args,
@@ -1514,6 +1531,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
           VIBE64_EXEC_HELPER_PATH: "/tmp/ignored-by-explicit-helper"
         },
         input: `${JSON.stringify(payload)}\n`,
+        outputEncoding: "base64",
         timeout: 1234
       }
     }

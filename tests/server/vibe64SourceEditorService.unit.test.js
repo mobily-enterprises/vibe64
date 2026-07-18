@@ -223,6 +223,10 @@ test("source editor enforces the Vibe64 source contract for source-tree .vibe64"
     preloadDirectories: [".vibe64/sessions", ".vibe64/project-knowledge"],
     extraFiles: [
       {
+        path: ".vibe64/launcher/cover.webp",
+        text: "launcher cover"
+      },
+      {
         path: ".vibe64/project-knowledge/notes.md",
         text: "Project context.\n"
       },
@@ -275,6 +279,7 @@ test("source editor enforces the Vibe64 source contract for source-tree .vibe64"
     });
     assert.equal(controlRootResponse.ok, true);
     assert.deepEqual(controlRootResponse.tree.children.map((child) => child.path), [
+      ".vibe64/launcher",
       ".vibe64/project-knowledge",
       ".vibe64/prompts",
       ".vibe64/scripts"

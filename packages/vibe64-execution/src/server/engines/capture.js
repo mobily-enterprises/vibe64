@@ -11,12 +11,14 @@ async function runCaptureCommand(command = "", args = [], {
   input = undefined,
   maxBuffer = undefined,
   onOutput = null,
+  outputEncoding = "utf8",
   timeout = 15_000
 } = {}) {
   try {
     const subprocess = execa(command, args, {
       all: true,
       cwd,
+      encoding: outputEncoding,
       env,
       extendEnv: false,
       input,

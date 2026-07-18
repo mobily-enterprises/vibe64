@@ -1547,7 +1547,7 @@ test("Project Setup remote mirror repair script is valid shell", () => {
   assert.match(mirrorRemoteBranchScript(), /vibe64\.project\.json/u);
   assert.match(mirrorRemoteBranchScript(), /vibe64\.runtime-lock\.json/u);
   assert.match(mirrorRemoteBranchScript(), /\.vibe64\/\*/u);
-  assert.match(mirrorRemoteBranchScript(), /project-knowledge\|prompts\|scripts/u);
+  assert.match(mirrorRemoteBranchScript(), /launcher\|project-knowledge\|prompts\|scripts/u);
   assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory="\$PWD" reset --hard "\$remote_ref"/u);
   assertShellScriptSurvivesWhitespaceCollapse(mirrorRemoteBranchScript());
 });

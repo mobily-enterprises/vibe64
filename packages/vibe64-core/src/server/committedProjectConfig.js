@@ -24,6 +24,7 @@ const COMMITTED_PROJECT_TYPE_FIELD = "projectType";
 const COMMITTED_PROJECT_CONFIG_VALUES_DIR = VIBE64_PROJECT_MANIFEST_FILE;
 const COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY = "repository.git";
 const VIBE64_COMMITTED_PROJECT_CONFIG_READER_SERVICE = "feature.vibe64-project.committed-config-reader";
+const DEFAULT_COMMITTED_SOURCE_FILE_MAX_BYTES = 16 * 1024 * 1024;
 
 function committedConfigUnavailable(code, message, extra = {}) {
   return Object.freeze({
@@ -128,6 +129,53 @@ async function runGit(args = [], {
     throw error;
   }
   return result.stdout;
+}
+
+async function runGitBuffer(args = [], {
+  cwd = "",
+  gitDir = "",
+  maxBytes = DEFAULT_COMMITTED_SOURCE_FILE_MAX_BYTES
+} = {}) {
+  const resolvedCwd = path.resolve(cwd || process.cwd());
+  const resolvedGitDir = gitDir ? path.resolve(gitDir) : "";
+  const resolvedMaxBytes = Number.isSafeInteger(Number(maxBytes)) && Number(maxBytes) > 0
+    ? Number(maxBytes)
+    : DEFAULT_COMMITTED_SOURCE_FILE_MAX_BYTES;
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [
+      resolvedCwd,
+      resolvedGitDir
+    ].filter(Boolean),
+    args: gitArgs(args, {
+      gitDir: resolvedGitDir
+    }),
+    command: "git",
+    cwd: resolvedCwd,
+    envPolicy: "project",
+    gitSafeDirectories: [
+      resolvedCwd,
+      resolvedGitDir
+    ].filter(Boolean),
+    maxBuffer: Math.ceil(resolvedMaxBytes / 3) * 4 + 4,
+    mode: "capture",
+    outputEncoding: "base64",
+    purpose: "source-editor",
+    runtimes: ["git"]
+  });
+  if (!result.ok) {
+    const stderr = Buffer.from(result.stderr || "", "base64").toString("utf8");
+    const error = new Error(normalizeText(stderr || result.error) || "git failed.");
+    error.code = result.code || "vibe64_committed_project_git_failed";
+    throw error;
+  }
+  const bytes = Buffer.from(result.stdout || "", "base64");
+  if (bytes.length > resolvedMaxBytes) {
+    const error = new Error(`Committed project source file exceeds ${resolvedMaxBytes} bytes.`);
+    error.code = "vibe64_committed_project_source_file_too_large";
+    throw error;
+  }
+  return bytes;
 }
 
 async function resolveGitCommit({
@@ -260,21 +308,58 @@ async function createCommittedGitSourceReader({
   const treeOutput = await runGit([
     "ls-tree",
     "-r",
-    "--name-only",
     "-z",
     revision
   ], {
     cwd,
     gitDir: resolvedGitDir
   });
-  const paths = new Set(String(treeOutput || "").split("\0").filter(Boolean));
+  const objectsByPath = committedGitTreeObjects(treeOutput);
   return Object.freeze({
     exists(relativePath = "") {
-      return paths.has(committedSourceRelativePath(relativePath));
+      return objectsByPath.has(committedSourceRelativePath(relativePath));
+    },
+    objectId(relativePath = "") {
+      return objectsByPath.get(committedSourceRelativePath(relativePath)) || "";
+    },
+    async readBuffer(relativePath = "", options = {}) {
+      const normalizedPath = committedSourceRelativePath(relativePath);
+      const objectId = objectsByPath.get(normalizedPath);
+      if (!objectId) {
+        return null;
+      }
+      const maxBytes = Number.isSafeInteger(Number(options?.maxBytes)) && Number(options.maxBytes) > 0
+        ? Number(options.maxBytes)
+        : DEFAULT_COMMITTED_SOURCE_FILE_MAX_BYTES;
+      const expectedBytes = Number(normalizeText(await runGit(["cat-file", "-s", objectId], {
+        cwd,
+        gitDir: resolvedGitDir
+      })));
+      if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
+        const error = new Error("Committed project source file size is unavailable.");
+        error.code = "vibe64_committed_project_source_file_size_invalid";
+        throw error;
+      }
+      if (expectedBytes > maxBytes) {
+        const error = new Error(`Committed project source file exceeds ${maxBytes} bytes.`);
+        error.code = "vibe64_committed_project_source_file_too_large";
+        throw error;
+      }
+      const bytes = await runGitBuffer(["show", `${revision}:${normalizedPath}`], {
+        cwd,
+        gitDir: resolvedGitDir,
+        maxBytes
+      });
+      if (bytes.length !== expectedBytes) {
+        const error = new Error("Committed project source file could not be read completely.");
+        error.code = "vibe64_committed_project_source_file_incomplete";
+        throw error;
+      }
+      return bytes;
     },
     async readText(relativePath = "") {
       const normalizedPath = committedSourceRelativePath(relativePath);
-      if (!paths.has(normalizedPath)) {
+      if (!objectsByPath.has(normalizedPath)) {
         return null;
       }
       return runGit(["show", `${revision}:${normalizedPath}`], {
@@ -283,6 +368,23 @@ async function createCommittedGitSourceReader({
       });
     }
   });
+}
+
+function committedGitTreeObjects(output = "") {
+  const objectsByPath = new Map();
+  for (const entry of String(output || "").split("\0").filter(Boolean)) {
+    const separatorIndex = entry.indexOf("\t");
+    if (separatorIndex < 1) {
+      continue;
+    }
+    const header = entry.slice(0, separatorIndex).trim().split(/\s+/u);
+    const objectId = normalizeText(header[2]);
+    const filePath = entry.slice(separatorIndex + 1);
+    if (objectId && filePath) {
+      objectsByPath.set(filePath, objectId);
+    }
+  }
+  return objectsByPath;
 }
 
 async function readCommittedConfigFromGit({

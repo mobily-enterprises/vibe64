@@ -36,6 +36,10 @@ const VIBE64_COMMAND_MODES = Object.freeze([
   "pty",
   "detached"
 ]);
+const VIBE64_COMMAND_OUTPUT_ENCODINGS = Object.freeze([
+  "utf8",
+  "base64"
+]);
 const VIBE64_COMMAND_ENV_POLICIES = Object.freeze([
   "session",
   "project",
@@ -234,6 +238,12 @@ function normalizeVibe64CommandRequest(input = {}) {
       : DEFAULT_COMMAND_MAX_BUFFER_BYTES,
     mode,
     onOutput: typeof request.onOutput === "function" ? request.onOutput : null,
+    outputEncoding: normalizeEnum(
+      request.outputEncoding,
+      VIBE64_COMMAND_OUTPUT_ENCODINGS,
+      "utf8",
+      "output_encoding"
+    ),
     project: recordValue(request.project),
     purpose,
     runtimes,
@@ -254,6 +264,7 @@ export {
   VIBE64_COMMAND_ENV_POLICIES,
   VIBE64_COMMAND_GIT_TRANSPORTS,
   VIBE64_COMMAND_MODES,
+  VIBE64_COMMAND_OUTPUT_ENCODINGS,
   VIBE64_COMMAND_PURPOSES,
   VIBE64_COMMAND_RUNTIMES,
   normalizeVibe64CommandRequest,

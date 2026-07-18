@@ -62,12 +62,14 @@ async function runHelperCommand(payload = {}, {
   env = process.env,
   helperPath = "",
   maxBuffer = undefined,
+  outputEncoding = "utf8",
   runCapture = runCaptureCommand,
   timeout = 15_000
 } = {}) {
   const options = {
     env,
     input: `${JSON.stringify(payload)}\n`,
+    outputEncoding,
     timeout
   };
   if (Number.isSafeInteger(Number(maxBuffer)) && Number(maxBuffer) > 0) {

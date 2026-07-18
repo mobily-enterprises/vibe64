@@ -34,6 +34,8 @@ system and runtime state goes to the real OS user's state directory:
   vibe64.project.json
   vibe64.runtime-lock.json
   .vibe64/
+    launcher/
+      cover.webp
     scripts/
     prompts/
     project-knowledge/
@@ -57,6 +59,8 @@ Source config lives in the active source tree:
   vibe64.project.json
   vibe64.runtime-lock.json
   .vibe64/
+    launcher/
+      cover.webp
     scripts/
     prompts/
     project-knowledge/
@@ -69,8 +73,9 @@ merge.
 
 `vibe64.project.json` contains the project type and adapter config values.
 `vibe64.runtime-lock.json` pins the selected runtime packages. The `.vibe64`
-directory is limited to project-authored Vibe64 customizations: scripts,
-prompts, and project knowledge.
+directory is limited to project-authored Vibe64 customizations: Launcher
+artwork, scripts, prompts, and project knowledge. When present,
+`.vibe64/launcher/cover.webp` is the app image shown by the hosted Launcher.
 
 ### Vibe64 Runtime State
 
