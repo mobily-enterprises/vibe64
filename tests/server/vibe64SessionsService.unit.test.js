@@ -170,14 +170,20 @@ function workflowDriverTestRuntime(runtime = {}, metadataBySession, sessionsById
 function projectServiceWithWorkflowDriverTestRuntime(projectService = {}) {
   const metadataBySession = new Map();
   const sessionsById = new Map();
-  if (typeof projectService?.createRuntime !== "function") {
-    return projectService;
+  const completeProjectService = {
+    async readCurrentProject() {
+      return null;
+    },
+    ...projectService
+  };
+  if (typeof completeProjectService.createRuntime !== "function") {
+    return completeProjectService;
   }
   return {
-    ...projectService,
+    ...completeProjectService,
     async createRuntime(...args) {
       return workflowDriverTestRuntime(
-        await projectService.createRuntime(...args),
+        await completeProjectService.createRuntime(...args),
         metadataBySession,
         sessionsById
       );
@@ -602,31 +608,6 @@ function readySetupServices() {
     connectionSetupService: readyService,
     projectSetupService: readyService,
     studioSetupService: readyService
-  };
-}
-
-function noviceSetupServices() {
-  const services = readySetupServices();
-  return {
-    ...services,
-    connectionSetupService: {
-      async getStatus(input = {}) {
-        return Array.isArray(input.providerIds) && input.providerIds.includes("github")
-          ? {
-              connections: [
-                {
-                  connected: false,
-                  id: "github"
-                }
-              ],
-              ok: true,
-              ready: true
-            }
-          : {
-              ready: true
-            };
-      }
-    }
   };
 }
 
@@ -6174,7 +6155,7 @@ test("session list exposes selectable workflow definitions after seeding", async
   assert.equal(result.limits.maxOpenSessions, 3);
 });
 
-test("session list gives users without GitHub the novice creation catalog and one-session limit", async () => {
+test("session list uses the authenticated GitHub identity without checking live connection status", async () => {
   const creationAudienceInputs = [];
   const service = createService({
     projectService: {
@@ -6199,7 +6180,13 @@ test("session list gives users without GitHub the novice creation catalog and on
         };
       }
     },
-    setupServices: noviceSetupServices()
+    setupServices: {
+      connectionSetupService: {
+        async getStatus() {
+          throw new Error("Session listing must not probe live GitHub status to classify its audience.");
+        }
+      }
+    }
   });
 
   const result = await service.listSessions({
@@ -6262,7 +6249,7 @@ test("session creation applies the novice limit on the server", async () => {
         };
       }
     },
-    setupServices: noviceSetupServices()
+    setupServices: readySetupServices()
   });
 
   const result = await service.createSession({
@@ -7164,7 +7151,7 @@ test("session creation lets novice users select free-form work", async () => {
         };
       }
     },
-    setupServices: noviceSetupServices()
+    setupServices: readySetupServices()
   });
 
   const result = await service.createSession({
@@ -7250,10 +7237,14 @@ test("session creation freezes managed Git repository profile metadata", async (
   });
 
   const result = await service.createSession({
+    vibe64User: {
+      username: "novice"
+    },
     workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   });
 
   assert.equal(result.ok, true);
+  assert.equal(connectionInputs.length, 1);
   assert.deepEqual(connectionInputs[0].providerIds, ["codex"]);
   assert.equal(runtimeOptions.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
   assert.equal(runtimeOptions.projectTypeState.projectType, "jskit");
@@ -7349,7 +7340,10 @@ test("session creation freezes GitHub repository profile metadata", async () => 
 
   const result = await service.createSession({
     vibe64User: {
-      id: "github-user"
+      github: {
+        login: "ada"
+      },
+      username: "ada"
     },
     workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   });

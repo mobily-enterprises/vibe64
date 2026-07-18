@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 
 import {
   WORKFLOW_CREATION_AUDIENCE,
-  VIBE64_CONNECTION_PURPOSE_SESSION,
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
@@ -2439,43 +2438,14 @@ function publicSessionServiceResponse(response = {}, options = {}) {
     : response;
 }
 
-function githubConnectionFromStatus(status = {}) {
-  const connections = Array.isArray(status.connections) ? status.connections : [];
-  return connections.find((connection) => String(connection?.id || "").trim() === "github") || null;
-}
-
-function readinessConnectionStatus(readiness = {}) {
-  const stages = Array.isArray(readiness?.stages) ? readiness.stages : [];
-  return stages.find((stage) => stage?.id === "connections") || null;
-}
-
-async function sessionWorkflowCreationAudience(setupServices = {}, input = {}, {
-  readiness = null
-} = {}) {
+function sessionWorkflowCreationAudience(input = {}) {
   const vibe64User = input?.vibe64User || null;
-  const connectionSetupService = setupServices.connectionSetupService;
-  if (!vibe64User || typeof connectionSetupService?.getStatus !== "function") {
+  if (!vibe64User) {
     return WORKFLOW_CREATION_AUDIENCE.EXPERT;
   }
-  const readinessGithub = githubConnectionFromStatus(readinessConnectionStatus(readiness) || {});
-  if (readinessGithub) {
-    return readinessGithub.connected !== true
-      ? WORKFLOW_CREATION_AUDIENCE.NOVICE
-      : WORKFLOW_CREATION_AUDIENCE.EXPERT;
-  }
-  try {
-    const status = await connectionSetupService.getStatus({
-      providerIds: ["github"],
-      purpose: VIBE64_CONNECTION_PURPOSE_SESSION,
-      vibe64User
-    });
-    const github = status?.ok === false ? null : githubConnectionFromStatus(status);
-    return github && github.connected !== true
-      ? WORKFLOW_CREATION_AUDIENCE.NOVICE
-      : WORKFLOW_CREATION_AUDIENCE.EXPERT;
-  } catch {
-    return WORKFLOW_CREATION_AUDIENCE.EXPERT;
-  }
+  return String(vibe64User.github?.login || "").trim()
+    ? WORKFLOW_CREATION_AUDIENCE.EXPERT
+    : WORKFLOW_CREATION_AUDIENCE.NOVICE;
 }
 
 async function workflowCreationOptions(runtime, creationAudience) {
@@ -2748,19 +2718,6 @@ async function createAndAdvanceWorkflowSession(runtime, projectType, workflowDef
     advancedSession: await runtime.advance(session.sessionId),
     session
   };
-}
-
-async function currentProjectForSession(projectService = {}) {
-  if (typeof projectService.readCurrentProject === "function") {
-    return projectService.readCurrentProject();
-  }
-  if (typeof projectService.listProjects !== "function") {
-    return null;
-  }
-  const projectList = await projectService.listProjects();
-  return projectList?.ok === false
-    ? null
-    : projectList?.currentProject || null;
 }
 
 function isOpenSessionList(options = {}) {
@@ -3472,35 +3429,31 @@ function createService({
           let phaseStartedAtMs = Date.now();
           const [projectType, currentProject] = await Promise.all([
             projectService.requireProjectType(),
-            currentProjectForSession(projectService)
+            projectService.readCurrentProject()
           ]);
           vibe64SessionDebugLog("server.service.createSession.projectContext.done", {
             durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
           });
           phaseStartedAtMs = Date.now();
           // These are independent read-only prerequisites. Session state is not created until both succeed.
-          const [readiness, runtime] = await Promise.all([
+          const [runtime] = await Promise.all([
+            projectService.createRuntime({
+              ...(currentProject ? { currentProject } : {}),
+              projectTypeState: projectType
+            }),
             assertVibe64SessionReady(
               setupServices,
               readinessOptions(input, normalizedSetupOptions, {
                 providerIds: sessionConnectionProviderIds(currentProject || {})
               })
-            ),
-            projectService.createRuntime({
-              ...(currentProject ? { currentProject } : {}),
-              projectTypeState: projectType
-            })
+            )
           ]);
           vibe64SessionDebugLog("server.service.createSession.prerequisites.done", {
             durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
           });
           phaseStartedAtMs = Date.now();
-          const [creationAudience, existingOpenSessions] = await Promise.all([
-            sessionWorkflowCreationAudience(setupServices, input, {
-              readiness
-            }),
-            listOpenSessionSummaries(runtime)
-          ]);
+          const creationAudience = sessionWorkflowCreationAudience(input);
+          const existingOpenSessions = await listOpenSessionSummaries(runtime);
           vibe64SessionDebugLog("server.service.createSession.creationInputs.done", {
             durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
           });
@@ -3926,7 +3879,7 @@ function createService({
           const openSessions = isOpenSessionList(options)
             ? sessions
             : await listOpenSessionSummaries(runtime);
-          const creationAudience = await sessionWorkflowCreationAudience(setupServices, input);
+          const creationAudience = sessionWorkflowCreationAudience(input);
           const creationState = await sessionCreationState(runtime, openSessions, {
             creationAudience
           });

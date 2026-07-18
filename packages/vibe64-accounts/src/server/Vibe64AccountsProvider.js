@@ -58,27 +58,11 @@ function inputHasProviderSelection(input = {}) {
     Object.hasOwn(input, "accountIds");
 }
 
-async function selectedProjectForConnections(projectService = null) {
-  if (typeof projectService?.readCurrentProject === "function") {
-    return projectService.readCurrentProject();
-  }
-  if (typeof projectService?.listProjects === "function") {
-    const listed = await projectService.listProjects();
-    if (listed?.ok === false) {
-      return null;
-    }
-    return listed?.currentProject || (Array.isArray(listed?.projects)
-      ? listed.projects.find((project) => project?.selected) || null
-      : null);
-  }
-  return projectService?.selectedProject || null;
-}
-
-async function connectionAccountStatusInput(input = {}, projectService = null) {
+async function connectionAccountStatusInput(input = {}, projectService) {
   if (inputHasProviderSelection(input)) {
     return input;
   }
-  const project = await selectedProjectForConnections(projectService);
+  const project = await projectService.readCurrentProject();
   return {
     ...input,
     providerIds: projectRequiresGithubConnection(project || {})
@@ -159,9 +143,7 @@ class Vibe64AccountsProvider {
     app.service(
       VIBE64_CONNECTIONS_SERVICE,
       (scope) => {
-        const projectService = typeof scope.has === "function" && scope.has("feature.vibe64-project.service")
-          ? scope.make("feature.vibe64-project.service")
-          : null;
+        const projectService = scope.make("feature.vibe64-project.service");
         const accountService = scope.make(VIBE64_ACCOUNTS_SERVICE);
         return {
           async getStatus(input = {}) {

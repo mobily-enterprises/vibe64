@@ -340,14 +340,22 @@ test("connections service does not include adapter-owned app auth readiness", as
     ready: true
   };
   const service = serviceFactory({
-    has() {
-      return false;
-    },
     make(id) {
       if (id === VIBE64_ACCOUNTS_SERVICE) {
         return {
           async getStatus() {
             return accountStatus;
+          }
+        };
+      }
+      if (id === "feature.vibe64-project.service") {
+        return {
+          async readCurrentProject() {
+            return {
+              repository: {
+                mode: PROJECT_REPOSITORY_MODE_GITHUB
+              }
+            };
           }
         };
       }
@@ -497,12 +505,8 @@ test("connections service treats local-source projects with GitHub metadata as n
       }
       if (id === "feature.vibe64-project.service") {
         return {
-          async listProjects() {
-            return {
-              currentProject,
-              ok: true,
-              projects: [currentProject]
-            };
+          async readCurrentProject() {
+            return currentProject;
           }
         };
       }

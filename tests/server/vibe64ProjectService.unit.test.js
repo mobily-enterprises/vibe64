@@ -34,6 +34,9 @@ import {
   PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
 } from "../../packages/vibe64-core/src/server/projectApplication.js";
 import {
+  writeProjectOneOffFlag
+} from "../../packages/vibe64-core/src/server/projectOneOffFlags.js";
+import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import {
@@ -1906,6 +1909,26 @@ test("Vibe64 project service passes managed and local repository profiles into r
     assert.equal(requestKnownOptions.initializationRequired, true);
     assert.equal(requestKnownOptions.seedRequired, false);
     assert.equal(requestKnownOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+
+    const flagBackedService = createService({
+      targetRoot: localRoot
+    });
+    await writeProjectOneOffFlag({
+      name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
+      projectRuntimeRoot: flagBackedService.currentProjectLocalRoot(),
+      value: PROJECT_APPLICATION_MODE_NEW
+    });
+    const flagBackedRuntime = await flagBackedService.createRuntime({
+      currentProject: {
+        repositoryMode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      },
+      skipProjectConfig: true
+    });
+    const flagBackedOptions = await flagBackedRuntime.workflowDefinitionCreationOptions();
+
+    assert.equal(flagBackedOptions.initializationRequired, false);
+    assert.equal(flagBackedOptions.seedRequired, true);
+    assert.equal(flagBackedOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
   });
 });
 

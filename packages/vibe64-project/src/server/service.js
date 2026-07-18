@@ -620,18 +620,14 @@ function createService({
     };
   }
 
+  function requestUsesSelectedProject(projectContextValue = {}) {
+    return !projectContextValue?.targetRoot ||
+      studioProjectContext.requestContextMatchesSelectedProject(projectContextValue);
+  }
+
   async function listProjectSelectionState() {
     const projectContextValue = currentProjectRequestContext();
-    if (!projectContextValue?.targetRoot) {
-      return {
-        ...await studioProjectContext.listProjects(),
-        repro: projectSelectionReproMetadata(),
-        setup: projectSelectionSetupMetadata(studioProjectContext.runtimeProfile)
-      };
-    }
-
-    if (typeof studioProjectContext.requestContextMatchesSelectedProject === "function" &&
-      studioProjectContext.requestContextMatchesSelectedProject(projectContextValue)) {
+    if (requestUsesSelectedProject(projectContextValue)) {
       return {
         ...await studioProjectContext.listProjects(),
         repro: projectSelectionReproMetadata(),
@@ -684,13 +680,7 @@ function createService({
 
   async function readCurrentProjectSelection() {
     const projectContextValue = currentProjectRequestContext();
-    if (
-      !projectContextValue?.targetRoot ||
-      (
-        typeof studioProjectContext.requestContextMatchesSelectedProject === "function" &&
-        studioProjectContext.requestContextMatchesSelectedProject(projectContextValue)
-      )
-    ) {
+    if (requestUsesSelectedProject(projectContextValue)) {
       return (await studioProjectContext.listProjects()).currentProject || null;
     }
 
@@ -2836,21 +2826,22 @@ function createService({
       : null;
     const setupRequired = options?.sourceSetupRequired !== false;
     const requestedApplicationMode = normalizeProjectApplicationMode(options?.applicationMode);
-    const applicationMode = requestedApplicationMode || (
-      currentProject
-        ? normalizeProjectApplicationMode(currentProject.applicationMode)
-        : await currentProjectApplicationMode()
-    );
+    const knownApplicationMode = normalizeProjectApplicationMode(currentProject?.applicationMode);
+    const applicationMode = requestedApplicationMode ||
+      knownApplicationMode ||
+      await currentProjectApplicationMode();
     let adapter = undefined;
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
-    const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(
-      options?.workflowRepositoryProfile
-    ) || normalizeWorkflowRepositoryProfile(
+    const knownWorkflowRepositoryProfile = normalizeWorkflowRepositoryProfile(
       currentProject?.workflowRepositoryProfile
     ) || workflowRepositoryProfileForMode(
       currentProject?.repositoryMode || currentProject?.repository?.mode
-    ) || (currentProject ? "" : await currentWorkflowRepositoryProfile());
+    );
+    const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(
+      options?.workflowRepositoryProfile
+    ) || knownWorkflowRepositoryProfile ||
+      await currentWorkflowRepositoryProfile();
     let workflowCreationBaseline = await workflowCreationBaselineForProjectType({}, {
       applicationMode,
       workflowRepositoryProfile
