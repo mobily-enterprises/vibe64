@@ -96,7 +96,9 @@ function gitArgs(args = [], {
 
 async function runGit(args = [], {
   cwd = "",
-  gitDir = ""
+  gitDir = "",
+  maxBuffer = 16 * 1024 * 1024,
+  outputEncoding = "utf8"
 } = {}) {
   const resolvedCwd = path.resolve(cwd || process.cwd());
   const resolvedGitDir = gitDir ? path.resolve(gitDir) : "";
@@ -116,13 +118,17 @@ async function runGit(args = [], {
       resolvedCwd,
       resolvedGitDir
     ].filter(Boolean),
-    maxBuffer: 16 * 1024 * 1024,
+    maxBuffer,
     mode: "capture",
+    outputEncoding,
     purpose: "source-editor",
     runtimes: ["git"]
   });
   if (!result.ok) {
-    const error = new Error(normalizeText(result.output || result.error) || "git failed.");
+    const stderr = outputEncoding === "base64"
+      ? Buffer.from(result.stderr || "", "base64").toString("utf8")
+      : result.stderr;
+    const error = new Error(normalizeText(stderr || result.output || result.error) || "git failed.");
     error.code = result.code || "vibe64_committed_project_git_failed";
     error.stdout = result.stdout || "";
     error.stderr = result.stderr || "";
@@ -141,35 +147,13 @@ async function runGitBuffer(args = [], {
   const resolvedMaxBytes = Number.isSafeInteger(Number(maxBytes)) && Number(maxBytes) > 0
     ? Number(maxBytes)
     : DEFAULT_COMMITTED_SOURCE_FILE_MAX_BYTES;
-  const result = await runVibe64Command({
-    actor: "daemon",
-    allowedRoots: [
-      resolvedCwd,
-      resolvedGitDir
-    ].filter(Boolean),
-    args: gitArgs(args, {
-      gitDir: resolvedGitDir
-    }),
-    command: "git",
+  const output = await runGit(args, {
     cwd: resolvedCwd,
-    envPolicy: "project",
-    gitSafeDirectories: [
-      resolvedCwd,
-      resolvedGitDir
-    ].filter(Boolean),
+    gitDir: resolvedGitDir,
     maxBuffer: Math.ceil(resolvedMaxBytes / 3) * 4 + 4,
-    mode: "capture",
-    outputEncoding: "base64",
-    purpose: "source-editor",
-    runtimes: ["git"]
+    outputEncoding: "base64"
   });
-  if (!result.ok) {
-    const stderr = Buffer.from(result.stderr || "", "base64").toString("utf8");
-    const error = new Error(normalizeText(stderr || result.error) || "git failed.");
-    error.code = result.code || "vibe64_committed_project_git_failed";
-    throw error;
-  }
-  const bytes = Buffer.from(result.stdout || "", "base64");
+  const bytes = Buffer.from(output || "", "base64");
   if (bytes.length > resolvedMaxBytes) {
     const error = new Error(`Committed project source file exceeds ${resolvedMaxBytes} bytes.`);
     error.code = "vibe64_committed_project_source_file_too_large";
@@ -345,7 +329,7 @@ async function createCommittedGitSourceReader({
         error.code = "vibe64_committed_project_source_file_too_large";
         throw error;
       }
-      const bytes = await runGitBuffer(["show", `${revision}:${normalizedPath}`], {
+      const bytes = await runGitBuffer(["cat-file", "blob", objectId], {
         cwd,
         gitDir: resolvedGitDir,
         maxBytes
