@@ -26,6 +26,7 @@ import {
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
+  projectRequiresGithubConnection,
   projectRepositoryView,
   workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
@@ -199,12 +200,18 @@ function sessionListOptions(input = {}) {
   throw new Error(`Unknown Vibe64 session archive: ${archive}`);
 }
 
-function readinessOptions(input = {}, setupOptions = {}) {
+function readinessOptions(input = {}, setupOptions = {}, {
+  providerIds = []
+} = {}) {
+  const selectedProviderIds = Array.isArray(providerIds)
+    ? providerIds.filter(Boolean)
+    : [];
   return {
     ...normalizeSetupOptions(setupOptions),
     input: {
       vibe64User: input?.vibe64User || null,
-      refresh: input?.refresh === true
+      refresh: input?.refresh === true,
+      ...(selectedProviderIds.length > 0 ? { providerIds: selectedProviderIds } : {})
     }
   };
 }
@@ -1024,6 +1031,14 @@ function sessionHasActiveAgentWork(session = {}) {
   return sessionHasActiveAgentRun(session) ||
     composerHandoffSnapshot(session)?.pending === true ||
     agentStateHasActiveTurn(session);
+}
+
+function sessionNeedsAgentState(session = {}, {
+  requested = false
+} = {}) {
+  return requested ||
+    sessionAwaitsAgentResult(session) ||
+    sessionHasActiveAgentWork(session);
 }
 
 function agentTurnFromState(state = {}) {
@@ -2429,11 +2444,24 @@ function githubConnectionFromStatus(status = {}) {
   return connections.find((connection) => String(connection?.id || "").trim() === "github") || null;
 }
 
-async function sessionWorkflowCreationAudience(setupServices = {}, input = {}) {
+function readinessConnectionStatus(readiness = {}) {
+  const stages = Array.isArray(readiness?.stages) ? readiness.stages : [];
+  return stages.find((stage) => stage?.id === "connections") || null;
+}
+
+async function sessionWorkflowCreationAudience(setupServices = {}, input = {}, {
+  readiness = null
+} = {}) {
   const vibe64User = input?.vibe64User || null;
   const connectionSetupService = setupServices.connectionSetupService;
   if (!vibe64User || typeof connectionSetupService?.getStatus !== "function") {
     return WORKFLOW_CREATION_AUDIENCE.EXPERT;
+  }
+  const readinessGithub = githubConnectionFromStatus(readinessConnectionStatus(readiness) || {});
+  if (readinessGithub) {
+    return readinessGithub.connected !== true
+      ? WORKFLOW_CREATION_AUDIENCE.NOVICE
+      : WORKFLOW_CREATION_AUDIENCE.EXPERT;
   }
   try {
     const status = await connectionSetupService.getStatus({
@@ -2688,6 +2716,12 @@ function sessionProjectRepositoryMetadata(project = {}) {
   };
 }
 
+function sessionConnectionProviderIds(project = {}) {
+  return projectRequiresGithubConnection(project)
+    ? ["codex", "github"]
+    : ["codex"];
+}
+
 function sessionProjectMetadata(projectType = {}, project = {}) {
   return {
     adapter_id: projectType.adapter?.id || projectType.projectType,
@@ -2717,6 +2751,9 @@ async function createAndAdvanceWorkflowSession(runtime, projectType, workflowDef
 }
 
 async function currentProjectForSession(projectService = {}) {
+  if (typeof projectService.readCurrentProject === "function") {
+    return projectService.readCurrentProject();
+  }
   if (typeof projectService.listProjects !== "function") {
     return null;
   }
@@ -3432,11 +3469,41 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const projectType = await projectService.requireProjectType();
-          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
-          const runtime = await projectService.createRuntime();
-          const creationAudience = await sessionWorkflowCreationAudience(setupServices, input);
-          const existingOpenSessions = await listOpenSessionSummaries(runtime);
+          let phaseStartedAtMs = Date.now();
+          const [projectType, currentProject] = await Promise.all([
+            projectService.requireProjectType(),
+            currentProjectForSession(projectService)
+          ]);
+          vibe64SessionDebugLog("server.service.createSession.projectContext.done", {
+            durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
+          });
+          phaseStartedAtMs = Date.now();
+          // These are independent read-only prerequisites. Session state is not created until both succeed.
+          const [readiness, runtime] = await Promise.all([
+            assertVibe64SessionReady(
+              setupServices,
+              readinessOptions(input, normalizedSetupOptions, {
+                providerIds: sessionConnectionProviderIds(currentProject || {})
+              })
+            ),
+            projectService.createRuntime({
+              ...(currentProject ? { currentProject } : {}),
+              projectTypeState: projectType
+            })
+          ]);
+          vibe64SessionDebugLog("server.service.createSession.prerequisites.done", {
+            durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
+          });
+          phaseStartedAtMs = Date.now();
+          const [creationAudience, existingOpenSessions] = await Promise.all([
+            sessionWorkflowCreationAudience(setupServices, input, {
+              readiness
+            }),
+            listOpenSessionSummaries(runtime)
+          ]);
+          vibe64SessionDebugLog("server.service.createSession.creationInputs.done", {
+            durationMs: vibe64SessionDebugDurationMs(phaseStartedAtMs)
+          });
           const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions, {
             creationAudience
           });
@@ -3480,7 +3547,6 @@ function createService({
             projectType: projectType.projectType,
             workflowDefinition: definitionSelection.definitionId
           });
-          const currentProject = await currentProjectForSession(projectService);
           const {
             advancedSession,
             session
@@ -3513,15 +3579,17 @@ function createService({
             sessionId: advancedSession.sessionId,
             terminalService
           });
-          const enrichedSession = await enrichSessionWithAgentState(terminalService, advancedSession, {
-            runtime
-          });
+          const responseSession = sessionNeedsAgentState(advancedSession)
+            ? await enrichSessionWithAgentState(terminalService, advancedSession, {
+                runtime
+              })
+            : advancedSession;
           vibe64SessionDebugLog("server.service.createSession.done", {
-            ...sessionServiceDebugResponse(enrichedSession),
+            ...sessionServiceDebugResponse(responseSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             workflowDefinition: definitionSelection.definitionId
           });
-          return enrichedSession;
+          return responseSession;
         } catch (error) {
           vibe64SessionDebugLog("server.service.createSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3579,9 +3647,9 @@ function createService({
             await resumeTask;
             runtimeSession = await runtime.getSession(sessionId);
           }
-          const reconcileAgentState = includeRuntimeEnrichment ||
-            sessionAwaitsAgentResult(runtimeSession) ||
-            sessionHasActiveAgentWork(runtimeSession);
+          const reconcileAgentState = sessionNeedsAgentState(runtimeSession, {
+            requested: includeRuntimeEnrichment
+          });
           const inspectedSession = reconcileAgentState
             ? await enrichSessionWithAgentState(terminalService, runtimeSession, {
                 runtime

@@ -521,11 +521,12 @@ function useVibe64SessionData({
       error: "Vibe64 session could not be created.",
       success: "Vibe64 session created."
     },
-    onRunSuccess: async (response) => {
+    onRunSuccess: (response) => {
+      acceptSessionResponse(response);
       if (response?.sessionId) {
         selectSessionId(response.sessionId);
       }
-      await refreshSessionData({
+      refreshSessionDataInBackground({
         includeList: true,
         reason: "create-session"
       });
@@ -964,12 +965,18 @@ function useVibe64SessionData({
       refreshSessionDataInFlight = null;
       if (refreshSessionDataQueuedIncludeList) {
         refreshSessionDataQueuedIncludeList = false;
-        void refreshSessionData({
+        refreshSessionDataInBackground({
           includeList: true,
           reason: "coalesced-trailing"
         });
       }
     }
+  }
+
+  function refreshSessionDataInBackground(options = {}) {
+    void refreshSessionData(options).catch(() => {
+      // The endpoint resources and runSessionDataRefresh debug event retain the failure for the UI and diagnostics.
+    });
   }
 
   function selectSessionId(sessionId = "") {

@@ -4960,6 +4960,43 @@ test("Vibe64 Codex terminal state has no stale process fallback when memory atta
   });
 });
 
+test("Vibe64 Codex terminal state reuses the supplied session runtime", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_terminal_existing_runtime";
+    const session = {
+      metadata: {},
+      sessionId,
+      targetRoot
+    };
+    let createRuntimeCalls = 0;
+    let getSessionCalls = 0;
+    const runtime = {
+      async getSession() {
+        getSessionCalls += 1;
+        return session;
+      }
+    };
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          createRuntimeCalls += 1;
+          return runtime;
+        }
+      }
+    });
+
+    const state = await terminalService.agentSessionState(sessionId, {
+      runtime,
+      session
+    });
+
+    assert.equal(state.ok, true);
+    assert.equal(createRuntimeCalls, 0);
+    assert.equal(getSessionCalls, 0);
+  });
+});
+
 test("Vibe64 Codex terminal close does not have a stale process fallback when memory state is gone", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_terminal_close_stale_container";

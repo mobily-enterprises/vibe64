@@ -6975,6 +6975,7 @@ test("session creation blocks non-seed definitions while seeding is required", a
 });
 
 test("session creation uses the selected workflow definition after seeding", async () => {
+  let agentSessionStateCalls = 0;
   let selectedWorkflowDefinitionId = "";
   const preparedSessions = [];
   const service = createService({
@@ -7017,6 +7018,12 @@ test("session creation uses the selected workflow definition after seeding", asy
     },
     setupServices: readySetupServices(),
     terminalService: {
+      async agentSessionState() {
+        agentSessionStateCalls += 1;
+        return {
+          ok: true
+        };
+      },
       async ensureAgentSession(sessionId) {
         preparedSessions.push(sessionId);
         return {
@@ -7033,7 +7040,86 @@ test("session creation uses the selected workflow definition after seeding", asy
   assert.equal(result.ok, true);
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
+  assert.equal(agentSessionStateCalls, 0);
   assert.deepEqual(preparedSessions, []);
+});
+
+test("session creation reads agent state when the initial step is already waiting for an agent", async () => {
+  let agentSessionStateCalls = 0;
+  let advancedSession = null;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            advancedSession = {
+              agentRuns: [
+                {
+                  active: true,
+                  id: "codex_app_server",
+                  state: "active"
+                }
+              ],
+              ok: true,
+              sessionId,
+              stepMachine: {
+                status: "awaiting_agent_result"
+              }
+            };
+            return advancedSession;
+          },
+          async createSession() {
+            return {
+              sessionId: "new-agent-session"
+            };
+          },
+          async getSession() {
+            return advancedSession;
+          },
+          async listSessions() {
+            return [];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async agentSessionState(sessionId) {
+        agentSessionStateCalls += 1;
+        return {
+          ok: true,
+          sessionId,
+          turn: {
+            active: true,
+            id: "turn-new-session",
+            state: "active",
+            threadId: "thread-new-session"
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(agentSessionStateCalls, 1);
+  assert.equal(result.agentSession.turn.id, "turn-new-session");
 });
 
 test("session creation lets novice users select free-form work", async () => {
@@ -7094,10 +7180,22 @@ test("session creation lets novice users select free-form work", async () => {
 });
 
 test("session creation freezes managed Git repository profile metadata", async () => {
+  const connectionInputs = [];
   let createdInput = null;
+  let runtimeOptions = null;
+  const setupServices = readySetupServices();
+  setupServices.connectionSetupService = {
+    async getStatus(input = {}) {
+      connectionInputs.push(input);
+      return {
+        ready: true
+      };
+    }
+  };
   const service = createService({
     projectService: {
-      async createRuntime() {
+      async createRuntime(options = {}) {
+        runtimeOptions = options;
         return {
           async advance(sessionId) {
             return {
@@ -7126,18 +7224,18 @@ test("session creation freezes managed Git repository profile metadata", async (
           }
         };
       },
-      async listProjects() {
+      async readCurrentProject() {
         return {
-          ok: true,
-          currentProject: {
-            repository: {
-              mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-              defaultBranch: "main"
-            },
-            repositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-            workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
-          }
+          repository: {
+            mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+            defaultBranch: "main"
+          },
+          repositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+          workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
         };
+      },
+      async listProjects() {
+        throw new Error("Session creation should not list every project.");
       },
       async requireProjectType() {
         return {
@@ -7148,7 +7246,7 @@ test("session creation freezes managed Git repository profile metadata", async (
         };
       }
     },
-    setupServices: readySetupServices()
+    setupServices
   });
 
   const result = await service.createSession({
@@ -7156,6 +7254,10 @@ test("session creation freezes managed Git repository profile metadata", async (
   });
 
   assert.equal(result.ok, true);
+  assert.deepEqual(connectionInputs[0].providerIds, ["codex"]);
+  assert.equal(runtimeOptions.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+  assert.equal(runtimeOptions.projectTypeState.projectType, "jskit");
+  assert.equal(runtimeOptions.workflowRepositoryProfile, undefined);
   assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
   assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
   assert.equal(createdInput.metadata.github_repository, undefined);
@@ -7164,10 +7266,44 @@ test("session creation freezes managed Git repository profile metadata", async (
 });
 
 test("session creation freezes GitHub repository profile metadata", async () => {
+  const connectionInputs = [];
   let createdInput = null;
+  let runtimeOptions = null;
+  const currentProject = {
+    repository: {
+      mode: PROJECT_REPOSITORY_MODE_GITHUB,
+      defaultBranch: "main",
+      github: {
+        fullName: "example/github-app",
+        url: "https://github.com/example/github-app"
+      }
+    }
+  };
+  const setupServices = readySetupServices();
+  setupServices.connectionSetupService = {
+    async getStatus(input = {}) {
+      connectionInputs.push(input);
+      return {
+        connections: [
+          {
+            connected: true,
+            id: "codex",
+            required: true
+          },
+          {
+            connected: true,
+            id: "github",
+            required: true
+          }
+        ],
+        ready: true
+      };
+    }
+  };
   const service = createService({
     projectService: {
-      async createRuntime() {
+      async createRuntime(options = {}) {
+        runtimeOptions = options;
         return {
           async advance(sessionId) {
             return {
@@ -7196,20 +7332,8 @@ test("session creation freezes GitHub repository profile metadata", async () => 
           }
         };
       },
-      async listProjects() {
-        return {
-          ok: true,
-          currentProject: {
-            repository: {
-              mode: PROJECT_REPOSITORY_MODE_GITHUB,
-              defaultBranch: "main",
-              github: {
-                fullName: "example/github-app",
-                url: "https://github.com/example/github-app"
-              }
-            }
-          }
-        };
+      async readCurrentProject() {
+        return currentProject;
       },
       async requireProjectType() {
         return {
@@ -7220,14 +7344,20 @@ test("session creation freezes GitHub repository profile metadata", async () => 
         };
       }
     },
-    setupServices: readySetupServices()
+    setupServices
   });
 
   const result = await service.createSession({
+    vibe64User: {
+      id: "github-user"
+    },
     workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
   });
 
   assert.equal(result.ok, true);
+  assert.equal(connectionInputs.length, 1);
+  assert.deepEqual(connectionInputs[0].providerIds, ["codex", "github"]);
+  assert.equal(runtimeOptions.currentProject, currentProject);
   assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_GITHUB);
   assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
   assert.equal(createdInput.metadata.github_repository, "example/github-app");

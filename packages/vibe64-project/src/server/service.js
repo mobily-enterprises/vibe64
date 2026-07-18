@@ -57,7 +57,8 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   normalizeRepositoryMode,
-  normalizeWorkflowRepositoryProfile
+  normalizeWorkflowRepositoryProfile,
+  workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
 import {
   PROJECT_APPLICATION_MODE_EXISTING,
@@ -165,6 +166,26 @@ function projectSelectionRecord({
     record.runtime = runtime;
   }
   return record;
+}
+
+function requestProjectSelectionRecord(projectContext = {}, catalogProject = {}) {
+  return projectSelectionRecord({
+    applicationMode: catalogProject.applicationMode,
+    gitCacheRoot: catalogProject.gitCacheRoot,
+    githubRepository: catalogProject.githubRepository,
+    projectRecordPath: projectContext.projectRecordPath || catalogProject.projectRecordPath,
+    projectLocalRoot: projectContext.projectLocalRoot || catalogProject.projectLocalRoot,
+    projectRuntimeRoot: projectContext.projectRuntimeRoot || catalogProject.projectRuntimeRoot,
+    repository: catalogProject.repository,
+    repositoryMode: catalogProject.repositoryMode,
+    runtime: catalogProject.runtime,
+    selected: true,
+    sourceConfigRoot: projectContext.sourceConfigRoot || catalogProject.sourceConfigRoot,
+    sourceRoot: projectContext.sourceRoot || catalogProject.sourceRoot,
+    slug: projectContext.slug || catalogProject.slug,
+    workflowRepositoryProfile: catalogProject.workflowRepositoryProfile,
+    projectRoot: projectContext.targetRoot || catalogProject.projectRoot
+  });
 }
 
 function projectResult(operation) {
@@ -620,23 +641,10 @@ function createService({
 
     const listed = await studioProjectContext.listWorkspaceProjects();
     const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
-    const currentProject = projectSelectionRecord({
-      applicationMode: currentCatalogProject?.applicationMode || "",
-      gitCacheRoot: currentCatalogProject?.gitCacheRoot || "",
-      githubRepository: currentCatalogProject?.githubRepository || null,
-      projectRecordPath: projectContextValue.projectRecordPath || currentCatalogProject?.projectRecordPath || "",
-      projectLocalRoot: projectContextValue.projectLocalRoot || currentCatalogProject?.projectLocalRoot || "",
-      projectRuntimeRoot: projectContextValue.projectRuntimeRoot || currentCatalogProject?.projectRuntimeRoot || "",
-      repository: currentCatalogProject?.repository || null,
-      repositoryMode: currentCatalogProject?.repositoryMode || "",
-      runtime: currentCatalogProject?.runtime || null,
-      selected: true,
-      sourceConfigRoot: projectContextValue.sourceConfigRoot || currentCatalogProject?.sourceConfigRoot || "",
-      sourceRoot: projectContextValue.sourceRoot || currentCatalogProject?.sourceRoot || "",
-      slug: projectContextValue.slug,
-      workflowRepositoryProfile: currentCatalogProject?.workflowRepositoryProfile || "",
-      projectRoot: projectContextValue.targetRoot
-    });
+    const currentProject = requestProjectSelectionRecord(
+      projectContextValue,
+      currentCatalogProject || {}
+    );
     const projects = listed.projects
       .map((project) => projectSelectionRecord({
         applicationMode: project.applicationMode,
@@ -674,12 +682,29 @@ function createService({
     };
   }
 
+  async function readCurrentProjectSelection() {
+    const projectContextValue = currentProjectRequestContext();
+    if (
+      !projectContextValue?.targetRoot ||
+      (
+        typeof studioProjectContext.requestContextMatchesSelectedProject === "function" &&
+        studioProjectContext.requestContextMatchesSelectedProject(projectContextValue)
+      )
+    ) {
+      return (await studioProjectContext.listProjects()).currentProject || null;
+    }
+
+    const result = await studioProjectContext.readWorkspaceProject({
+      slug: projectContextValue.slug
+    });
+    return requestProjectSelectionRecord(projectContextValue, result.project || {});
+  }
+
   async function currentProjectTemplateContext(input = {}) {
-    const selection = await listProjectSelectionState();
     return {
       env,
       input,
-      project: selection.currentProject || null,
+      project: await readCurrentProjectSelection(),
       projectRuntimeRoot: projectRuntimeRoot(),
       sourceRoot: currentSourceRoot(),
       targetRoot: currentTargetRoot(),
@@ -1270,8 +1295,10 @@ function createService({
     });
   }
 
-  async function createProjectAdapter(input = {}) {
-    const projectType = await resolveProjectTypeForConfig(input);
+  async function createProjectAdapter(input = {}, {
+    projectTypeState = null
+  } = {}) {
+    const projectType = projectTypeState || await resolveProjectTypeForConfig(input);
     const adapter = await adapterRegistry.createAdapter(projectType.projectType);
     return {
       adapter,
@@ -2752,8 +2779,8 @@ function createService({
     if (requestProfile) {
       return requestProfile;
     }
-    const selectionState = await listProjectSelectionState();
-    return normalizeWorkflowRepositoryProfile(selectionState?.currentProject?.workflowRepositoryProfile);
+    const currentProject = await readCurrentProjectSelection();
+    return normalizeWorkflowRepositoryProfile(currentProject?.workflowRepositoryProfile);
   }
 
   async function currentProjectApplicationMode() {
@@ -2804,13 +2831,26 @@ function createService({
     const runtimeInput = options?.input && typeof options.input === "object" && !Array.isArray(options.input)
       ? options.input
       : options;
+    const currentProject = options?.currentProject && typeof options.currentProject === "object" && !Array.isArray(options.currentProject)
+      ? options.currentProject
+      : null;
     const setupRequired = options?.sourceSetupRequired !== false;
     const requestedApplicationMode = normalizeProjectApplicationMode(options?.applicationMode);
-    const applicationMode = requestedApplicationMode || await currentProjectApplicationMode();
+    const applicationMode = requestedApplicationMode || (
+      currentProject
+        ? normalizeProjectApplicationMode(currentProject.applicationMode)
+        : await currentProjectApplicationMode()
+    );
     let adapter = undefined;
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
-    const workflowRepositoryProfile = await currentWorkflowRepositoryProfile();
+    const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(
+      options?.workflowRepositoryProfile
+    ) || normalizeWorkflowRepositoryProfile(
+      currentProject?.workflowRepositoryProfile
+    ) || workflowRepositoryProfileForMode(
+      currentProject?.repositoryMode || currentProject?.repository?.mode
+    ) || (currentProject ? "" : await currentWorkflowRepositoryProfile());
     let workflowCreationBaseline = await workflowCreationBaselineForProjectType({}, {
       applicationMode,
       workflowRepositoryProfile
@@ -2819,7 +2859,9 @@ function createService({
       resolvedSourceRoot = currentSourceRoot() || targetRootValue;
     } else {
       try {
-        const projectAdapter = await createProjectAdapter(runtimeInput);
+        const projectAdapter = await createProjectAdapter(runtimeInput, {
+          projectTypeState: options?.projectTypeState || null
+        });
         adapter = projectAdapter.adapter;
         projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
         resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
@@ -2921,6 +2963,10 @@ function createService({
 
     async createRuntime(options = {}) {
       return createRuntime(options);
+    },
+
+    async readCurrentProject() {
+      return readCurrentProjectSelection();
     },
 
     async consumeProjectApplicationMode() {

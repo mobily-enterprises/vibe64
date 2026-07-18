@@ -27,10 +27,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  PROJECT_REPOSITORY_MODE_GITHUB,
-  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
-  normalizeRepositoryMode,
-  normalizeWorkflowRepositoryProfile
+  projectRequiresGithubConnection
 } from "@local/vibe64-core/server/projectRepository";
 import {
   normalizeSetupOptions,
@@ -223,18 +220,6 @@ function automaticSetupReason(setup = {}) {
 
 function connectionSetupFix(connection = {}) {
   return connection.fix || dashboardFix(CONNECTIONS_DASHBOARD_ROUTE, "Open Setup");
-}
-
-function projectRequiresGithubWorkflow(project = {}) {
-  const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(project.workflowRepositoryProfile);
-  if (workflowRepositoryProfile) {
-    return workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
-  }
-  const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  if (repositoryMode) {
-    return repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB;
-  }
-  return Boolean(project.githubRepository);
 }
 
 function currentAppResult(operation) {
@@ -871,7 +856,7 @@ function createService({
           connectionReadiness(input),
           currentProjectCapabilityRecord()
         ]);
-        const githubRequired = projectRequiresGithubWorkflow(currentProject);
+        const githubRequired = projectRequiresGithubConnection(currentProject);
         const state = capabilityState({
           connections,
           githubRequired,

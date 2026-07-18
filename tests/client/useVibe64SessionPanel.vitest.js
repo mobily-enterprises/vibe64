@@ -2,12 +2,34 @@ import { describe, expect, it } from "vitest";
 
 import {
   sessionPanelDashboardContext,
+  sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelSelectedSessionClosing,
   sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
 
 describe("useVibe64SessionPanel", () => {
+  it("uses the empty-state loader for both initial loading and session creation", () => {
+    expect(sessionPanelEmptyStateActivity({
+      sessionListInitialLoading: true
+    })).toBe("loading");
+    expect(sessionPanelEmptyStateActivity({
+      createSessionRunning: true,
+      sessionListInitialLoading: true
+    })).toBe("creating");
+    expect(sessionPanelEmptyStateActivity({
+      createSessionRunning: true,
+      selectedSession: {
+        sessionId: "session-a"
+      }
+    })).toBe("");
+    expect(sessionPanelEmptyStateActivity({
+      createSessionRunning: true,
+      runtimeHostSessionCount: 1
+    })).toBe("");
+    expect(sessionPanelEmptyStateActivity()).toBe("");
+  });
+
   it("passes project setup metadata into empty dashboard context", () => {
     const projectContext = {
       projectConfig: {

@@ -8308,12 +8308,15 @@ function createCodexTerminalController({
       });
     },
 
-    async terminalState(sessionId) {
+    async terminalState(sessionId, {
+      runtime: existingRuntime = null,
+      session: existingSession = null
+    } = {}) {
       return vibe64Result(async () => {
-        const runtime = await createRuntimeForSession(sessionId);
+        const runtime = existingRuntime || await createRuntimeForSession(sessionId);
         const abandonedClaim = await recoverAbandonedCodexAppServerPromptClaim(
           runtime,
-          await runtime.getSession(sessionId)
+          existingSession || await runtime.getSession(sessionId)
         );
         const session = await reconcileCodexAppServerActiveTurn(
           abandonedClaim.session

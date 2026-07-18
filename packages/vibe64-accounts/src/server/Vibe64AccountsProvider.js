@@ -24,10 +24,7 @@ import {
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  PROJECT_REPOSITORY_MODE_GITHUB,
-  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
-  normalizeRepositoryMode,
-  normalizeWorkflowRepositoryProfile
+  projectRequiresGithubConnection
 } from "@local/vibe64-core/server/projectRepository";
 import {
   jskitRuntimeEnv
@@ -61,19 +58,10 @@ function inputHasProviderSelection(input = {}) {
     Object.hasOwn(input, "accountIds");
 }
 
-function projectRequiresGithubAccount(project = {}) {
-  const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(project.workflowRepositoryProfile);
-  if (workflowRepositoryProfile) {
-    return workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
-  }
-  const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  if (repositoryMode) {
-    return repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB;
-  }
-  return Boolean(project.githubRepository || project.repository?.github);
-}
-
 async function selectedProjectForConnections(projectService = null) {
+  if (typeof projectService?.readCurrentProject === "function") {
+    return projectService.readCurrentProject();
+  }
   if (typeof projectService?.listProjects === "function") {
     const listed = await projectService.listProjects();
     if (listed?.ok === false) {
@@ -93,7 +81,7 @@ async function connectionAccountStatusInput(input = {}, projectService = null) {
   const project = await selectedProjectForConnections(projectService);
   return {
     ...input,
-    providerIds: projectRequiresGithubAccount(project || {})
+    providerIds: projectRequiresGithubConnection(project || {})
       ? ["codex", "github"]
       : ["codex"]
   };

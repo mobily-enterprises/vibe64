@@ -263,6 +263,15 @@ test("Vibe64 project service exposes project selection before project-specific s
     assert.equal(created.currentProject.projectRecordPath, expectedRecordPath);
     assert.equal(created.currentProject.gitCacheRoot, path.join(expectedProjectRoot, "git-cache"));
 
+    const routedCurrentProject = await service.runInProjectContext(
+      "example-app",
+      () => service.readCurrentProject()
+    );
+    assert.equal(routedCurrentProject.slug, "example-app");
+    assert.equal(routedCurrentProject.projectRoot, expectedProjectRoot);
+    assert.equal(routedCurrentProject.projectRuntimeRoot, expectedRuntimeRoot);
+    assert.equal(routedCurrentProject.selected, true);
+
     const afterSelection = await service.readProjectType();
     assert.equal(afterSelection.ok, true);
     assert.equal(afterSelection.projectType.ready, false);
@@ -1882,6 +1891,21 @@ test("Vibe64 project service passes managed and local repository profiles into r
       localOptions.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE),
       true
     );
+
+    const requestKnownRuntime = await createService({
+      targetRoot: localRoot
+    }).createRuntime({
+      currentProject: {
+        applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
+        repositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+      },
+      skipProjectConfig: true
+    });
+    const requestKnownOptions = await requestKnownRuntime.workflowDefinitionCreationOptions();
+
+    assert.equal(requestKnownOptions.initializationRequired, true);
+    assert.equal(requestKnownOptions.seedRequired, false);
+    assert.equal(requestKnownOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
   });
 });
 

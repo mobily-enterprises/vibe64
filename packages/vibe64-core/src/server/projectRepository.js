@@ -62,6 +62,18 @@ function workflowRepositoryProfileForMode(value = "") {
   return "";
 }
 
+function projectRequiresGithubConnection(project = {}) {
+  const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(project.workflowRepositoryProfile);
+  if (workflowRepositoryProfile) {
+    return workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+  }
+  const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
+  if (repositoryMode) {
+    return repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB;
+  }
+  return Boolean(project.githubRepository || project.repository?.github);
+}
+
 function normalizeProjectGithubRepository(value = {}) {
   const input = isPlainObject(value) ? value : {};
   const fullName = normalizeText(input.fullName);
@@ -203,6 +215,7 @@ export {
   normalizeProjectRepository,
   normalizeRepositoryMode,
   normalizeWorkflowRepositoryProfile,
+  projectRequiresGithubConnection,
   projectRepositoryMetadataFromInput,
   projectRepositoryView,
   workflowRepositoryProfileForMode

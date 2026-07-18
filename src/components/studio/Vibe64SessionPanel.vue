@@ -119,7 +119,7 @@
                 size="20"
                 width="2"
               />
-              <span>Loading sessions.</span>
+              <span>{{ emptyStateStatusText }}</span>
             </div>
             <Vibe64CreateSessionButton
               v-else
@@ -200,6 +200,7 @@ const {
   emptyPreviewDetailText,
   emptyPreviewTitleText,
   emptyStateLoading,
+  emptyStateStatusText,
   pageError,
   projectPane,
   runtimeHostSessionIds,

@@ -428,12 +428,11 @@ test("connections service requests GitHub only for GitHub repository projects", 
       }
       if (id === "feature.vibe64-project.service") {
         return {
+          async readCurrentProject() {
+            return currentProject;
+          },
           async listProjects() {
-            return {
-              currentProject,
-              ok: true,
-              projects: [currentProject]
-            };
+            throw new Error("Connection readiness should not list every project.");
           }
         };
       }

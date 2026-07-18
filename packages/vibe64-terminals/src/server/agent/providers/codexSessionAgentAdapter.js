@@ -113,7 +113,10 @@ function createCodexSessionAgentAdapter({
       return controller.reconcileThreads(sessions, options);
     },
     async sessionState(context) {
-      return normalizeCodexSessionResult(await controller.terminalState(context.sessionId));
+      return normalizeCodexSessionResult(await controller.terminalState(context.sessionId, {
+        runtime: context.runtime,
+        session: context.session
+      }));
     },
     async readTerminal(context, input = {}) {
       return controller.readTerminal(context.sessionId, input.terminalSessionId);

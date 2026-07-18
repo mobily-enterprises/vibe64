@@ -108,26 +108,6 @@ function useVibe64SessionPanel(props, emit) {
   const emptyBlockedReason = computed(() => String(
     !toolbar.canCreateSession && toolbar.createSessionTitle ? toolbar.createSessionTitle : ""
   ).trim());
-  const emptyChatHintText = computed(() => {
-    if (emptyStateLoading.value) {
-      return "Loading sessions.";
-    }
-    return emptyBlockedReason.value || "Use the + button to start a session.";
-  });
-  const emptyPreviewTitleText = computed(() => {
-    return emptyStateLoading.value ? "Loading session." : "Create a session to start preview.";
-  });
-  const emptyPreviewDetailText = computed(() => {
-    if (emptyStateLoading.value) {
-      return "";
-    }
-    return emptyBlockedReason.value;
-  });
-  const emptyCreateAttention = computed(() => Boolean(
-    !emptyStateLoading.value &&
-    toolbar.canCreateSession &&
-    (toolbar.sessions || []).length < 1
-  ));
   const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
   const sessionLoadError = computed(() => Boolean(
     sessionData.sessionList.loadError ||
@@ -145,10 +125,41 @@ function useVibe64SessionPanel(props, emit) {
     }
     return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
   });
-  const emptyStateLoading = computed(() => Boolean(
-    sessionData.sessionList.isInitialLoading &&
-    !selection.selectedSession &&
-    runtimeHostSessionIds.value.length < 1
+  const emptyStateActivity = computed(() => sessionPanelEmptyStateActivity({
+    createSessionRunning: sessionData.createSessionCommand.isRunning,
+    runtimeHostSessionCount: runtimeHostSessionIds.value.length,
+    selectedSession: selection.selectedSession,
+    sessionListInitialLoading: sessionData.sessionList.isInitialLoading
+  }));
+  const emptyStateLoading = computed(() => Boolean(emptyStateActivity.value));
+  const emptyStateStatusText = computed(() => (
+    emptyStateActivity.value === "creating" ? "Creating session." : "Loading sessions."
+  ));
+  const emptyChatHintText = computed(() => {
+    if (emptyStateActivity.value === "creating") {
+      return "Creating session.";
+    }
+    if (emptyStateActivity.value === "loading") {
+      return "Loading sessions.";
+    }
+    return emptyBlockedReason.value || "Use the + button to start a session.";
+  });
+  const emptyPreviewTitleText = computed(() => {
+    if (emptyStateActivity.value === "creating") {
+      return "Creating session.";
+    }
+    return emptyStateLoading.value ? "Loading session." : "Create a session to start preview.";
+  });
+  const emptyPreviewDetailText = computed(() => {
+    if (emptyStateLoading.value) {
+      return "";
+    }
+    return emptyBlockedReason.value;
+  });
+  const emptyCreateAttention = computed(() => Boolean(
+    !emptyStateLoading.value &&
+    toolbar.canCreateSession &&
+    (toolbar.sessions || []).length < 1
   ));
   const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
   const selectedAbandon = computed(() => selectedRuntimeState.value?.toolbarControls?.abandon || fallbackAbandon);
@@ -233,6 +244,7 @@ function useVibe64SessionPanel(props, emit) {
     emptyPreviewDetailText,
     emptyPreviewTitleText,
     emptyStateLoading,
+    emptyStateStatusText,
     pageError,
     projectPane,
     runtimeHostSessionIds,
@@ -423,8 +435,24 @@ function sessionPanelRuntimeHostDiagnostics({
   };
 }
 
+function sessionPanelEmptyStateActivity({
+  createSessionRunning = false,
+  runtimeHostSessionCount = 0,
+  selectedSession = null,
+  sessionListInitialLoading = false
+} = {}) {
+  if (selectedSession || Number(runtimeHostSessionCount) > 0) {
+    return "";
+  }
+  if (createSessionRunning) {
+    return "creating";
+  }
+  return sessionListInitialLoading ? "loading" : "";
+}
+
 export {
   sessionPanelDashboardContext,
+  sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelSelectedSessionClosing,
   sessionPanelToolbarSessions,
