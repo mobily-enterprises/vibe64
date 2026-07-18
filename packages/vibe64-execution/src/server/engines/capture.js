@@ -37,12 +37,16 @@ async function runCaptureCommand(command = "", args = [], {
       });
     }
     const result = await subprocess;
+    const exitCode = typeof result.exitCode === "number" ? result.exitCode : 1;
     return commandResult({
-      exitCode: result.exitCode,
-      output: result.all,
+      code: result.timedOut === true ? "vibe64_command_capture_timed_out" : "",
+      error: exitCode === 0 ? "" : result.shortMessage,
+      exitCode,
+      output: result.all || (exitCode === 0 ? "" : result.shortMessage),
       signal: result.signal,
       stderr: result.stderr,
-      stdout: result.stdout
+      stdout: result.stdout,
+      timedOut: result.timedOut === true
     });
   } catch (error) {
     return commandErrorResult(error.message, "vibe64_command_capture_failed", {

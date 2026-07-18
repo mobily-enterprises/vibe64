@@ -45,6 +45,19 @@ test("execution helper gives release services the shared runtime PATH", async ()
 
   assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(DEFAULT_PATH\)\}/u);
   assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
+  assert.match(source, /StartLimitIntervalSec=60/u);
+  assert.match(source, /StartLimitBurst=5/u);
+  assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"reset-failed",\s*unitName/u);
+});
+
+test("execution helper reports bounded release service diagnostics", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /action === "inspect"/u);
+  assert.match(source, /function inspectDeploymentServiceUnit/u);
+  assert.match(source, /ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,NRestarts/u);
+  assert.match(source, /runRootCommandAllowFailure\("journalctl"/u);
+  assert.match(source, /"--lines=80"/u);
 });
 
 test("execution helper gives release services explicit managed-service dependencies", async () => {

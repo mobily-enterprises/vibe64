@@ -201,6 +201,10 @@ function handleDeploymentServiceOperation(payload = {}) {
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
   const unitName = assertValidDeploymentUnitName(payload.unitName);
+  if (action === "inspect") {
+    inspectDeploymentServiceUnit(unitName);
+    return;
+  }
   if (action === "remove") {
     removeDeploymentServiceUnit(unitName);
     return;
@@ -228,6 +232,29 @@ function handleDeploymentServiceOperation(payload = {}) {
     unitName,
     unitPath
   });
+}
+
+function inspectDeploymentServiceUnit(unitName = "") {
+  assertValidDeploymentUnitName(unitName);
+  const state = runRootCommand("systemctl", [
+    "show",
+    unitName,
+    "--no-pager",
+    "--property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,NRestarts"
+  ]);
+  const journalResult = runRootCommandAllowFailure("journalctl", [
+    "--unit",
+    unitName,
+    "--no-pager",
+    "--output=cat",
+    "--lines=80"
+  ]);
+  const journal = String(journalResult.stdout || journalResult.stderr || "").trim();
+  process.stdout.write([
+    "Service state:",
+    state,
+    ...(journal ? ["", "Recent service output:", journal] : [])
+  ].join("\n") + "\n");
 }
 
 function handleManagedServiceOperation(payload = {}) {
@@ -402,6 +429,10 @@ function installSystemdUnit({
     "enable",
     unitName
   ]);
+  runRootCommandAllowFailure("systemctl", [
+    "reset-failed",
+    unitName
+  ]);
   try {
     runRootCommand("systemctl", [
       activation,
@@ -570,10 +601,11 @@ function runRootCommand(command = "", args = []) {
   if (result.status !== 0) {
     throw new Error(String(result.stderr || result.stdout || `${command} failed.`).trim());
   }
+  return String(result.stdout || "").trim();
 }
 
 function runRootCommandAllowFailure(command = "", args = []) {
-  spawnSync(command, args, {
+  return spawnSync(command, args, {
     encoding: "utf8"
   });
 }
@@ -709,6 +741,8 @@ function deploymentServiceUnit({
     `After=${["network-online.target", ...dependencies].join(" ")}`,
     "Wants=network-online.target",
     ...(dependencies.length > 0 ? [`Requires=${dependencies.join(" ")}`] : []),
+    "StartLimitIntervalSec=60",
+    "StartLimitBurst=5",
     "",
     "[Service]",
     "Type=simple",

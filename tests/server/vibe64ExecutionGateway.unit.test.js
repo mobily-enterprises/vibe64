@@ -94,6 +94,25 @@ async function waitForTerminalOutput(id, namespace, expectedText = "") {
   });
 }
 
+test("execution gateway reports capture timeouts as failures", async () => {
+  const result = await runVibe64Command({
+    args: [
+      "-e",
+      "setInterval(() => {}, 1000)"
+    ],
+    command: process.execPath,
+    runtimes: [],
+    timeout: 100
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.timedOut, true);
+  assert.equal(result.signal, "SIGTERM");
+  assert.equal(result.code, "vibe64_command_capture_timed_out");
+  assert.match(result.output, /timed out/iu);
+});
+
 test("execution gateway injects shared tool and fallback git identity env", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
