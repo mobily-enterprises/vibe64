@@ -37,12 +37,8 @@ const RUNTIME_PACKS = Object.freeze({
     binDirs: ["mariadb/bin"],
     managedCommands: ["mariadb", "mysql"]
   },
-  "node20": {
-    binDirs: ["node20/bin"],
-    managedCommands: ["node", "npm", "npx", "corepack", "pnpm", "yarn"]
-  },
-  "node22": {
-    binDirs: ["node22/bin"],
+  "node26": {
+    binDirs: ["node26/bin"],
     managedCommands: ["node", "npm", "npx", "corepack", "pnpm", "yarn"]
   },
   "operator-clis": {
@@ -69,8 +65,7 @@ const RUNTIME_PACKS = Object.freeze({
 
 const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "operator-clis",
-  "node22",
-  "node20",
+  "node26",
   "git",
   "gh",
   "mysql",

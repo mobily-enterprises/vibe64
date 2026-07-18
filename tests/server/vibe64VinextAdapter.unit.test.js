@@ -36,7 +36,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -75,12 +75,12 @@ test("vinext adapter declares Node runtime requirements from source package mana
 
     assert.deepEqual((await adapter.getRuntimeRequirements({
       targetRoot
-    })).map((requirement) => requirement.id), ["nodejs-22"]);
+    })).map((requirement) => requirement.id), ["nodejs-26"]);
 
     await writeProjectFile(targetRoot, "bun.lock", "");
     assert.deepEqual((await adapter.getRuntimeRequirements({
       targetRoot
-    })).map((requirement) => requirement.id), ["nodejs-22", "bun"]);
+    })).map((requirement) => requirement.id), ["nodejs-26", "bun"]);
   });
 });
 
@@ -183,7 +183,7 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
     assertNodeRuntimeCommand(descriptor.commands[0].command, "npx --no-install vinext build");
     assertNodeRuntimeCommand(descriptor.commands[1].command, "npx --no-install vinext start --hostname 0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.mode, "production");
-    assert.deepEqual(descriptor.runtimes, ["node22"]);
+    assert.deepEqual(descriptor.runtimes, ["node26"]);
 
     const launchTargets = await listVinextLaunchTargets({
       session: {

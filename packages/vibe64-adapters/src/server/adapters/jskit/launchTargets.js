@@ -1035,7 +1035,7 @@ async function createJskitBuiltLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_BUILT_RESTART_ON_CHANGE,
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -1080,7 +1080,7 @@ async function createJskitDevLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),

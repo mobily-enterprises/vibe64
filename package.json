@@ -44,7 +44,7 @@
     "access": "public"
   },
   "engines": {
-    "node": "22.x"
+    "node": "26.x"
   },
   "scripts": {
     "prepack": "npm run verify:packages && npm run build && npm run prune:packaged-deps",

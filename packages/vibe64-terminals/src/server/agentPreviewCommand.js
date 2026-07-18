@@ -1251,7 +1251,7 @@ async function prepareAgentPreviewCommand({
   const packRoot = runtimePackRoot({
     env
   });
-  const [nodeBinDir] = runtimePackBinPaths("node22", {
+  const [nodeBinDir] = runtimePackBinPaths("node26", {
     env
   });
   const managedNodePath = path.join(nodeBinDir, "node");

@@ -348,7 +348,7 @@ test("Studio Setup doctor commands use the gateway shared Playwright runtime env
     "-e",
     "console.log(process.env.PLAYWRIGHT_BROWSERS_PATH)"
   ], {
-    runtimes: ["node22"]
+    runtimes: ["node26"]
   });
 
   assert.equal(result.ok, true, result.output);

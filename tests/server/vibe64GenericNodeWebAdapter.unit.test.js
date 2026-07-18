@@ -71,7 +71,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -138,12 +138,12 @@ test("generic Node web adapter declares Node runtime requirements from source pa
 
     assert.deepEqual((await adapter.getRuntimeRequirements({
       targetRoot
-    })).map((requirement) => requirement.id), ["nodejs-22"]);
+    })).map((requirement) => requirement.id), ["nodejs-26"]);
 
     await writeProjectFile(targetRoot, "bun.lock", "");
     assert.deepEqual((await adapter.getRuntimeRequirements({
       targetRoot
-    })).map((requirement) => requirement.id), ["nodejs-22", "bun"]);
+    })).map((requirement) => requirement.id), ["nodejs-26", "bun"]);
   });
 });
 
@@ -376,7 +376,7 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     assert.equal(descriptor.metadata.commandSource, "package-script");
     assert.equal(descriptor.metadata.packageManager, "npm");
     assert.equal(descriptor.metadata.serverScript, "start");
-    assert.deepEqual(descriptor.runtimes, ["node22"]);
+    assert.deepEqual(descriptor.runtimes, ["node26"]);
 
     const descriptorWithoutPort = await createGenericNodeWebLaunchDescriptor({
       launchTargetId: "dev",

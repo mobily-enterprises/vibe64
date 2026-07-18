@@ -79,7 +79,7 @@ function javascriptCodeIndexCommand({
 }
 
 function javascriptCodeIndexRuntimeCommand(options = {}) {
-  return runtimeShellCommand(["nodejs-22"], javascriptCodeIndexCommand(options));
+  return runtimeShellCommand(["nodejs-26"], javascriptCodeIndexCommand(options));
 }
 
 function javascriptAdapterCodeIndexCommand({

@@ -201,7 +201,7 @@ test("Codex git wrapper transports command, args, cwd, stdin, session id, and to
         }
       },
       env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments")
+        VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(path.dirname(root), "attachments")
       },
       sessionId,
       stateRoot: path.join(root, "state")
@@ -244,7 +244,7 @@ test("Codex git command preparation does not rewrite unchanged wrapper files", a
         }
       },
       env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments")
+        VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(path.dirname(root), "attachments")
       },
       sessionId: "idempotent-wrapper-session",
       stateRoot: path.join(root, "state")

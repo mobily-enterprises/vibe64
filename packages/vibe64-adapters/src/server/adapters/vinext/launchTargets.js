@@ -95,7 +95,7 @@ async function createVinextLaunchDescriptor({
       packageManager: packageManager.name,
       serverCommand
     },
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     urlPath: "/"
   };
 }

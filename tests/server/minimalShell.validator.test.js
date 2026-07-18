@@ -111,19 +111,17 @@ test("latest JSKIT scaffold files are present at the app root", async () => {
   }
 });
 
-test("starter shell keeps the canonical JSKIT-managed CI workflow simple", async () => {
+test("Vibe64 CI verifies the application on Node 26", async () => {
   const workflowSource = await readFile(
-    path.join(APP_ROOT, ".github", "workflows", "jskit-verify.yml"),
+    path.join(APP_ROOT, ".github", "workflows", "vibe64-verify.yml"),
     "utf8"
   );
 
-  assert.match(workflowSource, /Generated and managed by JSKIT/);
-  assert.match(workflowSource, /name: JSKIT Verify/);
+  assert.match(workflowSource, /name: Vibe64 Verify/);
+  assert.match(workflowSource, /node-version: 26/);
   assert.match(workflowSource, /run: npm run verify/);
-  assert.doesNotMatch(workflowSource, /jskit app verify --against/);
-  assert.doesNotMatch(workflowSource, /jskit app verify-ui/);
   await assert.rejects(
-    access(path.join(APP_ROOT, ".github", "workflows", "verify.yml")),
+    access(path.join(APP_ROOT, ".github", "workflows", "jskit-verify.yml")),
     /ENOENT/
   );
 });
@@ -134,7 +132,7 @@ test("docs deployment follows successful JSKIT verification on main", async () =
     "utf8"
   );
 
-  assert.match(workflowSource, /workflows:\s*\n\s*- JSKIT Verify/u);
+  assert.match(workflowSource, /workflows:\s*\n\s*- Vibe64 Verify/u);
   assert.match(workflowSource, /branches:\s*\n\s*- main/u);
   assert.match(workflowSource, /workflow_run\.conclusion == 'success'/u);
   assert.match(workflowSource, /workflow_run\.event == 'push'/u);

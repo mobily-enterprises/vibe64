@@ -54,7 +54,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -63,7 +63,7 @@ function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
   assert.doesNotMatch(command, /#php83/u);
   assert.doesNotMatch(command, /#php83Packages\.composer/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -131,10 +131,10 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assertNodeRuntimeCommand(plan.build.command, "npm run build");
     assertNodeRuntimeCommand(plan.migrate.command, "npm run db:migrate");
     assertNodeRuntimeCommand(plan.serve.command, "npm run server");
-    assert.deepEqual(plan.prepare.runtimes, ["node22"]);
-    assert.deepEqual(plan.build.runtimes, ["node22"]);
-    assert.deepEqual(plan.migrate.runtimes, ["node22"]);
-    assert.deepEqual(plan.serve.runtimes, ["node22"]);
+    assert.deepEqual(plan.prepare.runtimes, ["node26"]);
+    assert.deepEqual(plan.build.runtimes, ["node26"]);
+    assert.deepEqual(plan.migrate.runtimes, ["node26"]);
+    assert.deepEqual(plan.serve.runtimes, ["node26"]);
     assert.deepEqual(plan.requirements, [
       {
         config: {

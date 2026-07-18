@@ -2670,6 +2670,7 @@ test("assistant message acceptance does not wait for expensive provider handoff 
   const responseBeforeDeliveryFinished = response;
   assert.deepEqual(readinessInputs, [{
     connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+    providerIds: ["codex"],
     refresh: false,
     vibe64User: owner
   }]);
@@ -3693,6 +3694,7 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
       id: "connections",
       input: {
         connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+        providerIds: ["codex"],
         refresh: false,
         vibe64User
       }
@@ -4489,6 +4491,7 @@ test("session inspect disables controls when session readiness is blocked", asyn
 
   assert.deepEqual(connectionStatusInput, {
     connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+    providerIds: ["codex"],
     refresh: false,
     vibe64User: {
       email: "owner@example.com"
@@ -7350,7 +7353,7 @@ test("session creation freezes GitHub repository profile metadata", async () => 
 
   assert.equal(result.ok, true);
   assert.equal(connectionInputs.length, 1);
-  assert.deepEqual(connectionInputs[0].providerIds, ["codex", "github"]);
+  assert.deepEqual(connectionInputs[0].providerIds, ["codex"]);
   assert.equal(runtimeOptions.currentProject, currentProject);
   assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_GITHUB);
   assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);

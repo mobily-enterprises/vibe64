@@ -16,7 +16,7 @@ import {
 const LARAVEL_RUNTIME_PACKAGE_IDS = Object.freeze([
   "php-8.3",
   "composer",
-  "nodejs-22"
+  "nodejs-26"
 ]);
 
 async function fileExists(filePath = "") {

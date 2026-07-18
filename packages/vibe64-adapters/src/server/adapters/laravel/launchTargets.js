@@ -86,7 +86,7 @@ async function createLaravelLaunchDescriptor({
       serverCommand,
       serverCommandPreview
     },
-    runtimes: ["node22", "php", "composer"],
+    runtimes: ["node26", "php", "composer"],
     urlPath: "/"
   };
 }

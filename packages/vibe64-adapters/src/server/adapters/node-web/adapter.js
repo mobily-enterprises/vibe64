@@ -280,7 +280,7 @@ async function genericNodeWebAutomatedChecksHook({ worktreePath = "" } = {}) {
           automated_checks_package_manager: packageManager.name,
           automated_checks_script: verifyCommand ? VIBE64_VERIFY_SCRIPT_NAME : scriptName
         },
-        runtimes: ["node22"],
+        runtimes: ["node26"],
         script: studioCommandScript({
           command,
           intro: "Running generic Node web verification."
@@ -301,7 +301,7 @@ async function genericNodeWebCodeIndexHook({ worktreePath = "" } = {}) {
   return {
     commandPreview: codeIndexCommand.commandPreview,
     metadata: codeIndexCommand.metadata,
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     script: studioCommandScript({
       command: codeIndexCommand.command,
       commandPreview: codeIndexCommand.commandPreview,

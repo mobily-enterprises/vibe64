@@ -211,19 +211,19 @@ async function createWorkflowSessionRoot(root) {
 test("workflow hook normalization preserves runtimes", () => {
   assert.deepEqual(normalizeHookCommandResult({
     command: "npm install",
-    runtimes: ["node22", "", " mariadb "]
-  }).runtimes, ["node22", "mariadb"]);
+    runtimes: ["node26", "", " mariadb "]
+  }).runtimes, ["node26", "mariadb"]);
 
   assert.deepEqual(normalizeHookCommandResult("npm test", {
-    runtimes: ["node22"]
-  }).runtimes, ["node22"]);
+    runtimes: ["node26"]
+  }).runtimes, ["node26"]);
 });
 
 test("managed command runtimes add required tools once", () => {
-  assert.deepEqual(requiredCommandRuntimes(["git"], ["gh", " git ", "node22", "gh"]), [
+  assert.deepEqual(requiredCommandRuntimes(["git"], ["gh", " git ", "node26", "gh"]), [
     "git",
     "gh",
-    "node22"
+    "node26"
   ]);
 });
 
@@ -233,15 +233,15 @@ test("workflow command specs preserve hook runtimes", async () => {
     const hooks = {
       automatedChecks: async () => ({
         command: "npm run verify",
-        runtimes: ["node22"]
+        runtimes: ["node26"]
       }),
       installDependencies: async () => ({
         command: "npm install",
-        runtimes: ["node22"]
+        runtimes: ["node26"]
       }),
       updateCodeIndex: async () => ({
         command: "npm run vibe64:index",
-        runtimes: ["node22"]
+        runtimes: ["node26"]
       })
     };
 
@@ -251,7 +251,7 @@ test("workflow command specs preserve hook runtimes", async () => {
       targetRoot
     });
     assert.equal(installSpec.ok, true);
-    assert.deepEqual(installSpec.runtimes, ["node22"]);
+    assert.deepEqual(installSpec.runtimes, ["node26"]);
 
     const checksSpec = await runAutomatedChecksTerminalSpec({
       hooks,
@@ -259,7 +259,7 @@ test("workflow command specs preserve hook runtimes", async () => {
       targetRoot
     });
     assert.equal(checksSpec.ok, true);
-    assert.deepEqual(checksSpec.runtimes, ["node22"]);
+    assert.deepEqual(checksSpec.runtimes, ["node26"]);
 
     const codeIndexSpec = await updateCodeIndexTerminalSpec({
       hooks,
@@ -267,7 +267,7 @@ test("workflow command specs preserve hook runtimes", async () => {
       targetRoot
     });
     assert.equal(codeIndexSpec.ok, true);
-    assert.deepEqual(codeIndexSpec.runtimes, ["node22"]);
+    assert.deepEqual(codeIndexSpec.runtimes, ["node26"]);
   });
 });
 
@@ -276,7 +276,7 @@ test("implemented workflow adapters declare runtimes for install, checks, and co
     {
       adapter: createJskitTargetAdapter(),
       dependencies: {},
-      expectedRuntimes: ["node22"],
+      expectedRuntimes: ["node26"],
       label: "jskit"
     },
     {
@@ -284,7 +284,7 @@ test("implemented workflow adapters declare runtimes for install, checks, and co
       dependencies: {
         vite: "^8.0.0"
       },
-      expectedRuntimes: ["node22"],
+      expectedRuntimes: ["node26"],
       label: "node-web"
     },
     {
@@ -292,7 +292,7 @@ test("implemented workflow adapters declare runtimes for install, checks, and co
       dependencies: {
         next: "^16.0.0"
       },
-      expectedRuntimes: ["node22"],
+      expectedRuntimes: ["node26"],
       label: "nextjs"
     },
     {
@@ -300,13 +300,13 @@ test("implemented workflow adapters declare runtimes for install, checks, and co
       dependencies: {
         vinext: "^0.1.0"
       },
-      expectedRuntimes: ["node22"],
+      expectedRuntimes: ["node26"],
       label: "vinext"
     },
     {
       adapter: createLaravelTargetAdapter(),
       createProject: createLaravelWorkflowProject,
-      expectedRuntimes: ["node22", "php", "composer"],
+      expectedRuntimes: ["node26", "php", "composer"],
       label: "laravel"
     }
   ];
@@ -1863,7 +1863,7 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
         beforeMerge: async () => ({
           command: "npm run verify",
           intro: "Checking before merge.",
-          runtimes: ["node22"]
+          runtimes: ["node26"]
         })
       },
       session: {
@@ -1877,7 +1877,7 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
     });
 
     assert.equal(spec.ok, true);
-    assert.deepEqual(spec.runtimes, ["git", "gh", "node22"]);
+    assert.deepEqual(spec.runtimes, ["git", "gh", "node26"]);
     const script = spec.args.at(-1);
     assert.match(script, /printf '\[studio\] Checking before merge\.\\n'/u);
     assert.match(script, /npm run verify/u);

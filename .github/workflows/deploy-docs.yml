@@ -3,7 +3,7 @@ name: Deploy Docs
 on:
   workflow_run:
     workflows:
-      - JSKIT Verify
+      - Vibe64 Verify
     types:
       - completed
     branches:
@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
 
       - name: Configure Pages

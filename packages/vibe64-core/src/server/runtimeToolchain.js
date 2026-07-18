@@ -14,7 +14,7 @@ import {
   projectRuntimeLockPath
 } from "./projectManifest.js";
 
-const VIBE64_RUNTIME_CATALOG_VERSION = "2026-07-06.v1";
+const VIBE64_RUNTIME_CATALOG_VERSION = "2026-07-19.v1";
 const VIBE64_RUNTIME_LOCK_SCHEMA = "vibe64.runtime-lock";
 const VIBE64_RUNTIME_LOCK_SCHEMA_VERSION = 1;
 const VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX = "nix";
@@ -23,12 +23,12 @@ const VIBE64_NIX_COMMAND = "nix";
 const VIBE64_NIX_EXPERIMENTAL_FEATURES = "nix-command flakes";
 const VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE_ENV = "VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE";
 const VIBE64_NIXPKGS_PIN = deepFreeze({
-  flakeRef: "github:NixOS/nixpkgs/50ab793786d9de88ee30ec4e4c24fb4236fc2674",
-  id: "nixpkgs-24.11-20250630",
-  lastModified: 1751274312,
-  narHash: "sha256-/bVBlRpECLVzjV19t5KMdMFWSwKLtb5RyXdjz3LJT+g=",
-  originalRef: "github:NixOS/nixpkgs/nixos-24.11",
-  rev: "50ab793786d9de88ee30ec4e4c24fb4236fc2674"
+  flakeRef: "github:NixOS/nixpkgs/293d6abedf0478e681a4dfcfcb35b30fc796a32f",
+  id: "nixpkgs-26.05-20260717",
+  lastModified: 1784280462,
+  narHash: "sha256-DtoqIqM7VkR6NxAkcLpMwmi02USwWb3JdmNGLyhthc0=",
+  originalRef: "github:NixOS/nixpkgs/nixos-26.05",
+  rev: "293d6abedf0478e681a4dfcfcb35b30fc796a32f"
 });
 
 const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
@@ -36,7 +36,7 @@ const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
   "composer",
   "git",
   "mariadb",
-  "nodejs-22",
+  "nodejs-26",
   "php-8.3",
   "playwright",
   "postgresql",
@@ -44,41 +44,42 @@ const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
 ]));
 
 const VIBE64_RUNTIME_CATALOG = deepFreeze({
-  "nodejs-22": {
+  "nodejs-26": {
     family: "node",
-    id: "nodejs-22",
-    label: "Node.js 22",
+    id: "nodejs-26",
+    label: "Node.js 26",
     provider: VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX,
     role: "project-runtime",
     nix: {
-      attr: "nodejs_22",
+      attr: "nodejs_26",
+      companionAttrs: ["corepack"],
       flakeRef: VIBE64_NIXPKGS_PIN.flakeRef,
       pin: VIBE64_NIXPKGS_PIN.id
     },
     tools: {
       corepack: {
         command: "corepack",
-        expected: "Corepack from Node.js 22 is available.",
+        expected: "Corepack for Node.js 26 is available.",
         label: "Corepack",
         versionArgs: ["--version"],
         versionPattern: "^\\d+\\."
       },
       node: {
         command: "node",
-        expected: "Node.js 22 is available.",
+        expected: "Node.js 26 is available.",
         label: "Node.js",
         versionArgs: ["--version"],
-        versionPattern: "^v22\\."
+        versionPattern: "^v26\\."
       },
       npm: {
         command: "npm",
-        expected: "npm from Node.js 22 is available.",
+        expected: "npm from Node.js 26 is available.",
         label: "npm",
         versionArgs: ["--version"],
         versionPattern: "^\\d+\\."
       }
     },
-    version: "22.16.0"
+    version: "26.5.0"
   },
   mariadb: {
     family: "mariadb",
@@ -97,17 +98,17 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "MariaDB client is available.",
         label: "MariaDB client",
         versionArgs: ["--version"],
-        versionPattern: "\\b10\\.11\\."
+        versionPattern: "\\b11\\.4\\."
       },
       mariadbd: {
         command: "mariadbd",
         expected: "MariaDB server is available.",
         label: "MariaDB server",
         versionArgs: ["--version"],
-        versionPattern: "\\b10\\.11\\."
+        versionPattern: "\\b11\\.4\\."
       }
     },
-    version: "10.11.11"
+    version: "11.4.12"
   },
   postgresql: {
     family: "postgres",
@@ -143,7 +144,7 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         versionPattern: "\\b16\\."
       }
     },
-    version: "16"
+    version: "16.14"
   },
   "php-8.3": {
     family: "php",
@@ -165,7 +166,7 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         versionPattern: "^PHP 8\\.3\\."
       }
     },
-    version: "8.3.22"
+    version: "8.3.32"
   },
   composer: {
     family: "composer",
@@ -184,10 +185,10 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "Composer is available.",
         label: "Composer",
         versionArgs: ["--version"],
-        versionPattern: "\\b2\\.8\\."
+        versionPattern: "\\b2\\.10\\."
       }
     },
-    version: "2.8.5"
+    version: "2.10.2"
   },
   git: {
     family: "git",
@@ -209,7 +210,7 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         versionPattern: "git version"
       }
     },
-    version: "2.47.2"
+    version: "2.54.0"
   },
   gh: {
     family: "gh",
@@ -231,7 +232,7 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         versionPattern: "gh version"
       }
     },
-    version: "2.63.0"
+    version: "2.96.0"
   },
   ripgrep: {
     family: "ripgrep",
@@ -250,10 +251,10 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "ripgrep is available.",
         label: "ripgrep",
         versionArgs: ["--version"],
-        versionPattern: "ripgrep 14\\.1\\."
+        versionPattern: "ripgrep 15\\.1\\."
       }
     },
-    version: "14.1.1"
+    version: "15.1.0"
   },
   bubblewrap: {
     family: "bubblewrap",
@@ -272,10 +273,10 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "bubblewrap is available.",
         label: "bubblewrap",
         versionArgs: ["--version"],
-        versionPattern: "\\b0\\.11\\.0\\b"
+        versionPattern: "\\b0\\.11\\.2\\b"
       }
     },
-    version: "0.11.0"
+    version: "0.11.2"
   },
   playwright: {
     family: "playwright",
@@ -294,10 +295,10 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "Playwright is available.",
         label: "Playwright",
         versionArgs: ["--version"],
-        versionPattern: "Version 1\\.50\\."
+        versionPattern: "Version 1\\.59\\."
       }
     },
-    version: "1.50.0"
+    version: "1.59.1"
   },
   bun: {
     family: "bun",
@@ -316,10 +317,10 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
         expected: "Bun is available.",
         label: "Bun",
         versionArgs: ["--version"],
-        versionPattern: "^1\\.1\\."
+        versionPattern: "^1\\.3\\."
       }
     },
-    version: "1.1.31"
+    version: "1.3.13"
   },
   codex: {
     family: "codex",
@@ -397,16 +398,23 @@ function runtimePackageDefaultTool(packageId = "") {
 }
 
 function runtimePackageInstallable(entry = {}) {
-  if (entry?.provider !== VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX || !entry?.nix?.attr) {
-    return "";
+  return runtimePackageInstallables(entry)[0] || "";
+}
+
+function runtimePackageInstallables(entry = {}) {
+  if (entry?.provider !== VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX) {
+    return [];
   }
-  return `${entry.nix.flakeRef || VIBE64_NIXPKGS_PIN.flakeRef}#${entry.nix.attr}`;
+  const flakeRef = entry.nix?.flakeRef || VIBE64_NIXPKGS_PIN.flakeRef;
+  return [entry.nix?.attr, ...(entry.nix?.companionAttrs || [])]
+    .filter(Boolean)
+    .map((attr) => `${flakeRef}#${attr}`);
 }
 
 function nixShellArgs(packageIds = [], commandArgs = []) {
   const installables = runtimePackages(packageIds)
     .filter((entry) => entry.provider === VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX)
-    .map(runtimePackageInstallable)
+    .flatMap(runtimePackageInstallables)
     .filter(Boolean);
   return [
     "--extra-experimental-features",
@@ -592,6 +600,11 @@ function runtimeLockPackageRecord(requirement = {}) {
   if (entry.provider === VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX) {
     record.nix = {
       attr: entry.nix.attr,
+      ...(entry.nix.companionAttrs?.length
+        ? {
+            companionAttrs: entry.nix.companionAttrs
+          }
+        : {}),
       flakeRef: entry.nix.flakeRef || VIBE64_NIXPKGS_PIN.flakeRef,
       narHash: VIBE64_NIXPKGS_PIN.narHash,
       nixpkgsPin: entry.nix.pin || VIBE64_NIXPKGS_PIN.id,

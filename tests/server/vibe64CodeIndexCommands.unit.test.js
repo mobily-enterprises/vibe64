@@ -39,7 +39,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 

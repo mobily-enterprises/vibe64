@@ -46,7 +46,8 @@ const SESSION_READINESS_STAGES = Object.freeze([
   {
     ...CONNECTION_STAGES[0],
     input: {
-      connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
+      connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+      providerIds: ["codex"]
     }
   },
   {

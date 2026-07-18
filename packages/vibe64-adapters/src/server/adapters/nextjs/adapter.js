@@ -318,7 +318,7 @@ async function nextjsAutomatedChecksHook({ worktreePath = "" } = {}) {
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     script: studioCommandScript({
       command: buildCommand,
       intro: "Running Next.js production build."
@@ -338,7 +338,7 @@ async function nextjsCodeIndexHook({ worktreePath = "" } = {}) {
   return {
     commandPreview: codeIndexCommand.commandPreview,
     metadata: codeIndexCommand.metadata,
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     script: studioCommandScript({
       command: codeIndexCommand.command,
       commandPreview: codeIndexCommand.commandPreview,

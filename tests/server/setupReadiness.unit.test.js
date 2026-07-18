@@ -254,7 +254,8 @@ test("session readiness excludes project setup diagnostics", async () => {
       id: "connections",
       input: {
         ...input,
-        connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
+        connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
+        providerIds: ["codex"]
       }
     },
     {
@@ -262,6 +263,35 @@ test("session readiness excludes project setup diagnostics", async () => {
       input
     }
   ]);
+});
+
+test("session readiness does not let GitHub status block a Codex conversation", async () => {
+  let connectionInput = null;
+  const readiness = await readVibe64SessionReadiness({
+    connectionSetupService: {
+      async getStatus(input = {}) {
+        connectionInput = input;
+        const githubRequested = input.providerIds.includes("github");
+        return {
+          blockedReason: githubRequested ? "GitHub rejected the saved login." : "",
+          ready: !githubRequested
+        };
+      }
+    }
+  }, {
+    includeStudioSetup: false,
+    input: {
+      providerIds: ["codex", "github"],
+      vibe64User: {
+        github: {
+          login: "ada"
+        }
+      }
+    }
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(connectionInput.providerIds, ["codex"]);
 });
 
 test("session readiness can omit Studio Setup for composed runtimes", async () => {

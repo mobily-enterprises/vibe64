@@ -96,7 +96,7 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
     label,
     runtimeConfigEnvironment,
     runtimeConfigPhases,
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     targetRoot
   });
 }

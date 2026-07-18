@@ -25,7 +25,6 @@ import {
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
-  projectRequiresGithubConnection,
   projectRepositoryView,
   workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
@@ -199,18 +198,12 @@ function sessionListOptions(input = {}) {
   throw new Error(`Unknown Vibe64 session archive: ${archive}`);
 }
 
-function readinessOptions(input = {}, setupOptions = {}, {
-  providerIds = []
-} = {}) {
-  const selectedProviderIds = Array.isArray(providerIds)
-    ? providerIds.filter(Boolean)
-    : [];
+function readinessOptions(input = {}, setupOptions = {}) {
   return {
     ...normalizeSetupOptions(setupOptions),
     input: {
       vibe64User: input?.vibe64User || null,
-      refresh: input?.refresh === true,
-      ...(selectedProviderIds.length > 0 ? { providerIds: selectedProviderIds } : {})
+      refresh: input?.refresh === true
     }
   };
 }
@@ -2686,12 +2679,6 @@ function sessionProjectRepositoryMetadata(project = {}) {
   };
 }
 
-function sessionConnectionProviderIds(project = {}) {
-  return projectRequiresGithubConnection(project)
-    ? ["codex", "github"]
-    : ["codex"];
-}
-
 function sessionProjectMetadata(projectType = {}, project = {}) {
   return {
     adapter_id: projectType.adapter?.id || projectType.projectType,
@@ -3443,9 +3430,7 @@ function createService({
             }),
             assertVibe64SessionReady(
               setupServices,
-              readinessOptions(input, normalizedSetupOptions, {
-                providerIds: sessionConnectionProviderIds(currentProject || {})
-              })
+              readinessOptions(input, normalizedSetupOptions)
             )
           ]);
           vibe64SessionDebugLog("server.service.createSession.prerequisites.done", {

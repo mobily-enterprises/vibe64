@@ -34,8 +34,7 @@
           - /opt/vibe64/runtime-packs/manifest.json
 
       - Metal realizes and GC-roots approved Nix closures:
-          - Node 22
-          - Node 20 if needed
+          - Node 26
           - Git
           - ripgrep
           - bubblewrap
@@ -46,8 +45,8 @@
           - Playwright browser dependencies/fonts
 
       - Expose stable wrappers:
-          - /opt/vibe64/runtime-packs/node22/bin/node
-          - /opt/vibe64/runtime-packs/node22/bin/npm
+          - /opt/vibe64/runtime-packs/node26/bin/node
+          - /opt/vibe64/runtime-packs/node26/bin/npm
           - /opt/vibe64/runtime-packs/php84/bin/php
           - /opt/vibe64/runtime-packs/composer/bin/composer
           - /opt/vibe64/runtime-packs/mariadb/bin/mariadb

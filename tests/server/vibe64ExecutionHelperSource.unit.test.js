@@ -32,7 +32,7 @@ test("execution helper default PATH includes every first-class runtime pack", as
   const source = await helperSource();
 
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/operator-clis\/bin/u);
-  assert.match(source, /\/opt\/vibe64\/runtime-packs\/node22\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/node26\/bin/u);
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/git\/bin/u);
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/gh\/bin/u);
   assert.match(source, /\/opt\/vibe64\/runtime-packs\/mariadb\/bin/u);

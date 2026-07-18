@@ -294,8 +294,8 @@ async function runRuntimeDown(cwd = process.cwd(), stdout = process.stdout) {
 
 async function runRuntimeSet(args = [], cwd = process.cwd(), stdout = process.stdout) {
   const [family = "", value = ""] = args;
-  if (family === "node" && value === "22") {
-    stdout.write("Node runtime is fixed to Vibe64-supported Node 22.\n");
+  if (family === "node" && value === "26") {
+    stdout.write("Node runtime is fixed to Vibe64-supported Node 26.\n");
     await realizeCliRuntime(cwd, stdout);
     return 0;
   }
@@ -313,7 +313,7 @@ async function runRuntimeSet(args = [], cwd = process.cwd(), stdout = process.st
       return 0;
     }
   }
-  stdout.write("Usage: vibe64 runtime set node 22 | vibe64 runtime set database mariadb | vibe64 runtime set database none\n");
+  stdout.write("Usage: vibe64 runtime set node 26 | vibe64 runtime set database mariadb | vibe64 runtime set database none\n");
   return 1;
 }
 

@@ -896,7 +896,7 @@ test("launch terminal start passes launch spec runtimes through the execution ga
                   },
                   ok: true,
                   reuseRunning: false,
-                  runtimes: ["node22", "mariadb", "git"]
+                  runtimes: ["node26", "mariadb", "git"]
                 };
               },
               async listLaunchTargets() {
@@ -938,7 +938,7 @@ test("launch terminal start passes launch spec runtimes through the execution ga
     }));
 
     assert.equal(terminal.ok, true);
-    assert.deepEqual(requests[0].runtimes, ["git", "node22", "mariadb"]);
+    assert.deepEqual(requests[0].runtimes, ["git", "node26", "mariadb"]);
   });
 });
 
@@ -3024,7 +3024,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     const codexToolHomeSource = homedir();
     const systemRoot = path.join(targetRoot, "system-root");
 
-    const attachmentRoot = path.join(targetRoot, "online-state", "attachments");
+    const attachmentRoot = path.join(path.dirname(targetRoot), "attachments");
     const previousAttachmentRoot = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
     const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
     process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = VIBE64_LOCAL_RUNTIME_NAMESPACE;
@@ -11317,7 +11317,7 @@ test("Vibe64 command terminal forwards explicit runtimes through GitHub gateway 
         commandPreview: "npm install --foreground-scripts --no-audit --no-fund",
         cwd: targetRoot,
         requiresHostGithubCredentials: true,
-        runtimes: ["node22"]
+        runtimes: ["node26"]
       },
       target: "command",
       targetRoot,
@@ -11327,7 +11327,7 @@ test("Vibe64 command terminal forwards explicit runtimes through GitHub gateway 
     assert.equal(result.ok, true);
     assert.equal(startedRequest.purpose, "github");
     assert.equal(startedRequest.gitTransport, "github-https");
-    assert.deepEqual(startedRequest.runtimes, ["node22"]);
+    assert.deepEqual(startedRequest.runtimes, ["node26"]);
   });
 });
 
@@ -11660,7 +11660,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
         return {
           ...spec,
           requiresHostGithubCredentials: true,
-          runtimes: ["node22"],
+          runtimes: ["node26"],
           successMetadata: {
             ...spec.successMetadata,
             source_cache_path: path.join(targetRoot, "git-cache", "repository.git"),
@@ -11770,7 +11770,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     });
     assert.equal(startedRequest.purpose, "github");
     assert.equal(startedRequest.gitTransport, "github-https");
-    assert.deepEqual(startedRequest.runtimes, ["node22"]);
+    assert.deepEqual(startedRequest.runtimes, ["node26"]);
     assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
     assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
     assert.deepEqual(startedRequest.gitSafeDirectories, [

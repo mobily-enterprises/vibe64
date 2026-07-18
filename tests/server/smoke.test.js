@@ -375,7 +375,7 @@ test("Vibe64 project routes persist project type and config manifests", async ()
       const runtimeLock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
       assert.equal(runtimeLock.adapter.id, "jskit");
       assert.equal(runtimeLock.project.projectType, "jskit");
-      assert.deepEqual(runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
+      assert.deepEqual(runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-26"]);
       assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     });
   });

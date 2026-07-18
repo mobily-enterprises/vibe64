@@ -1,4 +1,4 @@
-#!/opt/vibe64/runtime-packs/node22/bin/node
+#!/opt/vibe64/runtime-packs/node26/bin/node
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -37,8 +37,7 @@ const BLOCKED_ENV_NAMES = new Set([
 const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/policy-bin",
   "/opt/vibe64/runtime-packs/operator-clis/bin",
-  "/opt/vibe64/runtime-packs/node22/bin",
-  "/opt/vibe64/runtime-packs/node20/bin",
+  "/opt/vibe64/runtime-packs/node26/bin",
   "/opt/vibe64/runtime-packs/git/bin",
   "/opt/vibe64/runtime-packs/gh/bin",
   "/opt/vibe64/runtime-packs/ripgrep/bin",

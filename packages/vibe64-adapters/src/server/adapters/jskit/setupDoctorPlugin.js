@@ -131,10 +131,10 @@ function createJskitSetupDoctorPlugin({
         id: "node",
         label: "Node",
         commandArgs: ["node", "--version"],
-        expected: "Node 22 is available through the Vibe64 runtime toolchain.",
+        expected: "Node 26 is available through the Vibe64 runtime toolchain.",
         explanation: "JSKIT Project Setup runs package scripts through the Vibe64-selected Node runtime.",
-        runtimes: ["node22"],
-        validate: (output) => runtimeToolVersionMatches(output, "nodejs-22", "node")
+        runtimes: ["node26"],
+        validate: (output) => runtimeToolVersionMatches(output, "nodejs-26", "node")
       });
       const npmCheck = toolkit.hostCommandCheck({
         id: "npm",
@@ -142,14 +142,14 @@ function createJskitSetupDoctorPlugin({
         commandArgs: ["npm", "--version"],
         expected: "npm is available through the Vibe64 runtime toolchain.",
         explanation: "JSKIT Project Setup uses npm from the Vibe64-selected Node runtime.",
-        runtimes: ["node22"],
-        validate: (output) => runtimeToolVersionMatches(output, "nodejs-22", "npm")
+        runtimes: ["node26"],
+        validate: (output) => runtimeToolVersionMatches(output, "nodejs-26", "npm")
       });
 
       return [
         runtimeLockCheck(),
         {
-          expected: "Node 22 is available through the Vibe64 runtime toolchain.",
+          expected: "Node 26 is available through the Vibe64 runtime toolchain.",
           id: "node",
           label: "Node",
           run() {

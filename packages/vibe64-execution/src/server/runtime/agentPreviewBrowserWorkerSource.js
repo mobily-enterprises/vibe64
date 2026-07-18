@@ -229,7 +229,7 @@ let previewInstance = "";
 let applicationIdentity = null;
 let commandQueue = Promise.resolve();
 let closing = false;
-let lastUsedAt = Date.now();
+let lastUsedAt = 0;
 let controlHealthFailures = 0;
 let shutdownPromise = null;
 let browserProcessGroups = [];
@@ -832,7 +832,7 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(socketPath);
 const idleTimer = setInterval(() => {
-  if (Date.now() - lastUsedAt < idleTimeoutMs) {
+  if (!lastUsedAt || Date.now() - lastUsedAt < idleTimeoutMs) {
     return;
   }
   closeServerAndExit();

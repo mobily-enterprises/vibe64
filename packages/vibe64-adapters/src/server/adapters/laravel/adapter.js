@@ -329,7 +329,7 @@ function laravelRuntimeRequirements({
     runtimeRequirement("composer", {
       tool: "composer"
     }),
-    runtimeRequirement("nodejs-22", {
+    runtimeRequirement("nodejs-26", {
       tool: "node"
     }),
     databaseRuntime === "mariadb"
@@ -355,7 +355,7 @@ async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
     metadata: {
       dependencies_package_manager: packageManager.name
     },
-    runtimes: ["node22", "php", "composer"],
+    runtimes: ["node26", "php", "composer"],
     script: runtimeCommand
   };
 }
@@ -390,7 +390,7 @@ async function laravelAutomatedChecksHook({ worktreePath = "" } = {}) {
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
-    runtimes: ["node22", "php", "composer"],
+    runtimes: ["node26", "php", "composer"],
     script: studioCommandScript({
       command: runtimeCommand,
       commandPreview: command,
@@ -429,7 +429,7 @@ async function laravelCodeIndexHook({ worktreePath = "" } = {}) {
       code_index_package_manager: composerIndexCommand ? "composer" : packageManager.name,
       code_index_path: DEFAULT_CODE_INDEX_RELATIVE_PATH
     },
-    runtimes: ["node22", "php", "composer"],
+    runtimes: ["node26", "php", "composer"],
     script: studioCommandScript({
       command: runtimeCommand,
       commandPreview,

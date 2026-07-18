@@ -218,7 +218,7 @@ async function nodeInstallWorkflowHook({ worktreePath = "" } = {}) {
     metadata: {
       dependencies_package_manager: packageManager.name
     },
-    runtimes: ["node22"]
+    runtimes: ["node26"]
   };
 }
 

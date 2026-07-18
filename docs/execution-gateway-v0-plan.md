@@ -101,7 +101,7 @@ await runVibe64Command({
   stdin,
   mode: "capture" | "pty" | "detached",
   envPolicy: "session" | "project" | "preview" | "auth" | "deployment",
-  runtimes: ["node22", "git", "gh", "mysql", "playwright"]
+  runtimes: ["node26", "git", "gh", "mysql", "playwright"]
 });
 ```
 
@@ -301,8 +301,7 @@ await runVibe64Command({
 
 - [x] Implement `resolveRuntimePath`.
 - [x] Define runtime packs in one place.
-- [x] Include Node 22.
-- [x] Include Node 20.
+- [x] Include Node 26.
 - [x] Include Git.
 - [x] Include GitHub CLI.
 - [x] Include ripgrep.

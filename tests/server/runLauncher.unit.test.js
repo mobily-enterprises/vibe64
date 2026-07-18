@@ -160,7 +160,7 @@ test("runtime CLI doctor uses Nix commands and project lock validation", async (
     });
     assert.equal(status, 0);
     assert.ok(calls.some((call) => call.includes("eval")));
-    assert.ok(calls.some((call) => call.some((arg) => String(arg).includes("#nodejs_22"))));
+    assert.ok(calls.some((call) => call.some((arg) => String(arg).includes("#nodejs_26"))));
   } finally {
     await rm(targetRoot, {
       force: true,

@@ -49,7 +49,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -58,7 +58,7 @@ function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
   assert.doesNotMatch(command, /#php83/u);
   assert.doesNotMatch(command, /#php83Packages\.composer/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -386,7 +386,7 @@ test("laravel launch target describes Artisan serve and runs through the Vibe64 
     assert.equal(descriptor.commands[1].commandPreview, "php artisan serve --host=0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.commandSource, "artisan");
     assert.equal(descriptor.metadata.mode, "built");
-    assert.deepEqual(descriptor.runtimes, ["node22", "php", "composer"]);
+    assert.deepEqual(descriptor.runtimes, ["node26", "php", "composer"]);
 
     const launchTargets = await listLaravelLaunchTargets({
       session: {
@@ -437,7 +437,7 @@ test("laravel adapter declares Vibe64-owned runtime requirements", async () => {
   })).map((requirement) => requirement.id), [
     "php-8.3",
     "composer",
-    "nodejs-22",
+    "nodejs-26",
     "mariadb"
   ]);
 
@@ -450,7 +450,7 @@ test("laravel adapter declares Vibe64-owned runtime requirements", async () => {
   })).map((requirement) => requirement.id), [
     "php-8.3",
     "composer",
-    "nodejs-22"
+    "nodejs-26"
   ]);
 
   await assert.rejects(

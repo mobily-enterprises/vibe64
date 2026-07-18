@@ -287,7 +287,7 @@ test("execution gateway gives detached Codex app-server commands the shared brow
         tenant: "sas"
       },
       purpose: "codex",
-      runtimes: ["node22", "git", "playwright"],
+      runtimes: ["node26", "git", "playwright"],
       session: {
         metadata: {
           workflow_driver_username: "merc"
@@ -450,14 +450,14 @@ test("execution gateway gives preview and terminal commands the same runtime PAT
     args,
     command: process.execPath,
     purpose: "terminal",
-    runtimes: ["node22", "git", "mysql", "playwright"]
+    runtimes: ["node26", "git", "mysql", "playwright"]
   });
   const preview = await runVibe64Command({
     args,
     command: process.execPath,
     envPolicy: "preview",
     purpose: "preview",
-    runtimes: ["node22", "git", "mysql", "playwright"]
+    runtimes: ["node26", "git", "mysql", "playwright"]
   });
 
   assert.equal(terminal.ok, true, terminal.output);
@@ -692,7 +692,7 @@ test("execution gateway gives deployment commands shared runtimes by default", a
 
   assert.equal(result.ok, true, result.output);
   const pathParts = result.stdout.split(":");
-  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/node22/bin"));
+  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/node26/bin"));
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/git/bin"));
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/bun/bin"));
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/playwright/bin"));
@@ -1052,8 +1052,7 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
       VIBE64_RUNTIME_PACK_ROOT: "/runtime-packs"
     },
     runtimes: [
-      "node22",
-      "node20",
+      "node26",
       "git",
       "gh",
       "mysql",
@@ -1070,10 +1069,9 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
   assert.equal(parts[0], "/tmp/vibe64-git-shim");
-  assert.deepEqual(parts.slice(1, 13), [
+  assert.deepEqual(parts.slice(1, 12), [
     "/runtime-packs/policy-bin",
-    "/runtime-packs/node22/bin",
-    "/runtime-packs/node20/bin",
+    "/runtime-packs/node26/bin",
     "/runtime-packs/git/bin",
     "/runtime-packs/gh/bin",
     "/runtime-packs/mariadb/bin",
@@ -1101,12 +1099,11 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 16), [
+  assert.deepEqual(parts.slice(0, 15), [
     "/runtime-packs/policy-bin",
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
-    "/runtime-packs/node22/bin",
-    "/runtime-packs/node20/bin",
+    "/runtime-packs/node26/bin",
     "/runtime-packs/git/bin",
     "/runtime-packs/gh/bin",
     "/runtime-packs/mariadb/bin",
@@ -1124,8 +1121,8 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 test("execution gateway lets declared runtime tools win before guard-bin", async () => {
   const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-guard-"));
   await writeExecutable(
-    path.join(runtimeRoot, "node22", "bin", "npm"),
-    "#!/usr/bin/env bash\nprintf '%s\\n' vibe64-node22-npm\n"
+    path.join(runtimeRoot, "node26", "bin", "npm"),
+    "#!/usr/bin/env bash\nprintf '%s\\n' vibe64-node26-npm\n"
   );
   await writeExecutable(
     path.join(runtimeRoot, "guard-bin", "npm"),
@@ -1142,13 +1139,13 @@ test("execution gateway lets declared runtime tools win before guard-bin", async
       VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
     },
     purpose: "terminal",
-    runtimes: ["node22"]
+    runtimes: ["node26"]
   });
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
-    path.join(runtimeRoot, "node22", "bin", "npm"),
-    "vibe64-node22-npm"
+    path.join(runtimeRoot, "node26", "bin", "npm"),
+    "vibe64-node26-npm"
   ]);
 });
 
@@ -1158,8 +1155,8 @@ test("execution gateway blocks managed host tools when runtimes are explicitly e
     path.join(runtimeRoot, "guard-bin", "npm"),
     [
       "#!/usr/bin/env bash",
-      "echo 'Vibe64 runtime error: npm requires runtime node22 or node20.' >&2",
-      "echo 'The command did not declare one of those runtimes, so host npm was blocked.' >&2",
+      "echo 'Vibe64 runtime error: npm requires runtime node26.' >&2",
+      "echo 'The command did not declare that runtime, so host npm was blocked.' >&2",
       "exit 127"
     ].join("\n")
   );
@@ -1178,7 +1175,7 @@ test("execution gateway blocks managed host tools when runtimes are explicitly e
   });
 
   assert.equal(result.ok, false, result.output);
-  assert.match(result.output, /Vibe64 runtime error: npm requires runtime node22 or node20\./u);
+  assert.match(result.output, /Vibe64 runtime error: npm requires runtime node26\./u);
   assert.match(result.output, /host npm was blocked/u);
 });
 

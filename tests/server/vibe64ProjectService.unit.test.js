@@ -1991,7 +1991,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
     assert.equal(defaults.defaults.defaults[JSKIT_USER_MODE_CONFIG], JSKIT_USER_MODE_USERS);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mariadb");
-    assert.deepEqual(defaults.defaults.runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
+    assert.deepEqual(defaults.defaults.runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-26"]);
     assert.deepEqual(defaults.defaults.runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const userModeField = defaults.defaults.fields.find((field) => field.id === JSKIT_USER_MODE_CONFIG);

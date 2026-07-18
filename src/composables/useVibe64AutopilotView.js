@@ -2405,7 +2405,7 @@ function useVibe64AutopilotView(props, emit) {
     if (actionResultStatus === "blocked" || actionResultStatus === "failed") {
       return false;
     }
-    const finishAction = sourceAction.type === "finish" || sourceAction.id === "finish_session";
+    const finishAction = sourceAction.type === "finish";
     const sessionClosed = isClosedVibe64Session(response);
     const refreshSessionList = sessionClosed || vibe64SessionListRefreshRequested(response);
     if (refreshSessionList) {

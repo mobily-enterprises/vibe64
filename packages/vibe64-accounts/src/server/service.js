@@ -443,9 +443,9 @@ function accountCommandRuntimes(command = "") {
     return ["git", "gh"];
   }
   if (normalized === STUDIO_MANAGED_CODEX_COMMAND) {
-    return ["operator-clis", "node22", "git"];
+    return ["operator-clis", "node26", "git"];
   }
-  return ["operator-clis", "node22", "git", "gh"];
+  return ["operator-clis", "node26", "git", "gh"];
 }
 
 function authCommandPreview(commandArgs = []) {

@@ -7,7 +7,7 @@ laptop, tenant VM, or CI host happens to have a usable `node`, `npm`,
 `mariadb`, `playwright`, `gh`, or similar tool in its normal system path.
 
 This happened during the `matt/beepollen` incident: local testing did not expose
-a missing `node22` runtime declaration because the local machine had `npm`
+a missing `node26` runtime declaration because the local machine had `npm`
 available. The deployed tenant VM then ran:
 
 ```bash
@@ -52,7 +52,7 @@ normal system PATH after
 Example:
 
 ```text
-/opt/vibe64/runtime-packs/node22/bin
+/opt/vibe64/runtime-packs/node26/bin
 /opt/vibe64/runtime-packs/mariadb/bin
 /opt/vibe64/runtime-packs/guard-bin
 /usr/local/bin
@@ -81,18 +81,18 @@ codex
 opencode
 ```
 
-If a command declares `node22`, the real Vibe64 runtime pack wins:
+If a command declares `node26`, the real Vibe64 runtime pack wins:
 
 ```text
-/opt/vibe64/runtime-packs/node22/bin/npm
+/opt/vibe64/runtime-packs/node26/bin/npm
 ```
 
-If it forgets to declare `node22`, the guard shim wins before host `npm` and
+If it forgets to declare `node26`, the guard shim wins before host `npm` and
 fails loudly:
 
 ```text
-Vibe64 runtime error: npm requires runtime node22.
-The command did not declare node22, so host npm was blocked.
+Vibe64 runtime error: npm requires runtime node26.
+The command did not declare node26, so host npm was blocked.
 ```
 
 This catches local, CI, and production drift while still allowing ordinary Unix
@@ -119,9 +119,9 @@ bash -lc 'command -v npm && npm --version'
 
 must produce one of two outcomes:
 
-1. It declared `node22`, so `command -v npm` resolves under
-   `/opt/vibe64/runtime-packs/node22/bin`.
-2. It did not declare `node22`, so the guard shim fails with a Vibe64 runtime
+1. It declared `node26`, so `command -v npm` resolves under
+   `/opt/vibe64/runtime-packs/node26/bin`.
+2. It did not declare `node26`, so the guard shim fails with a Vibe64 runtime
    error before any host `npm` can run.
 
 Any third outcome, especially `/usr/bin/npm`, `/usr/local/bin/npm`, `~/.nvm`,

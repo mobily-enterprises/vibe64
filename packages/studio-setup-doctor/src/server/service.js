@@ -35,8 +35,7 @@ import {
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-host-v2";
 const STUDIO_SETUP_RUNTIMES = Object.freeze([
-  "node22",
-  "node20",
+  "node26",
   "git",
   "gh",
   "mysql",
@@ -197,21 +196,21 @@ function createStudioHostCommandDoctorPlugin() {
         runtimeToolCheck({
           id: "node",
           label: "Node.js",
-          packageId: "nodejs-22",
+          packageId: "nodejs-26",
           toolId: "node",
           explanation: "Studio uses the Vibe64-selected Node runtime for JavaScript and TypeScript project setup, scripts, and framework CLIs."
         }),
         runtimeToolCheck({
           id: "npm",
           label: "npm",
-          packageId: "nodejs-22",
+          packageId: "nodejs-26",
           toolId: "npm",
           explanation: "npm is provided by the Vibe64-selected Node runtime and backs npx-based project seed commands."
         }),
         runtimeToolCheck({
           id: "corepack",
           label: "Corepack",
-          packageId: "nodejs-22",
+          packageId: "nodejs-26",
           toolId: "corepack",
           explanation: "Corepack is provided by the Vibe64-selected Node runtime for package-manager dispatch."
         }),

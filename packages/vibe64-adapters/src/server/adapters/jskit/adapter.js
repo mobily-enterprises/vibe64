@@ -529,7 +529,7 @@ async function jskitAutomatedChecksHook({ worktreePath = "" } = {}) {
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     script: studioCommandScript({
       command,
       intro: "Running JSKIT verification."
@@ -558,7 +558,7 @@ async function jskitCodeIndexHook({ worktreePath = "" } = {}) {
       code_index_package_manager: packageManager.name,
       code_index_path: ".jskit/helper-map.md"
     },
-    runtimes: ["node22"],
+    runtimes: ["node26"],
     script: studioCommandScript({
       command,
       intro: "Updating JSKIT code index."
@@ -805,7 +805,7 @@ function jskitRuntimeRequirements({
     );
   }
   return [
-    runtimeRequirement("nodejs-22", {
+    runtimeRequirement("nodejs-26", {
       tool: "node"
     }),
     jskitManagedDatabaseEnabled(config)
@@ -833,7 +833,7 @@ function jskitDeploymentNodeCommand(command = "") {
 }
 
 function jskitDeploymentPrepareRuntimes(packageManager = "") {
-  return normalizeText(packageManager) === "bun" ? ["node22", "bun"] : ["node22"];
+  return normalizeText(packageManager) === "bun" ? ["node26", "bun"] : ["node26"];
 }
 
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
@@ -983,7 +983,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       targetRoot: publishRoot
     });
     const packageManager = await detectPackageManager(publishRoot);
-    const nodeRuntimes = ["node22"];
+    const nodeRuntimes = ["node26"];
     const artifactPath = "dist";
     const databaseEnabled = jskitManagedDatabaseEnabled(config);
     return deploymentPublishPlanFromCommands({

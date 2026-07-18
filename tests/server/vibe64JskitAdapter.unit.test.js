@@ -145,7 +145,7 @@ function escapedPattern(value = "") {
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
   assert.match(command, /^bash -lc /u);
   assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
-  assert.doesNotMatch(command, /#nodejs_22/u);
+  assert.doesNotMatch(command, /#nodejs_26/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -568,7 +568,7 @@ test("jskit derives local auth storage from the database runtime", async () => {
     assert.match(promptContext.app_auth_contract, /file-backed storage/u);
     assert.match(promptContext.seed_issue_guidance, /Configured database for this seed: none/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /database-runtime-mysql/u);
-    assert.deepEqual(requirements.map((requirement) => requirement.id), ["nodejs-22"]);
+    assert.deepEqual(requirements.map((requirement) => requirement.id), ["nodejs-26"]);
   });
 });
 
@@ -784,7 +784,7 @@ test("jskit setup Doctor validates the source-owned runtime lock", async () => {
       targetRoot
     });
     assert.equal(pass.status, "pass");
-    assert.equal(pass.observed, "mariadb, nodejs-22");
+    assert.equal(pass.observed, "mariadb, nodejs-26");
 
     const stale = await runtimeLockCheck.run({
       config: {
@@ -1303,7 +1303,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.ok(spec.restartOnChange.include.includes("src/**"));
     assert.ok(spec.restartOnChange.include.includes("server.js"));
-    assert.deepEqual(spec.runtimes, ["node22"]);
+    assert.deepEqual(spec.runtimes, ["node26"]);
 
     const args = spec.args({
       id: "unit-terminal"
@@ -1384,7 +1384,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
     assert.equal(spec.metadata.serverRestartCheck, "active-agent-runs");
-    assert.deepEqual(spec.runtimes, ["node22"]);
+    assert.deepEqual(spec.runtimes, ["node26"]);
 
     const args = spec.args({
       id: "unit-terminal"
@@ -1486,14 +1486,14 @@ test("jskit dev launch applies preview startup arguments to the backend command"
     });
 
     assert.equal(spec.ok, true);
-    assert.deepEqual(spec.runtimes, ["node22"]);
+    assert.deepEqual(spec.runtimes, ["node26"]);
     assert.ok(spec.restartOnChange.include.includes("server/**"));
     assert.ok(spec.restartOnChange.include.includes("packages/**/src/shared/**"));
     const startupScript = spec.args({
       id: "unit-terminal"
     }).at(-1);
     assert.doesNotMatch(startupScript, /\bnix --extra-experimental-features\b/u);
-    assert.doesNotMatch(startupScript, /#nodejs_22/u);
+    assert.doesNotMatch(startupScript, /#nodejs_26/u);
     assert.match(startupScript, /npm run server -- \. .*--profile local editor/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);

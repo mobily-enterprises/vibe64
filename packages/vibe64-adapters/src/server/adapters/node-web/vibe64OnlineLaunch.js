@@ -162,7 +162,7 @@ async function createVibe64OnlineLaunchDescriptor({
     },
     previewAuth: APPLICATION_PREVIEW_AUTH_KIND,
     restartOnChange: VIBE64_ONLINE_RESTART_ON_CHANGE,
-    runtimes: packageManager.name === "bun" ? ["node22", "bun"] : ["node22"],
+    runtimes: packageManager.name === "bun" ? ["node26", "bun"] : ["node26"],
     urlPath: "/app",
     workdir: worktreePath
   };

@@ -99,8 +99,8 @@ async function writeExecutable(filePath, source) {
 }
 
 async function createFakePlaywrightRuntime(runtimeRoot) {
-  const nodePath = path.join(runtimeRoot, "node22", "bin", "node");
-  const npmPath = path.join(runtimeRoot, "node22", "bin", "npm");
+  const nodePath = path.join(runtimeRoot, "node26", "bin", "node");
+  const npmPath = path.join(runtimeRoot, "node26", "bin", "npm");
   const playwrightRoot = path.join(runtimeRoot, "playwright");
   const playwrightModule = path.join(playwrightRoot, "runtime", "lib", "node_modules", "playwright");
   await writeExecutable(nodePath, `#!/bin/sh\nexec ${process.execPath} "$@"\n`);
@@ -1263,20 +1263,19 @@ test("managed preview browser exits after idle expiry and loss of its Vibe64 con
         sessionId,
         wrapperHostDir: root
       });
-      await execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
+      const ensured = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
         env: {
           ...process.env,
           ...prepared.env
         }
-      });
-      const metadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+      })).stdout);
       if (mode === "control-loss") {
         await commandService.releaseControlForSession(sessionId);
       }
-      for (let attempt = 0; attempt < 100 && processRunning(metadata.pid); attempt += 1) {
+      for (let attempt = 0; attempt < 100 && processRunning(ensured.pid); attempt += 1) {
         await wait(25);
       }
-      assert.equal(processRunning(metadata.pid), false, `${mode} worker should exit`);
+      assert.equal(processRunning(ensured.pid), false, `${mode} worker should exit`);
       await assert.rejects(stat(prepared.hostBrowserMetadataPath), {
         code: "ENOENT"
       });

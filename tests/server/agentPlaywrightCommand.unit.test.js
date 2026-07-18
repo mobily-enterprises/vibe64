@@ -75,11 +75,11 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     current: true
   });
   await writeExecutable(
-    path.join(runtimeRoot, "node22", "bin", "node"),
+    path.join(runtimeRoot, "node26", "bin", "node"),
     `#!/bin/sh\nexec ${process.execPath} "$@"\n`
   );
   await writeExecutable(
-    path.join(runtimeRoot, "node22", "bin", "npm"),
+    path.join(runtimeRoot, "node26", "bin", "npm"),
     [
       "#!/usr/bin/env node",
       "process.stdout.write(JSON.stringify({",

@@ -53,8 +53,7 @@ const VIBE64_COMMAND_GIT_TRANSPORTS = Object.freeze([
   "github-token"
 ]);
 const VIBE64_COMMAND_RUNTIMES = Object.freeze([
-  "node22",
-  "node20",
+  "node26",
   "git",
   "gh",
   "mysql",

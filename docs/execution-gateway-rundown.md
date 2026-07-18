@@ -159,8 +159,7 @@ Interactive purposes default to the broad runtime pack set:
 ```js
 [
   "operator-clis",
-  "node22",
-  "node20",
+  "node26",
   "git",
   "gh",
   "mysql",
@@ -267,14 +266,14 @@ Deployment commands use deployment-specific env:
 
 ```js
 {
-  runtimes: ["node22", "git", "mysql", "playwright"]
+  runtimes: ["node26", "git", "mysql", "playwright"]
 }
 ```
 
 Those resolve under:
 
 ```txt
-/opt/vibe64/runtime-packs/node22/bin
+/opt/vibe64/runtime-packs/node26/bin
 /opt/vibe64/runtime-packs/git/bin
 /opt/vibe64/runtime-packs/mariadb/bin
 /opt/vibe64/runtime-packs/playwright/bin
@@ -707,7 +706,7 @@ For project command terminals:
   purpose: "terminal",
   mode: "pty",
   envPolicy: "project",
-  runtimes: ["node22", "git", "mysql", "playwright"]
+  runtimes: ["node26", "git", "mysql", "playwright"]
 }
 ```
 
@@ -748,7 +747,7 @@ For deployment:
   purpose: "deployment",
   envPolicy: "deployment",
   gitTransport: "github-https",
-  runtimes: ["node22", "git"]
+  runtimes: ["node26", "git"]
 }
 ```
 

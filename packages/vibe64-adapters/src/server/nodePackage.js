@@ -120,8 +120,8 @@ async function detectPackageManager(root = "", packageJson = null) {
 
 function nodeRuntimePackageIds(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
   return normalizePackageManagerName(packageManager) === "bun"
-    ? ["nodejs-22", "bun"]
-    : ["nodejs-22"];
+    ? ["nodejs-26", "bun"]
+    : ["nodejs-26"];
 }
 
 function nodeRuntimeRequirements({
