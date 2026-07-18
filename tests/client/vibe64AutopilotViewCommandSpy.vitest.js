@@ -162,14 +162,15 @@ describe("Vibe64AutopilotView command spy placement", () => {
     );
 
     expect(componentSource).toContain("layout=\"summary\"");
-    expect(componentSource).toContain(":status-label=\"dashboardSessionContext.activeSessionNav.statusLabel\"");
+    expect(componentSource).not.toContain(":status-label=\"dashboardSessionContext.activeSessionNav.statusLabel\"");
     expect(componentSource).toContain("title=\"Session menu\"");
     expect(toolDefinitionSource).toContain("label: \"Changes\"");
     expect(toolDefinitionSource).toContain("label: \"Technical details\"");
     expect(componentSource).toContain("title=\"Abandon session\"");
-    expect(navigationSource).toContain("Current stage");
+    expect(navigationSource).not.toContain("Current stage");
+    expect(navigationSource).toContain("{{ currentStepLabel }} ({{ currentStepIndex + 1 }}/{{ steps.length }})");
     expect(navigationSource).toContain("{{ mobileToggleLabel }}");
-    expect(navigationSource).toContain("{{ statusLabel }}");
+    expect(navigationSource).not.toContain("statusLabel");
   });
 
   it("keeps source state visible on session tabs and puts its action beside the current step", () => {
@@ -554,6 +555,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const actionButtonSource = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64SessionActionButton.vue"), "utf8");
 
     expect(formSource).toContain("visibleWorkflowButtonControls(props.workflowControls)");
+    expect(formSource.match(/:disabled="control\.disabled"/gu)).toHaveLength(2);
     expect(actionButtonSource).toContain("v-if=\"action.enabled === true\"");
     expect(actionButtonSource).not.toContain(":disabled=\"busy || action.enabled !== true\"");
   });

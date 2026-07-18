@@ -116,10 +116,14 @@ function workflowControlButtonVisible(control = {}) {
   if (!control || typeof control !== "object") {
     return false;
   }
+  if (booleanishTrue(control.hidden) || control.visible === false) {
+    return false;
+  }
+  if (booleanishTrue(control.loading)) {
+    return true;
+  }
   return !(
     booleanishTrue(control.disabled) ||
-    booleanishTrue(control.hidden) ||
-    control.visible === false ||
     booleanishFalse(control.enabled)
   );
 }

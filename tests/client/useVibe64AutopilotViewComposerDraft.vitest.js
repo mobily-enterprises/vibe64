@@ -251,6 +251,169 @@ function sessionDebugEntries(infoSpy) {
 }
 
 describe("useVibe64AutopilotView composer draft ownership", () => {
+  it("keeps Finish visible and loading until the server action closes the session", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const finishAction = {
+      enabled: true,
+      id: "finish_session",
+      label: "Finish",
+      type: "finish"
+    };
+    let resolveFinish;
+    const finishResponse = new Promise((resolve) => {
+      resolveFinish = resolve;
+    });
+    const actions = reactive({
+      activeActionId: "",
+      currentActions: [finishAction],
+      runAction: async () => {
+        actions.activeActionId = finishAction.id;
+        actions.runActionCommand.isRunning = true;
+        try {
+          return await finishResponse;
+        } finally {
+          actions.activeActionId = "";
+          actions.runActionCommand.isRunning = false;
+        }
+      },
+      runActionCommand: {
+        isRunning: false
+      }
+    });
+    const props = viewProps({
+      actions,
+      agentThinking: false
+    });
+    props.session.presentation.intents = [
+      {
+        actionId: "finish_session",
+        enabled: true,
+        id: "archive_session",
+        label: "Finish",
+        style: "secondary"
+      }
+    ];
+    props.session.presentation.screen.primaryIntentId = "";
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    const finishing = view.activateWorkflowButtonControl(view.workflowButtonControls.value[0]);
+    await nextTick();
+
+    expect(view.workflowButtonControls.value).toHaveLength(1);
+    expect(view.workflowButtonControls.value[0]).toMatchObject({
+      disabled: true,
+      id: "archive_session",
+      label: "Finish",
+      loading: true
+    });
+
+    resolveFinish({
+      clientRefresh: {
+        includeList: true
+      },
+      ok: true,
+      sessionId: "session-1",
+      status: "finished"
+    });
+
+    expect(await finishing).toBe(true);
+  });
+
+  it("finishes through the server action and refreshes the open-session list", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const finishAction = {
+      enabled: true,
+      id: "finish_session",
+      label: "Finish",
+      type: "finish"
+    };
+    const runAction = vi.fn(async () => ({
+      clientRefresh: {
+        includeList: true
+      },
+      ok: true,
+      sessionId: "session-1",
+      status: "finished"
+    }));
+    const refreshSessionData = vi.fn(async () => null);
+    const props = viewProps({
+      actions: {
+        currentActions: [finishAction],
+        runAction
+      },
+      agentThinking: false,
+      refreshSessionData
+    });
+    props.session.status = "active";
+    props.session.presentation.intents = [
+      {
+        actionId: "finish_session",
+        enabled: true,
+        id: "archive_session",
+        label: "Finish",
+        style: "secondary"
+      }
+    ];
+    props.session.presentation.screen.primaryIntentId = "";
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.workflowButtonControls.value).toHaveLength(1);
+    expect(await view.activateWorkflowButtonControl(view.workflowButtonControls.value[0])).toBe(true);
+    expect(runAction).toHaveBeenCalledWith(finishAction, expect.objectContaining({
+      input: {}
+    }));
+    expect(refreshSessionData).toHaveBeenCalledWith({
+      includeList: true,
+      reason: "server-requested-list-refresh"
+    });
+  });
+
+  it("does not acknowledge Finish unless the server actually closes the session", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const finishAction = {
+      enabled: true,
+      id: "finish_session",
+      label: "Finish",
+      type: "finish"
+    };
+    const props = viewProps({
+      actions: {
+        currentActions: [finishAction],
+        runAction: vi.fn(async () => ({
+          ok: true,
+          sessionId: "session-1",
+          status: "active"
+        }))
+      },
+      agentThinking: false
+    });
+    props.session.presentation.intents = [
+      {
+        actionId: "finish_session",
+        enabled: true,
+        id: "archive_session",
+        label: "Finish",
+        style: "secondary"
+      }
+    ];
+    props.session.presentation.screen.primaryIntentId = "";
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(await view.activateWorkflowButtonControl(view.workflowButtonControls.value[0])).toBe(false);
+  });
+
   it("enables the session Config tool for pending bootstrap config before source materialization", async () => {
     const {
       useVibe64AutopilotView

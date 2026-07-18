@@ -46,7 +46,7 @@ const {
   selectProjectPane,
   setChatCollapsed,
   showProjectPane,
-  sortedProjects,
+  switcherProjects,
   targetFolderName
 } = useVibe64AppPage();
 
@@ -84,7 +84,7 @@ function projectContextForDashboard(projectGateSlotProps = {}, projectSelectionS
             </template>
             <v-list density="compact" min-width="240">
               <v-list-item
-                v-for="project in sortedProjects"
+                v-for="project in switcherProjects"
                 :key="project.slug"
                 :active="project.slug === projectSlug"
                 :title="project.slug"
@@ -92,8 +92,8 @@ function projectContextForDashboard(projectGateSlotProps = {}, projectSelectionS
                 @click="openProject(project)"
               />
               <v-list-item
-                v-if="sortedProjects.length === 0"
-                :subtitle="projectLoadError || 'No projects found.'"
+                v-if="switcherProjects.length === 0"
+                :subtitle="projectLoadError || 'No open projects found.'"
                 title="Projects"
               />
             </v-list>

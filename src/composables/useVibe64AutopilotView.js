@@ -152,9 +152,13 @@ import {
   defineVibe64AsyncComponent
 } from "@/lib/vibe64AsyncComponent.js";
 import {
+  isClosedVibe64Session,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
+import {
+  vibe64SessionListRefreshRequested
+} from "@/lib/vibe64SessionClientRefresh.js";
 import {
   sessionGithubCommandActor
 } from "@/lib/vibe64GitCommandActor.js";
@@ -2394,9 +2398,28 @@ function useVibe64AutopilotView(props, emit) {
       displayInput: displayFields,
       input: fields
     });
+    if (!response || response.ok === false) {
+      return false;
+    }
+    const actionResultStatus = String(response.actionResult?.status || "");
+    if (actionResultStatus === "blocked" || actionResultStatus === "failed") {
+      return false;
+    }
+    const finishAction = sourceAction.type === "finish" || sourceAction.id === "finish_session";
+    const sessionClosed = isClosedVibe64Session(response);
+    const refreshSessionList = sessionClosed || vibe64SessionListRefreshRequested(response);
+    if (refreshSessionList) {
+      await props.refreshSessionData({
+        includeList: true,
+        reason: "server-requested-list-refresh"
+      });
+    }
     await nextTick();
+    if (finishAction || sessionClosed) {
+      return sessionClosed;
+    }
     await runNextOperation();
-    return response !== false;
+    return true;
   }
 
   function updateAgentSetting(parameterId = "", value = "") {
@@ -2513,6 +2536,9 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function controlDisabled(control = {}) {
+    if (controlLoading(control)) {
+      return true;
+    }
     if (controlCanSendDuringAgentActivity(control)) {
       return false;
     }

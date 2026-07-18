@@ -222,5 +222,7 @@ describe("Vibe64 project client scope", () => {
     expect(source).toContain("const selected = await createProject();");
     expect(source).toContain("const selected = await selectProject(slug);");
     expect(source).toContain("router.push(projectAppPath(selected))");
+    expect(source).toContain("v-if=\"selectionInitialLoading\"");
+    expect(source).toContain("<v-skeleton-loader");
   });
 });

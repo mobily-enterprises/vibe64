@@ -66,6 +66,9 @@ import {
   agentTurnRealtimeOverlayFromPayload,
   sessionWithAgentTurnRealtimeOverlay
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
+import {
+  vibe64SessionListRefreshRequested
+} from "@/lib/vibe64SessionClientRefresh.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "assistant-response-bundle",
@@ -398,12 +401,8 @@ function sessionChangedReason(payload = {}) {
   return String(payload?.reason || "").trim();
 }
 
-function sessionListRefreshRequested(payload = {}) {
-  return payload?.clientRefresh?.includeList === true;
-}
-
 function sessionListRealtimeShouldRefresh({ payload = {} } = {}) {
-  if (sessionListRefreshRequested(payload)) {
+  if (vibe64SessionListRefreshRequested(payload)) {
     return true;
   }
   const reason = sessionChangedReason(payload);

@@ -9,8 +9,10 @@ const commandMocks = vi.hoisted(() => ({
 const endpointMocks = vi.hoisted(() => ({
   calls: [],
   configData: null,
+  configInitialLoading: null,
   configReload: vi.fn(),
   projectTypeData: null,
+  projectTypeInitialLoading: null,
   projectTypeReload: vi.fn(),
   sessionsData: null,
   sessionsReload: vi.fn(),
@@ -111,6 +113,8 @@ describe("useProjectTypeGate", () => {
       },
       templates: []
     });
+    endpointMocks.projectTypeInitialLoading = ref(false);
+    endpointMocks.configInitialLoading = ref(false);
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockImplementation((options) => {
       endpointMocks.calls.push(options);
@@ -126,7 +130,7 @@ describe("useProjectTypeGate", () => {
       if (options.requestRecoveryLabel === "Project type") {
         return {
           data: endpointMocks.projectTypeData,
-          isInitialLoading: ref(false),
+          isInitialLoading: endpointMocks.projectTypeInitialLoading,
           isLoading: ref(false),
           loadError: ref(""),
           reload: endpointMocks.projectTypeReload
@@ -135,7 +139,7 @@ describe("useProjectTypeGate", () => {
       if (options.requestRecoveryLabel === "Project config") {
         return {
           data: endpointMocks.configData,
-          isInitialLoading: ref(false),
+          isInitialLoading: endpointMocks.configInitialLoading,
           isLoading: ref(false),
           loadError: ref(""),
           reload: endpointMocks.configReload
@@ -178,6 +182,47 @@ describe("useProjectTypeGate", () => {
   afterEach(() => {
     globalThis.window = originalWindow;
     vi.restoreAllMocks();
+  });
+
+  it("derives the setup loader from endpoint initial-loading state", async () => {
+    projectScopeMocks.projectSlug.value = "loading-project";
+    endpointMocks.projectTypeData.value = null;
+    endpointMocks.configData.value = null;
+    endpointMocks.projectTypeInitialLoading.value = true;
+
+    const scope = effectScope();
+    let gate;
+    scope.run(() => {
+      gate = useProjectTypeGate({
+        emit: () => null
+      });
+    });
+
+    expect(gate.projectStateInitialLoading.value).toBe(true);
+
+    endpointMocks.projectTypeData.value = {
+      projectType: {
+        projectType: "jskit",
+        ready: true
+      }
+    };
+    endpointMocks.projectTypeInitialLoading.value = false;
+    endpointMocks.configInitialLoading.value = true;
+    await nextTick();
+
+    expect(gate.projectStateInitialLoading.value).toBe(true);
+
+    endpointMocks.configData.value = {
+      config: {
+        ready: true,
+        values: {}
+      }
+    };
+    endpointMocks.configInitialLoading.value = false;
+    await nextTick();
+
+    expect(gate.projectStateInitialLoading.value).toBe(false);
+    scope.stop();
   });
 
   it("reads project setup from the baseline and saves session drafts only when explicit", async () => {

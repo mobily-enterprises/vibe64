@@ -155,7 +155,7 @@ describe("vibe64WorkflowControlModel", () => {
     });
   });
 
-  it("hides disabled workflow button controls from compact autopilot actions", () => {
+  it("hides unavailable workflow buttons but keeps the active action visible while it loads", () => {
     expect(visibleWorkflowButtonControls([
       {
         disabled: false,
@@ -179,12 +179,26 @@ describe("vibe64WorkflowControlModel", () => {
         disabledReason: "Create the pull request before syncing.",
         id: "sync_main_checkout",
         label: "Refresh Git cache"
+      },
+      {
+        disabled: true,
+        enabled: false,
+        id: "finish_session",
+        label: "Finish",
+        loading: true
       }
     ])).toEqual([
       {
         disabled: false,
         id: "draft_issue",
         label: "Describe work"
+      },
+      {
+        disabled: true,
+        enabled: false,
+        id: "finish_session",
+        label: "Finish",
+        loading: true
       }
     ]);
   });

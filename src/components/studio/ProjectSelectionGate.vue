@@ -7,8 +7,15 @@
       compact
     />
 
+    <v-skeleton-loader
+      v-if="selectionInitialLoading"
+      aria-label="Loading project"
+      class="project-selection-gate__loading"
+      type="article"
+    />
+
     <slot
-      v-if="selectedSlotVisible"
+      v-else-if="selectedSlotVisible"
       :project-selection="projectSelection"
       :reload="loadProjectSelection"
     />
@@ -111,6 +118,7 @@ const {
   projectsRoot,
   selectProject,
   selectingSlug,
+  selectionInitialLoading,
   selectionReady
 } = useProjectSelectionGate(emit, {
   scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject
@@ -139,6 +147,11 @@ async function handleCreateProject() {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.project-selection-gate__loading {
+  flex: 1 1 auto;
+  min-height: 18rem;
 }
 
 .project-selection-gate__picker {

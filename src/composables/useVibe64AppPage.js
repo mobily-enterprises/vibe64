@@ -116,6 +116,7 @@ function useVibe64AppPage() {
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
   const projectPane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
   const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
+  const switcherProjects = computed(() => openProjectSwitcherProjects(projects.value));
   const chatToggleIcon = computed(() => {
     if (mobilePaneLayout.value) {
       return chatCollapsed.value ? mdiChevronLeft : mdiChevronRight;
@@ -267,7 +268,7 @@ function useVibe64AppPage() {
     selectProjectPane,
     setChatCollapsed,
     showProjectPane,
-    sortedProjects,
+    switcherProjects,
     targetFolderName
   };
 
@@ -474,6 +475,15 @@ function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "") {
   return String(payload?.action || "").trim() === "runtime-closed" && payload?.runtime?.open === false;
 }
 
+function openProjectSwitcherProjects(projects = []) {
+  if (!Array.isArray(projects)) {
+    return [];
+  }
+  return projects
+    .filter((project) => project?.runtime?.open === true)
+    .sort((left, right) => String(left?.slug || "").localeCompare(String(right?.slug || "")));
+}
+
 function selfTargetAutoSelectProjectTarget({
   currentSlug = "",
   loading = false,
@@ -573,6 +583,7 @@ export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
   dashboardReturnPath,
+  openProjectSwitcherProjects,
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,

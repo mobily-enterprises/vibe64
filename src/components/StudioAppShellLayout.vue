@@ -46,6 +46,7 @@
   min-height: 0;
   overflow: hidden;
   padding-bottom: 0;
+  padding-top: 0.35rem;
 }
 
 :global(body.studio-home-shell-active .shell-error-host__banners) {

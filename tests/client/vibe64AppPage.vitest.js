@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   dashboardReturnPath,
+  openProjectSwitcherProjects,
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
@@ -10,6 +11,26 @@ import {
 } from "../../src/composables/useVibe64AppPage.js";
 
 describe("Vibe64 app page", () => {
+  it("shows only open projects in the project switcher", () => {
+    const projects = [
+      { runtime: { open: false }, slug: "closed" },
+      { runtime: { open: true }, slug: "zulu" },
+      { runtime: { open: true }, slug: "alpha" },
+      { slug: "unknown" }
+    ];
+
+    expect(openProjectSwitcherProjects(projects).map((project) => project.slug)).toEqual([
+      "alpha",
+      "zulu"
+    ]);
+    expect(projects.map((project) => project.slug)).toEqual([
+      "closed",
+      "zulu",
+      "alpha",
+      "unknown"
+    ]);
+  });
+
   it("targets the configured self-target project only when the repro hook is active", () => {
     const projects = [
       { slug: "beepollen" },

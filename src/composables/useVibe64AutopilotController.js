@@ -15,6 +15,9 @@ import {
   isVibe64StaleOperation
 } from "@/lib/vibe64StaleOperation.js";
 import {
+  vibe64SessionListRefreshRequested
+} from "@/lib/vibe64SessionClientRefresh.js";
+import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
@@ -77,17 +80,6 @@ function displayFieldsRequestOptions(displayFields = null) {
         displayFields
       }
     : {};
-}
-
-function responseClientRefresh(response = {}) {
-  const clientRefresh = response?.clientRefresh;
-  return clientRefresh && typeof clientRefresh === "object" && !Array.isArray(clientRefresh)
-    ? clientRefresh
-    : {};
-}
-
-function responseRequestsSessionListRefresh(response = {}) {
-  return responseClientRefresh(response).includeList === true;
 }
 
 function currentCommandPresentation(session = {}) {
@@ -795,7 +787,7 @@ function useVibe64AutopilotController({
       stepId: operation.stepId || currentSession.value?.currentStep || "",
       stepStatus: operation.stepStatus || currentSession.value?.stepMachine?.status || ""
     });
-    const refreshSessionList = responseRequestsSessionListRefresh(response);
+    const refreshSessionList = vibe64SessionListRefreshRequested(response);
     await refreshAfterServerOperation({
       includeList: refreshSessionList,
       reason: refreshSessionList ? "server-requested-list-refresh" : "session-intent"
@@ -803,14 +795,18 @@ function useVibe64AutopilotController({
   }
 
   async function dispatchSessionActionOperation(operation = {}) {
-    await actions.runActionById?.({
+    const response = await actions.runActionById?.({
       ...agentSettingsRequestOptions(currentAgentSettings.value),
       actionId: operation.actionId,
       advanceOnSuccess: operation.advanceOnSuccess === true,
       input: operationInput(operation),
       sessionId: currentSession.value?.sessionId || ""
     });
-    await refreshAfterServerOperation();
+    const refreshSessionList = vibe64SessionListRefreshRequested(response);
+    await refreshAfterServerOperation({
+      includeList: refreshSessionList,
+      reason: refreshSessionList ? "server-requested-list-refresh" : "session-action"
+    });
   }
 
   async function runPresentedIntent(intent = {}, {
@@ -837,7 +833,7 @@ function useVibe64AutopilotController({
         stepId: currentSession.value?.currentStep || "",
         stepStatus: currentSession.value?.stepMachine?.status || ""
       });
-      const refreshSessionList = responseRequestsSessionListRefresh(response);
+      const refreshSessionList = vibe64SessionListRefreshRequested(response);
       await refreshSessionData({
         includeList: refreshSessionList,
         reason: refreshSessionList ? "server-requested-list-refresh" : "presented-intent"

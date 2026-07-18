@@ -159,6 +159,14 @@ function useProjectTypeGate({
   });
   const projectTypeLoaded = computed(() => Boolean(projectTypeRecord.value?.projectType));
   const projectConfigLoaded = computed(() => Boolean(projectConfigRecord.value?.config));
+  const projectStateInitialLoading = computed(() => Boolean(
+    (!projectTypeLoaded.value && projectTypeView.isInitialLoading) ||
+    (
+      projectType.value.ready === true &&
+      !projectConfigLoaded.value &&
+      projectConfigView.isInitialLoading
+    )
+  ));
   const projectReady = computed(() => projectType.value.ready === true && projectConfig.value.ready === true);
   const projectState = computed(() => ({
     projectConfig: projectConfig.value,
@@ -279,6 +287,7 @@ function useProjectTypeGate({
     projectConfig,
     projectConfigSetupSummary,
     projectReady,
+    projectStateInitialLoading,
     projectState,
     projectTemplateChooserVisible,
     projectTemplates,

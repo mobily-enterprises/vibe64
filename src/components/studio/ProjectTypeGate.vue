@@ -7,54 +7,63 @@
       compact
     />
 
-    <template v-if="projectTemplateChooserVisible || canReturnToProjectTemplates">
-      <ProjectTemplateSetup
-        v-show="projectTemplateChooserVisible"
-        :applying-template-id="applyingTemplateId"
-        :loading="projectTemplatesLoading"
-        :templates="projectTemplates"
-        @advanced="showAdvancedProjectSetup"
-        @apply="applyProjectTemplate"
+    <v-skeleton-loader
+      v-if="projectStateInitialLoading"
+      aria-label="Loading project setup"
+      class="project-type-gate__loading"
+      type="article"
+    />
+
+    <template v-else>
+      <template v-if="projectTemplateChooserVisible || canReturnToProjectTemplates">
+        <ProjectTemplateSetup
+          v-show="projectTemplateChooserVisible"
+          :applying-template-id="applyingTemplateId"
+          :loading="projectTemplatesLoading"
+          :templates="projectTemplates"
+          @advanced="showAdvancedProjectSetup"
+          @apply="applyProjectTemplate"
+        />
+      </template>
+
+      <div
+        v-if="needsProjectType && !projectTemplateChooserVisible"
+        class="project-type-gate__advanced"
+      >
+        <v-btn
+          v-if="canReturnToProjectTemplates"
+          class="project-type-gate__templates-back"
+          :prepend-icon="mdiArrowLeft"
+          color="primary"
+          variant="text"
+          @click="showProjectTemplates"
+        >
+          Back to ready-made apps
+        </v-btn>
+        <ProjectTypeSetup
+          :state="projectType"
+          @select="selectDraftProjectType"
+        />
+      </div>
+
+      <ProjectConfigSetup
+        v-else-if="needsProjectConfig"
+        :can-change-project-type="hasDraftProjectType"
+        :saving="savingConfig"
+        :setup-summary="projectConfigSetupSummary"
+        :state="projectConfig"
+        @change-project-type="clearDraftProjectType"
+        @save="saveProjectConfig"
+      />
+
+      <slot
+        v-else-if="projectReady"
+        :target-project="projectState"
+        :reload="loadProjectState"
+        :save-project-config="saveProjectConfig"
+        :saving-config="savingConfig"
       />
     </template>
-
-    <div
-      v-if="needsProjectType && !projectTemplateChooserVisible"
-      class="project-type-gate__advanced"
-    >
-      <v-btn
-        v-if="canReturnToProjectTemplates"
-        class="project-type-gate__templates-back"
-        :prepend-icon="mdiArrowLeft"
-        color="primary"
-        variant="text"
-        @click="showProjectTemplates"
-      >
-        Back to ready-made apps
-      </v-btn>
-      <ProjectTypeSetup
-        :state="projectType"
-        @select="selectDraftProjectType"
-      />
-    </div>
-
-    <ProjectConfigSetup
-      v-else-if="needsProjectConfig"
-      :can-change-project-type="hasDraftProjectType"
-      :saving="savingConfig"
-      :setup-summary="projectConfigSetupSummary"
-      :state="projectConfig"
-      @change-project-type="clearDraftProjectType"
-      @save="saveProjectConfig"
-    />
-
-    <slot
-      v-else-if="projectReady"
-      :target-project="projectState"
-      :reload="loadProjectState"
-      :save-project-config="saveProjectConfig"
-      :saving-config="savingConfig"
-    />
   </div>
 </template>
 
@@ -87,6 +96,7 @@ const {
   projectConfig,
   projectConfigSetupSummary,
   projectReady,
+  projectStateInitialLoading,
   projectState,
   projectTemplateChooserVisible,
   projectTemplates,
@@ -108,6 +118,11 @@ const {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.project-type-gate__loading {
+  flex: 1 1 auto;
+  min-height: 18rem;
 }
 
 .project-type-gate__advanced {

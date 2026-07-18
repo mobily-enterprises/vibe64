@@ -22,13 +22,9 @@
         @click="toggleMobileSteps"
       >
         <span class="studio-autopilot-nav__summary-copy">
-          <span class="studio-autopilot-nav__summary-kicker">Current stage</span>
           <strong class="studio-autopilot-nav__summary-label">
-            {{ currentStepLabel }}
+            {{ currentStepLabel }} ({{ currentStepIndex + 1 }}/{{ steps.length }})
           </strong>
-          <span class="studio-autopilot-nav__summary-meta">
-            {{ mobileToggleLabel }}<template v-if="statusLabel"> · {{ statusLabel }}</template>
-          </span>
         </span>
         <v-icon :icon="mobileStepsOpen ? mdiChevronUp : mdiChevronDown" size="18" />
       </button>
@@ -170,10 +166,6 @@ const props = defineProps({
   steps: {
     default: () => [],
     type: Array
-  },
-  statusLabel: {
-    default: "",
-    type: String
   }
 });
 const emit = defineEmits(["rewind"]);
@@ -275,7 +267,7 @@ watch(currentStepIndex, () => {
   gap: 0.6rem;
   justify-content: space-between;
   min-width: 0;
-  padding: 0.45rem 0.6rem;
+  padding: 0.3rem 0.6rem;
   text-align: left;
 }
 
@@ -287,21 +279,7 @@ watch(currentStepIndex, () => {
 }
 
 .studio-autopilot-nav__summary-copy {
-  display: grid;
   min-width: 0;
-}
-
-.studio-autopilot-nav__summary-kicker,
-.studio-autopilot-nav__summary-meta {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.7rem;
-  line-height: 1.2;
-}
-
-.studio-autopilot-nav__summary-kicker {
-  font-weight: 720;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
 }
 
 .studio-autopilot-nav__summary-label {

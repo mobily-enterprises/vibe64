@@ -65,7 +65,6 @@
           :busy="navigationBusy"
           :executing="workflowExecuting"
           layout="summary"
-          :status-label="dashboardSessionContext.activeSessionNav.statusLabel"
           :steps="autopilotSteps"
           @rewind="rewindToAutopilotStep"
         >

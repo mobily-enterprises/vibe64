@@ -50,6 +50,7 @@ function useProjectSelectionGate(emit, {
   });
 
   const projectSelectionView = proxyRefs({
+    isInitialLoading: selectionResource.isInitialLoading,
     isLoading: selectionResource.isLoading,
     loadError: selectionResource.loadError,
     record: selectionResource.data,
@@ -106,6 +107,9 @@ function useProjectSelectionGate(emit, {
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);
   const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
+  const selectionInitialLoading = computed(() => Boolean(
+    projectSelectionView.isInitialLoading && !selectionReady.value
+  ));
   const busy = computed(() => creating.value || Boolean(selectingSlug.value));
   const saveError = computed(() => {
     if (createProjectCommand.messageType === "error") {
@@ -154,6 +158,7 @@ function useProjectSelectionGate(emit, {
     projectsRoot,
     selectProject,
     selectingSlug,
+    selectionInitialLoading,
     selectionReady
   };
 

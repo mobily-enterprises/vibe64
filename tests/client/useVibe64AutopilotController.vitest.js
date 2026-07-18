@@ -73,6 +73,33 @@ describe("useVibe64AutopilotController", () => {
     expect(context.controller.screenState.value.kind).toBe("codex_running");
   });
 
+  it("refreshes the session list when a server action closes the session", async () => {
+    const context = createControllerContext({
+      actionResponse: {
+        clientRefresh: {
+          includeList: true
+        },
+        ok: true,
+        status: "finished"
+      },
+      operation: {
+        actionId: "finish_session",
+        executable: true,
+        id: "session-action:finish_session",
+        kind: "finish",
+        label: "Finish",
+        route: "session-action"
+      }
+    });
+
+    await context.controller.runNextOperation();
+
+    expect(context.refreshSessionData).toHaveBeenCalledWith({
+      includeList: true,
+      reason: "server-requested-list-refresh"
+    });
+  });
+
   it("runs presented intents by id without knowing what the intent means", async () => {
     const context = createControllerContext({
       intents: [
@@ -603,6 +630,7 @@ function commandTerminalOperation(overrides = {}) {
 }
 
 function createControllerContext({
+  actionResponse = null,
   actionResults = [],
   commandCompletesWithServerAdvance = false,
   commandCompletionRefreshAttempts = 6,
@@ -699,6 +727,7 @@ function createControllerContext({
           title: "Codex is thinking..."
         }
       });
+      return actionResponse;
     }),
     runIntentById: vi.fn(async () => {
       syncSession();
