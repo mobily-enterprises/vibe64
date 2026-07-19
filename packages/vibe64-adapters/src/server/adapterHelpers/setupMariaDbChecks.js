@@ -38,7 +38,7 @@ function mariaDbHostClientScript({
   return [
     "set -e",
     "if ! command -v mariadb >/dev/null 2>&1; then echo 'mariadb was not found on this host.' >&2; exit 127; fi",
-    "db_args=(--no-defaults --protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
+    "db_args=(--no-defaults --skip-ssl --protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
     "[ -n \"$VIBE64_DB_USER\" ] && db_args+=(\"-u$VIBE64_DB_USER\")",
     "[ -n \"$VIBE64_DB_PASSWORD\" ] && db_args+=(\"-p$VIBE64_DB_PASSWORD\")",
     ...(selectDatabase ? [
@@ -104,7 +104,7 @@ function mariaDbCreateDatabaseRepair({
   return createDoctorRepair({
     actionId,
     autoRun: true,
-    command: `mariadb --host=${host || "<host>"} --port=${port || "<port>"} --execute="${mariaDbCreateDatabaseSql(databaseName)}"`,
+    command: `mariadb --skip-ssl --host=${host || "<host>"} --port=${port || "<port>"} --execute="${mariaDbCreateDatabaseSql(databaseName)}"`,
     fields: [
       {
         defaultValue: databaseName,

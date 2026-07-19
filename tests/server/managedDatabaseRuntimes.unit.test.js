@@ -128,7 +128,7 @@ test("managed database service bootstraps own daemon state but not application g
   assert.match(mariaDbScript, /mariadb-install-db/u);
   assert.match(mariaDbScript, /stored_mariadb_password.*previous_bootstrap_password/u);
   assert.match(mariaDbScript, /mariadb_root_previous_bootstrap/u);
-  assert.match(mariaDbScript, /env -u MYSQL_PWD mariadb --no-defaults/u);
+  assert.match(mariaDbScript, /env -u MYSQL_PWD mariadb --no-defaults --skip-ssl/u);
   assert.match(mariaDbScript, /mariadb_wait_for_started_process/u);
   assert.match(mariaDbScript, /recorded_pid.*started_pid/u);
   assert.match(mariaDbScript, /mv -f "\$temporary_admin_password_file" "\$admin_password_file"/u);

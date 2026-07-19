@@ -207,8 +207,8 @@ function jskitManagedMariaDbDevelopmentDatabaseScript({
     `development_app_password=${shellQuote(appPassword)}`,
     `development_grant_sql=${shellQuote(grantSql)}`,
     "development_admin_password=\"$(cat \"$development_admin_password_file\")\"",
-    "MYSQL_PWD=\"$development_admin_password\" mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$development_mariadb_port\" --user=root --execute=\"$development_grant_sql\"",
-    "MYSQL_PWD=\"$development_app_password\" mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$development_mariadb_port\" --user=\"$development_app_user\" \"$development_database\" --execute=\"SELECT 1\" >/dev/null",
+    "MYSQL_PWD=\"$development_admin_password\" mariadb --no-defaults --skip-ssl --protocol=TCP --host=127.0.0.1 --port=\"$development_mariadb_port\" --user=root --execute=\"$development_grant_sql\"",
+    "MYSQL_PWD=\"$development_app_password\" mariadb --no-defaults --skip-ssl --protocol=TCP --host=127.0.0.1 --port=\"$development_mariadb_port\" --user=\"$development_app_user\" \"$development_database\" --execute=\"SELECT 1\" >/dev/null",
     "printf '[studio] JSKIT development database %s is ready.\\n' \"$development_database\""
   ].join("\n");
 }
@@ -398,7 +398,7 @@ function managedMariaDbAccessInstructions(databaseName = "", targetRoot = "", {
 } = {}) {
   const database = normalizeText(databaseName);
   const databaseArg = database ? ` ${database}` : "";
-  return `Vibe64 MariaDB: mariadb --protocol=TCP --host=${JSKIT_MARIADB_HOST} --port=${jskitMariaDbHostPort(targetRoot, {
+  return `Vibe64 MariaDB: mariadb --skip-ssl --protocol=TCP --host=${JSKIT_MARIADB_HOST} --port=${jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   })} --user=${JSKIT_MARIADB_APP_USER}${databaseArg}`;
 }

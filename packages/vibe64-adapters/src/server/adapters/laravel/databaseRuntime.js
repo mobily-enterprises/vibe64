@@ -125,7 +125,7 @@ function mariaDbClientScript() {
     "  printf '[studio] mariadb client was not found on this host.\\n' >&2",
     "  exit 127",
     "fi",
-    "exec mariadb",
+    "exec mariadb --skip-ssl",
     "exit 127"
   ].join("\n");
 }
@@ -151,7 +151,7 @@ function listLaravelDatabaseProjectTools({
             mariaDbClientScript()
           ],
           command: "bash",
-          commandPreview: "mariadb",
+          commandPreview: "mariadb --skip-ssl",
           cwd: targetRoot,
           ok: true
         };

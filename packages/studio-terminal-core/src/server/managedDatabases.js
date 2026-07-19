@@ -149,12 +149,12 @@ function managedMariaDbServicePromptFacts({
   const client = mariaDbClient();
   return {
     client,
-    checkCommand: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="SELECT 1"`,
-    command: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="<SQL>"`,
+    checkCommand: `${client} --skip-ssl --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="SELECT 1"`,
+    command: `${client} --skip-ssl --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="<SQL>"`,
     environment: MARIADB_ENVIRONMENT_VARIABLES,
     generatorTokenHints: MARIADB_GENERATOR_TOKEN_HINTS,
     id,
-    interactiveCommand: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME"`,
+    interactiveCommand: `${client} --skip-ssl --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME"`,
     kind: "database",
     label,
     notes: [

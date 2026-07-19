@@ -1710,7 +1710,10 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
     assert.match(afterPrompt.actionResult.prompt, /MariaDB/u);
-    assert.match(afterPrompt.actionResult.prompt, /mariadb --host/u);
+    assert.match(afterPrompt.actionResult.prompt, /mariadb --skip-ssl --host/u);
+    assert.match(afterPrompt.actionResult.prompt, /tenant-local endpoint does not offer TLS/u);
+    assert.match(afterPrompt.actionResult.prompt, /derive each name from `\$DB_NAME`/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not hardcode an unscoped database prefix/u);
     assert.match(afterPrompt.actionResult.prompt, /--execute/u);
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
     assert.match(afterPrompt.actionResult.prompt, /DB_USER/u);

@@ -41,6 +41,8 @@ const SEED_WORK_PROFILE_PREAMBLE = [
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for Vibe64-managed database access.",
   "Run the listed non-interactive client command directly from the session source terminal: mariadb for MariaDB services, and psql for PostgreSQL services.",
+  "For Vibe64-managed MariaDB, keep the listed `--skip-ssl` flag. The tenant-local endpoint does not offer TLS, and this flag is part of the approved connection command, not a credential or policy bypass.",
+  "When tests need temporary MariaDB databases, derive each name from `$DB_NAME` so it stays inside the tenant-scoped grant. Do not hardcode an unscoped database prefix or request global database privileges.",
   "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
   "Do not discover replacement credentials, alternate hosts, local sockets, system accounts, or service probes for normal managed-service work.",

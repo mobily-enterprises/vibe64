@@ -218,7 +218,8 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   assert.match(startScript, /mariadb-install-db --no-defaults/u);
   assert.doesNotMatch(startScript, /mysql_install_db --no-defaults/u);
   assert.match(startScript, /mariadbd "\$\{mariadb_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
-  assert.match(startScript, /mariadb --no-defaults --protocol=TCP/u);
+  assert.match(startScript, /mariadb --no-defaults --skip-ssl --protocol=TCP/u);
+  assert.match(developmentDatabaseScript, /mariadb --no-defaults --skip-ssl --protocol=TCP/u);
   assert.doesNotMatch(startScript, /CREATE USER|GRANT ALL PRIVILEGES|development_app_password/u);
   assert.match(developmentDatabaseScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
   assert.match(developmentDatabaseScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
