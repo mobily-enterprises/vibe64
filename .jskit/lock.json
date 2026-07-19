@@ -524,5 +524,11 @@
       "installedAt": "2026-07-11T17:16:51.180Z",
       "migrationSyncVersion": "0.1.0"
     }
+  },
+  "managed": {
+    "ciWorkflow": {
+      "path": ".github/workflows/jskit-verify.yml",
+      "hash": "c073ece6ea417b406d6ed3be24233cd86edcf1a6bc4e57262e6d813e0adb2d55"
+    }
   }
 }

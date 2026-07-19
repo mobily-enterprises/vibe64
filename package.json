@@ -46,6 +46,14 @@
   "engines": {
     "node": "26.x"
   },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true,
+    "node-pty@1.1.0": true,
+    "vue-demi@0.14.10": true
+  },
   "scripts": {
     "prepack": "npm run verify:packages && npm run build && npm run prune:packaged-deps",
     "server": "node ./bin/server.js --no-open",
@@ -141,9 +149,9 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.80",
-    "@jskit-ai/config-eslint": "0.1.116",
-    "@jskit-ai/jskit-cli": "0.2.131",
+    "@jskit-ai/agent-docs": "0.1.81",
+    "@jskit-ai/config-eslint": "0.1.117",
+    "@jskit-ai/jskit-cli": "0.2.133",
     "@playwright/test": "^1.57.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "eslint": "^9.39.1",
