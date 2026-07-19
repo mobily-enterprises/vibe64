@@ -40,6 +40,25 @@
     </Transition>
 
     <div
+      v-show="!chatCollapsed"
+      ref="chatColumnSeparator"
+      class="studio-ai-sessions__chat-column-separator"
+      :class="{
+        'studio-ai-sessions__chat-column-separator--resizing': chatColumnResizing
+      }"
+      aria-label="Resize chat"
+      aria-orientation="vertical"
+      :aria-valuemax="chatColumnBounds.max"
+      :aria-valuemin="chatColumnBounds.min"
+      :aria-valuenow="chatColumnWidth"
+      role="separator"
+      tabindex="0"
+      title="Resize chat"
+      @keydown="resizeChatColumnWithKeyboard"
+      @pointerdown="startChatColumnResize"
+    />
+
+    <div
       v-if="emptyLayoutVisible"
       class="studio-ai-sessions__empty-layout"
       :aria-hidden="selectedSessionClosing ? 'true' : undefined"
@@ -179,6 +198,9 @@ import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64Sessi
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
+  useVibe64ChatColumnResize
+} from "@/composables/useVibe64ChatColumnResize.js";
+import {
   useVibe64SessionPanel,
   vibe64SessionPanelEmits,
   vibe64SessionPanelProps
@@ -214,6 +236,15 @@ const {
   toolbar,
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
+
+const {
+  bounds: chatColumnBounds,
+  resizing: chatColumnResizing,
+  resizeWithKeyboard: resizeChatColumnWithKeyboard,
+  separator: chatColumnSeparator,
+  startResize: startChatColumnResize,
+  width: chatColumnWidth
+} = useVibe64ChatColumnResize();
 </script>
 
 <style scoped>
@@ -236,13 +267,51 @@ const {
 }
 
 .studio-ai-sessions__empty-layout {
-  --studio-ai-sessions-layout-gap: 0.9rem;
   display: grid;
-  gap: var(--studio-ai-sessions-layout-gap);
+  gap: var(--studio-home-project-gap, 0.75rem);
   height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.studio-ai-sessions__chat-column-separator {
+  background: transparent;
+  bottom: 0;
+  cursor: col-resize;
+  left: var(--studio-home-chat-column-width, 24rem);
+  outline: none;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  user-select: none;
+  width: var(--studio-home-project-gap, 0.75rem);
+  z-index: 10;
+}
+
+.studio-ai-sessions__chat-column-separator::before {
+  background: rgba(var(--v-theme-on-surface), 0.14);
+  bottom: 0;
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  transition: background-color 120ms ease, width 120ms ease;
+  width: 1px;
+}
+
+.studio-ai-sessions__chat-column-separator:hover::before,
+.studio-ai-sessions__chat-column-separator:focus-visible::before,
+.studio-ai-sessions__chat-column-separator--resizing::before {
+  background: rgb(var(--v-theme-primary));
+  width: 2px;
+}
+
+:global(body.studio-home-chat-column-resizing),
+:global(body.studio-home-chat-column-resizing *) {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .studio-ai-sessions__empty-main,
@@ -490,6 +559,10 @@ const {
 }
 
 @media (max-width: 980px) {
+  .studio-ai-sessions__chat-column-separator {
+    display: none !important;
+  }
+
   .studio-ai-sessions__empty-layout {
     grid-template-rows: minmax(0, 1fr);
   }
