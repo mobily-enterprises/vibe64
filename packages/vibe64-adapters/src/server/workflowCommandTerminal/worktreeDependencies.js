@@ -221,6 +221,9 @@ function createWorktreeScript({
   const quotedLocalSourceBranch = shellQuote(PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
   const quotedPrepareWorktreeScriptPath = shellQuote(normalizeText(prepareWorktreeScriptPath));
   const quotedRemoteUrl = shellQuote(remoteUrl);
+  const quotedSessionBranchFetchRefspec = shellQuote(
+    `+refs/heads/${branch}:refs/remotes/origin/${branch}`
+  );
   const quotedTargetRoot = shellQuote(targetRoot);
   const quotedWorktreePath = shellQuote(worktreePath);
   const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
@@ -237,6 +240,11 @@ function createWorktreeScript({
     `VIBE64_GIT_DEFAULT_BRANCH=${quotedDefaultBranch}`,
     `VIBE64_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
     "prepare_vibe64_worktree() {",
+    ...(repositoryProfile.githubPr ? [
+      `  if ! git -C ${quotedWorktreePath} config --fixed-value --get-all remote.origin.fetch ${quotedSessionBranchFetchRefspec} >/dev/null; then`,
+      `    git -C ${quotedWorktreePath} config --add remote.origin.fetch ${quotedSessionBranchFetchRefspec}`,
+      "  fi"
+    ] : []),
     "  if [ -n \"$VIBE64_PREPARE_WORKTREE_SCRIPT\" ]; then",
     "    \"$VIBE64_PREPARE_WORKTREE_SCRIPT\"",
     "  fi",

@@ -454,8 +454,25 @@ test("create worktree creates an isolated clone from project repository metadata
     assert.equal(runGit(sourcePath, ["branch", "--list", "main"]), "");
     assert.equal(runGit(sourcePath, ["rev-parse", "--verify", "origin/main"]), baseCommit);
     assert.equal(runGit(sourcePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
+    assert.deepEqual(
+      runGit(sourcePath, ["config", "--get-all", "remote.origin.fetch"]).split("\n"),
+      [
+        "+refs/heads/main:refs/remotes/origin/main",
+        "+refs/heads/vibe64/metadata-remote:refs/remotes/origin/vibe64/metadata-remote"
+      ]
+    );
     assert.equal(runGit(sourcePath, ["remote", "get-url", "origin"]), remoteRoot);
     await assertNoGitAlternates(sourcePath);
+
+    await writeProjectFile(sourcePath, "session.txt", "session work\n");
+    runGit(sourcePath, ["add", "session.txt"]);
+    runGit(sourcePath, ["commit", "-m", "session work"]);
+    runGit(sourcePath, ["push", "-u", "origin", "vibe64/metadata-remote"]);
+    assert.equal(
+      runGit(sourcePath, ["rev-parse", "--verify", "refs/remotes/origin/vibe64/metadata-remote"]),
+      runGit(sourcePath, ["rev-parse", "--verify", "HEAD"])
+    );
+    assert.equal(runGit(sourcePath, ["rev-list", "--count", "HEAD", "--not", "--remotes"]), "0");
     assert.equal(runGit(cachePath, ["rev-parse", "--is-bare-repository"]), "true");
     assert.equal(runGit(cachePath, ["remote", "get-url", "origin"]), remoteRoot);
     assert.notEqual(runCommandResult("git", ["-C", targetRoot, "worktree", "list", "--porcelain"]).status, 0);
