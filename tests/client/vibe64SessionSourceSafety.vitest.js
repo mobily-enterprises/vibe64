@@ -48,8 +48,16 @@ describe("Vibe64 session source safety presentation", () => {
     expect(sourceSafetyButtonLabel(status)).toBe("Commit & push");
     expect(sourceSafetyStatusTitle(status)).toContain("3 commits not pushed");
     expect(sourceSafetyDialogMessage(status)).toContain("Commit and push it before abandoning");
-    expect(sourceSafetyPrompt(status)).toContain("never force-push");
+    expect(sourceSafetyPrompt(status)).toContain("Use the fast path");
     expect(sourceSafetyPrompt(status)).toContain("Do not change the workflow state");
+    expect(sourceSafetyPrompt(status)).toContain("HEAD:refs/heads/main");
+    expect(sourceSafetyPrompt(status)).toContain("Only ever push to origin/main");
+    expect(sourceSafetyPrompt(status)).toContain("stop and ask the user");
+    expect(sourceSafetyPrompt(status)).toContain("vibe64.system.json");
+    expect(sourceSafetyPrompt(status)).toContain("Do not inspect file contents");
+    expect(sourceSafetyPrompt(status)).not.toContain("secret");
+    expect(sourceSafetyPrompt(status)).not.toContain("ownership");
+    expect(sourceSafetyPrompt(status)).not.toContain("Verify that a remote ref contains HEAD");
   });
 
   it("moves the mark hue from yellow toward red as severity grows", () => {

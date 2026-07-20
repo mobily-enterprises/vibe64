@@ -97,7 +97,7 @@ function sourceSafetyDialogMessage(status = {}) {
 
 function sourceSafetyDisplayPrompt(status = {}) {
   return sourceSafetyRequiresPush(status)
-    ? "Commit and push all current session work."
+    ? "Commit and push all current session work to origin/main."
     : "Commit all current session work.";
 }
 
@@ -105,14 +105,16 @@ function sourceSafetyPrompt(status = {}) {
   const requiresPush = sourceSafetyRequiresPush(status);
   return [
     requiresPush
-      ? "Commit and push all current work in this Git-backed session."
+      ? "Commit and push all current work in this Git-backed session to origin/main."
       : "Commit all current work in this local-source session.",
     "This is an independent source-safety request, not a Vibe64 workflow step. Do not change the workflow state.",
-    "Inspect the working tree and commit all safe, source-owned session work. Never discard, stash, or overwrite changes; report ambiguous ownership or suspected secrets instead.",
+    "Use the fast path. Run git status --short --branch, then commit every current worktree change as-is, including untracked portable Vibe64 source contracts such as vibe64.system.json. Do not inspect file contents, edit files, or run audits, validation, lint, tests, or builds for a straightforward save.",
     requiresPush
-      ? "Fetch the configured remote first, preserve its work, and never force-push. Verify that a remote ref contains HEAD."
-      : "Do not push; this repository only needs a local commit. Verify that the working tree is clean.",
-    "Report the commit SHA and any remaining blocker."
+      ? "Fetch only origin/main. If origin/main is an ancestor of HEAD, immediately push HEAD:refs/heads/main. If HEAD is an ancestor of origin/main, fast-forward to origin/main and finish. Otherwise perform one normal merge of origin/main into the current work; if it succeeds cleanly, immediately push HEAD:refs/heads/main. Only ever push to origin/main. Never push another ref, rebase, force-push, create a fork, or start pull-request work. If a Git command fails or the merge conflicts, stop and ask the user; do not start a broader investigation."
+      : "Do not push; after committing, verify that the working tree is clean. If the commit fails, stop and ask the user.",
+    requiresPush
+      ? "Verify that live origin/main equals HEAD, then report the commit SHA in one concise response."
+      : "Report the commit SHA in one concise response."
   ].join("\n\n");
 }
 

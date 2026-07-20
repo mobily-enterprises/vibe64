@@ -88,7 +88,7 @@ test("local-source safety clears as soon as changes are committed", async () => 
   }
 });
 
-test("Git-backed safety remains unsafe after commit and clears after push", async () => {
+test("Git-backed safety remains unsafe when only a session branch is pushed and clears on origin/main", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-safety-git-"));
   try {
     const sourceRoot = path.join(root, "managed-source", "sessions", "active", "git-session", "source");
@@ -97,6 +97,7 @@ test("Git-backed safety remains unsafe after commit and clears after push", asyn
     await git(root, ["init", "--bare", remoteRoot]);
     await git(sourceRoot, ["remote", "add", "origin", remoteRoot]);
     await git(sourceRoot, ["push", "-u", "origin", "main"]);
+    await git(sourceRoot, ["checkout", "-b", "vibe64/git-session"]);
     const session = sourceSession(sourceRoot, "git-session", {
       base_commit: baseCommit,
       workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
@@ -120,7 +121,17 @@ test("Git-backed safety remains unsafe after commit and clears after push", asyn
     assert.ok(committed.severity < 50);
     assert.equal(committed.unsafe, true);
 
-    await git(sourceRoot, ["push", "origin", "main"]);
+    await git(sourceRoot, [
+      "push",
+      "origin",
+      "HEAD:refs/heads/vibe64/git-session"
+    ]);
+    const sessionBranchPushed = await inspectSessionSourceSafety(session);
+    assert.equal(sessionBranchPushed.hasUnpushedCommits, true);
+    assert.equal(sessionBranchPushed.unpushedCommitCount, 1);
+    assert.equal(sessionBranchPushed.unsafe, true);
+
+    await git(sourceRoot, ["push", "origin", "HEAD:refs/heads/main"]);
     const pushed = await inspectSessionSourceSafety(session);
     assert.equal(pushed.hasUnpushedCommits, false);
     assert.equal(pushed.unpushedCommitCount, 0);

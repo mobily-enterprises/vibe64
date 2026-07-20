@@ -75,9 +75,15 @@ describe("useVibe64SessionSourceSafety", () => {
     const [promptPath, promptOptions] = httpMocks.request.mock.calls[1];
     expect(promptPath).toBe("/api/app/project/example/vibe64/sessions/session-1/agent-message");
     expect(promptOptions.method).toBe("POST");
-    expect(promptOptions.body.displayFields.conversationRequest).toBe("Commit and push all current session work.");
+    expect(promptOptions.body.displayFields.conversationRequest).toBe("Commit and push all current session work to origin/main.");
     expect(promptOptions.body.message).toContain("independent source-safety request");
-    expect(promptOptions.body.message).toContain("never force-push");
+    expect(promptOptions.body.message).toContain("straightforward save");
+    expect(promptOptions.body.message).toContain("HEAD:refs/heads/main");
+    expect(promptOptions.body.message).toContain("Only ever push to origin/main");
+    expect(promptOptions.body.message).toContain("vibe64.system.json");
+    expect(promptOptions.body.message).not.toContain("secret");
+    expect(promptOptions.body.message).not.toContain("ownership");
+    expect(promptOptions.body.message).not.toContain("audit the");
     expect(promptOptions.body).not.toHaveProperty("actionId");
     expect(promptOptions.body).not.toHaveProperty("intentId");
 

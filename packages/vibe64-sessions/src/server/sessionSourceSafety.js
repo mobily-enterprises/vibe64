@@ -170,37 +170,39 @@ async function validCommit(cwd, candidate = "") {
   return result.ok === true ? commit : "";
 }
 
+async function originMainContainsHead(cwd) {
+  const remoteMain = await validCommit(cwd, "refs/remotes/origin/main");
+  if (!remoteMain) {
+    return false;
+  }
+  const result = await gitResult(cwd, [
+    "merge-base",
+    "--is-ancestor",
+    "HEAD",
+    "refs/remotes/origin/main"
+  ]);
+  return result.ok === true;
+}
+
 async function unpushedCommits(cwd, {
   baseCommit = "",
-  head = "",
-  hasRemoteRefs = false
+  head = ""
 } = {}) {
   if (!head) {
     return [];
   }
-  const pushedRefs = outputLines(await gitOutput(cwd, [
-    "for-each-ref",
-    "--format=%(refname:short)",
-    "--contains",
-    "HEAD",
-    "refs/remotes"
-  ]));
-  if (pushedRefs.length > 0) {
+  if (await originMainContainsHead(cwd)) {
     return [];
   }
 
   const validBaseCommit = await validCommit(cwd, baseCommit);
   const revision = validBaseCommit ? `${validBaseCommit}..HEAD` : "HEAD";
-  const args = [
+  return outputLines(await gitOutput(cwd, [
     "rev-list",
     "--reverse",
     `--max-count=${MAX_UNPUSHED_COMMITS}`,
     revision
-  ];
-  if (hasRemoteRefs) {
-    args.push("--not", "--remotes");
-  }
-  return outputLines(await gitOutput(cwd, args));
+  ]));
 }
 
 async function unpushedDiffBase(cwd, commits = []) {
@@ -277,7 +279,6 @@ async function inspectSessionSourceSafety(session = {}) {
     branch,
     head,
     remoteNamesOutput,
-    remoteRefsOutput,
     statusOutput,
     untrackedByteCount
   ] = await Promise.all([
@@ -288,11 +289,6 @@ async function inspectSessionSourceSafety(session = {}) {
       optional: true
     }),
     gitOutput(worktreePath, ["remote"]),
-    gitOutput(worktreePath, [
-      "for-each-ref",
-      "--format=%(refname:short)",
-      "refs/remotes"
-    ]),
     gitOutput(worktreePath, [
       "status",
       "--porcelain=v1",
@@ -306,8 +302,7 @@ async function inspectSessionSourceSafety(session = {}) {
   const commits = profile.requiresPush
     ? await unpushedCommits(worktreePath, {
         baseCommit: session.metadata?.base_commit,
-        head,
-        hasRemoteRefs: Boolean(normalizeOutput(remoteRefsOutput))
+        head
       })
     : [];
   const unpushedCommitCount = commits.length;
