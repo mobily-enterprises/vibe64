@@ -72,6 +72,30 @@ describe("Vibe64 terminal drivers", () => {
     ]);
   });
 
+  it("reports unexpected websocket loss as a recoverable disconnection", async () => {
+    const events = [];
+    const driver = createWebSocketTerminalDriver({
+      webSocketUrl: (sessionId) => `ws://terminal/${sessionId}`
+    });
+    const connection = driver.openConnection({
+      onEvent: (event) => events.push(event),
+      sessionId: "terminal-1"
+    });
+    const socket = FakeWebSocket.instances[0];
+
+    socket.dispatch("open");
+    await connection.ready;
+    socket.disconnect();
+
+    expect(events).toEqual([
+      { type: "connected" },
+      {
+        intentional: false,
+        type: "disconnected"
+      }
+    ]);
+  });
+
   it("polls through the same connection contract and stops after exit", async () => {
     vi.useFakeTimers();
     const events = [];
@@ -161,6 +185,14 @@ class FakeWebSocket {
   }
 
   close() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatch("close");
+  }
+
+  disconnect() {
+    if (this.readyState === FakeWebSocket.CLOSED) {
+      return;
+    }
     this.readyState = FakeWebSocket.CLOSED;
     this.dispatch("close");
   }

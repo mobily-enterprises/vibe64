@@ -244,6 +244,9 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.tooling_contract, /New JSKIT-owned files must be created/u);
     assert.match(promptContext.tooling_contract, /Before writing generic helpers for JSON:API documents/u);
     assert.match(promptContext.tooling_contract, /search JSKIT package exports and agent-doc references first/u);
+    assert.match(promptContext.tooling_contract, /architectural problem, missing framework capability/u);
+    assert.match(promptContext.tooling_contract, /treat it as a showstopper even if the requested work could technically continue/u);
+    assert.match(promptContext.tooling_contract, /Do not bypass it, patch around it in the application/u);
     assert.match(promptContext.generator_discovery_commands, /npx jskit list-placements --json/u);
     assert.doesNotMatch(promptContext.generator_discovery_commands, /helper-map update/u);
     assert.doesNotMatch(promptContext.generator_discovery_commands, /helper-map --json/u);
@@ -1570,6 +1573,9 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.match(afterPrompt.actionResult.prompt, /mostly template plus a short JavaScript section that calls the appropriate JSKIT composable/u);
     assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
     assert.match(afterPrompt.actionResult.prompt, /Repositories own persistence access and row mapping/u);
+    assert.match(afterPrompt.actionResult.prompt, /architectural problem, missing framework capability/u);
+    assert.match(afterPrompt.actionResult.prompt, /Stop, report the exact issue, evidence, and consequence to the user/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not bypass it, patch around it in the application/u);
     assert.match(afterPrompt.actionResult.prompt, /prefer adapting the existing generated file in place/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not replace the generated structure with a separate custom implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /guide\/agent\/generators\/crud-generators\.md/u);

@@ -82,6 +82,7 @@ const COMMON_MARKERS = Object.freeze([
   { currentId: "biomeConfigJson", id: "biome_config_json", kind: "file", label: "biome.json", relativePath: "biome.json", roles: [MARKER_ROLE.CONFIG] },
   { currentId: "biomeConfigJsonc", id: "biome_config_jsonc", kind: "file", label: "biome.jsonc", relativePath: "biome.jsonc", roles: [MARKER_ROLE.CONFIG] },
   { currentId: "playwrightConfigJs", id: "playwright_config_js", kind: "file", label: "playwright.config.js", relativePath: "playwright.config.js", roles: [MARKER_ROLE.CONFIG] },
+  { currentId: "playwrightConfigMjs", id: "playwright_config_mjs", kind: "file", label: "playwright.config.mjs", relativePath: "playwright.config.mjs", roles: [MARKER_ROLE.CONFIG] },
   { currentId: "playwrightConfigTs", id: "playwright_config_ts", kind: "file", label: "playwright.config.ts", relativePath: "playwright.config.ts", roles: [MARKER_ROLE.CONFIG] },
   { currentId: "vitestConfigJs", id: "vitest_config_js", kind: "file", label: "vitest.config.js", relativePath: "vitest.config.js", roles: [MARKER_ROLE.CONFIG] },
   { currentId: "vitestConfigTs", id: "vitest_config_ts", kind: "file", label: "vitest.config.ts", relativePath: "vitest.config.ts", roles: [MARKER_ROLE.CONFIG] },
@@ -280,7 +281,7 @@ const TOOLING_DEFINITIONS = Object.freeze([
     dependencies: ["@playwright/test", "playwright"],
     id: "playwright",
     label: "Playwright",
-    markerPaths: ["playwright.config.js", "playwright.config.ts"],
+    markerPaths: ["playwright.config.js", "playwright.config.mjs", "playwright.config.ts"],
     scriptPattern: /\bplaywright\b/u
   },
   {

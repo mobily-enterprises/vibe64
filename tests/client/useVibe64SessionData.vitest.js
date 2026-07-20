@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentTurnRealtimeOverlayFromPayload,
   composerMenuProjectionFromRealtimePayload,
+  latestAgentTurnRealtimeOverlay,
   rememberSessionComposerMenu,
   rememberSessionDetailRecord,
   selectedSessionShouldLoadComposerMenu,
@@ -959,6 +960,7 @@ describe("useVibe64SessionData selected session record", () => {
         }
       },
       reason: "codex-app-server-turn-active",
+      revision: 12,
       sessionId: "session-1"
     }, "session-1");
 
@@ -973,6 +975,7 @@ describe("useVibe64SessionData selected session record", () => {
           id: "turn-1"
         }
       },
+      revision: 12,
       sessionId: "session-1"
     });
 
@@ -982,11 +985,21 @@ describe("useVibe64SessionData selected session record", () => {
           active: true
         }
       },
+      revision: 12,
       sessionId: "session-2"
+    }, "session-1")).toBe(null);
+
+    expect(agentTurnRealtimeOverlayFromPayload({
+      agentSession: {
+        turn: {
+          active: true
+        }
+      },
+      sessionId: "session-1"
     }, "session-1")).toBe(null);
   });
 
-  it("applies active and idle assistant turn overlays without replacing the session record", () => {
+  it("orders assistant turn events and canonical session snapshots by revision", () => {
     const session = {
       agentRuns: [
         {
@@ -1010,10 +1023,11 @@ describe("useVibe64SessionData selected session record", () => {
           kind: "conversation"
         }
       },
+      revision: 11,
       sessionId: "session-1"
     };
 
-    const activeSession = sessionWithAgentTurnRealtimeOverlay(session, {
+    const activeOverlay = {
       active: true,
       agentRun: {
         id: "codex_app_server",
@@ -1032,15 +1046,18 @@ describe("useVibe64SessionData selected session record", () => {
           threadId: "thread-1"
         }
       },
+      revision: 12,
       sessionId: "session-1"
-    });
+    };
+    const activeSession = sessionWithAgentTurnRealtimeOverlay(session, activeOverlay);
 
     expect(activeSession).not.toBe(session);
     expect(activeSession.agentSession.turn.active).toBe(true);
     expect(activeSession.agentSession.turn.state).toBe("active");
     expect(activeSession.agentRuns[0].state).toBe("active");
+    expect(activeSession.revision).toBe(12);
 
-    const idleSession = sessionWithAgentTurnRealtimeOverlay(activeSession, {
+    const idleOverlay = {
       active: false,
       agentRun: {
         id: "codex_app_server",
@@ -1059,11 +1076,23 @@ describe("useVibe64SessionData selected session record", () => {
           threadId: "thread-1"
         }
       },
+      revision: 13,
       sessionId: "session-1"
-    });
+    };
+    const idleSession = sessionWithAgentTurnRealtimeOverlay(session, idleOverlay);
 
     expect(idleSession.agentSession.turn.active).toBe(false);
     expect(idleSession.agentSession.turn.state).toBe("idle");
     expect(idleSession.agentRuns[0].state).toBe("completed");
+    expect(idleSession.revision).toBe(13);
+
+    expect(latestAgentTurnRealtimeOverlay(idleOverlay, activeOverlay)).toBe(idleOverlay);
+
+    const canonicalIdleSession = {
+      ...session,
+      revision: 13
+    };
+    expect(sessionWithAgentTurnRealtimeOverlay(canonicalIdleSession, activeOverlay)).toBe(canonicalIdleSession);
+    expect(sessionWithAgentTurnRealtimeOverlay(canonicalIdleSession, idleOverlay)).toBe(canonicalIdleSession);
   });
 });

@@ -8,6 +8,11 @@ function sessionChangedReason(payload = {}) {
   return String(payload?.reason || "").trim();
 }
 
+function sessionRevision(value) {
+  const revision = Number(value);
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
+}
+
 function agentTurnRealtimeOverlayFromPayload(payload = {}, selectedSessionId = "") {
   const changedSessionId = String(payload?.sessionId || payload?.entityId || "").trim();
   if (!changedSessionId || changedSessionId !== String(selectedSessionId || "").trim()) {
@@ -16,7 +21,8 @@ function agentTurnRealtimeOverlayFromPayload(payload = {}, selectedSessionId = "
   const agentSession = plainObjectValue(payload.agentSession);
   const turn = plainObjectValue(agentSession.turn);
   const run = plainObjectValue(payload.agentRun);
-  if (!Object.keys(turn).length && !Object.keys(run).length) {
+  const revision = sessionRevision(payload.revision);
+  if (revision === null || (!Object.keys(turn).length && !Object.keys(run).length)) {
     return null;
   }
   const active = turn.active === true || run.active === true;
@@ -34,8 +40,19 @@ function agentTurnRealtimeOverlayFromPayload(payload = {}, selectedSessionId = "
       }
     },
     reason: sessionChangedReason(payload),
+    revision,
     sessionId: changedSessionId
   };
+}
+
+function latestAgentTurnRealtimeOverlay(current = null, candidate = null) {
+  if (!candidate) {
+    return current;
+  }
+  if (!current || candidate.revision > current.revision) {
+    return candidate;
+  }
+  return current;
 }
 
 function agentTurnIdentity(agentSession = {}) {
@@ -94,11 +111,13 @@ function mergeAgentRunOverlay(agentRuns = [], overlayRun = {}) {
 }
 
 function sessionWithAgentTurnRealtimeOverlay(session = null, overlay = null) {
+  const currentRevision = sessionRevision(session?.revision);
   if (
     !session ||
     !overlay ||
     session?.ok === false ||
     session.sessionId !== overlay.sessionId ||
+    (currentRevision !== null && overlay.revision <= currentRevision) ||
     !agentTurnOverlayMatchesSession(session, overlay)
   ) {
     return session;
@@ -119,11 +138,13 @@ function sessionWithAgentTurnRealtimeOverlay(session = null, overlay = null) {
         ...plainObjectValue(overlayAgentSession.turn),
         active: overlay.active === true
       }
-    }
+    },
+    revision: overlay.revision
   };
 }
 
 export {
   agentTurnRealtimeOverlayFromPayload,
+  latestAgentTurnRealtimeOverlay,
   sessionWithAgentTurnRealtimeOverlay
 };

@@ -11,7 +11,7 @@ const APP_ROOT = path.resolve(__dirname, "../..");
 const EXPECTED_MANAGED_SCRIPTS = Object.freeze({
   verify: "npx jskit app verify && npm run verify:packages && npm run --if-present verify:app",
   "jskit:release": "npx jskit app release",
-  "jskit:update": "node ./tooling/update-jskit-packages.mjs"
+  "jskit:update": "npx jskit app update-packages"
 });
 
 const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([

@@ -210,6 +210,7 @@ test("generic Node web adapter detects framework hints from config files without
       writeProjectFile(targetRoot, "astro.config.ts", "export default {};\n"),
       writeProjectFile(targetRoot, "tailwind.config.mjs", "export default {};\n"),
       writeProjectFile(targetRoot, "eslint.config.mjs", "export default [];\n"),
+      writeProjectFile(targetRoot, "playwright.config.mjs", "export default {};\n"),
       writeProjectFile(targetRoot, "src/routes/+page.svelte", "<main>Hello</main>\n"),
       writeProjectFile(targetRoot, "tests/example.test.js", "test('example', () => {});\n")
     ]);
@@ -225,6 +226,7 @@ test("generic Node web adapter detects framework hints from config files without
     assert.match(promptContext.config_files, /astro\.config\.ts/u);
     assert.match(promptContext.config_files, /tailwind\.config\.mjs/u);
     assert.match(promptContext.config_files, /eslint\.config\.mjs/u);
+    assert.match(promptContext.config_files, /playwright\.config\.mjs/u);
     assert.match(promptContext.test_locations, /tests/u);
   });
 });

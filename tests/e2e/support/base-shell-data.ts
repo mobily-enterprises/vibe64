@@ -1,4 +1,4 @@
-const PLAYWRIGHT_PORT = String(process.env.PLAYWRIGHT_PORT || "5173").trim() || "5173";
+const PLAYWRIGHT_PORT = String(process.env.PLAYWRIGHT_PORT || "4173").trim() || "4173";
 const DEFAULT_BASE_URL = `http://127.0.0.1:${PLAYWRIGHT_PORT}`;
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/u, "");
 const WORKSPACE_SLUG = "example-target-app";

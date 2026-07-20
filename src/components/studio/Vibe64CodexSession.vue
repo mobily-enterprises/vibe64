@@ -322,6 +322,7 @@ const {
     sendTerminalData: sendTerminalBytes,
   terminalFocused,
   terminalCommandPreview,
+  terminalConnectionStatus,
   terminalError,
   terminalExited,
   terminalSessionId,
@@ -345,6 +346,12 @@ const terminalSubtitle = computed(() => {
   }
   if (terminalExited.value) {
     return "Codex exited";
+  }
+  if (terminalConnectionStatus.value === "reconnecting") {
+    return "Reconnecting Codex";
+  }
+  if (terminalConnectionStatus.value === "connecting") {
+    return "Connecting Codex";
   }
   return terminalStatus.value === "running" ? "Codex is running" : "Codex agent session";
 });

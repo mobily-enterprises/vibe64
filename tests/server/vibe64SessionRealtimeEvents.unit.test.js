@@ -248,6 +248,45 @@ test("Vibe64 session change publisher can include an explicit realtime payload",
   });
 });
 
+test("Vibe64 session change publisher orders explicit payloads with the supplied session revision", async () => {
+  const events = [];
+  const publish = createVibe64SessionChangedPublisher({
+    domainEvents: {
+      async publish(event) {
+        events.push(event);
+      }
+    },
+    methodName: "startAgentTerminal",
+    serviceToken: "feature.vibe64-terminals.service"
+  });
+
+  await publish("session-1", {
+    payload: {
+      agentSession: {
+        turn: {
+          active: true
+        }
+      }
+    },
+    reason: "codex-app-server-turn-active",
+    session: {
+      revision: 14,
+      sessionId: "session-1"
+    }
+  });
+
+  assert.deepEqual(events[0].meta.realtime.payload, {
+    agentSession: {
+      turn: {
+        active: true
+      }
+    },
+    reason: "codex-app-server-turn-active",
+    revision: 14,
+    sessionId: "session-1"
+  });
+});
+
 test("Vibe64 session change publisher merges client refresh responsibilities", async () => {
   const events = [];
   const publish = createVibe64SessionChangedPublisher({

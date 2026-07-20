@@ -2107,17 +2107,21 @@ function createCodexTerminalController({
       updatedAt
     });
     delete runPatch.pendingUserMessageClientIds;
-    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
-      event: {
-        kind: "codex-prompt-delivery-abandoned",
-        message: error,
-        state: VIBE64_AGENT_RUN_STATE.FAILED
-      },
-      patch: runPatch
+    const updatedSession = await runtime.store.mutateSession(sessionId, async () => {
+      await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+        event: {
+          kind: "codex-prompt-delivery-abandoned",
+          message: error,
+          state: VIBE64_AGENT_RUN_STATE.FAILED
+        },
+        patch: runPatch
+      });
+      return runtime.getSession(sessionId);
     });
     await publishSessionChanged(sessionId, {
       payload: codexAppServerAgentRunRealtimePayload(runPatch),
-      reason: "codex-prompt-delivery-abandoned"
+      reason: "codex-prompt-delivery-abandoned",
+      session: updatedSession
     });
     vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.orphaned", {
       sessionId,
@@ -4309,7 +4313,7 @@ function createCodexTerminalController({
     let runPatch = null;
     let wrote = false;
     let stale = null;
-    await runtime.store.mutateSession(normalizedSessionId, async () => {
+    const updatedSession = await runtime.store.mutateSession(normalizedSessionId, async () => {
       const currentSession = typeof runtime?.getSession === "function"
         ? await runtime.getSession(normalizedSessionId).catch(() => null)
         : null;
@@ -4344,7 +4348,7 @@ function createCodexTerminalController({
           publishReason,
           sessionId: normalizedSessionId
         });
-        return;
+        return currentSession;
       }
       await runtime.store.writeAgentRunEvent(normalizedSessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
         event: {
@@ -4355,6 +4359,7 @@ function createCodexTerminalController({
         patch: runPatch
       });
       wrote = true;
+      return runtime.getSession(normalizedSessionId);
     });
     if (!wrote) {
       return {
@@ -4369,7 +4374,8 @@ function createCodexTerminalController({
         ...codexAppServerAgentRunRealtimePayload(runPatch),
         ...(isRecord(publishPayload) ? publishPayload : {})
       },
-      reason: publishReason || "codex-app-server-turn-state"
+      reason: publishReason || "codex-app-server-turn-state",
+      session: updatedSession
     });
     return {
       ok: true

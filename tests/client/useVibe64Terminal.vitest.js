@@ -238,6 +238,83 @@ describe("useVibe64Terminal", () => {
     });
   });
 
+  it("reconnects an attached terminal and restores its authoritative snapshot", async () => {
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      reconnectDelayMs: 0,
+      reconnectMaxDelayMs: 0
+    });
+
+    const attaching = terminal.attachTerminal({
+      id: "terminal-1",
+      output: "before outage\n",
+      outputVersion: 1,
+      status: "running"
+    });
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.dispatch("open");
+    await attaching;
+
+    firstSocket.disconnect();
+
+    expect(terminal.terminalConnectionStatus.value).toBe("reconnecting");
+    expect(terminal.terminalError.value).toBe("");
+    await vi.waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    });
+
+    const recoveredSocket = FakeWebSocket.instances[1];
+    recoveredSocket.dispatch("open");
+    recoveredSocket.dispatch("message", {
+      data: JSON.stringify({
+        session: {
+          id: "terminal-1",
+          output: "before outage\nafter outage\n",
+          outputVersion: 2,
+          status: "running"
+        },
+        type: "snapshot"
+      })
+    });
+    await flushPromises();
+
+    expect(terminal.terminalConnectionStatus.value).toBe("connected");
+    expect(terminal.terminalSessionId.value).toBe("terminal-1");
+    expect(terminal.terminalOutput.value).toBe("before outage\nafter outage\n");
+    expect(terminal.terminalStatus.value).toBe("running");
+
+    terminal.closeTerminalSocket();
+  });
+
+  it("does not retry a server protocol rejection as a transport outage", async () => {
+    const terminal = useVibe64Terminal({
+      driver: testTerminalDriver(),
+      reconnectDelayMs: 0,
+      reconnectMaxDelayMs: 0
+    });
+
+    const attaching = terminal.attachTerminal({
+      id: "terminal-1",
+      status: "running"
+    });
+    const socket = FakeWebSocket.instances[0];
+    socket.dispatch("open");
+    await attaching;
+
+    socket.dispatch("message", {
+      data: JSON.stringify({
+        error: "Terminal access was rejected.",
+        type: "error"
+      })
+    });
+    socket.disconnect();
+    await flushPromises();
+
+    expect(terminal.terminalConnectionStatus.value).toBe("disconnected");
+    expect(terminal.terminalError.value).toBe("Terminal access was rejected.");
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
   it("ignores stale snapshots that arrive after newer websocket output", async () => {
     const terminal = useVibe64Terminal({
       driver: testTerminalDriver()
@@ -501,6 +578,14 @@ class FakeWebSocket {
   }
 
   close() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatch("close");
+  }
+
+  disconnect() {
+    if (this.readyState === FakeWebSocket.CLOSED) {
+      return;
+    }
     this.readyState = FakeWebSocket.CLOSED;
     this.dispatch("close");
   }

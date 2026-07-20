@@ -415,6 +415,10 @@ function bindPreviewProxySocketPair(left, right, {
 } = {}) {
   tracker?.trackSocket?.(left, "browser-upgrade");
   tracker?.trackSocket?.(right, "upstream-upgrade");
+  // Preview WebSockets, including Vite HMR, legitimately stay open while a
+  // browser is backgrounded. Their lifetime is owned by the proxy registry.
+  left.setTimeout?.(0);
+  right.setTimeout?.(0);
   let closed = false;
   const closeBoth = () => {
     if (closed) {

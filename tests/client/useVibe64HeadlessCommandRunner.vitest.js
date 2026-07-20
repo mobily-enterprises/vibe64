@@ -410,6 +410,26 @@ describe("useVibe64HeadlessCommandRunner", () => {
     expect(runner.running.value).toBe(false);
   });
 
+  it("stops observing when the terminal server rejects the stream", async () => {
+    const { closeCommandTerminal, runner } = commandRunnerFixture({
+      terminalSessionId: "terminal-rejected"
+    });
+    const resultPromise = runCreateSource(runner);
+    const socket = await waitForSocketCount(1);
+    socket.sendMessage({
+      error: "Terminal access was rejected.",
+      type: "error"
+    });
+
+    await expect(resultPromise).resolves.toMatchObject({
+      error: "Terminal access was rejected.",
+      ok: false
+    });
+    expect(closeCommandTerminal).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(runner.running.value).toBe(false);
+  });
+
   it("detaches a stale observer without stopping the server command", async () => {
     const { closeCommandTerminal, runner } = commandRunnerFixture({
       startResponse: {

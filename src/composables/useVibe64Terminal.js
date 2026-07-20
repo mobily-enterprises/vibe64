@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, unref, watch } from "vue";
+import { computed, getCurrentScope, nextTick, onScopeDispose, ref, unref, watch } from "vue";
 import { isDynamicImportError } from "@jskit-ai/kernel/client/asyncModuleRecovery";
 import {
   useShellAsyncModuleRecoveryRuntime
@@ -13,6 +13,9 @@ import { validateTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import { createTerminalMatcherEngine } from "@/lib/vibe64TerminalMatchers.js";
 import { createTerminalPolicyEngine } from "@/lib/vibe64TerminalPolicies.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
+
+const TERMINAL_RECONNECT_DELAY_MS = 250;
+const TERMINAL_RECONNECT_MAX_DELAY_MS = 5_000;
 
 function resolveCallback(callback, fallback) {
   return typeof callback === "function" ? callback : fallback;
@@ -34,6 +37,8 @@ function useVibe64Terminal({
   policies = [],
   presentation = "inline",
   readOnly = false,
+  reconnectDelayMs = TERMINAL_RECONNECT_DELAY_MS,
+  reconnectMaxDelayMs = TERMINAL_RECONNECT_MAX_DELAY_MS,
   resizeReportDelayMs = 0
 } = {}) {
   const terminalDriver = validateTerminalDriver(driver);
@@ -63,6 +68,9 @@ function useVibe64Terminal({
   let terminalConnectionSessionId = "";
   let terminalConnectionOpenPromise = null;
   let terminalConnectionOpenSessionId = "";
+  let terminalReconnectAttempt = 0;
+  let terminalReconnectBlocked = false;
+  let terminalReconnectTimer = null;
   let terminalDataDisposable = null;
   let terminalSelectionDisposable = null;
   let terminalScrollDisposable = null;
@@ -96,6 +104,11 @@ function useVibe64Terminal({
   const asyncModuleRecoveryRuntime = useShellAsyncModuleRecoveryRuntime();
   const terminalExited = computed(() => terminalStatus.value === "exited");
   const terminalPlainOutput = computed(() => stripTerminalControlSequences(terminalOutput.value));
+  const terminalReconnectDelay = Math.max(0, Number(reconnectDelayMs) || 0);
+  const terminalReconnectMaxDelay = Math.max(
+    terminalReconnectDelay,
+    Number(reconnectMaxDelayMs) || 0
+  );
 
   function currentSessionId() {
     return String(terminalSessionId.value || "");
@@ -408,7 +421,19 @@ function useVibe64Terminal({
     }
   }
 
-  function closeTerminalSocket() {
+  function clearTerminalReconnect({
+    resetAttempt = true
+  } = {}) {
+    if (terminalReconnectTimer !== null) {
+      globalThis.clearTimeout(terminalReconnectTimer);
+      terminalReconnectTimer = null;
+    }
+    if (resetAttempt) {
+      terminalReconnectAttempt = 0;
+    }
+  }
+
+  function releaseTerminalConnection(status) {
     const connection = terminalConnection;
     const disconnectedSessionId = terminalConnectionSessionId || currentSessionId();
     terminalConnectionGeneration += 1;
@@ -416,8 +441,21 @@ function useVibe64Terminal({
     terminalConnectionSessionId = "";
     terminalConnectionOpenPromise = null;
     terminalConnectionOpenSessionId = "";
-    terminalConnectionStatus.value = "detached";
+    terminalConnectionStatus.value = status;
     resetReportedTerminalSize();
+    return {
+      connection,
+      sessionId: disconnectedSessionId
+    };
+  }
+
+  function closeTerminalSocket() {
+    clearTerminalReconnect();
+    terminalReconnectBlocked = false;
+    const {
+      connection,
+      sessionId: disconnectedSessionId
+    } = releaseTerminalConnection("detached");
     connection?.close?.();
     if (connection) {
       emitTerminalEvent("disconnected", {
@@ -425,6 +463,49 @@ function useVibe64Terminal({
         sessionId: disconnectedSessionId
       });
     }
+  }
+
+  function terminalCanReconnect(sessionId) {
+    return Boolean(
+      terminalDriver.reconnectOnDisconnect === true &&
+      !terminalReconnectBlocked &&
+      sessionId &&
+      sessionId === currentSessionId() &&
+      terminalStatus.value !== "exited"
+    );
+  }
+
+  function scheduleTerminalReconnect(sessionId) {
+    if (terminalReconnectTimer !== null || !terminalCanReconnect(sessionId)) {
+      return false;
+    }
+    const delayMs = Math.min(
+      terminalReconnectMaxDelay,
+      terminalReconnectDelay * (2 ** terminalReconnectAttempt)
+    );
+    terminalReconnectAttempt += 1;
+    terminalConnectionStatus.value = "reconnecting";
+    emitTerminalEvent("reconnecting", {
+      attempt: terminalReconnectAttempt,
+      delayMs,
+      sessionId
+    });
+    terminalReconnectTimer = globalThis.setTimeout(async () => {
+      terminalReconnectTimer = null;
+      if (!terminalCanReconnect(sessionId)) {
+        return;
+      }
+      if (!(await connectTerminalSocket())) {
+        scheduleTerminalReconnect(sessionId);
+      }
+    }, delayMs);
+    return true;
+  }
+
+  function recoverTerminalConnection(sessionId) {
+    const { connection } = releaseTerminalConnection("disconnected");
+    connection?.close?.();
+    scheduleTerminalReconnect(sessionId);
   }
 
   function disposeTerminalDisplay() {
@@ -486,6 +567,8 @@ function useVibe64Terminal({
   }
 
   function resetTerminalSessionState() {
+    clearTerminalReconnect();
+    terminalReconnectBlocked = false;
     terminalSessionId.value = "";
     terminalStatus.value = "";
     terminalCommandPreview.value = "";
@@ -826,6 +909,9 @@ function useVibe64Terminal({
       closeTerminalSocket();
       resetTerminalDisplay();
     }
+    if (!terminalSessionId.value || terminalSessionChanged) {
+      terminalReconnectBlocked = false;
+    }
     terminalSessionId.value = nextTerminalSessionId;
     const nextStatus = String(terminalSession.status || fallbackStatus || "");
     terminalExitCode.value = nextStatus === "exited" ? terminalSession.exitCode ?? null : null;
@@ -867,6 +953,10 @@ function useVibe64Terminal({
     }
 
     if (message?.type === "connected") {
+      clearTerminalReconnect({
+        resetAttempt: false
+      });
+      terminalReconnectBlocked = false;
       terminalConnectionStatus.value = "connected";
       terminalError.value = "";
       emitTerminalEvent("connected");
@@ -878,10 +968,14 @@ function useVibe64Terminal({
       emitTerminalEvent("disconnected", {
         intentional: message.intentional === true
       });
+      if (message.intentional !== true) {
+        recoverTerminalConnection(sessionId);
+      }
       return;
     }
 
     if (message?.type === "snapshot") {
+      terminalReconnectAttempt = 0;
       applyTerminalSession(message.session || {}, {
         replaceOutput: message.replaceOutput === true
       });
@@ -942,6 +1036,8 @@ function useVibe64Terminal({
         code: String(message.code || ""),
         error
       });
+      terminalReconnectBlocked = true;
+      clearTerminalReconnect();
       terminalError.value = error;
     }
   }
@@ -979,9 +1075,9 @@ function useVibe64Terminal({
         },
         sessionId: connectionSessionId
       });
-    } catch (error) {
+    } catch {
       terminalConnectionStatus.value = "disconnected";
-      terminalError.value = String(error?.message || error || "Terminal stream failed.");
+      scheduleTerminalReconnect(connectionSessionId);
       return false;
     }
     const connection = terminalConnection;
@@ -993,13 +1089,15 @@ function useVibe64Terminal({
         terminalConnectionStatus.value = ready ? "connected" : "disconnected";
         if (ready) {
           terminalError.value = "";
+        } else {
+          scheduleTerminalReconnect(connectionSessionId);
         }
       }
       return Boolean(ready);
-    }).catch((error) => {
+    }).catch(() => {
       if (generation === terminalConnectionGeneration) {
         terminalConnectionStatus.value = "disconnected";
-        terminalError.value = String(error?.message || error || "Terminal stream failed.");
+        scheduleTerminalReconnect(connectionSessionId);
       }
       return false;
     }).finally(() => {
@@ -1160,6 +1258,9 @@ function useVibe64Terminal({
       previousStatus: String(previousStatus || ""),
       status: String(status || "")
     });
+    if (status === "exited") {
+      clearTerminalReconnect();
+    }
     if (
       status === "exited" &&
       currentSessionId() &&
@@ -1183,6 +1284,10 @@ function useVibe64Terminal({
   }, {
     flush: "sync"
   });
+
+  if (getCurrentScope()) {
+    onScopeDispose(closeTerminalSocket);
+  }
 
   watch(terminalError, (error, previousError) => {
     if (!error || error === previousError) {

@@ -64,6 +64,7 @@ import {
 } from "@/lib/vibe64SessionComposerMenuProjection.js";
 import {
   agentTurnRealtimeOverlayFromPayload,
+  latestAgentTurnRealtimeOverlay,
   sessionWithAgentTurnRealtimeOverlay
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
 import {
@@ -635,7 +636,10 @@ function useVibe64SessionData({
       if (!overlay) {
         return;
       }
-      agentTurnRealtimeOverlaysById[overlay.sessionId] = overlay;
+      agentTurnRealtimeOverlaysById[overlay.sessionId] = latestAgentTurnRealtimeOverlay(
+        agentTurnRealtimeOverlaysById[overlay.sessionId] || null,
+        overlay
+      );
       vibe64SessionDebugLog("client.sessionData.agentTurn.overlay", {
         active: overlay.active === true,
         reason: overlay.reason,
@@ -1245,6 +1249,7 @@ export {
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
   agentTurnRealtimeOverlayFromPayload,
+  latestAgentTurnRealtimeOverlay,
   selectedSessionShouldLoadComposerMenu,
   selectedSessionDetailLoadState,
   sessionComposerMenuNeedsRefresh,

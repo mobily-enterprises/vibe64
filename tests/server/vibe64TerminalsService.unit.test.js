@@ -5067,6 +5067,7 @@ test("Vibe64 Codex polling releases an orphaned prompt claim without losing its 
         agent_transport_socket_path: path.join(runtimeDir, "app-server.sock"),
         ...testSourceMetadataForPath(worktree)
       },
+      revision: 5,
       sessionId,
       sessionRoot,
       stepMachine: {
@@ -5080,7 +5081,12 @@ test("Vibe64 Codex polling releases an orphaned prompt claim without losing its 
       },
       store: {
         async mutateSession(_sessionId, operation) {
-          return operation();
+          const result = await operation();
+          session.revision += 1;
+          return {
+            ...result,
+            revision: session.revision
+          };
         },
         async writeAgentRunEvent(_sessionId, runId, event) {
           writeAgentRunEventToSession(session, runId, event);
@@ -5091,6 +5097,7 @@ test("Vibe64 Codex polling releases an orphaned prompt claim without losing its 
       }
     };
     let readThreadStatusCalls = 0;
+    const sessionChanges = [];
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: () => ({
@@ -5108,6 +5115,9 @@ test("Vibe64 Codex polling releases an orphaned prompt claim without losing its 
         async createRuntime() {
           return runtime;
         }
+      },
+      publishSessionChanged: async (_sessionId, event = {}) => {
+        sessionChanges.push(event);
       }
     });
 
@@ -5123,6 +5133,8 @@ test("Vibe64 Codex polling releases an orphaned prompt claim without losing its 
     assert.deepEqual(run.pendingUserMessageClientIds, ["composer:unit:orphaned-prompt"]);
     assert.equal(state.codexAgentTurn.active, false);
     assert.equal(state.codexAgentTurn.state, "idle");
+    assert.equal(sessionChanges.at(-1)?.reason, "codex-prompt-delivery-abandoned");
+    assert.equal(sessionChanges.at(-1)?.session?.revision, 6);
   });
 });
 
@@ -9097,6 +9109,8 @@ test("Vibe64 Codex app-server checks live provider state before releasing a fail
     ));
     assert.ok(idleEvent, "Expected the failed Codex turn to publish its idle state.");
     assert.equal(idleEvent.payload?.clientRefresh?.includeLaunchTargets, true);
+    assert.equal(Number.isSafeInteger(idleEvent.session?.revision), true);
+    assert.equal(idleEvent.session.sessionId, sessionId);
   });
 });
 

@@ -23,6 +23,7 @@ function createWebSocketTerminalDriver({
   return {
     closeSession: typeof closeSession === "function" ? closeSession : null,
     readSession: typeof readSession === "function" ? readSession : null,
+    reconnectOnDisconnect: true,
     startSession: typeof startSession === "function" ? startSession : null,
 
     openConnection({ onEvent = null, sessionId = "" } = {}) {
@@ -34,6 +35,7 @@ function createWebSocketTerminalDriver({
       const notify = normalizeDriverCallback(onEvent);
       const socket = new WebSocket(String(webSocketUrl(normalizedSessionId) || ""));
       let closedByClient = false;
+      let disconnected = false;
       let readySettled = false;
       let resolveReady;
       const ready = new Promise((resolve) => {
@@ -45,6 +47,16 @@ function createWebSocketTerminalDriver({
         }
         readySettled = true;
         resolveReady(connected);
+      };
+      const notifyDisconnected = () => {
+        if (disconnected) {
+          return;
+        }
+        disconnected = true;
+        notify({
+          intentional: closedByClient,
+          type: "disconnected"
+        });
       };
 
       socket.addEventListener("open", () => {
@@ -65,23 +77,11 @@ function createWebSocketTerminalDriver({
       });
       socket.addEventListener("error", () => {
         settleReady(false);
-        notify({
-          error: "Terminal stream failed.",
-          type: "error"
-        });
+        notifyDisconnected();
       });
       socket.addEventListener("close", () => {
         settleReady(false);
-        notify({
-          intentional: closedByClient,
-          type: "disconnected"
-        });
-        if (!closedByClient) {
-          notify({
-            error: "Terminal stream closed before the session finished.",
-            type: "error"
-          });
-        }
+        notifyDisconnected();
       });
 
       function socketIsOpen() {

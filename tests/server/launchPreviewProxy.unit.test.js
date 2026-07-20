@@ -1372,7 +1372,7 @@ test("launch preview proxy close resolves while a browser WebSocket is still ope
   });
 });
 
-test("launch preview proxy idle timeout closes both WebSocket sides", async () => {
+test("launch preview proxy keeps idle WebSocket upgrades alive until proxy close", async () => {
   await withWebSocketTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry({
       socketIdleTimeoutMs: 50
@@ -1386,10 +1386,24 @@ test("launch preview proxy idle timeout closes both WebSocket sides", async () =
       const accepted = await connectWebSocket(previewWebSocketHref(preview.href));
       assert.equal(accepted.ok, true);
 
+      await delay(100);
+      assert.equal(accepted.socket.readyState, WebSocket.OPEN);
+      const update = new Promise((resolve, reject) => {
+        accepted.socket.once("message", (data) => resolve(data.toString()));
+        accepted.socket.once("error", reject);
+      });
+      assert.equal(target.webSockets.size, 1);
+      target.webSockets.values().next().value.send("vite-hot-update");
+      assert.equal(
+        await withTimeout(update, 1000, "Timed out waiting for the delayed hot update."),
+        "vite-hot-update"
+      );
+
+      await registry.closeAll();
       await waitForWebSocketClose(accepted.socket);
       await waitForCondition(
         () => target.targetSockets.size === 0,
-        "Preview proxy idle timeout should destroy upstream WebSocket sockets."
+        "Preview proxy close should destroy upstream WebSocket sockets."
       );
     } finally {
       await registry.closeAll();
@@ -1833,7 +1847,8 @@ async function withWebSocketTargetServer(callback) {
     await callback({
       origin: `http://127.0.0.1:${address.port}`,
       targetSockets,
-      upgradeRequests
+      upgradeRequests,
+      webSockets: websocketServer.clients
     });
   } finally {
     websocketServer.close();

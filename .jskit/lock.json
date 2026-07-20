@@ -3,25 +3,187 @@
   "installedPackages": {
     "@jskit-ai/shell-web": {
       "packageId": "@jskit-ai/shell-web",
-      "version": "0.1.68",
+      "version": "0.1.123",
       "source": {
-        "type": "packages-directory"
+        "type": "npm-installed-package",
+        "packagePath": "node_modules/@jskit-ai/shell-web",
+        "descriptorPath": "node_modules/@jskit-ai/shell-web/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
-          "dependencies": {},
+          "dependencies": {
+            "@jskit-ai/shell-web": {
+              "hadPrevious": true,
+              "previousValue": "0.1.123",
+              "value": "0.x"
+            }
+          },
           "devDependencies": {},
-          "scripts": {}
+          "scripts": {
+            "dev:all": {
+              "hadPrevious": true,
+              "previousValue": "node ./bin/dev.js",
+              "value": "vite"
+            },
+            "dev:home": {
+              "hadPrevious": false,
+              "previousValue": "",
+              "value": "VITE_SURFACE=home vite"
+            }
+          }
         },
         "text": {},
-        "source": {},
+        "source": {
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-menu-link-item-import": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-import",
+            "id": "shell-web-main-client-provider-menu-link-item-import",
+            "reason": "Bind app-owned shell menu link-item scaffold into local main client provider imports.",
+            "category": "shell-web"
+          },
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-surface-aware-menu-link-item-import": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-import",
+            "id": "shell-web-main-client-provider-surface-aware-menu-link-item-import",
+            "reason": "Bind app-owned shell surface-aware menu link-item scaffold into local main client provider imports.",
+            "category": "shell-web"
+          },
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-tab-link-item-import": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-import",
+            "id": "shell-web-main-client-provider-tab-link-item-import",
+            "reason": "Bind app-owned shell tab link-item scaffold into local main client provider imports.",
+            "category": "shell-web"
+          },
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-menu-link-item-register": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-call",
+            "id": "shell-web-main-client-provider-menu-link-item-register",
+            "reason": "Bind app-owned shell menu link-item token into local main client provider registry.",
+            "category": "shell-web"
+          },
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-surface-aware-menu-link-item-register": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-call",
+            "id": "shell-web-main-client-provider-surface-aware-menu-link-item-register",
+            "reason": "Bind app-owned shell surface-aware menu link-item token into local main client provider registry.",
+            "category": "shell-web"
+          },
+          "packages/main/src/client/providers/MainClientProvider.js::shell-web-main-client-provider-tab-link-item-register": {
+            "file": "packages/main/src/client/providers/MainClientProvider.js",
+            "op": "ensure-call",
+            "id": "shell-web-main-client-provider-tab-link-item-register",
+            "reason": "Bind app-owned shell tab link-item token into local main client provider registry.",
+            "category": "shell-web"
+          }
+        },
         "vite": {},
-        "files": [],
+        "files": [
+          {
+            "path": "src/App.vue",
+            "ownership": "app",
+            "hash": "e8ad49df01c665c6453d783ea3b67deda05473870fd29faa039e9a38e28a7f2c",
+            "hadPrevious": true,
+            "previousContentBase64": "PHRlbXBsYXRlPgogIDx2LWFwcD4KICAgIDx2LW1haW4+CiAgICAgIDx2LWNvbnRhaW5lciBjbGFzcz0icHktMTAgcHktbWQtMTQiPgogICAgICAgIDx2LXJvdyBqdXN0aWZ5PSJjZW50ZXIiPgogICAgICAgICAgPHYtY29sIGNvbHM9IjEyIiBzbT0iMTEiIG1kPSIxMCIgbGc9IjgiIHhsPSI3Ij4KICAgICAgICAgICAgPFJvdXRlclZpZXcgLz4KICAgICAgICAgIDwvdi1jb2w+CiAgICAgICAgPC92LXJvdz4KICAgICAgPC92LWNvbnRhaW5lcj4KICAgIDwvdi1tYWluPgogIDwvdi1hcHA+CjwvdGVtcGxhdGU+Cg==",
+            "preserveOnRemove": false,
+            "reason": "Install full-width shell app root with shell-web error host and edge-to-edge layout.",
+            "category": "shell-web",
+            "id": "shell-web-app-root"
+          },
+          {
+            "path": "src/components/ShellLayout.vue",
+            "ownership": "app",
+            "hash": "0c2c3b5439890e0822dab32b0a740927b7612df1510efe2254cb20d90fd7312c",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned shell layout component so apps can customize structure and slots.",
+            "category": "shell-web",
+            "id": "shell-web-component-shell-layout"
+          },
+          {
+            "path": "src/components/menus/MenuLinkItem.vue",
+            "ownership": "app",
+            "hash": "91460689ede313da18352c5fd67f99f198433198906b276586c7f60742f042a1",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned shell menu link-item scaffold for local placement customization.",
+            "category": "shell-web",
+            "id": "shell-web-component-menu-link-item"
+          },
+          {
+            "path": "src/components/menus/SurfaceAwareMenuLinkItem.vue",
+            "ownership": "app",
+            "hash": "63ad9112bf096974a6b268e2c719e9d5522fde179350f56dc640f8902c0e914e",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned surface-aware shell menu link-item scaffold for local placement customization.",
+            "category": "shell-web",
+            "id": "shell-web-component-surface-aware-menu-link-item"
+          },
+          {
+            "path": "src/components/menus/TabLinkItem.vue",
+            "ownership": "app",
+            "hash": "6fc8405ca0e19516ce762e392733fd39e7c2af85d8483193b4ee52caac76f1f4",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned shell tab link-item scaffold for local placement customization.",
+            "category": "shell-web",
+            "id": "shell-web-component-tab-link-item"
+          },
+          {
+            "path": "src/error.js",
+            "ownership": "app",
+            "hash": "dd7e2f4e32b83d1227135a0f224bb2c46854fe7fd9714c7cc56cf94f2f1eb55b",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned error runtime policy and presenter config scaffold.",
+            "category": "shell-web",
+            "id": "shell-web-error-config"
+          },
+          {
+            "path": "src/placement.js",
+            "ownership": "app",
+            "hash": "39ef1011cc96c94e8b1778a199b2222bed9887b066331918633524515ca8b909",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned placement registry scaffold used by shell-web placement runtime.",
+            "category": "shell-web",
+            "id": "shell-web-placement-registry"
+          },
+          {
+            "path": "src/placementTopology.js",
+            "ownership": "app",
+            "hash": "3e8a515abc359c61f28061c1c3d3df8b810ddc50b4a0c805c093394cc7693ffd",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install app-owned semantic placement topology used by shell-web placement runtime.",
+            "category": "shell-web",
+            "id": "shell-web-placement-topology"
+          },
+          {
+            "path": "tests/e2e/adaptive-shell.spec.ts",
+            "ownership": "app",
+            "hash": "456cbb65ebd0b97052e4e171bf87081e89b293fe67b9250af2cf876969d4eafd",
+            "hadPrevious": false,
+            "previousContentBase64": "",
+            "preserveOnRemove": false,
+            "reason": "Install compact/medium/expanded Playwright smoke coverage for the adaptive shell.",
+            "category": "shell-web",
+            "id": "shell-web-test-adaptive-shell-smoke"
+          }
+        ],
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-10T00:00:00.000Z",
-      "migrationSyncVersion": "0.1.119"
+      "installedAt": "2026-07-20T05:53:39.899Z",
+      "migrationSyncVersion": "0.1.123"
     },
     "@local/main": {
       "packageId": "@local/main",
@@ -215,7 +377,7 @@
     },
     "@jskit-ai/realtime": {
       "packageId": "@jskit-ai/realtime",
-      "version": "0.1.82",
+      "version": "0.1.119",
       "source": {
         "type": "npm-installed-package",
         "packagePath": "node_modules/@jskit-ai/realtime",
@@ -226,32 +388,12 @@
           "dependencies": {
             "@jskit-ai/kernel": {
               "hadPrevious": true,
-              "previousValue": "0.1.83",
+              "previousValue": "0.1.122",
               "value": "0.x"
             },
-            "@socket.io/redis-adapter": {
-              "hadPrevious": false,
-              "previousValue": "",
-              "value": "^8.3.0"
-            },
-            "redis": {
-              "hadPrevious": false,
-              "previousValue": "",
-              "value": "^5.8.2"
-            },
-            "socket.io": {
-              "hadPrevious": false,
-              "previousValue": "",
-              "value": "^4.8.3"
-            },
-            "socket.io-client": {
-              "hadPrevious": false,
-              "previousValue": "",
-              "value": "^4.8.3"
-            },
             "@jskit-ai/realtime": {
-              "hadPrevious": false,
-              "previousValue": "",
+              "hadPrevious": true,
+              "previousValue": "0.1.119",
               "value": "0.x"
             }
           },
@@ -263,21 +405,12 @@
             "file": ".env",
             "op": "upsert-env",
             "key": "REALTIME_REDIS_URL",
-            "value": "",
-            "hadPrevious": false,
-            "previousValue": "",
+            "hadPrevious": true,
             "reason": "Configure optional Redis backplane URL for realtime socket adapter.",
             "category": "runtime-config",
-            "id": "realtime-redis-url"
-          },
-          "src/placement.js::realtime-placement-indicator": {
-            "file": "src/placement.js",
-            "op": "append-text",
-            "value": "\naddPlacement({\n  id: \"realtime.connection.indicator\",\n  target: \"shell.status\",\n  kind: \"component\",\n  surfaces: [\"*\"],\n  order: 950,\n  componentToken: \"realtime.web.connection.indicator\"\n});\n",
-            "position": "bottom",
-            "reason": "Append realtime connection indicator placement into app-owned placement registry.",
-            "category": "realtime-web",
-            "id": "realtime-placement-indicator"
+            "id": "realtime-redis-url",
+            "value": "",
+            "previousValue": ""
           }
         },
         "source": {},
@@ -294,8 +427,8 @@
       "options": {
         "realtime-redis-url": ""
       },
-      "installedAt": "2026-05-24T07:02:06.012Z",
-      "migrationSyncVersion": "0.1.117"
+      "installedAt": "2026-07-20T05:53:39.312Z",
+      "migrationSyncVersion": "0.1.119"
     },
     "@local/vibe64-core": {
       "packageId": "@local/vibe64-core",
@@ -522,6 +655,54 @@
       },
       "options": {},
       "installedAt": "2026-07-11T17:16:51.180Z",
+      "migrationSyncVersion": "0.1.0"
+    },
+    "@local/adapter-setup-doctor": {
+      "packageId": "@local/adapter-setup-doctor",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/adapter-setup-doctor",
+        "descriptorPath": "packages/adapter-setup-doctor/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "source": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-07-20T03:48:44.147Z",
+      "migrationSyncVersion": "0.1.0"
+    },
+    "@local/vibe64-execution": {
+      "packageId": "@local/vibe64-execution",
+      "version": "0.1.0",
+      "source": {
+        "type": "app-local-package",
+        "packagePath": "packages/vibe64-execution",
+        "descriptorPath": "packages/vibe64-execution/package.descriptor.mjs"
+      },
+      "managed": {
+        "packageJson": {
+          "dependencies": {},
+          "devDependencies": {},
+          "scripts": {}
+        },
+        "text": {},
+        "source": {},
+        "vite": {},
+        "files": [],
+        "migrations": []
+      },
+      "options": {},
+      "installedAt": "2026-07-20T03:48:44.147Z",
       "migrationSyncVersion": "0.1.0"
     }
   },
