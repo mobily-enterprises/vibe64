@@ -722,25 +722,31 @@ translator interprets it; the graph does not.
 A stable Human symbol identity is:
 
 ~~~
-repository-relative Human file path + provided symbol
+provider repository identity + normalized @/ path + provided symbol
 ~~~
 
 For example:
 
 ~~~
-human-code/src/server/alertDispatcher.js.md
+current repository
+    +
+@/src/server/alertDispatcher.js.md
     +
 dispatchSeverityThreeEmails
 ~~~
 
-Markdown anchors are navigation aids. The resolver canonicalizes the exact
-provided symbol instead of trusting renderer-specific slug behavior.
+Within one repository, the provider repository identity is implicit. A
+composed multi-repository graph retains it so two repositories cannot
+accidentally claim the same symbol. Markdown anchors are navigation aids. The
+resolver canonicalizes the exact provided symbol instead of trusting
+renderer-specific slug behavior.
 
 Malformed structure produces deterministic diagnostics:
 
 - “The file has no Uses section.”
 - “notifySeverityThree() appears under Uses without a provider link.”
 - “The provider link does not resolve to an exported Human symbol.”
+- “Project-owned Human links must begin at @/.”
 - “AlertEmailDispatcher is listed in Provides but has no class section.”
 - “A public class method is described outside its class.”
 - “Two files provide the same canonical module path.”
@@ -1379,6 +1385,13 @@ additional prose:
     "changed": ["public symbol"],
     "removed": ["public symbol"]
   },
+  "sourceMappings": [
+    {
+      "humanSymbol": "provided Human symbol",
+      "humanEvidence": "sentence or paragraph identifier",
+      "implementationRegions": ["project-relative path and stable symbol or region"]
+    }
+  ],
   "implementationRepairs": ["mechanical or realization repair"],
   "humanCodeCorrections": ["missing or conflicting Human meaning"],
   "diagnostics": ["blocking or non-blocking diagnostic"],
@@ -1386,9 +1399,11 @@ additional prose:
   "verificationStillRequired": ["project-level check"]
 }
 
-Use an empty array when a field has no entries. Use status blocked when a
-material observable decision is unresolved or an input contract is
-inconsistent. On blocked status, do not leave partial writes.
+Use an empty array when a field has no entries. Source mappings are navigation
+and diagnostic evidence; they must not contain program meaning absent from
+H1. Use status blocked when a material observable decision is unresolved or an
+input contract is inconsistent. On blocked status, do not leave partial
+writes.
 ~~~
 
 ### 17.1 Atomic context capsule template
@@ -2229,6 +2244,8 @@ A conforming Atomic Translator must:
 - avoid unrelated refactoring;
 - block rather than browse or guess;
 - report boundary changes and Human corrections;
+- report source mappings from provided Human symbols and relevant behavior
+  paragraphs to their implementation regions;
 - converge when invoked again with unchanged accepted inputs.
 
 ### 23.4 File-profile conformance
