@@ -121,6 +121,24 @@ test("cpp adapter exposes project facts, commands, defaults, and prompt context"
   });
 });
 
+test("cpp adapter ignores unrelated package.json files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createCppProject(targetRoot);
+    await writeProjectFile(targetRoot, "package.json", "{ not json\n");
+    const adapter = createCppTargetAdapter();
+
+    const facts = await adapter.inspect({
+      targetRoot
+    });
+    const promptContext = await adapter.getPromptContext({
+      targetRoot
+    });
+
+    assert.equal(facts.summary, "C++ project type selected.");
+    assert.equal(promptContext.adapter, "cpp");
+  });
+});
+
 test("cpp adapter composes prompt blueprints from independent config choices", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createCppProject(targetRoot);

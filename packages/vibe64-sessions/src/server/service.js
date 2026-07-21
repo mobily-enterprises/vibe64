@@ -10,8 +10,6 @@ import {
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
-  PROJECT_SETUP_KIND_INITIALIZATION,
-  PROJECT_SETUP_KIND_SEED,
   projectSetupSessionActiveMessage,
   projectSetupSessionKind,
   VIBE64_ACTION_DISPATCH_ROUTES
@@ -107,6 +105,17 @@ const COMPOSER_DRAFT_KIND = Object.freeze({
 const COMPOSER_MESSAGE_AUTOMATIC_RETRY_LIMIT = 8;
 const COMPOSER_MESSAGE_AUTOMATIC_RETRY_WINDOW_MS = 30_000;
 const COMPOSER_MESSAGE_RETRY_EXHAUSTED_ERROR = "The assistant stayed unavailable for this message. Resend it to try again.";
+
+async function completeProjectBootstrapForFinishedSetupSession(projectService = {}, session = {}) {
+  if (
+    projectSetupSessionKind(session) &&
+    String(session.status || "").trim() === VIBE64_SESSION_STATUS.FINISHED &&
+    typeof projectService.completeProjectBootstrap === "function"
+  ) {
+    return projectService.completeProjectBootstrap(session);
+  }
+  return null;
+}
 
 function sessionResult(operation, {
   publicResponse = true,
@@ -2645,14 +2654,6 @@ function sessionCreationPlan({
   };
 }
 
-function creationMatchesSetupSession(creation = {}, session = {}) {
-  const setupKind = projectSetupSessionKind(session);
-  return (
-    (creation.seedRequired === true && setupKind === PROJECT_SETUP_KIND_SEED) ||
-    (creation.initializationRequired === true && setupKind === PROJECT_SETUP_KIND_INITIALIZATION)
-  );
-}
-
 function sessionProjectGithubMetadata(project = {}) {
   const repositoryView = projectRepositoryView(project);
   if (repositoryView.repositoryMode && repositoryView.repositoryMode !== PROJECT_REPOSITORY_MODE_GITHUB) {
@@ -3482,17 +3483,6 @@ function createService({
             limits
           });
           if (creationPlan.response) {
-            if (
-              creationPlan.blockedCode === "project_setup_session_active" &&
-              creationMatchesSetupSession(
-                creation,
-                (creationPlan.response.sessions || []).find((session) => (
-                  normalizedInputText(session?.sessionId || session?.id) === creation.setupSessionId
-                ))
-              )
-            ) {
-              await projectService.consumeProjectApplicationMode?.();
-            }
             vibe64SessionDebugLog("server.service.createSession.blocked", {
               code: creationPlan.blockedCode,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3512,7 +3502,6 @@ function createService({
           } = await createAndAdvanceWorkflowSession(runtime, projectType, definitionSelection.definitionId, {
             project: currentProject,
             async onCreated(createdSession) {
-              await projectService.consumeProjectApplicationMode?.();
               vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
                 ...sessionServiceDebugResponse(createdSession),
                 durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3953,6 +3942,7 @@ function createService({
             sessionId
           });
           if (alreadyClosedSession) {
+            await completeProjectBootstrapForFinishedSetupSession(projectService, alreadyClosedSession);
             return alreadyClosedSession;
           }
           const exclusive = await agentTaskCoordinator.runMainWriteExclusive(runtime, sessionId, async () => {
@@ -3989,6 +3979,7 @@ function createService({
           }
           if (!isOpenVibe64Session(session)) {
             await terminalService?.closeSessionTerminals?.(sessionId);
+            await completeProjectBootstrapForFinishedSetupSession(projectService, session);
             vibe64SessionDebugLog("server.service.runSessionAction.done", {
               ...sessionServiceDebugResponse(session),
               actionId,
@@ -4051,6 +4042,7 @@ function createService({
             sessionId
           });
           if (alreadyClosedSession) {
+            await completeProjectBootstrapForFinishedSetupSession(projectService, alreadyClosedSession);
             return alreadyClosedSession;
           }
           if (sessionClosingMarked) {

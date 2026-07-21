@@ -30,12 +30,8 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
   PROJECT_APPLICATION_MODE_EXISTING,
-  PROJECT_APPLICATION_MODE_NEW,
-  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
+  PROJECT_APPLICATION_MODE_NEW
 } from "../../packages/vibe64-core/src/server/projectApplication.js";
-import {
-  writeProjectOneOffFlag
-} from "../../packages/vibe64-core/src/server/projectOneOffFlags.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
@@ -65,7 +61,8 @@ import {
 } from "@local/vibe64-adapters/server/adapters/node-web/index";
 import {
   JSKIT_MARIADB_APP_USER,
-  jskitMariaDbAppPassword
+  jskitMariaDbAppPassword,
+  jskitMariaDbDatabaseName
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -86,11 +83,9 @@ function githubProjectRepositoryInput(github = {}) {
   };
 }
 
-async function writeProjectApplicationMode(projectContext, slug, value) {
-  await projectContext.writeWorkspaceProjectOneOffFlag({
-    flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-    slug,
-    value
+async function finishTestProjectBootstrap(projectContext, slug) {
+  await projectContext.completeWorkspaceProjectBootstrap({
+    slug
   });
 }
 
@@ -965,7 +960,6 @@ test("Vibe64 project service can create a source-optional runtime before selecti
       }),
       slug: "catalog-app"
     });
-    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "source"), {
       recursive: true
@@ -1095,7 +1089,6 @@ test("Vibe64 project service reads bootstrap config when active session sources 
       }),
       slug: "catalog-app"
     });
-    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const service = createService({
       projectContext
     });
@@ -1154,12 +1147,12 @@ test("Vibe64 project service requires initialization for an explicitly existing 
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       ...githubProjectRepositoryInput({
         fullName: "example/existing-app"
       }),
       slug: "existing-app"
     });
-    await writeProjectApplicationMode(projectContext, "existing-app", PROJECT_APPLICATION_MODE_EXISTING);
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
     const requestContext = {
       projectRecordPath: projectContext.projectRecordPathForSlug("existing-app"),
@@ -1214,7 +1207,6 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       }),
       slug: "catalog-app"
     });
-    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const service = createService({
       projectContext
     });
@@ -1455,7 +1447,6 @@ test("Vibe64 project service keeps a config-only JSKIT Git cache in the seed wor
       }),
       slug: "catalog-app"
     });
-    await writeProjectApplicationMode(projectContext, "catalog-app", PROJECT_APPLICATION_MODE_NEW);
     const projectRoot = path.join(projectsRoot, "catalog-app");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
@@ -1590,13 +1581,13 @@ test("Vibe64 project service reads existing GitHub project config without requir
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       ...githubProjectRepositoryInput({
         defaultBranch: "main",
         fullName: "example/existing-app"
       }),
       slug: "existing-app"
     });
-    await writeProjectApplicationMode(projectContext, "existing-app", PROJECT_APPLICATION_MODE_EXISTING);
     const projectRoot = path.join(projectsRoot, "existing-app");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("existing-app");
     const recordPath = projectContext.projectRecordPathForSlug("existing-app");
@@ -1751,6 +1742,7 @@ test("Vibe64 project service ignores stale bootstrap config when committed git-c
       }),
       slug: "dogandgroom"
     });
+    await finishTestProjectBootstrap(projectContext, "dogandgroom");
     const projectRoot = path.join(projectsRoot, "dogandgroom");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("dogandgroom");
     const recordPath = projectContext.projectRecordPathForSlug("dogandgroom");
@@ -1849,6 +1841,7 @@ test("Vibe64 project service reads committed config when active session sources 
       }),
       slug: "catalog-app"
     });
+    await finishTestProjectBootstrap(projectContext, "catalog-app");
     const projectRoot = path.join(projectsRoot, "catalog-app");
     const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
@@ -1922,6 +1915,7 @@ test("Vibe64 project service passes managed and local repository profiles into r
       },
       slug: "managed-app"
     });
+    await finishTestProjectBootstrap(projectContext, "managed-app");
     const managedService = createService({
       projectContext
     });
@@ -1984,25 +1978,20 @@ test("Vibe64 project service passes managed and local repository profiles into r
     assert.equal(requestKnownOptions.seedRequired, false);
     assert.equal(requestKnownOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
 
-    const flagBackedService = createService({
+    const newApplicationRuntime = await createService({
       targetRoot: localRoot
-    });
-    await writeProjectOneOffFlag({
-      name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      projectRuntimeRoot: flagBackedService.currentProjectLocalRoot(),
-      value: PROJECT_APPLICATION_MODE_NEW
-    });
-    const flagBackedRuntime = await flagBackedService.createRuntime({
+    }).createRuntime({
       currentProject: {
+        applicationMode: PROJECT_APPLICATION_MODE_NEW,
         repositoryMode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
       },
       skipProjectConfig: true
     });
-    const flagBackedOptions = await flagBackedRuntime.workflowDefinitionCreationOptions();
+    const newApplicationOptions = await newApplicationRuntime.workflowDefinitionCreationOptions();
 
-    assert.equal(flagBackedOptions.initializationRequired, false);
-    assert.equal(flagBackedOptions.seedRequired, true);
-    assert.equal(flagBackedOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+    assert.equal(newApplicationOptions.initializationRequired, false);
+    assert.equal(newApplicationOptions.seedRequired, true);
+    assert.equal(newApplicationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
   });
 });
 
@@ -3160,6 +3149,59 @@ test("Vibe64 project service runs best-effort hooks after project config saves",
         synced: true
       }
     ]);
+  });
+});
+
+test("Vibe64 project service removes only recorded adapter-owned resources", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: path.join(root, "projects"),
+      explicitSystemRoot: path.join(root, "state"),
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      slug: "cleanup-app"
+    });
+    const targetRoot = path.join(projectContext.projectsRoot, "cleanup-app");
+    const databaseName = jskitMariaDbDatabaseName(targetRoot);
+    await projectContext.recordWorkspaceProjectResources({
+      resources: [{
+        adapterId: "jskit",
+        id: "development-database",
+        kind: "relational-database",
+        name: databaseName,
+        provider: "mariadb"
+      }],
+      slug: "cleanup-app"
+    });
+    const commands = [];
+    const service = createService({
+      projectContext,
+      runCommand: async (request) => {
+        commands.push(request);
+        return {
+          ok: true
+        };
+      }
+    });
+
+    const result = await service.runInProjectContext(
+      "cleanup-app",
+      () => service.cleanupProjectResources(),
+      {
+        allowDeleting: true
+      }
+    );
+
+    assert.deepEqual(result, {
+      deleted: ["development-database"],
+      ok: true
+    });
+    assert.equal(commands.length, 1);
+    assert.equal(commands[0].actor, "daemon");
+    assert.deepEqual(commands[0].runtimes, ["mariadb"]);
+    assert.match(commands[0].args.join(" "), new RegExp(`DROP DATABASE IF EXISTS.*${databaseName}`, "u"));
   });
 });
 

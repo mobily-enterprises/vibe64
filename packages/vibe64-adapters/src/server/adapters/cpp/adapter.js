@@ -239,12 +239,7 @@ async function inspectCppProject(targetRoot) {
         makeTargets
       };
     },
-    markers: CPP_MARKERS,
-    packageJson: {
-      defaultValue: null,
-      invalidJsonCode: "vibe64_invalid_cpp_package_json",
-      invalidJsonMessage: (filePath) => `Invalid JSON in optional C++ package file: ${filePath}`
-    }
+    markers: CPP_MARKERS
   });
 }
 

@@ -231,6 +231,46 @@ function jskitManagedMariaDbDevelopmentDatabaseCommandArgs({
   );
 }
 
+function jskitManagedMariaDbDevelopmentDatabaseDropScript({
+  databaseName = "",
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  const validation = validateDatabaseName(databaseName);
+  if (!validation.ok) {
+    throw new Error("Managed MariaDB database name is invalid.");
+  }
+  const servicePaths = managedMariaDbServicePaths({
+    serviceDataRoot
+  });
+  const dropSql = `DROP DATABASE IF EXISTS \`${mariaDbIdentifier(validation.databaseName)}\``;
+  return [
+    managedMariaDbServiceStartScript({
+      serviceDataRoot,
+      targetRoot
+    }),
+    `development_admin_password_file=${shellQuote(servicePaths.adminPasswordFile)}`,
+    `development_mariadb_port=${shellQuote(jskitMariaDbHostPort(targetRoot, {
+      serviceDataRoot
+    }))}`,
+    `development_database=${shellQuote(validation.databaseName)}`,
+    `development_drop_sql=${shellQuote(dropSql)}`,
+    "development_admin_password=\"$(cat \"$development_admin_password_file\")\"",
+    "MYSQL_PWD=\"$development_admin_password\" mariadb --no-defaults --skip-ssl --protocol=TCP --host=127.0.0.1 --port=\"$development_mariadb_port\" --user=root --execute=\"$development_drop_sql\"",
+    "printf '[studio] JSKIT development database %s was removed.\\n' \"$development_database\""
+  ].join("\n");
+}
+
+function jskitManagedMariaDbDevelopmentDatabaseDropCommandArgs(input = {}) {
+  return runtimeShellCommandArgs(
+    [MANAGED_MARIADB_RUNTIME_ID],
+    jskitManagedMariaDbDevelopmentDatabaseDropScript(input),
+    {
+      preferSharedRuntimePacks: true
+    }
+  );
+}
+
 function managedMariaDbProcCmdlinePath(pid = 0) {
   return `/proc/${Number(pid || 0)}/cmdline`;
 }
@@ -417,6 +457,8 @@ export {
   jskitMariaDbHostPort,
   jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   jskitManagedMariaDbDevelopmentDatabaseScript,
+  jskitManagedMariaDbDevelopmentDatabaseDropCommandArgs,
+  jskitManagedMariaDbDevelopmentDatabaseDropScript,
   managedMariaDbCmdlineMatchesTarget,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_APP_USER,

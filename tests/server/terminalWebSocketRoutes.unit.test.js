@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -21,16 +21,15 @@ import {
 async function withProjectRequestContext(callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-ws-projects-"));
   const slug = "alpha_1";
-  await mkdir(path.join(projectsRoot, slug), {
-    recursive: true
+  const projectContext = createStudioProjectContext({
+    explicitProjectsRoot: projectsRoot,
+    env: {},
+    home: projectsRoot
   });
+  await projectContext.createWorkspaceProjectRecord({ slug });
   try {
     return await callback({
-      projectContext: createStudioProjectContext({
-        explicitProjectsRoot: projectsRoot,
-        env: {},
-        home: projectsRoot
-      }),
+      projectContext,
       slug
     });
   } finally {

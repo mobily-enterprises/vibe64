@@ -1,6 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { createHash } from "node:crypto";
-import { access, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -29,8 +29,22 @@ import {
   readProjectRuntimeOpenState
 } from "./projectRuntimeOpenState.js";
 import {
-  normalizeProjectBootstrapConfig
+  normalizeProjectBootstrapConfig,
+  readProjectRecordMetadata,
+  updateProjectRecordMetadata
 } from "./projectBootstrapConfig.js";
+import {
+  pathExists
+} from "./core.js";
+import {
+  completedProjectBootstrap,
+  createProjectBootstrap,
+  normalizeManagedProjectResources,
+  normalizeProjectBootstrap,
+  normalizeProjectDeletion,
+  projectBootstrapApplicationMode,
+  projectBootstrapWithTemplate
+} from "./projectLifecycle.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
@@ -41,14 +55,8 @@ import {
   projectRepositoryView
 } from "./projectRepository.js";
 import {
-  consumeProjectOneOffFlag,
-  readProjectOneOffFlag,
-  writeProjectOneOffFlag
-} from "./projectOneOffFlags.js";
-import {
   PROJECT_APPLICATION_MODE_NEW,
-  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-  normalizeProjectApplicationMode
+  requireProjectApplicationMode
 } from "./projectApplication.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
@@ -89,6 +97,26 @@ function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
 function projectCatalogUnavailableError() {
   const error = new Error("Project catalog operations are not available in local editor mode.");
   error.code = "vibe64_project_catalog_unavailable";
+  return error;
+}
+
+function projectSlugExistsError() {
+  const error = new Error("Project name already has local source or runtime state. Choose a different project name.");
+  error.code = "vibe64_project_slug_exists";
+  error.statusCode = 409;
+  return error;
+}
+
+function projectDeletingError() {
+  const error = new Error("Project deletion is in progress. Retry deletion before using this project.");
+  error.code = "vibe64_project_deleting";
+  error.statusCode = 409;
+  return error;
+}
+
+function projectStateMissingError(slug = "") {
+  const error = new Error(`Project state is missing for ${slug}.`);
+  error.code = "vibe64_project_state_missing";
   return error;
 }
 
@@ -158,17 +186,6 @@ function resolveCatalogProjectRuntimeRoot({
     throw error;
   }
   return projectRuntimeRoot;
-}
-
-async function directoryExists(directoryPath = "") {
-  try {
-    return (await stat(directoryPath)).isDirectory();
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
-      return false;
-    }
-    throw error;
-  }
 }
 
 async function assertDirectoryUsable(directoryPath = "") {
@@ -280,7 +297,6 @@ function localProjectKeyFromTargetRoot(targetRoot = "") {
 }
 
 function workspaceProjectRecord({
-  applicationMode = "",
   metadata = {},
   projectRecordPath = "",
   path: projectPath = "",
@@ -291,9 +307,14 @@ function workspaceProjectRecord({
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   const repositoryFields = projectRepositoryView(metadata);
+  const bootstrap = Object.keys(metadata).length
+    ? normalizeProjectBootstrap(metadata.bootstrap)
+    : null;
+  const applicationMode = bootstrap ? projectBootstrapApplicationMode(bootstrap) : "";
+  const deletion = normalizeProjectDeletion(metadata.deletion);
   return {
-    ...(normalizeProjectApplicationMode(applicationMode)
-      ? { applicationMode: normalizeProjectApplicationMode(applicationMode) }
+    ...(applicationMode
+      ? { applicationMode }
       : {}),
     ...(normalizeProjectBootstrapConfig(metadata?.bootstrapConfig)
       ? { bootstrapConfig: normalizeProjectBootstrapConfig(metadata.bootstrapConfig) }
@@ -327,6 +348,7 @@ function workspaceProjectRecord({
         })
       : "",
     runtime: publicProjectRuntimeOpenState(runtime),
+    ...(deletion ? { deletion } : {}),
     sessionsRoot: projectRuntimeRoot
       ? resolveProjectSessionsRoot({
           projectRuntimeRoot
@@ -352,40 +374,49 @@ function projectMetadataFromInput(input = {}, {
   const bootstrapConfig = normalizeProjectBootstrapConfig(input?.bootstrapConfig);
   return {
     ...repositoryMetadata,
-    ...(bootstrapConfig ? { bootstrapConfig } : {})
+    ...(input?.bootstrap ? { bootstrap: normalizeProjectBootstrap(input.bootstrap) } : {}),
+    ...(bootstrapConfig ? { bootstrapConfig } : {}),
+    ...(input?.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {}),
+    ...(Object.hasOwn(input, "resources") ? {
+      resources: normalizeManagedProjectResources(input.resources)
+    } : {})
   };
 }
 
-async function readJsonFile(filePath = "") {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return {};
-    }
+function normalizeProjectMetadata(metadata = {}) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    const error = new Error("Project metadata must be an object.");
+    error.code = "vibe64_project_metadata_invalid";
     throw error;
   }
+  if (Object.keys(metadata).length === 0) {
+    return {};
+  }
+  const unsupportedFields = Object.keys(metadata)
+    .filter((field) => ![
+      "bootstrap",
+      "bootstrapConfig",
+      "deletion",
+      "repository",
+      "resources"
+    ].includes(field));
+  if (unsupportedFields.length > 0) {
+    const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
+    error.code = "vibe64_project_metadata_field_unsupported";
+    throw error;
+  }
+  const normalized = projectMetadataFromInput(metadata);
+  normalizeProjectBootstrap(normalized.bootstrap);
+  return normalized;
 }
 
 async function readProjectMetadata({
   projectRecordPath = ""
 } = {}) {
   const metadataPath = projectMetadataPath(projectRecordPath);
-  if (!metadataPath) {
-    return {};
-  }
-  const metadata = await readJsonFile(metadataPath);
-  if (Object.keys(metadata).length === 0) {
-    return {};
-  }
-  const unsupportedFields = Object.keys(metadata)
-    .filter((field) => !["bootstrapConfig", "repository"].includes(field));
-  if (unsupportedFields.length > 0) {
-    const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
-    error.code = "vibe64_project_metadata_field_unsupported";
-    throw error;
-  }
-  return projectMetadataFromInput(metadata);
+  return metadataPath
+    ? normalizeProjectMetadata(await readProjectRecordMetadata(metadataPath))
+    : {};
 }
 
 async function writeProjectMetadata(projectRecordPath = "", metadata = {}, options = {}) {
@@ -394,14 +425,8 @@ async function writeProjectMetadata(projectRecordPath = "", metadata = {}, optio
     throw new Error("writeProjectMetadata requires projectRecordPath.");
   }
   const normalizedMetadata = projectMetadataFromInput(metadata, options);
-  await mkdir(path.dirname(metadataPath), {
-    recursive: true
-  });
-  await writeFile(
-    metadataPath,
-    `${JSON.stringify(normalizedMetadata, null, 2)}\n`,
-    "utf8"
-  );
+  normalizeProjectBootstrap(normalizedMetadata.bootstrap);
+  await updateProjectRecordMetadata(metadataPath, () => normalizedMetadata);
   return normalizedMetadata;
 }
 
@@ -421,14 +446,7 @@ async function workspaceProjectRecordForPath({
   const runtime = await readProjectRuntimeOpenState({
     projectLocalRoot: projectRuntimeRoot || resolvedPath
   });
-  const applicationMode = projectRuntimeRoot
-    ? await readProjectOneOffFlag({
-        name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-        projectRuntimeRoot
-      })
-    : "";
   return workspaceProjectRecord({
-    applicationMode,
     metadata,
     projectRecordPath,
     path: resolvedPath,
@@ -788,24 +806,6 @@ function createStudioProjectContext({
     return projectRuntimeRootForTarget(targetRoot);
   }
 
-  async function ensureProjectStateForSlug(slug = "") {
-    const normalizedSlug = normalizeProjectSlug(slug);
-    const targetRoot = projectRootForSlug(normalizedSlug);
-    const projectRuntimeRoot = projectRuntimeRootForSlug(normalizedSlug);
-    await mkdir(projectRuntimeRoot, {
-      recursive: true
-    });
-    return {
-      projectRecordPath: projectRecordPathForSlug(normalizedSlug),
-      projectLocalRoot: projectRuntimeRoot,
-      projectRuntimeRoot,
-      projectSessionSourceRoot: projectSessionSourceRootForSlug(normalizedSlug),
-      sourceConfigRoot: "",
-      sourceRoot: "",
-      targetRoot
-    };
-  }
-
   function selectedProject() {
     return selectedTargetRoot
       ? projectRecord({
@@ -942,35 +942,86 @@ function createStudioProjectContext({
       projectsRoot,
       slug
     });
-    if (await directoryExists(targetRoot)) {
-      await assertDirectoryUsable(targetRoot);
-    } else {
-      await mkdir(targetRoot, {
-        recursive: true
-      });
+    const projectRuntimeRoot = projectRuntimeRootForSlug(slug);
+    if (await pathExists(targetRoot) || await pathExists(projectRuntimeRoot)) {
+      throw projectSlugExistsError();
     }
-    const metadata = projectMetadataFromInput(input, {
+    const applicationMode = requireProjectApplicationMode(
+      input.applicationMode || PROJECT_APPLICATION_MODE_NEW
+    );
+    const metadataInput = {
+      ...input
+    };
+    delete metadataInput.applicationMode;
+    const metadata = projectMetadataFromInput({
+      ...metadataInput,
+      bootstrap: createProjectBootstrap(applicationMode),
+      resources: []
+    }, {
       defaultRepositoryBranch: PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
       defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
     });
-    if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-      await ensureLocalSourceMainBranch(targetRoot);
-    }
-    if (Object.keys(metadata).length > 0) {
+    let project = null;
+    let sourceCreated = false;
+    let runtimeCreated = false;
+    try {
+      await Promise.all([
+        mkdir(projectsRoot, {
+          recursive: true
+        }),
+        mkdir(path.dirname(projectRuntimeRoot), {
+          recursive: true
+        })
+      ]);
+      await mkdir(projectRuntimeRoot);
+      runtimeCreated = true;
+      await mkdir(targetRoot);
+      sourceCreated = true;
       await writeProjectMetadata(projectRecordPathForSlug(slug), metadata);
+      if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+        await ensureLocalSourceMainBranch(targetRoot);
+      }
+      project = await workspaceProjectRecordForPath({
+        projectRecordPath: projectRecordPathForSlug(slug),
+        path: targetRoot,
+        projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+        projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
+        projectsRoot
+      });
+    } catch (error) {
+      await Promise.all([
+        ...(sourceCreated ? [rm(targetRoot, {
+          force: true,
+          recursive: true
+        })] : []),
+        ...(runtimeCreated ? [rm(projectRuntimeRoot, {
+          force: true,
+          recursive: true
+        })] : [])
+      ]);
+      if (error?.code === "EEXIST") {
+        throw projectSlugExistsError();
+      }
+      throw error;
     }
-    await ensureProjectStateForSlug(slug);
-    const project = await workspaceProjectRecordForPath({
-      projectRecordPath: projectRecordPathForSlug(slug),
-      path: targetRoot,
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-      projectsRoot
-    });
     return {
       ok: true,
       project,
       projectsRoot
+    };
+  }
+
+  async function assertWorkspaceProjectAvailable(input = {}) {
+    const slug = projectSlugFromInput(input);
+    if (
+      await pathExists(projectRootForSlug(slug)) ||
+      await pathExists(projectRuntimeRootForSlug(slug))
+    ) {
+      throw projectSlugExistsError();
+    }
+    return {
+      slug,
+      targetRoot: projectRootForSlug(slug)
     };
   }
 
@@ -992,6 +1043,9 @@ function createStudioProjectContext({
       projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
       projectsRoot
     });
+    if (project.deletion && input.allowDeleting !== true) {
+      throw projectDeletingError();
+    }
     if (!project.repository) {
       const error = new Error("Vibe64 projects must have repository metadata.");
       error.code = "vibe64_project_repository_missing";
@@ -1015,11 +1069,16 @@ function createStudioProjectContext({
       slug
     });
     await assertDirectoryUsable(targetRoot);
-    const metadata = projectMetadataFromInput(input);
-    if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-      await ensureLocalSourceMainBranch(targetRoot);
-    }
-    await writeProjectMetadata(projectRecordPathForSlug(slug), input);
+    await updateWorkspaceProjectState({ slug }, async (currentMetadata) => {
+      const metadata = {
+        ...currentMetadata,
+        ...projectMetadataFromInput(input)
+      };
+      if (projectRepositoryView(metadata).repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+        await ensureLocalSourceMainBranch(targetRoot);
+      }
+      return metadata;
+    });
     const project = await workspaceProjectRecordForPath({
       projectRecordPath: projectRecordPathForSlug(slug),
       path: targetRoot,
@@ -1034,38 +1093,145 @@ function createStudioProjectContext({
     };
   }
 
-  function workspaceProjectOneOffFlagOptions(input = {}) {
+  async function readWorkspaceProjectState(input = {}) {
+    if (!projectCatalogEnabled) {
+      throw projectCatalogUnavailableError();
+    }
     const slug = projectSlugFromInput(input);
     return {
-      name: input?.flag || input?.flagName || input?.key,
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug)
+      metadata: await readProjectMetadata({
+        projectRecordPath: projectRecordPathForSlug(slug)
+      }),
+      projectRecordPath: projectRecordPathForSlug(slug),
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectStateRoot: projectRuntimeRootForSlug(slug),
+      slug,
+      targetRoot: projectRootForSlug(slug)
     };
   }
 
-  async function writeWorkspaceProjectOneOffFlag(input = {}) {
+  async function updateWorkspaceProjectState(input = {}, update, {
+    allowDeleting = false
+  } = {}) {
     if (!projectCatalogEnabled) {
       throw projectCatalogUnavailableError();
     }
+    if (typeof update !== "function") {
+      throw new TypeError("updateWorkspaceProjectState requires an update function.");
+    }
     const slug = projectSlugFromInput(input);
-    await ensureProjectStateForSlug(slug);
-    return writeProjectOneOffFlag({
-      ...workspaceProjectOneOffFlagOptions(input),
-      value: input?.value
+    const state = {
+      projectRecordPath: projectRecordPathForSlug(slug),
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectStateRoot: projectRuntimeRootForSlug(slug),
+      slug,
+      targetRoot: projectRootForSlug(slug)
+    };
+    const metadata = await updateProjectRecordMetadata(state.projectRecordPath, async (current) => {
+      const currentMetadata = normalizeProjectMetadata(current);
+      if (!Object.keys(currentMetadata).length) {
+        throw projectStateMissingError(state.slug);
+      }
+      if (currentMetadata.deletion && !allowDeleting) {
+        throw projectDeletingError();
+      }
+      return normalizeProjectMetadata(await update(currentMetadata, {
+        ...state,
+        metadata: currentMetadata
+      }));
+    });
+    return {
+      ...state,
+      metadata
+    };
+  }
+
+  async function recordWorkspaceProjectTemplate(input = {}) {
+    return updateWorkspaceProjectState(input, (metadata) => ({
+      ...metadata,
+      bootstrap: projectBootstrapWithTemplate(metadata.bootstrap, {
+        commit: input.commit
+      })
+    }));
+  }
+
+  async function completeWorkspaceProjectBootstrap(input = {}) {
+    return updateWorkspaceProjectState(input, (metadata) => ({
+      ...metadata,
+      bootstrap: completedProjectBootstrap(metadata.bootstrap)
+    }));
+  }
+
+  async function recordWorkspaceProjectResources(input = {}) {
+    const incomingResources = normalizeManagedProjectResources(input.resources);
+    return updateWorkspaceProjectState(input, (metadata) => {
+      const resources = new Map(
+        normalizeManagedProjectResources(metadata.resources)
+          .map((resource) => [resource.id, resource])
+      );
+      for (const resource of incomingResources) {
+        resources.set(resource.id, resource);
+      }
+      return {
+        ...metadata,
+        resources: [...resources.values()]
+      };
     });
   }
 
-  async function readWorkspaceProjectOneOffFlag(input = {}) {
-    if (!projectCatalogEnabled) {
-      throw projectCatalogUnavailableError();
-    }
-    return readProjectOneOffFlag(workspaceProjectOneOffFlagOptions(input));
+  async function beginWorkspaceProjectDeletion(input = {}) {
+    return updateWorkspaceProjectState(input, (metadata) => ({
+      ...metadata,
+      deletion: metadata.deletion || normalizeProjectDeletion({
+        startedAt: input.startedAt || new Date().toISOString(),
+        steps: {}
+      })
+    }), {
+      allowDeleting: true
+    });
   }
 
-  async function consumeWorkspaceProjectOneOffFlag(input = {}) {
-    if (!projectCatalogEnabled) {
-      throw projectCatalogUnavailableError();
+  async function completeWorkspaceProjectDeletionStep(input = {}) {
+    const step = String(input.step || "").trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(step)) {
+      const error = new Error("Project deletion step is invalid.");
+      error.code = "vibe64_project_deletion_step_invalid";
+      throw error;
     }
-    return consumeProjectOneOffFlag(workspaceProjectOneOffFlagOptions(input));
+    return updateWorkspaceProjectState(input, (metadata) => ({
+      ...metadata,
+      deletion: normalizeProjectDeletion({
+        ...metadata.deletion,
+        steps: {
+          ...metadata.deletion?.steps,
+          [step]: input.completedAt || new Date().toISOString()
+        }
+      })
+    }), {
+      allowDeleting: true
+    });
+  }
+
+  async function discardWorkspaceProjectRecord(input = {}) {
+    const state = await readWorkspaceProjectState(input);
+    if (!Object.keys(state.metadata).length) {
+      throw projectStateMissingError(state.slug);
+    }
+    if (state.metadata.deletion) {
+      const error = new Error("Project creation cleanup cannot remove a project being deleted.");
+      error.code = "vibe64_project_deleting";
+      throw error;
+    }
+    await Promise.all([
+      rm(state.targetRoot, {
+        force: true,
+        recursive: true
+      }),
+      rm(state.projectStateRoot, {
+        force: true,
+        recursive: true
+      })
+    ]);
   }
 
   async function selectWorkspaceProject(input = {}) {
@@ -1094,11 +1260,9 @@ function createStudioProjectContext({
       throw projectCatalogUnavailableError();
     }
 
-    const created = await createWorkspaceProjectRecord(input);
-    await writeWorkspaceProjectOneOffFlag({
-      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      slug: created.project.slug,
-      value: PROJECT_APPLICATION_MODE_NEW
+    const created = await createWorkspaceProjectRecord({
+      ...input,
+      applicationMode: PROJECT_APPLICATION_MODE_NEW
     });
     selectedTargetRoot = created.project.projectRoot;
     selectionSource = "workspace";
@@ -1115,9 +1279,13 @@ function createStudioProjectContext({
   }
 
   return Object.freeze({
+    assertWorkspaceProjectAvailable,
+    beginWorkspaceProjectDeletion,
+    completeWorkspaceProjectBootstrap,
+    completeWorkspaceProjectDeletionStep,
     createWorkspaceProject,
     createWorkspaceProjectRecord,
-    consumeWorkspaceProjectOneOffFlag,
+    discardWorkspaceProjectRecord,
     get projectsRoot() {
       return projectsRoot;
     },
@@ -1133,7 +1301,6 @@ function createStudioProjectContext({
     get managedSourceRoot() {
       return managedSourceRoot;
     },
-    ensureProjectStateForSlug,
     get selectedProject() {
       return selectedProject();
     },
@@ -1153,11 +1320,12 @@ function createStudioProjectContext({
     listProjects,
     listWorkspaceProjects,
     readWorkspaceProject,
-    readWorkspaceProjectOneOffFlag,
+    readWorkspaceProjectState,
+    recordWorkspaceProjectResources,
+    recordWorkspaceProjectTemplate,
     requireSelectedTargetRoot,
     selectWorkspaceProject,
     updateWorkspaceProjectMetadata,
-    writeWorkspaceProjectOneOffFlag,
     projectRecordPathForSlug,
     projectRecordPathForTarget,
     projectLocalRootForSlug,

@@ -36,6 +36,7 @@
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectApplication": "./src/server/projectApplication.js",
     "./server/projectBootstrapConfig": "./src/server/projectBootstrapConfig.js",
+    "./server/projectLifecycle": "./src/server/projectLifecycle.js",
     "./server/projectManifest": "./src/server/projectManifest.js",
     "./server/projectOneOffFlags": "./src/server/projectOneOffFlags.js",
     "./server/projectRuntimeOpenState": "./src/server/projectRuntimeOpenState.js",

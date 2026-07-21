@@ -405,6 +405,14 @@ class TargetAdapter {
     return [];
   }
 
+  async getManagedProjectResources() {
+    return [];
+  }
+
+  async deleteManagedProjectResources() {
+    return [];
+  }
+
   async inspectCommittedWorkflow() {
     return null;
   }

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  mkdir,
   mkdtemp,
   rm
 } from "node:fs/promises";
@@ -135,16 +134,15 @@ async function waitForSocketMessages(socket, count) {
 async function withProjectRequestContext(callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-service-terminal-routes-"));
   const slug = "alpha_1";
-  await mkdir(path.join(projectsRoot, slug), {
-    recursive: true
+  const projectContext = createStudioProjectContext({
+    explicitProjectsRoot: projectsRoot,
+    env: {},
+    home: projectsRoot
   });
+  await projectContext.createWorkspaceProjectRecord({ slug });
   try {
     return await callback({
-      projectContext: createStudioProjectContext({
-        explicitProjectsRoot: projectsRoot,
-        env: {},
-        home: projectsRoot
-      }),
+      projectContext,
       slug
     });
   } finally {

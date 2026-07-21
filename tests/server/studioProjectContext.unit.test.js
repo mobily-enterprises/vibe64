@@ -28,8 +28,14 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
   PROJECT_APPLICATION_MODE_EXISTING,
-  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
+  PROJECT_APPLICATION_MODE_NEW
 } from "../../packages/vibe64-core/src/server/projectApplication.js";
+import {
+  createProjectBootstrap
+} from "../../packages/vibe64-core/src/server/projectLifecycle.js";
+import {
+  saveProjectBootstrapConfig
+} from "../../packages/vibe64-core/src/server/projectBootstrapConfig.js";
 import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
@@ -314,7 +320,7 @@ test("Studio project context creates local-source projects with a real main bran
   });
 });
 
-test("Studio project context normalizes imported local-source repositories to main", async () => {
+test("Studio project context refuses to adopt a pre-existing source folder", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "legacy-app");
@@ -334,19 +340,73 @@ test("Studio project context normalizes imported local-source repositories to ma
       env: {},
       home: root
     });
-    await context.createWorkspaceProjectRecord({
+    await assert.rejects(() => context.createWorkspaceProjectRecord({
       repository: {
         mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
       },
       slug: "legacy-app"
+    }), {
+      code: "vibe64_project_slug_exists"
     });
 
-    assert.equal(await gitOutput(projectRoot, ["branch", "--show-current"]), PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH);
+    assert.equal(await gitOutput(projectRoot, ["branch", "--show-current"]), "trunk");
     assert.equal(
-      await gitOutput(projectRoot, ["rev-parse", "--verify", `refs/heads/${PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH}^{commit}`]),
+      await gitOutput(projectRoot, ["rev-parse", "--verify", "HEAD"]),
       trunkCommit
     );
     assert.equal(await readFile(path.join(projectRoot, "README.md"), "utf8"), "Legacy project\n");
+    await assert.rejects(() => access(context.projectRecordPathForSlug("legacy-app")), {
+      code: "ENOENT"
+    });
+  });
+});
+
+test("Studio project context refuses a slug with stale runtime state", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: path.join(root, "projects"),
+      env: {},
+      home: root
+    });
+    const runtimeRoot = context.projectRuntimeRootForSlug("stale-app");
+    await writeTestFile(path.join(runtimeRoot, "sessions", "active", "old-session", "session.json"), "{}\n");
+
+    await assert.rejects(
+      () => context.createWorkspaceProjectRecord({
+        slug: "stale-app"
+      }),
+      {
+        code: "vibe64_project_slug_exists"
+      }
+    );
+    assert.equal(
+      await readFile(path.join(runtimeRoot, "sessions", "active", "old-session", "session.json"), "utf8"),
+      "{}\n"
+    );
+    await assert.rejects(() => access(path.join(context.projectsRoot, "stale-app")), {
+      code: "ENOENT"
+    });
+  });
+});
+
+test("Studio project context reserves a project slug atomically", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: path.join(root, "projects"),
+      env: {},
+      home: root
+    });
+
+    const attempts = await Promise.allSettled([
+      context.createWorkspaceProjectRecord({ slug: "one-winner" }),
+      context.createWorkspaceProjectRecord({ slug: "one-winner" })
+    ]);
+
+    assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
+    const rejected = attempts.find((result) => result.status === "rejected");
+    assert.equal(rejected.reason.code, "vibe64_project_slug_exists");
+    await access(path.join(context.projectsRoot, "one-winner"));
+    await access(context.projectRecordPathForSlug("one-winner"));
   });
 });
 
@@ -660,6 +720,7 @@ test("Studio project context reads project records and ignores source config as 
     const runtimeRoot = context.projectRuntimeRootForSlug("canonical-app");
     await Promise.all([
       writeTestFile(recordPath, `${JSON.stringify({
+        bootstrap: createProjectBootstrap(PROJECT_APPLICATION_MODE_EXISTING),
         repository: {
           defaultBranch: "main",
           github: {
@@ -706,20 +767,16 @@ test("Studio project context lists and reads managed Git catalog records", async
     });
 
     const created = await context.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       repository: {
         mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
         defaultBranch: "main"
       },
       slug: "managed-app"
     });
-    await context.writeWorkspaceProjectOneOffFlag({
-      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      slug: "managed-app",
-      value: PROJECT_APPLICATION_MODE_EXISTING
-    });
 
     assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
-    assert.equal(created.project.applicationMode, undefined);
+    assert.equal(created.project.applicationMode, PROJECT_APPLICATION_MODE_EXISTING);
     assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
     assert.equal(created.project.githubRepository, undefined);
 
@@ -763,11 +820,92 @@ test("Studio project context defaults new catalog records to managed Git metadat
 
     const recordText = await readFile(context.projectRecordPathForSlug("default-managed-app"), "utf8");
     const record = JSON.parse(recordText);
-    assert.deepEqual(record, {
-      repository: {
-        mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-        defaultBranch: "main"
+    assert.deepEqual(record.repository, {
+      mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+      defaultBranch: "main"
+    });
+    assert.deepEqual(record.resources, []);
+    assert.equal(record.bootstrap.mode, PROJECT_APPLICATION_MODE_NEW);
+    assert.equal(record.bootstrap.status, "pending");
+  });
+});
+
+test("Studio project context keeps bootstrap pending through template setup and completes it explicitly", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: path.join(root, "projects"),
+      env: {},
+      home: root
+    });
+    await context.createWorkspaceProjectRecord({
+      slug: "template-app"
+    });
+    const templateCommit = "0123456789abcdef0123456789abcdef01234567";
+
+    await assert.rejects(
+      () => context.recordWorkspaceProjectTemplate({
+        commit: "not-a-commit",
+        slug: "template-app"
+      }),
+      {
+        code: "vibe64_project_bootstrap_template_invalid"
       }
+    );
+
+    await Promise.all([
+      context.recordWorkspaceProjectTemplate({
+        commit: templateCommit,
+        slug: "template-app"
+      }),
+      context.recordWorkspaceProjectResources({
+        resources: [{
+          adapterId: "jskit",
+          id: "development-database",
+          kind: "relational-database",
+          name: "template_app",
+          provider: "mariadb"
+        }],
+        slug: "template-app"
+      }),
+      saveProjectBootstrapConfig({
+        projectRecordPath: context.projectRecordPathForSlug("template-app"),
+        projectType: "jskit",
+        values: {
+          user_mode: "users"
+        }
+      })
+    ]);
+
+    const pending = await context.readWorkspaceProject({
+      slug: "template-app"
+    });
+    assert.equal(pending.project.applicationMode, PROJECT_APPLICATION_MODE_NEW);
+    await context.completeWorkspaceProjectBootstrap({
+      slug: "template-app"
+    });
+    await context.completeWorkspaceProjectBootstrap({
+      slug: "template-app"
+    });
+    const complete = await context.readWorkspaceProject({
+      slug: "template-app"
+    });
+    assert.equal(complete.project.applicationMode, undefined);
+    const metadata = JSON.parse(await readFile(context.projectRecordPathForSlug("template-app"), "utf8"));
+    assert.deepEqual(metadata.bootstrap, {
+      mode: PROJECT_APPLICATION_MODE_NEW,
+      status: "complete",
+      templateCommit
+    });
+    assert.deepEqual(metadata.resources, [{
+      adapterId: "jskit",
+      id: "development-database",
+      kind: "relational-database",
+      name: "template_app",
+      provider: "mariadb"
+    }]);
+    assert.equal(metadata.bootstrapConfig.projectType, "jskit");
+    assert.deepEqual(metadata.bootstrapConfig.values, {
+      user_mode: "users"
     });
   });
 });
@@ -795,24 +933,20 @@ test("Studio project context requires catalog metadata in the project record", a
       code: "ENOENT"
     });
 
-    const requestContext = await resolveProjectRequestContext({
+    await assert.rejects(() => resolveProjectRequestContext({
       projectContext: context,
       request: {
         params: {
           slug: "uncataloged-app"
         }
       }
+    }), {
+      code: "vibe64_project_repository_missing"
     });
-
-    assert.equal(requestContext.sourceConfigRoot, "");
-    assert.equal(requestContext.sourceRoot, "");
-    assert.equal(requestContext.projectLocalRoot, context.projectLocalRootForSlug("uncataloged-app"));
-    assert.equal(requestContext.projectRuntimeRoot, context.projectRuntimeRootForSlug("uncataloged-app"));
-    assert.equal(requestContext.projectRecordPath, context.projectRecordPathForSlug("uncataloged-app"));
     await assert.rejects(() => access(path.join(projectRoot, "project.json")), {
       code: "ENOENT"
     });
-    await assert.rejects(() => access(requestContext.projectRecordPath), {
+    await assert.rejects(() => access(context.projectRecordPathForSlug("uncataloged-app")), {
       code: "ENOENT"
     });
     const manifest = JSON.parse(await readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"));
@@ -820,17 +954,17 @@ test("Studio project context requires catalog metadata in the project record", a
   });
 });
 
-test("project request context ensures catalog runtime root only", async () => {
+test("project request context uses registered catalog runtime state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "direct-app");
-    await mkdir(projectRoot, {
-      recursive: true
-    });
     const projectContext = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
       env: {},
       home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      slug: "direct-app"
     });
     const vibe64User = {
       gid: 1001,

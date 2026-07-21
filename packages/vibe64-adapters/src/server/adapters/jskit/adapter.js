@@ -91,6 +91,7 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  jskitManagedMariaDbDevelopmentDatabaseDropCommandArgs,
   jskitManagedMariaDbDevelopmentDatabaseCommandArgs,
   jskitMariaDbDatabaseName
 } from "./setupMariaDbRuntime.js";
@@ -929,6 +930,60 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
 
   async getRuntimeConfigProfile() {
     return createJskitRuntimeConfigProfile();
+  }
+
+  async getManagedProjectResources({
+    config = {},
+    runtimeConfigEnv = {},
+    targetRoot = ""
+  } = {}) {
+    if (!jskitManagedDatabaseEnabled(config)) {
+      return [];
+    }
+    return [{
+      adapterId: this.id,
+      id: "development-database",
+      kind: "relational-database",
+      name: normalizeText(runtimeConfigEnv.DB_NAME) || jskitMariaDbDatabaseName(targetRoot),
+      provider: "mariadb"
+    }];
+  }
+
+  async deleteManagedProjectResources({
+    resources = [],
+    serviceDataRoot = "",
+    targetRoot = ""
+  } = {}) {
+    const expectedDatabaseName = jskitMariaDbDatabaseName(targetRoot);
+    const database = resources.find((resource) => resource.id === "development-database");
+    if (!database) {
+      return [];
+    }
+    if (
+      database.adapterId !== this.id ||
+      database.kind !== "relational-database" ||
+      database.provider !== "mariadb" ||
+      database.name !== expectedDatabaseName
+    ) {
+      throw vibe64Error(
+        "Recorded JSKIT development database does not match this project.",
+        "vibe64_project_resource_identity_mismatch"
+      );
+    }
+    const [command, ...args] = jskitManagedMariaDbDevelopmentDatabaseDropCommandArgs({
+      databaseName: database.name,
+      serviceDataRoot,
+      targetRoot
+    });
+    return [{
+      allowedRoots: [serviceDataRoot, targetRoot].filter(Boolean),
+      args,
+      command,
+      cwd: targetRoot,
+      id: database.id,
+      runtimes: ["mariadb"],
+      timeout: 120_000
+    }];
   }
 
   async listExecutionEnvironmentPreparations({

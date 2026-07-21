@@ -87,7 +87,15 @@ async function withRouteProject(operation) {
       apiBase: `/api/app/${TEST_PROJECT_SLUG}`,
       apiRouteBase: "/api/app/:slug",
       projectContext: {
-        projectsRoot
+        projectsRoot,
+        async readWorkspaceProject({ slug } = {}) {
+          return {
+            project: {
+              path: path.join(projectsRoot, slug)
+            },
+            projectsRoot
+          };
+        }
       },
       slug: TEST_PROJECT_SLUG
     });

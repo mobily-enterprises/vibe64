@@ -30,6 +30,9 @@ import {
   readProjectRecordMetadata
 } from "@local/vibe64-core/server/projectBootstrapConfig";
 import {
+  pendingProjectBootstrap
+} from "@local/vibe64-core/server/projectLifecycle";
+import {
   resolveSourceConfigRoot
 } from "@local/vibe64-core/server/projectState";
 import {
@@ -643,6 +646,18 @@ async function validateApplicationSourceForSetupWorkflow({
   });
   const applicationPresent = facts?.workflow?.seedRequired === false;
   if (setupKind === PROJECT_SETUP_KIND_SEED && applicationPresent) {
+    const metadataRecord = normalizeText(context.projectRecordPath)
+      ? await readProjectRecordMetadata(context.projectRecordPath)
+      : {};
+    const bootstrap = metadataRecord.bootstrap
+      ? pendingProjectBootstrap(metadataRecord.bootstrap)
+      : null;
+    const sourceCommit = await readCurrentCommitIfPresent(sourcePath);
+    if (
+      bootstrap?.templateCommit === sourceCommit
+    ) {
+      return;
+    }
     throw vibe64Error(
       "This repository was marked as needing a new application, but it already contains a complete application. Nothing was scaffolded. Add it as an existing application instead.",
       "vibe64_new_application_source_conflict"

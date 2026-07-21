@@ -242,34 +242,44 @@ async function inspectProjectSourceMarkers(source = {}, markers = []) {
 async function inspectDescribedProject(targetRoot, {
   extra = () => ({}),
   markers = [],
-  packageJson = {}
+  packageJson = null
 } = {}) {
   const resolvedTargetRoot = path.resolve(targetRoot || process.cwd());
-  const packageJsonOptions = {
-    defaultValue: null,
-    invalidJsonCode: "vibe64_invalid_project_json",
-    invalidJsonMessage: (filePath) => `Invalid JSON in project file: ${filePath}`,
-    key: "packageJson",
-    relativePath: "package.json",
-    ...packageJson
-  };
   const markerResults = await inspectProjectMarkers(resolvedTargetRoot, markers);
-  const packageJsonPath = path.join(resolvedTargetRoot, packageJsonOptions.relativePath);
-  const packageJsonValue = await readOptionalProjectJson(packageJsonPath, packageJsonOptions);
+  let packageJsonContext = {};
+  let packageJsonInspection = {};
+  if (packageJson) {
+    const packageJsonOptions = {
+      defaultValue: null,
+      invalidJsonCode: "vibe64_invalid_project_json",
+      invalidJsonMessage: (filePath) => `Invalid JSON in project file: ${filePath}`,
+      key: "packageJson",
+      relativePath: "package.json",
+      ...packageJson
+    };
+    const packageJsonPath = path.join(resolvedTargetRoot, packageJsonOptions.relativePath);
+    const packageJsonValue = await readOptionalProjectJson(packageJsonPath, packageJsonOptions);
+    packageJsonContext = {
+      packageJson: packageJsonValue,
+      packageJsonPath
+    };
+    packageJsonInspection = {
+      [packageJsonOptions.key]: packageJsonValue
+    };
+  }
   const context = {
     exists: (relativePath) => pathExists(path.join(resolvedTargetRoot, relativePath)),
     markers: markerResults,
-    packageJson: packageJsonValue,
-    packageJsonPath,
     pathFor: (relativePath) => path.join(resolvedTargetRoot, relativePath),
-    targetRoot: resolvedTargetRoot
+    targetRoot: resolvedTargetRoot,
+    ...packageJsonContext
   };
   const extraInspection = await extra(context) || {};
 
   return {
     markers: markerResults,
-    [packageJsonOptions.key]: packageJsonValue,
     targetRoot: resolvedTargetRoot,
+    ...packageJsonInspection,
     ...extraInspection
   };
 }

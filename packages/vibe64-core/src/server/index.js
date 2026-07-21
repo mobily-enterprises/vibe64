@@ -26,6 +26,7 @@ export * from "./vibe64MembershipStore.js";
 export * from "./projectState.js";
 export * from "./projectApplication.js";
 export * from "./projectBootstrapConfig.js";
+export * from "./projectLifecycle.js";
 export * from "./projectManifest.js";
 export * from "./projectOneOffFlags.js";
 export * from "./projectRuntimeOpenState.js";

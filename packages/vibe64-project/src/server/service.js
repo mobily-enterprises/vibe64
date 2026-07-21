@@ -69,19 +69,21 @@ import {
 import {
   PROJECT_APPLICATION_MODE_EXISTING,
   PROJECT_APPLICATION_MODE_NEW,
-  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
   normalizeProjectApplicationMode
 } from "@local/vibe64-core/server/projectApplication";
-import {
-  consumeProjectOneOffFlag,
-  readProjectOneOffFlag
-} from "@local/vibe64-core/server/projectOneOffFlags";
 import {
   consumeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
   readProjectRecordMetadata,
   saveProjectBootstrapConfig
 } from "@local/vibe64-core/server/projectBootstrapConfig";
+import {
+  normalizeManagedProjectResources,
+  projectBootstrapApplicationMode
+} from "@local/vibe64-core/server/projectLifecycle";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   resolveStudioTargetRoot,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
@@ -267,6 +269,7 @@ function createService({
   projectContext = null,
   projectConfigSavedHooks = [],
   projectTemplates = PROJECT_TEMPLATES,
+  runCommand = runVibe64Command,
   projectRuntimeConfigEnvironmentResolvers = [],
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
@@ -713,10 +716,20 @@ function createService({
   }
 
   async function applyProjectTemplateState(templateId = "", input = {}) {
-    return materializeProjectTemplate({
+    const result = await materializeProjectTemplate({
       ...await currentProjectTemplateContext(input),
       templateId
     });
+    if (
+      targetRootIsProjectHome() &&
+      typeof studioProjectContext.recordWorkspaceProjectTemplate === "function"
+    ) {
+      await studioProjectContext.recordWorkspaceProjectTemplate({
+        commit: result.materialization.commit,
+        slug: currentProjectRequestContext()?.slug || path.basename(currentTargetRoot())
+      });
+    }
+    return result;
   }
 
   function requireSelectedTargetRoot() {
@@ -1809,10 +1822,75 @@ function createService({
       target: input.target,
       targetRoot: targetRootValue
     });
+    if (
+      config.scope === RUNTIME_CONFIG_SCOPES.DEV &&
+      targetRootIsProjectHome(targetRootValue) &&
+      typeof runtimeConfigContext.adapter?.getManagedProjectResources === "function" &&
+      typeof studioProjectContext.recordWorkspaceProjectResources === "function"
+    ) {
+      const resources = normalizeManagedProjectResources(
+        await runtimeConfigContext.adapter.getManagedProjectResources({
+          config: runtimeConfigContext.projectConfig || {},
+          runtimeConfig: config,
+          runtimeConfigEnv: runtimeConfigEnv(config.records, {
+            scope: config.scope
+          }),
+          serviceDataRoot: resolvedServiceDataRoot,
+          targetRoot: targetRootValue
+        })
+      );
+      if (resources.length) {
+        await studioProjectContext.recordWorkspaceProjectResources({
+          resources,
+          slug: currentProjectSlug()
+        });
+      }
+    }
     return {
       ...config,
       envConfigSource: runtimeConfigContext.envConfigSource || envConfigSource || null,
       systemEnvironment: projectEnvironment
+    };
+  }
+
+  async function cleanupCurrentProjectResources() {
+    const targetRootValue = currentTargetRoot();
+    const metadata = await readProjectRecordMetadata(projectRecordPath(targetRootValue));
+    const resources = normalizeManagedProjectResources(metadata.resources);
+    const resourcesByAdapter = Map.groupBy(resources, (resource) => resource.adapterId);
+    const deleted = [];
+    for (const [adapterId, adapterResources] of resourcesByAdapter) {
+      const adapter = await adapterRegistry.createAdapter(adapterId);
+      const plans = await adapter.deleteManagedProjectResources({
+        resources: adapterResources,
+        serviceDataRoot: serviceDataRoot(),
+        targetRoot: targetRootValue
+      });
+      for (const plan of Array.isArray(plans) ? plans : []) {
+        const result = await runCommand({
+          actor: "daemon",
+          allowedRoots: Array.isArray(plan.allowedRoots) ? plan.allowedRoots : [targetRootValue],
+          args: Array.isArray(plan.args) ? plan.args : [],
+          command: plan.command,
+          cwd: plan.cwd || targetRootValue,
+          envPolicy: "project",
+          mode: "capture",
+          purpose: "setup",
+          runtimes: Array.isArray(plan.runtimes) ? plan.runtimes : [],
+          timeout: Number(plan.timeout || 120_000)
+        });
+        if (result?.ok === false) {
+          const error = new Error(result.output || `Managed project resource ${plan.id || "cleanup"} could not be removed.`);
+          error.code = result.code || "vibe64_project_resource_cleanup_failed";
+          error.result = result;
+          throw error;
+        }
+        deleted.push(plan.id || "resource");
+      }
+    }
+    return {
+      deleted,
+      ok: true
     };
   }
 
@@ -2780,24 +2858,24 @@ function createService({
   }
 
   async function currentProjectApplicationMode() {
-    const runtimeRoot = projectRuntimeRoot(currentTargetRoot());
-    if (!runtimeRoot) {
+    const recordPath = projectRecordPath(currentTargetRoot());
+    if (!recordPath) {
       return "";
     }
-    return normalizeProjectApplicationMode(await readProjectOneOffFlag({
-      name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      projectRuntimeRoot: runtimeRoot
-    }));
+    const metadata = await readProjectRecordMetadata(recordPath);
+    return projectBootstrapApplicationMode(metadata.bootstrap);
   }
 
-  async function consumeCurrentProjectApplicationMode() {
-    const runtimeRoot = projectRuntimeRoot(currentTargetRoot());
-    if (!runtimeRoot) {
-      return;
+  function currentProjectSlug() {
+    return currentProjectRequestContext()?.slug || path.basename(currentTargetRoot());
+  }
+
+  async function completeCurrentProjectBootstrap() {
+    if (!targetRootIsProjectHome() || typeof studioProjectContext.completeWorkspaceProjectBootstrap !== "function") {
+      return null;
     }
-    await consumeProjectOneOffFlag({
-      name: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      projectRuntimeRoot: runtimeRoot
+    return studioProjectContext.completeWorkspaceProjectBootstrap({
+      slug: currentProjectSlug()
     });
   }
 
@@ -3000,10 +3078,13 @@ function createService({
     });
   }
 
-  async function runInProjectContext(slug = "", operation) {
+  async function runInProjectContext(slug = "", operation, {
+    allowDeleting = false
+  } = {}) {
     return runWithResolvedProjectRequestContext({
       projectContext: studioProjectContext,
       request: {
+        allowDeleting,
         params: {
           slug
         }
@@ -3063,8 +3144,12 @@ function createService({
       return readCurrentProjectSelection();
     },
 
-    async consumeProjectApplicationMode() {
-      return consumeCurrentProjectApplicationMode();
+    async completeProjectBootstrap() {
+      return completeCurrentProjectBootstrap();
+    },
+
+    async cleanupProjectResources() {
+      return cleanupCurrentProjectResources();
     },
 
     async applyProjectTemplate(templateId = "", input = {}) {

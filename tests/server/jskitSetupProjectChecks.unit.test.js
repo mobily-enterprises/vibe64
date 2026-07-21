@@ -39,6 +39,7 @@ import {
   jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
   jskitMariaDbTenantDatabaseGrantPattern,
+  jskitManagedMariaDbDevelopmentDatabaseDropScript,
   jskitManagedMariaDbDevelopmentDatabaseScript,
   stopJskitManagedMariaDbRuntime
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
@@ -210,16 +211,33 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     serviceDataRoot,
     targetRoot
   });
+  const developmentDatabaseDropScript = jskitManagedMariaDbDevelopmentDatabaseDropScript({
+    databaseName: "app_db",
+    serviceDataRoot,
+    targetRoot
+  });
   const tenantGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
     serviceDataRoot
   });
   assertShellScriptSyntax(startScript);
   assertShellScriptSyntax(developmentDatabaseScript);
+  assertShellScriptSyntax(developmentDatabaseDropScript);
   assert.match(startScript, /mariadb-install-db --no-defaults/u);
   assert.doesNotMatch(startScript, /mysql_install_db --no-defaults/u);
   assert.match(startScript, /mariadbd "\$\{mariadb_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
   assert.match(startScript, /mariadb --no-defaults --skip-ssl --protocol=TCP/u);
   assert.match(developmentDatabaseScript, /mariadb --no-defaults --skip-ssl --protocol=TCP/u);
+  assert.match(developmentDatabaseDropScript, /DROP DATABASE IF EXISTS `app_db`/u);
+  assert.match(developmentDatabaseDropScript, /MYSQL_PWD="\$development_admin_password"/u);
+  assert.doesNotMatch(developmentDatabaseDropScript, /DROP USER|GRANT ALL PRIVILEGES/u);
+  assert.throws(
+    () => jskitManagedMariaDbDevelopmentDatabaseDropScript({
+      databaseName: "app_db; DROP DATABASE other",
+      serviceDataRoot,
+      targetRoot
+    }),
+    /database name is invalid/u
+  );
   assert.doesNotMatch(startScript, /CREATE USER|GRANT ALL PRIVILEGES|development_app_password/u);
   assert.match(developmentDatabaseScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
   assert.match(developmentDatabaseScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));

@@ -33,10 +33,6 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
-  PROJECT_APPLICATION_MODE_NEW,
-  PROJECT_APPLICATION_MODE_ONE_OFF_FLAG
-} from "../../packages/vibe64-core/src/server/projectApplication.js";
-import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -930,6 +926,9 @@ test("session action closes terminals when the action archives the session", asy
   const operations = [];
   const service = createService({
     projectService: {
+      async completeProjectBootstrap() {
+        operations.push("bootstrap:complete");
+      },
       async createRuntime() {
         return {
           async markSessionClosing(sessionId, options = {}) {
@@ -938,6 +937,9 @@ test("session action closes terminals when the action archives the session", asy
           async runAction(sessionId) {
             operations.push(`run:${sessionId}`);
             return {
+              metadata: {
+                work_source: "seed"
+              },
               sessionId,
               status: VIBE64_SESSION_STATUS.FINISHED
             };
@@ -965,19 +967,27 @@ test("session action closes terminals when the action archives the session", asy
     "closing:session-1:finished",
     "close:session-1",
     "run:session-1",
-    "close:session-1"
+    "close:session-1",
+    "bootstrap:complete"
   ]);
 });
 
 test("session action treats a repeated close request as already archived", async () => {
+  let bootstrapCompletions = 0;
   let runActionCalled = false;
   const service = createService({
     projectService: {
+      async completeProjectBootstrap() {
+        bootstrapCompletions += 1;
+      },
       async createRuntime() {
         return {
           async getSession(sessionId) {
             return {
               archived: true,
+              metadata: {
+                work_source: "seed"
+              },
               sessionId,
               status: VIBE64_SESSION_STATUS.FINISHED
             };
@@ -1001,6 +1011,7 @@ test("session action treats a repeated close request as already archived", async
 
   assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
   assert.equal(session.archived, true);
+  assert.equal(bootstrapCompletions, 1);
   assert.equal(runActionCalled, false);
   assert.deepEqual(session.clientRefresh, {
     includeList: true
@@ -6389,11 +6400,6 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
       },
       slug: "clicky"
     });
-    await projectContext.writeWorkspaceProjectOneOffFlag({
-      flag: PROJECT_APPLICATION_MODE_ONE_OFF_FLAG,
-      slug: "clicky",
-      value: PROJECT_APPLICATION_MODE_NEW
-    });
     const projectRoot = path.join(projectsRoot, "clicky");
     const projectRuntimeRoot = projectContext.projectRuntimeRootForSlug("clicky");
     const requestContext = {
@@ -7431,13 +7437,9 @@ test("session creation freezes GitHub repository profile metadata", async () => 
 });
 
 test("session creation is gated by session readiness, not project setup diagnostics", async () => {
-  let applicationModeConsumed = 0;
   let selectedWorkflowDefinitionId = "";
   const service = createService({
     projectService: {
-      async consumeProjectApplicationMode() {
-        applicationModeConsumed += 1;
-      },
       async createRuntime() {
         return {
           async advance(sessionId) {
@@ -7489,19 +7491,14 @@ test("session creation is gated by session readiness, not project setup diagnost
   });
 
   assert.equal(result.ok, true);
-  assert.equal(applicationModeConsumed, 1);
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 });
 
 test("session creation blocks a second open seed session", async () => {
-  let applicationModeConsumed = 0;
   let createSessionCalled = false;
   const service = createService({
     projectService: {
-      async consumeProjectApplicationMode() {
-        applicationModeConsumed += 1;
-      },
       async createRuntime() {
         return {
           async createSession() {
@@ -7546,7 +7543,6 @@ test("session creation blocks a second open seed session", async () => {
   assert.equal(result.errors[0].code, "project_setup_session_active");
   assert.equal(result.creation.setupSessionActive, true);
   assert.equal(result.limits.maxOpenSessions, 1);
-  assert.equal(applicationModeConsumed, 1);
   assert.equal(createSessionCalled, false);
 });
 

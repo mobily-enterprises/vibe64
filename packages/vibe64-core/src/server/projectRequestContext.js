@@ -45,32 +45,21 @@ async function resolveProjectRequestContext({
     error.code = "vibe64_project_route_unavailable";
     throw error;
   }
-  const targetRoot = resolveProjectRoot({
+  const result = await resolvedProjectContext.readWorkspaceProject({
+    allowDeleting: request.allowDeleting === true,
+    slug
+  });
+  const project = result.project || {};
+  const targetRoot = project.projectRoot || project.path || resolveProjectRoot({
     projectsRoot,
     slug
   });
-  await assertProjectDirectoryUsable(targetRoot);
-  if (typeof resolvedProjectContext.ensureProjectStateForSlug === "function") {
-    await resolvedProjectContext.ensureProjectStateForSlug(slug);
-  }
-  const projectLocalRoot = typeof resolvedProjectContext.projectLocalRootForSlug === "function"
-    ? resolvedProjectContext.projectLocalRootForSlug(slug)
-    : "";
-  const projectRuntimeRoot = typeof resolvedProjectContext.projectRuntimeRootForSlug === "function"
-    ? resolvedProjectContext.projectRuntimeRootForSlug(slug)
-    : projectLocalRoot;
-  const projectSessionSourceRoot = typeof resolvedProjectContext.projectSessionSourceRootForSlug === "function"
-    ? resolvedProjectContext.projectSessionSourceRootForSlug(slug)
-    : targetRoot;
-  const sourceRoot = typeof resolvedProjectContext.sourceRootForSlug === "function"
-    ? resolvedProjectContext.sourceRootForSlug(slug)
-    : "";
-  const sourceConfigRoot = typeof resolvedProjectContext.sourceConfigRootForSlug === "function"
-    ? resolvedProjectContext.sourceConfigRootForSlug(slug)
-    : "";
-  const projectRecordPath = typeof resolvedProjectContext.projectRecordPathForSlug === "function"
-    ? resolvedProjectContext.projectRecordPathForSlug(slug)
-    : "";
+  const projectLocalRoot = project.projectLocalRoot || "";
+  const projectRuntimeRoot = project.projectRuntimeRoot || projectLocalRoot;
+  const projectSessionSourceRoot = project.projectSessionSourceRoot || targetRoot;
+  const sourceRoot = project.sourceRoot || "";
+  const sourceConfigRoot = project.sourceConfigRoot || "";
+  const projectRecordPath = project.projectRecordPath || "";
   return Object.freeze({
     projectRecordPath,
     projectLocalRoot,

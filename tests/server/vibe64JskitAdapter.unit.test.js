@@ -52,6 +52,9 @@ import {
   jskitCodeIndexHook
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
 import {
+  jskitMariaDbDatabaseName
+} from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
+import {
   createJskitSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDoctorPlugin";
 import {
@@ -204,6 +207,49 @@ function assertJskitUiVerificationContract(prompt = "") {
   assert.match(prompt, /<none\|dev-auth-login-as\|session-bootstrap\|custom-local>/u);
   assert.match(prompt, /\[ui:verification\]/u);
 }
+
+test("jskit adapter deletes only the recorded database for the current project", async () => {
+  const adapter = createJskitTargetAdapter();
+  const targetRoot = "/var/lib/vibe64/unit-owner/projects/safetyculture";
+  const databaseName = jskitMariaDbDatabaseName(targetRoot);
+  const resources = await adapter.getManagedProjectResources({
+    config: {},
+    runtimeConfigEnv: {
+      DB_NAME: databaseName
+    },
+    targetRoot
+  });
+
+  assert.deepEqual(resources, [{
+    adapterId: "jskit",
+    id: "development-database",
+    kind: "relational-database",
+    name: databaseName,
+    provider: "mariadb"
+  }]);
+  const plans = await adapter.deleteManagedProjectResources({
+    resources,
+    serviceDataRoot: "/var/lib/vibe64/unit-owner/services",
+    targetRoot
+  });
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].id, "development-database");
+  assert.deepEqual(plans[0].runtimes, ["mariadb"]);
+  assert.match(plans[0].args.join(" "), new RegExp(`DROP DATABASE IF EXISTS.*${databaseName}`, "u"));
+  await assert.rejects(
+    () => adapter.deleteManagedProjectResources({
+      resources: [{
+        ...resources[0],
+        name: "another_project"
+      }],
+      serviceDataRoot: "/var/lib/vibe64/unit-owner/services",
+      targetRoot
+    }),
+    {
+      code: "vibe64_project_resource_identity_mismatch"
+    }
+  );
+});
 
 test("jskit adapter exposes selected-project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {

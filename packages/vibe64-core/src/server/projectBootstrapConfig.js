@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -9,6 +10,7 @@ import {
 const PROJECT_BOOTSTRAP_CONFIG_SCHEMA_VERSION = 1;
 const PROJECT_BOOTSTRAP_CONFIG_KEY = "bootstrapConfig";
 const PROJECT_BOOTSTRAP_CONFIG_STATUS_PENDING = "pending";
+const projectRecordMetadataUpdates = new Map();
 
 async function readJsonFile(filePath = "") {
   try {
@@ -28,7 +30,21 @@ async function writeJsonFile(filePath = "", value = {}) {
   await mkdir(path.dirname(filePath), {
     recursive: true
   });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const temporaryPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`
+  );
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx"
+    });
+    await rename(temporaryPath, filePath);
+  } finally {
+    await rm(temporaryPath, {
+      force: true
+    });
+  }
 }
 
 function normalizeBootstrapValues(values = {}) {
@@ -97,18 +113,30 @@ async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) 
   if (!filePath) {
     throw new Error("Updating project metadata requires a project record path.");
   }
-  const current = await readProjectRecordMetadata(filePath);
-  const next = typeof update === "function"
-    ? update(current)
-    : {
-        ...current,
-        ...(isPlainObject(update) ? update : {})
-      };
-  if (!isPlainObject(next)) {
-    throw new TypeError("Project metadata updates must produce an object.");
+  const metadataPath = path.resolve(filePath);
+  const previous = projectRecordMetadataUpdates.get(metadataPath) || Promise.resolve();
+  const operation = previous.catch(() => {}).then(async () => {
+    const current = await readProjectRecordMetadata(metadataPath);
+    const next = typeof update === "function"
+      ? await update(current)
+      : {
+          ...current,
+          ...(isPlainObject(update) ? update : {})
+        };
+    if (!isPlainObject(next)) {
+      throw new TypeError("Project metadata updates must produce an object.");
+    }
+    await writeJsonFile(metadataPath, next);
+    return next;
+  });
+  projectRecordMetadataUpdates.set(metadataPath, operation);
+  try {
+    return await operation;
+  } finally {
+    if (projectRecordMetadataUpdates.get(metadataPath) === operation) {
+      projectRecordMetadataUpdates.delete(metadataPath);
+    }
   }
-  await writeJsonFile(filePath, next);
-  return next;
 }
 
 async function saveProjectBootstrapConfig({
