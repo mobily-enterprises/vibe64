@@ -111,15 +111,16 @@ function workflowDefinitionIsSeed(workflowDefinition = "") {
     normalizedWorkflowDefinition.endsWith("_seed_application");
 }
 
+function sessionUsesSeedPromptProfile(session = {}) {
+  const metadata = isPlainObject(session?.metadata) ? session.metadata : {};
+  return normalizeText(metadata.work_source) === PROMPT_WORK_PROFILE_SEED ||
+    workflowDefinitionIsSeed(metadata.workflow_definition);
+}
+
 function promptWorkProfile(context = {}) {
-  const metadata = isPlainObject(context.session?.metadata) ? context.session.metadata : {};
-  if (normalizeText(metadata.work_source) === PROMPT_WORK_PROFILE_SEED) {
-    return PROMPT_WORK_PROFILE_SEED;
-  }
-  if (workflowDefinitionIsSeed(metadata.workflow_definition)) {
-    return PROMPT_WORK_PROFILE_SEED;
-  }
-  return PROMPT_WORK_PROFILE_STANDARD;
+  return sessionUsesSeedPromptProfile(context.session)
+    ? PROMPT_WORK_PROFILE_SEED
+    : PROMPT_WORK_PROFILE_STANDARD;
 }
 
 function promptWorkProfilePreamble(context = {}) {
@@ -873,5 +874,6 @@ export {
   promptContextForAction,
   promptSessionBriefing,
   renderPromptTemplate,
-  renderPromptWithOverrides
+  renderPromptWithOverrides,
+  sessionUsesSeedPromptProfile
 };

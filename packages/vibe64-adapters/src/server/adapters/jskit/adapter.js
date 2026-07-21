@@ -47,6 +47,9 @@ import {
   inspectProjectSourceMarkers
 } from "../../workflowAdapter.js";
 import {
+  sessionUsesSeedPromptProfile
+} from "../../promptRenderer.js";
+import {
   defaultConfigFromFields
 } from "../../configValues.js";
 import {
@@ -448,7 +451,7 @@ async function jskitPromptContext({
   const databaseRuntime = jskitDatabaseRuntime(config);
   const databaseContract = jskitDatabaseContract(databaseRuntime);
   const seedRequired = !allMarkersExist(markers);
-  const seedWorkflowActive = normalizeText(session?.metadata?.work_source) === "seed";
+  const seedWorkflowActive = sessionUsesSeedPromptProfile(session);
   const appAuth = seedRequired || seedWorkflowActive
     ? jskitAppAuthFromProjectState({
         projectConfig: config

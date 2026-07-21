@@ -270,6 +270,44 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
   });
 });
 
+test("jskit seed prompt context remains available after scaffold markers exist", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    const adapter = createJskitTargetAdapter();
+    const metadata = {
+      work_source: "description",
+      workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION
+    };
+    const promptContext = await adapter.getPromptContext({
+      session: {
+        metadata
+      },
+      targetRoot
+    });
+
+    assert.equal(promptContext.valid_jskit_markers, "true");
+    assert.match(promptContext.seed_issue_guidance, /Configured user mode:/u);
+
+    const rendered = await adapter.renderPrompt({
+      action: {
+        id: "define_seed_application",
+        promptId: "define_seed_application",
+        type: "prompt"
+      },
+      session: {
+        adapter: {
+          id: "jskit",
+          promptContext
+        },
+        metadata
+      }
+    });
+
+    assert.doesNotMatch(rendered.prompt, /\{\{adapter\.promptContext\.seed_issue_guidance\}\}/u);
+    assert.match(rendered.prompt, /Configured user mode:/u);
+  });
+});
+
 test("jskit adapter contributes composer menu prompts", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
@@ -1600,10 +1638,14 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
-      metadata: sourceMetadata(targetRoot, "jskit_seed_prompt"),
+      metadata: {
+        ...sourceMetadata(targetRoot, "jskit_seed_prompt"),
+        work_source: "description"
+      },
       sessionId: "jskit_seed_prompt",
       workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
+    await createJskitProject(targetRoot);
 
     const initialSession = await runtime.getSession("jskit_seed_prompt");
 
