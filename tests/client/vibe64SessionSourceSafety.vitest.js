@@ -52,6 +52,9 @@ describe("Vibe64 session source safety presentation", () => {
     expect(sourceSafetyPrompt(status)).toContain("Do not change the workflow state");
     expect(sourceSafetyPrompt(status)).toContain("HEAD:refs/heads/main");
     expect(sourceSafetyPrompt(status)).toContain("Only ever push to origin/main");
+    expect(sourceSafetyPrompt(status)).toContain("git merge-tree --write-tree HEAD refs/remotes/origin/main");
+    expect(sourceSafetyPrompt(status)).toContain("git merge --abort");
+    expect(sourceSafetyPrompt(status)).toContain("must not modify the index, worktree, or branch");
     expect(sourceSafetyPrompt(status)).toContain("stop and ask the user");
     expect(sourceSafetyPrompt(status)).toContain("vibe64.system.json");
     expect(sourceSafetyPrompt(status)).toContain("Do not inspect file contents");

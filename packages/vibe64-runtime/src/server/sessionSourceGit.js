@@ -96,6 +96,39 @@ async function sessionSourceGitAlternatesPath(sourceRoot = "") {
   return resolveGitPath(normalizedSourceRoot, gitPathResult.stdout || gitPathResult.output);
 }
 
+async function inspectSessionSourceMergeState(sourceRoot = "") {
+  const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
+  if (!normalizedSourceRoot) {
+    return {
+      conflictedFiles: [],
+      hasConflicts: false
+    };
+  }
+  if (!await pathExists(path.join(normalizedSourceRoot, ".git"))) {
+    return {
+      conflictedFiles: [],
+      hasConflicts: false
+    };
+  }
+  const conflictsResult = await runGit(normalizedSourceRoot, [
+    "diff",
+    "--name-only",
+    "--diff-filter=U",
+    "-z"
+  ]);
+  if (!conflictsResult.ok) {
+    throw vibe64Error(
+      `Cannot inspect session source conflicts: ${conflictsResult.output}`,
+      "vibe64_session_source_conflict_inspection_failed"
+    );
+  }
+  const conflictedFiles = String(conflictsResult.stdout || "").split("\0").filter(Boolean);
+  return {
+    conflictedFiles,
+    hasConflicts: conflictedFiles.length > 0
+  };
+}
+
 async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "") {
   const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
@@ -145,5 +178,6 @@ async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "") {
 
 export {
   ensureSessionSourceGitAlternatesDissociated,
+  inspectSessionSourceMergeState,
   sessionSourceGitAlternatesPath
 };

@@ -111,7 +111,15 @@ function normalizeProjectManifest(value = {}) {
 }
 
 function parseProjectManifestText(text = "") {
-  const rawManifest = JSON.parse(String(text));
+  let rawManifest;
+  try {
+    rawManifest = JSON.parse(String(text));
+  } catch {
+    throw vibe64Error(
+      "vibe64.project.json contains invalid JSON.",
+      "vibe64_project_manifest_invalid_json"
+    );
+  }
   if (!isPlainObject(rawManifest)) {
     throw vibe64Error(
       "Vibe64 project manifest must contain a JSON object.",

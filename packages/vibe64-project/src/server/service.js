@@ -5,6 +5,12 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server/runtime";
 import {
+  createVibe64SessionStore
+} from "@local/vibe64-runtime/server/sessionStore";
+import {
+  isSourceMetadataError
+} from "@local/vibe64-runtime/server/sessionSourceInspection";
+import {
   setupOptionsForRuntimeProfile
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
@@ -2816,11 +2822,93 @@ function createService({
     }
   }
 
+  function sessionRuntimeForSetup({
+    adapter = undefined,
+    options = {},
+    projectConfig = {},
+    resolvedSourceRoot = "",
+    sourceInspectionAvailable = true,
+    sourceInspectionError = null,
+    store = undefined,
+    targetRootValue = currentTargetRoot(),
+    workflowCreationBaseline = null
+  } = {}) {
+    const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);
+    const resolvedSourceContractRoot = resolvedSourceRoot && !(
+      resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue)
+    )
+      ? sourceConfigRoot(resolvedSourceRoot)
+      : "";
+    return new Vibe64SessionRuntime({
+      actionReadiness: options.actionReadiness,
+      adapter,
+      inspectSourceByDefault: options.inspectSource !== false,
+      projectConfig,
+      projectLocalRoot: resolvedProjectRuntimeRoot,
+      projectRecordPath: projectRecordPath(targetRootValue),
+      projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
+      sourceContractRoot: resolvedSourceContractRoot,
+      sourceInspectionAvailable,
+      sourceInspectionError,
+      store,
+      targetRoot: resolvedSourceRoot,
+      workflowCreationBaseline,
+      workflowRegistry
+    });
+  }
+
+  async function sessionRuntimeFromStoredState({
+    error,
+    options = {},
+    runtimeInput = {},
+    targetRootValue = currentTargetRoot(),
+    workflowCreationBaseline = null
+  } = {}) {
+    const sessionId = normalizeSessionId(runtimeInput?.sessionId);
+    const resolvedSourceRoot = sessionId
+      ? await projectConfigSourceRoot(runtimeInput, {
+          allowMissingSessionSource: true
+        })
+      : currentSourceRoot() || targetRootValue;
+    const store = createVibe64SessionStore({
+      projectLocalRoot: projectRuntimeRoot(targetRootValue),
+      projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
+      targetRoot: resolvedSourceRoot
+    });
+    const session = sessionId ? await store.readSession(sessionId) : null;
+    const adapterId = normalizeText(
+      session?.manifest?.adapterId || session?.promptContextSnapshot?.adapter?.id
+    );
+    const adapterDefinition = adapterId
+      ? adapterRegistry.projectTypeDefinition(adapterId)
+      : null;
+    let adapter = undefined;
+    let storedStateError = error || null;
+    if (adapterDefinition?.enabled === true) {
+      try {
+        adapter = await adapterRegistry.createAdapter(adapterId);
+      } catch (adapterError) {
+        storedStateError ||= adapterError;
+      }
+    }
+    return sessionRuntimeForSetup({
+      adapter,
+      options,
+      resolvedSourceRoot,
+      sourceInspectionAvailable: options.inspectSource !== false,
+      sourceInspectionError: storedStateError,
+      store,
+      targetRootValue,
+      workflowCreationBaseline
+    });
+  }
+
   async function createRuntime(options = {}) {
     const targetRootValue = requireSelectedTargetRoot();
     const runtimeInput = options?.input && typeof options.input === "object" && !Array.isArray(options.input)
       ? options.input
       : options;
+    const sessionScoped = Boolean(normalizeSessionId(runtimeInput?.sessionId));
     const currentProject = options?.currentProject && typeof options.currentProject === "object" && !Array.isArray(options.currentProject)
       ? options.currentProject
       : null;
@@ -2846,6 +2934,16 @@ function createService({
       applicationMode,
       workflowRepositoryProfile
     });
+    const storedStateRuntime = (error = null) => sessionRuntimeFromStoredState({
+      error,
+      options,
+      runtimeInput,
+      targetRootValue,
+      workflowCreationBaseline
+    });
+    if (options.inspectSource === false) {
+      return storedStateRuntime();
+    }
     if (options?.skipProjectConfig === true) {
       resolvedSourceRoot = currentSourceRoot() || targetRootValue;
     } else {
@@ -2861,9 +2959,20 @@ function createService({
           workflowRepositoryProfile
         });
       } catch (error) {
-        const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
-          ? await committedRuntimeSetup(targetRootValue)
-          : null;
+        if (isSourceMetadataError(error)) {
+          return storedStateRuntime(error);
+        }
+        let committedSetup = null;
+        if (runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)) {
+          try {
+            committedSetup = await committedRuntimeSetup(targetRootValue);
+          } catch (committedError) {
+            if (sessionScoped || isSourceMetadataError(committedError)) {
+              return storedStateRuntime(committedError);
+            }
+            throw committedError;
+          }
+        }
         if (committedSetup) {
           adapter = committedSetup.adapter;
           projectConfig = committedSetup.projectConfig;
@@ -2872,6 +2981,8 @@ function createService({
             applicationMode,
             workflowRepositoryProfile
           });
+        } else if (sessionScoped) {
+          return storedStateRuntime(error);
         } else if (setupRequired || !runtimeSetupOptionalError(error)) {
           throw error;
         } else {
@@ -2879,21 +2990,13 @@ function createService({
         }
       }
     }
-    const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);
-    const resolvedSourceContractRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))
-      ? sourceConfigRoot(resolvedSourceRoot)
-      : "";
-    return new Vibe64SessionRuntime({
-      actionReadiness: options.actionReadiness,
+    return sessionRuntimeForSetup({
       adapter,
+      options,
       projectConfig,
-      projectLocalRoot: resolvedProjectRuntimeRoot,
-      projectRecordPath: projectRecordPath(targetRootValue),
-      projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
-      sourceContractRoot: resolvedSourceContractRoot,
-      targetRoot: resolvedSourceRoot,
-      workflowCreationBaseline,
-      workflowRegistry
+      resolvedSourceRoot,
+      targetRootValue,
+      workflowCreationBaseline
     });
   }
 

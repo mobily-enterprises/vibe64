@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -1003,6 +1003,80 @@ test("Vibe64 project service can create a source-optional runtime before selecti
     assert.equal(runtime.targetRoot, projectRoot);
     assert.equal(runtime.sourceContractRoot, "");
     assert.equal(runtime.projectRecordPath, projectContext.projectRecordPathForSlug("catalog-app"));
+  });
+});
+
+test("Vibe64 project service keeps session controls available with malformed source metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeSeededJskitMarkers(targetRoot);
+    await writeVibe64SourceConfig(targetRoot);
+    const service = createServiceForTemporaryTarget(targetRoot);
+    const runtime = await service.createRuntime();
+    const created = await runtime.createSession({
+      initialStep: "plan_and_execute",
+      metadata: {
+        source_path: targetRoot
+      },
+      sessionId: "malformed-source-metadata"
+    });
+    await runtime.promptContextSnapshotForSession(created);
+    const packageJsonPath = path.join(targetRoot, "package.json");
+    const projectManifestPath = path.join(targetRoot, "vibe64.project.json");
+    const validPackageJson = await readFile(packageJsonPath, "utf8");
+    await writeFile(packageJsonPath, "{\n", "utf8");
+
+    const packageFailureRuntime = await service.createRuntime({
+      sessionId: "malformed-source-metadata"
+    });
+    const packageFailureSession = await packageFailureRuntime.getSession("malformed-source-metadata");
+    assert.equal(packageFailureSession.sourceInspection.kind, "source_error");
+    assert.equal(packageFailureSession.sourceInspection.error.code, "vibe64_invalid_jskit_json");
+    assert.equal(packageFailureSession.sourceInspection.error.message, "Application source metadata is invalid and must be repaired.");
+    assert.equal(JSON.stringify(packageFailureSession.sourceInspection).includes(targetRoot), false);
+
+    const controlRuntime = await service.createRuntime({
+      inspectSource: false,
+      sessionId: "malformed-source-metadata"
+    });
+    const controlSession = await controlRuntime.getSession("malformed-source-metadata");
+    assert.equal(controlSession.sourceInspection, undefined);
+    assert.equal(controlSession.adapter.id, "jskit");
+    await assert.rejects(
+      controlRuntime.assertSourceHealthy(controlSession),
+      (error) => error?.code === "vibe64_source_inspection_unavailable"
+    );
+
+    await writeFile(packageJsonPath, validPackageJson, "utf8");
+    await writeFile(projectManifestPath, "{\n", "utf8");
+    const inspectedRuntime = await service.createRuntime({
+      sessionId: "malformed-source-metadata"
+    });
+    const inspectedSession = await inspectedRuntime.getSession("malformed-source-metadata");
+    assert.equal(inspectedSession.status, "active");
+    assert.equal(inspectedSession.sourceInspection.status, "error");
+    assert.equal(inspectedSession.sourceInspection.kind, "source_error");
+    assert.equal(inspectedSession.sourceInspection.error.message, "Application source metadata is invalid and must be repaired.");
+    assert.equal(inspectedSession.sourceInspection.lastKnownGood.adapterId, "jskit");
+
+    await rm(projectManifestPath);
+    await mkdir(projectManifestPath);
+    const sourceIndependentRuntime = await service.createRuntime({
+      inspectSource: false,
+      sessionId: "malformed-source-metadata"
+    });
+    assert.equal(
+      (await sourceIndependentRuntime.getSession("malformed-source-metadata")).adapter.id,
+      "jskit"
+    );
+    const unavailableInspectionRuntime = await service.createRuntime({
+      sessionId: "malformed-source-metadata"
+    });
+    const unavailableInspectionSession = await unavailableInspectionRuntime.getSession("malformed-source-metadata");
+    assert.equal(unavailableInspectionSession.sourceInspection.kind, "platform_error");
+    assert.deepEqual(unavailableInspectionSession.sourceInspection.error, {
+      code: "vibe64_source_inspection_unavailable",
+      message: "Vibe64 could not inspect this application right now."
+    });
   });
 });
 

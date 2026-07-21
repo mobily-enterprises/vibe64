@@ -80,6 +80,8 @@ describe("useVibe64SessionSourceSafety", () => {
     expect(promptOptions.body.message).toContain("straightforward save");
     expect(promptOptions.body.message).toContain("HEAD:refs/heads/main");
     expect(promptOptions.body.message).toContain("Only ever push to origin/main");
+    expect(promptOptions.body.message).toContain("git merge-tree --write-tree HEAD refs/remotes/origin/main");
+    expect(promptOptions.body.message).toContain("git merge --abort");
     expect(promptOptions.body.message).toContain("vibe64.system.json");
     expect(promptOptions.body.message).not.toContain("secret");
     expect(promptOptions.body.message).not.toContain("ownership");

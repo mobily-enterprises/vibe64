@@ -13,6 +13,7 @@ import {
 } from "@local/vibe64-runtime/server";
 import {
   ensureSessionSourceGitAlternatesDissociated,
+  inspectSessionSourceMergeState,
   sessionSourceGitAlternatesPath
 } from "@local/vibe64-runtime/server/sessionSourceGit";
 import {
@@ -112,6 +113,66 @@ test("session source Git helper removes runtime git-cache alternates", async () 
     await rename(cachePath, `${cachePath}.removed`);
     assert.match(await git(sourcePath, ["rev-parse", "--verify", "HEAD"]), /^[0-9a-f]{40}$/u);
     assert.equal(await git(sourcePath, ["status", "--short"]), "");
+  });
+});
+
+test("session source Git helper reports an unresolved merge without changing it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sourcePath = path.join(targetRoot, "merge-conflict-source");
+    await createGitProject(sourcePath);
+    await git(sourcePath, ["checkout", "-b", "incoming"]);
+    await writeProjectFile(sourcePath, "app.txt", "incoming\n");
+    await git(sourcePath, ["add", "app.txt"]);
+    await git(sourcePath, ["commit", "-m", "incoming"]);
+    await git(sourcePath, ["checkout", "main"]);
+    await writeProjectFile(sourcePath, "app.txt", "local\n");
+    await git(sourcePath, ["add", "app.txt"]);
+    await git(sourcePath, ["commit", "-m", "local"]);
+    await assert.rejects(() => git(sourcePath, ["merge", "incoming"]));
+
+    assert.deepEqual(await inspectSessionSourceMergeState(sourcePath), {
+      conflictedFiles: ["app.txt"],
+      hasConflicts: true
+    });
+
+    await git(sourcePath, ["merge", "--abort"]);
+    assert.deepEqual(await inspectSessionSourceMergeState(sourcePath), {
+      conflictedFiles: [],
+      hasConflicts: false
+    });
+  });
+});
+
+test("runtime reports source-file merge conflicts before adapter inspection", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sourcePath = testManagedSourcePath(targetRoot, "merge-session");
+    await createGitProject(sourcePath);
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "plan_and_execute",
+      metadata: sourceMetadata(targetRoot, "merge-session"),
+      sessionId: "merge-session"
+    });
+    await git(sourcePath, ["checkout", "-b", "incoming"]);
+    await writeProjectFile(sourcePath, "app.txt", "incoming\n");
+    await git(sourcePath, ["add", "app.txt"]);
+    await git(sourcePath, ["commit", "-m", "incoming"]);
+    await git(sourcePath, ["checkout", "main"]);
+    await writeProjectFile(sourcePath, "app.txt", "local\n");
+    await git(sourcePath, ["add", "app.txt"]);
+    await git(sourcePath, ["commit", "-m", "local"]);
+    await assert.rejects(() => git(sourcePath, ["merge", "incoming"]));
+
+    const degraded = await runtime.getSession("merge-session");
+
+    assert.equal(degraded.sourceInspection.kind, "merge_conflict");
+    assert.deepEqual(degraded.sourceInspection.merge.conflictedFiles, ["app.txt"]);
+    assert.equal(degraded.recovery.issues[0].title, "Source conflicts need resolution");
+
+    await git(sourcePath, ["merge", "--abort"]);
+    assert.equal((await runtime.getSession("merge-session")).sourceInspection, undefined);
   });
 });
 

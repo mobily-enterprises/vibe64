@@ -453,6 +453,7 @@ const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEna
 async function terminalTargetRootForSession(projectService, sessionId) {
   try {
     const runtime = await projectService.createRuntime({
+      inspectSource: false,
       input: {
         sessionId
       }
@@ -1182,6 +1183,7 @@ function createCodexTerminalController({
 
   function createRuntimeForSession(sessionId = "") {
     return projectService.createRuntime({
+      inspectSource: false,
       input: {
         sessionId
       }
@@ -5474,7 +5476,9 @@ function createCodexTerminalController({
   }
 
   async function startGlobalCodexTerminalSession() {
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      inspectSource: false
+    });
     const targetRoot = await globalCodexTargetRoot(projectService, runtime);
     if (!targetRoot) {
       return retryableTerminalFailure({
@@ -5687,7 +5691,9 @@ function createCodexTerminalController({
   }
 
   async function startFixCodexJob(input = {}) {
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      inspectSource: false
+    });
     const targetRoot = terminalTargetRoot({
       targetRoot: input.targetRoot || runtime?.targetRoot
     }, projectService);

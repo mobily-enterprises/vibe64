@@ -304,6 +304,7 @@ function createService({
 
   async function runMainAgentWrite(sessionId = "", options = {}, operation) {
     const runtime = options.runtime || await projectService.createRuntime({
+      inspectSource: false,
       input: {
         sessionId
       }
@@ -313,7 +314,9 @@ function createService({
       sessionId,
       async () => {
         const session = typeof runtime.getSession === "function"
-          ? await runtime.getSession(sessionId)
+          ? await runtime.getSession(sessionId, {
+              inspectSource: false
+            })
           : options.session;
         if (vibe64AgentTaskIsActive(session.agentTask)) {
           return VIBE64_AGENT_TASK_ACTIVE_RESULT;
@@ -443,6 +446,7 @@ function createService({
     if (!knownAgentSessionReset) {
       knownAgentSessionReset = (async () => {
         const runtime = await projectService.createRuntime({
+          inspectSource: false,
           skipProjectConfig: true,
           sourceSetupRequired: false
         });
@@ -494,6 +498,7 @@ function createService({
       return session;
     }
     const runtime = await projectService.createRuntime({
+      inspectSource: false,
       input: {
         sessionId
       }
@@ -501,7 +506,9 @@ function createService({
     if (typeof runtime?.getSession !== "function") {
       return session;
     }
-    return runtime.getSession(sessionId);
+    return runtime.getSession(sessionId, {
+      inspectSource: false
+    });
   }
 
   async function ensureReconciledSessionSourcesSelfContained(sessions = []) {
@@ -666,6 +673,7 @@ function createService({
 
   async function listOpenProjectRuntimeSessions() {
     const runtime = await projectService.createRuntime({
+      inspectSource: false,
       skipProjectConfig: true,
       sourceSetupRequired: false
     });
@@ -864,13 +872,16 @@ function createService({
         };
       }
       const runtime = input.runtime || await projectService.createRuntime({
+        inspectSource: false,
         input: {
           sessionId: normalizedSessionId
         }
       });
       const session = input.session?.sessionId === normalizedSessionId
         ? input.session
-        : await runtime.getSession(normalizedSessionId);
+        : await runtime.getSession(normalizedSessionId, {
+            inspectSource: false
+          });
       const targetRoot = terminalTargetRoot(session, projectService);
       if (!targetRoot) {
         return {
@@ -1210,11 +1221,14 @@ function createService({
 
     async startSessionTerminalFixJob(sessionId, input = {}) {
       const runtime = await projectService.createRuntime({
+        inspectSource: false,
         input: {
           sessionId
         }
       });
-      const session = await runtime.getSession(sessionId);
+      const session = await runtime.getSession(sessionId, {
+        inspectSource: false
+      });
       const targetRoot = terminalTargetRoot(session, projectService);
       const worktreePath = terminalWorktreePath(session);
       return codex.startFixJob({

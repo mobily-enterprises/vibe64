@@ -351,6 +351,30 @@ describe("mounted Vibe64 session state", () => {
     });
   });
 
+  it("keeps a source-inspection failure as a ready mounted session", () => {
+    expect(mountedSessionDetailLoadState({
+      detailSession: {
+        recovery: {
+          issues: [{
+            id: "source_inspection"
+          }]
+        },
+        sessionId: "session-1",
+        sourceInspection: {
+          kind: "merge_conflict",
+          status: "error"
+        }
+      },
+      loadError: "",
+      sessionId: "session-1"
+    })).toMatchObject({
+      error: "",
+      ready: true,
+      state: "detailReady",
+      suppressPassiveComposer: false
+    });
+  });
+
   it("hydrates signature-only composer menu projections from the session menu cache", () => {
     const composerMenusById = {};
     const menuItems = [

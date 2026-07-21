@@ -68,17 +68,24 @@ function sessionRecoveryView(issues = []) {
   if (!publicIssues.length) {
     return null;
   }
+  const decisionRequired = publicIssues.some((issue) => issue.options.length > 0);
+  let title = "This session needs recovery";
+  if (decisionRequired) {
+    title = publicIssues.length === 1
+      ? "This session needs your decision"
+      : "This session has recovery decisions";
+  }
   return {
     issues: publicIssues,
     kind: SESSION_RECOVERY_KIND,
-    message: "Vibe64 found that saved session state no longer agrees with the project or runtime state it depends on. Your work has not been changed. Review the details and choose how this session should continue.",
+    message: decisionRequired
+      ? "Vibe64 found that saved session state no longer agrees with the project or runtime state it depends on. Your work has not been changed. Review the details and choose how this session should continue."
+      : "Vibe64 found a recoverable problem with this session. Your work has not been changed. Review the details and use the available session tools to repair it.",
     signature: recoverySignature(publicIssues.map((issue) => ({
       id: issue.id,
       signature: issue.signature
     }))),
-    title: publicIssues.length === 1
-      ? "This session needs your decision"
-      : "This session has recovery decisions"
+    title
   };
 }
 

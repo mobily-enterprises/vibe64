@@ -369,6 +369,22 @@ test("novice workflow briefing keeps all visible communication simple", () => {
   assert.doesNotMatch(standardBriefing, /Simple communication profile:/u);
 });
 
+test("session briefing prohibits dependency patches without informed human approval", () => {
+  const briefing = promptSessionBriefing({
+    session: {
+      sessionId: "dependency-patch-policy",
+      targetRoot: "/workspace/example"
+    }
+  });
+
+  assert.match(briefing, /Dependency patch policy:/u);
+  assert.match(briefing, /Do not patch dependency code unless the human explicitly approves that exact workaround/u);
+  assert.match(briefing, /Requests to fix a bug, pass tests, finish work, or commit changes are not approval/u);
+  assert.match(briefing, /First diagnose and report the package and version, minimal reproduction, failure, root-cause evidence/u);
+  assert.match(briefing, /Before requesting approval, list the exact patch, script, lockfile, install-hook, and dependency changes/u);
+  assert.match(briefing, /Without approval after that disclosure, leave the workaround unapplied and unchanged/u);
+});
+
 test("vibe64 prompt renderer ignores project-home prompt overrides without a session source", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {

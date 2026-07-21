@@ -109,10 +109,15 @@ function workflowDriverTestRuntime(runtime = {}, metadataBySession, sessionsById
   }
   return {
     ...wrappedRuntime,
-    async getSession(sessionId) {
+    async assertSourceHealthy(sessionOrId) {
+      return typeof runtime.assertSourceHealthy === "function"
+        ? runtime.assertSourceHealthy(sessionOrId)
+        : null;
+    },
+    async getSession(sessionId, options) {
       if (typeof originalGetSession === "function") {
         const session = sessionWithWorkflowDriverMetadata(
-          await originalGetSession.call(runtime, sessionId),
+          await originalGetSession.call(runtime, sessionId, options),
           metadataBySession
         );
         rememberWorkflowDriverTestSession(session, sessionsById);
@@ -289,7 +294,10 @@ test("session service updates the project current-session alias without source s
 
   const result = await service.updateCurrentSession("session-2");
 
-  assert.deepEqual(createRuntimeOptions, [{ sourceSetupRequired: false }]);
+  assert.deepEqual(createRuntimeOptions, [{
+    inspectSource: false,
+    sourceSetupRequired: false
+  }]);
   assert.deepEqual(selectedSessionIds, ["session-2"]);
   assert.deepEqual(result, {
     ok: true,
@@ -459,6 +467,14 @@ test("public session responses omit heavy runtime audit fields", () => {
     promptContextSnapshot: {
       prompt: "large prompt context"
     },
+    sourceInspection: {
+      error: {
+        code: "vibe64_invalid_jskit_json",
+        message: "Invalid package.json"
+      },
+      kind: "source_error",
+      status: "error"
+    },
     sessionId: "session-1"
   });
 
@@ -478,6 +494,14 @@ test("public session responses omit heavy runtime audit fields", () => {
   });
   assert.deepEqual(response.metadata, {
     issue_word: "compas"
+  });
+  assert.deepEqual(response.sourceInspection, {
+    error: {
+      code: "vibe64_invalid_jskit_json",
+      message: "Invalid package.json"
+    },
+    kind: "source_error",
+    status: "error"
   });
   assert.equal(response.presentation.composerMenu.items, undefined);
   assert.equal(response.presentation.composerMenu.itemCount, 2);
@@ -3864,6 +3888,47 @@ test("session service reads conversation logs through turn cursor pages", async 
   assert.deepEqual(older.conversationLog.map((turn) => turn.user.text), ["Older."]);
 });
 
+test("session conversation reads do not inspect mutable application source", async () => {
+  let sourceInspectionAttempts = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            sourceInspectionAttempts += 1;
+            throw new Error("Application source inspection must not run for conversation reads.");
+          },
+          store: {
+            async readConversationLog() {
+              return [{
+                turnId: "000001",
+                user: {
+                  role: "user",
+                  text: "Help me repair the source."
+                }
+              }];
+            },
+            async readSession(sessionId) {
+              return {
+                revision: 9,
+                sessionId
+              };
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const response = await service.readSessionConversationLog("broken-source-session");
+
+  assert.equal(response.ok, true);
+  assert.equal(response.revision, 9);
+  assert.equal(response.conversationLog[0].user.text, "Help me repair the source.");
+  assert.equal(sourceInspectionAttempts, 0);
+});
+
 test("session service records display fields while preserving runtime attachment references", async () => {
   const codexText = [
     "Please read this.",
@@ -6299,6 +6364,7 @@ test("session list can read sessions before a source config session is selected"
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(createRuntimeOptions, [
     {
+      inspectSource: false,
       sourceSetupRequired: false
     }
   ]);

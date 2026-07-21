@@ -27,6 +27,14 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  inspectSessionSourceMergeState
+} from "./sessionSourceGit.js";
+import {
+  assertSourceInspectionHealthy,
+  sourceInspectionDisabledReason,
+  sourceInspectionFailure
+} from "./sessionSourceInspection.js";
+import {
   readSessionUiSyncStateForSession
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
@@ -108,6 +116,10 @@ const RECOVERABLE_COMMAND_LIFECYCLE_PHASES = new Set([
   "advanced",
   "post_commit_running"
 ]);
+function actionRequiresSourceInspection(action = {}) {
+  return action.recordsConversationTurn !== true &&
+    normalizeText(action.type) !== "link";
+}
 
 function metadataFlagIsOn(value) {
   return ["1", "true", "yes", "on"].includes(normalizeText(value).toLowerCase());
@@ -209,6 +221,12 @@ function disabledAction(disabledReason) {
 }
 
 function defaultActionReadiness({ action = {}, session = {} } = {}) {
+  if (
+    session.sourceInspection?.status === "error" &&
+    actionRequiresSourceInspection(action)
+  ) {
+    return disabledAction(sourceInspectionDisabledReason(session.sourceInspection));
+  }
   if (promptActionIsBlocked(action, session)) {
     return disabledAction("Codex terminal is active.");
   }
@@ -1046,11 +1064,14 @@ class Vibe64SessionRuntime {
     adapter = new TargetAdapter(),
     clock = undefined,
     defaultHandler = defaultActionHandler,
+    inspectSourceByDefault = true,
     projectRecordPath = "",
     projectConfig = {},
     projectLocalRoot = "",
     projectSessionSourceRoot = "",
     sourceContractRoot = "",
+    sourceInspectionAvailable = true,
+    sourceInspectionError = null,
     stateRoot = "",
     store = undefined,
     targetRoot = process.cwd(),
@@ -1065,6 +1086,9 @@ class Vibe64SessionRuntime {
     this.defaultHandler = typeof defaultHandler === "function"
       ? defaultHandler
       : defaultActionHandler;
+    this.inspectSourceByDefault = inspectSourceByDefault !== false;
+    this.sourceInspectionAvailable = sourceInspectionAvailable !== false;
+    this.sourceInspectionError = sourceInspectionError || null;
     this.adapter = adapter;
     this.projectConfig = projectConfig && typeof projectConfig === "object"
       ? projectConfig
@@ -1118,6 +1142,7 @@ class Vibe64SessionRuntime {
       });
       const session = await this.store.createSession({
         ...input,
+        adapterId: normalizeText(this.adapter?.id),
         metadata: this.sessionMetadataWithWorkflowDefinition(input.metadata, workflowDefinitionId),
         initialStep
       });
@@ -1148,13 +1173,18 @@ class Vibe64SessionRuntime {
     }
   }
 
-  async getSession(sessionId) {
-    return this.sessionView(await this.store.readSession(sessionId));
+  async getSession(sessionId, options = {}) {
+    return this.sessionView(await this.store.readSession(sessionId), {
+      ...options,
+      inspectSource: options.inspectSource ?? this.inspectSourceByDefault
+    });
   }
 
   async listSessions(options = {}) {
     const sessions = await this.store.listSessions(options);
-    return Promise.all(sessions.map((session) => this.sessionView(session)));
+    return Promise.all(sessions.map((session) => this.sessionView(session, {
+      inspectSource: this.inspectSourceByDefault
+    })));
   }
 
   async listSessionSummaries(options = {}) {
@@ -1182,14 +1212,26 @@ class Vibe64SessionRuntime {
 
   async sessionView(session, {
     includeRecovery = true,
+    inspectSource = true,
     sessionAdapter = undefined
   } = {}) {
     const workflowDefinitionId = this.workflowDefinitionIdForSession(session);
     const sessionWithWorkflowMetadata = this.sessionWithWorkflowInitialMetadata(session, workflowDefinitionId);
+    let resolvedSessionAdapter = sessionAdapter;
+    let sourceInspection = null;
+    if (resolvedSessionAdapter === undefined && inspectSource === false) {
+      resolvedSessionAdapter = this.cachedAdapterViewForSession(sessionWithWorkflowMetadata);
+    }
+    if (resolvedSessionAdapter === undefined) {
+      const inspectedSource = await this.inspectSourceForSession(sessionWithWorkflowMetadata);
+      resolvedSessionAdapter = inspectedSource.adapter;
+      sourceInspection = inspectedSource.sourceInspection;
+    }
     const sessionWithConfig = {
       ...sessionWithWorkflowMetadata,
       config: this.projectConfig,
-      adapter: sessionAdapter || await this.adapterViewForSession(sessionWithWorkflowMetadata)
+      adapter: resolvedSessionAdapter,
+      ...(sourceInspection ? { sourceInspection } : {})
     };
     const workflowMachine = this.workflowMachineForDefinition(workflowDefinitionId);
     const sessionView = {
@@ -1219,7 +1261,10 @@ class Vibe64SessionRuntime {
         recovery
       };
     }
-    const recoveryDisabledReason = "Choose how to recover this session before continuing its workflow.";
+    const recoveryDecisionRequired = recovery.issues.some((issue) => issue.options.length > 0);
+    const recoveryDisabledReason = recoveryDecisionRequired
+      ? "Choose how to recover this session before continuing its workflow."
+      : "Repair this session before continuing its workflow.";
     const next = presentedSession.next
       ? {
           ...presentedSession.next,
@@ -1488,12 +1533,11 @@ class Vibe64SessionRuntime {
 
   async runActionSessionView(sessionId) {
     const session = await this.store.readSession(sessionId);
-    const sessionAdapter = promptContextSnapshotHasAdapter(session.promptContextSnapshot)
-      ? session.promptContextSnapshot.adapter
-      : await this.adapterViewForSession(session);
-    return this.sessionView(session, {
-      sessionAdapter
-    });
+    return promptContextSnapshotHasAdapter(session.promptContextSnapshot)
+      ? this.sessionView(session, {
+          sessionAdapter: session.promptContextSnapshot.adapter
+        })
+      : this.sessionView(session);
   }
 
   async renderComposerTemplate(template = {}, {
@@ -1548,6 +1592,116 @@ class Vibe64SessionRuntime {
       ...renderedTemplates.filter(Boolean),
       ...(Array.isArray(explicitItems) ? explicitItems : [])
     ];
+  }
+
+  cachedAdapterViewForSession(session = {}, {
+    stale = false
+  } = {}) {
+    const snapshot = promptContextSnapshotHasAdapter(session.promptContextSnapshot)
+      ? session.promptContextSnapshot
+      : null;
+    const cachedAdapter = snapshot?.adapter || adapterView({
+      adapter: this.adapter,
+      detection: {
+        detected: false
+      }
+    });
+    if (!stale) {
+      return cachedAdapter;
+    }
+    return {
+      ...cachedAdapter,
+      commands: [],
+      composerMenuItems: [],
+      managedServices: [],
+      promptContext: {},
+      stale: true
+    };
+  }
+
+  sourceInspectionFailureView(session = {}, error = null, {
+    merge = null,
+    phase = ""
+  } = {}) {
+    if (error) {
+      vibe64SessionDebugLog("server.runtime.sourceInspection.error", {
+        error: vibe64SessionDebugError(error),
+        phase,
+        sessionId: normalizeText(session.sessionId)
+      });
+    }
+    const failure = sourceInspectionFailure(error, {
+      merge
+    });
+    const snapshot = promptContextSnapshotHasAdapter(session.promptContextSnapshot)
+      ? session.promptContextSnapshot
+      : null;
+    return {
+      adapter: this.cachedAdapterViewForSession(session, {
+        stale: true
+      }),
+      sourceInspection: {
+        ...failure,
+        ...(snapshot
+          ? {
+              lastKnownGood: {
+                adapterId: normalizeText(snapshot.adapter?.id),
+                capturedAt: normalizeText(snapshot.createdAt)
+              }
+            }
+          : {}),
+        status: "error"
+      }
+    };
+  }
+
+  async inspectSourceForSession(session = {}) {
+    if (!this.sourceInspectionAvailable) {
+      return this.sourceInspectionFailureView(session);
+    }
+    const sourceRoot = sessionSourcePath(session);
+    let merge = null;
+    if (sourceRoot) {
+      try {
+        merge = await inspectSessionSourceMergeState(sourceRoot);
+      } catch (error) {
+        return this.sourceInspectionFailureView(session, error, {
+          phase: "merge_state"
+        });
+      }
+    }
+    if (merge?.hasConflicts === true) {
+      return this.sourceInspectionFailureView(session, null, {
+        merge
+      });
+    }
+    if (this.sourceInspectionError) {
+      return this.sourceInspectionFailureView(session, this.sourceInspectionError, {
+        phase: "runtime_setup"
+      });
+    }
+    try {
+      return {
+        adapter: await this.adapterViewForSession(session),
+        sourceInspection: null
+      };
+    } catch (error) {
+      return this.sourceInspectionFailureView(session, error, {
+        phase: "adapter_view"
+      });
+    }
+  }
+
+  async assertSourceHealthy(sessionOrId = {}) {
+    const session = typeof sessionOrId === "string"
+      ? await this.store.readSession(sessionOrId)
+      : sessionOrId;
+    if (!sessionHasSource(session)) {
+      return null;
+    }
+    const inspectedSource = await this.inspectSourceForSession(session);
+    assertSourceInspectionHealthy(inspectedSource.sourceInspection);
+    return inspectedSource.adapter;
   }
 
   async adapterViewForSession(session) {
@@ -1807,7 +1961,11 @@ class Vibe64SessionRuntime {
     reason = "archive"
   } = {}) {
     return this.store.mutateSession(session.sessionId, async () => {
-      const latestSession = await this.getSession(session.sessionId);
+      const storedSession = await this.store.readSession(session.sessionId);
+      await this.assertSourceHealthy(storedSession);
+      const latestSession = await this.sessionView(storedSession, {
+        inspectSource: false
+      });
       return archiveSessionSource({
         adapter: this.adapter,
         reason,
@@ -1864,6 +2022,9 @@ class Vibe64SessionRuntime {
             reason: "action_not_available"
           });
           throw actionNotAvailableError(session, normalizedActionId);
+        }
+        if (actionRequiresSourceInspection(action)) {
+          await this.assertSourceHealthy(session);
         }
         if (!action.enabled) {
           vibe64SessionDebugLog("server.runtime.runAction.blocked", {
@@ -1968,7 +2129,9 @@ class Vibe64SessionRuntime {
     }
   }
 
-  async advance(sessionId, expected = {}) {
+  async advance(sessionId, expected = {}, {
+    inspectSource = this.inspectSourceByDefault
+  } = {}) {
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("server.runtime.advance.start", {
       expectedStepId: String(expected?.stepId || ""),
@@ -1977,7 +2140,9 @@ class Vibe64SessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        const session = await this.getSession(sessionId);
+        const session = await this.getSession(sessionId, {
+          inspectSource
+        });
         vibe64SessionDebugLog("server.runtime.advance.loaded", {
           ...vibe64SessionDebugSummary(session),
           nextVisible: session.next?.visible !== false,
@@ -2005,7 +2170,9 @@ class Vibe64SessionRuntime {
           message: `Advanced from ${session.currentStep} to ${session.next.stepId}.`
         });
         await this.store.writeCurrentStep(session.sessionId, session.next.stepId);
-        const advancedSession = await this.getSession(session.sessionId);
+        const advancedSession = await this.getSession(session.sessionId, {
+          inspectSource
+        });
         vibe64SessionDebugLog("server.runtime.advance.done", {
           ...vibe64SessionDebugSummary(advancedSession),
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -2152,7 +2319,8 @@ class Vibe64SessionRuntime {
     try {
       return await this.store.mutateSession(sessionId, async () => {
         const session = await this.sessionView(await this.store.readSession(sessionId), {
-          includeRecovery: false
+          includeRecovery: false,
+          inspectSource: false
         });
         if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
           throw vibe64Error(
@@ -2164,7 +2332,9 @@ class Vibe64SessionRuntime {
           runtime: this,
           session
         }, input);
-        const recoveredSession = await this.getSession(sessionId);
+        const recoveredSession = await this.getSession(sessionId, {
+          inspectSource: false
+        });
         vibe64SessionDebugLog("server.runtime.resolveSessionRecovery.done", {
           ...vibe64SessionDebugSummary(recoveredSession),
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -2192,7 +2362,9 @@ class Vibe64SessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        const session = await this.getSession(sessionId);
+        const session = await this.getSession(sessionId, {
+          inspectSource: false
+        });
         if (session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
           vibe64SessionDebugLog("server.runtime.recoverStuckStep.blocked", {
             ...vibe64SessionDebugSummary(session),
@@ -2213,7 +2385,9 @@ class Vibe64SessionRuntime {
           stepId: session.currentStep,
           toStatus: "ready"
         });
-        const recoveredSession = await this.getSession(session.sessionId);
+        const recoveredSession = await this.getSession(session.sessionId, {
+          inspectSource: false
+        });
         vibe64SessionDebugLog("server.runtime.recoverStuckStep.done", {
           ...vibe64SessionDebugSummary(recoveredSession),
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -2243,7 +2417,9 @@ class Vibe64SessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        const session = await this.getSession(sessionId);
+        const session = await this.getSession(sessionId, {
+          inspectSource: false
+        });
         if (expectedRevision !== null && session.revision !== expectedRevision) {
           vibe64SessionDebugLog("server.runtime.returnControlFromAgentWait.blocked", {
             ...vibe64SessionDebugSummary(session),
@@ -2267,7 +2443,9 @@ class Vibe64SessionRuntime {
             text: message
           });
         }
-        const updatedSession = await this.getSession(session.sessionId);
+        const updatedSession = await this.getSession(session.sessionId, {
+          inspectSource: false
+        });
         vibe64SessionDebugLog("server.runtime.returnControlFromAgentWait.done", {
           ...vibe64SessionDebugSummary(updatedSession),
           changed,
@@ -2294,7 +2472,9 @@ class Vibe64SessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        const session = await this.getSession(sessionId);
+        const session = await this.getSession(sessionId, {
+          inspectSource: false
+        });
         const requestText = normalizeText(input.request || input.prompt || input.user || input.text);
         const responseText = normalizeText(input.response || input.answer || input.assistant);
         if (requestText) {
@@ -2307,7 +2487,9 @@ class Vibe64SessionRuntime {
             text: responseText
           });
         }
-        const updatedSession = await this.getSession(session.sessionId);
+        const updatedSession = await this.getSession(session.sessionId, {
+          inspectSource: false
+        });
         vibe64SessionDebugLog("server.runtime.appendTerminalChatExchange.done", {
           ...vibe64SessionDebugSummary(updatedSession),
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),

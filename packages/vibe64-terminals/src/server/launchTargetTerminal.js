@@ -70,6 +70,9 @@ import {
   sessionClosingReason
 } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
+  assertSourceInspectionHealthy
+} from "@local/vibe64-runtime/server/sessionSourceInspection";
+import {
   commandInvocation,
   ensureTerminalSessionSourceGitSelfContained,
   vibe64Result,
@@ -600,6 +603,7 @@ async function createLaunchContext(projectService, sessionId) {
     }
   });
   const session = await runtime.getSession(sessionId);
+  assertSourceInspectionHealthy(session.sourceInspection);
   const targetRoot = sessionTerminalCwd(session, projectService);
   const runtimeTargetRoot = String(
     (typeof projectService?.currentTargetRoot === "function"

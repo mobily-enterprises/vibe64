@@ -101,6 +101,17 @@ function sourceSafetyDisplayPrompt(status = {}) {
     : "Commit all current session work.";
 }
 
+const GIT_BACKED_SOURCE_SAFETY_INSTRUCTION = [
+  "Fetch only origin/main.",
+  "If origin/main is an ancestor of HEAD, immediately push HEAD:refs/heads/main.",
+  "If HEAD is an ancestor of origin/main, fast-forward to origin/main and finish.",
+  "If the branches diverged, preflight `git merge-tree --write-tree HEAD refs/remotes/origin/main`; it must not modify the index, worktree, or branch.",
+  "If preflight fails or reports conflicts, do not merge: stop and ask the user.",
+  "If it is clean, merge origin/main once and immediately push HEAD:refs/heads/main.",
+  "If that merge unexpectedly fails or leaves unmerged entries, run git merge --abort immediately, verify the committed pre-merge worktree was restored, then stop and ask the user.",
+  "Only ever push to origin/main. Never push another ref, rebase, force-push, create a fork, or start pull-request work."
+].join(" ");
+
 function sourceSafetyPrompt(status = {}) {
   const requiresPush = sourceSafetyRequiresPush(status);
   return [
@@ -110,7 +121,7 @@ function sourceSafetyPrompt(status = {}) {
     "This is an independent source-safety request, not a Vibe64 workflow step. Do not change the workflow state.",
     "Use the fast path. Run git status --short --branch, then commit every current worktree change as-is, including untracked portable Vibe64 source contracts such as vibe64.system.json. Do not inspect file contents, edit files, or run audits, validation, lint, tests, or builds for a straightforward save.",
     requiresPush
-      ? "Fetch only origin/main. If origin/main is an ancestor of HEAD, immediately push HEAD:refs/heads/main. If HEAD is an ancestor of origin/main, fast-forward to origin/main and finish. Otherwise perform one normal merge of origin/main into the current work; if it succeeds cleanly, immediately push HEAD:refs/heads/main. Only ever push to origin/main. Never push another ref, rebase, force-push, create a fork, or start pull-request work. If a Git command fails or the merge conflicts, stop and ask the user; do not start a broader investigation."
+      ? GIT_BACKED_SOURCE_SAFETY_INSTRUCTION
       : "Do not push; after committing, verify that the working tree is clean. If the commit fails, stop and ask the user.",
     requiresPush
       ? "Verify that live origin/main equals HEAD, then report the commit SHA in one concise response."

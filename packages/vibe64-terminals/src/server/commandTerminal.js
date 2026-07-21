@@ -37,6 +37,9 @@ import {
   terminalFailureOutputTail
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import {
+  assertSourceInspectionHealthy
+} from "@local/vibe64-runtime/server/sessionSourceInspection";
+import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
@@ -109,6 +112,12 @@ function delay(ms) {
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
     .find((action) => action.id === actionId) || null;
+}
+
+function sessionControlView(runtime, sessionId = "") {
+  return runtime.getSession(sessionId, {
+    inspectSource: false
+  });
 }
 
 function actionRunsInCommandTerminal(action = {}) {
@@ -374,6 +383,7 @@ async function claimCommandExecution({
         "vibe64_command_requires_terminal"
       );
     }
+    await runtime.assertSourceHealthy(currentSession);
     if (currentAction.enabled !== true) {
       throw refreshRecommendedCommandError(vibe64Error(
         currentAction.disabledReason || `Action ${currentAction.label || currentAction.id} is disabled.`,
@@ -649,7 +659,7 @@ async function writeActionTerminalResult({
       message: "Command terminal exited; applying command result."
     }
   });
-  const currentSessionBeforeWrite = await runtime.getSession(session.sessionId);
+  const currentSessionBeforeWrite = await sessionControlView(runtime, session.sessionId);
   const staleReason = staleCompletionReason(session, currentSessionBeforeWrite);
   if (staleReason) {
     vibe64SessionDebugLog("server.commandTerminal.writeResult.stale", {
@@ -771,7 +781,7 @@ async function writeActionTerminalResult({
     runtime,
     session: sessionForWrite
   });
-  const currentSession = advancedSession || await runtime.getSession(session.sessionId);
+  const currentSession = advancedSession || await sessionControlView(runtime, session.sessionId);
   const advanced = completed && currentSession.currentStep !== sessionForWrite.currentStep;
   await writeCommandLifecycleEvent({
     lifecycleId: commandLifecycleId,
@@ -945,7 +955,7 @@ async function advanceSessionAfterSuccessfulCommand({
     );
   }
 
-  const refreshedSession = await runtime.getSession(session.sessionId);
+  const refreshedSession = await sessionControlView(runtime, session.sessionId);
   if (
     refreshedSession?.next?.visible === true &&
     refreshedSession.next.enabled === true &&
@@ -954,7 +964,9 @@ async function advanceSessionAfterSuccessfulCommand({
     vibe64SessionDebugLog("server.commandTerminal.advanceAfterSuccess.start", {
       ...vibe64SessionDebugSummary(refreshedSession)
     });
-    return runtime.advance(session.sessionId);
+    return runtime.advance(session.sessionId, {}, {
+      inspectSource: false
+    });
   }
   vibe64SessionDebugLog("server.commandTerminal.advanceAfterSuccess.notReady", {
     ...vibe64SessionDebugSummary(refreshedSession),
@@ -1200,12 +1212,13 @@ function createCommandTerminalController({
       return null;
     }
     const runtime = await projectService.createRuntime({
+      inspectSource: false,
       input: {
         sessionId
       }
     });
     const recovered = await runtime.store.mutateSession(sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       const lifecycle = activeCommandLifecycles(session).find((entry) => {
         return commandLifecyclePhase(entry) === "started" &&
           normalizeText(entry.terminalSessionId) === normalizedTerminalSessionId;
@@ -1247,7 +1260,7 @@ function createCommandTerminalController({
         action,
         lifecycle,
         message,
-        session: await runtime.getSession(sessionId)
+        session: await sessionControlView(runtime, sessionId)
       };
     });
     if (!recovered) {
@@ -1334,6 +1347,7 @@ function createCommandTerminalController({
               "vibe64_command_requires_terminal"
             );
           }
+          assertSourceInspectionHealthy(session.sourceInspection);
           if (action.enabled !== true) {
             vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
               ...vibe64SessionDebugSummary(session),
@@ -1757,6 +1771,7 @@ function createProjectToolTerminalController({
         ...loadedSession,
         targetRoot
       };
+      assertSourceInspectionHealthy(session.sourceInspection);
       const workdir = resolveCommandWorkdir(targetRoot, run.spec?.cwd);
       const driverResult = await claimSessionWorkflowDriver(runtime, runSessionId, {
         originId: input?.originId || "",

@@ -40,6 +40,12 @@ function taskOperation(session, task) {
   };
 }
 
+function sessionControlView(runtime, sessionId = "") {
+  return runtime.getSession(sessionId, {
+    inspectSource: false
+  });
+}
+
 function taskLastRunId(task = {}) {
   return normalizeText(task.runId) || normalizeText(task.lastRunId);
 }
@@ -182,7 +188,7 @@ function createAgentTaskCoordinator({
     try {
       await publishSessionChanged(sessionId, {
         reason,
-        session: await runtime.getSession(sessionId)
+        session: await sessionControlView(runtime, sessionId)
       });
     } catch (error) {
       vibe64SessionDebugLog("server.agentTask.publish.error", {
@@ -328,7 +334,7 @@ function createAgentTaskCoordinator({
         };
       }
       const exclusive = await runVibe64AgentWriteExclusive(runtime, session.sessionId, async () => {
-        const currentSession = await runtime.getSession(session.sessionId);
+        const currentSession = await sessionControlView(runtime, session.sessionId);
         const currentTask = await runtime.store.readCurrentAgentTask(session.sessionId);
         if (!sameTaskTurn(currentTask, task)) {
           return currentTask;
@@ -478,7 +484,7 @@ function createAgentTaskCoordinator({
       return taskFailure("vibe64_agent_task_definition_required", "Choose a task to start.");
     }
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       if (vibe64AgentTaskIsActive(session.agentTask)) {
         return taskFailure(
           "vibe64_agent_task_active",
@@ -549,7 +555,7 @@ function createAgentTaskCoordinator({
       return taskFailure("vibe64_agent_task_message_required", "Enter a task message.");
     }
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       const current = session.agentTask;
       if (!vibe64AgentTaskIsActive(current)) {
         return taskFailure("vibe64_agent_task_not_active", "There is no active focused task.");
@@ -583,7 +589,7 @@ function createAgentTaskCoordinator({
 
   async function finish({ runtime, sessionId = "" } = {}) {
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       const current = session.agentTask;
       if (!vibe64AgentTaskIsActive(current)) {
         return taskFailure("vibe64_agent_task_not_active", "There is no active focused task.");
@@ -628,7 +634,7 @@ function createAgentTaskCoordinator({
 
   async function stop({ runtime, sessionId = "" } = {}) {
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       let task = session.agentTask;
       if (!vibe64AgentTaskIsActive(task)) {
         return taskFailure("vibe64_agent_task_not_active", "There is no active focused task.");
@@ -724,7 +730,7 @@ function createAgentTaskCoordinator({
       };
     }
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       return taskOperation(session, await reconcileTask(runtime, session));
     });
     const result = exclusive.value;
@@ -741,7 +747,7 @@ function createAgentTaskCoordinator({
 
   async function runMainWriteExclusive(runtime, sessionId, operation) {
     return runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-      const session = await runtime.getSession(sessionId);
+      const session = await sessionControlView(runtime, sessionId);
       if (vibe64AgentTaskIsActive(session.agentTask)) {
         return VIBE64_AGENT_TASK_ACTIVE_RESULT;
       }

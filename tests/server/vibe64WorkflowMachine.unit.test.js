@@ -624,6 +624,169 @@ test("vibe64 runtime read views do not persist default or derived step-machine s
   });
 });
 
+test("vibe64 runtime returns a recoverable session when live source inspection fails", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let inspectFails = false;
+    let inspectionCount = 0;
+    let finishCount = 0;
+    const adapter = new FakeTargetAdapter({
+      capabilities: {
+        finish_session: true,
+        run_automated_checks: true,
+        update_code_index: true
+      },
+      commands: [
+        {
+          id: "run_automated_checks",
+          label: "Run automated checks"
+        }
+      ]
+    });
+    const inspect = adapter.inspect.bind(adapter);
+    adapter.inspect = async (...args) => {
+      inspectionCount += 1;
+      if (inspectFails) {
+        const error = new Error("Invalid JSON in JSKIT project file: package.json");
+        error.code = "vibe64_invalid_jskit_json";
+        throw error;
+      }
+      return inspect(...args);
+    };
+    adapter.finishSession = async () => {
+      finishCount += 1;
+      return {
+        status: "completed"
+      };
+    };
+    const runtime = new Vibe64SessionRuntime({
+      adapter,
+      clock: () => new Date("2026-07-21T01:02:03.000Z"),
+      inspectSourceByDefault: false,
+      targetRoot
+    });
+    const created = await runtime.createSession({
+      initialStep: "review_and_validate",
+      metadata: sourceMetadata(targetRoot, "inspection-failure"),
+      sessionId: "inspection-failure"
+    });
+    await runtime.promptContextSnapshotForSession(created);
+    const conversation = await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: sourceMetadata(targetRoot, "inspection-failure-conversation"),
+      sessionId: "inspection-failure-conversation",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.promptContextSnapshotForSession(conversation);
+    const finishedStep = await runtime.createSession({
+      initialStep: "session_finished",
+      metadata: {
+        ...sourceMetadata(targetRoot, "inspection-failure-finish"),
+        main_checkout_synced: "yes"
+      },
+      sessionId: "inspection-failure-finish"
+    });
+    await runtime.promptContextSnapshotForSession(finishedStep);
+    const inspectionsBeforeCachedRead = inspectionCount;
+
+    inspectFails = true;
+    const cached = await runtime.getSession("inspection-failure");
+    assert.equal(inspectionCount, inspectionsBeforeCachedRead);
+    assert.equal(cached.sourceInspection, undefined);
+
+    const degraded = await runtime.getSession("inspection-failure", {
+      inspectSource: true
+    });
+    assert.equal(degraded.status, VIBE64_SESSION_STATUS.ACTIVE);
+    assert.deepEqual(degraded.sourceInspection, {
+      error: {
+        code: "vibe64_invalid_jskit_json",
+        message: "Application source metadata is invalid and must be repaired."
+      },
+      kind: "source_error",
+      lastKnownGood: {
+        adapterId: "fake",
+        capturedAt: "2026-07-21T01:02:03.000Z"
+      },
+      status: "error"
+    });
+    assert.equal(degraded.adapter.stale, true);
+    assert.deepEqual(degraded.adapter.commands, []);
+    assert.equal(degraded.recovery.issues[0].code, "vibe64_invalid_jskit_json");
+    assert.equal(degraded.recovery.issues[0].id, "source_inspection");
+    assert.equal(degraded.recovery.issues[0].title, "Application source needs repair");
+    assert.equal(degraded.recovery.title, "This session needs recovery");
+    assert.equal(degraded.presentation.auto.nextOperation, null);
+    const sourceDependentActions = degraded.actions.filter((action) => (
+      action.type !== "link" &&
+      action.recordsConversationTurn !== true
+    ));
+    assert.ok(sourceDependentActions.length > 0);
+    assert.equal(sourceDependentActions.every((action) => action.enabled === false), true);
+    await assert.rejects(
+      runtime.runAction("inspection-failure", "run_automated_checks"),
+      (error) => (
+        error?.code === "vibe64_invalid_jskit_json" &&
+        error?.message === "Application source metadata is invalid and must be repaired."
+      )
+    );
+    const degradedFinish = await runtime.getSession("inspection-failure-finish", {
+      inspectSource: true
+    });
+    assert.equal(degradedFinish.actions.find((action) => action.id === "finish_session")?.enabled, false);
+    await assert.rejects(
+      runtime.runAction("inspection-failure-finish", "finish_session"),
+      (error) => error?.code === "vibe64_invalid_jskit_json"
+    );
+    await assert.rejects(
+      runtime.archiveSessionSource(degradedFinish),
+      (error) => error?.code === "vibe64_invalid_jskit_json"
+    );
+    assert.equal(finishCount, 0);
+    assert.equal((await runtime.store.readSession("inspection-failure-finish")).status, VIBE64_SESSION_STATUS.ACTIVE);
+
+    const degradedConversation = await runtime.getSession("inspection-failure-conversation", {
+      inspectSource: true
+    });
+    const conversationAction = degradedConversation.actions.find((action) => (
+      action.recordsConversationTurn === true
+    ));
+    assert.equal(conversationAction?.enabled, true);
+  });
+});
+
+test("vibe64 runtime distinguishes platform inspection failures without exposing internals", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = new FakeTargetAdapter();
+    const runtime = new Vibe64SessionRuntime({
+      adapter,
+      inspectSourceByDefault: false,
+      targetRoot
+    });
+    const created = await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: sourceMetadata(targetRoot, "inspection-platform-failure"),
+      sessionId: "inspection-platform-failure",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.promptContextSnapshotForSession(created);
+    adapter.listManagedServices = async () => {
+      throw new Error("internal service failed at /private/platform/path");
+    };
+
+    const degraded = await runtime.getSession("inspection-platform-failure", {
+      inspectSource: true
+    });
+
+    assert.equal(degraded.sourceInspection.kind, "platform_error");
+    assert.deepEqual(degraded.sourceInspection.error, {
+      code: "vibe64_source_inspection_unavailable",
+      message: "Vibe64 could not inspect this application right now."
+    });
+    assert.equal(degraded.recovery.issues[0].title, "Application inspection is unavailable");
+    assert.doesNotMatch(JSON.stringify(degraded), /private\/platform\/path/u);
+  });
+});
+
 test("vibe64 runtime keeps evaluated Autopilot state in presentation, not raw step definitions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -5027,7 +5190,7 @@ test("chat-with-ai step instructions make completion ownership explicit", () => 
   );
 });
 
-test("vibe64 runtime reuses the persisted prompt context snapshot for later prompt actions", async () => {
+test("vibe64 runtime reuses the persisted prompt snapshot after live source validation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
@@ -5058,18 +5221,16 @@ test("vibe64 runtime reuses the persisted prompt context snapshot for later prom
       stepStatus: "awaiting_agent_result"
     });
 
-    class ThrowingInspectionAdapter extends FakeTargetAdapter {
-      async inspect() {
-        throw new Error("Prompt actions should use the persisted snapshot, not live inspection.");
-      }
-
+    class ChangedPromptContextAdapter extends FakeTargetAdapter {
       async getPromptContext() {
-        throw new Error("Prompt actions should use the persisted snapshot, not live prompt context.");
+        return {
+          marker: "second"
+        };
       }
     }
 
     const restartedRuntime = new Vibe64SessionRuntime({
-      adapter: new ThrowingInspectionAdapter({
+      adapter: new ChangedPromptContextAdapter({
         promptContext: {
           marker: "second"
         }

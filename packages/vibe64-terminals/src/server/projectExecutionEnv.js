@@ -10,6 +10,9 @@ import {
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  isSourceMetadataError
+} from "@local/vibe64-runtime/server/sessionSourceInspection";
 const SERVER_LIKE_TERMINAL_TARGETS = new Set([
   "codex",
   "fix-codex",
@@ -83,6 +86,20 @@ function projectRuntimeConfigEnvironmentInput({
   };
 }
 
+async function terminalEnvironmentForSourceState(operation, target = "") {
+  try {
+    return await operation();
+  } catch (error) {
+    if (
+      !SERVER_LIKE_TERMINAL_TARGETS.has(String(target || "").trim()) ||
+      !isSourceMetadataError(error)
+    ) {
+      throw error;
+    }
+    return {};
+  }
+}
+
 function runtimeConfigTargetForTerminalTarget(target = "") {
   const terminalTarget = String(target || "").trim();
   if (terminalTarget === "launch-target") {
@@ -124,16 +141,22 @@ async function loadProjectExecutionEnvRecords({
   const resolvedSourcePath = String(sourcePath || worktreePath || sessionSourcePath(session) || "").trim();
   const [projectConfigEnv, runtimeConfigEnv] = await Promise.all([
     typeof projectService.projectConfigEnvironment === "function"
-      ? projectService.projectConfigEnvironment(projectConfigInput)
+      ? terminalEnvironmentForSourceState(
+          () => projectService.projectConfigEnvironment(projectConfigInput),
+          target
+        )
       : {},
     shouldRequestRuntimeConfig
-      ? projectService.projectRuntimeConfigEnvironment(projectRuntimeConfigEnvironmentInput({
-          phases: runtimeConfigPhases,
-          session,
-          sourcePath: resolvedSourcePath,
-          target,
-          targetRoot
-        }))
+      ? terminalEnvironmentForSourceState(
+          () => projectService.projectRuntimeConfigEnvironment(projectRuntimeConfigEnvironmentInput({
+            phases: runtimeConfigPhases,
+            session,
+            sourcePath: resolvedSourcePath,
+            target,
+            targetRoot
+          })),
+          target
+        )
       : {}
   ]);
   const records = {

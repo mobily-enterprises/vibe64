@@ -139,6 +139,19 @@ function normalizedInputText(value = "") {
   return String(value || "").trim();
 }
 
+async function sessionControlView(runtime, sessionId = "") {
+  return runtime.getSession(sessionId, {
+    inspectSource: false
+  });
+}
+
+async function storedSession(runtime, sessionId = "") {
+  if (typeof runtime?.store?.readSession === "function") {
+    return runtime.store.readSession(sessionId);
+  }
+  return sessionControlView(runtime, sessionId);
+}
+
 function inputFlagEnabled(value = false) {
   if (value === true) {
     return true;
@@ -250,7 +263,7 @@ async function observeAlreadyAdvancedSession(runtime, sessionId = "", expected =
   if (typeof runtime?.getSession !== "function") {
     return null;
   }
-  const session = await runtime.getSession(sessionId).catch(() => null);
+  const session = await sessionControlView(runtime, sessionId).catch(() => null);
   return sessionAlreadyObservedAdvance(session, expected) ? session : null;
 }
 
@@ -258,7 +271,7 @@ async function closedSessionResponseForCloseRetry(runtime, sessionId = "", close
   if (!closeRequest || typeof runtime?.getSession !== "function") {
     return null;
   }
-  const session = await runtime.getSession(sessionId).catch((error) => {
+  const session = await sessionControlView(runtime, sessionId).catch((error) => {
     if (normalizedInputText(error?.code) === "vibe64_session_not_found") {
       return null;
     }
@@ -757,6 +770,13 @@ function runtimeScopeForSession(sessionId = "", options = {}) {
   };
 }
 
+function controlRuntimeScopeForSession(sessionId = "", options = {}) {
+  return runtimeScopeForSession(sessionId, {
+    ...options,
+    inspectSource: false
+  });
+}
+
 function conversationRequestText(input = {}) {
   const inputObject = objectValue(input);
   const fields = objectValue(inputObject.fields);
@@ -869,7 +889,7 @@ async function prepareComposerHandoffForQueuedMessages(runtime, session = {}, ha
   if (!sessionId || !handoffId || typeof runtime?.getSession !== "function") {
     return handoff;
   }
-  const currentSession = await runtime.getSession(sessionId);
+  const currentSession = await sessionControlView(runtime, sessionId);
   const currentHandoff = composerHandoffSnapshot(currentSession);
   if (!currentHandoff || currentHandoff.id !== handoffId) {
     return handoff;
@@ -918,7 +938,7 @@ async function sessionWithLatestRevision(runtime, session = {}) {
     return session;
   }
   return {
-    ...await runtime.getSession(session.sessionId),
+    ...await sessionControlView(runtime, session.sessionId),
     actionResult: session.actionResult
   };
 }
@@ -1099,7 +1119,7 @@ async function latestSessionForAgentWaitRecovery(runtime, session = {}) {
     return session;
   }
   try {
-    return await runtime.getSession(session.sessionId);
+    return await sessionControlView(runtime, session.sessionId);
   } catch {
     return session;
   }
@@ -1164,7 +1184,7 @@ async function observeAcceptedUserMessageSession(runtime, sessionId = "", input 
   if (!conversationRequestText(input) || typeof runtime?.getSession !== "function") {
     return null;
   }
-  const currentSession = await runtime.getSession(sessionId).catch(() => null);
+  const currentSession = await sessionControlView(runtime, sessionId).catch(() => null);
   if (!currentSession) {
     return null;
   }
@@ -1205,7 +1225,7 @@ async function observeAcceptedPromptActionSession(runtime, sessionId = "", actio
   if (typeof runtime?.getSession !== "function") {
     return null;
   }
-  const currentSession = await runtime.getSession(sessionId).catch(() => null);
+  const currentSession = await sessionControlView(runtime, sessionId).catch(() => null);
   if (
     !currentSession ||
     !acceptedPromptActionResult(currentSession, actionId) ||
@@ -1293,7 +1313,7 @@ async function enrichSessionWithAgentState(terminalService, session = {}, {
     throw new Error(agentState.error || "Vibe64 assistant state could not be read.");
   }
   const sessionForRecovery = agentState?.sessionUpdated === true && typeof runtime?.getSession === "function"
-    ? await runtime.getSession(session.sessionId).catch(() => session)
+    ? await sessionControlView(runtime, session.sessionId).catch(() => session)
     : session;
   const recoveredSession = await recoverAgentWaitWithoutProvider(
     runtime,
@@ -1389,7 +1409,7 @@ async function transitionComposerDeliveryLifecycle(runtime, session = {}, handof
 }
 
 async function failComposerHandoff(runtime, session = {}, handoff = {}, provider = {}, error = "") {
-  const currentSession = await runtime.getSession(session.sessionId).catch(() => session);
+  const currentSession = await sessionControlView(runtime, session.sessionId).catch(() => session);
   const current = composerHandoffSnapshot(currentSession);
   if (
     !current ||
@@ -1405,7 +1425,7 @@ async function failComposerHandoff(runtime, session = {}, handoff = {}, provider
 }
 
 async function finishComposerHandoff(runtime, session = {}, handoff = {}, provider = {}, delivery = {}) {
-  let currentSession = await runtime.getSession(session.sessionId);
+  let currentSession = await sessionControlView(runtime, session.sessionId);
   let current = composerHandoffSnapshot(currentSession);
   if (
     !current ||
@@ -1428,7 +1448,7 @@ async function finishComposerHandoff(runtime, session = {}, handoff = {}, provid
       threadId,
       turnId
     });
-    currentSession = await runtime.getSession(session.sessionId);
+    currentSession = await sessionControlView(runtime, session.sessionId);
     current = composerHandoffSnapshot(currentSession);
   }
   if (current?.state === COMPOSER_HANDOFF_STATES.DELIVERED) {
@@ -1452,7 +1472,7 @@ async function drainComposerControls(terminalService, {
   }
 
   while (true) {
-    const currentSession = await runtime.getSession(sessionId);
+    const currentSession = await sessionControlView(runtime, sessionId);
     const handoff = composerHandoffSnapshot(currentSession);
     if (handoff?.state !== COMPOSER_HANDOFF_STATES.ACTIVE || !handoff.submissionId) {
       return;
@@ -1590,7 +1610,7 @@ async function startComposerMessageTurn(terminalService, coordinator, {
   if (!batch || !messageId) {
     throw new TypeError("Starting an assistant turn requires a composer message batch.");
   }
-  const currentSession = await runtime.getSession(sessionId);
+  const currentSession = await sessionControlView(runtime, sessionId);
   const currentHandoff = composerHandoffSnapshot(currentSession);
   if (
     batch.messageIds.every((id) => currentHandoff?.submissionIds?.includes(id)) &&
@@ -1696,7 +1716,7 @@ async function publishComposerMessageChanged(publishSessionChanged, runtime, ses
   try {
     await publishSessionChanged(sessionId, {
       reason,
-      session: await runtime.getSession(sessionId)
+      session: await sessionControlView(runtime, sessionId)
     });
   } catch (error) {
     vibe64SessionDebugLog("server.service.composerMessage.publish.error", {
@@ -1730,7 +1750,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
   }
 
   while (true) {
-    const currentSession = await runtime.getSession(sessionId);
+    const currentSession = await sessionControlView(runtime, sessionId);
     const queuedMessages = pendingComposerMessages(currentSession);
     if (!queuedMessages.length) {
       return null;
@@ -1848,7 +1868,7 @@ async function drainComposerMessages(terminalService, coordinator, publishSessio
         sessionId
       });
       if (result?.ok === true && result?.newTurnRequired === true) {
-        let latestSession = await runtime.getSession(sessionId);
+        let latestSession = await sessionControlView(runtime, sessionId);
         batch = composerMessageBatch(pendingComposerMessages(latestSession)) || batch;
         if (composerHandoffSnapshot(latestSession)?.pending === true) {
           return {
@@ -2101,7 +2121,7 @@ async function deliverAgentPromptHandoff(terminalService, {
     });
     throw error;
   }
-  const settledSession = await runtime.getSession(session.sessionId).catch(() => session);
+  const settledSession = await sessionControlView(runtime, session.sessionId).catch(() => session);
   await recoverAgentWaitWithoutProvider(runtime, settledSession, delivery, {
     reason: "agent_prompt_delivery_settled_without_active_turn"
   });
@@ -2882,7 +2902,7 @@ function createService({
   });
 
   async function runAgentTaskOperation(sessionId, operation, input = undefined) {
-    const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+    const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
     return operation({
       ...(input === undefined ? {} : { input }),
       runtime,
@@ -2903,8 +2923,8 @@ function createService({
         ok: false
       };
     }
-    const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-    const session = await runtime.getSession(sessionId);
+    const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
+    const session = await sessionControlView(runtime, sessionId);
 
     const request = await acceptComposerControl(runtime, sessionId, {
       ...input,
@@ -2937,8 +2957,8 @@ function createService({
           ok: false
         };
       }
-      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
-      const session = await runtime.getSession(normalizedSessionId);
+      const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(normalizedSessionId));
+      const session = await sessionControlView(runtime, normalizedSessionId);
       const exclusive = await composerHandoffCoordinator.runMessagesExclusive({
         runtime,
         session
@@ -2995,8 +3015,8 @@ function createService({
           ok: false
         };
       }
-      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
-      const session = await runtime.getSession(normalizedSessionId);
+      const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(normalizedSessionId));
+      const session = await sessionControlView(runtime, normalizedSessionId);
       const queuedMessages = pendingComposerMessages(session);
       for (const message of queuedMessages) {
         await settleComposerMessage(runtime, normalizedSessionId, message.messageId, {
@@ -3013,7 +3033,7 @@ function createService({
           "session-agent-message-cancelled"
         );
       }
-      const currentSession = await runtime.getSession(normalizedSessionId);
+      const currentSession = await sessionControlView(runtime, normalizedSessionId);
       const currentHandoff = composerHandoffSnapshot(currentSession);
       const currentSubmissionId = normalizedInputText(
         currentHandoff?.state === COMPOSER_HANDOFF_STATES.FAILED
@@ -3064,7 +3084,7 @@ function createService({
           ok: false
         };
       }
-      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
+      const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(normalizedSessionId));
       const exclusive = await agentTaskCoordinator.runMainWriteExclusive(
         runtime,
         normalizedSessionId,
@@ -3122,7 +3142,7 @@ function createService({
       }
       void composerHandoffCoordinator.drainMessages({
         runtime,
-        session: await runtime.getSession(normalizedSessionId)
+        session: await sessionControlView(runtime, normalizedSessionId)
       });
       vibe64SessionDebugLog("server.service.composerMessage.accepted", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3175,7 +3195,7 @@ function createService({
           error: "Composer draft reads require a session and control."
         };
       }
-      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
+      const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(normalizedSessionId));
       const draft = await readStoredComposerDraft(runtime, normalizedSessionId, controlId);
       return {
         draft,
@@ -3203,7 +3223,7 @@ function createService({
           error: "Composer draft updates require a session, control, field, and origin."
         };
       }
-      const runtime = await projectService.createRuntime(runtimeScopeForSession(draftInput.sessionId));
+      const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(draftInput.sessionId));
       const existing = await readStoredComposerDraft(runtime, draftInput.sessionId, draftInput.controlId);
       if (composerDraftInputIsStale(existing, draftInput)) {
         return {
@@ -3358,7 +3378,8 @@ function createService({
             terminalService
           });
           const closeSession = async () => {
-            const session = await runtime.getSession(sessionId);
+            const session = await sessionControlView(runtime, sessionId);
+            await runtime.assertSourceHealthy(session);
             if (typeof runtime.markSessionClosing === "function") {
               await runtime.markSessionClosing(sessionId, {
                 reason: "abandoned"
@@ -3378,7 +3399,7 @@ function createService({
           } else {
             await closeSession();
           }
-          const abandonedSession = await runtime.getSession(sessionId);
+          const abandonedSession = await sessionControlView(runtime, sessionId);
           const closedSession = typeof runtime.compactClosedSessionIfNeeded === "function"
             ? await runtime.compactClosedSessionIfNeeded(abandonedSession) || abandonedSession
             : abandonedSession;
@@ -3542,6 +3563,7 @@ function createService({
     async updateCurrentSession(sessionId = "") {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime({
+          inspectSource: false,
           sourceSetupRequired: false
         });
         const currentSession = await runtime.updateCurrentSession(sessionId);
@@ -3638,8 +3660,8 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          const session = await runtime.getSession(sessionId);
+          const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
+          const session = await storedSession(runtime, sessionId);
           const pageResult = typeof runtime.store?.readConversationLogPage === "function"
             ? await runtime.store.readConversationLogPage(sessionId, pageOptions)
             : typeof runtime.store?.readConversationLog === "function"
@@ -3682,8 +3704,8 @@ function createService({
 
     async inspectSessionDiff(sessionId, options = {}) {
       return sessionResult(async () => {
-        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-        return inspectSessionDiff(await runtime.getSession(sessionId), options);
+        const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
+        return inspectSessionDiff(await storedSession(runtime, sessionId), options);
       }, {
         publicResponse: false
       });
@@ -3691,8 +3713,8 @@ function createService({
 
     async inspectSessionSourceSafety(sessionId) {
       return sessionResult(async () => {
-        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-        return inspectSessionSourceSafety(await runtime.getSession(sessionId));
+        const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
+        return inspectSessionSourceSafety(await storedSession(runtime, sessionId));
       }, {
         publicResponse: false
       });
@@ -3706,7 +3728,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: "terminal-failure-fix-request",
@@ -3714,7 +3736,7 @@ function createService({
             sessionId,
             terminalService
           });
-          const session = await runtime.getSession(sessionId);
+          const session = await sessionControlView(runtime, sessionId);
           const request = terminalFailureFixRequestForSession(session, input);
           vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.done", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -3743,7 +3765,7 @@ function createService({
       return sessionResult(async () => {
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: "session-stuck-step-recover",
@@ -3784,7 +3806,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: "session-recovery",
@@ -3821,7 +3843,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: "session-agent-control-return",
@@ -3857,6 +3879,7 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime({
+            inspectSource: false,
             sourceSetupRequired: false
           });
           const options = sessionListOptions(input);
@@ -3941,6 +3964,9 @@ function createService({
               terminalService
             });
             if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
+              await runtime.assertSourceHealthy(
+                await sessionControlView(runtime, sessionId)
+              );
               sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
                 eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
               });
@@ -4094,6 +4120,9 @@ function createService({
               terminalService
             });
             if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
+              await runtime.assertSourceHealthy(
+                await sessionControlView(runtime, sessionId)
+              );
               sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
                 eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
               });

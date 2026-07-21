@@ -48,6 +48,14 @@ const MANAGED_SERVICE_POLICY = [
   "Do not discover replacement credentials, alternate hosts, local sockets, system accounts, or service probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
 ].join(" ");
+const DEPENDENCY_PATCH_POLICY = [
+  "Do not patch dependency code unless the human explicitly approves that exact workaround after the disclosure below.",
+  "This includes `patch-package` or package-manager patches, dependency overrides used to alter code, install hooks that rewrite dependencies, edits under `node_modules` or `vendor`, vendored forks, and runtime monkey patches outside supported extension APIs.",
+  "Requests to fix a bug, pass tests, finish work, or commit changes are not approval. Existing patch machinery is not pre-approved: do not activate, repair, retarget, or commit it.",
+  "First diagnose and report the package and version, minimal reproduction, failure, root-cause evidence, upstream fix or status, validation impact, and whether work is blocked. Ask whether to wait, report it upstream, or consider a workaround.",
+  "Before requesting approval, list the exact patch, script, lockfile, install-hook, and dependency changes. Explain install/build mutation, version coupling, security and maintenance costs, the removal condition, and the upstream replacement.",
+  "Without approval after that disclosure, leave the workaround unapplied and unchanged and report the upstream defect or blocker."
+].join("\n");
 const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, Git command policy, project config, and missing-information policy.";
 const STATIC_CONTEXT_REFERENCE_MODE = "reference";
 const PROMPT_CONTEXT_BRIEFING_SECTIONS = Object.freeze([
@@ -624,6 +632,9 @@ function promptSessionBriefing(contextInput = {}) {
     "Do not run absolute or host Git/GitHub binaries such as `/usr/bin/git`, `/bin/git`, `/usr/local/bin/git`, `/usr/bin/gh`, or `/bin/gh`.",
     "Do not bypass the managed command path with `command -p`, a stripped `PATH`, `env -i`, shell builtins that force host lookup, or direct executable paths.",
     "If managed `git` or `gh` cannot authenticate or cannot reach the remote, report that exact managed-command failure. Do not retry with host binaries, inspect credentials, or invent alternate GitHub authentication.",
+    "",
+    "Dependency patch policy:",
+    DEPENDENCY_PATCH_POLICY,
     "",
     "Missing information policy:",
     missingInformationPolicyInstruction(),

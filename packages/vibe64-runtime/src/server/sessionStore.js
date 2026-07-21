@@ -2862,6 +2862,7 @@ function createVibe64SessionStore({
   }
 
   async function createSession({
+    adapterId = "",
     initialStep = VIBE64_INITIAL_STEP,
     metadata = {},
     sessionId = "",
@@ -2927,7 +2928,9 @@ function createVibe64SessionStore({
         recursive: true
       })
     ]);
+    const normalizedAdapterId = normalizeText(adapterId);
     const manifest = {
+      ...(normalizedAdapterId ? { adapterId: normalizedAdapterId } : {}),
       createdAt,
       product: "vibe64",
       revision: 1,

@@ -6513,6 +6513,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerCalls.startThread[0].developerInstructions, /ordinary Markdown/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Live progress instruction/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /`git` and `gh` are available/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /Do not patch dependency code unless the human explicitly approves/u);
     const recoveryTurnCall = providerCalls.sendTurn[0];
     const promptTurnCall = providerCalls.sendTurn[1];
     assert.equal(recoveryTurnCall.threadId, "00000000-0000-4000-8000-000000000004");
@@ -11170,6 +11171,52 @@ test("Vibe64 terminal env requests server runtime config for Codex terminals", a
   assert.equal(calls[0].target, RUNTIME_CONFIG_TARGETS.SERVER);
 });
 
+test("Vibe64 repair terminals tolerate only source-metadata environment failures", async () => {
+  const invalidSourceMetadata = () => {
+    const error = new Error("Invalid JSON in JSKIT project file: /private/source/package.json");
+    error.code = "vibe64_invalid_jskit_json";
+    throw error;
+  };
+  const projectService = {
+    projectConfigEnvironment: invalidSourceMetadata,
+    projectRuntimeConfigEnvironment: invalidSourceMetadata
+  };
+
+  assert.deepEqual(await loadProjectExecutionEnv({
+    projectService,
+    session: {
+      sessionId: "repair-source"
+    },
+    target: "codex",
+    targetRoot: "/tmp/repair-source"
+  }), {});
+  await assert.rejects(
+    loadProjectExecutionEnv({
+      projectService,
+      session: {
+        sessionId: "blocked-command"
+      },
+      spec: {
+        runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.SERVER]
+      },
+      target: "command",
+      targetRoot: "/tmp/blocked-command"
+    }),
+    (error) => error?.code === "vibe64_invalid_jskit_json"
+  );
+  await assert.rejects(
+    loadProjectExecutionEnv({
+      projectService: {
+        async projectConfigEnvironment() {
+          throw new Error("Platform configuration service failed.");
+        }
+      },
+      target: "codex"
+    }),
+    /Platform configuration service failed/u
+  );
+});
+
 test("Vibe64 terminal env requests project config env for the session source", async () => {
   const calls = [];
   const env = await loadProjectExecutionEnv({
@@ -12829,6 +12876,87 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
     assert.equal(session.actionResults[0]?.status, "completed");
     const commandLog = await runtime.store.readCommandLog("terminal_metadata_race");
     assert.equal(commandLog.filter((entry) => entry.kind === "terminal-action").length, 1);
+  });
+});
+
+test("Vibe64 command completion does not re-enter live source inspection", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let inspectionMustNotRun = false;
+    let blockedInspectionCount = 0;
+    const adapter = new UnitCommandAdapter();
+    const inspect = adapter.inspect.bind(adapter);
+    adapter.inspect = async (...args) => {
+      if (inspectionMustNotRun) {
+        blockedInspectionCount += 1;
+        throw new Error("Command completion re-entered source inspection.");
+      }
+      return inspect(...args);
+    };
+    const runtime = new Vibe64SessionRuntime({
+      adapter,
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-source-failure",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        source_path: targetRoot
+      },
+      sessionId: "terminal_source_failure"
+    });
+
+    let closeTerminal = async () => null;
+    const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      runCommand: commandTerminalTestRunCommand((options) => {
+        const id = "unit-command-source-failure-terminal";
+        closeTerminal = () => options.onClose({
+          exitCode: 0,
+          id
+        });
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      })
+    });
+
+    const terminal = await command.startTerminal("terminal_source_failure", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+    assert.equal(terminal.ok, true);
+    inspectionMustNotRun = true;
+
+    await closeTerminal();
+
+    const stored = await runtime.store.readSession("terminal_source_failure");
+    assert.equal(blockedInspectionCount, 0);
+    assert.equal(stored.actionResults[0]?.status, "completed");
   });
 });
 
