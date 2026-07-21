@@ -7,15 +7,14 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
-  sessionRecordHasActiveAgentWork,
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 import {
   useVibe64SessionSourceSafety
 } from "@/composables/useVibe64SessionSourceSafety.js";
 import {
-  useVibe64SessionViewSync
-} from "@/composables/useVibe64SessionViewSync.js";
+  sessionRecordHasActiveAgentWork
+} from "@/lib/vibe64MountedSessionState.js";
 
 const vibe64SessionPanelEmits = ["title-change", "project-attention", "project-pane-change"];
 const vibe64SessionPanelProps = {
@@ -94,13 +93,6 @@ function useVibe64SessionPanel(props, emit) {
     shortSessionId: sessionData.shortSessionId,
     workflowDefinitions: sessionData.workflowDefinitions
   });
-  useVibe64SessionViewSync({
-    enabled: computed(() => Boolean(selection.selectedSessionId)),
-    sessionId: () => selection.selectedSessionId,
-    sessionsApiPath: sessionData.sessionsApiPath,
-    viewState: computed(() => selection.selectedSession?.uiSync?.viewState || null)
-  });
-
   const projectPane = computed(() => normalizeProjectPane(props.projectPane || route.query.pane));
   const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
   const dashboardProjectActive = computed(() => projectPane.value === "dashboard");
@@ -109,13 +101,10 @@ function useVibe64SessionPanel(props, emit) {
     !toolbar.canCreateSession && toolbar.createSessionTitle ? toolbar.createSessionTitle : ""
   ).trim());
   const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
-  const sessionLoadError = computed(() => Boolean(
-    sessionData.sessionList.loadError ||
-    sessionData.selectedSessionView?.loadError
-  ));
+  const sessionLoadError = computed(() => Boolean(sessionData.sessionList.loadError));
   const runtimeHostSessionIds = computed(() => {
     const visibleSessionIds = new Set((toolbar.sessions || []).map((session) => session.sessionId));
-    if (selection.selectedSession && selection.selectedSessionId) {
+    if (selection.selectedSessionId) {
       visibleSessionIds.add(selection.selectedSessionId);
     }
     if (sessionLoadError.value) {
@@ -171,7 +160,7 @@ function useVibe64SessionPanel(props, emit) {
     hasMountedRuntime: runtimeHostSessionIds.value.length > 0,
     runtimePageError: selectedRuntimeState.value?.pageError,
     selectedSession: selection.selectedSession,
-    selectedSessionLoadError: sessionData.selectedSessionView?.loadError,
+    selectedSessionLoadError: "",
     sessionListLoadError: sessionData.sessionList.loadError,
     sessions: toolbar.sessions || []
   }));
@@ -191,7 +180,7 @@ function useVibe64SessionPanel(props, emit) {
 
   watch(sessionData.sessions, (sessions = []) => {
     if (sessionLoadError.value) {
-      if (selection.selectedSession) {
+      if (selection.selectedSessionId) {
         ensureRuntimeHost(selection.selectedSessionId);
       }
       return;
@@ -203,16 +192,16 @@ function useVibe64SessionPanel(props, emit) {
         delete runtimeStateBySessionId[sessionId];
       }
     }
-    if (selection.selectedSession) {
+    if (selection.selectedSessionId) {
       ensureRuntimeHost(selection.selectedSessionId);
     }
   });
 
   watch(() => [
     selection.selectedSessionId,
-    selection.selectedSession ? "selected" : "empty"
+    selection.selectedSessionId ? "selected" : "empty"
   ].join("|"), () => {
-    if (selection.selectedSession) {
+    if (selection.selectedSessionId) {
       ensureRuntimeHost(selection.selectedSessionId);
     }
   }, {

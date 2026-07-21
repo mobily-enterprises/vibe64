@@ -122,7 +122,7 @@ describe("Vibe64 session runtime host", () => {
         },
         sessionId: "session-a"
       }
-    })).toBe(false);
+    })).toBe(true);
 
     expect(runtimeHostAgentWorking({
       active: true,

@@ -1,6 +1,9 @@
-import { computed, ref, watch } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import {
+  useRealtimeEvent,
+  useRealtimeSocket
+} from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
@@ -370,6 +373,19 @@ function useVibe64ConversationLog({
       }
     }
   }
+
+  const realtimeSocket = useRealtimeSocket({ required: false });
+  const reconcileConversationAfterRealtimeConnect = () => {
+    if (enabled.value) {
+      void reloadConversationLog().catch(() => {
+        // The resource retains the failed reconciliation for the mounted session UI.
+      });
+    }
+  };
+  realtimeSocket.on("connect", reconcileConversationAfterRealtimeConnect);
+  onScopeDispose(() => {
+    realtimeSocket.off("connect", reconcileConversationAfterRealtimeConnect);
+  });
 
   function applyRealtimeConversationLogPatch(payload = {}) {
     const patch = conversationLogRealtimePatch(payload);

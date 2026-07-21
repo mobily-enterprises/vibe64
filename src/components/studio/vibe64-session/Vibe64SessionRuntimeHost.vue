@@ -19,7 +19,7 @@
       :page="guardedPage"
       :project-context="props.projectContext"
       :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
-      :refresh-session-data="sessionData.refreshSessionData"
+      :refresh-session-data="refreshSessionData"
       :report-preview="reportPreview"
       :review="review"
       :rewind-busy="Boolean(timeline.rewindCommand?.isRunning)"
@@ -160,6 +160,7 @@ const {
   headlessCommandTerminal,
   humanInputResponsePreview,
   interruptAgentTurn,
+  refreshSessionData,
   reportPreview,
   requestAgentTask,
   review,

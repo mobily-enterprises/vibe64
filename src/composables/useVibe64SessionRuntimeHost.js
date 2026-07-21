@@ -15,20 +15,25 @@ import {
   useVibe64ConversationLog
 } from "@/composables/useVibe64ConversationLog.js";
 import {
-  sessionRecordHasActiveAgentWork
-} from "@/composables/useVibe64SessionData.js";
+  useVibe64MountedSessionData
+} from "@/composables/useVibe64MountedSessionData.js";
 import {
   useVibe64SessionWorkflow
 } from "@/composables/useVibe64SessionWorkflow.js";
+import {
+  useVibe64SessionViewSync
+} from "@/composables/useVibe64SessionViewSync.js";
 import {
   useVibe64ReportPreview
 } from "@/composables/useVibe64ReportPreview.js";
 import {
   vibe64SessionFacts,
   buildVibe64AutopilotNavigationSteps,
-  buildVibe64TimelineSteps,
-  enrichVibe64SessionForDisplay
+  buildVibe64TimelineSteps
 } from "@/lib/vibe64SessionPanelModel.js";
+import {
+  sessionRecordHasActiveAgentWork
+} from "@/lib/vibe64MountedSessionState.js";
 import {
   vibe64SessionDisplayTitle,
   vibe64SessionStatusColor,
@@ -128,10 +133,9 @@ function runtimeHostToolbarSessions({
 }
 
 function runtimeHostAgentWorking({
-  active = false,
   selectedSession = null
 } = {}) {
-  return Boolean(active && sessionRecordHasActiveAgentWork(selectedSession));
+  return sessionRecordHasActiveAgentWork(selectedSession);
 }
 
 function runtimeHostAutopilotPageBusy({
@@ -229,25 +233,16 @@ function agentTurnControlPayloadFromContext(context = {}) {
 function useVibe64SessionRuntimeHost(props, emit) {
   const selectedSessionId = computed(() => props.sessionId);
   const selectedListSession = computed(() => {
-    if (typeof props.sessionData.sessionForId === "function") {
-      return props.sessionData.sessionForId(props.sessionId);
-    }
     const sessions = unref(props.sessionData.sessions) || [];
     return sessions.find((session) => session.sessionId === props.sessionId) || null;
   });
-  const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedListSession.value));
-  const selectedSessionDetailState = computed(() => {
-    const state = readRefOrGetterValue(props.sessionData.selectedSessionDetailState) || {};
-    return String(state?.sessionId || "") === props.sessionId
-      ? state
-      : {
-          label: "",
-          ready: Boolean(selectedSession.value?.sessionId),
-          sessionId: props.sessionId,
-          state: selectedSession.value?.sessionId ? "detailReady" : "summaryOnly",
-          suppressPassiveComposer: !selectedSession.value?.sessionId
-        };
+  const mountedSessionData = useVibe64MountedSessionData({
+    sessionId: selectedSessionId,
+    sessionsApiPath: props.sessionData.sessionsApiPath,
+    summarySession: selectedListSession
   });
+  const selectedSession = mountedSessionData.session;
+  const selectedSessionDetailState = mountedSessionData.detailState;
   const selectedSessionTitle = computed(() => {
     return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
       `Session ${props.sessionData.shortSessionId(props.sessionId)}`;
@@ -265,14 +260,18 @@ function useVibe64SessionRuntimeHost(props, emit) {
     toolbarSessions.value.find((session) => session?.sessionId === props.sessionId)?.sourceSafety || {}
   ));
   const sessionScopedData = {
+    acceptSessionResponse: mountedSessionData.acceptSessionResponse,
     canCreateSession: props.sessionData.canCreateSession,
     clearSelectedSession: props.sessionData.clearSelectedSession,
     createSessionCommand: props.sessionData.createSessionCommand,
     createSessionMode: props.sessionData.createSessionMode,
     createSessionTitle: props.sessionData.createSessionTitle,
     isSelectedSessionClosed,
-    pageLoading: props.sessionData.pageLoading,
-    refreshSessionData: props.sessionData.refreshSessionData,
+    pageLoading: computed(() => Boolean(
+      selectedSessionDetailState.value.loading ||
+      readRefOrGetterValue(props.sessionData.pageLoading)
+    )),
+    refreshSessionData,
     selectSessionId: props.sessionData.selectSessionId,
     selectedSession,
     selectedSessionDetailState,
@@ -289,6 +288,13 @@ function useVibe64SessionRuntimeHost(props, emit) {
     timelineSteps,
     workflowDefinitions: props.sessionData.workflowDefinitions
   };
+
+  useVibe64SessionViewSync({
+    enabled: computed(() => Boolean(props.active && selectedSessionId.value)),
+    sessionId: selectedSessionId,
+    sessionsApiPath: props.sessionData.sessionsApiPath,
+    viewState: computed(() => selectedSession.value?.uiSync?.viewState || null)
+  });
 
   const sessionWorkflow = useVibe64SessionWorkflow({
     sessionData: sessionScopedData
@@ -346,7 +352,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     session: selectedSession
   }));
   const conversationLog = proxyRefs(useVibe64ConversationLog({
-    active: computed(() => Boolean(props.active)),
+    active: computed(() => Boolean(selectedSessionId.value)),
     session: selectedSession
   }));
   const review = proxyRefs(sessionWorkflow.review);
@@ -416,7 +422,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     ""
   ));
   const serverSaysAgentIsWorking = computed(() => runtimeHostAgentWorking({
-    active: props.active,
     selectedSession: selectedSession.value
   }));
   const autopilotAgentWorkingVisible = computed(() => Boolean(
@@ -427,7 +432,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     autopilotAgentWorkingVisible.value
   ));
   const autopilotToolbarSessions = computed(() => runtimeHostToolbarSessions({
-    activeAgentThinking: autopilotInteractionLocked.value,
+    activeAgentThinking: serverSaysAgentIsWorking.value,
     selectedSession: selectedSession.value,
     selectedSessionId: selectedSessionId.value,
     sessions: toolbarSessions.value
@@ -527,6 +532,19 @@ function useVibe64SessionRuntimeHost(props, emit) {
     emit("project-attention");
   }
 
+  async function refreshSessionData(options = {}) {
+    const includeList = typeof options === "object" && options?.includeList === true;
+    const localRefresh = mountedSessionData.refresh(options);
+    if (!includeList) {
+      return localRefresh;
+    }
+    const [sessionResult, listResult] = await Promise.all([
+      localRefresh.catch(() => null),
+      props.sessionData.refreshSessionData(options)
+    ]);
+    return [sessionResult, listResult];
+  }
+
   function setAutopilotBusy(busy) {
     autopilotBusy.value = Boolean(busy);
   }
@@ -534,7 +552,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   function emitBusy() {
     emit("busy-change", {
       busy: interactionBusy.value,
-      agentThinking: autopilotInteractionLocked.value,
+      agentThinking: serverSaysAgentIsWorking.value,
       sessionId: props.sessionId
     });
   }
@@ -577,7 +595,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         ...control,
         sessionId
       });
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       const interrupted = result?.ok !== false;
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt", {
         interrupted,
@@ -586,7 +604,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       });
       return interrupted;
     } catch (error) {
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt.error", {
         error: String(error?.message || error || "Assistant interrupt failed."),
         reason: String(control.reason || "user_interrupt"),
@@ -621,7 +639,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         method: "POST",
         signal: AbortSignal.timeout(AGENT_MESSAGE_ACCEPT_TIMEOUT_MS)
       });
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       const cancelled = Boolean(result?.cancelled === true && result?.ok !== false);
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.cancel", {
         cancelled,
@@ -630,7 +648,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       });
       return cancelled;
     } catch (error) {
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.cancel.error", {
         error: String(error?.message || error || "Assistant message cancellation failed."),
         messageId,
@@ -660,7 +678,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         method: "POST",
         signal: AbortSignal.timeout(AGENT_TASK_ACCEPT_TIMEOUT_MS)
       });
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       if (result?.ok === false) {
         emit("page-error-change", {
           error: String(result.error || "Focused task request failed."),
@@ -674,7 +692,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       });
       return true;
     } catch (error) {
-      await props.sessionData.refreshSessionData().catch(() => null);
+      await refreshSessionData().catch(() => null);
       const message = String(error?.message || error || "Focused task request failed.");
       emit("page-error-change", {
         error: message,
@@ -720,7 +738,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
           method: "POST",
           signal: AbortSignal.timeout(AGENT_MESSAGE_ACCEPT_TIMEOUT_MS)
         });
-        void props.sessionData.refreshSessionData().catch(() => null);
+        void refreshSessionData().catch(() => null);
         const accepted = Boolean(result && result.ok !== false);
         vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage", {
           accepted,
@@ -730,7 +748,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         });
         return accepted;
       } catch (error) {
-        void props.sessionData.refreshSessionData().catch(() => null);
+        void refreshSessionData().catch(() => null);
         vibe64SessionDebugLog("client.sessionRuntimeHost.agentMessage.error", {
           error: String(error?.message || error || "Assistant message failed."),
           messageId: String(body.composerSubmissionId || ""),
@@ -752,9 +770,19 @@ function useVibe64SessionRuntimeHost(props, emit) {
 
   watch([
     interactionBusy,
-    autopilotInteractionLocked
+    autopilotInteractionLocked,
+    serverSaysAgentIsWorking
   ], emitBusy, {
     flush: "post"
+  });
+
+  watch(() => props.active, (active, previousActive) => {
+    if (active && previousActive === false) {
+      void mountedSessionData.refresh({
+        reason: "selected"
+      }).catch(() => null);
+      void conversationLog.reload().catch(() => null);
+    }
   });
 
   watch(() => [
@@ -823,7 +851,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       artifactReadinessVersion: version,
       sessionId
     });
-    void props.sessionData.refreshSessionData({
+    void refreshSessionData({
       reason: "artifact-readiness"
     });
   }, {
@@ -863,6 +891,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     humanInputResponsePreview,
     interruptAgentTurn,
     reportPreview,
+    refreshSessionData,
     review,
     selectedAgentTerminalId,
     selection,

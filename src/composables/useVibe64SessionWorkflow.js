@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, unref } from "vue";
 import { useVibe64SessionActions } from "@/composables/useVibe64SessionActions.js";
 import { useVibe64SessionClipboard } from "@/composables/useVibe64SessionClipboard.js";
 import { useVibe64SessionCommandTerminal } from "@/composables/useVibe64SessionCommandTerminal.js";
@@ -68,6 +68,7 @@ function useVibe64SessionWorkflow({
     pageLoading,
     refreshSessionData,
     selectedSession,
+    selectedSessionDetailState,
     selectedSessionId,
     selectedSessionTitle,
     selectSessionId,
@@ -155,7 +156,8 @@ function useVibe64SessionWorkflow({
   });
 
   const pageError = computed(() => {
-    return sessionList.loadError ||
+    return String(unref(selectedSessionDetailState)?.error || "") ||
+      sessionList.loadError ||
       commandMessage(createSessionCommand, "error") ||
       commandMessage(updateCurrentSessionCommand, "error") ||
       workflow.actions.error.value ||

@@ -1,25 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
-  agentTurnRealtimeOverlayFromPayload,
-  composerMenuProjectionFromRealtimePayload,
-  latestAgentTurnRealtimeOverlay,
-  rememberSessionComposerMenu,
-  rememberSessionDetailRecord,
-  selectedSessionShouldLoadComposerMenu,
-  sessionDetailRecordForId,
   sessionListRealtimeShouldRefresh,
-  sessionComposerMenuNeedsRefresh,
-  sessionRecordHasComposerMenuProjection,
-  sessionRecordHasActiveAgentWork,
-  sessionWithCachedComposerMenu,
-  sessionWithAgentTurnRealtimeOverlay,
-  selectedSessionRealtimeShouldRefresh,
-  selectedSessionDetailLoadState,
-  selectedSessionDetailRefreshReason,
   selectedSessionIdForCurrentAlias,
-  selectedSessionRecord,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
+import {
+  agentTurnRealtimeOverlayFromPayload,
+  latestAgentTurnRealtimeOverlay,
+  sessionWithAgentTurnRealtimeOverlay
+} from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
+import {
+  composerMenuProjectionFromRealtimePayload,
+  rememberSessionComposerMenu,
+  selectedSessionShouldLoadComposerMenu,
+  sessionComposerMenuNeedsRefresh,
+  sessionRecordHasComposerMenuProjection,
+  sessionWithCachedComposerMenu
+} from "../../src/lib/vibe64SessionComposerMenuProjection.js";
+import {
+  latestSessionDetailRecord,
+  mountedSessionDetailLoadState,
+  mountedSessionDetailRefreshReason,
+  mountedSessionRealtimeShouldRefresh,
+  mountedSessionRecord,
+  sessionRecordHasActiveAgentWork
+} from "../../src/lib/vibe64MountedSessionState.js";
 import {
   createVibe64CurrentSessionPublisher
 } from "../../src/lib/vibe64CurrentSessionPublisher.js";
@@ -127,7 +132,7 @@ describe("current session alias synchronization", () => {
   });
 });
 
-describe("useVibe64SessionData selected session record", () => {
+describe("mounted Vibe64 session state", () => {
   it("prefers the selected detail record over the shallow list summary", () => {
     const detailRecord = {
       actions: [
@@ -149,7 +154,7 @@ describe("useVibe64SessionData selected session record", () => {
       sessionId: "session-1"
     };
 
-    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+    expect(mountedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
   it("uses the list summary when it is newer than the selected detail record", () => {
@@ -186,7 +191,7 @@ describe("useVibe64SessionData selected session record", () => {
       }
     };
 
-    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(listSummary);
+    expect(mountedSessionRecord(detailRecord, listSummary, "session-1")).toBe(listSummary);
   });
 
   it("keeps selected detail over a newer list summary with only stepMachine projection", () => {
@@ -225,8 +230,8 @@ describe("useVibe64SessionData selected session record", () => {
       }
     };
 
-    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
-    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
+    expect(mountedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+    expect(mountedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
       .toBe("newer_summary_without_runtime_projection");
   });
 
@@ -260,7 +265,7 @@ describe("useVibe64SessionData selected session record", () => {
       sessionId: "session-1"
     };
 
-    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+    expect(mountedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
   it("does not refresh selected detail when the workflow has no composer menu", () => {
@@ -280,35 +285,8 @@ describe("useVibe64SessionData selected session record", () => {
       sessionId: "session-1"
     };
 
-    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
+    expect(mountedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
       .toBe("");
-  });
-
-  it("refreshes selected detail when list projection advertises a missing composer menu", () => {
-    const detailRecord = {
-      currentStep: "maintenance_conversation",
-      presentation: {
-        screen: {
-          kind: "conversation"
-        }
-      },
-      revision: 8,
-      sessionId: "session-1"
-    };
-    const listSummary = {
-      currentStep: "maintenance_conversation",
-      presentation: {
-        composerMenu: {
-          itemCount: 1,
-          signature: "menu-signature"
-        }
-      },
-      revision: 8,
-      sessionId: "session-1"
-    };
-
-    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
-      .toBe("detail_missing_composer_menu");
   });
 
   it("treats composer menu signatures as a complete menu projection", () => {
@@ -323,11 +301,11 @@ describe("useVibe64SessionData selected session record", () => {
   });
 
   it("does not suppress the passive composer after selected detail loading has stopped", () => {
-    expect(selectedSessionDetailLoadState({
+    expect(mountedSessionDetailLoadState({
       listSession: {
         sessionId: "session-1"
       },
-      selectedSessionId: "session-1"
+      sessionId: "session-1"
     })).toMatchObject({
       label: "Session controls could not load.",
       loading: false,
@@ -336,7 +314,7 @@ describe("useVibe64SessionData selected session record", () => {
       suppressPassiveComposer: false
     });
 
-    expect(selectedSessionDetailLoadState({
+    expect(mountedSessionDetailLoadState({
       detailSession: {
         presentation: {
           screen: {
@@ -349,7 +327,7 @@ describe("useVibe64SessionData selected session record", () => {
       listSession: {
         sessionId: "session-1"
       },
-      selectedSessionId: "session-1"
+      sessionId: "session-1"
     })).toMatchObject({
       label: "",
       loading: false,
@@ -359,12 +337,12 @@ describe("useVibe64SessionData selected session record", () => {
       suppressPassiveComposer: false
     });
 
-    expect(selectedSessionDetailLoadState({
+    expect(mountedSessionDetailLoadState({
       fetching: true,
       listSession: {
         sessionId: "session-1"
       },
-      selectedSessionId: "session-1"
+      sessionId: "session-1"
     })).toMatchObject({
       label: "Loading session controls...",
       loading: true,
@@ -546,7 +524,7 @@ describe("useVibe64SessionData selected session record", () => {
       sessionId: "session-1"
     };
 
-    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+    expect(mountedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
   it("uses provider and durable message truth instead of stale generic agent runs", () => {
@@ -589,60 +567,14 @@ describe("useVibe64SessionData selected session record", () => {
     })).toBe(false);
   });
 
-  it("restores cached active assistant detail after switching sessions", () => {
-    const detailCache = {};
-    const activeDetailRecord = {
-      agentSession: {
-        turn: {
-          active: true
-        }
-      },
-      presentation: {
-        prompt: {
-          state: "waiting_for_agent"
-        }
-      },
-      revision: 8,
-      sessionId: "session-1",
-      stepMachine: {
-        status: "awaiting_agent_result"
-      }
-    };
-    const otherLiveDetailRecord = {
-      presentation: {
-        screen: {
-          kind: "conversation"
-        }
-      },
-      revision: 11,
-      sessionId: "session-2"
-    };
-    const listSummary = {
-      currentStep: "plan_and_execute",
-      revision: 9,
-      sessionId: "session-1"
-    };
-
-    expect(rememberSessionDetailRecord(detailCache, activeDetailRecord)).toBe(true);
-
-    const cachedDetailRecord = sessionDetailRecordForId(
-      detailCache,
-      "session-1",
-      otherLiveDetailRecord
-    );
-
-    expect(cachedDetailRecord).toBe(activeDetailRecord);
-    expect(selectedSessionRecord(cachedDetailRecord, listSummary, "session-1")).toBe(activeDetailRecord);
-  });
-
   it("uses the list summary while the selected detail record is unavailable", () => {
     const listSummary = {
       currentStep: "step_c",
       sessionId: "session-1"
     };
 
-    expect(selectedSessionRecord(null, listSummary, "session-1")).toBe(listSummary);
-    expect(selectedSessionRecord({
+    expect(mountedSessionRecord(null, listSummary, "session-1")).toBe(listSummary);
+    expect(mountedSessionRecord({
       ok: false,
       sessionId: "session-1"
     }, listSummary, "session-1")).toBe(listSummary);
@@ -817,28 +749,28 @@ describe("useVibe64SessionData selected session record", () => {
   });
 
   it("does not refresh selected session detail for launch-target-only session events", () => {
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "launch-target-ready",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(false);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "launch-target-stopped",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(false);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "codex-app-server-running",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(false);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "codex-app-server-ready",
         sessionId: "session-1"
@@ -857,7 +789,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-context-replaced",
       "codex-prompt-injected"
     ]) {
-      expect(selectedSessionRealtimeShouldRefresh({
+      expect(mountedSessionRealtimeShouldRefresh({
         payload: {
           reason,
           sessionId: "session-1"
@@ -865,28 +797,28 @@ describe("useVibe64SessionData selected session record", () => {
       }, "session-1")).toBe(false);
     }
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "agent-terminal-started",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "session-action-run",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "session-intent-run",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "codex-app-server-turn-idle",
         sessionId: "session-1"
@@ -900,7 +832,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-turn-idle",
       "codex-app-server-turn-state"
     ]) {
-      expect(selectedSessionRealtimeShouldRefresh({
+      expect(mountedSessionRealtimeShouldRefresh({
         payload: {
           reason,
           sessionId: "session-1"
@@ -908,27 +840,27 @@ describe("useVibe64SessionData selected session record", () => {
       }, "session-1")).toBe(false);
     }
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "codex-app-server-agent-result",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "codex-app-server-agent-result-provider-failed",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
 
-    expect(selectedSessionRealtimeShouldRefresh({
+    expect(mountedSessionRealtimeShouldRefresh({
       payload: {
         reason: "agent-terminal-started",
         sessionId: "session-2"
@@ -997,6 +929,82 @@ describe("useVibe64SessionData selected session record", () => {
       },
       sessionId: "session-1"
     }, "session-1")).toBe(null);
+  });
+
+  it("accepts assistant turn completion events only for the host's fixed session", () => {
+    const payload = {
+      agentRun: {
+        id: "codex_app_server",
+        state: "completed"
+      },
+      agentSession: {
+        turn: {
+          active: false,
+          id: "turn-2",
+          state: "idle"
+        }
+      },
+      reason: "codex-app-server-turn-idle",
+      revision: 14,
+      sessionId: "session-2"
+    };
+
+    expect(agentTurnRealtimeOverlayFromPayload(payload, "session-2")).toMatchObject({
+      active: false,
+      revision: 14,
+      sessionId: "session-2"
+    });
+    expect(agentTurnRealtimeOverlayFromPayload(payload, "session-1")).toBe(null);
+  });
+
+  it("repairs a missed completion event from a newer authoritative session refresh", () => {
+    const activeSnapshot = {
+      agentSession: {
+        turn: {
+          active: true,
+          id: "turn-1",
+          state: "active"
+        }
+      },
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 12,
+      sessionId: "session-1"
+    };
+    const idleSnapshot = {
+      agentSession: {
+        turn: {
+          active: false,
+          id: "turn-1",
+          state: "idle"
+        }
+      },
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 13,
+      sessionId: "session-1"
+    };
+    const reconciledSnapshot = latestSessionDetailRecord(
+      activeSnapshot,
+      idleSnapshot,
+      "session-1"
+    );
+
+    expect(reconciledSnapshot).toMatchObject({
+      agentSession: {
+        turn: {
+          active: false,
+          state: "idle"
+        }
+      },
+      revision: 13
+    });
   });
 
   it("orders assistant turn events and canonical session snapshots by revision", () => {
