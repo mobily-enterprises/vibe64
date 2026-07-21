@@ -300,6 +300,9 @@ test("session briefing keeps the primary preview canonical while permitting expl
   assert.match(briefing, /automatically recovers a killed preview or browser worker/u);
   assert.match(briefing, /Codex's internal managed browser has its own application session/u);
   assert.match(briefing, /separate from the user's visible Preview/u);
+  assert.match(briefing, /For authenticated verification, first run `vibe64-preview browser identity you`/u);
+  assert.match(briefing, /immediately retry with the authorized explicit application identity/u);
+  assert.match(briefing, /report an authentication blocker only if both attempts fail/u);
   assert.match(briefing, /When reporting authentication state, always name the browser explicitly/u);
   assert.match(briefing, /vibe64-playwright test/u);
   assert.match(briefing, /exact managed browser version/u);
