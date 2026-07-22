@@ -42,6 +42,22 @@ test("retains explicit compatibility commands and parses read-only status", () =
   const status = parseArguments(["status", "src/greet.js"]);
   assert.equal(status.command, "status");
   assert.equal(status.options.path, "src/greet.js");
+  assert.equal(parseArguments(["author-prompt"]).command, "author-prompt");
+});
+
+test("prints the Program-authoring prompt without requiring a project", async () => {
+  const result = await runProgSyncCommand("node", [
+    CLI_PATH,
+    "author-prompt"
+  ], {
+    allowedRoots: [PACKAGE_ROOT],
+    cwd: PACKAGE_ROOT,
+    outputEncoding: "base64"
+  });
+
+  assert.match(result.stdout, /Every meaningful value must come from/u);
+  assert.match(result.stdout, /use a numbered list/u);
+  assert.equal(result.stderr, "");
 });
 
 test("rejects missing option values and incompatible targets", () => {

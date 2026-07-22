@@ -76,6 +76,13 @@ PROGRAM FORMAT
 - State exact public inputs, results, local selection and transformation,
   meaningful conditions, ordering, repetition, mutation, outside calls and
   arguments, used results, effects, failures, and important reasons.
+- Every meaningful value must come from a named input, an exact field of a
+  declared complex type, a previous result, a stated literal, module-owned
+  state, or an exact outside dependency. Express field ownership in readable,
+  language-neutral terms rather than target member-access syntax.
+- Use a numbered list when an orchestration function has several meaningful
+  ordered transformations. Each point follows semantic data from its source to
+  its use; it must not expose private helpers or target mechanics.
 - Do not produce line-by-line pseudocode.
 - Shared complex object shapes use reachable definitions from `types.md`.
   Primitive values and ordinary identifiers do not become shared types merely
@@ -119,6 +126,12 @@ behavior, data flow, outside calls, effects, meaningful failures, constraints,
 or important reasons changed, make the smallest corresponding Program patch.
 Add or refine a shared complex type only when that changed public boundary
 requires it.
+
+An implementation repair that makes behavior conform more accurately to
+meaning already stated by Program is realization-only. For example,
+floating-point compensation used to implement an already-declared rounding
+rule remains solely in implementation; do not add the compensation mechanism
+to Program.
 
 RECONCILE_BOTH:
 Preserve compatible work from both current files. If the implementation

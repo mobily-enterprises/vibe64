@@ -31,4 +31,5 @@ export {
   receiptPathForPair
 } from "./checkpoint.js";
 export { createCodexExecRunner } from "./codexRunner.js";
+export { readProgramAuthorPrompt } from "./prompts.js";
 export { ProgSyncError, asDiagnostic } from "./errors.js";

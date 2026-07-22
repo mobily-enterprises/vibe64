@@ -603,6 +603,15 @@ function collectJavaScriptStructure(ast) {
   }
   const ambientNames = new Set();
   const ambientUses = new Map();
+  const recordAmbientUse = ({ base, called = false, member = null }) => {
+    const key = member ? `${base}.${member}` : base;
+    const existing = ambientUses.get(key);
+    ambientUses.set(key, {
+      base,
+      called: called || Boolean(existing?.called),
+      member
+    });
+  };
   walkAst(ast.program, (node, parent) => {
     if (
       node.type === "Identifier" &&
@@ -611,6 +620,26 @@ function collectJavaScriptStructure(ast) {
     ) {
       if (!identifierIsBinding(node, parent) && !identifierIsPropertyName(node, parent)) {
         ambientNames.add(node.name);
+        if (
+          !(
+            (parent?.type === "MemberExpression" ||
+              parent?.type === "OptionalMemberExpression") &&
+            parent.object === node
+          )
+        ) {
+          recordAmbientUse({ base: node.name });
+        }
+      }
+    }
+    if (
+      (node.type === "MemberExpression" || node.type === "OptionalMemberExpression") &&
+      node.object?.type === "Identifier" &&
+      AMBIENT_NAMES.has(node.object.name) &&
+      !shadowedAmbientNames.has(node.object.name)
+    ) {
+      const member = identifierName(node.property);
+      if (member) {
+        recordAmbientUse({ base: node.object.name, member });
       }
     }
     if (
@@ -634,10 +663,9 @@ function collectJavaScriptStructure(ast) {
       AMBIENT_NAMES.has(callee.name) &&
       !shadowedAmbientNames.has(callee.name)
     ) {
-      ambientUses.set(callee.name, {
+      recordAmbientUse({
         base: callee.name,
-        called: true,
-        member: null
+        called: true
       });
     }
     if (
@@ -648,7 +676,7 @@ function collectJavaScriptStructure(ast) {
     ) {
       const member = identifierName(callee.property);
       if (member) {
-        ambientUses.set(`${callee.object.name}.${member}`, {
+        recordAmbientUse({
           base: callee.object.name,
           called: true,
           member

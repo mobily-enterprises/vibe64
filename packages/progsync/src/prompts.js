@@ -40,6 +40,10 @@ async function composeAtomicPrompt({ allowedPaths, capsule, mode, target }) {
     `END UNTRUSTED PROGSYNC CAPSULE ${capsuleMarker}\n`;
 }
 
+async function readProgramAuthorPrompt() {
+  return readPrompt("program-author.txt");
+}
+
 async function promptFingerprint(target) {
   if (!target?.prompt) {
     throw new ProgSyncError(
@@ -68,5 +72,6 @@ function synchronizerSchemaPath() {
 export {
   composeAtomicPrompt,
   promptFingerprint,
+  readProgramAuthorPrompt,
   synchronizerSchemaPath
 };

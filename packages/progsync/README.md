@@ -20,6 +20,7 @@ npm run progsync -- compile program/src/lib/clipboard.js.md
 npm run progsync -- sync src/lib/clipboard.js
 npm run progsync -- sync --changed
 npm run progsync -- check
+npm run progsync -- author-prompt
 ```
 
 A bare Program or implementation path is the normal command. ProgSync resolves
@@ -36,6 +37,10 @@ while removing orphaned per-file projections, without invoking AI. It does not
 build the project or prove behavioral
 idempotence; those remain project-verification responsibilities.
 
+`author-prompt` prints the strict default Program-authoring prompt directly to
+stdout. It requires no project or Git repository, performs no writes, and can
+be composed with any project-aware agent runner.
+
 ## Library
 
 The package exports:
@@ -47,6 +52,7 @@ The package exports:
 - `syncChanged()`
 - `checkProgram()`
 - Program path, parser, validation, and projection functions
+- `readProgramAuthorPrompt()` for the strict default project-programming prompt
 - `createCodexExecRunner()` for non-interactive Codex execution
 
 Every project operation requires an explicit `projectRoot`. Library callers can
@@ -82,6 +88,18 @@ providers such as `types.md` and root libraries. It also schedules modules that
 consume changed retained assets and modules whose retained `package.json`
 context changed. City Explorer integration is still deferred; the materialized
 projections are its intended input.
+
+Mass discovery respects Git's standard ignore rules. Runtime reports, build
+output, caches, and any other non-source tree containing supported extensions
+must be listed in `.gitignore` or kept outside the project source set. A common
+prototype setup ignores `.program/` and the application's runtime `output/`
+directory.
+
+The strict default prompt for a project-aware AI that authors Program is
+`prompts/program-author.txt`. It is distinct from the atomic synchronization
+prompt. A proposed future `progsync doctor` command will apply deterministic
+checks followed by isolated, read-only semantic review; it is specified but not
+implemented in this prototype.
 
 The Codex runner receives a complete capsule in an ephemeral invocation, with
 shell, web search, connectors, and collaboration disabled. Codex edits only a

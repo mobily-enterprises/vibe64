@@ -9,6 +9,7 @@ import {
   syncFile,
   statusFile
 } from "./service.js";
+import { readProgramAuthorPrompt } from "./prompts.js";
 
 const HELP = `ProgSync keeps Program and managed implementation synchronized.
 
@@ -20,6 +21,7 @@ Usage:
   progsync sync <program-or-implementation> [--dry-run]
   progsync sync --changed [--dry-run]
   progsync check
+  progsync author-prompt
 
 Options:
   --project-root <path>  Project root (defaults to current directory)
@@ -30,7 +32,15 @@ Options:
   --help                 Show this help
 `;
 
-const COMMANDS = new Set(["check", "compile", "help", "import", "status", "sync"]);
+const COMMANDS = new Set([
+  "author-prompt",
+  "check",
+  "compile",
+  "help",
+  "import",
+  "status",
+  "sync"
+]);
 
 function optionValue(option, args) {
   const value = args.shift();
@@ -56,6 +66,14 @@ function validateCommandOptions(command, options) {
   if (command === "help") {
     rejectOption(Boolean(options.path), "a path", command);
     rejectOption(options.changed, "--changed", command);
+    return;
+  }
+  if (command === "author-prompt") {
+    rejectOption(Boolean(options.path), "a path", command);
+    rejectOption(options.changed, "--changed", command);
+    rejectOption(options.dryRun, "--dry-run", command);
+    rejectOption(options.write, "--write", command);
+    rejectOption(Boolean(options.base), "--base", command);
     return;
   }
   if (command === "check") {
@@ -246,6 +264,13 @@ async function runCli(argv = process.argv.slice(2)) {
       process.stdout.write(HELP);
       return 0;
     }
+    if (command === "author-prompt") {
+      const prompt = await readProgramAuthorPrompt();
+      process.stdout.write(options.json
+        ? `${JSON.stringify({ prompt }, null, 2)}\n`
+        : prompt);
+      return 0;
+    }
     const shared = {
       base: options.base,
       onEvent: eventReporter(options.json),
@@ -310,7 +335,11 @@ async function runCli(argv = process.argv.slice(2)) {
       process.stderr.write(`ProgSync error [${diagnostic.code}]: ${diagnostic.message}\n`);
       if (diagnostic.details?.diagnostics) {
         for (const item of diagnostic.details.diagnostics) {
-          process.stderr.write(`- line ${item.line || "?"}: ${item.message}\n`);
+          if (typeof item === "string") {
+            process.stderr.write(`- ${item}\n`);
+          } else {
+            process.stderr.write(`- line ${item.line || "?"}: ${item.message || item.code}\n`);
+          }
         }
       }
     }

@@ -50,6 +50,22 @@ exports.stop = async function stop(reason) { return reason; };
   );
 });
 
+test("extracts ambient platform data as well as called operations", async () => {
+  const facts = await extractSourceFacts({
+    implementationPath: "src/command.js",
+    projectRoot: process.cwd(),
+    source: `export const argumentsFromRuntime = process.argv.slice(2);
+console.error("started");
+`,
+    targetKind: "javascript"
+  });
+
+  assert.deepEqual(facts.ambientUses, [
+    { base: "process", called: false, member: "argv" },
+    { base: "console", called: true, member: "error" }
+  ]);
+});
+
 test("extracts nested CommonJS imports and reports ambiguous shadowing", async () => {
   const nestedRequire = await extractSourceFacts({
     implementationPath: "src/module.js",

@@ -427,12 +427,12 @@ The file has one `## Uses` section containing any number of dependencies.
 ~~~markdown
 ## Uses
 
-- [`Alert`](@/types.md#alert)
 - [`notifySeverityThree()`](@/src/server/notifications/notifySeverityThree.js.md#notifyseveritythree)
 - [`Notification failure logging`](@/errors.md#notification-failure-logging)
 ~~~
 
-Each list item contains a Markdown link:
+`Uses` contains operational dependencies and exact outside data sources. Each
+list item contains a Markdown link:
 
 - the visible link text is the exact symbol or named concept used;
 - the link destination identifies its exact Program provider;
@@ -452,7 +452,7 @@ Explicit external dependencies use stable resolver schemes:
 
 ~~~markdown
 - [`parse()`](package:npm/yaml#parse)
-- [`Request`](platform:http#request)
+- [`process.argv`](platform:process#argv)
 - [`Application logo`](asset:src/assets/application-logo.svg)
 ~~~
 
@@ -473,9 +473,10 @@ When a module uses nothing outside itself:
 - Nothing outside this file.
 ~~~
 
-Primitive language concepts do not appear in `Uses`. Complex shared types do.
-Target-only implementation helpers need not appear unless they are themselves
-part of program meaning.
+Primitive language concepts and shared types do not appear in `Uses`. Complex
+types use the implicit `[Type name]` notation described below. Target-only
+implementation helpers need not appear unless they are themselves part of
+program meaning.
 
 A file never creates a second `Uses` section. Additional dependencies are added
 to the same list.
@@ -507,11 +508,23 @@ part of the operation's meaning.
 
 The opening signature is one complete sentence containing `returns` before its
 first full stop. Behavior belongs in following sentences. A shared type is
-linked canonically as ``[`Type name`](@/types.md#type-name)``; source-to-Program
-translation never substitutes a filesystem or relative path for that identity.
+written as `[Type name]`, which resolves case-sensitively and implicitly through
+`program/types.md`. The authored module never repeats `@/types.md` paths.
 
 The remainder supplies observable behavior, semantic dependencies, effects,
 failure behavior, and important reasons.
+
+Every meaningful value must have a visible source: a named input, an exact
+field of a declared complex type, a previous result, a stated literal,
+module-owned state, or an exact outside dependency. Program describes field
+ownership in readable terms rather than target syntax such as
+`options.booksPath`.
+
+Short operations should remain compact prose. An orchestration operation with
+several meaningful ordered transformations should use a numbered list, with
+one point per semantic dataflow step. Such a list names meaningful inputs and
+results but still omits private helpers, loops, temporary data structures, and
+target mechanics.
 
 An exported non-callable value may be a bullet in `Provides` when it is part of
 the file's public semantic interface.
@@ -644,11 +657,10 @@ one. It belongs there only when its structure or rules carry meaningful shared
 semantics.
 
 Every complex value that crosses a Program module boundary must resolve to one
-definition: a provided type in `types.md`, a type supplied by an exact external
-interface, or a named platform type. Program modules reference that definition
-instead of repeating its fields. Private temporary object shapes do not enter
-the registry unless their structure becomes part of a public or cross-module
-contract.
+provided type in `types.md`. Program modules refer to it as `[Type name]`
+instead of repeating its fields or adding it to `Uses`. Private temporary
+object shapes do not enter the registry unless their structure becomes part of
+a public or cross-module contract.
 
 Example:
 
@@ -676,9 +688,12 @@ A `Notification` contains ...
 ~~~
 
 The context builder indexes `types.md` and normally supplies only the reachable
-definitions to each Atomic Synchronizer. A source-to-Program synchronizer that
-is allowed to add a missing public type receives the complete current registry
-so it can reuse names and preserve unrelated definitions.
+definitions to each Atomic Synchronizer. Type definitions may themselves use
+`[Type name]`; those references are followed transitively so a type's complete
+shape enters the capsule without supplying the entire registry. A
+source-to-Program synchronizer that is allowed to add a missing public type
+receives the complete current registry so it can reuse names and preserve
+unrelated definitions.
 
 ### 8.9 Program libraries
 
@@ -748,10 +763,6 @@ same notification more than once.
 
 ## Uses
 
-- [`Alert`](@/types.md#alert)
-- [`Job`](@/types.md#job)
-- [`Request`](platform:http#request)
-- [`Notification`](@/types.md#notification)
 - [`notifySeverityThree()`](@/src/server/notifications/notifySeverityThree.js.md#notifyseveritythree)
 - [`notificationExists()`](@/src/server/stores/alertEmails.js.md#notificationexists)
 - [`registerNotification()`](@/src/server/stores/alertEmails.js.md#registernotification)
@@ -761,15 +772,15 @@ same notification more than once.
 
 ### `dispatchSeverityThreeEmails()`
 
-The function takes `alerts`, a list of `Alert`; `jobs`, a list of
-`Job`; and `request`, the current `Request`. It returns no value.
+The function takes `alerts`, a list of [Alert]; `jobs`, a list of
+[Job]; and `request`, the current [Request]. It returns no value.
 
 For Severity 3 job alerts, it ignores alerts without an associated job,
 incomplete identifying information, duplicates in the current batch, and
 notifications already sent according to `notificationExists()`.
 
 It uses `notifySeverityThree()` to send the remaining notifications and records
-each returned `Notification` through `registerNotification()`.
+each returned [Notification] through `registerNotification()`.
 
 It follows `Notification failure logging` so that notification failures do not
 interrupt the caller.
@@ -803,11 +814,12 @@ Markdown structural parser recognizes:
 - the single level-one file title and preamble;
 - the reserved `Uses` and `Provides` level-two headings;
 - linked list entries beneath `Uses`;
+- implicit `[Type name]` references in prose;
 - level-three provided symbols beneath `Provides`;
 - exported class links listed beneath `Provides`;
 - level-two class headings beginning with `Class`;
 - public level-three methods beneath class headings;
-- link destinations to types, libraries, packages, assets, and Program modules.
+- link destinations to libraries, packages, assets, and Program modules.
 
 The prose beneath a symbol remains opaque to structural interpretation. Its
 exact text may be copied into descriptions, but only the synchronizer reasons
@@ -834,6 +846,7 @@ A minimal projection has this shape:
   "sourceHash": "sha256:...",
   "title": "Severity 3 email dispatch",
   "preamble": "Dispatches eligible Severity 3 job-alert notifications without sending the same notification more than once.",
+  "types": ["Alert", "Job", "Request", "Notification"],
   "provides": [
     {
       "id": "@/src/server/alertDispatcher.js.md#dispatchseveritythreeemails",
@@ -844,12 +857,6 @@ A minimal projection has this shape:
     }
   ],
   "uses": [
-    {
-      "symbol": "Alert",
-      "provider": "@/types.md#alert",
-      "kind": "type",
-      "source": { "line": 8 }
-    },
     {
       "symbol": "notifySeverityThree()",
       "provider": "@/src/server/notifications/notifySeverityThree.js.md#notifyseveritythree",
@@ -862,9 +869,9 @@ A minimal projection has this shape:
 ~~~
 
 The projection contains only Program and target paths, inferred target kind,
-source hash, title, preamble, provided and used symbols, relationship kinds,
-exact descriptions, stable identities, source locations, and structural
-diagnostics. It contains no implementation imports, private helpers,
+source hash, title, preamble, provided and used symbols, referenced type names,
+relationship kinds, exact descriptions, stable identities, source locations,
+and structural diagnostics. It contains no implementation imports, private helpers,
 synchronization history, previous files, verification results, or meaning
 absent from Program.
 
@@ -915,6 +922,7 @@ building:
 
 - `provides` supplies the building's outward-facing capabilities;
 - `uses` supplies semantic dependency edges;
+- `types` supplies separately filterable shared-type edges to `types.md`;
 - reverse edges identify consumers;
 - source locations navigate directly into Program;
 - descriptions explain a capability without reopening and interpreting
@@ -1332,8 +1340,8 @@ RESPONSIBILITIES
 - Edit Program, types.md, and Program libraries as required.
 - Preserve the canonical Markdown structure exactly.
 - Keep one level-one file title, one Uses section, and one Provides section.
-- Keep every semantic dependency as an exact Markdown link to the symbol that
-  provides it.
+- Keep every operational dependency and outside data source as an exact
+  Markdown link to the symbol that provides it. Types never appear in Uses.
 - Use `@/` root-anchored links for providers in this repository. Never emit
   depth-relative `../` Program links.
 - Keep standalone exported functions under Provides as level-three headings.
@@ -1342,6 +1350,16 @@ RESPONSIBILITIES
 - State exact public inputs, results, data movement, external operations,
   effects, meaningful conditions, ordering, repetition, mutation, concurrency,
   and failure behavior.
+- Give every meaningful value a visible source: a named input, a field of a
+  declared complex type, a previous result, a literal, module-owned state, or
+  an exact outside dependency. State field ownership in readable language,
+  not target member-access syntax.
+- Use a numbered list for a dense orchestration function, with one point per
+  meaningful ordered data transformation. Keep short functions as prose.
+- Write shared complex types as `[Type name]`; resolve them implicitly through
+  `program/types.md`, including transitive references between type definitions.
+- Do not label functions synchronous or asynchronous. State only meaningful
+  ordering and completion requirements.
 - Include important reasons when they preserve product, safety, consistency,
   operational, performance, or accessibility intent.
 - Put shared complex structures in types.md. Do not create shared entries for
@@ -1363,6 +1381,8 @@ DO NOT
   ceremony, or target syntax unless they have observable meaning;
 - invent a database, service, file, global, operation, component, or library;
 - call an ambient capability without adding an exact Uses reference;
+- leave the origin of command arguments, files, request data, stored data, or
+  other external input implicit;
 - use vague phrases such as "save appropriately", "handle errors", or "make it
   responsive" when materially different behaviors would satisfy them;
 - repeat a dependency's full behavior inside every caller;
@@ -1420,6 +1440,37 @@ REFERENCED PROGRAM LIBRARIES
 PROJECT EVIDENCE
 {{PROJECT_EVIDENCE}}
 ~~~
+
+The package ships the operational default form of this prompt as
+`packages/progsync/prompts/program-author.txt`. A host may add project context
+and vocabulary, but should not weaken its data-provenance, module-boundary, or
+canonical-format rules.
+
+### 16.1 Program doctor
+
+`progsync doctor <program-file>` is the proposed read-only quality gate for
+authored Program. It runs deterministic `check` rules first, then gives one
+Program module, its reachable types, exact used interfaces, and Program-author
+rules to an isolated semantic reviewer. It never reads managed implementation,
+because the question is whether Program is independently sufficient.
+
+The doctor reports, with source locations where possible:
+
+- values whose origin or destination is unclear;
+- outside operations or ambient data without exact Uses providers;
+- Uses entries that are types rather than operational dependencies;
+- unresolved, repeated, or unnecessary complex types;
+- implementation syntax or private decomposition leaking into Program;
+- materially ambiguous behavior or failure handling;
+- dense orchestration prose that would be clearer as ordered dataflow points;
+- point lists that descend into line-by-line implementation;
+- missing important reasons where an unusual rule would otherwise be lost.
+
+Deterministic structural failures are errors. English-quality findings are
+advisory diagnostics with evidence and a proposed correction, never claims of
+formal proof. The initial doctor does not edit files. A future explicit
+`--fix` mode, if added, must produce a reviewable Program-only proposal and run
+the doctor again rather than silently rewriting authored meaning.
 
 ## 17. Atomic Synchronizer base prompt
 
@@ -1554,6 +1605,9 @@ IMPLEMENTATION_TO_PROGRAM
   that states the implemented meaning.
 - Check the complete implementation against the resulting Program. Do not
   rewrite implementation that is already a correct realization.
+- Treat a repair that realizes meaning already stated in Program more
+  accurately as implementation-only. For example, floating-point compensation
+  used to satisfy an existing rounding rule does not belong in Program.
 
 RECONCILE_BOTH
 
@@ -2555,6 +2609,7 @@ progsync compile program/src/lib/clipboard.js.md
 progsync sync src/lib/clipboard.js
 progsync sync --changed
 progsync check
+progsync author-prompt
 ~~~
 
 - A bare Program or implementation path resolves the pair, inspects its private
@@ -2567,10 +2622,16 @@ progsync check
 - `sync --changed` derives candidate pairs from Git changes, then resolves each
   pair's accepted private checkpoint, adds the transitive consumers of changed
   Program providers, and synchronizes each pair independently.
+- `sync --changed` follows Git's standard ignore rules. Runtime output, build
+  output, caches, projections, and other non-source trees that use a supported
+  extension must be ignored or kept outside the project source set so mass
+  discovery cannot mistake them for missing Program counterparts.
 - `check` validates all Program structures and internal links and materializes
   missing or stale deterministic projections while removing orphaned per-file
   projections. It does not invoke AI or modify Program or managed
   implementation.
+- `author-prompt` prints the package's strict default Project Program Author
+  prompt to stdout without requiring a project or changing any state.
 
 During experimentation, writes are staged in an ignored temporary workspace,
 validated, and shown as pair-aware patches. Acceptance applies the staged
