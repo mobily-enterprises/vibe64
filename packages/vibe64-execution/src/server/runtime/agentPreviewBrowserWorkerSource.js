@@ -192,6 +192,7 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import process from "node:process";
 import { inflateSync } from "node:zlib";
 
@@ -492,16 +493,13 @@ async function ensureBrowser(url = "", {
   return statusPayload();
 }
 
-async function selectApplicationIdentity(input = {}) {
-  await ensureBrowser(input.previewUrl, {
-    instance: input.previewInstance
-  });
-  const grant = String(input.grant || "").trim();
+async function exchangeApplicationIdentity(browserContext, browserPage, grantValue = "") {
+  const grant = String(grantValue || "").trim();
   if (!grant) {
     throw new Error("A preview identity grant is required.");
   }
-  const response = await context.request.post(
-    new URL(identityControlPath, page.url()).toString(),
+  const response = await browserContext.request.post(
+    new URL(identityControlPath, browserPage.url()).toString(),
     {
       data: { grant },
       failOnStatusCode: false
@@ -514,16 +512,30 @@ async function selectApplicationIdentity(input = {}) {
     payload = {};
   }
   if (!response.ok() || payload?.ok === false) {
-    if (payload?.signedOut === true) {
+    const error = new Error(String(
+      payload?.error || "Preview identity exchange failed."
+    ));
+    error.code = String(payload?.code || "vibe64_preview_identity_exchange_failed");
+    error.signedOut = payload?.signedOut === true;
+    throw error;
+  }
+  return payload;
+}
+
+async function selectApplicationIdentity(input = {}) {
+  await ensureBrowser(input.previewUrl, {
+    instance: input.previewInstance
+  });
+  let payload;
+  try {
+    payload = await exchangeApplicationIdentity(context, page, input.grant);
+  } catch (error) {
+    if (error?.signedOut === true) {
       applicationIdentity = {
         mode: "guest"
       };
       await page.reload({ waitUntil: "load" }).catch(() => null);
     }
-    const error = new Error(String(
-      payload?.error || "Preview identity exchange failed."
-    ));
-    error.code = String(payload?.code || "vibe64_preview_identity_exchange_failed");
     throw error;
   }
   const requestedIdentity = input.requestedIdentity && typeof input.requestedIdentity === "object"
@@ -557,6 +569,45 @@ async function selectApplicationIdentity(input = {}) {
     identity: applicationIdentity,
     url: safeUrl(page.url())
   };
+}
+
+async function writePlaywrightStorageState(input = {}) {
+  const outputPath = outputPathFromInput(input);
+  if (!outputPath || !path.isAbsolute(outputPath)) {
+    throw new Error("Managed Playwright storage state requires an absolute output path.");
+  }
+  await ensureBrowser(input.previewUrl, {
+    instance: input.previewInstance
+  });
+  const storageContext = await browser.newContext();
+  try {
+    const storagePage = await storageContext.newPage();
+    await storagePage.goto(input.previewUrl, {
+      waitUntil: "load"
+    });
+    await exchangeApplicationIdentity(storageContext, storagePage, input.grant);
+    const storageState = await storageContext.storageState();
+    try {
+      await writeFile(outputPath, JSON.stringify(storageState) + "\\n", {
+        flag: "wx",
+        mode: 0o600
+      });
+    } catch (error) {
+      if (error?.code === "EEXIST") {
+        const immutablePathError = new Error(
+          "Managed Playwright storage-state path already exists: " + outputPath
+        );
+        immutablePathError.code = "vibe64_managed_playwright_storage_state_exists";
+        throw immutablePathError;
+      }
+      throw error;
+    }
+    return {
+      outputPath
+    };
+  } finally {
+    await storageContext.close().catch(() => null);
+  }
 }
 
 async function waitForScreenshotReady() {
@@ -650,6 +701,9 @@ async function runCommand(input = {}) {
   }
   if (command === "identity") {
     return selectApplicationIdentity(input);
+  }
+  if (command === "storage-state") {
+    return writePlaywrightStorageState(input);
   }
   if (command === "eval") {
     await ensureBrowser(input.previewUrl, {

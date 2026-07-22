@@ -34,7 +34,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "7";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "8";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
   "/agent-preview-command/health",
@@ -371,6 +371,11 @@ function previewStatusSummary(status = {}, {
   const browserUrl = normalizeText(openTarget.href || previewTarget.targetHref);
   const agentEndpoint = previewEndpoint(agentUrl);
   const browserEndpoint = previewEndpoint(browserUrl);
+  const identityTypes = (Array.isArray(status.previewIdentity?.identityTypes)
+    ? status.previewIdentity.identityTypes
+    : [])
+    .map(normalizeText)
+    .filter(Boolean);
   return {
     currentPage: previewCurrentPage(previewState, {
       agentUrl: agentEndpoint?.url
@@ -380,6 +385,7 @@ function previewStatusSummary(status = {}, {
       agent: agentEndpoint,
       browser: browserEndpoint
     },
+    identityTypes,
     launchTargetId: normalizeText(lastLaunchTarget.id || activeMetadata.launchTargetId),
     ready: previewReady(status),
     stale: previewTarget.stale === true || normalizeText(previewTarget.recovery?.reason) === "server_source_changed",

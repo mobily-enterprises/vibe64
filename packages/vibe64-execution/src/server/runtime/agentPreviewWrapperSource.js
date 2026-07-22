@@ -141,12 +141,17 @@ async function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function screenshotOutputPath(args = []) {
+function requestedOutputPath(args = []) {
   const outputIndex = args.indexOf("--output");
   const outputEntry = args.find((arg) => String(arg || "").startsWith("--output="));
   const requested = outputIndex >= 0
     ? String(args[outputIndex + 1] || "").trim()
     : String(outputEntry || "").slice("--output=".length).trim();
+  return requested ? path.resolve(requested) : "";
+}
+
+function screenshotOutputPath(args = []) {
+  const requested = requestedOutputPath(args);
   const safeSessionId = String(sessionId || "session").replace(/[^A-Za-z0-9_.-]+/gu, "-");
   const timestamp = new Date().toISOString().replace(/[^0-9A-Za-z]+/gu, "-").replace(/-+$/u, "");
   const nonce = crypto.randomBytes(6).toString("hex");
@@ -581,6 +586,20 @@ try {
       printJson(await interactiveCommand("identity", {
         grant: authorization.grant,
         requestedIdentity: authorization.requestedIdentity
+      }, session));
+      process.exit(0);
+    }
+    if (browserCommand === "storage-state") {
+      const identity = String(browserArgs[0] || "").trim();
+      const outputPath = requestedOutputPath(browserArgs.slice(1));
+      if (!identity || !outputPath) {
+        fail("Managed Playwright storage state requires an identity and --output path.", 64);
+      }
+      const session = await previewSession();
+      const authorization = await authorizeBrowserIdentity(identity);
+      printJson(await interactiveCommand("storage-state", {
+        grant: authorization.grant,
+        outputPath
       }, session));
       process.exit(0);
     }

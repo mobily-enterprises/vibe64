@@ -140,6 +140,7 @@ exports.chromium = {
       async newContext() {
         let selectedIdentity = null;
         const context = {
+          async close() {},
           request: {
             async post(url, options) {
               if (new URL(url).pathname !== identityControlPath) {
@@ -184,6 +185,22 @@ exports.chromium = {
             }
           },
           pages() { return [...pages]; },
+          async storageState() {
+            const identityValue = selectedIdentity?.email || selectedIdentity?.login || "";
+            return {
+              cookies: identityValue ? [{
+                domain: "preview.example.test",
+                expires: -1,
+                httpOnly: true,
+                name: "app_session",
+                path: "/",
+                sameSite: "Lax",
+                secure: true,
+                value: identityValue
+              }] : [],
+              origins: []
+            };
+          },
           async newPage() {
             const page = {
               closed: false,
@@ -436,6 +453,9 @@ test("agent preview command ensures the managed preview and waits for readiness"
       openTarget: {
         href: "http://127.0.0.1:4100/"
       },
+      previewIdentity: {
+        identityTypes: ["email"]
+      },
       previewTarget: {
         available: true,
         href: "/preview/session/",
@@ -488,6 +508,7 @@ test("agent preview command ensures the managed preview and waits for readiness"
         url: "http://127.0.0.1:4100/"
       }
     },
+    identityTypes: ["email"],
     ensured: true,
     launchTargetId: "dev",
     ready: true,
@@ -613,6 +634,7 @@ test("agent preview command delegates restart to the managed launch controller",
         url: "http://127.0.0.1:4100/app"
       }
     },
+    identityTypes: [],
     launchTargetId: "jskit-dev",
     ready: true,
     restarted: true,
@@ -763,7 +785,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "7");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "8");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -937,6 +959,96 @@ test("managed preview browser selects real application identities inside its own
       },
       sessionId
     });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed preview writes authenticated Playwright state without changing the interactive browser identity", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-storage-state-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const previewUrl = "https://preview.example.test/home?vibe64_preview_token=identity-token";
+  const sessionId = "browser-storage-state-session";
+  const outputPath = path.join(root, "playwright", "storage-state.json");
+  const commandService = createReadyPreviewCommandService({
+    previewUrl,
+    async selectPreviewIdentity(receivedSessionId, input) {
+      assert.equal(receivedSessionId, sessionId);
+      assert.equal(input.mode, "viewer");
+      assert.equal(input.vibe64User.email, "ada@example.com");
+      return {
+        grant: "grant:ada@example.com",
+        ok: true,
+        requestedIdentity: {
+          mode: "viewer",
+          selector: {
+            type: "email",
+            value: "ada@example.com"
+          }
+        }
+      };
+    }
+  });
+  commandService.registerViewer(sessionId, {
+    displayName: "Ada Lovelace",
+    email: "ada@example.com"
+  });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    await mkdir(path.dirname(outputPath), {
+      recursive: true
+    });
+    const prepared = await prepareAgentPreviewCommand({
+      commandService,
+      env: {
+        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+      },
+      sessionId,
+      wrapperHostDir: path.join(root, "commands")
+    });
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+
+    const written = JSON.parse((await execFileAsync(prepared.hostWrapperPath, [
+      "browser",
+      "storage-state",
+      "you",
+      "--output",
+      outputPath
+    ], {
+      env: commandEnv
+    })).stdout);
+
+    assert.deepEqual(written, {
+      outputPath
+    });
+    assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), {
+      cookies: [{
+        domain: "preview.example.test",
+        expires: -1,
+        httpOnly: true,
+        name: "app_session",
+        path: "/",
+        sameSite: "Lax",
+        secure: true,
+        value: "ada@example.com"
+      }],
+      origins: []
+    });
+    assert.equal((await stat(outputPath)).mode & 0o777, 0o600);
+
+    const browserStatus = JSON.parse((await execFileAsync(
+      prepared.hostWrapperPath,
+      ["browser", "status"],
+      { env: commandEnv }
+    )).stdout);
+    assert.equal(browserStatus.applicationIdentity, null);
   } finally {
     await commandService.closeAllForSession(sessionId);
     await rm(root, {

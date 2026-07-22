@@ -6,7 +6,7 @@ function agentPlaywrightCommandSource({
 } = {}) {
   return `#!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -102,10 +102,14 @@ function managedRuntime(version = "") {
   return null;
 }
 
-function managedPreviewBaseUrl(projectRoot = "") {
+function managedPreview(projectRoot = "") {
   const explicitBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || "").trim();
   if (explicitBaseUrl) {
-    return explicitBaseUrl;
+    return {
+      baseUrl: explicitBaseUrl,
+      identityRequired: false,
+      managed: false
+    };
   }
   if (!path.isAbsolute(managedPreviewPath) || !existsSync(managedPreviewPath)) {
     fail(
@@ -151,7 +155,11 @@ function managedPreviewBaseUrl(projectRoot = "") {
     if (status?.ready !== true || !["http:", "https:"].includes(url.protocol)) {
       throw new Error("Managed preview is not ready.");
     }
-    return url.origin;
+    return {
+      baseUrl: url.origin,
+      identityRequired: Array.isArray(status.identityTypes) && status.identityTypes.length > 0,
+      managed: true
+    };
   } catch {
     fail(
       "Vibe64 did not provide a ready HTTP managed preview for Playwright tests. " +
@@ -160,31 +168,98 @@ function managedPreviewBaseUrl(projectRoot = "") {
   }
 }
 
-function childEnv(runtime = {}, projectRoot = "") {
+function managedPlaywrightStorageState(projectRoot = "") {
+  const directory = mkdtempSync(path.join(
+    path.resolve(process.env.TMPDIR || "/tmp"),
+    "vibe64-playwright-auth-"
+  ));
+  const storageStatePath = path.join(directory, "storage-state.json");
+  const result = spawnSync(managedNodePath, [
+    managedPreviewPath,
+    "browser",
+    "storage-state",
+    "you",
+    "--output",
+    storageStatePath
+  ], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: 120_000
+  });
+  const diagnostics = [result.error?.message, result.stderr, result.stdout]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("\\n");
+  if (result.error || result.status !== 0 || !existsSync(storageStatePath)) {
+    rmSync(directory, {
+      force: true,
+      recursive: true
+    });
+    fail(
+      "Vibe64 could not authenticate managed Playwright for the current application user. " +
+      "Project tests were not started." +
+      (diagnostics ? "\\n" + diagnostics : "")
+    );
+  }
+  return {
+    directory,
+    storageStatePath
+  };
+}
+
+function childEnv(runtime = {}, preview = {}, authentication = null) {
   return {
     ...process.env,
     PATH: [path.dirname(runtime.cliPath), process.env.PATH || ""].filter(Boolean).join(":"),
-    PLAYWRIGHT_BASE_URL: managedPreviewBaseUrl(projectRoot),
+    PLAYWRIGHT_BASE_URL: preview.baseUrl,
     PLAYWRIGHT_BROWSERS_PATH: runtime.browsersPath,
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
-    VIBE64_MANAGED_PLAYWRIGHT_TEST: "1"
+    VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
+    ...(preview.managed ? {
+      JSKIT_PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
+    } : {})
   };
 }
 
 function run(command = "", args = [], options = {}) {
+  const cleanup = () => {
+    if (options.cleanupRoot) {
+      rmSync(options.cleanupRoot, {
+        force: true,
+        recursive: true
+      });
+    }
+  };
   const child = spawn(command, args, {
     cwd: options.cwd,
     env: options.env,
     stdio: "inherit"
   });
-  child.once("error", (error) => fail(error?.message || error));
+  child.once("error", (error) => {
+    cleanup();
+    fail(error?.message || error);
+  });
   child.once("close", (code, signal) => {
+    cleanup();
     if (signal) {
       process.kill(process.pid, signal);
       return;
     }
     process.exit(Number.isInteger(code) ? code : 1);
   });
+}
+
+function managedExecution(runtime = {}, projectRoot = "") {
+  const preview = managedPreview(projectRoot);
+  const authentication = preview.managed && preview.identityRequired
+    ? managedPlaywrightStorageState(projectRoot)
+    : null;
+  return {
+    cleanupRoot: authentication?.directory || "",
+    env: childEnv(runtime, preview, authentication)
+  };
 }
 
 const projectRoot = findProjectRoot();
@@ -227,18 +302,22 @@ if (command === "status") {
   process.exit(0);
 }
 if (command === "test") {
+  const execution = managedExecution(runtime, projectRoot);
   run(managedNodePath, [project.cliPath, "test", ...args], {
+    cleanupRoot: execution.cleanupRoot,
     cwd: projectRoot,
-    env: childEnv(runtime, projectRoot)
+    env: execution.env
   });
 } else if (command === "npm-run") {
   const script = String(args.shift() || "").trim();
   if (!script) {
     fail("A package script name is required.", 64);
   }
+  const execution = managedExecution(runtime, projectRoot);
   run(managedNpmPath, ["run", script, ...args], {
+    cleanupRoot: execution.cleanupRoot,
     cwd: projectRoot,
-    env: childEnv(runtime, projectRoot)
+    env: execution.env
   });
 } else {
   fail("Unsupported managed Playwright command: " + command + ". Browser installation is never permitted.", 64);

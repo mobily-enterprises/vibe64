@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -53,14 +53,62 @@ async function createProject(projectRoot, version) {
     version
   }), "utf8");
   await writeFile(path.join(packageRoot, "cli.js"), [
+    "const { existsSync, readFileSync } = require(\"node:fs\");",
+    "const storageStatePath = process.env.JSKIT_PLAYWRIGHT_STORAGE_STATE || \"\";",
     "process.stdout.write(JSON.stringify({",
     "  args: process.argv.slice(2),",
     "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
     "  browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH,",
     "  managed: process.env.VIBE64_MANAGED_PLAYWRIGHT_TEST,",
-    "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+    "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD,",
+    "  storageState: storageStatePath && existsSync(storageStatePath)",
+    "    ? JSON.parse(readFileSync(storageStatePath, \"utf8\"))",
+    "    : null,",
+    "  storageStateExists: Boolean(storageStatePath && existsSync(storageStatePath)),",
+    "  storageStatePath",
     "}));"
   ].join("\n") + "\n", "utf8");
+}
+
+async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
+  const storageState = {
+    cookies: [{
+      domain: "127.0.0.1",
+      expires: -1,
+      httpOnly: true,
+      name: "app_session",
+      path: "/",
+      sameSite: "Lax",
+      secure: false,
+      value: "managed-viewer"
+    }],
+    origins: []
+  };
+  await writeExecutable(wrapperPath, [
+    "#!/usr/bin/env node",
+    "const { writeFileSync } = require(\"node:fs\");",
+    `const previewUrl = ${JSON.stringify(previewUrl)};`,
+    `const storageState = ${JSON.stringify(storageState)};`,
+    "const args = process.argv.slice(2);",
+    "if (args[0] === \"ensure\") {",
+    "  process.stdout.write(JSON.stringify({",
+    "    endpoints: { agent: { url: previewUrl } },",
+    "    identityTypes: [\"email\"],",
+    "    ready: true",
+    "  }));",
+    "  process.exit(0);",
+    "}",
+    "if (args[0] === \"browser\" && args[1] === \"storage-state\" && args[2] === \"you\") {",
+    "  const outputIndex = args.indexOf(\"--output\");",
+    "  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : \"\";",
+    "  if (!outputPath) process.exit(64);",
+    "  writeFileSync(outputPath, JSON.stringify(storageState) + \"\\n\", { flag: \"wx\", mode: 0o600 });",
+    "  process.stdout.write(JSON.stringify({ outputPath }));",
+    "  process.exit(0);",
+    "}",
+    "process.exit(64);"
+  ].join("\n") + "\n");
+  return storageState;
 }
 
 async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion, {
@@ -82,12 +130,19 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     path.join(runtimeRoot, "node26", "bin", "npm"),
     [
       "#!/usr/bin/env node",
+      "const { existsSync, readFileSync } = require(\"node:fs\");",
+      "const storageStatePath = process.env.JSKIT_PLAYWRIGHT_STORAGE_STATE || \"\";",
       "process.stdout.write(JSON.stringify({",
       "  args: process.argv.slice(2),",
       "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
       "  browsersPath: process.env.PLAYWRIGHT_BROWSERS_PATH,",
       "  managed: process.env.VIBE64_MANAGED_PLAYWRIGHT_TEST,",
-      "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+      "  skipDownload: process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD,",
+      "  storageState: storageStatePath && existsSync(storageStatePath)",
+      "    ? JSON.parse(readFileSync(storageStatePath, \"utf8\"))",
+      "    : null,",
+      "  storageStateExists: Boolean(storageStatePath && existsSync(storageStatePath)),",
+      "  storageStatePath",
       "}));"
     ].join("\n") + "\n"
   );
@@ -171,7 +226,8 @@ test("managed Playwright test command uses the exact versioned browser runtime w
           ...process.env,
           ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override",
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0",
+          JSKIT_PLAYWRIGHT_STORAGE_STATE: "/tmp/stale-managed-state.json"
         }
       }
     )).stdout);
@@ -183,6 +239,7 @@ test("managed Playwright test command uses the exact versioned browser runtime w
     );
     assert.equal(executed.managed, "1");
     assert.equal(executed.skipDownload, "1");
+    assert.equal(executed.storageStatePath, "");
 
     const npmRun = JSON.parse((await execFileAsync(
       fixture.prepared.hostPlaywrightWrapperPath,
@@ -209,11 +266,66 @@ test("managed Playwright test command uses the exact versioned browser runtime w
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
-          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom"
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom",
+          JSKIT_PLAYWRIGHT_STORAGE_STATE: "/tmp/explicit-state.json"
         }
       }
     )).stdout);
     assert.equal(explicit.baseUrl, "http://127.0.0.1:6200/custom");
+    assert.equal(explicit.storageStatePath, "/tmp/explicit-state.json");
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed Playwright supplies and removes authenticated browser state", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-auth-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.61.1");
+    const expectedState = await writeAuthenticatedPreviewWrapper(
+      fixture.prepared.hostWrapperPath,
+      "http://127.0.0.1:4104/home"
+    );
+
+    const executed = JSON.parse((await execFileAsync(
+      fixture.prepared.hostPlaywrightWrapperPath,
+      ["test", "--grep", "authenticated"],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ...fixture.prepared.env
+        }
+      }
+    )).stdout);
+    assert.equal(executed.storageStateExists, true);
+    assert.deepEqual(executed.storageState, expectedState);
+    await assert.rejects(access(executed.storageStatePath), {
+      code: "ENOENT"
+    });
+
+    const npmRun = JSON.parse((await execFileAsync(
+      fixture.prepared.hostPlaywrightWrapperPath,
+      ["npm-run", "e2e"],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ...fixture.prepared.env
+        }
+      }
+    )).stdout);
+    assert.equal(npmRun.storageStateExists, true);
+    assert.deepEqual(npmRun.storageState, expectedState);
+    assert.notEqual(npmRun.storageStatePath, executed.storageStatePath);
+    await assert.rejects(access(npmRun.storageStatePath), {
+      code: "ENOENT"
+    });
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {

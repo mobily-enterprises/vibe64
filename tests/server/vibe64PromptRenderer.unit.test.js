@@ -308,6 +308,10 @@ test("session briefing keeps the primary preview canonical while permitting expl
   assert.match(briefing, /exact managed browser version/u);
   assert.match(briefing, /automatically ensure the current managed preview/u);
   assert.match(briefing, /supply its agent origin as `PLAYWRIGHT_BASE_URL`/u);
+  assert.match(briefing, /authenticate identity-aware application tests as the current Vibe64 viewer/u);
+  assert.match(briefing, /Do not call development-auth endpoints/u);
+  assert.match(briefing, /register throwaway users merely to authenticate a feature test/u);
+  assert.match(briefing, /sign-in or registration only when that authentication behavior itself is under test/u);
   assert.match(briefing, /Do not inspect or hard-code managed ports/u);
   assert.match(briefing, /add Vibe64 URL-discovery helpers/u);
   assert.match(briefing, /Immediately run `vibe64-preview screenshot`/u);
