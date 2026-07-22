@@ -928,7 +928,7 @@ async function createWorktreeTerminalSpec({
       ...successContext
     }),
     runtimeConfigPhases: false,
-    runtimes: ["git"],
+    runtimes: repositoryProfile.githubAuthRequired ? ["git", "gh"] : ["git"],
     successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
     successMetadata: sourceMetadata({
       baseBranch: metadataBaseBranch,
