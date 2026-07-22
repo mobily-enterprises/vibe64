@@ -405,11 +405,7 @@ class TargetAdapter {
     return [];
   }
 
-  async getManagedProjectResources() {
-    return [];
-  }
-
-  async deleteManagedProjectResources() {
+  async deleteManagedDevelopmentDatabase() {
     return [];
   }
 

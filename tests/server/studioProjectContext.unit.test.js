@@ -646,6 +646,69 @@ test("Studio project context resolves GitHub capability from explicit target rem
   });
 });
 
+test("Studio project context does not admit unregistered GitHub folders", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "existing-app");
+    await createGitProject(projectRoot, {
+      origin: "git@github.com:example/existing-app.git"
+    });
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    const listed = await context.listWorkspaceProjects();
+
+    assert.deepEqual(listed.projects, []);
+    await assert.rejects(() => context.readWorkspaceProject({
+      slug: "existing-app"
+    }), {
+      code: "vibe64_project_repository_missing"
+    });
+    await assert.rejects(() => access(context.projectRecordPathForSlug("existing-app")), {
+      code: "ENOENT"
+    });
+  });
+});
+
+test("Studio project context rejects project records without bootstrap metadata", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "legacy-app");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    const recordPath = context.projectRecordPathForSlug("legacy-app");
+    const legacyMetadata = {
+      repository: {
+        defaultBranch: "main",
+        github: {
+          fullName: "example/legacy-app"
+        },
+        mode: PROJECT_REPOSITORY_MODE_GITHUB
+      }
+    };
+    await Promise.all([
+      mkdir(projectRoot, { recursive: true }),
+      writeTestFile(recordPath, `${JSON.stringify(legacyMetadata, null, 2)}\n`)
+    ]);
+
+    await assert.rejects(() => context.listWorkspaceProjects(), {
+      code: "vibe64_project_bootstrap_missing"
+    });
+    await assert.rejects(() => context.readWorkspaceProjectState({
+      slug: "legacy-app"
+    }), {
+      code: "vibe64_project_bootstrap_missing"
+    });
+    assert.deepEqual(JSON.parse(await readFile(recordPath, "utf8")), legacyMetadata);
+  });
+});
+
 test("Project repository view reads GitHub metadata only from repository contract", () => {
   const currentView = projectRepositoryView({
     repository: {
@@ -824,7 +887,6 @@ test("Studio project context defaults new catalog records to managed Git metadat
       mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
       defaultBranch: "main"
     });
-    assert.deepEqual(record.resources, []);
     assert.equal(record.bootstrap.mode, PROJECT_APPLICATION_MODE_NEW);
     assert.equal(record.bootstrap.status, "pending");
   });
@@ -857,16 +919,6 @@ test("Studio project context keeps bootstrap pending through template setup and 
         commit: templateCommit,
         slug: "template-app"
       }),
-      context.recordWorkspaceProjectResources({
-        resources: [{
-          adapterId: "jskit",
-          id: "development-database",
-          kind: "relational-database",
-          name: "template_app",
-          provider: "mariadb"
-        }],
-        slug: "template-app"
-      }),
       saveProjectBootstrapConfig({
         projectRecordPath: context.projectRecordPathForSlug("template-app"),
         projectType: "jskit",
@@ -896,13 +948,6 @@ test("Studio project context keeps bootstrap pending through template setup and 
       status: "complete",
       templateCommit
     });
-    assert.deepEqual(metadata.resources, [{
-      adapterId: "jskit",
-      id: "development-database",
-      kind: "relational-database",
-      name: "template_app",
-      provider: "mariadb"
-    }]);
     assert.equal(metadata.bootstrapConfig.projectType, "jskit");
     assert.deepEqual(metadata.bootstrapConfig.values, {
       user_mode: "users"

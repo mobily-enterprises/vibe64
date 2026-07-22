@@ -932,46 +932,25 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     return createJskitRuntimeConfigProfile();
   }
 
-  async getManagedProjectResources({
+  async deleteManagedDevelopmentDatabase({
     config = {},
     runtimeConfigEnv = {},
+    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     if (!jskitManagedDatabaseEnabled(config)) {
       return [];
     }
-    return [{
-      adapterId: this.id,
-      id: "development-database",
-      kind: "relational-database",
-      name: normalizeText(runtimeConfigEnv.DB_NAME) || jskitMariaDbDatabaseName(targetRoot),
-      provider: "mariadb"
-    }];
-  }
-
-  async deleteManagedProjectResources({
-    resources = [],
-    serviceDataRoot = "",
-    targetRoot = ""
-  } = {}) {
     const expectedDatabaseName = jskitMariaDbDatabaseName(targetRoot);
-    const database = resources.find((resource) => resource.id === "development-database");
-    if (!database) {
-      return [];
-    }
-    if (
-      database.adapterId !== this.id ||
-      database.kind !== "relational-database" ||
-      database.provider !== "mariadb" ||
-      database.name !== expectedDatabaseName
-    ) {
+    const databaseName = normalizeText(runtimeConfigEnv.DB_NAME);
+    if (!databaseName || databaseName !== expectedDatabaseName) {
       throw vibe64Error(
-        "Recorded JSKIT development database does not match this project.",
-        "vibe64_project_resource_identity_mismatch"
+        "JSKIT development DB_NAME does not match this project.",
+        "vibe64_development_database_identity_mismatch"
       );
     }
     const [command, ...args] = jskitManagedMariaDbDevelopmentDatabaseDropCommandArgs({
-      databaseName: database.name,
+      databaseName,
       serviceDataRoot,
       targetRoot
     });
@@ -980,7 +959,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       args,
       command,
       cwd: targetRoot,
-      id: database.id,
+      id: "development-database",
       runtimes: ["mariadb"],
       timeout: 120_000
     }];

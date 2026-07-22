@@ -39,7 +39,6 @@ import {
 import {
   completedProjectBootstrap,
   createProjectBootstrap,
-  normalizeManagedProjectResources,
   normalizeProjectBootstrap,
   normalizeProjectDeletion,
   projectBootstrapApplicationMode,
@@ -376,10 +375,7 @@ function projectMetadataFromInput(input = {}, {
     ...repositoryMetadata,
     ...(input?.bootstrap ? { bootstrap: normalizeProjectBootstrap(input.bootstrap) } : {}),
     ...(bootstrapConfig ? { bootstrapConfig } : {}),
-    ...(input?.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {}),
-    ...(Object.hasOwn(input, "resources") ? {
-      resources: normalizeManagedProjectResources(input.resources)
-    } : {})
+    ...(input?.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {})
   };
 }
 
@@ -397,8 +393,7 @@ function normalizeProjectMetadata(metadata = {}) {
       "bootstrap",
       "bootstrapConfig",
       "deletion",
-      "repository",
-      "resources"
+      "repository"
     ].includes(field));
   if (unsupportedFields.length > 0) {
     const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
@@ -435,13 +430,11 @@ async function workspaceProjectRecordForPath({
   path: projectPath = "",
   projectRuntimeRoot = "",
   projectSessionSourceRoot = "",
-  projectsRoot = "",
-  writeDerivedMetadata = false
+  projectsRoot = ""
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
-  const metadata = await projectMetadataWithGitRemote(resolvedPath, {
-    projectRecordPath,
-    writeDerivedMetadata
+  const metadata = await readProjectMetadata({
+    projectRecordPath
   });
   const runtime = await readProjectRuntimeOpenState({
     projectLocalRoot: projectRuntimeRoot || resolvedPath
@@ -955,8 +948,7 @@ function createStudioProjectContext({
     delete metadataInput.applicationMode;
     const metadata = projectMetadataFromInput({
       ...metadataInput,
-      bootstrap: createProjectBootstrap(applicationMode),
-      resources: []
+      bootstrap: createProjectBootstrap(applicationMode)
     }, {
       defaultRepositoryBranch: PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
       defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
@@ -1162,23 +1154,6 @@ function createStudioProjectContext({
     }));
   }
 
-  async function recordWorkspaceProjectResources(input = {}) {
-    const incomingResources = normalizeManagedProjectResources(input.resources);
-    return updateWorkspaceProjectState(input, (metadata) => {
-      const resources = new Map(
-        normalizeManagedProjectResources(metadata.resources)
-          .map((resource) => [resource.id, resource])
-      );
-      for (const resource of incomingResources) {
-        resources.set(resource.id, resource);
-      }
-      return {
-        ...metadata,
-        resources: [...resources.values()]
-      };
-    });
-  }
-
   async function beginWorkspaceProjectDeletion(input = {}) {
     return updateWorkspaceProjectState(input, (metadata) => ({
       ...metadata,
@@ -1321,7 +1296,6 @@ function createStudioProjectContext({
     listWorkspaceProjects,
     readWorkspaceProject,
     readWorkspaceProjectState,
-    recordWorkspaceProjectResources,
     recordWorkspaceProjectTemplate,
     requireSelectedTargetRoot,
     selectWorkspaceProject,

@@ -5,8 +5,7 @@ import {
 
 const PROJECT_BOOTSTRAP_STATUS_PENDING = "pending";
 const PROJECT_BOOTSTRAP_STATUS_COMPLETE = "complete";
-const PROJECT_RESOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
-const PROJECT_RESOURCE_NAME_PATTERN = /^[A-Za-z0-9_]{1,64}$/u;
+const PROJECT_LIFECYCLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 
 function projectLifecycleError(message, code) {
   const error = new Error(message);
@@ -120,68 +119,6 @@ function completedProjectBootstrap(value = null) {
   });
 }
 
-function normalizeManagedProjectResource(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw projectLifecycleError(
-      "Managed project resources must be objects.",
-      "vibe64_project_resource_invalid"
-    );
-  }
-  const adapterId = String(value.adapterId || "").trim();
-  const id = String(value.id || "").trim();
-  const kind = String(value.kind || "").trim();
-  const name = String(value.name || "").trim();
-  const provider = String(value.provider || "").trim();
-  if (!PROJECT_RESOURCE_ID_PATTERN.test(adapterId) || !PROJECT_RESOURCE_ID_PATTERN.test(id)) {
-    throw projectLifecycleError(
-      "Managed project resource identifiers are invalid.",
-      "vibe64_project_resource_id_invalid"
-    );
-  }
-  if (kind !== "relational-database" || provider !== "mariadb") {
-    throw projectLifecycleError(
-      "Managed project resource type is unsupported.",
-      "vibe64_project_resource_type_invalid"
-    );
-  }
-  if (!PROJECT_RESOURCE_NAME_PATTERN.test(name)) {
-    throw projectLifecycleError(
-      "Managed project database name is invalid.",
-      "vibe64_project_resource_name_invalid"
-    );
-  }
-  return {
-    adapterId,
-    id,
-    kind,
-    name,
-    provider
-  };
-}
-
-function normalizeManagedProjectResources(value = []) {
-  if (!Array.isArray(value)) {
-    throw projectLifecycleError(
-      "Managed project resources must be an array.",
-      "vibe64_project_resource_invalid"
-    );
-  }
-  const resources = value
-    .map(normalizeManagedProjectResource)
-    .sort((left, right) => left.id.localeCompare(right.id));
-  const ids = new Set();
-  for (const resource of resources) {
-    if (ids.has(resource.id)) {
-      throw projectLifecycleError(
-        `Managed project resource ID is duplicated: ${resource.id}.`,
-        "vibe64_project_resource_duplicate"
-      );
-    }
-    ids.add(resource.id);
-  }
-  return resources;
-}
-
 function normalizeProjectDeletion(value = null) {
   if (!value) {
     return null;
@@ -211,7 +148,7 @@ function normalizeProjectDeletion(value = null) {
   }
   for (const [step, completedAtValue] of Object.entries(value.steps || {})) {
     const completedAt = String(completedAtValue || "").trim();
-    if (!PROJECT_RESOURCE_ID_PATTERN.test(step) || !completedAt || !Number.isFinite(Date.parse(completedAt))) {
+    if (!PROJECT_LIFECYCLE_ID_PATTERN.test(step) || !completedAt || !Number.isFinite(Date.parse(completedAt))) {
       throw projectLifecycleError(
         "Project deletion step state is invalid.",
         "vibe64_project_deletion_step_invalid"
@@ -227,7 +164,6 @@ export {
   PROJECT_BOOTSTRAP_STATUS_PENDING,
   completedProjectBootstrap,
   createProjectBootstrap,
-  normalizeManagedProjectResources,
   normalizeProjectBootstrap,
   normalizeProjectDeletion,
   pendingProjectBootstrap,

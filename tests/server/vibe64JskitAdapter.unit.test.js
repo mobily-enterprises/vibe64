@@ -17,6 +17,9 @@ import {
   writeRuntimeLock
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   JSKIT_AUTH_LOCAL_BACKEND_DB,
   JSKIT_AUTH_LOCAL_BACKEND_FILE,
   JSKIT_AUTH_PROVIDER_LOCAL,
@@ -208,27 +211,35 @@ function assertJskitUiVerificationContract(prompt = "") {
   assert.match(prompt, /\[ui:verification\]/u);
 }
 
-test("jskit adapter deletes only the recorded database for the current project", async () => {
+test("jskit adapter prepares the canonical development database without executing it", async () => {
   const adapter = createJskitTargetAdapter();
   const targetRoot = "/var/lib/vibe64/unit-owner/projects/safetyculture";
   const databaseName = jskitMariaDbDatabaseName(targetRoot);
-  const resources = await adapter.getManagedProjectResources({
+  const plans = await adapter.listExecutionEnvironmentPreparations({
+    config: {},
+    runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.SERVER],
+    runtimeConfigEnv: {
+      DB_NAME: databaseName
+    },
+    serviceDataRoot: "/var/lib/vibe64/unit-owner/services",
+    targetRoot
+  });
+
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].id, "jskit-managed-mariadb");
+  assert.match(plans[0].args.join(" "), /CREATE DATABASE IF NOT EXISTS/u);
+  assert.match(plans[0].args.join(" "), new RegExp(databaseName, "u"));
+});
+
+test("jskit adapter deletes only the canonical development DB_NAME", async () => {
+  const adapter = createJskitTargetAdapter();
+  const targetRoot = "/var/lib/vibe64/unit-owner/projects/safetyculture";
+  const databaseName = jskitMariaDbDatabaseName(targetRoot);
+  const plans = await adapter.deleteManagedDevelopmentDatabase({
     config: {},
     runtimeConfigEnv: {
       DB_NAME: databaseName
     },
-    targetRoot
-  });
-
-  assert.deepEqual(resources, [{
-    adapterId: "jskit",
-    id: "development-database",
-    kind: "relational-database",
-    name: databaseName,
-    provider: "mariadb"
-  }]);
-  const plans = await adapter.deleteManagedProjectResources({
-    resources,
     serviceDataRoot: "/var/lib/vibe64/unit-owner/services",
     targetRoot
   });
@@ -237,16 +248,16 @@ test("jskit adapter deletes only the recorded database for the current project",
   assert.deepEqual(plans[0].runtimes, ["mariadb"]);
   assert.match(plans[0].args.join(" "), new RegExp(`DROP DATABASE IF EXISTS.*${databaseName}`, "u"));
   await assert.rejects(
-    () => adapter.deleteManagedProjectResources({
-      resources: [{
-        ...resources[0],
-        name: "another_project"
-      }],
+    () => adapter.deleteManagedDevelopmentDatabase({
+      config: {},
+      runtimeConfigEnv: {
+        DB_NAME: "another_project"
+      },
       serviceDataRoot: "/var/lib/vibe64/unit-owner/services",
       targetRoot
     }),
     {
-      code: "vibe64_project_resource_identity_mismatch"
+      code: "vibe64_development_database_identity_mismatch"
     }
   );
 });

@@ -3152,7 +3152,7 @@ test("Vibe64 project service runs best-effort hooks after project config saves",
   });
 });
 
-test("Vibe64 project service removes only recorded adapter-owned resources", async () => {
+test("Vibe64 project service preserves the database for an imported project", async () => {
   await withTemporaryRoot(async (root) => {
     const projectContext = createStudioProjectContext({
       explicitProjectsRoot: path.join(root, "projects"),
@@ -3161,20 +3161,11 @@ test("Vibe64 project service removes only recorded adapter-owned resources", asy
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
+      applicationMode: PROJECT_APPLICATION_MODE_EXISTING,
       slug: "cleanup-app"
     });
     const targetRoot = path.join(projectContext.projectsRoot, "cleanup-app");
-    const databaseName = jskitMariaDbDatabaseName(targetRoot);
-    await projectContext.recordWorkspaceProjectResources({
-      resources: [{
-        adapterId: "jskit",
-        id: "development-database",
-        kind: "relational-database",
-        name: databaseName,
-        provider: "mariadb"
-      }],
-      slug: "cleanup-app"
-    });
+    await writeVibe64SourceConfig(targetRoot);
     const commands = [];
     const service = createService({
       projectContext,
@@ -3188,7 +3179,62 @@ test("Vibe64 project service removes only recorded adapter-owned resources", asy
 
     const result = await service.runInProjectContext(
       "cleanup-app",
-      () => service.cleanupProjectResources(),
+      () => service.cleanupProjectDevelopmentDatabase(),
+      {
+        allowDeleting: true
+      }
+    );
+
+    assert.deepEqual(result, {
+      deleted: [],
+      ok: true,
+      preserved: true
+    });
+    assert.deepEqual(commands, []);
+  });
+});
+
+test("Vibe64 project service deletes only a new project's canonical development DB_NAME", async () => {
+  await withTemporaryRoot(async (root) => {
+    const sourceRoot = path.join(root, "source");
+    await createGitProject(sourceRoot);
+    await writeVibe64SourceConfig(sourceRoot);
+    await commitAll(sourceRoot, "Commit Vibe64 config");
+    const defaultBranch = await gitCurrentBranch(sourceRoot);
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: path.join(root, "projects"),
+      explicitSystemRoot: path.join(root, "state"),
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        defaultBranch,
+        fullName: "example/cleanup-app"
+      }),
+      slug: "cleanup-app"
+    });
+    const targetRoot = path.join(projectContext.projectsRoot, "cleanup-app");
+    const databaseName = jskitMariaDbDatabaseName(targetRoot);
+    const gitCacheRepository = path.join(targetRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(gitCacheRepository), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", sourceRoot, gitCacheRepository]);
+    const commands = [];
+    const service = createService({
+      projectContext,
+      runCommand: async (request) => {
+        commands.push(request);
+        return {
+          ok: true
+        };
+      }
+    });
+
+    const result = await service.runInProjectContext(
+      "cleanup-app",
+      () => service.cleanupProjectDevelopmentDatabase(),
       {
         allowDeleting: true
       }
@@ -3196,7 +3242,8 @@ test("Vibe64 project service removes only recorded adapter-owned resources", asy
 
     assert.deepEqual(result, {
       deleted: ["development-database"],
-      ok: true
+      ok: true,
+      preserved: false
     });
     assert.equal(commands.length, 1);
     assert.equal(commands[0].actor, "daemon");

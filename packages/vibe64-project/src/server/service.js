@@ -78,7 +78,7 @@ import {
   saveProjectBootstrapConfig
 } from "@local/vibe64-core/server/projectBootstrapConfig";
 import {
-  normalizeManagedProjectResources,
+  normalizeProjectBootstrap,
   projectBootstrapApplicationMode
 } from "@local/vibe64-core/server/projectLifecycle";
 import {
@@ -1822,30 +1822,6 @@ function createService({
       target: input.target,
       targetRoot: targetRootValue
     });
-    if (
-      config.scope === RUNTIME_CONFIG_SCOPES.DEV &&
-      targetRootIsProjectHome(targetRootValue) &&
-      typeof runtimeConfigContext.adapter?.getManagedProjectResources === "function" &&
-      typeof studioProjectContext.recordWorkspaceProjectResources === "function"
-    ) {
-      const resources = normalizeManagedProjectResources(
-        await runtimeConfigContext.adapter.getManagedProjectResources({
-          config: runtimeConfigContext.projectConfig || {},
-          runtimeConfig: config,
-          runtimeConfigEnv: runtimeConfigEnv(config.records, {
-            scope: config.scope
-          }),
-          serviceDataRoot: resolvedServiceDataRoot,
-          targetRoot: targetRootValue
-        })
-      );
-      if (resources.length) {
-        await studioProjectContext.recordWorkspaceProjectResources({
-          resources,
-          slug: currentProjectSlug()
-        });
-      }
-    }
     return {
       ...config,
       envConfigSource: runtimeConfigContext.envConfigSource || envConfigSource || null,
@@ -1853,44 +1829,65 @@ function createService({
     };
   }
 
-  async function cleanupCurrentProjectResources() {
+  async function cleanupCurrentProjectDevelopmentDatabase() {
     const targetRootValue = currentTargetRoot();
     const metadata = await readProjectRecordMetadata(projectRecordPath(targetRootValue));
-    const resources = normalizeManagedProjectResources(metadata.resources);
-    const resourcesByAdapter = Map.groupBy(resources, (resource) => resource.adapterId);
+    const bootstrap = normalizeProjectBootstrap(metadata.bootstrap);
+    if (bootstrap.mode !== PROJECT_APPLICATION_MODE_NEW) {
+      return {
+        deleted: [],
+        ok: true,
+        preserved: true
+      };
+    }
+    const setup = await committedRuntimeSetup(targetRootValue);
+    if (!setup) {
+      return {
+        deleted: [],
+        ok: true,
+        preserved: false
+      };
+    }
+    const config = await projectRuntimeConfigState({
+      environment: RUNTIME_CONFIG_SCOPES.DEV
+    }, {
+      configSource: "committed"
+    });
+    const plans = await setup.adapter.deleteManagedDevelopmentDatabase({
+      config: setup.projectConfig,
+      runtimeConfig: config,
+      runtimeConfigEnv: runtimeConfigEnv(config.records, {
+        scope: RUNTIME_CONFIG_SCOPES.DEV
+      }),
+      serviceDataRoot: serviceDataRoot(),
+      targetRoot: targetRootValue
+    });
     const deleted = [];
-    for (const [adapterId, adapterResources] of resourcesByAdapter) {
-      const adapter = await adapterRegistry.createAdapter(adapterId);
-      const plans = await adapter.deleteManagedProjectResources({
-        resources: adapterResources,
-        serviceDataRoot: serviceDataRoot(),
-        targetRoot: targetRootValue
+    for (const plan of Array.isArray(plans) ? plans : []) {
+      const result = await runCommand({
+        actor: "daemon",
+        allowedRoots: Array.isArray(plan.allowedRoots) ? plan.allowedRoots : [targetRootValue],
+        args: Array.isArray(plan.args) ? plan.args : [],
+        command: plan.command,
+        cwd: plan.cwd || targetRootValue,
+        envPolicy: "project",
+        mode: "capture",
+        purpose: "setup",
+        runtimes: Array.isArray(plan.runtimes) ? plan.runtimes : [],
+        timeout: Number(plan.timeout || 120_000)
       });
-      for (const plan of Array.isArray(plans) ? plans : []) {
-        const result = await runCommand({
-          actor: "daemon",
-          allowedRoots: Array.isArray(plan.allowedRoots) ? plan.allowedRoots : [targetRootValue],
-          args: Array.isArray(plan.args) ? plan.args : [],
-          command: plan.command,
-          cwd: plan.cwd || targetRootValue,
-          envPolicy: "project",
-          mode: "capture",
-          purpose: "setup",
-          runtimes: Array.isArray(plan.runtimes) ? plan.runtimes : [],
-          timeout: Number(plan.timeout || 120_000)
-        });
-        if (result?.ok === false) {
-          const error = new Error(result.output || `Managed project resource ${plan.id || "cleanup"} could not be removed.`);
-          error.code = result.code || "vibe64_project_resource_cleanup_failed";
-          error.result = result;
-          throw error;
-        }
-        deleted.push(plan.id || "resource");
+      if (result?.ok === false) {
+        const error = new Error(result.output || "The managed development database could not be removed.");
+        error.code = result.code || "vibe64_development_database_cleanup_failed";
+        error.result = result;
+        throw error;
       }
+      deleted.push(plan.id || "development-database");
     }
     return {
       deleted,
-      ok: true
+      ok: true,
+      preserved: false
     };
   }
 
@@ -3148,8 +3145,8 @@ function createService({
       return completeCurrentProjectBootstrap();
     },
 
-    async cleanupProjectResources() {
-      return cleanupCurrentProjectResources();
+    async cleanupProjectDevelopmentDatabase() {
+      return cleanupCurrentProjectDevelopmentDatabase();
     },
 
     async applyProjectTemplate(templateId = "", input = {}) {
