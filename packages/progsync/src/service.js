@@ -14,6 +14,7 @@ import {
 } from "./git.js";
 import { acquirePairLock } from "./lock.js";
 import {
+  absoluteProjectPath,
   isSupportedImplementationPath,
   isTargetBoundProgramPath,
   projectionPathForProgram,
@@ -543,6 +544,60 @@ function internalProgramProviderPath(provider) {
   return match ? `program/${match[1]}` : null;
 }
 
+function localAssetProviderPath(provider, consumerProgramPath) {
+  const identity = String(provider || "").startsWith("asset:")
+    ? String(provider).slice("asset:".length)
+    : null;
+  if (!identity) {
+    return null;
+  }
+  if (!identity.startsWith("url:")) {
+    if (identity.startsWith("//") || /^[a-z][a-z0-9+.-]*:/iu.test(identity)) {
+      return null;
+    }
+    return slashPath(identity);
+  }
+  const url = identity.slice("url:".length).split(/[?#]/u)[0];
+  if (
+    !url ||
+    url.startsWith("//") ||
+    /^[a-z][a-z0-9+.-]*:/iu.test(url)
+  ) {
+    return null;
+  }
+  if (url.startsWith("@/")) {
+    return slashPath(url.slice(2));
+  }
+  if (url.startsWith("/")) {
+    return slashPath(url.slice(1));
+  }
+  if (!isTargetBoundProgramPath(consumerProgramPath)) {
+    return null;
+  }
+  const consumerTarget = consumerProgramPath
+    .slice("program/".length, -".md".length);
+  const resolved = path.posix.normalize(path.posix.join(
+    path.posix.dirname(consumerTarget),
+    url
+  ));
+  return resolved === ".." || resolved.startsWith("../") ? null : resolved;
+}
+
+function programUseDependencyPath(use, consumerProgramPath) {
+  return internalProgramProviderPath(use.provider) ||
+    localAssetProviderPath(use.provider, consumerProgramPath);
+}
+
+function addReverseDependency(reverse, providerPath, consumerPath) {
+  if (!providerPath) {
+    return;
+  }
+  if (!reverse.has(providerPath)) {
+    reverse.set(providerPath, new Set());
+  }
+  reverse.get(providerPath).add(consumerPath);
+}
+
 async function reverseProgramDependencies(root) {
   const reverse = new Map();
   const programFiles = await walkMarkdown(path.join(root, "program"), root);
@@ -550,7 +605,7 @@ async function reverseProgramDependencies(root) {
     let parsed;
     try {
       const source = await fs.readFile(
-        path.join(root, ...consumerPath.split("/")),
+        absoluteProjectPath(root, consumerPath),
         "utf8"
       );
       parsed = parseProgram(source, { programPath: consumerPath });
@@ -558,14 +613,14 @@ async function reverseProgramDependencies(root) {
       continue;
     }
     for (const use of parsed.uses) {
-      const providerPath = internalProgramProviderPath(use.provider);
-      if (!providerPath) {
-        continue;
-      }
-      if (!reverse.has(providerPath)) {
-        reverse.set(providerPath, new Set());
-      }
-      reverse.get(providerPath).add(consumerPath);
+      addReverseDependency(
+        reverse,
+        programUseDependencyPath(use, consumerPath),
+        consumerPath
+      );
+    }
+    if (isTargetBoundProgramPath(consumerPath)) {
+      addReverseDependency(reverse, "package.json", consumerPath);
     }
   }
   return reverse;
@@ -597,18 +652,19 @@ async function syncChanged({
   const root = projectRootPath(projectRoot);
   const changed = await changedGitPaths(root, { base });
   const pairInputs = new Map();
-  const skippedPaths = [];
-  const changedProgramPaths = new Set();
+  const unresolvedChangedPaths = [];
+  const changedDependencyPaths = new Set();
   for (const filePath of changed.paths) {
     if (filePath.startsWith(".program/index/")) {
       continue;
     }
+    changedDependencyPaths.add(filePath);
     const input = pairInputForChangedPath(filePath);
     if (!input) {
       if (filePath.startsWith("program/") && filePath.endsWith(".md")) {
-        changedProgramPaths.add(filePath);
+        continue;
       } else {
-        skippedPaths.push(filePath);
+        unresolvedChangedPaths.push(filePath);
       }
       continue;
     }
@@ -618,16 +674,13 @@ async function syncChanged({
         dependencyChanged: false,
         inputPath: input
       });
-      if (filePath === pair.programPath) {
-        changedProgramPaths.add(pair.programPath);
-      }
     } catch {
-      skippedPaths.push(filePath);
+      unresolvedChangedPaths.push(filePath);
     }
   }
   const reverseDependencies = await reverseProgramDependencies(root);
   for (const programPath of dependentProgramPaths(
-    changedProgramPaths,
+    changedDependencyPaths,
     reverseDependencies
   )) {
     if (!isTargetBoundProgramPath(programPath)) {
@@ -642,6 +695,9 @@ async function syncChanged({
       });
     }
   }
+  const skippedPaths = unresolvedChangedPaths.filter((filePath) => (
+    !reverseDependencies.has(filePath)
+  ));
   const results = [];
   const pending = [...pairInputs.values()];
   const queuedProgramPaths = new Set(pairInputs.keys());
@@ -692,9 +748,11 @@ async function syncChanged({
 }
 
 async function walkFiles(directory, projectRoot, accept, output = []) {
+  const relativeDirectory = slashPath(path.relative(projectRoot, directory));
+  const safeDirectory = absoluteProjectPath(projectRoot, relativeDirectory);
   let entries;
   try {
-    entries = await fs.readdir(directory, { withFileTypes: true });
+    entries = await fs.readdir(safeDirectory, { withFileTypes: true });
   } catch (error) {
     if (error?.code === "ENOENT") {
       return output;
@@ -702,7 +760,10 @@ async function walkFiles(directory, projectRoot, accept, output = []) {
     throw error;
   }
   for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
+    const entryPath = absoluteProjectPath(
+      projectRoot,
+      slashPath(path.join(relativeDirectory, entry.name))
+    );
     if (entry.isDirectory()) {
       await walkFiles(entryPath, projectRoot, accept, output);
     } else if (entry.isFile() && accept(entry.name)) {
@@ -729,7 +790,7 @@ async function checkProgram({ projectRoot }) {
   const parsedByPath = new Map();
 
   for (const programPath of programFiles) {
-    const source = await fs.readFile(path.join(root, ...programPath.split("/")), "utf8");
+    const source = await fs.readFile(absoluteProjectPath(root, programPath), "utf8");
     try {
       const parsed = parseProgram(source, { programPath });
       const projection = buildProgramProjection({
@@ -809,7 +870,7 @@ async function checkProgram({ projectRoot }) {
     if (expectedProjectionPaths.has(projectionPath)) {
       continue;
     }
-    await fs.rm(path.join(root, ...projectionPath.split("/")), { force: true });
+    await fs.rm(absoluteProjectPath(root, projectionPath), { force: true });
     removedProjectionPaths.push(projectionPath);
   }
 

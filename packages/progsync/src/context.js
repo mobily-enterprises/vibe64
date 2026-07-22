@@ -43,7 +43,7 @@ async function resolveProgramReferences({
   parsedProgram,
   projectRoot
 }) {
-const references = [];
+  const references = [];
   const diagnostics = [];
   const visited = new Set();
   const queue = parsedProgram.uses.map((use) => ({ depth: 0, use }));
@@ -58,7 +58,7 @@ const references = [];
     visited.add(key);
     if (use.provider.startsWith("asset:")) {
       const identity = use.provider.slice("asset:".length);
-      if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(identity)) {
+      if (identity.startsWith("url:") || /^[a-z][a-z0-9+.-]*:/iu.test(identity)) {
         references.push({
           symbol: use.symbol,
           provider: use.provider,
@@ -166,6 +166,11 @@ const references = [];
       for (const dependency of providerProgram.uses) {
         queue.push({ depth: current.depth + 1, use: dependency });
       }
+    } else if (providerProgram.uses.length > 0) {
+      diagnostics.push({
+        code: "REFERENCE_CLOSURE_DEPTH_LIMIT",
+        message: `Program reference closure stopped at ${internal.programPath}; its dependencies were not silently omitted.`
+      });
     }
   }
 
@@ -229,6 +234,13 @@ async function sourceFactUses(sourceFacts, {
   targetKind = "javascript"
 } = {}) {
   const uses = [];
+  for (const resource of sourceFacts.htmlResources || []) {
+    uses.push({
+      provider: resource.provider,
+      source: { line: null },
+      symbol: resource.symbol
+    });
+  }
   for (const importedModule of sourceFacts.imports || []) {
     if (importedModule.realizationOnly || frameworkRealizationImport(importedModule, targetKind)) {
       continue;
@@ -402,7 +414,14 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
       projectRoot: pair.projectRoot
     })
     : { diagnostics: [], references: [] };
-  const resolution = mergeResolutionResults(programReferences, sourceReferences);
+  const resolution = mergeResolutionResults(
+    programReferences,
+    sourceReferences,
+    {
+      diagnostics: sourceFacts.diagnostics || [],
+      references: []
+    }
+  );
 
   return {
     capsuleVersion: 2,

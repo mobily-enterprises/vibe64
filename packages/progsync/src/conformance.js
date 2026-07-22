@@ -4,7 +4,7 @@ import path from "node:path";
 import { sourceFactUses } from "./context.js";
 import { ProgSyncError } from "./errors.js";
 import { assertValidProgram, parseProgram, symbolAnchor } from "./program.js";
-import { absoluteProjectPath, slashPath } from "./paths.js";
+import { absoluteProjectPath } from "./paths.js";
 import { extractSourceFacts } from "./structural.js";
 
 function callableName(name) {
@@ -181,6 +181,7 @@ async function validateImplementationUses({
       );
     }
   }
+  return requirements;
 }
 
 function providerTarget(provider) {
@@ -191,33 +192,25 @@ function providerTarget(provider) {
   return match[1].replace(/\.md$/u, "");
 }
 
-function programUseIsRealized(use, sourceFacts) {
-  if (use.provider.startsWith("asset:") || use.provider.startsWith("platform:")) {
+function programUseRequiresRuntimeBinding(use) {
+  if (use.provider.startsWith("asset:") || use.provider.startsWith("@/types.md#")) {
+    return false;
+  }
+  if (use.provider.startsWith("platform:") || use.provider.startsWith("package:")) {
     return true;
   }
-  if (use.provider.startsWith("@/types.md#")) {
-    return true;
-  }
-  const target = providerTarget(use.provider);
-  if (target) {
-    return (sourceFacts.imports || []).some((entry) => (
-      slashPath(entry.resolvedTarget) === slashPath(target)
-    ));
-  }
-  if (use.provider.startsWith("@/")) {
-    return true;
-  }
-  if (use.provider.startsWith("package:")) {
-    const specifier = use.provider.slice("package:npm/".length).split("#")[0];
-    return (sourceFacts.imports || []).some((entry) => entry.specifier === specifier);
-  }
-  return false;
+  return Boolean(providerTarget(use.provider));
 }
 
-function validateProgramUses(parsedProgram, sourceFacts, diagnostics) {
+function validateProgramUses(parsedProgram, requirements, diagnostics) {
   for (const use of parsedProgram.uses) {
-    if (!programUseIsRealized(use, sourceFacts)) {
-      diagnostics.push(`${use.symbol} from ${use.provider} has no implementation import or binding.`);
+    if (
+      programUseRequiresRuntimeBinding(use) &&
+      !requirements.some((required) => sameUse(use, required))
+    ) {
+      diagnostics.push(
+        `${use.symbol} from ${use.provider} has no matching implementation use of that exact symbol.`
+      );
     }
   }
 }
@@ -299,7 +292,12 @@ async function validatePairConformance({
     source: implementationSource,
     targetKind: pair.target.kind
   });
-  const diagnostics = sameFileCallDiagnostics(parsedProgram);
+  const diagnostics = [
+    ...sameFileCallDiagnostics(parsedProgram),
+    ...(sourceFacts.diagnostics || []).map((diagnostic) => (
+      `${diagnostic.code}: ${diagnostic.message}`
+    ))
+  ];
   if (pair.target.kind === "javascript") {
     await validateJavaScriptProvides(
       parsedProgram,
@@ -312,14 +310,14 @@ async function validatePairConformance({
   } else {
     validateHtmlSurface(parsedProgram, diagnostics);
   }
-  await validateImplementationUses({
+  const requirements = await validateImplementationUses({
     diagnostics,
     pair,
     parsedProgram,
     projectRoot,
     sourceFacts
   });
-  validateProgramUses(parsedProgram, sourceFacts, diagnostics);
+  validateProgramUses(parsedProgram, requirements, diagnostics);
   if (diagnostics.length > 0) {
     throw new ProgSyncError(
       "PAIR_SURFACE_MISMATCH",

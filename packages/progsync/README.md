@@ -78,8 +78,10 @@ Git-dirty while fully synchronized.
 
 `sync --changed` synchronizes directly changed supported pairs and follows
 Program `Uses` links to schedule the transitive consumers of changed Program
-providers such as `types.md` and root libraries. City Explorer integration is
-still deferred; the materialized projections are its intended input.
+providers such as `types.md` and root libraries. It also schedules modules that
+consume changed retained assets and modules whose retained `package.json`
+context changed. City Explorer integration is still deferred; the materialized
+projections are its intended input.
 
 The Codex runner receives a complete capsule in an ephemeral invocation, with
 shell, web search, connectors, and collaboration disabled. Codex edits only a
@@ -89,10 +91,12 @@ only then applies it to the project.
 
 Each pair is locked from snapshot through checkpoint. ProgSync rechecks that
 neither real file changed while Codex was working, stages candidate writes,
-rolls back ordinary apply failures, re-reads the final pair, and advances the
-private ref only after final conformance validation. The private accepted state
-is all-or-nothing; several filesystem renames are not crash-atomic, so a process
-or machine crash during the short apply window can require another sync.
+checks each file again while installing it without overwriting a concurrent
+path-level edit, rolls back ordinary apply failures, re-reads the final pair,
+and advances the private ref only after final conformance validation. The
+private accepted state is all-or-nothing; several filesystem operations are not
+crash-atomic, so a process or machine crash during the short apply window can
+require another sync.
 
 The ephemeral candidate is a small standalone temporary Git repository, not a
 `git worktree`. It is removed after each invocation. Persistent accepted state

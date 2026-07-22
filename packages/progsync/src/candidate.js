@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -6,7 +7,7 @@ import { runProgSyncCommand } from "./command.js";
 import { validatePairConformance } from "./conformance.js";
 import { validateRunnerResult } from "./codexRunner.js";
 import { ProgSyncError } from "./errors.js";
-import { stageFileWrite, writeFileAtomic } from "./files.js";
+import { stageFileWrite } from "./files.js";
 import { parseNulPaths, readWorkingFile } from "./git.js";
 import {
   absoluteProjectPath,
@@ -19,6 +20,129 @@ import {
 } from "./program.js";
 import { fileChanged } from "./state.js";
 import { extractSourceFacts } from "./structural.js";
+
+function workingFileChanged(expected, current) {
+  return fileChanged(expected, current) || Boolean(
+    expected?.exists &&
+    current?.exists &&
+    expected.permissions !== null &&
+    expected.permissions !== undefined &&
+    expected.permissions !== current.permissions
+  );
+}
+
+async function readAbsoluteFile(absolutePath) {
+  try {
+    const stat = await fs.lstat(absolutePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new ProgSyncError(
+        "REGULAR_FILE_REQUIRED",
+        `ProgSync can only replace regular files: ${absolutePath}`
+      );
+    }
+    return {
+      exists: true,
+      mode: (stat.mode & 0o111) === 0 ? 0o644 : 0o755,
+      permissions: stat.mode & 0o777,
+      source: await fs.readFile(absolutePath, "utf8")
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { exists: false, mode: null, permissions: null, source: null };
+    }
+    throw error;
+  }
+}
+
+function siblingRecoveryPath(absolutePath) {
+  return path.join(
+    path.dirname(absolutePath),
+    `.${path.basename(absolutePath)}.progsync-backup-${crypto.randomBytes(8).toString("hex")}`
+  );
+}
+
+async function restoreDisplacedFile({ backupPath, targetPath }) {
+  try {
+    await fs.link(backupPath, targetPath);
+    await fs.rm(backupPath, { force: true });
+    return true;
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function installStagedWrite({ original, stagedPath, targetPath }) {
+  let backupPath = null;
+  try {
+    if (original.exists) {
+      backupPath = siblingRecoveryPath(targetPath);
+      try {
+        await fs.rename(targetPath, backupPath);
+      } catch (error) {
+        if (error?.code === "ENOENT") {
+          throw new ProgSyncError(
+            "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+            `The file disappeared before ProgSync could replace it: ${targetPath}`
+          );
+        }
+        throw error;
+      }
+      const displaced = await readAbsoluteFile(backupPath);
+      if (workingFileChanged(original, displaced)) {
+        const restored = await restoreDisplacedFile({ backupPath, targetPath });
+        if (restored) {
+          backupPath = null;
+        }
+        throw new ProgSyncError(
+          "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+          "A project file changed immediately before candidate installation; the candidate was not installed.",
+          restored ? {} : { recoveryPath: backupPath }
+        );
+      }
+    } else if ((await readAbsoluteFile(targetPath)).exists) {
+      throw new ProgSyncError(
+        "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+        `The file was created before ProgSync could install its candidate: ${targetPath}`
+      );
+    }
+
+    try {
+      await fs.link(stagedPath, targetPath);
+    } catch (error) {
+      if (error?.code !== "EEXIST") {
+        throw error;
+      }
+      if (backupPath) {
+        const backup = await readAbsoluteFile(backupPath);
+        if (!workingFileChanged(original, backup)) {
+          await fs.rm(backupPath, { force: true });
+          backupPath = null;
+        }
+      }
+      throw new ProgSyncError(
+        "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+        "A project file was created while ProgSync was installing its candidate; the external file was preserved.",
+        backupPath ? { recoveryPath: backupPath } : {}
+      );
+    }
+    await fs.rm(stagedPath, { force: true }).catch(() => {});
+    return backupPath;
+  } catch (error) {
+    if (backupPath && !(await readAbsoluteFile(targetPath)).exists) {
+      const restored = await restoreDisplacedFile({ backupPath, targetPath });
+      if (restored) {
+        backupPath = null;
+      }
+    }
+    if (backupPath && error instanceof ProgSyncError) {
+      error.details = { ...error.details, recoveryPath: backupPath };
+    }
+    throw error;
+  }
+}
 
 async function writeWorkspaceFile(workspaceRoot, relativePath, source, permissions = 0o644) {
   const absolutePath = path.join(workspaceRoot, ...slashPath(relativePath).split("/"));
@@ -59,7 +183,12 @@ async function collectCandidateChanges(workspaceRoot) {
   };
 }
 
-async function validateImplementationCandidate({ absolutePath, targetKind }) {
+async function validateImplementationCandidate({
+  absolutePath,
+  implementationPath = path.basename(absolutePath),
+  projectRoot = path.dirname(absolutePath),
+  targetKind
+}) {
   if (targetKind === "javascript") {
     try {
       await runProgSyncCommand(process.execPath, ["--check", absolutePath], {
@@ -76,8 +205,8 @@ async function validateImplementationCandidate({ absolutePath, targetKind }) {
   }
   const source = await fs.readFile(absolutePath, "utf8");
   await extractSourceFacts({
-    implementationPath: path.basename(absolutePath),
-    projectRoot: path.dirname(absolutePath),
+    implementationPath,
+    projectRoot,
     source,
     targetKind
   });
@@ -222,6 +351,8 @@ async function runCandidateSynchronization({
       if (relativePath === pair.implementationPath) {
         await validateImplementationCandidate({
           absolutePath,
+          implementationPath: pair.implementationPath,
+          projectRoot: workspaceRoot,
           targetKind: pair.target.kind
         });
       }
@@ -293,8 +424,8 @@ async function applyCandidates({
     const currentImplementation = originals.get(pair.implementationPath) ||
       await readWorkingFile(pair.projectRoot, pair.implementationPath);
     if (
-      fileChanged(expectedPair.program, currentProgram) ||
-      fileChanged(expectedPair.implementation, currentImplementation)
+      workingFileChanged(expectedPair.program, currentProgram) ||
+      workingFileChanged(expectedPair.implementation, currentImplementation)
     ) {
       throw new ProgSyncError(
         "PAIR_CHANGED_DURING_SYNCHRONIZATION",
@@ -334,41 +465,60 @@ async function applyCandidates({
   const completed = [];
   try {
     for (const write of effectiveWrites) {
-      await fs.rename(
-        staged.get(write.relativePath),
-        absoluteProjectPath(pair.projectRoot, write.relativePath)
-      );
+      const original = originals.get(write.relativePath);
+      const targetPath = absoluteProjectPath(pair.projectRoot, write.relativePath);
+      const backupPath = await installStagedWrite({
+        original,
+        stagedPath: staged.get(write.relativePath),
+        targetPath
+      });
       staged.delete(write.relativePath);
-      completed.push(write.relativePath);
+      completed.push({ backupPath, original, targetPath, write });
+    }
+    for (const completedWrite of completed) {
+      if (!completedWrite.backupPath) {
+        continue;
+      }
+      const backup = await readAbsoluteFile(completedWrite.backupPath);
+      if (workingFileChanged(completedWrite.original, backup)) {
+        throw new ProgSyncError(
+          "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+          "A project file changed through an open handle while ProgSync was applying its candidate.",
+          { recoveryPath: completedWrite.backupPath }
+        );
+      }
     }
   } catch (error) {
     const rollbackDiagnostics = [];
-    for (const relativePath of completed.reverse()) {
-      const original = originals.get(relativePath);
-      const absolutePath = absoluteProjectPath(pair.projectRoot, relativePath);
-      const attempted = effectiveWrites.find((write) => write.relativePath === relativePath);
+    for (const completedWrite of completed.reverse()) {
+      const { backupPath, original, targetPath, write } = completedWrite;
       try {
-        const current = await readWorkingFile(pair.projectRoot, relativePath);
+        const current = await readAbsoluteFile(targetPath);
         const attemptedState = {
           exists: true,
-          mode: (attempted.permissions ?? original?.permissions ?? 0o644) & 0o111
+          mode: (write.permissions ?? original?.permissions ?? 0o644) & 0o111
             ? 0o755
             : 0o644,
-          source: attempted.source
+          permissions: write.permissions ?? original?.permissions ?? 0o644,
+          source: write.source
         };
-        if (fileChanged(attemptedState, current)) {
+        if (workingFileChanged(attemptedState, current)) {
           rollbackDiagnostics.push(
-            `${relativePath} changed again during rollback and was left untouched.`
+            `${write.relativePath} changed again during rollback and was left untouched.`
           );
           continue;
         }
-        if (original.exists) {
-          await writeFileAtomic(absolutePath, original.source, original.permissions);
-        } else {
-          await fs.rm(absolutePath, { force: true });
+        await fs.rm(targetPath, { force: true });
+        if (backupPath) {
+          const restored = await restoreDisplacedFile({ backupPath, targetPath });
+          if (!restored) {
+            rollbackDiagnostics.push(
+              `${write.relativePath} was recreated during rollback; its backup remains at ${backupPath}.`
+            );
+          }
         }
       } catch (rollbackError) {
-        rollbackDiagnostics.push(`${relativePath}: ${rollbackError.message}`);
+        rollbackDiagnostics.push(`${write.relativePath}: ${rollbackError.message}`);
       }
     }
     await Promise.all([...staged.values()].map((temporaryPath) => (
@@ -390,11 +540,15 @@ async function applyCandidates({
       fs.rm(temporaryPath, { force: true })
     )));
   }
+  await Promise.all(completed.map(({ backupPath }) => (
+    backupPath ? fs.rm(backupPath, { force: true }) : Promise.resolve()
+  )));
   return effectiveWrites.map((write) => write.relativePath);
 }
 
 export {
   applyCandidates,
+  installStagedWrite,
   runCandidateSynchronization,
   validateImplementationCandidate
 };

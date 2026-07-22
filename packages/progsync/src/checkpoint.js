@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -21,18 +20,9 @@ import {
   runGit
 } from "./git.js";
 import { stableJson } from "./program.js";
-import { fileChanged, sourceHash } from "./state.js";
+import { fileChanged, pairDigest, sourceHash } from "./state.js";
 
 const MAX_STATE_WRITE_ATTEMPTS = 8;
-
-function pairDigest(pair) {
-  return crypto
-    .createHash("sha256")
-    .update(pair.programPath)
-    .update("\0")
-    .update(pair.implementationPath)
-    .digest("hex");
-}
 
 function pairId(pair) {
   return `sha256:${pairDigest(pair)}`;

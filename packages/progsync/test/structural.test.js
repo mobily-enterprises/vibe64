@@ -50,6 +50,49 @@ exports.stop = async function stop(reason) { return reason; };
   );
 });
 
+test("extracts nested CommonJS imports and reports ambiguous shadowing", async () => {
+  const nestedRequire = await extractSourceFacts({
+    implementationPath: "src/module.js",
+    projectRoot: process.cwd(),
+    source: `export function dispatch(value) {
+  const { send } = require("./sender.js");
+  return send(value);
+}
+`,
+    targetKind: "javascript"
+  });
+  assert.equal(nestedRequire.imports[0].specifier, "./sender.js");
+  assert.equal(nestedRequire.imports[0].names[0].called, true);
+  assert.deepEqual(nestedRequire.diagnostics, []);
+
+  const shadowedImport = await extractSourceFacts({
+    implementationPath: "src/module.js",
+    projectRoot: process.cwd(),
+    source: `import { send } from "./sender.js";
+export function dispatch(send) { return send(); }
+`,
+    targetKind: "javascript"
+  });
+  assert.equal(
+    shadowedImport.diagnostics.some(({ code }) => code === "AMBIGUOUS_IMPORT_BINDING"),
+    true
+  );
+
+  const indirectRequire = await extractSourceFacts({
+    implementationPath: "src/module.js",
+    projectRoot: process.cwd(),
+    source: `export function dispatch(value) {
+  return require("./sender.js").send(value);
+}
+`,
+    targetKind: "javascript"
+  });
+  assert.equal(
+    indirectRequire.diagnostics.some(({ code }) => code === "AMBIGUOUS_REQUIRE_USE"),
+    true
+  );
+});
+
 test("supports TypeScript script-setup attributes, macros, templates, and JSON blocks", async () => {
   const facts = await extractSourceFacts({
     implementationPath: "src/ProfileEditor.vue",
@@ -75,6 +118,90 @@ defineExpose({ save })
   assert.deepEqual(facts.exposes, ["save"]);
   assert.deepEqual(facts.templateComponents, ["SaveButton"]);
   assert.equal(facts.imports[0].names[0].used, true);
+});
+
+test("extracts runtime-array Vue props and rejects unresolved macro types", async () => {
+  const runtime = await extractSourceFacts({
+    implementationPath: "src/RuntimeProps.vue",
+    projectRoot: process.cwd(),
+    source: `<script setup>defineProps(["title", "count"])</script>\n`,
+    targetKind: "vue"
+  });
+  assert.deepEqual(runtime.props, ["title", "count"]);
+
+  const imported = await extractSourceFacts({
+    implementationPath: "src/ImportedProps.vue",
+    projectRoot: process.cwd(),
+    source: `<script setup lang="ts">
+import type { ImportedProps } from "./types"
+defineProps<ImportedProps>()
+</script>
+`,
+    targetKind: "vue"
+  });
+  assert.equal(
+    imported.diagnostics.some(({ code }) => code === "UNRESOLVED_VUE_MACRO_TYPE"),
+    true
+  );
+
+  const dynamicRuntime = await extractSourceFacts({
+    implementationPath: "src/DynamicProps.vue",
+    projectRoot: process.cwd(),
+    source: `<script setup>const names = ["title"]; defineProps(names)</script>\n`,
+    targetKind: "vue"
+  });
+  assert.equal(
+    dynamicRuntime.diagnostics.some(({ code }) => code === "UNRESOLVED_VUE_MACRO_RUNTIME"),
+    true
+  );
+});
+
+test("extracts HTML resources and dependencies from inline scripts", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "progsync-html-facts-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, "public"), { recursive: true });
+  await fs.writeFile(path.join(root, "public/boot.js"), "export function boot() {}\n", "utf8");
+  const facts = await extractSourceFacts({
+    implementationPath: "public/index.html",
+    projectRoot: root,
+    source: `<!doctype html>
+<html>
+  <head><link rel="stylesheet" href="./screen.css"></head>
+  <body>
+    <script src="/runtime.js"></script>
+    <script type="module">import { boot } from "./boot.js"; boot();</script>
+  </body>
+</html>
+`,
+    targetKind: "html"
+  });
+  assert.deepEqual(facts.htmlResources, [
+    { provider: "asset:runtime.js", symbol: "/runtime.js" },
+    { provider: "asset:public/screen.css", symbol: "./screen.css" }
+  ]);
+  assert.equal(facts.imports[0].specifier, "./boot.js");
+  assert.equal(facts.imports[0].names[0].called, true);
+});
+
+test("validates nested candidate imports against the project root", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "progsync-candidate-root-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, "src/deep"), { recursive: true });
+  await fs.mkdir(path.join(root, "lib"), { recursive: true });
+  await fs.writeFile(path.join(root, "lib/value.js"), "export const value = 1;\n", "utf8");
+  const candidatePath = path.join(root, "src/deep/module.js");
+  await fs.writeFile(
+    candidatePath,
+    `import { value } from "../../lib/value.js";\nexport { value };\n`,
+    "utf8"
+  );
+
+  await validateImplementationCandidate({
+    absolutePath: candidatePath,
+    implementationPath: "src/deep/module.js",
+    projectRoot: root,
+    targetKind: "javascript"
+  });
 });
 
 test("rejects unsupported or malformed Vue and HTML candidates", async (t) => {

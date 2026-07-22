@@ -9,6 +9,15 @@ function sourceHash(file) {
   return crypto.createHash("sha256").update(file.source).digest("hex");
 }
 
+function pairDigest(pair) {
+  return crypto
+    .createHash("sha256")
+    .update(pair.programPath)
+    .update("\0")
+    .update(pair.implementationPath)
+    .digest("hex");
+}
+
 function fileChanged(previous, current) {
   if (Boolean(previous?.exists) !== Boolean(current?.exists)) {
     return true;
@@ -81,6 +90,7 @@ function snapshotSummary(snapshot) {
 export {
   classifyPair,
   fileChanged,
+  pairDigest,
   snapshotSummary,
   sourceHash
 };

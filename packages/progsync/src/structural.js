@@ -385,6 +385,48 @@ function identifierIsPropertyName(node, parent) {
   );
 }
 
+function declaredBindingCounts(ast) {
+  const counts = new Map();
+  const add = (name) => counts.set(name, (counts.get(name) || 0) + 1);
+  walkAst(ast.program, (node) => {
+    if (node.type === "VariableDeclarator") {
+      for (const name of patternNames(node.id)) {
+        add(name);
+      }
+      return;
+    }
+    if (node.type === "CatchClause") {
+      for (const name of patternNames(node.param)) {
+        add(name);
+      }
+      return;
+    }
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "ObjectMethod" ||
+      node.type === "ClassMethod" ||
+      node.type === "ClassPrivateMethod"
+    ) {
+      if (node.id?.name) {
+        add(node.id.name);
+      }
+      for (const name of parameterNames(node.params)) {
+        add(name);
+      }
+      return;
+    }
+    if (
+      (node.type === "ClassDeclaration" || node.type === "ClassExpression") &&
+      node.id?.name
+    ) {
+      add(node.id.name);
+    }
+  });
+  return counts;
+}
+
 function collectJavaScriptStructure(ast) {
   const programBody = ast.program.body || [];
   const declarations = declarationFacts(programBody);
@@ -456,20 +498,38 @@ function collectJavaScriptStructure(ast) {
     }
   }
 
-  for (const statement of programBody) {
-    if (statement.type === "VariableDeclaration") {
-      for (const item of statement.declarations) {
-        const specifier = requireSpecifier(item.init);
-        if (specifier) {
-          addImport(importsBySpecifier, specifier, { names: requireNames(item.id) });
+  const declaredBindings = declaredBindingCounts(ast);
+  const requireBindingCounts = new Map();
+  const diagnostics = [];
+  if (declaredBindings.has("require")) {
+    diagnostics.push({
+      code: "AMBIGUOUS_REQUIRE_BINDING",
+      message: "A local `require` binding prevents exact CommonJS dependency extraction."
+    });
+  } else {
+    walkAst(ast.program, (node, parent) => {
+      const specifier = requireSpecifier(node);
+      if (!specifier) {
+        return;
+      }
+      if (parent?.type === "VariableDeclarator" && parent.init === node) {
+        const names = requireNames(parent.id);
+        for (const name of names) {
+          requireBindingCounts.set(
+            name.local,
+            (requireBindingCounts.get(name.local) || 0) + 1
+          );
         }
-      }
-    } else if (statement.type === "ExpressionStatement") {
-      const specifier = requireSpecifier(statement.expression);
-      if (specifier) {
+        addImport(importsBySpecifier, specifier, { names });
+      } else if (parent?.type === "ExpressionStatement") {
         addImport(importsBySpecifier, specifier, { sideEffect: true });
+      } else {
+        diagnostics.push({
+          code: "AMBIGUOUS_REQUIRE_USE",
+          message: `The value returned by require(${JSON.stringify(specifier)}) is used in a form ProgSync cannot resolve exactly.`
+        });
       }
-    }
+    });
   }
 
   walkAst(ast.program, (node) => {
@@ -511,15 +571,44 @@ function collectJavaScriptStructure(ast) {
   });
 
   const importedLocals = new Map();
+  const importedLocalCounts = new Map();
   for (const entry of importsBySpecifier.values()) {
     for (const name of entry.names) {
       importedLocals.set(name.local, name);
+      importedLocalCounts.set(
+        name.local,
+        (importedLocalCounts.get(name.local) || 0) + 1
+      );
     }
+  }
+  const shadowedImports = [...importedLocals.keys()].filter((name) => (
+    (declaredBindings.get(name) || 0) > (requireBindingCounts.get(name) || 0) ||
+    (requireBindingCounts.get(name) || 0) > 1 ||
+    (importedLocalCounts.get(name) || 0) > 1
+  ));
+  if (shadowedImports.length > 0) {
+    diagnostics.push({
+      code: "AMBIGUOUS_IMPORT_BINDING",
+      message: `Imported bindings are shadowed locally: ${shadowedImports.join(", ")}.`
+    });
+  }
+  const shadowedAmbientNames = new Set(
+    [...AMBIENT_NAMES].filter((name) => declaredBindings.has(name))
+  );
+  if (shadowedAmbientNames.size > 0) {
+    diagnostics.push({
+      code: "AMBIGUOUS_AMBIENT_BINDING",
+      message: `Possible platform bindings are declared locally: ${[...shadowedAmbientNames].join(", ")}.`
+    });
   }
   const ambientNames = new Set();
   const ambientUses = new Map();
   walkAst(ast.program, (node, parent) => {
-    if (node.type === "Identifier" && AMBIENT_NAMES.has(node.name)) {
+    if (
+      node.type === "Identifier" &&
+      AMBIENT_NAMES.has(node.name) &&
+      !shadowedAmbientNames.has(node.name)
+    ) {
       if (!identifierIsBinding(node, parent) && !identifierIsPropertyName(node, parent)) {
         ambientNames.add(node.name);
       }
@@ -540,7 +629,11 @@ function collectJavaScriptStructure(ast) {
       return;
     }
     const callee = node.type === "TaggedTemplateExpression" ? node.tag : node.callee;
-    if (callee?.type === "Identifier" && AMBIENT_NAMES.has(callee.name)) {
+    if (
+      callee?.type === "Identifier" &&
+      AMBIENT_NAMES.has(callee.name) &&
+      !shadowedAmbientNames.has(callee.name)
+    ) {
       ambientUses.set(callee.name, {
         base: callee.name,
         called: true,
@@ -550,7 +643,8 @@ function collectJavaScriptStructure(ast) {
     if (
       (callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression") &&
       callee.object?.type === "Identifier" &&
-      AMBIENT_NAMES.has(callee.object.name)
+      AMBIENT_NAMES.has(callee.object.name) &&
+      !shadowedAmbientNames.has(callee.object.name)
     ) {
       const member = identifierName(callee.property);
       if (member) {
@@ -581,6 +675,7 @@ function collectJavaScriptStructure(ast) {
   return {
     ambientNames: [...ambientNames].sort(),
     ambientUses: [...ambientUses.values()],
+    diagnostics,
     exports: [...exportsByName.values()],
     imports: [...importsBySpecifier.values()]
   };
@@ -672,14 +767,6 @@ function macroCall(node, name) {
   if (node?.type === "CallExpression" && node.callee?.type === "Identifier" && node.callee.name === name) {
     return node;
   }
-  if (
-    name === "defineProps" &&
-    node?.type === "CallExpression" &&
-    node.callee?.type === "Identifier" &&
-    node.callee.name === "withDefaults"
-  ) {
-    return macroCall(node.arguments?.[0], name);
-  }
   return null;
 }
 
@@ -691,6 +778,23 @@ function objectKeys(node) {
     .filter((property) => property.type !== "SpreadElement")
     .map((property) => identifierName(property.key))
     .filter(Boolean);
+}
+
+function runtimeKeysAreResolvable(node) {
+  if (!node) {
+    return true;
+  }
+  if (node.type === "ArrayExpression") {
+    return (node.elements || []).every((element) => element?.type === "StringLiteral");
+  }
+  if (node.type === "ObjectExpression") {
+    return (node.properties || []).every((property) => (
+      property.type !== "SpreadElement" &&
+      !property.computed &&
+      Boolean(identifierName(property.key))
+    ));
+  }
+  return false;
 }
 
 function typeArgument(call) {
@@ -730,6 +834,15 @@ function typeMembers(call, definitions) {
   return [];
 }
 
+function macroTypeIsResolvable(call, definitions) {
+  const argument = typeArgument(call);
+  if (!argument) {
+    return true;
+  }
+  const resolved = resolveTypeNode(argument, definitions);
+  return resolved?.type === "TSTypeLiteral" || resolved?.type === "TSInterfaceBody";
+}
+
 function typeMemberNames(call, definitions) {
   const members = typeMembers(call, definitions);
   if (members.length === 0) {
@@ -757,6 +870,7 @@ function emittedTypeNames(call, definitions) {
 
 function collectVueMacros(ast) {
   const definitions = typeDefinitions(ast);
+  const diagnostics = [];
   const props = new Set();
   const emits = new Set();
   const exposes = new Set();
@@ -764,11 +878,29 @@ function collectVueMacros(ast) {
   walkAst(ast.program, (node) => {
     const propsCall = macroCall(node, "defineProps");
     if (propsCall) {
+      const runtimeProps = propsCall.arguments?.[0]?.type === "ArrayExpression"
+        ? propsCall.arguments[0].elements
+          .map((element) => element?.type === "StringLiteral" ? element.value : null)
+          .filter(Boolean)
+        : [];
       for (const name of [
+        ...runtimeProps,
         ...objectKeys(propsCall.arguments?.[0]),
         ...typeMemberNames(propsCall, definitions)
       ]) {
         props.add(name);
+      }
+      if (!macroTypeIsResolvable(propsCall, definitions)) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_TYPE",
+          message: "defineProps() uses a type that cannot be resolved atomically from this Vue file."
+        });
+      }
+      if (!runtimeKeysAreResolvable(propsCall.arguments?.[0])) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_RUNTIME",
+          message: "defineProps() uses runtime keys that cannot be resolved atomically."
+        });
       }
     }
     const emitsCall = macroCall(node, "defineEmits");
@@ -783,17 +915,41 @@ function collectVueMacros(ast) {
       for (const name of names) {
         emits.add(String(name));
       }
+      if (!macroTypeIsResolvable(emitsCall, definitions)) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_TYPE",
+          message: "defineEmits() uses a type that cannot be resolved atomically from this Vue file."
+        });
+      }
+      if (!runtimeKeysAreResolvable(argument)) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_RUNTIME",
+          message: "defineEmits() uses runtime keys that cannot be resolved atomically."
+        });
+      }
     }
     const exposeCall = macroCall(node, "defineExpose");
     if (exposeCall) {
       for (const name of objectKeys(exposeCall.arguments?.[0])) {
         exposes.add(name);
       }
+      if (!runtimeKeysAreResolvable(exposeCall.arguments?.[0])) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_RUNTIME",
+          message: "defineExpose() uses runtime keys that cannot be resolved atomically."
+        });
+      }
     }
     const slotsCall = macroCall(node, "defineSlots");
     if (slotsCall) {
       for (const name of typeMemberNames(slotsCall, definitions)) {
         slots.add(name);
+      }
+      if (!macroTypeIsResolvable(slotsCall, definitions)) {
+        diagnostics.push({
+          code: "UNRESOLVED_VUE_MACRO_TYPE",
+          message: "defineSlots() uses a type that cannot be resolved atomically from this Vue file."
+        });
       }
     }
     const modelCall = macroCall(node, "defineModel");
@@ -806,6 +962,7 @@ function collectVueMacros(ast) {
     }
   });
   return {
+    diagnostics,
     emits: [...emits],
     exposes: [...exposes],
     props: [...props],
@@ -851,8 +1008,8 @@ async function extractVueFacts({ implementationPath, projectRoot, source }) {
       );
     }
   }
-  let javascript = { ambientNames: [], exports: [], imports: [] };
-  let macros = { emits: [], exposes: [], props: [], slots: [] };
+  let javascript = { ambientNames: [], ambientUses: [], diagnostics: [], exports: [], imports: [] };
+  let macros = { diagnostics: [], emits: [], exposes: [], props: [], slots: [] };
   if (descriptor.scriptSetup) {
     const language = String(descriptor.scriptSetup.lang || "js").toLowerCase();
     const typescript = language === "ts" || language === "tsx";
@@ -896,6 +1053,7 @@ async function extractVueFacts({ implementationPath, projectRoot, source }) {
   return {
     ...javascript,
     ...macros,
+    diagnostics: [...javascript.diagnostics, ...macros.diagnostics],
     hasOrdinaryScript: Boolean(descriptor.script),
     hasScriptSetup: Boolean(descriptor.scriptSetup),
     hasStyle: descriptor.styles.length > 0,
@@ -911,7 +1069,27 @@ function htmlAttribute(node, name) {
   return property?.value?.content || null;
 }
 
-function extractHtmlFacts({ implementationPath, source }) {
+function htmlResourceProvider(value, implementationPath) {
+  const source = String(value || "");
+  if (/^[a-z][a-z0-9+.-]*:/iu.test(source)) {
+    return `asset:${source}`;
+  }
+  if (source.startsWith("//")) {
+    return `asset:url:${source}`;
+  }
+  const pathname = source.split(/[?#]/u)[0];
+  const resolved = pathname.startsWith("@/")
+    ? pathname.slice(2)
+    : pathname.startsWith("/")
+      ? pathname.slice(1)
+      : path.posix.normalize(path.posix.join(
+        path.posix.dirname(slashPath(implementationPath)),
+        pathname
+      ));
+  return `asset:${resolved}`;
+}
+
+async function extractHtmlFacts({ implementationPath, projectRoot, source }) {
   const diagnostics = [];
   let ast;
   try {
@@ -937,6 +1115,7 @@ function extractHtmlFacts({ implementationPath, source }) {
   }
   const scripts = [];
   const styles = [];
+  const inlineScripts = [];
   walkAst(ast, (node) => {
     if (node.type !== 1) {
       return;
@@ -953,9 +1132,7 @@ function extractHtmlFacts({ implementationPath, source }) {
             .map((child) => child.content)
             .join("");
           if (scriptSource.trim()) {
-            javascriptAst(scriptSource, {
-              implementationPath: `${implementationPath}#inline-script`
-            });
+            inlineScripts.push(scriptSource);
           }
         }
       }
@@ -970,7 +1147,26 @@ function extractHtmlFacts({ implementationPath, source }) {
       }
     }
   });
-  return { scripts, styles };
+  const inlineFacts = await Promise.all(inlineScripts.map((scriptSource, index) => (
+    extractJavaScriptFacts({
+      implementationPath: `${implementationPath}#inline-script-${index + 1}.js`,
+      projectRoot,
+      source: scriptSource
+    })
+  )));
+  return {
+    ambientNames: inlineFacts.flatMap((facts) => facts.ambientNames || []),
+    ambientUses: inlineFacts.flatMap((facts) => facts.ambientUses || []),
+    diagnostics: inlineFacts.flatMap((facts) => facts.diagnostics || []),
+    exports: [],
+    htmlResources: [...scripts, ...styles].map((resource) => ({
+      provider: htmlResourceProvider(resource, implementationPath),
+      symbol: resource
+    })),
+    imports: inlineFacts.flatMap((facts) => facts.imports || []),
+    scripts,
+    styles
+  };
 }
 
 async function extractSourceFacts({
@@ -988,7 +1184,7 @@ async function extractSourceFacts({
   if (targetKind === "vue") {
     return extractVueFacts({ implementationPath, projectRoot, source });
   }
-  return extractHtmlFacts({ implementationPath, source });
+  return extractHtmlFacts({ implementationPath, projectRoot, source });
 }
 
 export {

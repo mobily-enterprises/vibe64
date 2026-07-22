@@ -5,17 +5,9 @@ import path from "node:path";
 
 import { ProgSyncError } from "./errors.js";
 import { runGit } from "./git.js";
+import { pairDigest } from "./state.js";
 
 const STALE_LOCK_MS = 30 * 60 * 1000;
-
-function pairLockDigest(pair) {
-  return crypto
-    .createHash("sha256")
-    .update(pair.programPath)
-    .update("\0")
-    .update(pair.implementationPath)
-    .digest("hex");
-}
 
 function processIsAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) {
@@ -59,7 +51,7 @@ async function acquirePairLock(pair) {
   const gitPath = (await runGit(pair.projectRoot, [
     "rev-parse",
     "--git-path",
-    `progsync/locks/${pairLockDigest(pair)}.lock`
+    `progsync/locks/${pairDigest(pair)}.lock`
   ])).trim();
   const lockPath = path.isAbsolute(gitPath)
     ? gitPath
@@ -98,9 +90,27 @@ async function acquirePairLock(pair) {
       if (error?.code !== "EEXIST") {
         throw error;
       }
-      if (attempt === 1 && await existingLockIsStale(lockPath)) {
-        await fs.rm(lockPath, { force: true });
-        continue;
+      if (attempt === 1) {
+        const cleanupPath = `${lockPath}.cleanup`;
+        let ownsCleanup = false;
+        try {
+          await fs.mkdir(cleanupPath);
+          ownsCleanup = true;
+        } catch (cleanupError) {
+          if (cleanupError?.code !== "EEXIST") {
+            throw cleanupError;
+          }
+        }
+        if (ownsCleanup) {
+          try {
+            if (await existingLockIsStale(lockPath)) {
+              await fs.rm(lockPath, { force: true });
+              continue;
+            }
+          } finally {
+            await fs.rmdir(cleanupPath).catch(() => {});
+          }
+        }
       }
       throw new ProgSyncError(
         "PAIR_BUSY",

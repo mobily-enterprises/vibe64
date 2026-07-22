@@ -5,11 +5,16 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  checkProgram,
   importProgram,
   syncFile
 } from "../src/index.js";
+import { installStagedWrite } from "../src/candidate.js";
 import { runProgSyncCommand } from "../src/command.js";
 import { PROGSYNC_STATE_REF } from "../src/constants.js";
+import { acquirePairLock } from "../src/lock.js";
+import { resolveModulePair } from "../src/paths.js";
+import { pairDigest } from "../src/state.js";
 import {
   createGitProject,
   readContext,
@@ -80,6 +85,35 @@ test("does not read a pair through a project-internal symbolic link", async (t) 
   );
 });
 
+test("does not traverse a symbolic-link projection tree while checking", async (t) => {
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "progsync-index-outside-"));
+  t.after(() => fs.rm(outside, { recursive: true, force: true }));
+  const victim = path.join(outside, "orphan.js.md.json");
+  await fs.writeFile(victim, "do not delete\n", "utf8");
+  const root = await createGitProject(t, {
+    "program/types.md": `# Types
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`Record\`
+
+A structured record.
+`
+  });
+  await fs.mkdir(path.join(root, ".program"), { recursive: true });
+  await fs.symlink(outside, path.join(root, ".program/index"));
+
+  await assert.rejects(
+    checkProgram({ projectRoot: root }),
+    (error) => error.code === "SYMLINKED_PROJECT_PATH"
+  );
+  assert.equal(await fs.readFile(victim, "utf8"), "do not delete\n");
+});
+
 test("serializes synchronization of the same pair", async (t) => {
   const root = await createGitProject(t, { "src/greet.js": IMPLEMENTATION });
   const entered = deferred();
@@ -114,6 +148,58 @@ test("serializes synchronization of the same pair", async (t) => {
   }
   const result = await first;
   assert.equal(result.status, "updated");
+});
+
+test("allows only one contender to recover and acquire a stale pair lock", async (t) => {
+  const root = await createGitProject(t, { "src/greet.js": IMPLEMENTATION });
+  const pair = resolveModulePair(root, "src/greet.js");
+  const gitPath = (await runProgSyncCommand("git", [
+    "rev-parse",
+    "--git-path",
+    `progsync/locks/${pairDigest(pair)}.lock`
+  ], { cwd: root })).stdout.trim();
+  const lockPath = path.isAbsolute(gitPath) ? gitPath : path.resolve(root, gitPath);
+  await fs.mkdir(path.dirname(lockPath), { recursive: true });
+  await fs.writeFile(lockPath, `${JSON.stringify({
+    hostname: os.hostname(),
+    nonce: "stale",
+    pid: 2147483647
+  })}\n`, "utf8");
+
+  const contenders = await Promise.allSettled([
+    acquirePairLock(pair),
+    acquirePairLock(pair)
+  ]);
+  const acquired = contenders.filter(({ status }) => status === "fulfilled");
+  const rejected = contenders.filter(({ status }) => status === "rejected");
+  assert.equal(acquired.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason.code, "PAIR_BUSY");
+  await acquired[0].value();
+});
+
+test("does not overwrite a file changed at candidate installation time", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "progsync-install-race-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const targetPath = path.join(root, "module.js");
+  const stagedPath = path.join(root, ".module.js.candidate");
+  await fs.writeFile(targetPath, "manual edit\n", "utf8");
+  await fs.writeFile(stagedPath, "generated edit\n", "utf8");
+
+  await assert.rejects(
+    installStagedWrite({
+      original: {
+        exists: true,
+        mode: 0o644,
+        permissions: 0o644,
+        source: "accepted source\n"
+      },
+      stagedPath,
+      targetPath
+    }),
+    (error) => error.code === "PAIR_CHANGED_DURING_SYNCHRONIZATION"
+  );
+  assert.equal(await fs.readFile(targetPath, "utf8"), "manual edit\n");
 });
 
 test("preserves a manual edit made while a candidate is running", async (t) => {

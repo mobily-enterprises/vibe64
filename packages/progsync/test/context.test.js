@@ -201,6 +201,118 @@ test("rejects a Program candidate that omits a used outside operation", async (t
   await assert.rejects(fs.stat(path.join(root, "program/src/dispatch.js.md")), /ENOENT/u);
 });
 
+test("rejects a Program dependency that names an unused symbol from an imported module", async (t) => {
+  const senderProgram = `${SENDER_PROGRAM.trimEnd()}
+
+### \`unusedOperation()\`
+
+The function returns no value.
+`;
+  const invalid = DISPATCH_PROGRAM.replace(
+    "- [`deliver()`](@/src/sendAlert.js.md#sendalert)",
+    `- [\`deliver()\`](@/src/sendAlert.js.md#sendalert)
+- [\`unusedOperation()\`](@/src/sendAlert.js.md#unusedoperation)`
+  );
+  const root = await createGitProject(t, {
+    "program/src/sendAlert.js.md": senderProgram,
+    "src/dispatch.js": DISPATCH_IMPLEMENTATION,
+    "src/sendAlert.js": `${SENDER_IMPLEMENTATION}\nexport function unusedOperation() {}\n`
+  });
+
+  await assert.rejects(
+    importProgram({
+      inputPath: "src/dispatch.js",
+      projectRoot: root,
+      runner: async ({ mode, workspaceRoot }) => {
+        const context = await readContext(workspaceRoot);
+        await writeWorkspace(workspaceRoot, context.target.programPath, invalid);
+        return synchronizationReport(mode);
+      },
+      write: false
+    }),
+    (error) => error.code === "PAIR_SURFACE_MISMATCH" &&
+      error.details.diagnostics.some((message) => message.includes("unusedOperation"))
+  );
+});
+
+test("requires HTML scripts and styles to appear in Program Uses", async (t) => {
+  const root = await createGitProject(t, {
+    "public/app.js": "document.body.dataset.ready = 'true';\n",
+    "public/index.html": "<!doctype html><html><body><script src=\"./app.js\"></script></body></html>\n"
+  });
+  const incompleteProgram = `# Application document
+
+Loads the application document.
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`Application document\`
+
+The document presents the application.
+`;
+
+  await assert.rejects(
+    importProgram({
+      inputPath: "public/index.html",
+      projectRoot: root,
+      runner: async ({ mode, workspaceRoot }) => {
+        const context = await readContext(workspaceRoot);
+        await writeWorkspace(workspaceRoot, context.target.programPath, incompleteProgram);
+        return synchronizationReport(mode);
+      },
+      write: false
+    }),
+    (error) => error.code === "PAIR_SURFACE_MISMATCH" &&
+      error.details.diagnostics.some((message) => message.includes("asset:public/app.js"))
+  );
+});
+
+test("blocks instead of silently truncating a deep Program reference closure", async (t) => {
+  const files = {
+    "src/entry.js": `import { f1 } from "./f1.js";\nexport function entry() { return f1(); }\n`,
+    "src/f1.js": "export function f1() { return 1; }\n"
+  };
+  for (let index = 1; index <= 10; index += 1) {
+    const nextUse = index === 10
+      ? "- Nothing outside this file."
+      : `- [\`f${index + 1}()\`](@/src/f${index + 1}.js.md#f${index + 1})`;
+    files[`program/src/f${index}.js.md`] = `# Function ${index}
+
+Provides one link in a deliberately deep dependency chain.
+
+## Uses
+
+${nextUse}
+
+## Provides
+
+### \`f${index}()\`
+
+The function returns a number.
+`;
+  }
+  const root = await createGitProject(t, files);
+  let runnerCalled = false;
+
+  await assert.rejects(
+    importProgram({
+      inputPath: "src/entry.js",
+      projectRoot: root,
+      runner: async () => {
+        runnerCalled = true;
+      },
+      write: false
+    }),
+    (error) => error.code === "UNRESOLVED_CONTEXT" &&
+      error.details.diagnostics.some(({ code }) => code === "REFERENCE_CLOSURE_DEPTH_LIMIT")
+  );
+  assert.equal(runnerCalled, false);
+});
+
 test("invalidates an accepted consumer when a referenced interface changes", async (t) => {
   const root = await createGitProject(t, {
     "program/src/dispatch.js.md": DISPATCH_PROGRAM,
@@ -293,4 +405,71 @@ The function returns a \`Greeting\`.
   });
   assert.equal(repeated.results.length, 1);
   assert.equal(repeated.results[0].mode, "NO_CHANGE");
+});
+
+test("sync --changed schedules consumers of changed retained assets", async (t) => {
+  const program = `# Configuration name
+
+Returns a name from retained configuration.
+
+## Uses
+
+- [\`config\`](asset:config.json)
+
+## Provides
+
+### \`configName()\`
+
+The function returns the \`name\` text from \`config\`.
+`;
+  const root = await createGitProject(t, {
+    "config.json": "{\"name\":\"before\"}\n",
+    "program/src/configName.js.md": program,
+    "src/configName.js": `import config from "../config.json" with { type: "json" };
+export function configName() { return config.name; }
+`
+  });
+  await writeFiles(root, { "config.json": "{\"name\":\"after\"}\n" });
+  let runnerCalls = 0;
+  const result = await syncChanged({
+    projectRoot: root,
+    runner: async ({ mode, workspaceRoot }) => {
+      runnerCalls += 1;
+      const context = await readContext(workspaceRoot);
+      assert.equal(
+        context.resolvedReferences.some((reference) => (
+          reference.provider === "asset:config.json" &&
+          reference.content.includes("after")
+        )),
+        true
+      );
+      return synchronizationReport(mode, "unchanged", "The retained value changed, not its shape.");
+    }
+  });
+  assert.equal(runnerCalls, 1);
+  assert.equal(result.results.length, 1);
+  assert.deepEqual(result.skippedPaths, []);
+});
+
+test("sync --changed schedules modules whose retained package context changed", async (t) => {
+  const root = await createGitProject(t, {
+    "program/src/sendAlert.js.md": SENDER_PROGRAM,
+    "src/sendAlert.js": SENDER_IMPLEMENTATION
+  });
+  await writeFiles(root, {
+    "package.json": "{\n  \"name\": \"fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"dependencies\": { \"mail-client\": \"1.0.0\" }\n}\n"
+  });
+  let runnerCalls = 0;
+  const result = await syncChanged({
+    projectRoot: root,
+    runner: async ({ mode, workspaceRoot }) => {
+      runnerCalls += 1;
+      const context = await readContext(workspaceRoot);
+      assert.equal(context.retainedPackageContext.dependencies["mail-client"], "1.0.0");
+      return synchronizationReport(mode, "unchanged", "The module remains compatible.");
+    }
+  });
+  assert.equal(runnerCalls, 1);
+  assert.equal(result.results.length, 1);
+  assert.deepEqual(result.skippedPaths, []);
 });
