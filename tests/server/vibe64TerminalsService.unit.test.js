@@ -5675,6 +5675,133 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
   });
 });
 
+test("Vibe64 Codex app-server retries settlement without delivering a processed result twice", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_finalized_settlement_retry";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    const threadId = "thread-finalized-settlement-retry";
+    const turnId = "turn-finalized-settlement-retry";
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerStatus: "completed",
+          providerThreadId: threadId,
+          providerTurnId: turnId,
+          state: VIBE64_AGENT_RUN_STATE.FINALIZING
+        })
+      ],
+      completedSteps: ["source_created"],
+      currentStep: "maintenance_conversation",
+      metadata: {
+        agent_transport_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        agent_transport_runtime_dir: runtimeDir,
+        agent_transport_socket_path: path.join(runtimeDir, "app-server.sock"),
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "done"
+      },
+      targetRoot
+    };
+    let failFirstSettlement = true;
+    let processedResultWrites = 0;
+    let terminalStateWrites = 0;
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          if (event?.event?.kind === "codex-app-server-result-processed") {
+            processedResultWrites += 1;
+          }
+          if (
+            failFirstSettlement &&
+            event?.event?.kind === "codex-app-server-turn-idle"
+          ) {
+            failFirstSettlement = false;
+            throw new Error("simulated terminal-state write failure");
+          }
+          if (event?.event?.kind === "codex-app-server-turn-idle") {
+            terminalStateWrites += 1;
+          }
+          writeAgentRunEventToSession(session, runId, event);
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    let readThreadCalls = 0;
+    function createController() {
+      return createCodexTerminalController({
+        codexAuthPreflight: noopCodexAuthPreflight,
+        codexAppServerProviderFactory: () => ({
+          async ensureAvailable() {
+            return {
+              ok: true
+            };
+          },
+          async readThread() {
+            readThreadCalls += 1;
+            return {
+              raw: {
+                turns: [{
+                  id: turnId,
+                  items: [{
+                    id: "assistant-message-finalized-settlement-retry",
+                    phase: "final_answer",
+                    text: "The provider result was already delivered.",
+                    type: "agentMessage"
+                  }],
+                  status: "completed"
+                }]
+              }
+            };
+          },
+          async resumeThread() {
+            return {
+              id: threadId
+            };
+          }
+        }),
+        projectService: {
+          targetRoot,
+          async createRuntime() {
+            return runtime;
+          }
+        },
+        repairSessionWorkdirPermissions: async () => null
+      });
+    }
+
+    const controller = createController();
+    const firstState = await controller.terminalState(sessionId);
+    assert.equal(firstState.ok, false);
+    assert.equal(processedResultWrites, 1);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, VIBE64_AGENT_RUN_STATE.FINALIZING);
+
+    const recoveredState = await createController().terminalState(sessionId);
+    assert.equal(recoveredState.ok, true);
+    assert.equal(readThreadCalls, 1);
+    assert.equal(processedResultWrites, 1);
+    assert.equal(terminalStateWrites, 1);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+    assert.equal(recoveredState.codexAgentTurn.active, false);
+    assert.equal(recoveredState.codexAgentTurn.state, "idle");
+  });
+});
+
 test("Vibe64 Codex terminal state explains unprocessable app-server results", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_unprocessable";
@@ -8243,6 +8370,99 @@ test("Vibe64 Codex app-server messages request a new turn when the tracked turn 
   });
 });
 
+test("Vibe64 Codex app-server messages settle a completed finalizing turn before delivery", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_steer_finalizing_turn";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const threadId = "00000000-0000-4000-8000-000000000128";
+    const turnId = "codex-app-server-turn-finalizing";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "codex-app-server-turn-finalizing"
+      },
+      patch: {
+        inputSource: "terminal",
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "completed",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: VIBE64_AGENT_RUN_STATE.FINALIZING
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const readThreadStatusCalls = [];
+    let permissionRepairCalls = 0;
+    let steerCalls = 0;
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {},
+      codexAppServerProviderFactory: () => ({
+        async readThreadStatus(readThreadId) {
+          readThreadStatusCalls.push(readThreadId);
+          return {
+            raw: {
+              status: {
+                activeFlags: [],
+                type: "idle"
+              }
+            }
+          };
+        },
+        async steerTurn() {
+          steerCalls += 1;
+          throw new Error("completed turns must not be steered");
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      async repairSessionWorkdirPermissions() {
+        permissionRepairCalls += 1;
+        throw new Error("simulated permission cleanup failure");
+      }
+    });
+
+    const result = await controller.sendMessage(sessionId, {
+      message: "Start this as a new turn.",
+      originId: "tab:test"
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.delivered, false);
+    assert.equal(result.newTurnRequired, true);
+    assert.equal(result.operationOutcome, "new_turn_required");
+    assert.deepEqual(readThreadStatusCalls, [threadId]);
+    assert.equal(steerCalls, 0);
+    assert.equal(permissionRepairCalls, 1);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).active, false);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+  });
+});
+
 test("Vibe64 Codex app-server message delivery converts a completed steer race into a new turn", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_message_completed_race";
@@ -8625,6 +8845,102 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
     assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+  });
+});
+
+test("Vibe64 Codex app-server Stop releases a finalizing turn locally", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_interrupt_finalizing";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    const threadId = "00000000-0000-4000-8000-000000000219";
+    const turnId = "codex-app-server-turn-finalizing-stop";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_transport_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        agent_transport_runtime_dir: runtimeDir,
+        agent_transport_socket_path: path.join(runtimeDir, "app-server.sock"),
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "codex-app-server-turn-finalizing"
+      },
+      patch: {
+        inputSource: "workflow",
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "completed",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: VIBE64_AGENT_RUN_STATE.FINALIZING
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    let interruptCalls = 0;
+    let readThreadCalls = 0;
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {},
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async interruptTurn() {
+          interruptCalls += 1;
+          throw new Error("a completed provider turn must not be interrupted");
+        },
+        async readThread() {
+          readThreadCalls += 1;
+          return {
+            raw: {
+              turns: []
+            }
+          };
+        },
+        async resumeThread() {
+          return {
+            id: threadId
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      repairSessionWorkdirPermissions: async () => null
+    });
+
+    const result = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.operationOutcome, "interrupted");
+    assert.equal(interruptCalls, 0);
+    assert.equal(readThreadCalls, 0);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).active, false);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, VIBE64_AGENT_RUN_STATE.INTERRUPTED);
   });
 });
 
