@@ -406,17 +406,19 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
     }
     if (
       (provided.kind === "function" || provided.kind === "method") &&
-      !/^The (?:asynchronous )?(?:function|method)\b/u.test(provided.description)
+      !/^The (?:function|method)\b/u.test(provided.description)
     ) {
       diagnostics.push({
         code: "INVALID_OPERATION_SIGNATURE",
         line: provided.source.line,
-        message: `${provided.name} must begin with its synchronous or asynchronous human-readable signature.`
+        message: `${provided.name} must begin with "The function" or "The method" and its human-readable signature.`
       });
     }
     if (
       (provided.kind === "function" || provided.kind === "method") &&
-      !/^The (?:asynchronous )?(?:function|method)[^.]*\breturns?\b/isu.test(provided.description)
+      !/^The (?:function|method)[^.]*\breturns?\b/isu.test(
+        provided.description
+      )
     ) {
       diagnostics.push({
         code: "MISSING_OPERATION_RESULT",

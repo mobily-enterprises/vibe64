@@ -54,9 +54,12 @@ PROGRAM FORMAT
 - Every exported class is listed in Provides, has a level-two
   Class heading with its backticked exact name, and places intentionally public
   methods beneath it as level-three headings ending in parentheses.
-- The first sentence beneath an operation heading states whether it is
-  synchronous or asynchronous, every exact parameter name and its semantic
-  type, and its return type or that it returns no value.
+- The first sentence beneath an operation heading begins with `The function`
+  or `The method`, then states every exact parameter name and its semantic type,
+  and its return type or that it returns no value.
+- Do not label an operation synchronous or asynchronous. Promise and `async`
+  mechanics belong to the target implementation. State ordering, concurrency,
+  or completion requirements only when they are part of the program's meaning.
 - Private helpers, temporary variables, internal data structures, and target
   syntax do not receive headings. Fold their meaningful behavior into the
   public symbol that uses them.

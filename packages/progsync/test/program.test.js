@@ -21,7 +21,7 @@ Sends complete alerts without duplicate delivery.
 
 ### \`dispatchAlerts()\`
 
-The asynchronous function takes \`alerts\`, a list of \`Alert\`, and returns no
+The function takes \`alerts\`, a list of \`Alert\`, and returns no
 value.
 
 It calls \`sendAlerts()\` with complete alerts in their existing order.
@@ -36,6 +36,18 @@ test("parses the canonical structural spine without interpreting prose", () => {
   assert.equal(parsed.provides.length, 1);
   assert.equal(parsed.provides[0].name, "dispatchAlerts()");
   assert.equal(parsed.provides[0].kind, "function");
+});
+
+test("keeps target-language timing out of operation signatures", () => {
+  const parsed = parseProgram(
+    PROGRAM.replace("The function", "The asynchronous function"),
+    { programPath: "program/src/alerts.js.md" }
+  );
+  assert.equal(parsed.valid, false);
+  assert.equal(
+    parsed.diagnostics.some((entry) => entry.code === "INVALID_OPERATION_SIGNATURE"),
+    true
+  );
 });
 
 test("projects Program deterministically for source explorers", () => {

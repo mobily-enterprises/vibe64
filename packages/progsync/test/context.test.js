@@ -29,7 +29,7 @@ Sends one alert through the configured notification transport.
 
 ### \`sendAlert()\`
 
-The asynchronous function takes \`alert\`, an \`Alert\`, and returns a \`Notification\`.
+The function takes \`alert\`, an \`Alert\`, and returns a \`Notification\`.
 `;
 
 const DISPATCH_PROGRAM = `# Alert dispatch
@@ -44,7 +44,7 @@ Dispatches one alert through the sender.
 
 ### \`dispatch()\`
 
-The asynchronous function takes \`alert\`, an \`Alert\`, and returns the
+The function takes \`alert\`, an \`Alert\`, and returns the
 \`Notification\` returned by \`deliver()\`.
 
 It calls \`deliver()\` with \`alert\` so that transport remains owned by the

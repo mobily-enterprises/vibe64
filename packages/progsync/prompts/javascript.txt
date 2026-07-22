@@ -21,8 +21,10 @@ package context.
   resolved Program references. A member chain such as `this.stores.alertEmails`
   does not establish an origin by itself.
 - Preserve exact arguments, object-field meanings, used return values, call
-  order, awaiting, mutation, repetition, concurrency, and failure behavior.
-- Preserve sequential waits; do not make them concurrent merely for style.
+  order, completion dependencies, mutation, repetition, concurrency, and
+  failure behavior.
+- Preserve required sequential completion; do not introduce concurrency merely
+  for style. Do not expose Promise or `async` syntax as Program meaning.
 - Do not invent a database, filesystem, service, global, package, retry,
   persistence effect, authorization rule, or logging behavior.
 - Browser and Node ambient APIs are outside capabilities. Describe them when

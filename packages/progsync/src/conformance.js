@@ -25,15 +25,6 @@ function regularExpressionText(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function validateOperationTiming({ async, description, name }, diagnostics) {
-  const describedAsynchronous = /^The asynchronous (?:function|method)\b/u.test(description);
-  if (Boolean(async) !== describedAsynchronous) {
-    diagnostics.push(
-      `${name} must be described as ${async ? "asynchronous" : "synchronous"}.`
-    );
-  }
-}
-
 async function resolvedForwardExport(exported, sourceFacts, projectRoot) {
   if (exported.kind !== "forward" || exported.imported === "*") {
     return exported;
@@ -67,7 +58,6 @@ async function resolvedForwardExport(exported, sourceFacts, projectRoot) {
     }
     return {
       ...exported,
-      async: /^The asynchronous (?:function|method)\b/u.test(provided.description),
       kind: provided.kind === "function" || provided.kind === "class"
         ? provided.kind
         : "value",
@@ -75,7 +65,6 @@ async function resolvedForwardExport(exported, sourceFacts, projectRoot) {
         ? provider.provides
           .filter((candidate) => candidate.owner === provided.name)
           .map((candidate) => ({
-            async: /^The asynchronous method\b/u.test(candidate.description),
             kind: "method",
             name: candidate.name.replace(/\(\)$/u, ""),
             parameters: [],
@@ -116,13 +105,6 @@ async function validateJavaScriptProvides(
     for (const parameter of exactParameters(provided.description, exported.parameters)) {
       diagnostics.push(`${name} must name parameter \`${parameter}\` in its signature.`);
     }
-    if (exported.kind === "function") {
-      validateOperationTiming({
-        async: exported.async,
-        description: provided.description,
-        name
-      }, diagnostics);
-    }
     if (exported.kind !== "class") {
       continue;
     }
@@ -139,11 +121,6 @@ async function validateJavaScriptProvides(
       for (const parameter of exactParameters(providedMethod.description, method.parameters)) {
         diagnostics.push(`${exported.name}.${methodName} must name parameter \`${parameter}\`.`);
       }
-      validateOperationTiming({
-        async: method.async,
-        description: providedMethod.description,
-        name: `${exported.name}.${methodName}`
-      }, diagnostics);
     }
   }
   for (const provided of topLevel) {

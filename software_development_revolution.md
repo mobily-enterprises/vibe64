@@ -490,16 +490,20 @@ Standalone exported functions appear as level-three headings beneath
 
 ### `dispatchSeverityThreeEmails()`
 
-The asynchronous function ...
+The function ...
 ~~~
 
 The heading supplies the stable public symbol. The first sentence supplies its
 human-readable signature:
 
-- whether it is synchronous or asynchronous;
 - each parameter name;
 - each parameter's type and meaning when necessary;
 - its return type or statement that it returns no value.
+
+The signature does not label the operation synchronous or asynchronous.
+Promise and `async` mechanics belong to the managed implementation. Program
+states ordering, concurrency, or completion requirements only when they are
+part of the operation's meaning.
 
 The remainder supplies observable behavior, semantic dependencies, effects,
 failure behavior, and important reasons.
@@ -534,7 +538,7 @@ is created.
 
 ### `dispatchSeverityThreeEmails()`
 
-The asynchronous method ...
+The method ...
 ~~~
 
 Rules:
@@ -750,7 +754,7 @@ same notification more than once.
 
 ### `dispatchSeverityThreeEmails()`
 
-The asynchronous function takes `alerts`, a list of `Alert`; `jobs`, a list of
+The function takes `alerts`, a list of `Alert`; `jobs`, a list of
 `Job`; and `request`, the current `Request`. It returns no value.
 
 For Severity 3 job alerts, it ignores alerts without an associated job,
@@ -828,7 +832,7 @@ A minimal projection has this shape:
       "id": "@/src/server/alertDispatcher.js.md#dispatchseveritythreeemails",
       "name": "dispatchSeverityThreeEmails()",
       "kind": "function",
-      "description": "The asynchronous function takes alerts, jobs, and the current request.",
+      "description": "The function takes alerts, jobs, and the current request.",
       "source": { "line": 20 }
     }
   ],
@@ -1686,8 +1690,8 @@ SYNCHRONIZATION REQUIREMENTS
 - Preserve exact outside operations, arguments, object-field meanings, used
   results, call order, waiting, mutation, repetition, concurrency, and failure
   handling.
-- Preserve asynchronous behavior. Required sequential waits must not become
-  concurrent.
+- Treat Promise and `async` mechanics as implementation details. Preserve any
+  stated ordering, concurrency, and completion requirements.
 - Preserve current construction, dependency injection, and module conventions
   unless Program changes them.
 - A member chain such as this.stores.alertEmails does not establish an origin.
