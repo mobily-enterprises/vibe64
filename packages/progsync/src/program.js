@@ -238,7 +238,7 @@ function parseUses(lines, headings, usesHeading, diagnostics) {
   return uses;
 }
 
-function parseTypeReferences(lines) {
+function parseTypeReferences(lines, lineOffset = 0) {
   const references = new Map();
   let fence = "";
   for (let index = 0; index < lines.length; index += 1) {
@@ -258,7 +258,7 @@ function parseTypeReferences(lines) {
       if (!references.has(name)) {
         references.set(name, {
           name,
-          source: { line: index + 1 }
+          source: { line: lineOffset + index + 1 }
         });
       }
     }
@@ -358,6 +358,10 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
       name: className,
       kind: "class",
       description: contentBelowHeading(lines, headings, classHeading).split(/^###\s/mu)[0].trim(),
+      typeReferences: parseTypeReferences(
+        contentBelowHeading(lines, headings, classHeading).split(/^###\s/mu)[0].trim().split("\n"),
+        classHeading.line
+      ),
       source: {
         line: classHeading.line
       }
@@ -400,11 +404,13 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
     }
     const name = nameMatch[1];
     const owner = classMatch?.[1] || null;
+    const description = contentBelowHeading(lines, headings, heading);
     provides.push({
       name,
       owner,
       kind: inferProvidedKind({ owner, programPath, symbol: name }),
-      description: contentBelowHeading(lines, headings, heading),
+      description,
+      typeReferences: parseTypeReferences(description.split("\n"), heading.line),
       source: {
         line: heading.line
       }

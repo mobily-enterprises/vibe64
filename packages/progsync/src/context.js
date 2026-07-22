@@ -176,6 +176,16 @@ async function resolveProgramReferences({
       for (const dependency of providerProgram.uses) {
         queue.push({ depth: current.depth + 1, use: dependency });
       }
+      for (const dependency of provided.typeReferences || []) {
+        queue.push({
+          depth: current.depth + 1,
+          use: {
+            provider: `@/types.md#${symbolAnchor(dependency.name)}`,
+            source: dependency.source,
+            symbol: dependency.name
+          }
+        });
+      }
     } else if (providerProgram.uses.length > 0) {
       diagnostics.push({
         code: "REFERENCE_CLOSURE_DEPTH_LIMIT",

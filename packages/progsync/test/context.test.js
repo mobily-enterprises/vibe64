@@ -407,6 +407,63 @@ The function returns a [Greeting].
   assert.equal(repeated.results[0].mode, "NO_CHANGE");
 });
 
+test("closes type definitions over their referenced shared types", async (t) => {
+  const types = `# Types
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`Catalog Book\`
+
+A catalog book contains a title.
+
+### \`Catalog\`
+
+A catalog contains a list of [Catalog Book].
+`;
+  const program = `# Catalog title
+
+Returns the first catalog title.
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`firstTitle()\`
+
+The function takes \`catalog\`, a [Catalog], and returns text.
+`;
+  const root = await createGitProject(t, {
+    "program/src/firstTitle.js.md": program,
+    "program/types.md": types
+  });
+
+  await syncFile({
+    inputPath: "program/src/firstTitle.js.md",
+    projectRoot: root,
+    runner: async ({ workspaceRoot }) => {
+      const context = await readContext(workspaceRoot);
+      assert.deepEqual(
+        context.resolvedReferences
+          .filter((reference) => reference.kind === "type")
+          .map((reference) => reference.symbol),
+        ["Catalog", "Catalog Book"]
+      );
+      await writeWorkspace(
+        workspaceRoot,
+        "src/firstTitle.js",
+        "export function firstTitle(catalog) { return catalog.books[0].title; }\n"
+      );
+      return synchronizationReport("CREATE_IMPLEMENTATION");
+    }
+  });
+});
+
 test("sync --changed schedules consumers of changed retained assets", async (t) => {
   const program = `# Configuration name
 

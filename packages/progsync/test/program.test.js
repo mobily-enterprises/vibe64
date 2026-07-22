@@ -36,6 +36,10 @@ test("parses the canonical structural spine without interpreting prose", () => {
   assert.equal(parsed.provides.length, 1);
   assert.equal(parsed.provides[0].name, "dispatchAlerts()");
   assert.equal(parsed.provides[0].kind, "function");
+  assert.deepEqual(
+    parsed.provides[0].typeReferences.map((reference) => reference.name),
+    ["Alert"]
+  );
 });
 
 test("keeps target-language timing out of operation signatures", () => {
