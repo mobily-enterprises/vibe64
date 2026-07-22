@@ -628,6 +628,9 @@ async function reverseProgramDependencies(root) {
         consumerPath
       );
     }
+    if ((parsed.typeReferences || []).length > 0) {
+      addReverseDependency(reverse, "program/types.md", consumerPath);
+    }
     if (isTargetBoundProgramPath(consumerPath)) {
       addReverseDependency(reverse, "package.json", consumerPath);
     }

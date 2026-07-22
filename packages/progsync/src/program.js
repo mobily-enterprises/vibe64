@@ -175,6 +175,13 @@ function parseUses(lines, headings, usesHeading, diagnostics) {
     }
     const symbol = normalizeSymbolName(match[1]);
     const provider = match[2].trim();
+    if (provider.startsWith("@/types.md#")) {
+      diagnostics.push({
+        code: "TYPE_IN_USES",
+        line: usesHeading.line + offset + 1,
+        message: "Shared types use [Type name] in Program prose and do not appear in Uses."
+      });
+    }
     if (
       !provider.startsWith("@/") &&
       !provider.startsWith("package:") &&
@@ -231,6 +238,34 @@ function parseUses(lines, headings, usesHeading, diagnostics) {
   return uses;
 }
 
+function parseTypeReferences(lines) {
+  const references = new Map();
+  let fence = "";
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/u);
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      fence = fence ? (fence === marker ? "" : fence) : marker;
+      continue;
+    }
+    if (fence) {
+      continue;
+    }
+    const pattern = /\[([A-Za-z][A-Za-z0-9]*(?: [A-Za-z][A-Za-z0-9]*)*)\](?!\s*[([])/gu;
+    for (const match of line.matchAll(pattern)) {
+      const name = match[1];
+      if (!references.has(name)) {
+        references.set(name, {
+          name,
+          source: { line: index + 1 }
+        });
+      }
+    }
+  }
+  return [...references.values()];
+}
+
 function parseProgram(programSource, { programPath = "program/unknown.js.md" } = {}) {
   const source = String(programSource ?? "").replaceAll("\r\n", "\n");
   const lines = source.split("\n");
@@ -273,6 +308,7 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
   const uses = usesHeadings[0]
     ? parseUses(lines, headings, usesHeadings[0], diagnostics)
     : [];
+  const typeReferences = parseTypeReferences(lines);
   const provides = [];
   const classHeadings = headings.filter((heading) => (
     heading.level === 2 && /^Class\s+`[^`]+`$/u.test(heading.text)
@@ -435,6 +471,7 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
     provides,
     source,
     title: titleHeading?.text || "",
+    typeReferences,
     uses,
     valid: diagnostics.length === 0
   };
@@ -456,15 +493,9 @@ function relationshipKind(use) {
   if (use.provider.startsWith("asset:")) {
     return "generation";
   }
-  if (use.provider.startsWith("@/types.md#")) {
-    return "type";
-  }
   const providerPath = use.provider.match(/^@\/([^#]+)/u)?.[1] || "";
   if (providerPath && !providerPath.includes("/")) {
     return "generation";
-  }
-  if (!/\(\)$/u.test(use.symbol) && /^[A-Z]/u.test(use.symbol)) {
-    return "type";
   }
   return "runtime";
 }
@@ -526,6 +557,7 @@ function buildProgramProjection({ parsedProgram = null, programPath, programSour
     sourceHash: `sha256:${crypto.createHash("sha256").update(parsed.source).digest("hex")}`,
     title: parsed.title,
     preamble: parsed.preamble,
+    types: parsed.typeReferences.map((reference) => reference.name),
     provides: parsed.provides.map((provided) => ({
       id: `@/${providerPath}#${symbolAnchor(provided.owner ? `${provided.owner}.${provided.name}` : provided.name)}`,
       name: provided.name,

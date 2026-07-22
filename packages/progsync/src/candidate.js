@@ -216,8 +216,8 @@ async function validateImplementationCandidate({
   });
 }
 
-function typeUses(parsedProgram) {
-  return parsedProgram.uses.filter((use) => use.provider.startsWith("@/types.md#"));
+function typeReferences(parsedProgram) {
+  return parsedProgram.typeReferences || [];
 }
 
 function providedTypes(source) {
@@ -239,23 +239,17 @@ function validateSharedTypeCandidate({
   typesChanged
 }) {
   const finalProgram = assertValidProgram(finalProgramSource);
-  const finalUses = typeUses(finalProgram);
-  const finalUseAnchors = new Set(finalUses.map((use) => (
-    use.provider.split("#")[1]
+  const finalReferences = typeReferences(finalProgram);
+  const finalUseAnchors = new Set(finalReferences.map((reference) => (
+    symbolAnchor(reference.name)
   )));
-  const undescribed = finalUses.filter((use) => (
-    !finalProgram.provides.some((provided) => provided.description.includes(use.symbol))
-  ));
   const finalTypes = providedTypes(finalTypesSource);
   const missing = [...finalUseAnchors].filter((anchor) => !finalTypes.has(anchor));
-  if (missing.length > 0 || undescribed.length > 0) {
+  if (missing.length > 0) {
     throw new ProgSyncError(
       "INVALID_PROGRAM",
-      "Every shared type must be provided by program/types.md and used by a provided symbol.",
-      {
-        missing,
-        undescribed: undescribed.map((use) => use.symbol)
-      }
+      "Every [Type name] reference must be provided by program/types.md.",
+      { missing }
     );
   }
   if (!typesChanged) {
@@ -264,7 +258,9 @@ function validateSharedTypeCandidate({
 
   const currentTypes = providedTypes(currentTypesSource);
   const previousUses = previousProgramSource
-    ? typeUses(parseProgram(previousProgramSource)).map((use) => use.provider.split("#")[1])
+    ? typeReferences(parseProgram(previousProgramSource)).map((reference) => (
+      symbolAnchor(reference.name)
+    ))
     : [];
   const permittedChanges = new Set([...previousUses, ...finalUseAnchors]);
   const diagnostics = [];

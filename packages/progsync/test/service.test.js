@@ -39,15 +39,14 @@ Calculates the monetary parts of one order line.
 
 ## Uses
 
-- [\`Line item\`](@/types.md#line-item)
-- [\`Line total\`](@/types.md#line-total)
+- Nothing outside this file.
 
 ## Provides
 
 ### \`calculateLineTotal()\`
 
-The function takes \`line\`, a \`Line item\`, and \`taxRate\`, a decimal tax
-rate, and returns a \`Line total\`.
+The function takes \`line\`, a [Line item], and \`taxRate\`, a decimal tax
+rate, and returns a [Line total].
 
 It multiplies the line's \`unitPrice\` by its \`quantity\` to obtain the
 subtotal, multiplies that subtotal by \`taxRate\` to obtain the tax, and returns

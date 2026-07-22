@@ -21,6 +21,10 @@ package context.
   boundaries as candidate shared complex types. Reuse the exact existing type
   when one matches; otherwise define it in `program/types.md` when that path is
   writable.
+- Semantic `[Type]` references require no JavaScript declaration, import, or
+  JSDoc. Erase them by default. Preserve existing JSDoc as compatible managed
+  implementation, and generate runtime validation only when Program explicitly
+  requires that observable behavior.
 - Resolve every meaningful imported operation through supplied source facts or
   resolved Program references. A member chain such as `this.stores.alertEmails`
   does not establish an origin by itself.

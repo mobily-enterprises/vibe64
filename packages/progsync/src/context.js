@@ -49,7 +49,14 @@ async function resolveProgramReferences({
   const references = [];
   const diagnostics = [];
   const visited = new Set();
-  const queue = parsedProgram.uses.map((use) => ({ depth: 0, use }));
+  const queue = [
+    ...parsedProgram.uses,
+    ...(parsedProgram.typeReferences || []).map((reference) => ({
+      provider: `@/types.md#${symbolAnchor(reference.name)}`,
+      source: reference.source,
+      symbol: reference.name
+    }))
+  ].map((use) => ({ depth: 0, use }));
 
   while (queue.length > 0 && visited.size < 128) {
     const current = queue.shift();

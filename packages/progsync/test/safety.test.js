@@ -252,13 +252,13 @@ A \`Line item\` contains \`amount\`, its numeric amount.
 
 ## Uses
 
-- [\`Line item\`](@/types.md#line-item)
+- Nothing outside this file.
 
 ## Provides
 
 ### \`amount()\`
 
-The function takes \`line\`, a \`Line item\`, and returns its numeric amount.
+The function takes \`line\`, a [Line item], and returns its numeric amount.
 `;
   const root = await createGitProject(t, {
     "program/types.md": initialTypes,

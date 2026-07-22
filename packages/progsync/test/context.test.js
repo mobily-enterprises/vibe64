@@ -364,13 +364,13 @@ Builds a greeting value.
 
 ## Uses
 
-- [\`Greeting\`](@/types.md#greeting)
+- Nothing outside this file.
 
 ## Provides
 
 ### \`greet()\`
 
-The function returns a \`Greeting\`.
+The function returns a [Greeting].
 `;
   const root = await createGitProject(t, {
     "program/src/greet.js.md": program,

@@ -47,7 +47,7 @@ PROGRAM FORMAT
 - Exactly one `## Provides` section.
 - When the module uses nothing outside itself, Uses contains exactly
   `- Nothing outside this file.` It is never left empty.
-- Every Uses item is an exact Markdown link.
+- Every Uses item is an exact Markdown link to an operational dependency.
 - Every Uses link has a backticked visible symbol and a canonical provider:
   `@/<program-path>.md#<anchor>`, `package:npm/<package>#<anchor>`,
   `platform:<capability>#<anchor>`, or `asset:<identity>`.
@@ -82,13 +82,11 @@ PROGRAM FORMAT
   because a variable contains them.
 - When the implementation defines a previously unregistered complex shape that
   crosses the public boundary, add its concise definition to
-  `program/types.md` and link to it from Uses. Do not repeat its fields in the
-  module or create types for private temporary objects.
-- A shared type use has exactly this form:
-  ``- [`Type name`](@/types.md#type-name)``. The visible name is backticked, the
-  provider always begins `@/types.md#`, and the anchor is the normalized type
-  heading. Never use `program/types.md`, `types.md`, or a relative path as the
-  provider.
+  `program/types.md` and refer to it as `[Type name]` in Program prose. Do not
+  repeat its fields in the module or create types for private temporary objects.
+- `[Type name]` is the complete type-reference syntax. Every such name resolves
+  implicitly and case-sensitively through `program/types.md`. Types never appear
+  in Uses and never carry provider paths in authored Program.
 - A new type is a level-three backticked heading beneath the one `## Provides`
   section in `program/types.md`, followed by its concise field meanings. Keep
   the file's one `## Uses` section; use `- Nothing outside this file.` when it
