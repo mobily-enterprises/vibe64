@@ -15,10 +15,6 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  APPLICATION_PREVIEW_AUTH_KIND,
-  PREVIEW_IDENTITY_SELECTOR_LOGIN
-} from "@local/vibe64-core/server/previewAuth";
-import {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
   createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
@@ -155,12 +151,10 @@ async function createVibe64OnlineLaunchDescriptor({
       composedAppRoot,
       mode: "vibe64-online-dev",
       packageManager: packageManager.name,
-      previewIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_LOGIN],
       previewProxyPortRange: `${previewProxy.portRange.start}-${previewProxy.portRange.end}`,
       runtimeNamespace: identityEnv[VIBE64_RUNTIME_NAMESPACE_ENV] || "",
       stateRoot
     },
-    previewAuth: APPLICATION_PREVIEW_AUTH_KIND,
     restartOnChange: VIBE64_ONLINE_RESTART_ON_CHANGE,
     runtimes: packageManager.name === "bun" ? ["node26", "bun"] : ["node26"],
     urlPath: "/app",

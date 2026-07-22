@@ -1,5 +1,11 @@
 # Preview Identity Implementation Plan
 
+> Historical plan: the completed design now uses an app-owned executable
+> declared in `vibe64.project.json`. References below to adapter-declared
+> application exchanges and fixed upstream endpoints describe the superseded
+> implementation. See `docs/site/dev/technical-reference.md` for the current
+> contract.
+
 ## Goal
 
 Make a Vibe64 managed preview authenticate as a real user from the running
@@ -17,20 +23,20 @@ does not, the preview remains signed out and Vibe64 reports the exact failure.
 ## Product Contract
 
 - Vibe64 chooses and authorizes the desired preview identity.
-- The adapter describes whether the running target supports preview identity
-  exchange and how Vibe64 should reach that exchange.
+- The application declares whether it supports preview identity and provides
+  the executable that performs the exchange.
 - The application auth provider resolves an existing application user and
   issues its own normal session.
 - Application users, memberships, roles, workspaces, and other domain records
   are never created or repaired by preview authentication.
-- The signed-in Vibe64 user is the default requested identity, matched by
-  normalized email and confirmed by the application.
+- The signed-in Vibe64 user is the default requested identity only through the
+  identifier mappings explicitly declared by the application.
 - A viewer can explicitly switch to Guest or enter another existing
   application user's email.
 - Each browser receives its own application cookies. Selecting an identity in
   one browser must not change another viewer's preview identity.
 - Preview impersonation is unavailable in production application runtimes.
-- An adapter that does not advertise the capability gets no identity control.
+- An application that does not declare the capability gets no identity control.
 
 ## Existing Machinery We Will Reuse
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
-  JSKIT_PREVIEW_AUTH_KIND
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
   buildRuntimeLock,
@@ -144,6 +144,31 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+async function writeJskitPreviewIdentityContract(root) {
+  await writeProjectFile(root, "vibe64.project.json", `${JSON.stringify({
+    capabilities: {
+      previewIdentity: {
+        command: [".vibe64/bin/preview-identity"],
+        environment: {
+          enabled: "AUTH_DEV_BYPASS_ENABLED",
+          secret: "AUTH_DEV_BYPASS_SECRET"
+        },
+        identityTypes: ["email", "user-id"],
+        protocol: "vibe64.preview-identity.command.v1",
+        runtimes: ["node26"],
+        viewerIdentityTypes: ["email"]
+      }
+    },
+    config: {},
+    projectType: "jskit",
+    schema: "vibe64.project",
+    schemaVersion: 1
+  }, null, 2)}\n`);
+  const executablePath = path.join(root, ".vibe64", "bin", "preview-identity");
+  await writeProjectFile(root, ".vibe64/bin/preview-identity", "#!/usr/bin/env bash\nexit 0\n");
+  await chmod(executablePath, 0o755);
+}
+
 function escapedPattern(value = "") {
   return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -175,6 +200,7 @@ async function createJskitProject(root, {
     }, null, 2)),
     writeProjectFile(root, ".jskit/APP_BLUEPRINT.md", "# App blueprint\n")
   ]);
+  await writeJskitPreviewIdentityContract(root);
 }
 
 function commandIds() {
@@ -912,6 +938,7 @@ test("jskit Vibe64 self-target uses host execution with shared project roots and
         server: "node server.js"
       }
     }, null, 2));
+    await writeJskitPreviewIdentityContract(targetRoot);
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       context: {
@@ -1367,6 +1394,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
         server: "node server.js"
       }
     }, null, 2));
+    await writeJskitPreviewIdentityContract(targetRoot);
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       context: {
@@ -1398,7 +1426,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.managedMariaDbPreparation, undefined);
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.serverCommand, "npm run server");
-    assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
+    assert.equal(spec.metadata.previewAuth, APPLICATION_COMMAND_PREVIEW_AUTH_KIND);
     assert.ok(spec.restartOnChange.include.includes("src/**"));
     assert.ok(spec.restartOnChange.include.includes("server.js"));
     assert.deepEqual(spec.runtimes, ["node26"]);
@@ -1411,8 +1439,6 @@ test("jskit built launch waits for the server readiness marker before opening", 
     });
     assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
-    assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
-    assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
@@ -1447,6 +1473,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
         server: "node server.js"
       }
     }, null, 2));
+    await writeJskitPreviewIdentityContract(targetRoot);
 
     try {
       spec = await createJskitLaunchTargetTerminalSpec({
@@ -1479,7 +1506,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
     assert.equal(spec.metadata.managedMariaDbPreparation, undefined);
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
-    assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
+    assert.equal(spec.metadata.previewAuth, APPLICATION_COMMAND_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
     assert.equal(spec.metadata.serverRestartCheck, "active-agent-runs");
     assert.deepEqual(spec.runtimes, ["node26"]);
@@ -1492,8 +1519,6 @@ test("jskit dev launch starts backend and Vite together", async () => {
     });
     assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
-    assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
-    assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);

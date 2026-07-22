@@ -38,7 +38,6 @@ import {
   normalizePreviewAuthKind,
   previewAuthCookieNames,
   previewAuthCookieHeader,
-  previewAuthIdentityExchange,
   verifyPreviewIdentityGrant
 } from "@local/vibe64-core/server/previewAuth";
 import {
@@ -63,7 +62,6 @@ const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
-const PREVIEW_IDENTITY_RESPONSE_BODY_LIMIT_BYTES = 256 * 1024;
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
@@ -535,32 +533,6 @@ function writePreviewIdentityJson(response, statusCode, payload = {}, setCookie 
   response.end(body);
 }
 
-function previewIdentityUpstreamError(payload = {}, statusCode = 502) {
-  const fieldErrors = payload?.details?.fieldErrors || payload?.fieldErrors || {};
-  const fieldMessage = Object.values(
-    fieldErrors && typeof fieldErrors === "object" && !Array.isArray(fieldErrors) ? fieldErrors : {}
-  ).find(Boolean);
-  const firstError = Array.isArray(payload?.errors) ? payload.errors.find(Boolean) : null;
-  const firstErrorMessage = typeof firstError === "string" ? firstError : firstError?.message;
-  const message = String(
-    fieldMessage ||
-    firstErrorMessage ||
-    payload?.error ||
-    payload?.message ||
-    "Application preview identity exchange failed."
-  ).trim();
-  return previewIdentityProxyError(
-    message,
-    String(firstError?.code || payload?.code || "vibe64_preview_identity_upstream_rejected"),
-    Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 502
-  );
-}
-
-function responseSetCookieHeaders(response = {}) {
-  const value = response.headers?.["set-cookie"] || response.headers?.["Set-Cookie"] || [];
-  return (Array.isArray(value) ? value : [value]).map(String).filter(Boolean);
-}
-
 function previewIdentityResult(payload = {}, selection = {}) {
   if (selection.operation === PREVIEW_IDENTITY_LOGOUT_OPERATION) {
     return {
@@ -568,17 +540,18 @@ function previewIdentityResult(payload = {}, selection = {}) {
       ok: true
     };
   }
-  const selector = selection.selector && typeof selection.selector === "object"
-    ? selection.selector
-    : {};
+  const identityPayload = payload?.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
+    ? payload.identity
+    : payload;
+  const selector = selection.subject?.selector || selection.selector || selection.subject?.identifiers?.[0] || {};
   return {
     identity: {
-      displayName: String(payload.displayName || payload.name || "").trim(),
-      email: String(payload.email || (selector.type === "email" ? selector.value : "")).trim().toLowerCase(),
-      login: String(payload.login || (selector.type === "login" ? selector.value : "")).trim(),
+      displayName: String(identityPayload.displayName || identityPayload.name || "").trim(),
+      email: String(identityPayload.email || (selector.type === "email" ? selector.value : "")).trim().toLowerCase(),
+      login: String(identityPayload.login || (selector.type === "login" ? selector.value : "")).trim(),
       selector,
-      userId: String(payload.userId || "").trim(),
-      username: String(payload.username || "").trim()
+      userId: String(identityPayload.userId || "").trim(),
+      username: String(identityPayload.username || "").trim()
     },
     ok: true
   };
@@ -608,14 +581,11 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
 }
 
 async function proxyPreviewIdentityExchange(request, response, {
-  connectOrigin = "",
   consumeIdentityGrant,
+  executePreviewIdentityCommand = null,
   previewAuth = null,
   proxyOrigin = "",
-  targetHost = "",
-  targetOrigin = "",
-  token = "",
-  tracker = null
+  token = ""
 } = {}) {
   const setCookie = [];
   let signedOut = false;
@@ -629,43 +599,30 @@ async function proxyPreviewIdentityExchange(request, response, {
     }
     const grant = await previewIdentityRequestGrant(request);
     const selection = consumeIdentityGrant(grant);
-    const exchange = previewAuthIdentityExchange(previewAuth || {}, selection);
-    for (const prerequisite of Array.isArray(exchange.before) ? exchange.before : []) {
-      const prerequisiteResult = await requestPreviewIdentityTarget(prerequisite, {
-        connectOrigin,
-        previewAuth,
-        proxyOrigin,
-        request,
-        targetHost,
-        targetOrigin,
-        tracker
-      });
-      setCookie.push(...prerequisiteResult.setCookie);
-      if (!prerequisiteResult.ok) {
-        throw previewIdentityUpstreamError(
-          prerequisiteResult.payload,
-          prerequisiteResult.statusCode
-        );
-      }
-      signedOut = true;
+    if (typeof executePreviewIdentityCommand !== "function") {
+      throw previewIdentityProxyError(
+        "Application preview identity command is unavailable. Restart the preview.",
+        "vibe64_preview_identity_command_unavailable",
+        409
+      );
     }
-    const result = await requestPreviewIdentityTarget(exchange, {
-      connectOrigin,
+    const commandResult = await executePreviewIdentityCommand({
       previewAuth,
-      proxyOrigin,
-      request,
-      targetHost,
-      targetOrigin,
-      tracker
+      selection
     });
-    setCookie.push(...result.setCookie);
-    if (!result.ok) {
-      throw previewIdentityUpstreamError(result.payload, result.statusCode);
+    setCookie.push(...(Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : []));
+    signedOut = commandResult?.signedOut === true;
+    if (commandResult?.ok !== true) {
+      throw previewIdentityProxyError(
+        String(commandResult?.error || "Application preview identity was rejected."),
+        String(commandResult?.code || "vibe64_preview_identity_application_rejected"),
+        Number(commandResult?.statusCode || 400)
+      );
     }
     writePreviewIdentityJson(
       response,
       200,
-      previewIdentityResult(result.payload, selection),
+      previewIdentityResult(commandResult, selection),
       [
         ...setCookie,
         previewTokenCookie(token, { proxyOrigin })
@@ -681,70 +638,6 @@ async function proxyPreviewIdentityExchange(request, response, {
       setCookie
     );
   }
-}
-
-async function requestPreviewIdentityTarget(exchange = {}, {
-  connectOrigin = "",
-  previewAuth = null,
-  proxyOrigin = "",
-  request = null,
-  targetHost = "",
-  targetOrigin = "",
-  tracker = null
-} = {}) {
-  const upstreamOrigin = new URL(connectOrigin || targetOrigin);
-  const targetUrl = new URL(exchange.path, upstreamOrigin);
-  const method = String(exchange.method || "").trim().toUpperCase();
-  if (targetUrl.origin !== upstreamOrigin.origin || method !== "POST") {
-    throw previewIdentityProxyError(
-      "Preview identity provider returned an invalid upstream exchange.",
-      "vibe64_preview_identity_provider_invalid",
-      500
-    );
-  }
-  const body = Buffer.from(JSON.stringify(exchange.body || {}));
-  const headers = proxyRequestHeaders(request?.headers || {}, targetUrl, {
-    previewAuth,
-    proxyOrigin,
-    targetHost
-  });
-  delete headers.origin;
-  delete headers.referer;
-  for (const name of Object.keys(headers)) {
-    if (name.startsWith("sec-fetch-")) {
-      delete headers[name];
-    }
-  }
-  headers.accept = "application/json";
-  for (const [name, value] of Object.entries(exchange.headers || {})) {
-    headers[String(name).trim().toLowerCase()] = String(value);
-  }
-  headers["content-length"] = String(body.length);
-  headers["content-type"] = "application/json";
-  const upstream = await requestPreviewTarget(targetUrl, {
-    body,
-    headers,
-    method,
-    tracker
-  });
-  const responseText = await streamText(upstream, {
-    maxBytes: PREVIEW_IDENTITY_RESPONSE_BODY_LIMIT_BYTES
-  });
-  let payload;
-  try {
-    payload = responseText ? JSON.parse(responseText) : {};
-  } catch {
-    payload = {
-      message: String(responseText || "").trim().slice(0, 1000)
-    };
-  }
-  const statusCode = Number(upstream.statusCode || 502);
-  return {
-    ok: statusCode >= 200 && statusCode < 300 && payload?.ok !== false,
-    payload,
-    setCookie: responseSetCookieHeaders(upstream),
-    statusCode
-  };
 }
 
 function responseHeaders(response, {
@@ -1004,6 +897,7 @@ function queryParamName(rawName = "") {
 async function proxyPreviewRequest(request, response, {
   connectOrigin = "",
   consumeIdentityGrant = null,
+  executePreviewIdentityCommand = null,
   previewAuth = null,
   proxyOrigin = "",
   tracker = null,
@@ -1064,6 +958,7 @@ async function proxyPreviewRequest(request, response, {
     await proxyPreviewIdentityExchange(request, response, {
       connectOrigin,
       consumeIdentityGrant,
+      executePreviewIdentityCommand,
       previewAuth,
       proxyOrigin,
       targetHost,
@@ -1509,6 +1404,7 @@ function createLaunchPreviewProxyRegistry({
         targetHref: targetUrl.toString()
       }, {
         env: runtimeEnv,
+        executePreviewIdentityCommand: input.executePreviewIdentityCommand,
         previewAuth,
         publicOrigin,
         socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs
@@ -1720,6 +1616,7 @@ async function startLaunchPreviewProxy({
   targetUrl
 } = {}, scope = {}, {
   env = process.env,
+  executePreviewIdentityCommand = null,
   previewAuth = null,
   publicOrigin = "",
   socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
@@ -1746,6 +1643,7 @@ async function startLaunchPreviewProxy({
     void proxyPreviewRequest(request, response, {
       connectOrigin,
       consumeIdentityGrant,
+      executePreviewIdentityCommand,
       previewAuth,
       proxyOrigin,
       tracker,
@@ -1824,6 +1722,9 @@ function normalizePreviewAuth(value = {}, {
     return null;
   }
   return {
+    identityTypes: Array.isArray(value.identityTypes)
+      ? value.identityTypes.map((entry) => String(entry || "").trim()).filter(Boolean)
+      : [],
     kind,
     profilePath: String(value.profilePath || ""),
     projectScope: String(value.projectScope || ""),
@@ -1832,7 +1733,10 @@ function normalizePreviewAuth(value = {}, {
     sessionRoot: String(value.sessionRoot || ""),
     targetHref: String(value.targetHref || targetHref || ""),
     targetRoot: String(value.targetRoot || ""),
-    terminalSessionId: String(value.terminalSessionId || "")
+    terminalSessionId: String(value.terminalSessionId || ""),
+    viewerIdentityTypes: Array.isArray(value.viewerIdentityTypes)
+      ? value.viewerIdentityTypes.map((entry) => String(entry || "").trim()).filter(Boolean)
+      : []
   };
 }
 
@@ -1842,6 +1746,7 @@ function previewAuthFingerprint(value = null) {
   }
   return JSON.stringify([
     value.kind,
+    value.identityTypes,
     value.profilePath,
     value.projectScope,
     value.secret
@@ -1851,7 +1756,8 @@ function previewAuthFingerprint(value = null) {
     value.sessionRoot,
     value.targetHref,
     value.targetRoot,
-    value.terminalSessionId
+    value.terminalSessionId,
+    value.viewerIdentityTypes
   ]);
 }
 

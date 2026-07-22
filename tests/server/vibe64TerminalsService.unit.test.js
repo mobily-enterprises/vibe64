@@ -37,7 +37,8 @@ import {
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  JSKIT_PREVIEW_AUTH_KIND,
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_USER_ID,
   previewAuthSecretPath,
@@ -1293,7 +1294,17 @@ test("launch preview identity grants use the trusted viewer and active terminal 
           kind: "url",
           label: "Open browser"
         },
-        previewAuth: JSKIT_PREVIEW_AUTH_KIND,
+        previewAuth: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+        previewIdentity: {
+          command: [".vibe64/bin/preview-identity"],
+          identityTypes: [
+            PREVIEW_IDENTITY_SELECTOR_EMAIL,
+            PREVIEW_IDENTITY_SELECTOR_USER_ID
+          ],
+          protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+          sourceRoot: targetRoot,
+          viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
+        },
         projectScope,
         sessionId,
         sessionRoot,
@@ -1364,8 +1375,15 @@ test("launch preview identity grants use the trusted viewer and active terminal 
           PREVIEW_IDENTITY_SELECTOR_EMAIL,
           PREVIEW_IDENTITY_SELECTOR_USER_ID
         ],
+        viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
         viewer: {
           displayName: "Ada Lovelace",
+          identifiers: [
+            {
+              type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+              value: "ada@example.com"
+            }
+          ],
           selector: {
             type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
             value: "ada@example.com"
@@ -1387,19 +1405,27 @@ test("launch preview identity grants use the trusted viewer and active terminal 
         }
       });
       const verified = verifyPreviewIdentityGrant(selection.grant, {
-        kind: JSKIT_PREVIEW_AUTH_KIND,
+        identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL, PREVIEW_IDENTITY_SELECTOR_USER_ID],
+        kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
         projectScope,
         secret,
         sessionId,
         targetHref,
         targetRoot,
-        terminalSessionId: terminal.id
+        terminalSessionId: terminal.id,
+        viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
       });
       assert.deepEqual(verified.selection, {
         operation: "login-as",
-        selector: {
-          type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
-          value: "ada@example.com"
+        subject: {
+          displayName: "Ada Lovelace",
+          identifiers: [
+            {
+              type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+              value: "ada@example.com"
+            }
+          ],
+          kind: "viewer"
         }
       });
 
@@ -1417,13 +1443,15 @@ test("launch preview identity grants use the trusted viewer and active terminal 
         }
       });
       assert.deepEqual(verifyPreviewIdentityGrant(byUserId.grant, {
-        kind: JSKIT_PREVIEW_AUTH_KIND,
+        identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL, PREVIEW_IDENTITY_SELECTOR_USER_ID],
+        kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
         projectScope,
         secret,
         sessionId,
         targetHref,
         targetRoot,
-        terminalSessionId: terminal.id
+        terminalSessionId: terminal.id,
+        viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
       }).selection, {
         operation: "login-as",
         selector: {
@@ -1763,7 +1791,6 @@ test("launch status clears stale launch metadata when the launch terminal is gon
     launch_target_open_href: "http://127.0.0.1:4100/app",
     launch_target_open_kind: "url",
     launch_target_open_label: "Open browser",
-    launch_target_preview_auth: "jskit-dev",
     launch_target_restart_baseline: "{\"version\":1}",
     launch_target_session_root: "/tmp/vibe64-launch-missing-container/session",
     launch_target_started_at: "2026-06-25T00:00:00.000Z",
@@ -1895,7 +1922,6 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
                       kind: "url",
                       label: "Open browser"
                     },
-                    previewAuth: "jskit-dev",
                     targetUrl: "http://127.0.0.1:4100/app",
                     targetRoot
                   },

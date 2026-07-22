@@ -22,16 +22,12 @@ import {
   PREVIEW_PROXY_PORT_START_ENV
 } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
 import {
-  APPLICATION_PREVIEW_AUTH_KIND,
-  APPLICATION_PREVIEW_IDENTITY_PATH,
-  APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER,
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   COOKIE_PROFILE_PREVIEW_AUTH_KIND,
-  JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
-  PREVIEW_IDENTITY_SELECTOR_LOGIN,
   createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
@@ -50,7 +46,7 @@ import {
   stripPreviewTokenQueryParam
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 
-const TEST_JSKIT_PREVIEW_AUTH_SECRET = "a".repeat(64);
+const TEST_PREVIEW_IDENTITY_SECRET = "a".repeat(64);
 
 test("launch preview bridge injects once and reports target URLs", () => {
   const html = "<!doctype html><html><head><title>App</title></head><body></body></html>";
@@ -708,7 +704,7 @@ test("launch preview proxy does not inject JSKIT auth cookies into ordinary requ
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "ordinary-request");
+      const previewAuth = commandPreviewAuth(target.origin, "ordinary-request");
       const preview = await registry.ensure({
         previewAuth,
         sessionId: previewAuth.sessionId,
@@ -737,7 +733,7 @@ test("launch preview proxy preserves browser-owned native JSKIT auth cookies", a
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "native-cookie");
+      const previewAuth = commandPreviewAuth(target.origin, "native-cookie");
       const preview = await registry.ensure({
         previewAuth,
         sessionId: previewAuth.sessionId,
@@ -874,12 +870,33 @@ test("launch preview proxy injects adapter cookie-profile preview auth cookies",
   });
 });
 
-test("launch preview proxy exchanges a one-use grant for native JSKIT cookies", async () => {
+test("launch preview proxy delegates identity exchange to the app-owned command", async () => {
   await withTargetServer(async (target) => {
+    const invocations = [];
+    const executePreviewIdentityCommand = async (input) => {
+        invocations.push(input);
+        return {
+          identity: {
+            displayName: "Alice",
+            email: "alice@example.com",
+            userId: "user-alice"
+          },
+          ok: true,
+          setCookie: ["application_session=app-native-alice; Path=/; HttpOnly; SameSite=Lax"],
+          signedOut: false,
+          statusCode: 200
+        };
+      };
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "login-as");
+      const previewAuth = {
+        ...commandPreviewAuth(target.origin, "application-command"),
+        identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
+        kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+        viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
+      };
       const preview = await registry.ensure({
+        executePreviewIdentityCommand,
         previewAuth,
         sessionId: previewAuth.sessionId,
         targetHref: previewAuth.targetHref,
@@ -888,86 +905,6 @@ test("launch preview proxy exchanges a one-use grant for native JSKIT cookies", 
       const grant = createPreviewIdentityGrant(
         previewAuth,
         previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_EMAIL, "alice@example.com")
-      );
-      const controlUrl = previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH);
-
-      const response = await fetch(controlUrl, {
-        body: JSON.stringify({ grant }),
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: [
-            "target_cookie=alice-browser",
-            "jskit_local_access_token=old-access",
-            "jskit_local_refresh_token=old-refresh"
-          ].join("; ")
-        },
-        method: "POST"
-      });
-      assert.equal(response.status, 200);
-      const payload = await response.json();
-      assert.deepEqual(payload, {
-        identity: {
-          displayName: "",
-          email: "alice@example.com",
-          login: "",
-          selector: {
-            type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
-            value: "alice@example.com"
-          },
-          userId: "user-alice",
-          username: "alice"
-        },
-        ok: true
-      });
-      const setCookie = response.headers.get("set-cookie") || "";
-      assert.match(setCookie, /jskit_local_access_token=native-access-alice/u);
-      assert.match(setCookie, /jskit_local_refresh_token=native-refresh-alice/u);
-      assert.match(setCookie, new RegExp(`${previewTokenCookieName(new URL(preview.href).origin)}=`, "u"));
-
-      const authRequests = target.requests.filter((request) => request.url.startsWith("/api/"));
-      assert.deepEqual(authRequests.map((request) => request.url), [
-        "/api/logout",
-        "/api/dev-auth/login-as"
-      ]);
-      assert.equal(authRequests[1].devAuthSecret, TEST_JSKIT_PREVIEW_AUTH_SECRET);
-      assert.deepEqual(JSON.parse(authRequests[1].body), {
-        email: "alice@example.com"
-      });
-
-      const replay = await fetch(controlUrl, {
-        body: JSON.stringify({ grant }),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-      assert.equal(replay.status, 409);
-      assert.match((await replay.json()).error, /already been used/u);
-      assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 2);
-    } finally {
-      await registry.closeAll();
-    }
-  });
-});
-
-test("launch preview proxy exchanges a generic login selector through the application endpoint", async () => {
-  await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
-    try {
-      const previewAuth = {
-        ...jskitPreviewAuth(target.origin, "application-login"),
-        identityTypes: [PREVIEW_IDENTITY_SELECTOR_LOGIN],
-        kind: APPLICATION_PREVIEW_AUTH_KIND
-      };
-      const preview = await registry.ensure({
-        previewAuth,
-        sessionId: previewAuth.sessionId,
-        targetHref: previewAuth.targetHref,
-        terminalSessionId: previewAuth.terminalSessionId
-      });
-      const grant = createPreviewIdentityGrant(
-        previewAuth,
-        previewLoginSelection(PREVIEW_IDENTITY_SELECTOR_LOGIN, "merc")
       );
       const response = await fetch(previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH), {
         body: JSON.stringify({ grant }),
@@ -978,36 +915,39 @@ test("launch preview proxy exchanges a generic login selector through the applic
       });
 
       assert.equal(response.status, 200);
+      assert.equal(invocations.length, 1);
+      assert.deepEqual(invocations[0].selection, previewLoginSelection(
+        PREVIEW_IDENTITY_SELECTOR_EMAIL,
+        "alice@example.com"
+      ));
+      assert.equal(invocations[0].previewAuth.terminalSessionId, previewAuth.terminalSessionId);
       assert.deepEqual(await response.json(), {
         identity: {
-          displayName: "Merc",
-          email: "",
-          login: "merc",
+          displayName: "Alice",
+          email: "alice@example.com",
+          login: "",
           selector: {
-            type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
-            value: "merc"
+            type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+            value: "alice@example.com"
           },
-          userId: "",
-          username: "merc"
+          userId: "user-alice",
+          username: ""
         },
         ok: true
       });
-      assert.match(response.headers.get("set-cookie") || "", /application_session=merc/u);
-      const exchangeRequests = target.requests.filter((request) => (
-        request.url === APPLICATION_PREVIEW_IDENTITY_PATH
-      ));
-      assert.equal(exchangeRequests.length, 2);
-      assert.deepEqual(JSON.parse(exchangeRequests[0].body), {
-        operation: PREVIEW_IDENTITY_LOGOUT_OPERATION
+      assert.match(response.headers.get("set-cookie") || "", /application_session=app-native-alice/u);
+      assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 0);
+
+      const replay = await fetch(previewPath(preview.href, PREVIEW_IDENTITY_CONTROL_PATH), {
+        body: JSON.stringify({ grant }),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        method: "POST"
       });
-      assert.equal(exchangeRequests[1].previewIdentitySecret, TEST_JSKIT_PREVIEW_AUTH_SECRET);
-      assert.deepEqual(JSON.parse(exchangeRequests[1].body), {
-        operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
-        selector: {
-          type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
-          value: "merc"
-        }
-      });
+      assert.equal(replay.status, 409);
+      assert.match((await replay.json()).error, /already been used/u);
+      assert.equal(invocations.length, 1);
     } finally {
       await registry.closeAll();
     }
@@ -1018,7 +958,7 @@ test("launch preview identity control requires preview authorization and a valid
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "grant-validation");
+      const previewAuth = commandPreviewAuth(target.origin, "grant-validation");
       const preview = await registry.ensure({
         previewAuth,
         sessionId: previewAuth.sessionId,
@@ -1088,10 +1028,19 @@ test("launch preview identity control requires preview authorization and a valid
 
 test("launch preview identity failure leaves the browser signed out with the exact app error", async () => {
   await withTargetServer(async (target) => {
+    const executePreviewIdentityCommand = async () => ({
+        code: "user_not_found",
+        error: "User not found.",
+        ok: false,
+        setCookie: ["application_session=; Max-Age=0; Path=/"],
+        signedOut: true,
+        statusCode: 404
+      });
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "missing-user");
+      const previewAuth = commandPreviewAuth(target.origin, "missing-user");
       const preview = await registry.ensure({
+        executePreviewIdentityCommand,
         previewAuth,
         sessionId: previewAuth.sessionId,
         targetHref: previewAuth.targetHref,
@@ -1110,18 +1059,15 @@ test("launch preview identity failure leaves the browser signed out with the exa
         method: "POST"
       });
 
-      assert.equal(response.status, 400);
+      assert.equal(response.status, 404);
       assert.deepEqual(await response.json(), {
-        code: "validation_failed",
+        code: "user_not_found",
         error: "User not found.",
         ok: false,
         signedOut: true
       });
-      assert.match(response.headers.get("set-cookie") || "", /jskit_local_refresh_token=; Max-Age=0/u);
-      assert.deepEqual(
-        target.requests.filter((request) => request.url.startsWith("/api/")).map((request) => request.url),
-        ["/api/logout", "/api/dev-auth/login-as"]
-      );
+      assert.match(response.headers.get("set-cookie") || "", /application_session=; Max-Age=0/u);
+      assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 0);
     } finally {
       await registry.closeAll();
     }
@@ -1130,10 +1076,22 @@ test("launch preview identity failure leaves the browser signed out with the exa
 
 test("launch preview Guest exchange forwards native logout cookies", async () => {
   await withTargetServer(async (target) => {
+    const invocations = [];
+    const executePreviewIdentityCommand = async (input) => {
+        invocations.push(input);
+        return {
+          identity: null,
+          ok: true,
+          setCookie: ["application_session=; Max-Age=0; Path=/"],
+          signedOut: true,
+          statusCode: 200
+        };
+      };
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "guest");
+      const previewAuth = commandPreviewAuth(target.origin, "guest");
       const preview = await registry.ensure({
+        executePreviewIdentityCommand,
         previewAuth,
         sessionId: previewAuth.sessionId,
         targetHref: previewAuth.targetHref,
@@ -1155,40 +1113,10 @@ test("launch preview Guest exchange forwards native logout cookies", async () =>
         identity: null,
         ok: true
       });
-      assert.match(response.headers.get("set-cookie") || "", /jskit_local_access_token=; Max-Age=0/u);
-      assert.deepEqual(
-        target.requests.filter((request) => request.url.startsWith("/api/")).map((request) => request.url),
-        ["/api/logout"]
-      );
-    } finally {
-      await registry.closeAll();
-    }
-  });
-});
-
-test("ordinary proxied requests cannot invoke JSKIT login-as without the private exchange header", async () => {
-  await withTargetServer(async (target) => {
-    const registry = createLaunchPreviewProxyRegistry();
-    try {
-      const previewAuth = jskitPreviewAuth(target.origin, "direct-login-as");
-      const preview = await registry.ensure({
-        previewAuth,
-        sessionId: previewAuth.sessionId,
-        targetHref: previewAuth.targetHref,
-        terminalSessionId: previewAuth.terminalSessionId
-      });
-      const response = await fetch(previewPath(preview.href, "/api/dev-auth/login-as"), {
-        body: JSON.stringify({ email: "alice@example.com" }),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
-
-      assert.equal(response.status, 403);
-      assert.equal((await response.json()).error, "Dev auth exchange is not authorized.");
-      const loginRequest = target.requests.find((request) => request.url === "/api/dev-auth/login-as");
-      assert.equal(loginRequest.devAuthSecret, "");
+      assert.match(response.headers.get("set-cookie") || "", /application_session=; Max-Age=0/u);
+      assert.equal(invocations.length, 1);
+      assert.equal(invocations[0].selection.operation, PREVIEW_IDENTITY_LOGOUT_OPERATION);
+      assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 0);
     } finally {
       await registry.closeAll();
     }
@@ -1197,10 +1125,27 @@ test("ordinary proxied requests cannot invoke JSKIT login-as without the private
 
 test("separate preview browsers can exchange different identities without shared proxy state", async () => {
   await withTargetServer(async (target) => {
+    const invocations = [];
+    const executePreviewIdentityCommand = async (input) => {
+        invocations.push(input);
+        const email = input.selection.selector.value;
+        const login = email.split("@", 1)[0];
+        return {
+          identity: {
+            email,
+            username: login
+          },
+          ok: true,
+          setCookie: [`application_session=${login}; Path=/; HttpOnly`],
+          signedOut: false,
+          statusCode: 200
+        };
+      };
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "two-browsers");
+      const previewAuth = commandPreviewAuth(target.origin, "two-browsers");
       const preview = await registry.ensure({
+        executePreviewIdentityCommand,
         previewAuth,
         sessionId: previewAuth.sessionId,
         targetHref: previewAuth.targetHref,
@@ -1222,12 +1167,12 @@ test("separate preview browsers can exchange different identities without shared
 
       const alice = await exchange("alice@example.com", "alice-context");
       const bob = await exchange("bob@example.com", "bob-context");
-      assert.match(alice.headers.get("set-cookie") || "", /native-access-alice/u);
-      assert.match(bob.headers.get("set-cookie") || "", /native-access-bob/u);
-      const logins = target.requests.filter((request) => request.url === "/api/dev-auth/login-as");
-      assert.equal(logins.length, 2);
-      assert.match(logins[0].cookie, /browser=alice-context/u);
-      assert.match(logins[1].cookie, /browser=bob-context/u);
+      assert.match(alice.headers.get("set-cookie") || "", /application_session=alice/u);
+      assert.match(bob.headers.get("set-cookie") || "", /application_session=bob/u);
+      assert.equal(invocations.length, 2);
+      assert.equal(invocations[0].selection.selector.value, "alice@example.com");
+      assert.equal(invocations[1].selection.selector.value, "bob@example.com");
+      assert.equal(target.requests.filter((request) => request.url.startsWith("/api/")).length, 0);
     } finally {
       await registry.closeAll();
     }
@@ -1238,7 +1183,7 @@ test("launch preview proxy forwards provider-native JSKIT cookies from ordinary 
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     try {
-      const previewAuth = jskitPreviewAuth(target.origin, "native-set-cookie");
+      const previewAuth = commandPreviewAuth(target.origin, "native-set-cookie");
       const preview = await registry.ensure({
         previewAuth,
         sessionId: previewAuth.sessionId,
@@ -1582,125 +1527,19 @@ test("launch preview proxy handles aborted upstream response bodies", async () =
   }
 });
 
-async function readRequestText(request) {
-  const chunks = [];
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
 async function withTargetServer(callback) {
   const requests = [];
   const server = createServer(async (request, response) => {
     const requestRecord = {
       body: "",
       cookie: request.headers.cookie || "",
-      devAuthSecret: request.headers["x-jskit-dev-auth-secret"] || "",
       host: request.headers.host || "",
       ifModifiedSince: request.headers["if-modified-since"] || "",
       ifNoneMatch: request.headers["if-none-match"] || "",
       method: request.method || "GET",
-      previewIdentitySecret: request.headers[APPLICATION_PREVIEW_IDENTITY_SECRET_HEADER] || "",
       url: request.url || ""
     };
     requests.push(requestRecord);
-    if (request.url === "/api/logout") {
-      requestRecord.body = await readRequestText(request);
-      response.writeHead(200, {
-        "Content-Type": "application/json",
-        "Set-Cookie": [
-          "jskit_local_access_token=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
-          "jskit_local_refresh_token=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
-        ]
-      });
-      response.end(JSON.stringify({ ok: true }));
-      return;
-    }
-    if (request.url === "/api/dev-auth/login-as") {
-      requestRecord.body = await readRequestText(request);
-      if (requestRecord.devAuthSecret !== TEST_JSKIT_PREVIEW_AUTH_SECRET) {
-        response.writeHead(403, {
-          "Content-Type": "application/json"
-        });
-        response.end(JSON.stringify({
-          code: "dev_auth_exchange_unauthorized",
-          error: "Dev auth exchange is not authorized.",
-          ok: false
-        }));
-        return;
-      }
-      const input = JSON.parse(requestRecord.body || "{}");
-      const email = String(input.email || "").trim().toLowerCase();
-      if (email === "missing@example.com") {
-        response.writeHead(400, {
-          "Content-Type": "application/json"
-        });
-        response.end(JSON.stringify({
-          code: "validation_failed",
-          details: {
-            fieldErrors: {
-              email: "User not found."
-            }
-          },
-          error: "Validation failed.",
-          ok: false
-        }));
-        return;
-      }
-      const username = email.split("@")[0] || "preview-user";
-      response.writeHead(200, {
-        "Content-Type": "application/json",
-        "Set-Cookie": [
-          `jskit_local_access_token=native-access-${username}; Path=/; HttpOnly; SameSite=Lax`,
-          `jskit_local_refresh_token=native-refresh-${username}; Path=/; HttpOnly; SameSite=Lax`
-        ]
-      });
-      response.end(JSON.stringify({
-        email,
-        ok: true,
-        userId: `user-${username}`,
-        username
-      }));
-      return;
-    }
-    if (request.url === APPLICATION_PREVIEW_IDENTITY_PATH) {
-      requestRecord.body = await readRequestText(request);
-      if (requestRecord.previewIdentitySecret !== TEST_JSKIT_PREVIEW_AUTH_SECRET) {
-        response.writeHead(403, {
-          "Content-Type": "application/json"
-        });
-        response.end(JSON.stringify({
-          code: "preview_identity_exchange_unauthorized",
-          error: "Preview identity exchange is not authorized.",
-          ok: false
-        }));
-        return;
-      }
-      const input = JSON.parse(requestRecord.body || "{}");
-      if (input.operation === PREVIEW_IDENTITY_LOGOUT_OPERATION) {
-        response.writeHead(200, {
-          "Content-Type": "application/json",
-          "Set-Cookie": "application_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
-        });
-        response.end(JSON.stringify({
-          ok: true
-        }));
-        return;
-      }
-      const login = String(input.selector?.value || "").trim();
-      response.writeHead(200, {
-        "Content-Type": "application/json",
-        "Set-Cookie": `application_session=${login}; Path=/; HttpOnly; SameSite=Lax`
-      });
-      response.end(JSON.stringify({
-        displayName: "Merc",
-        login,
-        ok: true,
-        username: login
-      }));
-      return;
-    }
     if (request.url === "/api/ping") {
       response.writeHead(200, {
         "Content-Type": "application/json"
@@ -1908,15 +1747,17 @@ async function withRejectedUpgradeTargetServer(callback) {
   }
 }
 
-function jskitPreviewAuth(targetOrigin = "", suffix = "identity") {
+function commandPreviewAuth(targetOrigin = "", suffix = "identity") {
   return {
-    kind: JSKIT_PREVIEW_AUTH_KIND,
+    identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
+    kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
     projectScope: `project:${suffix}`,
-    secret: TEST_JSKIT_PREVIEW_AUTH_SECRET,
+    secret: TEST_PREVIEW_IDENTITY_SECRET,
     sessionId: `session-${suffix}`,
     targetHref: `${targetOrigin}/home`,
     targetRoot: `/tmp/vibe64-preview-${suffix}`,
-    terminalSessionId: `terminal-${suffix}`
+    terminalSessionId: `terminal-${suffix}`,
+    viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
   };
 }
 

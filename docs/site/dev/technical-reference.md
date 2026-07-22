@@ -158,10 +158,27 @@ not treat `VIBE64_SYSTEM_ROOT` as a casual state-placement override.
 
 ## Application Preview Identity
 
-Launch adapters can opt an application into generic preview identity switching
-with `previewAuth: "application-dev"`. The launch metadata may restrict the
-identifiers accepted by that application with `previewIdentityTypes`; supported
-values are `email`, `login`, and `user-id`.
+Applications opt into preview identity switching in their committed
+`vibe64.project.json`. The capability names an app-owned executable and the
+identifiers that app accepts:
+
+```json
+{
+  "capabilities": {
+    "previewIdentity": {
+      "protocol": "vibe64.preview-identity.command.v1",
+      "command": [".vibe64/bin/preview-identity"],
+      "identityTypes": ["email", "user-id"],
+      "viewerIdentityTypes": ["email"],
+      "runtimes": ["node26"]
+    }
+  }
+}
+```
+
+The executable must be a real executable file directly under `.vibe64/bin`.
+Vibe64 runs it from the application source root with the managed project
+environment. Launch adapters do not implement or infer application identity.
 
 Vibe64 supplies the launched process with:
 
@@ -170,9 +187,9 @@ VIBE64_PREVIEW_IDENTITY_ENABLED=true
 VIBE64_PREVIEW_IDENTITY_SECRET=<random per-launch secret>
 ```
 
-The application implements `POST /api/dev-auth/preview-identity` and validates
-the secret from `x-vibe64-preview-identity-secret`. Login requests use a typed
-selector:
+The command reads one protocol request as JSON from stdin and writes one JSON
+response to stdout. A login request carries either a typed selector or the
+current viewer identifiers explicitly allowed by `viewerIdentityTypes`:
 
 ```json
 {
@@ -184,15 +201,18 @@ selector:
 }
 ```
 
-Logout requests use `{ "operation": "logout" }`. A successful login creates
-the application's normal browser session and returns canonical, non-secret
-identity fields such as `displayName`, `email`, `login`, `userId`, and
-`username`. The application remains responsible for finding an existing user,
-rejecting missing or disabled users, and setting or clearing its own cookies.
-Vibe64 never creates users or changes their roles or application data.
+Logout requests use `{ "operation": "logout" }`. The response repeats the
+protocol and request ID, reports `ok`, and returns the application's native
+`Set-Cookie` headers plus canonical, non-secret identity fields. The command
+may call an internal development endpoint, use framework code directly, or use
+another app-specific mechanism. The application remains responsible for
+finding an existing user, rejecting missing or disabled users, and creating or
+clearing its normal browser session. Vibe64 never creates users or changes
+their roles or application data.
 
-The endpoint must be disabled unless the enable flag and per-launch secret are
-present. It is a development-preview control, not a production sign-in API.
+Any internal endpoint used by the command must remain disabled unless the
+enable flag and per-launch secret are present. This is a development-preview
+control, not a production sign-in API.
 
 ## Host Runtime Naming
 

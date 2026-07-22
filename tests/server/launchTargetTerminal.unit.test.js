@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -63,6 +63,39 @@ async function createLaunchSpecFixture() {
   };
 }
 
+async function installPreviewIdentityContract(targetRoot, {
+  includeExecutable = true
+} = {}) {
+  await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+    capabilities: {
+      previewIdentity: {
+        command: [".vibe64/bin/preview-identity"],
+        environment: {
+          enabled: "APP_PREVIEW_IDENTITY_ENABLED",
+          secret: "APP_PREVIEW_IDENTITY_SECRET"
+        },
+        identityTypes: ["email", "user-id"],
+        protocol: "vibe64.preview-identity.command.v1",
+        runtimes: ["node26"],
+        viewerIdentityTypes: ["email"]
+      }
+    },
+    config: {},
+    projectType: "unit",
+    schema: "vibe64.project",
+    schemaVersion: 1
+  }, null, 2)}\n`, "utf8");
+  if (!includeExecutable) {
+    return;
+  }
+  const executablePath = path.join(targetRoot, ".vibe64", "bin", "preview-identity");
+  await mkdir(path.dirname(executablePath), {
+    recursive: true
+  });
+  await writeFile(executablePath, "#!/usr/bin/env bash\nexit 0\n", "utf8");
+  await chmod(executablePath, 0o755);
+}
+
 test("serialized launch restart rules use the canonical matcher", () => {
   const generatedMatcherFactory = Function(
     `"use strict";\n${launchRestartRulesMatcherSource()}\nreturn vibe64LaunchRestartRulesMatcher;`
@@ -87,6 +120,7 @@ test("serialized launch restart rules use the canonical matcher", () => {
 });
 
 function createSpec({
+  launch = {},
   preferredPort,
   session,
   targetRoot
@@ -106,12 +140,111 @@ function createSpec({
         DB_PASSWORD: "database-password",
         VISIBLE_VALUE: "visible"
       },
+      ...launch,
       waitForReadiness: false
     }),
     session,
     targetRoot
   });
 }
+
+test("web launch resolves preview identity only from the committed Vibe64 project contract", async () => {
+  const fixture = await createLaunchSpecFixture();
+  let spec;
+  try {
+    await installPreviewIdentityContract(fixture.targetRoot);
+    spec = await createSpec({
+      preferredPort: 47000 + crypto.randomInt(500),
+      session: fixture.session,
+      targetRoot: fixture.targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.previewAuth, "application-command");
+    assert.deepEqual(spec.metadata.previewIdentity.command, [".vibe64/bin/preview-identity"]);
+    assert.deepEqual(spec.metadata.previewIdentity.identityTypes, ["email", "user-id"]);
+    assert.equal(spec.metadata.previewIdentity.sourceRoot, fixture.targetRoot);
+    assert.deepEqual(spec.metadata.previewIdentity.viewerIdentityTypes, ["email"]);
+    const env = spec.env({ id: "terminal-preview-identity" });
+    assert.equal(env.APP_PREVIEW_IDENTITY_ENABLED, "true");
+    assert.equal(env.VIBE64_PREVIEW_IDENTITY_ENABLED, "true");
+    assert.match(env.APP_PREVIEW_IDENTITY_SECRET, /^[a-f0-9]{64}$/u);
+    assert.equal(env.VIBE64_PREVIEW_IDENTITY_SECRET, env.APP_PREVIEW_IDENTITY_SECRET);
+  } finally {
+    spec?.releasePortReservation?.();
+    await fixture.cleanup();
+  }
+});
+
+test("web launch rejects incomplete preview identity source contracts", async () => {
+  const fixture = await createLaunchSpecFixture();
+  try {
+    await installPreviewIdentityContract(fixture.targetRoot, {
+      includeExecutable: false
+    });
+    const spec = await createSpec({
+      preferredPort: 47500 + crypto.randomInt(500),
+      session: fixture.session,
+      targetRoot: fixture.targetRoot
+    });
+
+    assert.equal(spec.ok, false);
+    assert.match(spec.message, /missing or is not executable/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("web launch rejects preview identity executable symlinks", async () => {
+  const fixture = await createLaunchSpecFixture();
+  try {
+    await installPreviewIdentityContract(fixture.targetRoot, {
+      includeExecutable: false
+    });
+    const executablePath = path.join(fixture.targetRoot, ".vibe64", "bin", "preview-identity");
+    const externalExecutable = path.join(path.dirname(fixture.targetRoot), "external-preview-identity");
+    await mkdir(path.dirname(executablePath), {
+      recursive: true
+    });
+    await writeFile(externalExecutable, "#!/usr/bin/env bash\nexit 0\n", "utf8");
+    await chmod(externalExecutable, 0o755);
+    await symlink(externalExecutable, executablePath);
+
+    const spec = await createSpec({
+      preferredPort: 47500 + crypto.randomInt(500),
+      session: fixture.session,
+      targetRoot: fixture.targetRoot
+    });
+
+    assert.equal(spec.ok, false);
+    assert.match(spec.message, /missing or is not executable/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("web launch rejects adapter-owned preview identity declarations", async () => {
+  const fixture = await createLaunchSpecFixture();
+  try {
+    const spec = await createSpec({
+      launch: {
+        previewIdentity: {
+          command: [".vibe64/bin/preview-identity"],
+          identityTypes: ["email"],
+          protocol: "vibe64.preview-identity.command.v1"
+        }
+      },
+      preferredPort: 46500 + crypto.randomInt(500),
+      session: fixture.session,
+      targetRoot: fixture.targetRoot
+    });
+
+    assert.equal(spec.ok, false);
+    assert.match(spec.message, /vibe64\.project\.json/u);
+  } finally {
+    await fixture.cleanup();
+  }
+});
 
 test("preview public origin maps user Studio hosts to the app preview domain", () => {
   const publicOrigin = previewPublicOriginForLaunch({

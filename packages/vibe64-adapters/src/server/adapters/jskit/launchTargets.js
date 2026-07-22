@@ -16,9 +16,6 @@ import {
   resolveStudioProjectsRoot
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
-  JSKIT_PREVIEW_AUTH_KIND
-} from "@local/vibe64-core/server/previewAuth";
-import {
   shellQuote
 } from "@local/vibe64-execution/server";
 
@@ -65,6 +62,7 @@ const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
 const AGENT_RUNS_DIR_NAME = "agent-runs";
+
 const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
   ".env",
   ".env.*",
@@ -987,8 +985,6 @@ async function createJskitBuiltLaunchDescriptor({
         networkEnv: true
       }
     : null;
-  const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
-
   return {
     commands: config.buildCommand || config.serverCommand
       ? [
@@ -1033,7 +1029,6 @@ async function createJskitBuiltLaunchDescriptor({
       testrunCommand: config.testrunCommand,
       ...jskitSelfTargetMetadata(selfTarget)
     },
-    previewAuth: previewAuthKind,
     restartOnChange: JSKIT_BUILT_RESTART_ON_CHANGE,
     runtimes: ["node26"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
@@ -1053,7 +1048,6 @@ async function createJskitDevLaunchDescriptor({
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
-  const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
   return {
     command: createJskitDevCommand({
       agentRunsRoot,
@@ -1078,7 +1072,6 @@ async function createJskitDevLaunchDescriptor({
       selfTargetSource: config.selfTargetSource,
       ...jskitSelfTargetMetadata(selfTarget)
     },
-    previewAuth: previewAuthKind,
     restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
     runtimes: ["node26"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {

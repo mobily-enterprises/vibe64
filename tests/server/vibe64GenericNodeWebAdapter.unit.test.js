@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -24,7 +24,7 @@ import {
   PREVIEW_PROXY_PUBLIC_HOST_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
-  APPLICATION_PREVIEW_AUTH_KIND,
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   APPLICATION_PREVIEW_IDENTITY_ENABLED_ENV,
   APPLICATION_PREVIEW_IDENTITY_SECRET_ENV,
   PREVIEW_IDENTITY_SELECTOR_LOGIN
@@ -62,6 +62,27 @@ async function writeProjectFile(root, relativePath, text = "") {
     recursive: true
   });
   await writeFile(filePath, text, "utf8");
+}
+
+async function writeOnlinePreviewIdentityContract(root) {
+  await writeProjectFile(root, "vibe64.project.json", `${JSON.stringify({
+    capabilities: {
+      previewIdentity: {
+        command: [".vibe64/bin/preview-identity.mjs"],
+        identityTypes: ["login"],
+        protocol: "vibe64.preview-identity.command.v1",
+        runtimes: ["node26"],
+        viewerIdentityTypes: ["login"]
+      }
+    },
+    config: {},
+    projectType: "node-web",
+    schema: "vibe64.project",
+    schemaVersion: 1
+  }, null, 2)}\n`);
+  const executablePath = path.join(root, ".vibe64", "bin", "preview-identity.mjs");
+  await writeProjectFile(root, ".vibe64/bin/preview-identity.mjs", "#!/usr/bin/env node\n");
+  await chmod(executablePath, 0o755);
 }
 
 function escapedPattern(value = "") {
@@ -413,6 +434,7 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
         start: "node ./bin/vibe64-online.js start"
       }
     }, null, 2));
+    await writeOnlinePreviewIdentityContract(onlineRoot);
 
     const session = {
       metadata: {
@@ -445,8 +467,8 @@ test("generic Node owns the explicit Vibe64 Online nested launch", async () => {
       assert.equal(spec.metadata.urlPath, "/app");
       assert.match(spec.metadata.targetUrl, /\/app$/u);
       assert.equal(spec.metadata.composedAppRoot, onlineComposedAppRoot);
-      assert.equal(spec.metadata.previewAuth, APPLICATION_PREVIEW_AUTH_KIND);
-      assert.deepEqual(spec.metadata.previewIdentityTypes, [PREVIEW_IDENTITY_SELECTOR_LOGIN]);
+      assert.equal(spec.metadata.previewAuth, APPLICATION_COMMAND_PREVIEW_AUTH_KIND);
+      assert.deepEqual(spec.metadata.previewIdentity.identityTypes, [PREVIEW_IDENTITY_SELECTOR_LOGIN]);
       assert.equal(spec.metadata.stateRoot, onlineStateRoot);
       assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
       assert.equal(spec.restartOnChange.label, "Vibe64 Online source files");

@@ -231,7 +231,7 @@ function childEnv(runtime = {}, preview = {}, authentication = null) {
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
     VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
     ...(preview.managed ? {
-      JSKIT_PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
+      VIBE64_PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
     } : {})
   };
 }

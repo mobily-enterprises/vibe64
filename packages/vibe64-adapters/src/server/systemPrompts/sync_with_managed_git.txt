@@ -15,7 +15,7 @@ Managed Git command path:
 - If managed `git` cannot reach the Vibe64 Git repository, report that managed-command failure. Do not retry with host binaries or inspect credentials.
 
 Ownership rules for dirty files:
-- Safe source-owned project changes may be committed. This includes normal application source files and portable Vibe64 project contract files such as `vibe64.project.json`, `vibe64.runtime-lock.json`, `vibe64.system.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
+- Safe source-owned project changes may be committed. This includes normal application source files and portable Vibe64 project contract files such as `vibe64.project.json`, `vibe64.runtime-lock.json`, `vibe64.system.json`, optional `.vibe64/bin`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
 - Do not commit Vibe64-owned runtime/session/deployment/credential state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/user metadata.
 - Treat unclear ownership, unrelated files, unresolved conflicts, and suspected secrets as blockers. Explain the exact paths and why sync stopped.
 

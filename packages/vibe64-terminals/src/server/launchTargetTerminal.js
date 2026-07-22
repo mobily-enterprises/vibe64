@@ -50,8 +50,11 @@ import {
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_LOGIN,
   PREVIEW_IDENTITY_SELECTOR_USER_ID,
+  PREVIEW_IDENTITY_SUBJECT_VIEWER,
+  previewAuthEnvironment,
   previewAuthIdentityAvailable,
   previewAuthIdentityTypes,
+  previewAuthViewerIdentityTypes,
   previewAuthRequiresIdentitySecret,
   previewAuthProfilePath,
   previewAuthSecretPath,
@@ -89,6 +92,9 @@ import {
 import {
   createLaunchPreviewProxyRegistry
 } from "./launchPreviewProxy.js";
+import {
+  createPreviewIdentityCommandRunner
+} from "./previewIdentityCommand.js";
 
 const LAUNCH_METADATA = Object.freeze({
   agentHref: "launch_target_agent_href",
@@ -947,7 +953,7 @@ function previewAuthForLaunchTerminal(terminal = {}, {
   }
   return {
     identityTypes: previewAuthIdentityTypes({
-      identityTypes: metadata.previewIdentityTypes,
+      identityTypes: metadata.previewIdentity?.identityTypes,
       kind
     }),
     kind,
@@ -961,7 +967,12 @@ function previewAuthForLaunchTerminal(terminal = {}, {
     sessionRoot: String(metadata.sessionRoot || ""),
     targetHref,
     targetRoot: String(metadata.targetRoot || metadata.runRoot || ""),
-    terminalSessionId: String(terminal.id || "")
+    terminalSessionId: String(terminal.id || ""),
+    viewerIdentityTypes: previewAuthViewerIdentityTypes({
+      identityTypes: metadata.previewIdentity?.identityTypes,
+      kind,
+      viewerIdentityTypes: metadata.previewIdentity?.viewerIdentityTypes
+    })
   };
 }
 
@@ -969,7 +980,7 @@ function previewIdentityViewer(vibe64User = null, identityTypes = []) {
   const email = String(vibe64User?.email || "").trim().toLowerCase();
   const login = String(vibe64User?.username || vibe64User?.login || "").trim();
   const userId = String(vibe64User?.id || vibe64User?.userId || "").trim();
-  const selector = [
+  const identifiers = [
     identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_EMAIL) && email
       ? { type: PREVIEW_IDENTITY_SELECTOR_EMAIL, value: email }
       : null,
@@ -979,7 +990,8 @@ function previewIdentityViewer(vibe64User = null, identityTypes = []) {
     identityTypes.includes(PREVIEW_IDENTITY_SELECTOR_USER_ID) && userId
       ? { type: PREVIEW_IDENTITY_SELECTOR_USER_ID, value: userId }
       : null
-  ].find(Boolean);
+  ].filter(Boolean);
+  const selector = identifiers[0] || null;
   if (!selector) {
     return null;
   }
@@ -987,6 +999,7 @@ function previewIdentityViewer(vibe64User = null, identityTypes = []) {
     displayName: String(
       vibe64User?.displayName || vibe64User?.name || login || email || userId
     ).trim() || selector.value,
+    identifiers,
     selector
   };
 }
@@ -1008,7 +1021,11 @@ function previewIdentityCapability({
   const identityTypes = previewAuthIdentityTypes(previewAuth || {
     kind: previewAuthKind
   });
-  const viewer = previewIdentityViewer(vibe64User, identityTypes);
+  const viewerIdentityTypes = previewAuthViewerIdentityTypes(previewAuth || {
+    identityTypes,
+    kind: previewAuthKind
+  });
+  const viewer = previewIdentityViewer(vibe64User, viewerIdentityTypes);
   const available = previewReady &&
     identityTypes.length > 0 &&
     previewAuthIdentityAvailable(previewAuth || {});
@@ -1025,6 +1042,7 @@ function previewIdentityCapability({
             : "Preview identity authorization is unavailable. Restart the preview."
           : "This preview does not support application identity switching.",
     identityTypes,
+    viewerIdentityTypes,
     viewer
   };
 }
@@ -1079,7 +1097,9 @@ function inferredPreviewIdentitySelector({
 }
 
 function previewIdentitySelection(input = {}, {
-  identityTypes = []
+  identityTypes = [],
+  useViewerSubject = false,
+  viewerIdentityTypes = []
 } = {}) {
   const mode = String(input.mode || "viewer").trim();
   if (!["viewer", "user", "guest"].includes(mode)) {
@@ -1097,7 +1117,10 @@ function previewIdentitySelection(input = {}, {
       }
     };
   }
-  const viewer = previewIdentityViewer(input.vibe64User, identityTypes);
+  const viewer = previewIdentityViewer(
+    input.vibe64User,
+    viewerIdentityTypes
+  );
   if (mode === "viewer" && !viewer) {
     const error = new Error(
       `The signed-in Vibe64 user does not have a supported ${previewIdentityTypeDescription(identityTypes)} to match.`
@@ -1116,7 +1139,15 @@ function previewIdentitySelection(input = {}, {
     },
     selection: {
       operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
-      selector
+      ...(mode === "viewer" && useViewerSubject
+        ? {
+            subject: {
+              displayName: viewer.displayName,
+              identifiers: viewer.identifiers,
+              kind: PREVIEW_IDENTITY_SUBJECT_VIEWER
+            }
+          }
+        : { selector })
     }
   };
 }
@@ -1571,6 +1602,24 @@ async function readyLaunchPreview({
   }
   try {
     const previewTarget = await launchPreviewProxies.ensure({
+      executePreviewIdentityCommand: terminal?.metadata?.previewIdentity
+        ? async ({ selection }) => {
+            const runner = await previewIdentityCommandRunnerForLaunchTerminal({
+              context,
+              projectService: options.projectService,
+              runCommand: options.runCommand,
+              targetHref,
+              terminal
+            });
+            if (!runner) {
+              const error = new Error("Application preview identity command is unavailable. Restart the preview.");
+              error.code = "vibe64_preview_identity_command_unavailable";
+              error.statusCode = 409;
+              throw error;
+            }
+            return runner(selection);
+          }
+        : null,
       previewPublicOrigin: previewPublicOriginForLaunch({
         env: options.env,
         previewPublicDomain: options.previewPublicDomain,
@@ -1628,6 +1677,67 @@ async function readyLaunchPreview({
       })
     };
   }
+}
+
+function launchExecutionProject(context = {}, terminalEnvRecords = {}) {
+  return {
+    config: context.config || {},
+    configEnv: terminalEnvRecords.projectConfigEnv,
+    projectsRoot: context.projectsRoot || "",
+    runtimeConfigEnv: terminalEnvRecords.runtimeConfigEnv,
+    runtimeTargetRoot: context.runtimeTargetRoot || "",
+    serviceDataRoot: context.serviceDataRoot || "",
+    targetRoot: context.targetRoot || ""
+  };
+}
+
+async function previewIdentityCommandRunnerForLaunchTerminal({
+  context = {},
+  projectService = null,
+  runCommand = null,
+  targetHref = "",
+  terminal = null
+} = {}) {
+  const capability = terminal?.metadata?.previewIdentity;
+  if (!capability || typeof runCommand !== "function") {
+    return null;
+  }
+  const previewAuth = previewAuthForLaunchTerminal(terminal, {
+    sessionId: terminal?.metadata?.sessionId || "",
+    targetHref
+  });
+  if (!previewAuthIdentityAvailable(previewAuth || {})) {
+    return null;
+  }
+  const terminalEnvRecords = await loadProjectExecutionEnvRecords({
+    projectService,
+    runCommand,
+    runtime: context.runtime,
+    session: context.session,
+    target: "launch-target",
+    targetRoot: context.targetRoot
+  });
+  return createPreviewIdentityCommandRunner({
+    allowedRoots: [
+      context.targetRoot,
+      context.runtimeTargetRoot,
+      capability.sourceRoot
+    ].filter(Boolean),
+    capability,
+    env: {
+      ...projectExecutionEnvFromRecords(terminalEnvRecords),
+      ...previewAuthEnvironment({
+        ...previewAuth,
+        previewIdentity: capability
+      })
+    },
+    project: launchExecutionProject(context, terminalEnvRecords),
+    runCommand,
+    runtimes: capability.runtimes,
+    session: context.session || {},
+    sourceRoot: capability.sourceRoot,
+    targetHref
+  });
 }
 
 function stoppedLaunchPreviewStatus({
@@ -1896,7 +2006,9 @@ function createLaunchTargetTerminalController({
           markReady: markLaunchReady,
           options: {
             ...options,
-            env
+            env,
+            projectService,
+            runCommand
           },
           publishSessionChanged,
           sessionId
@@ -1935,7 +2047,9 @@ function createLaunchTargetTerminalController({
           throw error;
         }
         const identity = previewIdentitySelection(input, {
-          identityTypes: status.previewIdentity?.identityTypes || []
+          identityTypes: status.previewIdentity?.identityTypes || [],
+          useViewerSubject: previewAuthIdentityAvailable(previewAuth || {}),
+          viewerIdentityTypes: status.previewIdentity?.viewerIdentityTypes || []
         });
         return {
           grant: createPreviewIdentityGrant(previewAuth, identity.selection),
@@ -1967,7 +2081,9 @@ function createLaunchTargetTerminalController({
           launchTargets,
           markReady: markLaunchReady,
           options: {
-            env
+            env,
+            projectService,
+            runCommand
           },
           publishSessionChanged,
           sessionId,
@@ -2016,7 +2132,9 @@ function createLaunchTargetTerminalController({
             launchTargets,
             markReady: markLaunchReady,
             options: {
-              env
+              env,
+              projectService,
+              runCommand
             },
             publishSessionChanged,
             sessionId
@@ -2167,6 +2285,14 @@ function createLaunchTargetTerminalController({
             specEnv: spec.env,
             terminalEnv
           });
+          const commandAllowedRoots = [
+            context.targetRoot,
+            context.runtimeTargetRoot,
+            spec.cwd,
+            cwd,
+            ...launchSpecAllowedRoots(spec)
+          ].filter(Boolean);
+          const commandProject = launchExecutionProject(context, terminalEnvRecords);
           const launchEnvHash = executionEnvFingerprint(launchEnvironment.hashEnv);
           const launchRestartBaseline = await createLaunchRestartBaseline({
             restartOnChange: spec.restartOnChange || spec.metadata?.restartOnChange,
@@ -2192,28 +2318,14 @@ function createLaunchTargetTerminalController({
           });
           terminalSession = await runCommand({
             actor: "daemon",
-            allowedRoots: [
-              context.targetRoot,
-              context.runtimeTargetRoot,
-              spec.cwd,
-              cwd,
-              ...launchSpecAllowedRoots(spec)
-            ].filter(Boolean),
+            allowedRoots: commandAllowedRoots,
             args: spec.args || [],
             command: spec.command,
             cwd: spec.cwd || cwd,
             env: launchEnvironment.env,
             envPolicy: "preview",
             mode: "pty",
-            project: {
-              config: context.config || {},
-              configEnv: terminalEnvRecords.projectConfigEnv,
-              projectsRoot: context.projectsRoot || "",
-              runtimeConfigEnv: terminalEnvRecords.runtimeConfigEnv,
-              runtimeTargetRoot: context.runtimeTargetRoot || "",
-              serviceDataRoot: context.serviceDataRoot || "",
-              targetRoot: context.targetRoot || ""
-            },
+            project: commandProject,
             purpose: "preview",
             runtimes: previewRuntimesForSpec(spec),
             session: context.session || {},

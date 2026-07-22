@@ -7,6 +7,9 @@ import {
   normalizeText,
   vibe64Error
 } from "./core.js";
+import {
+  normalizePreviewIdentityCommandCapability
+} from "./previewAuth.js";
 
 const VIBE64_PROJECT_MANIFEST_FILE = "vibe64.project.json";
 const VIBE64_PROJECT_MANIFEST_SCHEMA = "vibe64.project";
@@ -23,6 +26,7 @@ const VIBE64_SOURCE_CONTRACT_ROOT_ENTRIES = Object.freeze([
   VIBE64_SYSTEM_DOCUMENT_FILE
 ]);
 const VIBE64_SOURCE_CONTRACT_VIBE64_DIRS = Object.freeze([
+  "bin",
   VIBE64_PROJECT_LAUNCHER_DIR,
   "project-knowledge",
   "prompts",
@@ -68,6 +72,14 @@ function normalizeProjectManifestConfig(config = {}) {
     .sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function normalizeProjectManifestCapabilities(capabilities = {}) {
+  const input = isPlainObject(capabilities) ? capabilities : {};
+  const previewIdentity = normalizePreviewIdentityCommandCapability(input.previewIdentity);
+  return previewIdentity
+    ? { previewIdentity }
+    : {};
+}
+
 function sourceContractPathLabel(value = "") {
   return String(value || "")
     .trim()
@@ -102,11 +114,13 @@ function sourceContractEntryLabelIsAllowed(entry = "") {
 
 function normalizeProjectManifest(value = {}) {
   const input = isPlainObject(value) ? value : {};
+  const capabilities = normalizeProjectManifestCapabilities(input.capabilities);
   return {
     schema: VIBE64_PROJECT_MANIFEST_SCHEMA,
     schemaVersion: VIBE64_PROJECT_MANIFEST_SCHEMA_VERSION,
     projectType: normalizeText(input.projectType),
-    config: normalizeProjectManifestConfig(input.config)
+    config: normalizeProjectManifestConfig(input.config),
+    ...(Object.keys(capabilities).length > 0 ? { capabilities } : {})
   };
 }
 
@@ -209,6 +223,7 @@ export {
   VIBE64_SOURCE_CONTRACT_ROOT_ENTRIES,
   VIBE64_SOURCE_CONTRACT_VIBE64_DIRS,
   normalizeProjectManifest,
+  normalizeProjectManifestCapabilities,
   normalizeProjectManifestConfig,
   parseProjectManifestText,
   projectContractRoot,

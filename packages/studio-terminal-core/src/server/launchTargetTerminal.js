@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -17,6 +17,10 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  readProjectManifest
+} from "@local/vibe64-core/server/projectManifest";
+import {
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   createPreviewAuthSecret,
   normalizePreviewAuthKind,
   previewAuthEnvironment,
@@ -477,7 +481,47 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         message: "Launch command workdir is outside the session source."
       };
     }
-    const previewAuthKind = normalizePreviewAuthKind(launch.previewAuth);
+    if (launch.previewIdentity) {
+      releasePortReservation();
+      return {
+        ok: false,
+        message: "Declare preview identity in vibe64.project.json, not in a launch descriptor."
+      };
+    }
+    const projectManifest = await readProjectManifest({
+      sourceRoot: resolvedWorktreeRoot
+    });
+    const previewIdentity = projectManifest?.capabilities?.previewIdentity || null;
+    if (previewIdentity && normalizePreviewAuthKind(launch.previewAuth)) {
+      releasePortReservation();
+      return {
+        ok: false,
+        message: "Vibe64 project contract cannot combine preview identity with legacy preview auth."
+      };
+    }
+    if (previewIdentity) {
+      const executablePath = path.resolve(resolvedWorktreeRoot, previewIdentity.command[0]);
+      const executable = (() => {
+        try {
+          return lstatSync(executablePath);
+        } catch {
+          return null;
+        }
+      })();
+      if (
+        !executable?.isFile() ||
+        (executable.mode & 0o111) === 0
+      ) {
+        releasePortReservation();
+        return {
+          ok: false,
+          message: `Preview identity executable is missing or is not executable: ${previewIdentity.command[0]}.`
+        };
+      }
+    }
+    const previewAuthKind = previewIdentity
+      ? APPLICATION_COMMAND_PREVIEW_AUTH_KIND
+      : normalizePreviewAuthKind(launch.previewAuth);
     const previewAuthSecretValue = previewAuthRequiresIdentitySecret({ kind: previewAuthKind })
       ? createPreviewAuthSecret()
       : "";
@@ -497,6 +541,12 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       openTarget,
       port,
       previewAuth: previewAuthKind,
+      ...(previewIdentity ? {
+        previewIdentity: {
+          ...previewIdentity,
+          sourceRoot: resolvedWorktreeRoot
+        }
+      } : {}),
       projectScope,
       readinessMarker: readiness.readinessMarker,
       launchReady: !readiness.readinessMarker,
@@ -553,6 +603,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
           ...launchAgentEnv,
           ...previewAuthEnvironment({
             kind: previewAuthKind,
+            previewIdentity,
             projectScope,
             secret: previewAuthSecret,
             sessionId: session.sessionId || "",
