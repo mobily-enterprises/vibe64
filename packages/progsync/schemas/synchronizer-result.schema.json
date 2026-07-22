@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "mode",
+    "summary",
+    "programChanges",
+    "implementationChanges",
+    "preservedImplementationDetails",
+    "sharedDefinitionProposals",
+    "diagnostics",
+    "verificationPerformed",
+    "verificationStillRequired"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["updated", "unchanged", "blocked"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "CREATE_PROGRAM",
+        "CREATE_IMPLEMENTATION",
+        "PROGRAM_TO_IMPLEMENTATION",
+        "IMPLEMENTATION_TO_PROGRAM",
+        "RECONCILE_BOTH",
+        "NO_CHANGE"
+      ]
+    },
+    "summary": { "type": "string" },
+    "programChanges": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "implementationChanges": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "preservedImplementationDetails": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sharedDefinitionProposals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "verificationPerformed": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "verificationStillRequired": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

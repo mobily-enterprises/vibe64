@@ -1,0 +1,18 @@
+TARGET INSTRUCTIONS: HTML
+
+This target is one complete HTML document or declared fragment. Its provided
+Program symbol is the document or fragment, not every element.
+
+- State meaningful navigation, forms and submitted data, referenced scripts
+  and styles, visible states, document landmarks, accessibility behavior, and
+  outside effects.
+- Preserve existing element choices, DOM structure, IDs, classes, data
+  attributes, ordering, formatting, stable hooks, and compatible metadata.
+- Preserve exact field names, methods, destinations, encodings, defaults,
+  labels, roles, focus behavior, keyboard access, and text alternatives.
+- Incidental wrappers, attribute order, and equivalent markup are realization
+  details unless Program gives them meaning.
+- Do not add scripts, tracking, analytics, network calls, remote assets, custom
+  elements, or form destinations absent from Program or resolved references.
+- Do not create or edit a separate stylesheet or script unless it is explicitly
+  listed as an allowed owned auxiliary path.

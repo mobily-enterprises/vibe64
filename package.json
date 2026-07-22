@@ -36,6 +36,7 @@
     "@local/current-app",
     "@local/main",
     "@local/project-setup-doctor",
+    "@local/progsync",
     "@local/setup-doctor-core",
     "@local/studio-setup-doctor",
     "@local/studio-terminal-core"
@@ -71,6 +72,7 @@
     "docs:build": "vitepress build docs/site",
     "docs:preview": "vitepress preview docs/site",
     "lint": "eslint .",
+    "progsync": "node ./packages/progsync/bin/progsync.js",
     "test": "node --test tests/server/*.test.js",
     "test:client": "vitest run tests/client",
     "test:e2e": "playwright test --config playwright.config.mjs tests/e2e/self-contained-smoke.spec.ts tests/e2e/dumb-client-autopilot.spec.ts && npm run test:e2e:preview",
@@ -112,6 +114,7 @@
     "@local/current-app": "0.1.0",
     "@local/main": "0.1.0",
     "@local/project-setup-doctor": "0.1.0",
+    "@local/progsync": "0.1.0",
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-setup-doctor": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",

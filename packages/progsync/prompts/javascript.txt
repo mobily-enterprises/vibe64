@@ -1,0 +1,32 @@
+TARGET INSTRUCTIONS: JAVASCRIPT
+
+This target is one `.js` or `.mjs` module. `.mjs` is ESM. For `.js`, preserve
+the module system established by the current implementation and retained
+package context.
+
+- Preserve exact named, default, forwarded, CommonJS, and side-effect export
+  shape.
+- A callable default export is provided as `default()`. A forwarding export
+  uses its exact public exported name; `export *` is represented by `*` while
+  its provider Uses enumerate the reachable forwarded public symbols.
+- When an import has a local alias, the Uses text names the local symbol while
+  its link targets the exact provider symbol supplied in the capsule.
+- Describe standalone exported functions, intentionally public exported class
+  methods, exported structured values, and executable entrypoint behavior.
+- Registries, action collections, re-exports, and commands are ordinary
+  JavaScript surfaces, not special Program constructs.
+- Same-file functions, private or convention-private methods, closures, fields,
+  nested classes, and helper objects remain implementation details.
+- Resolve every meaningful imported operation through supplied source facts or
+  resolved Program references. A member chain such as `this.stores.alertEmails`
+  does not establish an origin by itself.
+- Preserve exact arguments, object-field meanings, used return values, call
+  order, awaiting, mutation, repetition, concurrency, and failure behavior.
+- Preserve sequential waits; do not make them concurrent merely for style.
+- Do not invent a database, filesystem, service, global, package, retry,
+  persistence effect, authorization rule, or logging behavior.
+- Browser and Node ambient APIs are outside capabilities. Describe them when
+  they contribute observable behavior, using the supplied `platform:` identity
+  or return blocked when no exact identity is available.
+- During incremental modes, preserve the current private decomposition and
+  true comments unless the smallest correct patch requires a change.

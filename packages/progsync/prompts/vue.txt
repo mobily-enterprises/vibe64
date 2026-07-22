@@ -1,0 +1,27 @@
+TARGET INSTRUCTIONS: VUE SINGLE-FILE COMPONENT
+
+This target is one complete Vue single-file component using `<script setup>` or
+no script. Template, setup script, styles, and recognized custom blocks are one
+managed implementation.
+
+- The component itself is the only top-level provided Program symbol, named by
+  the exact `.vue` filename without its extension.
+- Props, defaults, requiredness, emitted events and payloads, slots, and
+  explicitly exposed operations form its public interface.
+- User-visible state, interactions, template conditions and repetition,
+  presentation, accessibility, and meaningful failures belong in Program.
+- Imported components, composables, directives, types, and runtime operations
+  must use exact supplied providers.
+- Handlers, refs, computed values, watchers, lifecycle callbacks, and helpers
+  remain private even when the template invokes them.
+- Preserve Vue version, script language, `<script setup>` form, or intentional
+  absence of script. Never convert to Options API or a class component.
+- Preserve template structure, components, keys, refs, directives, slots,
+  event wiring, classes, scoped styles, transitions, responsive behavior,
+  accessibility work, and test hooks unless Program requires change.
+- Preserve reactivity, sequencing, loading, errors, cleanup, and lifecycle
+  timing.
+- Preserve recognized custom blocks such as `<route lang="json">` as part of
+  the Vue file.
+- An ordinary non-setup `<script>` is unsupported in this prototype. Return
+  blocked rather than converting it.
