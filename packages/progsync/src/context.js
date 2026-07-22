@@ -3,10 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  assertValidProgram,
   parseProgram,
   stableJson,
   symbolAnchor
 } from "./program.js";
+import { SHARED_TYPES_PATH } from "./constants.js";
+import { readWorkingFile } from "./git.js";
 import {
   absoluteProjectPath,
   slashPath
@@ -378,6 +381,8 @@ async function readRootPackageContext(projectRoot) {
 }
 
 async function buildContextCapsule({ mode, pair, snapshot }) {
+  const allowedPaths = allowedPathsForMode(mode, pair);
+  const sharedTypesAreWritable = allowedPaths.includes(SHARED_TYPES_PATH);
   const parsedProgram = snapshot.P1.exists
     ? parseProgram(snapshot.P1.source, { programPath: pair.programPath })
     : null;
@@ -385,7 +390,8 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
     sourceFacts,
     programReferences,
     packageContext,
-    translatorFingerprint
+    translatorFingerprint,
+    sharedTypes
   ] = await Promise.all([
     extractSourceFacts({
       implementationPath: pair.implementationPath,
@@ -401,8 +407,19 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
       })
       : Promise.resolve({ diagnostics: [], references: [] }),
     readRootPackageContext(pair.projectRoot),
-    promptFingerprint(pair.target)
+    promptFingerprint(pair.target),
+    sharedTypesAreWritable
+      ? readWorkingFile(pair.projectRoot, SHARED_TYPES_PATH)
+      : Promise.resolve({
+        exists: false,
+        mode: null,
+        permissions: null,
+        source: null
+      })
   ]);
+  if (sharedTypes.exists) {
+    assertValidProgram(sharedTypes.source, { programPath: SHARED_TYPES_PATH });
+  }
   const sourceUses = await sourceFactUses(sourceFacts, {
     projectRoot: pair.projectRoot,
     targetKind: pair.target.kind
@@ -436,7 +453,7 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
       programPath: pair.programPath,
       implementationPath: pair.implementationPath,
       targetKind: pair.target.kind,
-      allowedPaths: allowedPathsForMode(mode, pair)
+      allowedPaths
     },
     baseline: snapshotSummary(snapshot),
     previous: {
@@ -452,19 +469,24 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
     resolvedReferences: resolution.references,
     resolutionDiagnostics: resolution.diagnostics,
     retainedPackageContext: packageContext,
+    sharedTypes: {
+      ...sharedTypes,
+      editable: sharedTypesAreWritable,
+      path: SHARED_TYPES_PATH
+    },
     translatorFingerprint
   };
 }
 
 function allowedPathsForMode(mode, pair) {
   if (mode === "CREATE_PROGRAM" || mode === "IMPLEMENTATION_TO_PROGRAM") {
-    return [pair.programPath];
+    return [pair.programPath, SHARED_TYPES_PATH];
   }
   if (mode === "CREATE_IMPLEMENTATION" || mode === "PROGRAM_TO_IMPLEMENTATION") {
     return [pair.implementationPath];
   }
   if (mode === "RECONCILE_BOTH") {
-    return [pair.programPath, pair.implementationPath];
+    return [pair.programPath, pair.implementationPath, SHARED_TYPES_PATH];
   }
   return [];
 }

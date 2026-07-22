@@ -17,6 +17,10 @@ package context.
   JavaScript surfaces, not special Program constructs.
 - Same-file functions, private or convention-private methods, closures, fields,
   nested classes, and helper objects remain implementation details.
+- Treat JSDoc records and object shapes crossing exported function or class
+  boundaries as candidate shared complex types. Reuse the exact existing type
+  when one matches; otherwise define it in `program/types.md` when that path is
+  writable.
 - Resolve every meaningful imported operation through supplied source facts or
   resolved Program references. A member chain such as `this.stores.alertEmails`
   does not establish an origin by itself.

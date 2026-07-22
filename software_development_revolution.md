@@ -505,6 +505,11 @@ Promise and `async` mechanics belong to the managed implementation. Program
 states ordering, concurrency, or completion requirements only when they are
 part of the operation's meaning.
 
+The opening signature is one complete sentence containing `returns` before its
+first full stop. Behavior belongs in following sentences. A shared type is
+linked canonically as ``[`Type name`](@/types.md#type-name)``; source-to-Program
+translation never substitutes a filesystem or relative path for that identity.
+
 The remainder supplies observable behavior, semantic dependencies, effects,
 failure behavior, and important reasons.
 
@@ -670,8 +675,10 @@ An `Alert` contains:
 A `Notification` contains ...
 ~~~
 
-The context builder indexes `types.md` and supplies only the reachable
-definitions to each Atomic Synchronizer.
+The context builder indexes `types.md` and normally supplies only the reachable
+definitions to each Atomic Synchronizer. A source-to-Program synchronizer that
+is allowed to add a missing public type receives the complete current registry
+so it can reuse names and preserve unrelated definitions.
 
 ### 8.9 Program libraries
 
@@ -1040,8 +1047,10 @@ shared presentation Program module owns it.
 
 Declared auxiliary ownership is part of the model but is not yet implemented
 by the initial package. The prototype write boundary contains only the Program
-file and its one primary implementation; separate CSS and other auxiliary files
-remain untouched until an ownership format and transaction contract are added.
+file and its one primary implementation, with one controlled exception:
+source-to-Program synchronization may add or refine complex public definitions
+in `program/types.md`. Separate CSS and other auxiliary files remain untouched
+until an ownership format and transaction contract are added.
 
 ### 12.6 Applying a validated pair
 
@@ -1454,12 +1463,16 @@ WRITE BOUNDARY
 
 Edit only the exact paths in `target.allowedPaths`. Write only the side or
 sides permitted by the orchestration-selected synchronization mode. Everything
-else, including `.progsync/context.json`, types, Program libraries, retained
-JSON, dependencies, tests, lockfiles, project configuration, and generated
-Program index files, is read-only.
+else, including `.progsync/context.json`, Program libraries, retained JSON,
+dependencies, tests, lockfiles, project configuration, and generated Program
+index files, is read-only.
 
-If a required shared type or library definition is missing, return a precise
-proposal or diagnostic. Do not modify another Program module.
+`program/types.md` may be edited only when it is explicitly listed in
+`target.allowedPaths` for source-to-Program synchronization. Add or refine only
+complex public types required by the current module, reuse matching definitions,
+preserve unrelated definitions verbatim, and never remove a shared type. If a
+required type cannot be established exactly, return a diagnostic. Do not modify
+another Program module or Program library.
 
 USE THE SELECTED MODE
 

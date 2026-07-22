@@ -31,8 +31,13 @@ AUTHORITY
 WRITE BOUNDARY
 
 Edit only paths listed in `target.allowedPaths`. Do not edit
-`.progsync/context.json`, package metadata, tests, dependencies, types, Program
+`.progsync/context.json`, package metadata, tests, dependencies, Program
 libraries, or any other path. Never delete or rename a file.
+
+`program/types.md` is a controlled exception only when it appears in
+`target.allowedPaths`. During source-to-Program synchronization, add or refine
+only complex public types required by this module. Reuse existing definitions,
+preserve every unrelated definition verbatim, and never remove a shared type.
 
 PROGRAM FORMAT
 
@@ -57,6 +62,8 @@ PROGRAM FORMAT
 - The first sentence beneath an operation heading begins with `The function`
   or `The method`, then states every exact parameter name and its semantic type,
   and its return type or that it returns no value.
+- That complete opening signature is one sentence and contains the word
+  `returns` before its first full stop. Put behavior in later sentences.
 - Do not label an operation synchronous or asynchronous. Promise and `async`
   mechanics belong to the target implementation. State ordering, concurrency,
   or completion requirements only when they are part of the program's meaning.
@@ -73,14 +80,28 @@ PROGRAM FORMAT
 - Shared complex object shapes use reachable definitions from `types.md`.
   Primitive values and ordinary identifiers do not become shared types merely
   because a variable contains them.
+- When the implementation defines a previously unregistered complex shape that
+  crosses the public boundary, add its concise definition to
+  `program/types.md` and link to it from Uses. Do not repeat its fields in the
+  module or create types for private temporary objects.
+- A shared type use has exactly this form:
+  ``- [`Type name`](@/types.md#type-name)``. The visible name is backticked, the
+  provider always begins `@/types.md#`, and the anchor is the normalized type
+  heading. Never use `program/types.md`, `types.md`, or a relative path as the
+  provider.
+- A new type is a level-three backticked heading beneath the one `## Provides`
+  section in `program/types.md`, followed by its concise field meanings. Keep
+  the file's one `## Uses` section; use `- Nothing outside this file.` when it
+  has no dependencies.
 
 MODE RULES
 
 CREATE_PROGRAM:
 Create the complete Program file from the implementation. Describe only its
-public semantic module. Use mechanically supplied provider identities. If an
-important origin, type, or behavior cannot be established, return blocked
-instead of guessing.
+public semantic module. Create missing shared complex types when their exact
+shape is established by the implementation. Use mechanically supplied provider
+identities. If an important origin, type, or behavior cannot be established,
+return blocked instead of guessing.
 
 CREATE_IMPLEMENTATION:
 Create a complete target file from Program, resolved definitions, target
@@ -98,6 +119,8 @@ Leave Program unchanged for private refactoring, optimization, formatting,
 comments, compatible framework changes, and visual tuning. When public
 behavior, data flow, outside calls, effects, meaningful failures, constraints,
 or important reasons changed, make the smallest corresponding Program patch.
+Add or refine a shared complex type only when that changed public boundary
+requires it.
 
 RECONCILE_BOTH:
 Preserve compatible work from both current files. If the implementation

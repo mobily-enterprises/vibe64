@@ -33,6 +33,46 @@ Returns the configured greeting.
 The function returns \`hello\`.
 `;
 
+const LINE_TOTAL_PROGRAM = `# Line total calculation
+
+Calculates the monetary parts of one order line.
+
+## Uses
+
+- [\`Line item\`](@/types.md#line-item)
+- [\`Line total\`](@/types.md#line-total)
+
+## Provides
+
+### \`calculateLineTotal()\`
+
+The function takes \`line\`, a \`Line item\`, and \`taxRate\`, a decimal tax
+rate, and returns a \`Line total\`.
+
+It multiplies the line's \`unitPrice\` by its \`quantity\` to obtain the
+subtotal, multiplies that subtotal by \`taxRate\` to obtain the tax, and returns
+the subtotal, tax, and their sum as the total.
+`;
+
+const SHARED_TYPES = `# Project types
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`Line item\`
+
+A \`Line item\` contains \`unitPrice\`, its numeric price for one unit, and
+\`quantity\`, the number of units.
+
+### \`Line total\`
+
+A \`Line total\` contains \`subtotal\`, the price before tax; \`tax\`, the tax
+amount; and \`total\`, their sum.
+`;
+
 test("imports source into a dry-run Program proposal", async (t) => {
   const root = await createGitProject(t, {
     "src/greet.js": "function greet() { return \"hello\"; }\n\nexport { greet };\n"
@@ -81,6 +121,49 @@ test("applies imported Program and its deterministic projection", async (t) => {
     await fs.readFile(path.join(root, ".program/index/src/greet.js.md.json"), "utf8")
   );
   assert.equal(projection.targetFile, "src/greet.js");
+});
+
+test("creates shared public types while importing an implementation", async (t) => {
+  const implementation = `/**
+ * @typedef {{ unitPrice: number, quantity: number }} LineItem
+ * @typedef {{ subtotal: number, tax: number, total: number }} LineTotal
+ */
+export function calculateLineTotal(line, taxRate) {
+  const subtotal = line.unitPrice * line.quantity;
+  const tax = subtotal * taxRate;
+  return { subtotal, tax, total: subtotal + tax };
+}
+`;
+  const root = await createGitProject(t, {
+    "src/calculateLineTotal.js": implementation
+  });
+  const runner = async ({ mode, workspaceRoot }) => {
+    const context = await readContext(workspaceRoot);
+    assert.equal(context.sharedTypes.exists, false);
+    assert.equal(context.target.allowedPaths.includes("program/types.md"), true);
+    await writeWorkspace(workspaceRoot, context.target.programPath, LINE_TOTAL_PROGRAM);
+    await writeWorkspace(workspaceRoot, "program/types.md", SHARED_TYPES);
+    return synchronizationReport(mode);
+  };
+
+  const result = await importProgram({
+    inputPath: "src/calculateLineTotal.js",
+    projectRoot: root,
+    runner,
+    write: true
+  });
+  assert.equal(result.status, "updated");
+  assert.equal(
+    await fs.readFile(path.join(root, "program/types.md"), "utf8"),
+    SHARED_TYPES
+  );
+  const projection = JSON.parse(
+    await fs.readFile(path.join(root, ".program/index/types.md.json"), "utf8")
+  );
+  assert.deepEqual(
+    projection.provides.map((provided) => provided.name),
+    ["Line item", "Line total"]
+  );
 });
 
 test("rejects Program proposals that obscure exact exported function symbols", async (t) => {

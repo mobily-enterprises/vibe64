@@ -104,7 +104,12 @@ uses the single private ref above, so synchronizing hundreds of files does not
 create hundreds of worktrees or refs.
 
 Declared auxiliary ownership is not implemented in this first package. The
-current write boundary is exactly one Program file and one primary target.
+ordinary write boundary is exactly one Program file and one primary target.
+Source-to-Program synchronization may additionally update `program/types.md`
+when the implementation establishes a new or changed complex public type. It
+may change only definitions used by that module and preserves unrelated shared
+types.
+
 Standalone CSS and other auxiliary artifacts are preserved because ProgSync
 does not touch them; creating or synchronizing them awaits an explicit
 ownership format.

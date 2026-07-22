@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { runProgSyncCommand } from "./command.js";
+import { SHARED_TYPES_PATH } from "./constants.js";
 import { validatePairConformance } from "./conformance.js";
 import { validateRunnerResult } from "./codexRunner.js";
 import { ProgSyncError } from "./errors.js";
@@ -15,7 +16,10 @@ import {
   slashPath
 } from "./paths.js";
 import {
+  assertValidProgram,
   buildProgramProjection,
+  parseProgram,
+  symbolAnchor,
   stableJson
 } from "./program.js";
 import { fileChanged } from "./state.js";
@@ -212,6 +216,87 @@ async function validateImplementationCandidate({
   });
 }
 
+function typeUses(parsedProgram) {
+  return parsedProgram.uses.filter((use) => use.provider.startsWith("@/types.md#"));
+}
+
+function providedTypes(source) {
+  if (!source) {
+    return new Map();
+  }
+  const parsed = assertValidProgram(source, { programPath: SHARED_TYPES_PATH });
+  return new Map(parsed.provides.map((provided) => [
+    symbolAnchor(provided.name),
+    provided
+  ]));
+}
+
+function validateSharedTypeCandidate({
+  currentTypesSource,
+  finalProgramSource,
+  finalTypesSource,
+  previousProgramSource,
+  typesChanged
+}) {
+  const finalProgram = assertValidProgram(finalProgramSource);
+  const finalUses = typeUses(finalProgram);
+  const finalUseAnchors = new Set(finalUses.map((use) => (
+    use.provider.split("#")[1]
+  )));
+  const undescribed = finalUses.filter((use) => (
+    !finalProgram.provides.some((provided) => provided.description.includes(use.symbol))
+  ));
+  const finalTypes = providedTypes(finalTypesSource);
+  const missing = [...finalUseAnchors].filter((anchor) => !finalTypes.has(anchor));
+  if (missing.length > 0 || undescribed.length > 0) {
+    throw new ProgSyncError(
+      "INVALID_PROGRAM",
+      "Every shared type must be provided by program/types.md and used by a provided symbol.",
+      {
+        missing,
+        undescribed: undescribed.map((use) => use.symbol)
+      }
+    );
+  }
+  if (!typesChanged) {
+    return;
+  }
+
+  const currentTypes = providedTypes(currentTypesSource);
+  const previousUses = previousProgramSource
+    ? typeUses(parseProgram(previousProgramSource)).map((use) => use.provider.split("#")[1])
+    : [];
+  const permittedChanges = new Set([...previousUses, ...finalUseAnchors]);
+  const diagnostics = [];
+  for (const [anchor, current] of currentTypes) {
+    const candidate = finalTypes.get(anchor);
+    if (!candidate) {
+      diagnostics.push(`Shared type ${current.name} cannot be removed during module synchronization.`);
+      continue;
+    }
+    if (
+      candidate.name !== current.name ||
+      candidate.description !== current.description
+    ) {
+      if (!permittedChanges.has(anchor)) {
+        diagnostics.push(`Unrelated shared type ${current.name} was modified.`);
+      }
+    }
+  }
+  for (const [anchor, candidate] of finalTypes) {
+    if (!currentTypes.has(anchor) && !finalUseAnchors.has(anchor)) {
+      diagnostics.push(`New shared type ${candidate.name} is not used by this Program module.`);
+    }
+  }
+  if (diagnostics.length > 0) {
+    throw new ProgSyncError(
+      "INVALID_PROGRAM",
+      "The shared type candidate exceeds this module's synchronization boundary.",
+      { diagnostics }
+    );
+  }
+}
+
 async function runCandidateSynchronization({
   capsule,
   onEvent,
@@ -239,6 +324,14 @@ async function runCandidateSynchronization({
         pair.implementationPath,
         snapshot.I1.source,
         snapshot.I1.permissions
+      );
+    }
+    if (capsule.sharedTypes.exists) {
+      await writeWorkspaceFile(
+        workspaceRoot,
+        SHARED_TYPES_PATH,
+        capsule.sharedTypes.source,
+        capsule.sharedTypes.permissions
       );
     }
     try {
@@ -356,6 +449,9 @@ async function runCandidateSynchronization({
           targetKind: pair.target.kind
         });
       }
+      if (relativePath === SHARED_TYPES_PATH) {
+        assertValidProgram(source, { programPath: SHARED_TYPES_PATH });
+      }
       candidates.push({
         mode: (stat.mode & 0o111) === 0 ? 0o644 : 0o755,
         permissions: stat.mode & 0o777,
@@ -375,6 +471,18 @@ async function runCandidateSynchronization({
         "PAIR_INCOMPLETE",
         "A successful candidate must leave both Program and implementation present."
       );
+    }
+    if (capsule.sharedTypes.editable) {
+      const sharedTypesCandidate = candidates.find((entry) => (
+        entry.relativePath === SHARED_TYPES_PATH
+      ));
+      validateSharedTypeCandidate({
+        currentTypesSource: capsule.sharedTypes.source,
+        finalProgramSource: finalProgram,
+        finalTypesSource: sharedTypesCandidate?.source || capsule.sharedTypes.source,
+        previousProgramSource: snapshot.P1.source,
+        typesChanged: Boolean(sharedTypesCandidate)
+      });
     }
     await validatePairConformance({
       implementationSource: finalImplementation,
@@ -396,6 +504,7 @@ async function runCandidateSynchronization({
 
 async function applyCandidates({
   candidates,
+  expectedFiles = [],
   expectedPair = null,
   pair,
   programSourceForProjection = null
@@ -414,9 +523,33 @@ async function applyCandidates({
       source: stableJson(projection)
     });
   }
+  const sharedTypesCandidate = candidates.find((candidate) => (
+    candidate.relativePath === SHARED_TYPES_PATH
+  ));
+  if (sharedTypesCandidate) {
+    const projection = buildProgramProjection({
+      programPath: SHARED_TYPES_PATH,
+      programSource: sharedTypesCandidate.source
+    });
+    writes.push({
+      relativePath: projectionPathForProgram(SHARED_TYPES_PATH),
+      source: stableJson(projection)
+    });
+  }
   const originals = new Map();
   for (const write of writes) {
     originals.set(write.relativePath, await readWorkingFile(pair.projectRoot, write.relativePath));
+  }
+  for (const expected of expectedFiles) {
+    const current = originals.get(expected.relativePath) ||
+      await readWorkingFile(pair.projectRoot, expected.relativePath);
+    if (workingFileChanged(expected.state, current)) {
+      throw new ProgSyncError(
+        "PAIR_CHANGED_DURING_SYNCHRONIZATION",
+        `${expected.relativePath} changed while the candidate was being prepared; no candidate was applied.`,
+        { relativePath: expected.relativePath }
+      );
+    }
   }
   if (expectedPair) {
     const currentProgram = originals.get(pair.programPath) ||

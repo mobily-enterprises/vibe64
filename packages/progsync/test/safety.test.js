@@ -225,6 +225,70 @@ test("preserves a manual edit made while a candidate is running", async (t) => {
   await assert.rejects(fs.stat(path.join(root, "program/src/greet.js.md")), /ENOENT/u);
 });
 
+test("does not overwrite shared types changed while a candidate is running", async (t) => {
+  const initialTypes = `# Project types
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`Existing type\`
+
+An existing public structure.
+`;
+  const externallyEditedTypes = `${initialTypes}
+### \`External type\`
+
+A type added by another process.
+`;
+  const candidateTypes = `${initialTypes}
+### \`Line item\`
+
+A \`Line item\` contains \`amount\`, its numeric amount.
+`;
+  const amountProgram = `# Amount
+
+## Uses
+
+- [\`Line item\`](@/types.md#line-item)
+
+## Provides
+
+### \`amount()\`
+
+The function takes \`line\`, a \`Line item\`, and returns its numeric amount.
+`;
+  const root = await createGitProject(t, {
+    "program/types.md": initialTypes,
+    "src/amount.js": "export function amount(line) { return line.amount; }\n"
+  });
+  const runner = async ({ mode, workspaceRoot }) => {
+    const context = await readContext(workspaceRoot);
+    assert.equal(context.sharedTypes.source, initialTypes);
+    await writeFiles(root, { "program/types.md": externallyEditedTypes });
+    await writeWorkspace(workspaceRoot, context.target.programPath, amountProgram);
+    await writeWorkspace(workspaceRoot, "program/types.md", candidateTypes);
+    return synchronizationReport(mode);
+  };
+
+  await assert.rejects(
+    importProgram({
+      inputPath: "src/amount.js",
+      projectRoot: root,
+      runner,
+      write: true
+    }),
+    (error) => error.code === "PAIR_CHANGED_DURING_SYNCHRONIZATION"
+  );
+  assert.equal(
+    await fs.readFile(path.join(root, "program/types.md"), "utf8"),
+    externallyEditedTypes
+  );
+  await assert.rejects(fs.stat(path.join(root, "program/src/amount.js.md")), /ENOENT/u);
+});
+
 test("preserves executable mode through an implementation patch and checkpoint", async (t) => {
   const root = await createGitProject(t, {
     "program/bin/greet.mjs.md": PROGRAM,

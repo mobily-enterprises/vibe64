@@ -32,6 +32,7 @@ import {
   writeProgramProjection
 } from "./program.js";
 import { composeAtomicPrompt } from "./prompts.js";
+import { SHARED_TYPES_PATH } from "./constants.js";
 import { classifyPair } from "./state.js";
 
 const REPAIRABLE_CANDIDATE_CODES = new Set([
@@ -425,6 +426,14 @@ async function synchronizeFile({
     if (write) {
       changedFiles = await applyCandidates({
         candidates: candidate.candidates,
+        expectedFiles: candidate.candidates.some((entry) => (
+          entry.relativePath === SHARED_TYPES_PATH
+        )) ? [
+          {
+            relativePath: SHARED_TYPES_PATH,
+            state: capsule.sharedTypes
+          }
+        ] : [],
         expectedPair: {
           implementation: snapshot.I1,
           program: snapshot.P1
