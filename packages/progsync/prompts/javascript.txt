@@ -33,6 +33,11 @@ package context.
   failure behavior.
 - Preserve required sequential completion; do not introduce concurrency merely
   for style. Do not expose Promise or `async` syntax as Program meaning.
+- When Program requires decimal rounding, preserve its mathematical boundary
+  behavior despite JavaScript binary floating-point representation. Scale any
+  tolerance to the rounded magnitude or use another robust decimal strategy;
+  adding an unscaled `Number.EPSILON` is not generally sufficient. Keep the
+  realization mechanism out of Program.
 - Do not invent a database, filesystem, service, global, package, retry,
   persistence effect, authorization rule, or logging behavior.
 - Browser and Node ambient APIs are outside capabilities. Describe them when
