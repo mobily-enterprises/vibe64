@@ -102,11 +102,20 @@ function managedRuntime(version = "") {
   return null;
 }
 
-function managedPreview(projectRoot = "") {
+function managedPreview(projectRoot = "", {
+  identityExplicit = false
+} = {}) {
   const explicitBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || "").trim();
   if (explicitBaseUrl) {
+    if (identityExplicit) {
+      fail(
+        "Explicit Playwright application identity requires the Vibe64-managed preview. " +
+        "Remove PLAYWRIGHT_BASE_URL or omit --identity."
+      );
+    }
     return {
       baseUrl: explicitBaseUrl,
+      identityTypes: [],
       identityRequired: false,
       managed: false
     };
@@ -155,9 +164,13 @@ function managedPreview(projectRoot = "") {
     if (status?.ready !== true || !["http:", "https:"].includes(url.protocol)) {
       throw new Error("Managed preview is not ready.");
     }
+    const identityTypes = Array.isArray(status.identityTypes)
+      ? status.identityTypes
+      : [];
     return {
       baseUrl: url.origin,
-      identityRequired: Array.isArray(status.identityTypes) && status.identityTypes.length > 0,
+      identityTypes,
+      identityRequired: identityTypes.length > 0,
       managed: true
     };
   } catch {
@@ -168,7 +181,7 @@ function managedPreview(projectRoot = "") {
   }
 }
 
-function managedPlaywrightStorageState(projectRoot = "") {
+function managedPlaywrightStorageState(projectRoot = "", identity = "you") {
   const directory = mkdtempSync(path.join(
     path.resolve(process.env.TMPDIR || "/tmp"),
     "vibe64-playwright-auth-"
@@ -178,7 +191,7 @@ function managedPlaywrightStorageState(projectRoot = "") {
     managedPreviewPath,
     "browser",
     "storage-state",
-    "you",
+    identity,
     "--output",
     storageStatePath
   ], {
@@ -198,7 +211,7 @@ function managedPlaywrightStorageState(projectRoot = "") {
       recursive: true
     });
     fail(
-      "Vibe64 could not authenticate managed Playwright for the current application user. " +
+      "Vibe64 could not authenticate managed Playwright for the selected application identity. " +
       "Project tests were not started." +
       (diagnostics ? "\\n" + diagnostics : "")
     );
@@ -251,14 +264,54 @@ function run(command = "", args = [], options = {}) {
   });
 }
 
-function managedExecution(runtime = {}, projectRoot = "") {
-  const preview = managedPreview(projectRoot);
+function managedExecution(runtime = {}, projectRoot = "", {
+  identity = "you",
+  identityExplicit = false
+} = {}) {
+  const preview = managedPreview(projectRoot, {
+    identityExplicit
+  });
+  if (preview.managed && identityExplicit && !preview.identityRequired) {
+    fail(
+      "This managed preview does not support application identity selection. " +
+      "Project tests were not started."
+    );
+  }
   const authentication = preview.managed && preview.identityRequired
-    ? managedPlaywrightStorageState(projectRoot)
+    ? managedPlaywrightStorageState(projectRoot, identity)
     : null;
   return {
     cleanupRoot: authentication?.directory || "",
     env: childEnv(runtime, preview, authentication)
+  };
+}
+
+function parseInvocation(values = []) {
+  const args = [...values];
+  let identity = "you";
+  let identityExplicit = false;
+  while (args.length > 0) {
+    const option = String(args[0] || "");
+    if (option !== "--identity" && !option.startsWith("--identity=")) {
+      break;
+    }
+    if (identityExplicit) {
+      fail("Specify --identity only once.", 64);
+    }
+    identityExplicit = true;
+    args.shift();
+    identity = option === "--identity"
+      ? String(args.shift() || "").trim()
+      : option.slice("--identity=".length).trim();
+    if (!identity) {
+      fail("--identity requires you, guest, or an existing application user identifier.", 64);
+    }
+  }
+  return {
+    args,
+    command: String(args.shift() || "").trim(),
+    identity,
+    identityExplicit
   };
 }
 
@@ -279,20 +332,28 @@ if (!runtime) {
   );
 }
 
-const args = process.argv.slice(2);
-const command = String(args.shift() || "").trim();
+const invocation = parseInvocation(process.argv.slice(2));
+const {
+  args,
+  command,
+  identity,
+  identityExplicit
+} = invocation;
 if (!command || command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "Usage:",
-    "  vibe64-playwright test [playwright test arguments]",
-    "  vibe64-playwright npm-run <package-script> [-- script arguments]",
+    "  vibe64-playwright [--identity <you|guest|existing-user-identifier>] test [playwright test arguments]",
+    "  vibe64-playwright [--identity <you|guest|existing-user-identifier>] npm-run <package-script> [-- script arguments]",
     "  vibe64-playwright status",
     "",
-    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, and selects the matching managed browser runtime."
+    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and defaults authenticated tests to the current Vibe64 viewer. Use --identity only for an explicitly authorized existing application identity."
   ].join("\\n") + "\\n");
   process.exit(0);
 }
 if (command === "status") {
+  if (identityExplicit) {
+    fail("--identity applies only to test and npm-run commands.", 64);
+  }
   process.stdout.write(JSON.stringify({
     browsersPath: runtime.browsersPath,
     managed: true,
@@ -302,7 +363,10 @@ if (command === "status") {
   process.exit(0);
 }
 if (command === "test") {
-  const execution = managedExecution(runtime, projectRoot);
+  const execution = managedExecution(runtime, projectRoot, {
+    identity,
+    identityExplicit
+  });
   run(managedNodePath, [project.cliPath, "test", ...args], {
     cleanupRoot: execution.cleanupRoot,
     cwd: projectRoot,
@@ -313,7 +377,10 @@ if (command === "test") {
   if (!script) {
     fail("A package script name is required.", 64);
   }
-  const execution = managedExecution(runtime, projectRoot);
+  const execution = managedExecution(runtime, projectRoot, {
+    identity,
+    identityExplicit
+  });
   run(managedNpmPath, ["run", script, ...args], {
     cleanupRoot: execution.cleanupRoot,
     cwd: projectRoot,

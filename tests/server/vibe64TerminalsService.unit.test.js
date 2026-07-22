@@ -1434,7 +1434,11 @@ test("launch preview identity grants use the trusted viewer and active terminal 
 
       const missingViewer = await controller.selectPreviewIdentity(sessionId, {
         mode: "viewer",
-        vibe64User: null
+        vibe64User: {
+          displayName: "Merc",
+          uid: 1000,
+          username: "merc"
+        }
       });
       assert.equal(missingViewer.ok, false);
       assert.equal(missingViewer.code, "vibe64_preview_identity_viewer_missing");

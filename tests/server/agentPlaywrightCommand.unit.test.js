@@ -70,8 +70,8 @@ async function createProject(projectRoot, version) {
   ].join("\n") + "\n", "utf8");
 }
 
-async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
-  const storageState = {
+function authenticatedStorageState(identity = "you") {
+  return {
     cookies: [{
       domain: "127.0.0.1",
       expires: -1,
@@ -80,15 +80,17 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
       path: "/",
       sameSite: "Lax",
       secure: false,
-      value: "managed-viewer"
+      value: identity
     }],
     origins: []
   };
+}
+
+async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
   await writeExecutable(wrapperPath, [
     "#!/usr/bin/env node",
     "const { writeFileSync } = require(\"node:fs\");",
     `const previewUrl = ${JSON.stringify(previewUrl)};`,
-    `const storageState = ${JSON.stringify(storageState)};`,
     "const args = process.argv.slice(2);",
     "if (args[0] === \"ensure\") {",
     "  process.stdout.write(JSON.stringify({",
@@ -98,7 +100,9 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
     "  }));",
     "  process.exit(0);",
     "}",
-    "if (args[0] === \"browser\" && args[1] === \"storage-state\" && args[2] === \"you\") {",
+    "if (args[0] === \"browser\" && args[1] === \"storage-state\" && args[2]) {",
+    "  const identity = args[2];",
+    `  const storageState = ${authenticatedStorageState.toString()}(identity);`,
     "  const outputIndex = args.indexOf(\"--output\");",
     "  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : \"\";",
     "  if (!outputPath) process.exit(64);",
@@ -108,7 +112,6 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl) {
     "}",
     "process.exit(64);"
   ].join("\n") + "\n");
-  return storageState;
 }
 
 async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion, {
@@ -273,6 +276,21 @@ test("managed Playwright test command uses the exact versioned browser runtime w
     )).stdout);
     assert.equal(explicit.baseUrl, "http://127.0.0.1:6200/custom");
     assert.equal(explicit.storageStatePath, "/tmp/explicit-state.json");
+
+    await assert.rejects(
+      execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, [
+        "--identity",
+        "compas-owner@example.com",
+        "test"
+      ], {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom"
+        }
+      }),
+      /Explicit Playwright application identity requires the Vibe64-managed preview/iu
+    );
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {
@@ -287,10 +305,11 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
   let fixture;
   try {
     fixture = await prepareFixture(root, "1.61.1");
-    const expectedState = await writeAuthenticatedPreviewWrapper(
+    await writeAuthenticatedPreviewWrapper(
       fixture.prepared.hostWrapperPath,
       "http://127.0.0.1:4104/home"
     );
+    const expectedState = authenticatedStorageState("you");
 
     const executed = JSON.parse((await execFileAsync(
       fixture.prepared.hostPlaywrightWrapperPath,
@@ -309,9 +328,27 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
       code: "ENOENT"
     });
 
+    const explicitIdentity = "compas-owner@example.com";
+    const explicit = JSON.parse((await execFileAsync(
+      fixture.prepared.hostPlaywrightWrapperPath,
+      ["--identity", explicitIdentity, "test", "--grep", "expanded jobs"],
+      {
+        cwd: fixture.projectRoot,
+        env: {
+          ...process.env,
+          ...fixture.prepared.env
+        }
+      }
+    )).stdout);
+    assert.deepEqual(explicit.args, ["test", "--grep", "expanded jobs"]);
+    assert.deepEqual(explicit.storageState, authenticatedStorageState(explicitIdentity));
+    await assert.rejects(access(explicit.storageStatePath), {
+      code: "ENOENT"
+    });
+
     const npmRun = JSON.parse((await execFileAsync(
       fixture.prepared.hostPlaywrightWrapperPath,
-      ["npm-run", "e2e"],
+      ["--identity=app-user-42", "npm-run", "e2e"],
       {
         cwd: fixture.projectRoot,
         env: {
@@ -321,7 +358,7 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
       }
     )).stdout);
     assert.equal(npmRun.storageStateExists, true);
-    assert.deepEqual(npmRun.storageState, expectedState);
+    assert.deepEqual(npmRun.storageState, authenticatedStorageState("app-user-42"));
     assert.notEqual(npmRun.storageStatePath, executed.storageStatePath);
     await assert.rejects(access(npmRun.storageStatePath), {
       code: "ENOENT"

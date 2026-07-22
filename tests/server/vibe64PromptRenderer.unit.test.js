@@ -305,10 +305,14 @@ test("session briefing keeps the primary preview canonical while permitting expl
   assert.match(briefing, /report an authentication blocker only if both attempts fail/u);
   assert.match(briefing, /When reporting authentication state, always name the browser explicitly/u);
   assert.match(briefing, /vibe64-playwright test/u);
+  assert.match(briefing, /vibe64-playwright --identity <existing-user-identifier> test/u);
+  assert.match(briefing, /using only an existing identity explicitly supplied/u);
+  assert.match(briefing, /Do not guess an identity/u);
   assert.match(briefing, /exact managed browser version/u);
   assert.match(briefing, /automatically ensure the current managed preview/u);
   assert.match(briefing, /supply its agent origin as `PLAYWRIGHT_BASE_URL`/u);
-  assert.match(briefing, /authenticate identity-aware application tests as the current Vibe64 viewer/u);
+  assert.match(briefing, /authenticate identity-aware application tests through temporary managed storage state/u);
+  assert.match(briefing, /default to the current Vibe64 viewer/u);
   assert.match(briefing, /Do not call development-auth endpoints/u);
   assert.match(briefing, /register throwaway users merely to authenticate a feature test/u);
   assert.match(briefing, /sign-in or registration only when that authentication behavior itself is under test/u);
