@@ -18,6 +18,7 @@ import { ProgSyncError } from "./errors.js";
 import { snapshotSummary } from "./state.js";
 import { extractSourceFacts } from "./structural.js";
 import { promptFingerprint } from "./prompts.js";
+import { codexRunnerProfile } from "./codexRunner.js";
 
 function splitProvider(provider) {
   const match = String(provider || "").match(/^@\/([^#]+)(?:#(.+))?$/u);
@@ -172,21 +173,19 @@ async function resolveProgramReferences({
       targetFile,
       targetImport
     });
+    const nestedUses = [
+      ...(targetFile ? [] : providerProgram.uses),
+      ...(provided.typeReferences || []).map((dependency) => ({
+        provider: `@/types.md#${symbolAnchor(dependency.name)}`,
+        source: dependency.source,
+        symbol: dependency.name
+      }))
+    ];
     if (current.depth < 8) {
-      for (const dependency of providerProgram.uses) {
+      for (const dependency of nestedUses) {
         queue.push({ depth: current.depth + 1, use: dependency });
       }
-      for (const dependency of provided.typeReferences || []) {
-        queue.push({
-          depth: current.depth + 1,
-          use: {
-            provider: `@/types.md#${symbolAnchor(dependency.name)}`,
-            source: dependency.source,
-            symbol: dependency.name
-          }
-        });
-      }
-    } else if (providerProgram.uses.length > 0) {
+    } else if (nestedUses.length > 0) {
       diagnostics.push({
         code: "REFERENCE_CLOSURE_DEPTH_LIMIT",
         message: `Program reference closure stopped at ${internal.programPath}; its dependencies were not silently omitted.`
@@ -359,16 +358,23 @@ function capsuleProgram(parsedProgram) {
   return withoutDuplicateSource;
 }
 
-function contextHash({ packageContext, pair, resolution, translatorFingerprint }) {
+function contextHash({
+  packageContext,
+  pair,
+  resolution,
+  runnerProfile,
+  translatorFingerprint
+}) {
   return `sha256:${crypto.createHash("sha256").update(stableJson({
     packageContext,
     resolution,
+    runnerProfile,
     target: {
       implementationPath: pair.implementationPath,
       targetKind: pair.target.kind,
       translatorFingerprint
     },
-    version: 1
+    version: 2
   })).digest("hex")}`;
 }
 
@@ -456,13 +462,15 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
       references: []
     }
   );
+  const runnerProfile = codexRunnerProfile();
 
   return {
-    capsuleVersion: 2,
+    capsuleVersion: 3,
     contextHash: contextHash({
       packageContext,
       pair,
       resolution,
+      runnerProfile,
       translatorFingerprint
     }),
     mode,
@@ -486,6 +494,7 @@ async function buildContextCapsule({ mode, pair, snapshot }) {
     resolvedReferences: resolution.references,
     resolutionDiagnostics: resolution.diagnostics,
     retainedPackageContext: packageContext,
+    runnerProfile,
     sharedTypes: {
       ...sharedTypes,
       editable: sharedTypesAreWritable,

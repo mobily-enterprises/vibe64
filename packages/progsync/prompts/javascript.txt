@@ -4,6 +4,23 @@ This target is one `.js` or `.mjs` module. `.mjs` is ESM. For `.js`, preserve
 the module system established by the current implementation and retained
 package context.
 
+- For every exported callable, including a command entrypoint, its opening
+  signature sentence must explicitly say what it returns or that it returns no
+  value. Never end that first sentence after listing only its parameters.
+- Source facts expose `parameterGroups`; each entry is one actual argument.
+  Preserve that grouping exactly. A group whose kind is `object` is one object
+  argument containing its listed field names, never several positional
+  arguments. State this explicitly as “one object containing ...” in Program,
+  and generate the same grouped callable and call sites from Program.
+- In Program-to-implementation modes, “one object containing ...” is an
+  authoritative boundary constraint even when the current implementation was
+  previously flattened incorrectly. Emit one argument and pass one object at
+  every affected call site. Public object keys come from Program; target-local
+  destructuring aliases are private realization details.
+- When an opening signature combines positional arguments with an object
+  argument, preserve every group in the stated order. For example, “`source`
+  as text and one object containing `path`” means `(source, { path })`, never
+  `(source, options)` and never `({ source, options })`.
 - Preserve exact named, default, forwarded, CommonJS, and side-effect export
   shape.
 - A callable default export is provided as `default()`. A forwarding export
@@ -13,6 +30,18 @@ package context.
   its link targets the exact provider symbol supplied in the capsule.
 - Describe standalone exported functions, intentionally public exported class
   methods, exported structured values, and executable entrypoint behavior.
+- A shebang executable under `bin/` provides one command named by its exact
+  filename stem, using a level-three backticked heading without parentheses.
+  Describe its arguments, outside calls, effects, failure behavior, and exit
+  result without claiming that the command is a JavaScript export.
+- ProgSync enforces executable permission bits for a provided command
+  deterministically. Preserve or create its shebang, but do not block solely
+  because your file-editing tools cannot change permission bits.
+- A `name.test.js` or `name.test.mjs` file provides one test suite named
+  exactly `name tests`, using a level-three backticked heading without
+  parentheses. Describe every registered test's setup, operation, assertions,
+  and meaningful failure evidence. The suite is observable entrypoint behavior,
+  not a JavaScript export; same-file test helpers remain implementation details.
 - Registries, action collections, re-exports, and commands are ordinary
   JavaScript surfaces, not special Program constructs.
 - Same-file functions, private or convention-private methods, closures, fields,
@@ -31,8 +60,29 @@ package context.
 - Preserve exact arguments, object-field meanings, used return values, call
   order, completion dependencies, mutation, repetition, concurrency, and
   failure behavior.
+- A resolved complex return type is a field-level contract. Generate its exact
+  public keys and populate each from the source stated by Program. Exact status,
+  mode, reason, and discriminator literals are observable data and must not be
+  shortened or paraphrased.
+- An outside-call sentence that states an argument count and uses semicolons to
+  separate its groups is an exact call boundary. Generate that many arguments;
+  “one object containing ...” is one of them. Never collapse all groups into a
+  single object or flatten one object into several arguments.
 - Preserve required sequential completion; do not introduce concurrency merely
   for style. Do not expose Promise or `async` syntax as Program meaning.
+- When Program says that an outside operation finishes before the caller
+  returns, or that its failures propagate, preserve that completion dependency
+  in the target language. In JavaScript, an asynchronous imported operation
+  must be awaited or its Promise returned as appropriate even though Program
+  does not expose `async` syntax.
+- Whenever the generated module reads fields, iterates, branches on, or otherwise
+  uses an imported operation's returned value, that operation must finish before
+  the first use. Inspect every imported result flow for an omitted `await` or
+  equivalent completion dependency before returning the candidate.
+- Before returning a candidate, inspect private bindings for temporal-dead-zone
+  access and accidental shadowing of an imported or same-module operation that
+  the scope calls. Successful parsing alone does not prove that an initialized
+  callable will be reached at runtime.
 - When Program requires decimal rounding, preserve its mathematical boundary
   behavior despite JavaScript binary floating-point representation. Scale any
   tolerance to the rounded magnitude or use another robust decimal strategy;

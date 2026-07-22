@@ -54,6 +54,59 @@ test("keeps target-language timing out of operation signatures", () => {
   );
 });
 
+test("does not treat dots inside signature code spans as sentence endings", () => {
+  const source = PROGRAM.replace(
+    "The function takes `alerts`, a list of [Alert], and returns no value.",
+    "The function takes `argv`, defaulting to `process.argv.slice(2)`, and returns a numeric exit status."
+  );
+
+  const parsed = assertValidProgram(source, {
+    programPath: "program/src/alerts.js.md"
+  });
+
+  assert.equal(parsed.valid, true);
+});
+
+test("recognizes a bin entrypoint as a command rather than an export", () => {
+  const source = `# ProgSync command
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`progsync\`
+
+The command returns a numeric process exit status.
+`;
+  const parsed = assertValidProgram(source, {
+    programPath: "program/bin/progsync.js.md"
+  });
+
+  assert.equal(parsed.provides[0].kind, "command");
+});
+
+test("recognizes a JavaScript test file as a test suite rather than an export", () => {
+  const source = `# Path tests
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`paths tests\`
+
+The test suite registers the path-mapping tests.
+`;
+  const parsed = assertValidProgram(source, {
+    programPath: "program/test/paths.test.js.md"
+  });
+
+  assert.equal(parsed.provides[0].kind, "test");
+});
+
 test("projects Program deterministically for source explorers", () => {
   const first = buildProgramProjection({
     programPath: "program/src/alerts.js.md",

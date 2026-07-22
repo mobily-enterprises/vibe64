@@ -66,6 +66,57 @@ console.error("started");
   ]);
 });
 
+test("extracts a shebang JavaScript entrypoint as a command surface", async () => {
+  const facts = await extractSourceFacts({
+    implementationPath: "bin/example.js",
+    projectRoot: process.cwd(),
+    source: "#!/usr/bin/env node\nprocess.exitCode = 0;\n",
+    targetKind: "javascript"
+  });
+
+  assert.deepEqual(facts.entrypoint, { kind: "command", name: "example" });
+});
+
+test("preserves callable parameter grouping in JavaScript facts", async () => {
+  const facts = await extractSourceFacts({
+    implementationPath: "src/example.js",
+    projectRoot: process.cwd(),
+    source: "export function run(command, args = [], { cwd, reject = true } = {}) {}\n",
+    targetKind: "javascript"
+  });
+
+  assert.deepEqual(facts.exports[0].parameterGroups, [
+    { defaulted: false, kind: "identifier", names: ["command"], rest: false },
+    { defaulted: true, kind: "identifier", names: ["args"], rest: false },
+    { defaulted: true, kind: "object", names: ["cwd", "reject"], rest: false }
+  ]);
+});
+
+test("reports public object field names rather than local destructuring aliases", async () => {
+  const facts = await extractSourceFacts({
+    implementationPath: "src/example.js",
+    projectRoot: process.cwd(),
+    source: "export function run({ projection: suppliedProjection = null }) {}\n",
+    targetKind: "javascript"
+  });
+
+  assert.deepEqual(facts.exports[0].parameterGroups, [
+    { defaulted: false, kind: "object", names: ["projection"], rest: false }
+  ]);
+  assert.deepEqual(facts.exports[0].parameters, ["projection"]);
+});
+
+test("extracts a JavaScript test file as a test-suite surface", async () => {
+  const facts = await extractSourceFacts({
+    implementationPath: "test/paths.test.js",
+    projectRoot: process.cwd(),
+    source: 'import test from "node:test";\ntest("maps paths", () => {});\n',
+    targetKind: "javascript"
+  });
+
+  assert.deepEqual(facts.entrypoint, { kind: "test", name: "paths tests" });
+});
+
 test("extracts nested CommonJS imports and reports ambiguous shadowing", async () => {
   const nestedRequire = await extractSourceFacts({
     implementationPath: "src/module.js",

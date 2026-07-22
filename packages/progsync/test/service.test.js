@@ -72,6 +72,47 @@ A \`Line total\` contains \`subtotal\`, the price before tax; \`tax\`, the tax
 amount; and \`total\`, their sum.
 `;
 
+const COMMAND_PROGRAM = `# Example command
+
+## Uses
+
+- [\`process.exitCode\`](platform:process#exitcode)
+
+## Provides
+
+### \`example\`
+
+The command accepts no arguments, returns no direct value, and sets [\`process.exitCode\`](platform:process#exitcode) to zero.
+`;
+
+const OBJECT_PARAMETER_PROGRAM = `# Message rendering
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`renderMessage()\`
+
+The function accepts one object containing \`name\` as text and \`punctuation\`
+as text, and returns the rendered message as text.
+`;
+
+const MIXED_PARAMETER_PROGRAM = `# Source parsing
+
+## Uses
+
+- Nothing outside this file.
+
+## Provides
+
+### \`parseSource()\`
+
+The function accepts \`source\` as text and one optional object containing
+\`path\` as text and \`typescript\` as a boolean, and returns parsed source.
+`;
+
 test("imports source into a dry-run Program proposal", async (t) => {
   const root = await createGitProject(t, {
     "src/greet.js": "function greet() { return \"hello\"; }\n\nexport { greet };\n"
@@ -211,7 +252,7 @@ test("treats exported arrow values as exact callable symbols", async (t) => {
   assert.equal(result.status, "updated");
 });
 
-test("retries one deterministically rejected candidate with its diagnostic", async (t) => {
+test("accumulates diagnostics across bounded candidate retries", async (t) => {
   const root = await createGitProject(t, {
     "src/greet.js": "function greet() { return \"hello\"; }\n\nexport { greet };\n"
   });
@@ -222,10 +263,20 @@ test("retries one deterministically rejected candidate with its diagnostic", asy
     await writeWorkspace(
       workspaceRoot,
       context.target.programPath,
-      attempts === 1 ? PROGRAM.replace("`greet()`", "`greet`") : PROGRAM
+      attempts === 1
+        ? PROGRAM.replace("`greet()`", "`greet`")
+        : attempts === 2
+          ? PROGRAM.replaceAll("greet", "farewell")
+          : PROGRAM
     );
     if (attempts === 2) {
       assert.match(prompt, /PAIR_SURFACE_MISMATCH/u);
+      assert.match(prompt, /A diagnostic may identify only the first newly observed mismatch/u);
+      assert.match(prompt, /Do not fix the named mismatch by dropping a different required symbol/u);
+    }
+    if (attempts === 3) {
+      assert.equal((prompt.match(/PAIR_SURFACE_MISMATCH/gu) || []).length >= 2, true);
+      assert.match(prompt, /Earlier retry diagnostics remain applicable/u);
     }
     return synchronizationReport(mode);
   };
@@ -235,6 +286,74 @@ test("retries one deterministically rejected candidate with its diagnostic", asy
     projectRoot: root,
     runner,
     write: false
+  });
+  assert.equal(attempts, 3);
+  assert.equal(result.status, "updated");
+});
+
+test("rejects flattened object parameters and explains the required grouping on retry", async (t) => {
+  const root = await createGitProject(t, {
+    "program/src/renderMessage.js.md": OBJECT_PARAMETER_PROGRAM
+  });
+  let attempts = 0;
+  const runner = async ({ mode, prompt, workspaceRoot }) => {
+    attempts += 1;
+    const context = await readContext(workspaceRoot);
+    if (attempts === 2) {
+      assert.match(prompt, /must preserve its Program parameter grouping/u);
+      assert.match(prompt, /Candidate arguments: `name`; `punctuation`/u);
+    }
+    await writeWorkspace(
+      workspaceRoot,
+      context.target.implementationPath,
+      attempts === 1
+        ? "export function renderMessage(name, punctuation) { return `${name}${punctuation}`; }\n"
+        : "export function renderMessage({ name, punctuation }) { return `${name}${punctuation}`; }\n"
+    );
+    return synchronizationReport(mode);
+  };
+
+  const result = await compileProgram({
+    inputPath: "program/src/renderMessage.js.md",
+    projectRoot: root,
+    runner
+  });
+  assert.equal(attempts, 2);
+  assert.equal(result.status, "updated");
+});
+
+test("preserves positional and object parameter groups without collapsing them", async (t) => {
+  const root = await createGitProject(t, {
+    "program/src/parseSource.js.md": MIXED_PARAMETER_PROGRAM
+  });
+  let attempts = 0;
+  const runner = async ({ mode, prompt, workspaceRoot }) => {
+    attempts += 1;
+    const context = await readContext(workspaceRoot);
+    if (attempts === 2) {
+      assert.match(
+        prompt,
+        /Program arguments: `source`; one object containing `path`, `typescript`/u
+      );
+      assert.match(
+        prompt,
+        /Candidate arguments: one object containing `source`, `options`/u
+      );
+    }
+    await writeWorkspace(
+      workspaceRoot,
+      context.target.implementationPath,
+      attempts === 1
+        ? "export function parseSource({ source, options }) { return { source, options }; }\n"
+        : "export function parseSource(source, { path, typescript } = {}) { return { source, path, typescript }; }\n"
+    );
+    return synchronizationReport(mode);
+  };
+
+  const result = await compileProgram({
+    inputPath: "program/src/parseSource.js.md",
+    projectRoot: root,
+    runner
   });
   assert.equal(attempts, 2);
   assert.equal(result.status, "updated");
@@ -262,6 +381,50 @@ test("creates missing implementation from Program", async (t) => {
   assert.equal(result.mode, "CREATE_IMPLEMENTATION");
   assert.equal(result.applied, true);
   assert.match(await fs.readFile(path.join(root, "src/greet.js"), "utf8"), /export \{ greet \}/u);
+});
+
+test("creates a Program command with executable permissions", async (t) => {
+  const root = await createGitProject(t, {
+    "program/bin/example.js.md": COMMAND_PROGRAM
+  });
+  const runner = async ({ mode, workspaceRoot }) => {
+    const context = await readContext(workspaceRoot);
+    await writeWorkspace(
+      workspaceRoot,
+      context.target.implementationPath,
+      "#!/usr/bin/env node\nprocess.exitCode = 0;\n"
+    );
+    return synchronizationReport(mode);
+  };
+
+  await compileProgram({
+    inputPath: "program/bin/example.js.md",
+    projectRoot: root,
+    runner
+  });
+
+  const stat = await fs.stat(path.join(root, "bin/example.js"));
+  assert.notEqual(stat.mode & 0o111, 0);
+});
+
+test("normalizes an existing Program command without invoking the synchronizer", async (t) => {
+  const root = await createGitProject(t, {
+    "bin/example.js": "#!/usr/bin/env node\nprocess.exitCode = 0;\n",
+    "program/bin/example.js.md": COMMAND_PROGRAM
+  });
+
+  const result = await syncFile({
+    inputPath: "program/bin/example.js.md",
+    projectRoot: root,
+    runner: async () => {
+      throw new Error("The synchronizer must not be invoked for mode normalization.");
+    }
+  });
+
+  assert.equal(result.status, "updated");
+  assert.equal(result.applied, true);
+  const stat = await fs.stat(path.join(root, "bin/example.js"));
+  assert.notEqual(stat.mode & 0o111, 0);
 });
 
 test("preserves implementation-only realization changes without Program noise", async (t) => {

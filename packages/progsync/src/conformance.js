@@ -21,6 +21,78 @@ function exactParameters(description, parameters = []) {
   return parameters.filter((parameter) => !description.includes(`\`${parameter}\``));
 }
 
+function objectParameterGroupCount(description) {
+  const signatureEnd = String(description || "").search(/\breturns?\b/iu);
+  const signature = signatureEnd === -1
+    ? String(description || "")
+    : String(description || "").slice(0, signatureEnd);
+  return [...signature.matchAll(
+    /\bone (?:optional )?(?:\[[^\]]+\]\s+)?object containing\b/giu
+  )].length;
+}
+
+function describedParameterGroups(description) {
+  const signatureEnd = String(description || "").search(/\breturns?\b/iu);
+  const signature = signatureEnd === -1
+    ? String(description || "")
+    : String(description || "").slice(0, signatureEnd);
+  const objectMatch = /\bone (?:optional )?(?:\[[^\]]+\]\s+)?object containing\b/iu.exec(signature);
+  if (!objectMatch) {
+    return null;
+  }
+  const parameterNames = (text) => [...text.matchAll(
+    /`([A-Za-z_$][A-Za-z0-9_$]*)`\s+as\b/gu
+  )].map((match) => match[1]);
+  const positionalNames = parameterNames(signature.slice(0, objectMatch.index));
+  const objectNames = parameterNames(signature.slice(objectMatch.index + objectMatch[0].length));
+  if (objectNames.length === 0) {
+    return null;
+  }
+  return [
+    ...positionalNames.map((name) => ({ kind: "identifier", names: [name] })),
+    { kind: "object", names: objectNames }
+  ];
+}
+
+function parameterGroupText(groups) {
+  return groups.length === 0
+    ? "no arguments"
+    : groups.map((group) => (
+      group.kind === "object"
+        ? `one object containing ${group.names.map((field) => `\`${field}\``).join(", ")}`
+        : group.names.map((parameter) => `\`${parameter}\``).join(", ") || group.kind
+    )).join("; ");
+}
+
+function validateParameterGrouping(name, provided, exported, diagnostics) {
+  const expectedObjectGroups = objectParameterGroupCount(provided.description);
+  const groups = exported.parameterGroups || [];
+  const describedGroups = describedParameterGroups(provided.description);
+  if (describedGroups) {
+    const actualGroups = groups.map((group) => ({
+      kind: group.kind,
+      names: group.names || []
+    }));
+    if (JSON.stringify(describedGroups) !== JSON.stringify(actualGroups)) {
+      diagnostics.push(
+        `${name} must preserve its Program parameter grouping. ` +
+        `Program arguments: ${parameterGroupText(describedGroups)}. ` +
+        `Candidate arguments: ${parameterGroupText(actualGroups)}.`
+      );
+    }
+    return;
+  }
+  const actualObjectGroups = groups.filter((group) => group.kind === "object").length;
+  if (expectedObjectGroups === actualObjectGroups) {
+    return;
+  }
+  diagnostics.push(
+    `${name} must preserve its Program parameter grouping: the opening signature declares ` +
+    `${expectedObjectGroups} object argument${expectedObjectGroups === 1 ? "" : "s"}, ` +
+    `but the candidate has ${actualObjectGroups}. Candidate arguments: ${parameterGroupText(groups)}.`
+  );
+}
+
 function regularExpressionText(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -89,6 +161,9 @@ async function validateJavaScriptProvides(
 ) {
   const topLevel = parsedProgram.provides.filter((provided) => !provided.owner);
   const expected = new Map();
+  if (sourceFacts.entrypoint) {
+    expected.set(sourceFacts.entrypoint.name, sourceFacts.entrypoint);
+  }
   for (const unresolvedExport of sourceFacts.exports || []) {
     const exported = await resolvedForwardExport(
       unresolvedExport,
@@ -102,8 +177,11 @@ async function validateJavaScriptProvides(
       diagnostics.push(`Implementation export ${exported.name} must be provided as ${name}.`);
       continue;
     }
-    for (const parameter of exactParameters(provided.description, exported.parameters)) {
-      diagnostics.push(`${name} must name parameter \`${parameter}\` in its signature.`);
+    validateParameterGrouping(name, provided, exported, diagnostics);
+    if (!describedParameterGroups(provided.description)) {
+      for (const parameter of exactParameters(provided.description, exported.parameters)) {
+        diagnostics.push(`${name} must name parameter \`${parameter}\` in its signature.`);
+      }
     }
     if (exported.kind !== "class") {
       continue;
@@ -118,8 +196,16 @@ async function validateJavaScriptProvides(
         diagnostics.push(`Exported class ${exported.name} must describe public method ${methodName}.`);
         continue;
       }
-      for (const parameter of exactParameters(providedMethod.description, method.parameters)) {
-        diagnostics.push(`${exported.name}.${methodName} must name parameter \`${parameter}\`.`);
+      validateParameterGrouping(
+        `${exported.name}.${methodName}`,
+        providedMethod,
+        method,
+        diagnostics
+      );
+      if (!describedParameterGroups(providedMethod.description)) {
+        for (const parameter of exactParameters(providedMethod.description, method.parameters)) {
+          diagnostics.push(`${exported.name}.${methodName} must name parameter \`${parameter}\`.`);
+        }
       }
     }
   }

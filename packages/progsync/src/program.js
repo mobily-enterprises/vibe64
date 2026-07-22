@@ -97,10 +97,18 @@ function inferProvidedKind({ owner, programPath, symbol }) {
   if (/\.html\.md$/u.test(programPath)) {
     return "document";
   }
+  const relative = slashPath(programPath).replace(/^program\//u, "");
+  const commandName = relative.match(/^bin\/(?:.*\/)?([^/]+)\.(?:js|mjs)\.md$/u)?.[1];
+  if (commandName && symbol === commandName) {
+    return "command";
+  }
+  const testName = relative.match(/(?:^|\/)([^/]+)\.test\.(?:js|mjs)\.md$/u)?.[1];
+  if (testName && symbol === `${testName} tests`) {
+    return "test";
+  }
   if (/\(\)$/u.test(symbol)) {
     return "function";
   }
-  const relative = slashPath(programPath).replace(/^program\//u, "");
   if (!relative.includes("/")) {
     return "library";
   }
@@ -264,6 +272,34 @@ function parseTypeReferences(lines, lineOffset = 0) {
     }
   }
   return [...references.values()];
+}
+
+function openingSentence(source) {
+  const text = String(source ?? "");
+  let codeFenceLength = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "`") {
+      let runLength = 1;
+      while (text[index + runLength] === "`") {
+        runLength += 1;
+      }
+      if (codeFenceLength === 0) {
+        codeFenceLength = runLength;
+      } else if (runLength === codeFenceLength) {
+        codeFenceLength = 0;
+      }
+      index += runLength - 1;
+      continue;
+    }
+    if (
+      text[index] === "." &&
+      codeFenceLength === 0 &&
+      (index === text.length - 1 || /\s/u.test(text[index + 1]))
+    ) {
+      return text.slice(0, index + 1);
+    }
+  }
+  return text;
 }
 
 function parseProgram(programSource, { programPath = "program/unknown.js.md" } = {}) {
@@ -458,9 +494,7 @@ function parseProgram(programSource, { programPath = "program/unknown.js.md" } =
     }
     if (
       (provided.kind === "function" || provided.kind === "method") &&
-      !/^The (?:function|method)[^.]*\breturns?\b/isu.test(
-        provided.description
-      )
+      !/\breturns?\b/iu.test(openingSentence(provided.description))
     ) {
       diagnostics.push({
         code: "MISSING_OPERATION_RESULT",

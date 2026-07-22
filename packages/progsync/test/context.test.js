@@ -71,6 +71,11 @@ test("supplies an imported provider interface when creating Program", async (t) 
   });
   const runner = async ({ mode, workspaceRoot }) => {
     const context = await readContext(workspaceRoot);
+    assert.equal(context.capsuleVersion, 3);
+    assert.deepEqual(context.runnerProfile, {
+      model: "gpt-5.6-sol",
+      reasoningEffort: "xhigh"
+    });
     assert.equal(
       context.resolvedReferences.some((reference) => (
         reference.provider === "@/src/sendAlert.js.md#sendalert" &&
@@ -197,7 +202,7 @@ test("rejects a Program candidate that omits a used outside operation", async (t
     }),
     (error) => error.code === "PAIR_SURFACE_MISMATCH"
   );
-  assert.equal(attempts, 2);
+  assert.equal(attempts, 3);
   await assert.rejects(fs.stat(path.join(root, "program/src/dispatch.js.md")), /ENOENT/u);
 });
 
@@ -271,7 +276,7 @@ The document presents the application.
   );
 });
 
-test("blocks instead of silently truncating a deep Program reference closure", async (t) => {
+test("closes target-bound runtime uses at their direct provider interfaces", async (t) => {
   const files = {
     "src/entry.js": `import { f1 } from "./f1.js";\nexport function entry() { return f1(); }\n`,
     "src/f1.js": "export function f1() { return 1; }\n"
@@ -296,21 +301,39 @@ The function returns a number.
 `;
   }
   const root = await createGitProject(t, files);
-  let runnerCalled = false;
+  const result = await importProgram({
+    inputPath: "src/entry.js",
+    projectRoot: root,
+    runner: async ({ mode, workspaceRoot }) => {
+      const context = await readContext(workspaceRoot);
+      assert.equal(
+        context.resolvedReferences.some(({ provider }) => provider === "@/src/f1.js.md#f1"),
+        true
+      );
+      assert.equal(
+        context.resolvedReferences.some(({ provider }) => provider === "@/src/f2.js.md#f2"),
+        false
+      );
+      await writeWorkspace(workspaceRoot, context.target.programPath, `# Entry
 
-  await assert.rejects(
-    importProgram({
-      inputPath: "src/entry.js",
-      projectRoot: root,
-      runner: async () => {
-        runnerCalled = true;
-      },
-      write: false
-    }),
-    (error) => error.code === "UNRESOLVED_CONTEXT" &&
-      error.details.diagnostics.some(({ code }) => code === "REFERENCE_CLOSURE_DEPTH_LIMIT")
-  );
-  assert.equal(runnerCalled, false);
+Calls the direct provider interface.
+
+## Uses
+
+- [\`f1()\`](@/src/f1.js.md#f1)
+
+## Provides
+
+### \`entry()\`
+
+The function returns the number returned by \`f1()\`.
+`);
+      return synchronizationReport(mode);
+    },
+    write: false
+  });
+
+  assert.equal(result.status, "updated");
 });
 
 test("invalidates an accepted consumer when a referenced interface changes", async (t) => {

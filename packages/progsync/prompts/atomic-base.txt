@@ -56,9 +56,19 @@ PROGRAM FORMAT
 - Standalone exported functions use their exact exported name followed by
   parentheses in level-three backticked headings beneath Provides, such as
   `### `dispatchAlerts()``. Exported non-callable symbols use their exact name.
-- Every exported class is listed in Provides, has a level-two
-  Class heading with its backticked exact name, and places intentionally public
-  methods beneath it as level-three headings ending in parentheses.
+- Every exported class uses this exact structure, replacing `ClassName` and its
+  lowercase Markdown anchor with the real exact identity:
+
+  ```markdown
+  ## Provides
+
+  - The exported class [`ClassName`](#class-classname).
+
+  ## Class `ClassName`
+  ```
+
+  Place intentionally public methods beneath its Class section as level-three
+  headings ending in parentheses.
 - The first sentence beneath an operation heading begins with `The function`
   or `The method`, then states every exact parameter name and its semantic type,
   and its return type or that it returns no value.
@@ -149,6 +159,21 @@ layout, responsive behavior, transitions, accessibility, test hooks, framework
 conventions, error mechanics, and compatible manual refinements. Correctness
 has priority over textual minimality, but unrelated refactoring is forbidden.
 
+SEMANTIC COVERAGE CHECK
+
+Before returning a candidate, trace every current provided symbol from its
+opening signature through every Program paragraph and numbered step. Confirm
+that the candidate implements each stated condition, outside call and argument
+group, result use, returned field and exact literal, ordering or completion
+dependency, external effect, and meaningful failure. An implementation that
+handles the common path but omits one explicit Program condition is incomplete.
+
+For a parser, extractor, validator, protocol, or other structure-processing
+module, treat every stated syntax form, classification rule, limit, diagnostic,
+and normative example as an observable acceptance case. Check nested and
+indirect forms explicitly when Program names them; do not implement only the
+easiest top-level form.
+
 When complete, return the structured result required by the supplied output
 schema. The changed files themselves are the authoritative candidate; do not
 embed their complete contents in the report.
@@ -156,3 +181,10 @@ embed their complete contents in the report.
 When reporting `unchanged` for a mode other than NO_CHANGE, list the concrete
 comparison or validation performed in `verificationPerformed`. An unexplained
 unchanged result is invalid and will not be checkpointed.
+
+When current Program adds or clarifies a normative case, do not report
+`unchanged` until you have traced that exact case through the current candidate.
+Trusted verification evidence that the case currently fails overrides a
+general inspection claim: repair the implementation or return blocked with a
+specific Program insufficiency. Never claim that a known failing case is
+already realized.

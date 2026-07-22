@@ -5,6 +5,10 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  DEFAULT_CODEX_MODEL,
+  DEFAULT_CODEX_REASONING_EFFORT,
+  DEFAULT_TIMEOUT_MS,
+  codexRunnerProfile,
   createCodexExecRunner,
   validateRunnerResult
 } from "../src/codexRunner.js";
@@ -21,6 +25,11 @@ test("exercises the default Codex runner protocol without invoking an LLM", asyn
     assert.equal(options.cwd, workspaceRoot);
     assert.equal(options.input, "trusted prompt");
     assert.equal(args.includes("--ephemeral"), true);
+    assert.equal(args[args.indexOf("--model") + 1], "gpt-5.6-sol");
+    assert.equal(
+      args.includes('model_reasoning_effort="xhigh"'),
+      true
+    );
     const resultPath = args[args.indexOf("--output-last-message") + 1];
     await fs.writeFile(
       resultPath,
@@ -46,6 +55,16 @@ test("exercises the default Codex runner protocol without invoking an LLM", asyn
   });
   assert.equal(result.mode, "CREATE_PROGRAM");
   assert.deepEqual(events, [{ type: "turn.started" }]);
+});
+
+test("pins every Codex run to the declared Sol xhigh profile", () => {
+  assert.equal(DEFAULT_CODEX_MODEL, "gpt-5.6-sol");
+  assert.equal(DEFAULT_CODEX_REASONING_EFFORT, "xhigh");
+  assert.equal(DEFAULT_TIMEOUT_MS, 1_800_000);
+  assert.deepEqual(codexRunnerProfile(), {
+    model: "gpt-5.6-sol",
+    reasoningEffort: "xhigh"
+  });
 });
 
 test("rejects structured runner fields outside the output contract", () => {

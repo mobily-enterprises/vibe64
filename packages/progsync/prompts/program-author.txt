@@ -38,17 +38,47 @@ CANONICAL MODULE FORMAT
   so its reachable definition closure is complete.
 - Put every exported standalone function beneath Provides as an exact
   level-three backticked heading ending in parentheses.
-- List each exported class beneath Provides, give it a level-two `Class`
-  section followed by its exact backticked name, and put only intentionally
-  public methods beneath the class as exact level-three backticked headings.
+- Give every exported class this exact structure, replacing `ClassName` and its
+  lowercase Markdown anchor with the real exact identity:
+
+  ```markdown
+  ## Provides
+
+  - The exported class [`ClassName`](#class-classname).
+
+  ## Class `ClassName`
+  ```
+
+  Put only intentionally public methods beneath the Class section as exact
+  level-three backticked headings.
 - Describe exported non-callable values and executable entrypoint behavior when
   they are part of the file's real external surface.
+- A shebang executable under `bin/` provides a command named by its exact
+  filename stem in a level-three backticked heading without parentheses. State
+  its arguments, outside calls, effects, failure behavior, and exit result; do
+  not pretend that it is a JavaScript export.
+- A `name.test.js` or `name.test.mjs` file provides a test suite named exactly
+  `name tests` in a level-three backticked heading without parentheses. State
+  every registered test's setup, operation, assertions, and meaningful failure
+  evidence; do not pretend that the suite is a JavaScript export.
 
 FUNCTIONS AND DATAFLOW
 
 - Begin each function or method with one sentence starting `The function` or
   `The method`. Name every exact parameter and its semantic type, and include
   `returns` before the first full stop.
+- Preserve argument grouping, not only parameter names. When a callable takes
+  a destructured object, write “one object containing ...” and name its public
+  fields; never turn those fields into separate positional arguments. When an
+  outside callable accepts such an object, pass one object at that boundary.
+- When positional arguments and an object argument are combined, state every
+  group in order. For example, “`source` as text and one object containing
+  `path`” means `source` followed by the object containing `path`; never obscure
+  that boundary as one object containing `source` and `options`.
+- For an ordinary named object parameter, retain that exact parameter name and
+  its complex type. For a destructured object parameter, name its public field
+  keys after “one object containing”; do not expose private local aliases or
+  invent a wrapper-variable name that the boundary does not have.
 - Do not label a function synchronous or asynchronous. State meaningful order,
   waiting, concurrency, or completion constraints without exposing Promise or
   `async` mechanics.
@@ -62,9 +92,19 @@ FUNCTIONS AND DATAFLOW
   from `options`,” rather than target syntax such as `options.booksPath`.
 - Name every function or value used across the module boundary, its exact
   provider in Uses, the data passed to it, and how its result is used.
+- Preserve the argument boundaries of every outside call. When an imported
+  operation receives several arguments or an object argument, state the count
+  and grouping explicitly, for example: “calls `send()` with three arguments:
+  `message`; `recipient`; and one object containing `urgent` and `traceId`.”
+  Listing the values without saying which argument contains them is
+  insufficient.
 - State local data selection and transformation, conditions, meaningful order
   and repetition, returned values, external effects, mutation, and failure
   behavior precisely enough that materially different outcomes are excluded.
+- For a returned complex value, preserve every public field name and state
+  which input, outside result, or local transformation supplies it. Preserve
+  exact literal status, mode, reason, and discriminator values; paraphrasing a
+  machine-observed identifier changes the program.
 - Calls to private or same-file helpers are realization details. Describe their
   meaningful local transformation without naming the helper.
 - Keep a short operation in compact prose. When an orchestration operation has
@@ -73,6 +113,30 @@ FUNCTIONS AND DATAFLOW
   loops, maps, temporary collections, private helpers, or target mechanics.
 - Include reasons for non-obvious product, safety, consistency, performance,
   accessibility, or operational decisions. Do not explain obvious syntax.
+- For a parser, extractor, validator, serializer, protocol, command, or test
+  harness, syntax distinctions, exact classifications, machine-observed
+  literals, diagnostics, and externally inspected metadata are Program meaning.
+  Use small normative input-to-result examples when prose alone would permit
+  materially different implementations. An example specifies behavior; it
+  does not require the target to use the original parser algorithm.
+
+ASSIMILATING AN EXISTING IMPLEMENTATION
+
+- Begin from mechanically extracted exports, entrypoints, imported bindings,
+  outside call sites, argument groups, returned object fields, observable
+  literals, and effects. Account for every fact in Program or explicitly
+  classify it as private realization before finishing.
+- Trace every exported operation through the source from its public inputs to
+  its return and effects. Preserve exact cross-module data shapes and call
+  boundaries even when the implementation gives them no declared type.
+- Use bounded tests, fixtures, schemas, and consumers as evidence when they
+  establish observable behavior that the implementation file alone leaves
+  ambiguous. Never silently copy a test's private implementation assumption
+  into Program.
+- Perform a final coverage pass against the extracted facts. A structurally
+  valid Markdown file is not sufficient when it omits an observable boundary.
+- Mark unresolved meaning as a diagnostic or request bounded evidence rather
+  than choosing a plausible interpretation.
 
 DO NOT
 

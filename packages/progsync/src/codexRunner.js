@@ -6,7 +6,9 @@ import { SYNCHRONIZATION_MODES } from "./constants.js";
 import { ProgSyncError } from "./errors.js";
 import { synchronizerSchemaPath } from "./prompts.js";
 
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
+const DEFAULT_CODEX_REASONING_EFFORT = "xhigh";
 const MAX_CAPTURED_OUTPUT = 16 * 1024 * 1024;
 const RESULT_ARRAY_FIELDS = Object.freeze([
   "programChanges",
@@ -25,6 +27,13 @@ const RESULT_FIELDS = new Set([
   "summary",
   ...RESULT_ARRAY_FIELDS
 ]);
+
+function codexRunnerProfile() {
+  return {
+    model: DEFAULT_CODEX_MODEL,
+    reasoningEffort: DEFAULT_CODEX_REASONING_EFFORT
+  };
+}
 
 function parseJsonResult(source) {
   const trimmed = String(source || "").trim();
@@ -92,9 +101,14 @@ function createCodexExecRunner({
   timeoutMs = DEFAULT_TIMEOUT_MS
 } = {}) {
   return async function codexExecRunner({ onEvent, prompt, workspaceRoot }) {
+    const runnerProfile = codexRunnerProfile();
     const resultPath = path.join(path.dirname(workspaceRoot), "codex-result.json");
     const args = [
       "exec",
+      "--model",
+      runnerProfile.model,
+      "--config",
+      `model_reasoning_effort=${JSON.stringify(runnerProfile.reasoningEffort)}`,
       "--ephemeral",
       "--ignore-user-config",
       "--ignore-rules",
@@ -197,7 +211,10 @@ function createCodexExecRunner({
 }
 
 export {
+  DEFAULT_CODEX_MODEL,
+  DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_TIMEOUT_MS,
+  codexRunnerProfile,
   createCodexExecRunner,
   parseJsonResult,
   validateRunnerResult

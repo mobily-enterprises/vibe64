@@ -92,6 +92,22 @@ function parseReceipt(source, { pair, receiptPath, stateCommit }) {
       });
     }
   }
+  if (
+    receipt.runnerProfile !== undefined &&
+    receipt.runnerProfile !== null &&
+    (
+      typeof receipt.runnerProfile !== "object" ||
+      Array.isArray(receipt.runnerProfile) ||
+      typeof receipt.runnerProfile.model !== "string" ||
+      typeof receipt.runnerProfile.reasoningEffort !== "string"
+    )
+  ) {
+    checkpointCorrupt("ProgSync's private pair receipt has an invalid runnerProfile.", {
+      actual: receipt.runnerProfile,
+      receiptPath,
+      stateCommit
+    });
+  }
   return receipt;
 }
 
@@ -395,7 +411,13 @@ async function compareAndSwapStateRef({
   );
 }
 
-async function checkpointPair({ contextHash = null, expectedPair = null, mode, pair }) {
+async function checkpointPair({
+  contextHash = null,
+  expectedPair = null,
+  mode,
+  pair,
+  runnerProfile = null
+}) {
   await assertGitRepository(pair.projectRoot);
   const [program, implementation, currentGit] = await Promise.all([
     readWorkingFile(pair.projectRoot, pair.programPath),
@@ -442,6 +464,7 @@ async function checkpointPair({ contextHash = null, expectedPair = null, mode, p
     programHash: prefixedSourceHash(program),
     programMode: program.mode,
     programPath: pair.programPath,
+    runnerProfile,
     schemaVersion: PROGSYNC_STATE_SCHEMA_VERSION,
     targetKind: pair.target.kind
   };

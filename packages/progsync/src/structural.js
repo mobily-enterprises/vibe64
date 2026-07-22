@@ -144,7 +144,72 @@ function patternNames(node, output = []) {
 }
 
 function parameterNames(parameters = []) {
-  return [...new Set(parameters.flatMap((parameter) => patternNames(parameter)))];
+  return [...new Set(parameters.flatMap((parameter) => publicParameterNames(parameter)))];
+}
+
+function publicParameterNames(node, output = []) {
+  if (!node) {
+    return output;
+  }
+  if (node.type === "Identifier") {
+    output.push(node.name);
+  } else if (node.type === "AssignmentPattern") {
+    publicParameterNames(node.left, output);
+  } else if (node.type === "RestElement") {
+    publicParameterNames(node.argument, output);
+  } else if (node.type === "ObjectPattern") {
+    for (const property of node.properties || []) {
+      if (property.type === "RestElement") {
+        publicParameterNames(property.argument, output);
+        continue;
+      }
+      const name = identifierName(property.key);
+      if (name) {
+        output.push(name);
+      }
+    }
+  } else if (node.type === "ArrayPattern") {
+    for (const element of node.elements || []) {
+      publicParameterNames(element, output);
+    }
+  } else if (node.type === "TSParameterProperty") {
+    publicParameterNames(node.parameter, output);
+  }
+  return output;
+}
+
+function parameterGroup(parameter) {
+  let node = parameter;
+  let defaulted = false;
+  let rest = false;
+  if (node?.type === "TSParameterProperty") {
+    node = node.parameter;
+  }
+  if (node?.type === "AssignmentPattern") {
+    defaulted = true;
+    node = node.left;
+  }
+  if (node?.type === "RestElement") {
+    rest = true;
+    node = node.argument;
+  }
+  const names = parameterNames([node]);
+  return {
+    defaulted,
+    kind: node?.type === "ObjectPattern"
+      ? "object"
+      : node?.type === "ArrayPattern"
+        ? "array"
+        : node?.type === "Identifier"
+          ? "identifier"
+          : "unknown",
+    names,
+    rest
+  };
+}
+
+function parameterGroups(parameters = []) {
+  return parameters.map((parameter) => parameterGroup(parameter));
 }
 
 function classMethods(node) {
@@ -160,6 +225,7 @@ function classMethods(node) {
         async: Boolean(member.async),
         kind: member.kind || "method",
         name,
+        parameterGroups: parameterGroups(member.params),
         parameters: parameterNames(member.params),
         private: member.type === "ClassPrivateMethod" || Boolean(name?.startsWith("_")),
         static: Boolean(member.static)
@@ -170,7 +236,7 @@ function classMethods(node) {
 
 function expressionFact(node, declarations = new Map()) {
   if (!node) {
-    return { kind: "value", parameters: [] };
+    return { kind: "value", parameterGroups: [], parameters: [] };
   }
   if (node.type === "Identifier" && declarations.has(node.name)) {
     return declarations.get(node.name);
@@ -183,6 +249,7 @@ function expressionFact(node, declarations = new Map()) {
     return {
       async: Boolean(node.async),
       kind: "function",
+      parameterGroups: parameterGroups(node.params),
       parameters: parameterNames(node.params)
     };
   }
@@ -190,10 +257,11 @@ function expressionFact(node, declarations = new Map()) {
     return {
       kind: "class",
       methods: classMethods(node),
+      parameterGroups: [],
       parameters: []
     };
   }
-  return { kind: "value", parameters: [] };
+  return { kind: "value", parameterGroups: [], parameters: [] };
 }
 
 function declarationFacts(programBody) {
@@ -229,6 +297,7 @@ function exportedFact(name, fact, extra = {}) {
     ...fact,
     ...extra,
     name,
+    parameterGroups: fact.parameterGroups || [],
     parameters: fact.parameters || []
   };
 }
@@ -412,7 +481,7 @@ function declaredBindingCounts(ast) {
       if (node.id?.name) {
         add(node.id.name);
       }
-      for (const name of parameterNames(node.params)) {
+      for (const name of node.params.flatMap((parameter) => patternNames(parameter))) {
         add(name);
       }
       return;
@@ -781,8 +850,22 @@ async function extractJavaScriptFacts({
 }) {
   const ast = javascriptAst(source, { implementationPath, jsx, typescript });
   const structure = collectJavaScriptStructure(ast);
+  const normalizedPath = slashPath(implementationPath);
+  const commandName = path.posix.basename(normalizedPath).replace(/\.(?:js|mjs)$/u, "");
+  const testName = path.posix.basename(normalizedPath).match(/^(.+)\.test\.(?:js|mjs)$/u)?.[1];
   return {
     ...structure,
+    entrypoint: String(source).startsWith("#!")
+      ? {
+        kind: "command",
+        name: commandName
+      }
+      : testName
+        ? {
+          kind: "test",
+          name: `${testName} tests`
+        }
+        : null,
     imports: await resolveImportFacts({
       implementationPath,
       imports: structure.imports,
@@ -1204,7 +1287,7 @@ async function extractSourceFacts({
   targetKind
 }) {
   if (source === null || source === undefined) {
-    return { ambientNames: [], exports: [], imports: [] };
+    return { ambientNames: [], entrypoint: null, exports: [], imports: [] };
   }
   if (targetKind === "javascript") {
     return extractJavaScriptFacts({ implementationPath, projectRoot, source });

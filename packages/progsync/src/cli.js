@@ -184,8 +184,14 @@ function eventReporter(json) {
     }
     if (event.type === "progsync.candidate_rejected") {
       process.stderr.write(
-        `ProgSync: candidate ${event.attempt} rejected (${event.diagnostic.code}); retrying once.\n`
+        `ProgSync: candidate ${event.attempt} rejected (${event.diagnostic.code}): ` +
+        `${event.diagnostic.message}; retrying once.\n`
       );
+      if (event.diagnostic.details) {
+        process.stderr.write(
+          `ProgSync: candidate rejection details:\n${JSON.stringify(event.diagnostic.details, null, 2)}\n`
+        );
+      }
     }
   };
 }

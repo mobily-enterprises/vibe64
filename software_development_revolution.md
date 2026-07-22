@@ -25,6 +25,271 @@ The central proposition is:
 > realization knowledge. ProgSync creates a missing side and otherwise keeps
 > both synchronized without discarding knowledge owned by either.
 
+## 0. Authoritative abstraction boundary
+
+Decision date: 2026-07-23.
+
+This section is normative and takes precedence over any later passage that
+still mirrors every implementation file, export, helper, import, test seam, or
+low-level operation into Program. Those passages describe the initial
+assimilation experiment and must be brought into line with this decision.
+
+### 0.1 Program defines the intended architecture
+
+Program must not reproduce the structure of the implementation from which it
+was initially assimilated. Existing files, exports, helpers, library calls,
+error construction, and test seams are evidence about behavior; they are not
+automatically Program architecture.
+
+A Program module states:
+
+- the smallest intentional public surface through which people reason about
+  the program;
+- the data accepted and returned by that surface;
+- its observable behavior, effects, failures, and important reasons;
+- the other intentional public Program operations it calls; and
+- any external service or platform identity whose selection is itself part of
+  program meaning.
+
+The implementation may divide that behavior into any number of private
+functions and files. A new target is expected to choose different private
+decomposition when appropriate.
+
+### 0.2 Golden rule for shared functions
+
+The absolute default is:
+
+> A callable is a Program symbol only when it is part of an externally invoked
+> interface or is intentionally used by at least two distinct production
+> Program modules.
+
+This rule is applied semantically, not by copying target-language `export`
+syntax.
+
+- A function used by only one production module is normally an implementation
+  detail and its behavior is absorbed into that consuming Program operation.
+- A function exported only so a test can call it is an implementation detail.
+  Tests do not count as production consumers.
+- A same-file helper is always an implementation detail.
+- An unused export is removed unless it is deliberately supported for external
+  consumers.
+- A command, public package API, HTTP endpoint, plugin hook, framework callback,
+  or other externally invoked entrypoint remains a Program symbol even when no
+  local Program module calls it. The external caller is its consumer.
+- A single-consumer function may remain shared only when its boundary is itself
+  a deliberate externally meaningful constraint, such as a process, security,
+  deployment, or independently substitutable service boundary. Convenience,
+  historical file layout, and test access are not sufficient reasons.
+
+The aim is not to maximize reusable functions. The aim is to minimize the
+public semantic surface. Fewer Program functions are better when they preserve
+the same understandable behavior and genuine composition points.
+
+### 0.3 Public Uses only
+
+`## Uses` and function bodies mention only intentional public dependencies.
+
+A used operation belongs in Program when:
+
+- it satisfies the shared-function rule above;
+- it is an externally supplied service whose identity is an architectural
+  decision; or
+- replacing it would change Program meaning rather than merely change how the
+  target realizes that meaning.
+
+Commodity realization APIs do not appear merely because the current target
+imports them. Examples normally omitted include filesystem primitives, path
+utilities, cryptographic random-byte helpers used for temporary names,
+collection helpers, parsing libraries, framework plumbing, and private error
+constructors.
+
+The decisive test is:
+
+> If another correct implementation could stop calling this operation without
+> changing Program meaning, the operation does not belong in Program Uses.
+
+When a Program operation does call another public Program operation, it names
+and links that exact operation and states the meaningful data passed to it and
+the result used from it. It does not reproduce the provider's implementation.
+
+### 0.4 Observable guarantees, not mechanisms
+
+Program states results and safety properties at the level a caller, user, or
+other Program module can observe. It does not prescribe one mechanism unless
+that mechanism is intentionally part of the product.
+
+For example, Program may require:
+
+- accepted changes are installed as one safe update;
+- project edits made while synchronization is running are never overwritten;
+- a failed installation does not leave partial project changes behind;
+- executable permissions are preserved; and
+- an unrecoverable conflict identifies the affected files.
+
+Program does not normally prescribe:
+
+- staging-file creation and cleanup;
+- backup naming;
+- hard links, renames, or exact filesystem calls;
+- the private fields compared to detect a concurrent edit;
+- private rollback helpers;
+- temporary data structures; or
+- an internal error class or code that callers do not intentionally consume.
+
+Thus this is implementation detail:
+
+> If staging fails, it removes every staged temporary file through `fs()`.
+
+The Program behavior is:
+
+> A failed installation leaves no temporary or partially installed project
+> files behind.
+
+Likewise, the exact fields and private error construction used to detect a
+changed file are implementation detail. The Program behavior is:
+
+> It never overwrites project files changed after synchronization began. It
+> reports the conflict without installing the candidate.
+
+Reasons remain important. Program should explain, for example, that concurrent
+edits are protected so synchronization cannot destroy a developer's work. A
+reason explains the required behavior; it does not justify exposing the
+mechanism.
+
+### 0.5 Canonical function format
+
+Every Program function uses the following visible structure:
+
+```markdown
+### `operationName()`
+
+#### Parameters
+
+- an object containing:
+  - `firstField`: its meaning and type
+  - `secondField`: its meaning, type, and default when applicable
+
+#### What it does
+
+1. State the first meaningful behavior or data transformation.
+2. Name and link an intentional public operation when this function calls it,
+   including the meaningful data passed and result used.
+3. State observable ordering, effects, failures, and reasons only where they
+   matter outside the implementation.
+
+#### Returns
+
+The exact result and its meaning, or `No value.` when it returns no value.
+```
+
+Positional parameters receive one bullet each. A single object parameter uses
+one outer bullet and nested field bullets so parameter grouping remains
+unambiguous. Complex types use their shared `[Type]` references. Target-language
+timing syntax does not appear merely because the implementation is asynchronous;
+waiting, ordering, or concurrency is stated under `What it does` only when it
+is observable.
+
+The body may use short conceptual paragraphs or subheadings to remain readable,
+but those concepts do not become callable symbols. Minimizing functions must
+not create an undifferentiated wall of prose.
+
+### 0.6 Program modules may own many implementation files
+
+There is no strict one-Program-file-to-one-implementation-file architecture.
+A Program module may have one primary target and any number of private owned
+implementation artifacts. The implementation may retain or introduce private
+files, helpers, target-specific adapters, styles, and tests without adding
+Program symbols.
+
+If an implementation file exposes no symbol satisfying the golden rule, that
+file does not require its own Program module. Its behavior belongs to the
+Program operation that owns it.
+
+This ownership model is necessary for synchronization:
+
+- fresh generation may choose a new private file decomposition;
+- evolutionary synchronization preserves mature private files and refinements;
+- the Atomic Synchronizer may change only the current Program module's primary
+  target and recorded auxiliaries; and
+- implementation-only imports between artifacts owned by the same Program
+  module do not create Program Uses edges.
+
+Auxiliary ownership must be deterministic and auditable, but auxiliary file
+names and private symbols are managed implementation state rather than public
+Program meaning.
+
+### 0.7 Tests do not define Program architecture
+
+Committed target-language tests must not automatically receive one-to-one
+Program counterparts. Translating a white-box test into Program can force a
+private helper to become public and thereby make the old implementation's
+decomposition authoritative.
+
+Tests are classified as follows:
+
+- Black-box behavioral tests of Program-visible behavior are valuable
+  independent verification and may be retained.
+- Tests that import helpers exposed only for testing must be rewritten through
+  Program-visible behavior or removed.
+- A helper that genuinely deserves independent testing may instead become a
+  real Program module, but only when it independently satisfies the golden
+  shared-function or external-interface rule.
+- Target-specific tests of realization mechanics may remain precious managed
+  implementation or compiler-maintainer evidence without becoming Program
+  architecture.
+- Independently generated tests are verification evidence, never a second
+  source of program meaning.
+
+During assimilation, the existing test suite is an external oracle. The clean
+generation experiment compiles production Program and then runs an adapted,
+independently retained oracle suite against the result. Test Program files are
+not compiled from the same corpus being verified.
+
+### 0.8 Consequence for the ProgSync self-hosting corpus
+
+The initial self-hosting Markdown corpus is an assimilation transcript, not the
+authoritative Program design. It is too closely coupled to JavaScript exports,
+file boundaries, private mechanisms, exact low-level calls, and white-box
+tests.
+
+For example, the assimilated `candidate.js.md` provides four operations:
+
+- `applyCandidates()` and `runCandidateSynchronization()` are each consumed by
+  only one production module, `service.js`;
+- `installStagedWrite()` is exported outside the file only for a safety test;
+  and
+- `validateImplementationCandidate()` is exported outside the file only for a
+  structural test.
+
+None satisfies the normal shared-function rule. `candidate.js.md` should
+therefore disappear as a public Program module. Its observable validation,
+installation, concurrency-protection, rollback, and permission guarantees are
+absorbed into the public synchronization operations that own them. The managed
+implementation may still use `candidate.js` privately.
+
+The corpus rewrite must:
+
+1. adopt the canonical `Parameters`, `What it does`, and `Returns` format;
+2. start from the desired public package, command, component, and service
+   interfaces rather than existing exports;
+3. classify every provided symbol as externally invoked, shared by at least two
+   production Program modules, single-consumer, test-only, or unused;
+4. remove single-consumer, test-only, and unused symbols from Program unless a
+   deliberate boundary exception applies;
+5. remove low-level realization dependencies from Uses;
+6. replace mechanical algorithms with observable guarantees and important
+   reasons;
+7. remove one-to-one test Program modules; and
+8. record ownership for existing private implementation files so evolutionary
+   synchronization can preserve them.
+
+The Sol/xhigh generation begun from the old corpus was deliberately stopped
+after nine of thirty-three target files had been accepted. That stopped run is
+preserved as evidence about the assimilation approach and model behavior. It
+must not be resumed as the authoritative experiment. The next clean generation
+begins only after this abstraction-boundary rewrite and compiles the production
+Program corpus before running an independent oracle suite.
+
 ## 1. Goals
 
 Program is intended to:

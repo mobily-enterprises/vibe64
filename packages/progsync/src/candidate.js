@@ -155,6 +155,35 @@ async function writeWorkspaceFile(workspaceRoot, relativePath, source, permissio
   await fs.chmod(absolutePath, permissions);
 }
 
+async function normalizeCommandMode({ pair, workspaceRoot }) {
+  if (pair.target.kind !== "javascript") {
+    return false;
+  }
+  const programPath = path.join(workspaceRoot, ...pair.programPath.split("/"));
+  const program = await readAbsoluteFile(programPath);
+  if (!program.exists) {
+    return false;
+  }
+  const parsedProgram = assertValidProgram(program.source, {
+    programPath: pair.programPath
+  });
+  if (!parsedProgram.provides.some((provided) => (
+    !provided.owner && provided.kind === "command"
+  ))) {
+    return false;
+  }
+  const implementationPath = path.join(
+    workspaceRoot,
+    ...pair.implementationPath.split("/")
+  );
+  const implementation = await readAbsoluteFile(implementationPath);
+  if (!implementation.exists || (implementation.permissions & 0o111) !== 0) {
+    return false;
+  }
+  await fs.chmod(implementationPath, implementation.permissions | 0o111);
+  return true;
+}
+
 async function initializeCandidateRepository(workspaceRoot) {
   await runProgSyncCommand("git", ["init", "--quiet"], {
     cwd: workspaceRoot
@@ -348,7 +377,7 @@ async function runCandidateSynchronization({
     );
     await initializeCandidateRepository(workspaceRoot);
 
-    const report = validateRunnerResult(await runner({
+    let report = validateRunnerResult(await runner({
       allowedPaths: capsule.target.allowedPaths,
       mode: capsule.mode,
       onEvent,
@@ -360,6 +389,23 @@ async function runCandidateSynchronization({
         "CODEX_MODE_MISMATCH",
         `Codex reported ${report.mode} while ProgSync selected ${capsule.mode}.`
       );
+    }
+
+    const commandModeNormalized = await normalizeCommandMode({ pair, workspaceRoot });
+    if (commandModeNormalized && report.status === "unchanged") {
+      report = {
+        ...report,
+        status: "updated",
+        summary: `${report.summary} ProgSync made the command executable.`.trim(),
+        implementationChanges: [
+          ...report.implementationChanges,
+          `Set executable permissions on ${pair.implementationPath}.`
+        ],
+        verificationPerformed: [
+          ...report.verificationPerformed,
+          "Confirmed that the Program provides a command entrypoint."
+        ]
+      };
     }
 
     const changes = await collectCandidateChanges(workspaceRoot);
@@ -466,6 +512,31 @@ async function runCandidateSynchronization({
       throw new ProgSyncError(
         "PAIR_INCOMPLETE",
         "A successful candidate must leave both Program and implementation present."
+      );
+    }
+    const parsedFinalProgram = assertValidProgram(finalProgram, {
+      programPath: pair.programPath
+    });
+    const providesCommand = parsedFinalProgram.provides.some((provided) => (
+      !provided.owner && provided.kind === "command"
+    ));
+    if (providesCommand && implementationCandidate) {
+      implementationCandidate.permissions |= 0o111;
+      implementationCandidate.mode = 0o755;
+    } else if (
+      providesCommand &&
+      (snapshot.I1.permissions ?? snapshot.I1.mode ?? 0) & 0o111
+    ) {
+      // The existing managed command is already executable.
+    } else if (providesCommand) {
+      throw new ProgSyncError(
+        "IMPLEMENTATION_MODE_MISMATCH",
+        `Program command ${pair.implementationPath} must be executable.`,
+        {
+          expectedMode: "100755",
+          implementationPath: pair.implementationPath,
+          observedPermissions: snapshot.I1.permissions ?? null
+        }
       );
     }
     if (capsule.sharedTypes.editable) {

@@ -62,7 +62,14 @@ test("stores accepted pairs in one private ref without touching project Git stat
     status: await git(root, ["status", "--porcelain=v1", "--untracked-files=all"])
   };
 
-  const checkpoint = await checkpointPair({ mode: "NO_CHANGE", pair });
+  const checkpoint = await checkpointPair({
+    mode: "NO_CHANGE",
+    pair,
+    runnerProfile: {
+      model: "gpt-5.6-sol",
+      reasoningEffort: "xhigh"
+    }
+  });
 
   assert.equal(await git(root, ["rev-parse", PROGSYNC_STATE_REF]), checkpoint.commit);
   assert.notEqual(checkpoint.commit, before.head);
@@ -80,6 +87,10 @@ test("stores accepted pairs in one private ref without touching project Git stat
   ]));
   assert.equal(receipt.programPath, pair.programPath);
   assert.equal(receipt.implementationPath, pair.implementationPath);
+  assert.deepEqual(receipt.runnerProfile, {
+    model: "gpt-5.6-sol",
+    reasoningEffort: "xhigh"
+  });
   assert.deepEqual({
     branch: await git(root, ["branch", "--show-current"]),
     head: await git(root, ["rev-parse", "HEAD"]),
@@ -155,6 +166,10 @@ test("uses the accepted checkpoint after a sync even while both files remain dir
   const first = await syncFile({ inputPath: "src/greet.js", projectRoot: root, runner });
   assert.equal(first.mode, "PROGRAM_TO_IMPLEMENTATION");
   assert.equal(first.checkpointed, true);
+  assert.deepEqual(first.checkpoint.receipt.runnerProfile, {
+    model: "gpt-5.6-sol",
+    reasoningEffort: "xhigh"
+  });
   assert.equal(runnerCalls, 1);
   const dirtyPaths = await git(root, ["status", "--porcelain=v1", "--untracked-files=all"]);
   assert.match(dirtyPaths, /program\/src\/greet\.js\.md/u);
