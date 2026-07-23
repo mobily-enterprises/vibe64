@@ -189,6 +189,13 @@ timing syntax does not appear merely because the implementation is asynchronous;
 waiting, ordering, or concurrency is stated under `What it does` only when it
 is observable.
 
+An object parameter must not be hidden behind only a name such as `request` or
+`options`, even when it also has a shared `[Type]`. The operation enumerates the
+fields it accepts under `an object containing:`; the shared type defines the
+reusable record, while the nested bullets expose this function's exact data
+connection. Public returned records likewise preserve exact field names,
+nullability, ordering, status literals, diagnostic codes, and provenance.
+
 The body may use short conceptual paragraphs or subheadings to remain readable,
 but those concepts do not become callable symbols. Minimizing functions must
 not create an undifferentiated wall of prose.
@@ -285,10 +292,13 @@ The corpus rewrite must:
 
 The Sol/xhigh generation begun from the old corpus was deliberately stopped
 after nine of thirty-three target files had been accepted. That stopped run is
-preserved as evidence about the assimilation approach and model behavior. It
-must not be resumed as the authoritative experiment. The next clean generation
-begins only after this abstraction-boundary rewrite and compiles the production
-Program corpus before running an independent oracle suite.
+preserved only as evidence about the assimilation approach and model behavior.
+It was replaced by the abstraction-boundary rewrite described here. A later
+clean Sol/xhigh run began with only the five-file production Program corpus and
+retained package inputs, generated every production module, passed the
+independent public oracle, and then accepted a Program-driven incremental
+change. The current experiment therefore tests this reduced Program model, not
+the superseded one-file-per-implementation corpus.
 
 ## 1. Goals
 
@@ -391,8 +401,11 @@ back into Program and restart synchronization.
 The complete bounded input supplied to one Atomic Synchronizer. It contains
 available previous and current Program and implementation states, referenced
 types and libraries, imported public interfaces, target rules, owned
-auxiliaries, and retained package context. It does not contain unrestricted
-repository access.
+auxiliaries, and retained package context. For source-directed synchronization,
+it also contains deterministic source-surface evidence: each implementation
+export's distinct production consumers, test-only consumers, and external
+package or process boundary. It contains consumer identities and import facts,
+not unrestricted consumer implementations or repository access.
 
 ### Semantic dependency
 
@@ -435,6 +448,41 @@ parts of the same program.
 This is synchronization between overlapping representations, not conventional
 generation with disposable output.
 
+### 4.1 Research finding: synthesis does not make output disposable
+
+The ProgSync self-hosting experiment produced a clear implementation defect from
+sufficient Program: the generated compiler consulted stale accepted dependency
+state even when an explicit Git base was required to bypass that state. An
+independent public oracle found the error. Incremental Sol/xhigh reconciliation
+then repaired two conditions in one private file without regenerating the
+module's other implementation.
+
+That result establishes a core architectural requirement:
+
+> A verified managed implementation is durable program source, not a temporary
+> rendering that can be discarded after every Program edit.
+
+Program and managed implementation are the two editable artifacts. Updating
+them is a three-way reconciliation against their last jointly accepted pair:
+
+~~~
+accepted pair (P0, I0)
+      + current Program P1
+      + current implementation I1
+      + verification evidence
+      → reconciled pair
+~~~
+
+Program remains authoritative for observable meaning. Managed implementation
+remains authoritative for compatible realization knowledge, including
+accumulated repairs to synthesis errors. The accepted pair supplies provenance
+and the common ancestor. Tests, builds, and runtime evidence decide whether the
+result conforms, but they do not silently invent program meaning.
+
+Consequently, fresh generation is a portability and sufficiency test. It is not
+the ordinary maintenance operation for an established target. Ordinary
+synchronization minimally evolves the existing verified implementation.
+
 If a developer tunes CSS and that precise tuning is absent from Program,
 libraries, assets, or visual references, the tuning exists only in the managed
 implementation. ProgSync must preserve it during synchronization. A fresh target
@@ -445,7 +493,7 @@ libraries. Unique important details may appear in a local `Presentation` or
 `Realization` paragraph. Details that are intentionally target-specific may
 remain in managed implementation.
 
-### 4.1 File-state synchronization
+### 4.2 File-state synchronization
 
 For a target-bound Program module, ProgSync selects its action from the current
 pair and their changes since the accepted baseline:
@@ -756,28 +804,33 @@ Standalone exported functions appear as level-three headings beneath
 
 ### `dispatchSeverityThreeEmails()`
 
-The function ...
+#### Parameters
+
+* `alerts`: a list of [Alert] values
+* `jobs`: a list of [Job] values
+* `request`: the current [Request]
+
+#### What it does
+
+The shortest complete account of observable behavior and data flow.
+
+#### Returns
+
+No value.
 ~~~
 
-The heading supplies the stable public symbol. The first sentence supplies its
-human-readable signature:
+The heading supplies the stable public symbol. Every function, public method,
+and command then has exactly one `#### Parameters`, `#### What it does`, and
+`#### Returns` section, in that order. Parameters uses one top-level bullet per
+actual argument and nested bullets only for fields of one object argument.
+`No parameters.` and `No value.` are the canonical empty forms.
 
-- each parameter name;
-- each parameter's type and meaning when necessary;
-- its return type or statement that it returns no value.
-
-The signature does not label the operation synchronous or asynchronous.
-Promise and `async` mechanics belong to the managed implementation. Program
-states ordering, concurrency, or completion requirements only when they are
-part of the operation's meaning.
-
-The opening signature is one complete sentence containing `returns` before its
-first full stop. Behavior belongs in following sentences. A shared type is
-written as `[Type name]`, which resolves case-sensitively and implicitly through
-`program/types.md`. The authored module never repeats `@/types.md` paths.
-
-The remainder supplies observable behavior, semantic dependencies, effects,
-failure behavior, and important reasons.
+The sections do not label the operation synchronous or asynchronous. Promise
+and `async` mechanics belong to managed implementation. Program states
+ordering, concurrency, completion, and failure propagation under `What it does`
+only when they affect callers or results. A shared type is written as
+`[Type name]`, resolving case-sensitively and implicitly through
+`program/types.md`; authored modules never repeat `@/types.md` paths.
 
 Every meaningful value must have a visible source: a named input, an exact
 field of a declared complex type, a previous result, a stated literal,
@@ -819,17 +872,53 @@ mandatory structural rule.
 The class coordinates alert-email delivery using the stores supplied when it
 is created.
 
+### `constructor()`
+
+#### Parameters
+
+* `stores`: the application stores used by the dispatcher
+
+#### What it does
+
+It creates a dispatcher that uses `stores` for later delivery operations.
+
+#### Returns
+
+The new `AlertEmailDispatcher`.
+
 ### `dispatchSeverityThreeEmails()`
 
-The method ...
+#### Parameters
+
+* an object containing:
+  * `alerts`: the alerts currently being processed
+  * `jobs`: the jobs associated with those alerts
+  * `request`: the current request
+
+#### What it does
+
+The method dispatches the eligible Severity 3 job-alert emails.
+
+#### Returns
+
+No value.
+
+### `static fromConfiguration()`
+
+The static method receives the same three required operation sections.
 ~~~
 
 Rules:
 
 - every exported class appears in `Provides`;
 - the class itself receives a level-two heading beginning with `Class`;
-- every public constructor with meaningful inputs and every public instance or
-  static method receives a level-three heading containing its backticked name;
+- every exported class has exactly one level-three `constructor()` operation, even
+  when the target language supplies an implicit no-argument constructor;
+- an instance-method heading contains `method()` and a static-method heading
+  contains `static method()`; `static` records Program structure rather than
+  becoming part of the method's name;
+- every constructor and method receives the same Parameters, What it does, and
+  Returns sections as a standalone function;
 - in languages such as JavaScript, “public method” means intentionally callable
   through the exported class interface, not merely accessible because the
   language lacks a private modifier;
@@ -1037,18 +1126,28 @@ same notification more than once.
 
 ### `dispatchSeverityThreeEmails()`
 
-The function takes `alerts`, a list of [Alert]; `jobs`, a list of
-[Job]; and `request`, the current [Request]. It returns no value.
+#### Parameters
 
-For Severity 3 job alerts, it ignores alerts without an associated job,
-incomplete identifying information, duplicates in the current batch, and
-notifications already sent according to `notificationExists()`.
+* an object containing:
+  * `alerts`: the [Alert] values currently being processed
+  * `jobs`: the [Job] values associated with those alerts
+  * `request`: the current [Request], used to prepare notifications
 
-It uses `notifySeverityThree()` to send the remaining notifications and records
-each returned [Notification] through `registerNotification()`.
+#### What it does
 
-It follows `Notification failure logging` so that notification failures do not
-interrupt the caller.
+1. For Severity 3 job alerts, it ignores alerts without an associated job,
+   incomplete identifying information, duplicates in the current batch, and
+   notifications already sent according to `notificationExists()`.
+2. It calls `notifySeverityThree()` with the remaining alerts, the supplied
+   jobs indexed by their IDs, and `request`.
+3. It calls `registerNotification()` with each returned [Notification], in
+   order, after notification creation succeeds so it will not be sent again.
+4. It follows `Notification failure logging`, because one notification failure
+   must not interrupt the caller.
+
+#### Returns
+
+No value.
 ~~~
 
 This example is intentionally not line-by-line pseudocode. It preserves:
@@ -1084,6 +1183,8 @@ Markdown structural parser recognizes:
 - exported class links listed beneath `Provides`;
 - level-two class headings beginning with `Class`;
 - public level-three methods beneath class headings;
+- the required Parameters, What it does, and Returns subsections for callable
+  symbols;
 - link destinations to libraries, packages, assets, and Program modules.
 
 The prose beneath a symbol remains opaque to structural interpretation. Its
@@ -1104,20 +1205,39 @@ A minimal projection has this shape:
 
 ~~~json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "programFile": "program/src/server/alertDispatcher.js.md",
   "targetFile": "src/server/alertDispatcher.js",
   "targetKind": "javascript",
+  "auxiliaryRoot": "src/server/alertDispatcher/",
   "sourceHash": "sha256:...",
   "title": "Severity 3 email dispatch",
   "preamble": "Dispatches eligible Severity 3 job-alert notifications without sending the same notification more than once.",
-  "types": ["Alert", "Job", "Request", "Notification"],
+  "typeReferences": [
+    {
+      "name": "Alert",
+      "provider": "@/types.md#alert",
+      "source": { "line": 21 }
+    }
+  ],
   "provides": [
     {
       "id": "@/src/server/alertDispatcher.js.md#dispatchseveritythreeemails",
       "name": "dispatchSeverityThreeEmails()",
       "kind": "function",
-      "description": "The function takes alerts, jobs, and the current request.",
+      "parameters": [
+        {
+          "name": null,
+          "description": "an object containing:",
+          "fields": [
+            { "name": "alerts", "description": "the Alert values currently being processed" },
+            { "name": "jobs", "description": "the associated Job values" },
+            { "name": "request", "description": "the current Request" }
+          ]
+        }
+      ],
+      "behavior": "For Severity 3 job alerts ...",
+      "returns": "No value.",
       "source": { "line": 20 }
     }
   ],
@@ -1133,12 +1253,13 @@ A minimal projection has this shape:
 }
 ~~~
 
-The projection contains only Program and target paths, inferred target kind,
-source hash, title, preamble, provided and used symbols, referenced type names,
+The projection contains only Program and target paths, inferred target kind and
+auxiliary root, source hash, title, preamble, provided and used symbols,
+structured public parameters, behavior and returns, referenced type names,
 relationship kinds, exact descriptions, stable identities, source locations,
-and structural diagnostics. It contains no implementation imports, private helpers,
-synchronization history, previous files, verification results, or meaning
-absent from Program.
+and structural diagnostics. It contains no implementation imports, private
+helpers, synchronization history, previous files, verification results, or
+meaning absent from Program.
 
 For `types.md` and Program libraries without primary implementation targets,
 `targetFile` is `null`. `targetKind` is `types` for `types.md`, `library` for a
@@ -1214,7 +1335,7 @@ Atomicity has four separate meanings:
 
 | Kind | Rule |
 | --- | --- |
-| Write atomicity | A synchronizer changes only one target-bound Program module, its primary target, and—when implemented—declared auxiliaries. |
+| Write atomicity | A synchronizer changes only one target-bound Program module, its primary target, and the regular files below its deterministic auxiliary root. |
 | Synchronization atomicity | The private accepted checkpoint advances only for a complete, revalidated pair. |
 | Knowledge atomicity | The synchronizer receives only the smallest explicit context capsule that closes the module. |
 | Verification atomicity | The module is checked first; the integrated project is checked afterward. |
@@ -1318,12 +1439,18 @@ remain precious implementation after creation and are patched minimally. A
 standalone stylesheet has no `.css.md` counterpart by default; a Vue, HTML, or
 shared presentation Program module owns it.
 
-Declared auxiliary ownership is part of the model but is not yet implemented
-by the initial package. The prototype write boundary contains only the Program
-file and its one primary implementation, with one controlled exception:
-source-to-Program synchronization may add or refine complex public definitions
-in `program/types.md`. Separate CSS and other auxiliary files remain untouched
-until an ownership format and transaction contract are added.
+The prototype implements deterministic auxiliary ownership. For a primary
+target, remove its final extension and append `/`: `src/index.js` owns
+`src/index/`, `Dashboard.vue` owns `Dashboard/`, and so on. The synchronizer
+receives every current and accepted regular file below that root, may write
+only there or to the primary pair paths, validates the complete module, and
+installs and checkpoints the effective writes together. Auxiliary imports and
+exports are private realization and do not create Program Uses or Provides.
+
+Source-to-Program synchronization may also add or refine complex public
+definitions in `program/types.md` when that exact path is writable. It must
+preserve unrelated shared definitions. Explicit deletion and rename remain
+future operations rather than being inferred from absence.
 
 ### 12.6 Applying a validated pair
 
@@ -1333,6 +1460,13 @@ checks that the real pair still equals the snapshot immediately before writing,
 stages replacement files, applies them with rollback on an ordinary write
 failure, re-reads and revalidates the result, and only then advances the private
 accepted-state ref.
+
+A repairable deterministic rejection does not discard that candidate and ask a
+new model to reconstruct it. The rejected files remain in the same disposable
+workspace; a fresh isolated runner receives the complete structured diagnostic
+and repairs them in place, for at most three total attempts. Non-repairable
+write-boundary and orchestration failures stop immediately. No rejected
+candidate is ever installed in the project.
 
 This protects ordinary concurrent ProgSync invocations and detects manual edits
 made while the AI is working. Multiple filesystem renames are not one
@@ -1602,6 +1736,11 @@ RESPONSIBILITIES
 
 - Determine which Program modules, complex types, and Program library concepts must
   change.
+- Begin from the smallest desired public architecture, not the current target
+  file or export graph. A callable is a Program symbol only when it crosses a
+  genuine external boundary or is intentionally used by at least two distinct
+  production Program modules. Tests never count as consumers; one-consumer,
+  test-only, and unused helpers are absorbed into their owning operation.
 - Edit Program, types.md, and Program libraries as required.
 - Preserve the canonical Markdown structure exactly.
 - Keep one level-one file title, one Uses section, and one Provides section.
@@ -1609,8 +1748,12 @@ RESPONSIBILITIES
   Markdown link to the symbol that provides it. Types never appear in Uses.
 - Use `@/` root-anchored links for providers in this repository. Never emit
   depth-relative `../` Program links.
-- Keep standalone exported functions under Provides as level-three headings.
-- List exported classes under Provides, give each class a level-two Class
+- Keep each standalone Program function under Provides as a level-three
+  heading. Give every function, method, and command exactly one
+  `#### Parameters`, `#### What it does`, and `#### Returns` section in that
+  order. Use one top-level parameter bullet per actual argument and nested
+  bullets only for the fields of one object argument.
+- List genuinely public classes under Provides, give each class a level-two Class
   heading, and put each public method under its class as a level-three heading.
 - State exact public inputs, results, data movement, external operations,
   effects, meaningful conditions, ordering, repetition, mutation, concurrency,
@@ -1644,6 +1787,8 @@ DO NOT
 - edit managed implementation as the way to implement the user's request;
 - express private helpers, temporary variables, loops, maps, sets, framework
   ceremony, or target syntax unless they have observable meaning;
+- preserve an existing exported helper merely because target code or a
+  white-box test can import it;
 - invent a database, service, file, global, operation, component, or library;
 - call an ambient capability without adding an exact Uses reference;
 - leave the origin of command arguments, files, request data, stored data, or
@@ -1777,11 +1922,13 @@ COMPLEMENTARY AUTHORITY
 
 WRITE BOUNDARY
 
-Edit only the exact paths in `target.allowedPaths`. Write only the side or
-sides permitted by the orchestration-selected synchronization mode. Everything
-else, including `.progsync/context.json`, Program libraries, retained JSON,
-dependencies, tests, lockfiles, project configuration, and generated Program
-index files, is read-only.
+Edit only the exact paths in `target.allowedPaths` and regular files below
+`target.allowedPathPrefixes`. The primary target owns its deterministic
+auxiliary root; those private files have no separate Program counterparts.
+Write only the side or sides permitted by the orchestration-selected
+synchronization mode. Everything else, including `.progsync/context.json`,
+Program libraries, retained JSON, dependencies, tests, lockfiles, project
+configuration, and generated Program index files, is read-only.
 
 `program/types.md` may be edited only when it is explicitly listed in
 `target.allowedPaths` for source-to-Program synchronization. Add or refine only
@@ -1809,6 +1956,14 @@ PROGRAM RULES
 - Program contains one H1 title, an optional preamble, exactly one Uses
   section, exactly one Provides section, and the required public symbol or
   class headings.
+- A callable belongs in Program only when it crosses a genuine external
+  boundary or is intentionally used by at least two distinct production
+  Program modules. Tests do not count. Never copy a single-consumer or
+  test-only helper into Program merely because target code exports it.
+- Every function, method, and command has exactly one `#### Parameters`,
+  `#### What it does`, and `#### Returns` section. One top-level parameter
+  bullet is one actual argument; nested bullets are fields of that object
+  argument.
 - Program describes exact exported surfaces, complex data, cross-module calls,
   arguments, used results, local selection and transformation, meaningful
   conditions, ordering, repetition, returns, effects, failures, and reasons.
@@ -1837,6 +1992,8 @@ MODE BEHAVIOR
 CREATE_PROGRAM
 
 - Derive the complete public Program module from the complete implementation.
+- Use supplied production-consumer evidence to apply the public-symbol golden
+  rule. If that evidence is insufficient, block instead of mirroring exports.
 - Describe exported public surfaces and the semantic behavior implemented by
   private code without exposing private helpers.
 - Name every meaningful outside operation and its exact supplied provider.
@@ -1939,7 +2096,7 @@ The prototype capsule is versioned and has this structural shape:
 
 ~~~json
 {
-  "capsuleVersion": 2,
+  "capsuleVersion": 4,
   "contextHash": "sha256:...",
   "translatorFingerprint": "sha256:...",
   "mode": "PROGRAM_TO_IMPLEMENTATION",
@@ -1947,7 +2104,9 @@ The prototype capsule is versioned and has this structural shape:
     "programPath": "program/src/example.js.md",
     "implementationPath": "src/example.js",
     "targetKind": "javascript",
-    "allowedPaths": ["src/example.js"]
+    "auxiliaryRoot": "src/example/",
+    "allowedPaths": ["src/example.js"],
+    "allowedPathPrefixes": ["src/example/"]
   },
   "baseline": {
     "baselineKind": "checkpoint",
@@ -1958,24 +2117,47 @@ The prototype capsule is versioned and has this structural shape:
   },
   "previous": {
     "program": "complete P0 or null",
-    "implementation": "complete I0 or null"
+    "implementation": "complete I0 or null",
+    "auxiliaryImplementations": [
+      { "path": "src/example/private.js", "source": "...", "mode": 420 }
+    ]
   },
   "current": {
     "program": "complete P1 or null",
-    "implementation": "complete I1 or null"
+    "implementation": "complete I1 or null",
+    "auxiliaryImplementations": [
+      { "path": "src/example/private.js", "source": "...", "mode": 420 }
+    ]
   },
   "parsedProgram": {},
   "sourceFacts": {},
+  "sourceSurfaceEvidence": null,
   "resolvedReferences": [],
   "resolutionDiagnostics": [],
-  "retainedPackageContext": {}
+  "retainedPackageContext": {
+    "directory": ".",
+    "manifestPath": "package.json",
+    "name": "example",
+    "type": "module",
+    "exports": { ".": "./src/example.js" },
+    "bin": null,
+    "main": null,
+    "module": null,
+    "dependencies": {},
+    "devDependencies": {}
+  }
 }
 ~~~
 
 Complete available artifacts are supplied even though the selected mode focuses
 the synchronizer on their changes. Provider definitions, reachable types, and
 Program-library definitions appear only through `resolvedReferences`. An
-unclosed reference prevents the AI invocation rather than being guessed.
+unclosed reference prevents the AI invocation rather than being guessed. In
+`CREATE_PROGRAM`, `IMPLEMENTATION_TO_PROGRAM`, and `RECONCILE_BOTH`,
+`sourceSurfaceEvidence` is an object containing `complete`, `diagnostics`, the
+target boundary and entrypoint, and one record per implementation export with
+`productionConsumers`, `testConsumers`, and `externallyInvoked`. It is `null`
+when source-surface eligibility is not needed.
 
 ## 18. Built-in target instructions
 
@@ -1998,8 +2180,8 @@ PROGRAM SURFACE
 
 - Standalone exported functions are level-three symbols under Provides.
 - Every exported class is listed under Provides, has a level-two Class heading,
-  and places intentionally public instance and static methods under
-  level-three headings.
+  exactly one `constructor()` operation, and intentionally public instance and
+  `static method()` operations under level-three headings.
 - Same-file unexported functions, convention-private or language-private
   methods, fields, closures, nested classes, and helper objects are realization
   details. Fold their meaningful behavior into the public symbol that uses
@@ -2247,6 +2429,17 @@ FAILURE CLASSIFICATION
 
 Classify each failure before changing anything:
 
+Difference from an earlier implementation is never itself a failure. Private
+file decomposition, helper names, algorithms, internal state encodings, error
+wording, and other realization choices may differ freely while public behavior
+still conforms. Evaluate the result against Program and public evidence, not
+against resemblance to the implementation from which Program was assimilated.
+
+An observable failure is not automatically a Program omission. Call it an
+omission only when required observable meaning was genuinely absent, wrong, or
+ambiguous in Program. When Program already states enough and the result is
+wrong, classify the failure as synchronization or implementation instead.
+
 A. PROGRAM_PROBLEM
 The requested or required observable behavior, dependency, type, failure rule,
 constraint, or reason is missing, wrong, or materially ambiguous in Program.
@@ -2377,6 +2570,12 @@ For every proposed expectation:
   accepted visual baseline establishes the result;
 - avoid assertions about private helpers, exact generated syntax, incidental
   markup, or implementation-only imports.
+
+Do not compare the candidate with a previous implementation as a clone oracle.
+A different implementation is correct when it fulfills the same Program
+behavior and public contracts. Report a Program omission only when a required
+observable rule cannot be derived from Program, not merely because generated
+code realizes that rule differently.
 
 If an important expected result cannot be derived without choosing between
 multiple reasonable meanings, do not invent it. Return a Program ambiguity.
@@ -2755,10 +2954,10 @@ types into public source or duplicating public types in the private repository.
 
 ProgSync is a temporary tenant of Vibe64 but is designed for extraction into
 its own repository. It exposes a library and CLI, owns its package metadata,
-and keeps host coupling behind one execution adapter. During incubation,
-`src/command.js` imports Vibe64's execution gateway; extraction replaces that
-single seam with a standalone process runner. No other ProgSync module imports
-Vibe64 application code.
+and has no Vibe64 runtime dependency. `src/index/command.js` starts subprocesses
+directly through Node, so extraction requires moving the package rather than
+rewriting a host execution seam. No ProgSync module imports Vibe64 application
+code.
 
 ~~~text
 packages/progsync/
@@ -2770,29 +2969,23 @@ packages/progsync/
 │   ├── atomic-base.txt
 │   ├── javascript.txt
 │   ├── html.txt
-│   └── vue.txt
+│   ├── vue.txt
+│   └── program-author.txt
 ├── schemas/
 │   └── synchronizer-result.schema.json
 ├── src/
 │   ├── index.js
 │   ├── cli.js
-│   ├── service.js
-│   ├── checkpoint.js
-│   ├── context.js
-│   ├── structural.js
-│   ├── conformance.js
-│   ├── program.js
-│   ├── candidate.js
-│   ├── paths.js
-│   ├── git.js
-│   ├── lock.js
-│   ├── files.js
-│   ├── state.js
-│   ├── constants.js
-│   ├── errors.js
-│   ├── command.js
-│   ├── codexRunner.js
-│   └── prompts.js
+│   ├── index/
+│   │   └── ... private owned implementation
+│   └── cli/
+│       └── ... private owned implementation
+├── program/
+│   ├── types.md
+│   ├── src/index.js.md
+│   ├── src/cli.js.md
+│   ├── bin/progsync.js.md
+│   └── package.descriptor.mjs.md
 └── test/
 ~~~
 
@@ -2800,10 +2993,13 @@ The first release invokes Codex directly and has no project-configured prompt,
 model, target selection, or extension system. Built-in prompts are versioned
 ProgSync infrastructure. Extensibility may be added after the model is proven.
 
-The library requires an explicit `projectRoot` and exports at least
-`importProgram()`, `compileProgram()`, `syncFile()`, `syncChanged()`,
-`checkProgram()`, and deterministic projection functions. CLI commands default
-the project root to the current directory and may accept an explicit root.
+The library requires an explicit `projectRoot` for project operations and
+exports exactly `synchronizeFile()`, `syncChanged()`, `statusFile()`,
+`checkProgram()`, `parseProgram()`, `buildProgramProjection()`, and
+`readProgramAuthorPrompt()`. The separate `./cli` subpath exports only
+`runCli()`. Directed import and compile are operation choices passed to
+`synchronizeFile()`, not duplicate library functions. CLI commands default the
+project root to the current directory and may accept an explicit root.
 
 ### 26.3 Source Editor integration
 

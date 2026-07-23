@@ -1,0 +1,45 @@
+{
+  "auxiliaryRoot": "bin/progsync/",
+  "diagnostics": [],
+  "preamble": "Exposes the ProgSync command-line interface as the package's executable.",
+  "programFile": "program/bin/progsync.js.md",
+  "provides": [
+    {
+      "behavior": "It passes the current process command arguments to `runCli()` and, after that\noperation finishes, assigns its returned numeric status to the process exit\nstatus. A rejected unexpected failure terminates the command unsuccessfully.",
+      "description": "#### Parameters\n\nNo parameters.\n\n#### What it does\n\nIt passes the current process command arguments to `runCli()` and, after that\noperation finishes, assigns its returned numeric status to the process exit\nstatus. A rejected unexpected failure terminates the command unsuccessfully.\n\n#### Returns\n\nNo direct value; the process exits with the status returned by `runCli()`.",
+      "id": "@/bin/progsync.js.md#progsync",
+      "kind": "command",
+      "name": "progsync",
+      "parameters": [],
+      "returns": "No direct value; the process exits with the status returned by `runCli()`.",
+      "source": {
+        "line": 12
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "sourceHash": "sha256:c711e0bb707c0fa8caec5b91a78af5e7ada05556d79eda3705363ef30fc12528",
+  "targetFile": "bin/progsync.js",
+  "targetKind": "javascript",
+  "title": "ProgSync executable",
+  "typeReferences": [],
+  "uses": [
+    {
+      "kind": "runtime",
+      "provider": "@/src/cli.js.md#runcli",
+      "source": {
+        "line": 7
+      },
+      "symbol": "runCli()"
+    },
+    {
+      "description": "supplies the process exit status.",
+      "kind": "runtime",
+      "provider": "package:npm/node:process#default",
+      "source": {
+        "line": 8
+      },
+      "symbol": "process"
+    }
+  ]
+}

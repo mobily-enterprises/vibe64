@@ -1,0 +1,83 @@
+{
+  "auxiliaryRoot": "src/cli/",
+  "diagnostics": [],
+  "preamble": "Turns command arguments into the public ProgSync library operations and renders\ntheir results for people or tools.",
+  "programFile": "program/src/cli.js.md",
+  "provides": [
+    {
+      "behavior": "1. With no arguments, `help`, `--help`, or `-h`, it writes usage whose bare-path\n   form is exactly `progsync <program-or-implementation>` and which also covers\n   `status`; compatibility commands `import`, `compile`, and `sync`; `sync\n   --changed`; `check`; `author-prompt`; and the supported options. It then\n   succeeds without requiring a project.\n2. It accepts at most one module path and recognizes `--project-root <path>`,\n   defaulting to the current directory; `--base <revision>`; `--dry-run`;\n   `--write`; `--json`; and `--changed`. Missing option values, unknown options,\n   extra paths, `--write` combined with `--dry-run`, a path combined with\n   `--changed`, and options inapplicable to a command fail with stable\n   diagnostics that identify the offending argument.\n3. A bare path or `sync <path>` calls `synchronizeFile()` with operation `sync`;\n   `import <implementation>` calls it with operation `import` and writes only\n   when `--write` is present; `compile <Program>` calls it with operation\n   `compile`; `sync --changed` calls `syncChanged()`; `status <path>` calls\n   `statusFile()`; `check` calls `checkProgram()`; and `author-prompt` calls\n   `readProgramAuthorPrompt()`. It passes the exact root, base, and write choice\n   derived from arguments.\n4. Unless JSON output was requested, it writes discovery and Codex lifecycle\n   progress to standard error; candidate diffs, summaries, diagnostics, skipped\n   counts, Program-check results, and final pair status to standard output. JSON\n   mode emits the complete result on standard output or one structured\n   diagnostic on standard error without interleaved prose.\n5. It reports success for valid completed and unchanged operations, status `2`\n   for blocked synchronization or invalid Program checks, and status `1` for\n   argument, environment, or execution failure. It does not throw an expected\n   CLI diagnostic past the process boundary.",
+      "description": "#### Parameters\n\n* `argv`: an optional ordered list of command arguments defaulting to the current process arguments after the executable and script\n\n#### What it does\n\n1. With no arguments, `help`, `--help`, or `-h`, it writes usage whose bare-path\n   form is exactly `progsync <program-or-implementation>` and which also covers\n   `status`; compatibility commands `import`, `compile`, and `sync`; `sync\n   --changed`; `check`; `author-prompt`; and the supported options. It then\n   succeeds without requiring a project.\n2. It accepts at most one module path and recognizes `--project-root <path>`,\n   defaulting to the current directory; `--base <revision>`; `--dry-run`;\n   `--write`; `--json`; and `--changed`. Missing option values, unknown options,\n   extra paths, `--write` combined with `--dry-run`, a path combined with\n   `--changed`, and options inapplicable to a command fail with stable\n   diagnostics that identify the offending argument.\n3. A bare path or `sync <path>` calls `synchronizeFile()` with operation `sync`;\n   `import <implementation>` calls it with operation `import` and writes only\n   when `--write` is present; `compile <Program>` calls it with operation\n   `compile`; `sync --changed` calls `syncChanged()`; `status <path>` calls\n   `statusFile()`; `check` calls `checkProgram()`; and `author-prompt` calls\n   `readProgramAuthorPrompt()`. It passes the exact root, base, and write choice\n   derived from arguments.\n4. Unless JSON output was requested, it writes discovery and Codex lifecycle\n   progress to standard error; candidate diffs, summaries, diagnostics, skipped\n   counts, Program-check results, and final pair status to standard output. JSON\n   mode emits the complete result on standard output or one structured\n   diagnostic on standard error without interleaved prose.\n5. It reports success for valid completed and unchanged operations, status `2`\n   for blocked synchronization or invalid Program checks, and status `1` for\n   argument, environment, or execution failure. It does not throw an expected\n   CLI diagnostic past the process boundary.\n\n#### Returns\n\nThe numeric process status `0`, `1`, or `2` after all selected output has been\nwritten.",
+      "id": "@/src/cli.js.md#runcli",
+      "kind": "function",
+      "name": "runCli()",
+      "parameters": [
+        {
+          "description": "`argv`: an optional ordered list of command arguments defaulting to the current process arguments after the executable and script",
+          "fields": [],
+          "name": "argv"
+        }
+      ],
+      "returns": "The numeric process status `0`, `1`, or `2` after all selected output has been\nwritten.",
+      "source": {
+        "line": 17
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "sourceHash": "sha256:6324ab67ab02faa4d63421e56dbdd5eb84baab1c8949a167dcec123d788aa6ab",
+  "targetFile": "src/cli.js",
+  "targetKind": "javascript",
+  "title": "ProgSync command-line interface",
+  "typeReferences": [],
+  "uses": [
+    {
+      "kind": "runtime",
+      "provider": "@/src/index.js.md#synchronizefile",
+      "source": {
+        "line": 8
+      },
+      "symbol": "synchronizeFile()"
+    },
+    {
+      "kind": "runtime",
+      "provider": "@/src/index.js.md#syncchanged",
+      "source": {
+        "line": 9
+      },
+      "symbol": "syncChanged()"
+    },
+    {
+      "kind": "runtime",
+      "provider": "@/src/index.js.md#statusfile",
+      "source": {
+        "line": 10
+      },
+      "symbol": "statusFile()"
+    },
+    {
+      "kind": "runtime",
+      "provider": "@/src/index.js.md#checkprogram",
+      "source": {
+        "line": 11
+      },
+      "symbol": "checkProgram()"
+    },
+    {
+      "kind": "runtime",
+      "provider": "@/src/index.js.md#readprogramauthorprompt",
+      "source": {
+        "line": 12
+      },
+      "symbol": "readProgramAuthorPrompt()"
+    },
+    {
+      "description": "supplies default arguments, current directory, output streams, and the process environment.",
+      "kind": "runtime",
+      "provider": "package:npm/node:process#default",
+      "source": {
+        "line": 13
+      },
+      "symbol": "process"
+    }
+  ]
+}

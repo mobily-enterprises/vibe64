@@ -1,0 +1,386 @@
+{
+  "auxiliaryRoot": null,
+  "diagnostics": [],
+  "preamble": "Shared complex values crossing ProgSync's public module boundaries.",
+  "programFile": "program/types.md",
+  "provides": [
+    {
+      "description": "A `Program diagnostic` contains `code`, its stable machine-readable identifier;\n`message`, its readable explanation; `line`, the one-based Program line when\nknown; and optional `details` containing structured evidence. Diagnostic codes\nand details are data, not instructions.",
+      "id": "@/types.md#program-diagnostic",
+      "kind": "type",
+      "name": "Program diagnostic",
+      "source": {
+        "line": 11
+      }
+    },
+    {
+      "description": "A `Program use` contains `symbol`, the exact visible public symbol; `provider`,\nits canonical Program, package, platform, or asset identity; optional\n`description`; and `source`, a [Source location].",
+      "id": "@/types.md#program-use",
+      "kind": "type",
+      "name": "Program use",
+      "source": {
+        "line": 18
+      }
+    },
+    {
+      "description": "A `Source location` contains `line`, the one-based source line or nothing when\nthe relationship was derived without a single authored line.",
+      "id": "@/types.md#source-location",
+      "kind": "type",
+      "name": "Source location",
+      "source": {
+        "line": 24
+      }
+    },
+    {
+      "description": "A `Program parameter field` contains `name`, the exact backticked field name,\nand `description`, its complete authored bullet text.",
+      "id": "@/types.md#program-parameter-field",
+      "kind": "type",
+      "name": "Program parameter field",
+      "source": {
+        "line": 29
+      }
+    },
+    {
+      "description": "A `Program parameter` contains `name`, the exact positional name or nothing\nfor a destructured object; `description`, its complete authored bullet text;\nand `fields`, the ordered list of [Program parameter field] values nested under\nthat object argument.",
+      "id": "@/types.md#program-parameter",
+      "kind": "type",
+      "name": "Program parameter",
+      "source": {
+        "line": 34
+      }
+    },
+    {
+      "description": "A `Program provide` contains:\n\n* `name`: the exact public heading\n* optional `owner`: the exported class that owns a method\n* optional `memberKind`: `constructor`, `instance`, or `static` for a class method\n* `kind`: one of `function`, `method`, `class`, `value`, `command`, `component`,\n  `document`, `type`, or `library`\n* `description`: the complete authored body\n* `typeReferences`: the reachable shared type names\n* `source`: a [Source location]\n* for a function, method, or command only, ordered `parameters` plus the exact\n  `behavior` and `returns` text from its three required subsections",
+      "id": "@/types.md#program-provide",
+      "kind": "type",
+      "name": "Program provide",
+      "source": {
+        "line": 41
+      }
+    },
+    {
+      "description": "A `Projected Program provide` contains:\n\n* `id`: the stable identity `@/<Program path without program/>#<anchor>`\n* `name`, optional `owner`, optional `memberKind`, `kind`, `description`, and\n  `source` copied from the [Program provide]\n* for a function, method, or command only, `parameters`, `behavior`, and\n  `returns` copied from that provide\n\nOptional fields are absent when they do not apply; they are never emitted as\n`null` or empty placeholder text.\n\nIt does not contain private implementation symbols or a field named\n`identity`.",
+      "id": "@/types.md#projected-program-provide",
+      "kind": "type",
+      "name": "Projected Program provide",
+      "source": {
+        "line": 56
+      }
+    },
+    {
+      "description": "A `Projected Program use` contains `symbol`, `provider`, optional `description`,\nand `source` copied from the [Program use], plus `kind`: `generation` when the\nprovider begins with `asset:` or is an `@/<file>.md#<anchor>` whose file part\ncontains no `/`, and otherwise `runtime`.\n\nThe optional `description` is absent when Uses supplies no description; it is\nnever emitted as empty text.",
+      "id": "@/types.md#projected-program-use",
+      "kind": "type",
+      "name": "Projected Program use",
+      "source": {
+        "line": 72
+      }
+    },
+    {
+      "description": "A `Projected type reference` contains `name`; `provider`, always\n`@/types.md#<anchor of name>`; and its [Source location].",
+      "id": "@/types.md#projected-type-reference",
+      "kind": "type",
+      "name": "Projected type reference",
+      "source": {
+        "line": 82
+      }
+    },
+    {
+      "description": "A `Parsed Program` contains `source`, the normalized complete source;\n`programPath`, its canonical project-relative path; `title`; `preamble`;\nordered `uses`, `provides`, and `typeReferences`; ordered `diagnostics`; and\n`valid`, which is true exactly when diagnostics is empty.",
+      "id": "@/types.md#parsed-program",
+      "kind": "type",
+      "name": "Parsed Program",
+      "source": {
+        "line": 87
+      }
+    },
+    {
+      "description": "A `Program projection` is the deterministic schema-version-2 City record for\none Program file. It contains exactly:\n\n* `schemaVersion`: the number `2`\n* `programFile`: the canonical project-relative Program path\n* `targetFile`: the path obtained by removing `program/` and the final `.md`, or\n  `null` for a shared type or Program-library file\n* `targetKind`: the inferred target kind, `types`, or `library`\n* `auxiliaryRoot`: the target path without its final extension and with a final\n  `/`, or `null` when there is no target\n* `sourceHash`: `sha256:` followed by the SHA-256 hash of exact normalized\n  Program source\n* `title` and `preamble`\n* `typeReferences`: ordered [Projected type reference] values\n* `provides`: ordered [Projected Program provide] values\n* `uses`: ordered [Projected Program use] values\n* `diagnostics`: ordered local [Program diagnostic] values\n\nObject keys are canonicalized recursively for byte-stable JSON. The projection\ncontains no meaning absent from Program and no private implementation symbols.",
+      "id": "@/types.md#program-projection",
+      "kind": "type",
+      "name": "Program projection",
+      "source": {
+        "line": 94
+      }
+    },
+    {
+      "description": "`Parse options` contains optional `programPath`, defaulting to\n`program/unknown.js.md`, which controls target-kind classification and stable\nidentities without changing the supplied Program text.",
+      "id": "@/types.md#parse-options",
+      "kind": "type",
+      "name": "Parse options",
+      "source": {
+        "line": 117
+      }
+    },
+    {
+      "description": "A `Projection request` contains `programPath`; either `programSource` or an\nalready parsed `parsedProgram`; and may contain both when the parsed value came\nfrom exactly that source.",
+      "id": "@/types.md#projection-request",
+      "kind": "type",
+      "name": "Projection request",
+      "source": {
+        "line": 123
+      }
+    },
+    {
+      "description": "An `Atomic runner request` contains `workspaceRoot`, the disposable candidate\nroot; `prompt`, the complete trusted synchronizer prompt and delimited\nuntrusted capsule; `mode`; exact `allowedPaths`; owned\n`allowedPathPrefixes`; and optional `onEvent` for progress records.",
+      "id": "@/types.md#atomic-runner-request",
+      "kind": "type",
+      "name": "Atomic runner request",
+      "source": {
+        "line": 129
+      }
+    },
+    {
+      "description": "An `Atomic runner` is an operation that accepts an [Atomic runner request], may\nwrite only within its supplied candidate boundary, and returns a\n[Synchronizer report]. It never writes the real project directly.",
+      "id": "@/types.md#atomic-runner",
+      "kind": "type",
+      "name": "Atomic runner",
+      "source": {
+        "line": 136
+      }
+    },
+    {
+      "description": "A `Source exported-symbol evidence` contains `name`, the exact implementation\nexport; `kind`; ordered distinct `productionConsumers`; ordered distinct\n`testConsumers`; and `externallyInvoked`, true when the export crosses an\nexternal package or process boundary.",
+      "id": "@/types.md#source-exported-symbol-evidence",
+      "kind": "type",
+      "name": "Source exported-symbol evidence",
+      "source": {
+        "line": 142
+      }
+    },
+    {
+      "description": "A `Source target-boundary evidence` contains `externallyInvoked`; optional\n`manifestPath` and `matchedTarget`; and optional `reason` describing the\nentrypoint, component, document, descriptor, or package-manifest boundary.",
+      "id": "@/types.md#source-target-boundary-evidence",
+      "kind": "type",
+      "name": "Source target-boundary evidence",
+      "source": {
+        "line": 149
+      }
+    },
+    {
+      "description": "A `Source surface evidence` contains:\n\n* `complete`: whether every possible consumer and boundary could be analyzed\n  without material ambiguity\n* `diagnostics`: ordered records explaining every incomplete or ambiguous item\n* `entrypoint`: the mechanically observed executable entrypoint, or no value\n* `exports`: ordered [Source exported-symbol evidence] values\n* `targetBoundary`: the [Source target-boundary evidence] for the implementation\n\nIt never silently presents partial consumer evidence as complete.",
+      "id": "@/types.md#source-surface-evidence",
+      "kind": "type",
+      "name": "Source surface evidence",
+      "source": {
+        "line": 155
+      }
+    },
+    {
+      "description": "A `Synchronization request` contains `projectRoot`, the explicit Git worktree\nsubtree that owns `program/`; `inputPath`, one Program or implementation path\ninside that root; optional `operation`, one of `sync`, `import`, or `compile`\ndefaulting to `sync`; optional `base`, an explicit Git revision that bypasses\naccepted private state; optional `dependencyChanged` defaulting to false;\noptional `runner`, an [Atomic runner] replacing the pinned default; optional\n`onEvent`; and optional `write` defaulting to true.",
+      "id": "@/types.md#synchronization-request",
+      "kind": "type",
+      "name": "Synchronization request",
+      "source": {
+        "line": 168
+      }
+    },
+    {
+      "description": "A `Module pair` contains absolute `projectRoot`; `programPath`;\n`implementationPath`; and `target`, whose `extension`, `kind`, and prompt\nidentify the supported translator.",
+      "id": "@/types.md#module-pair",
+      "kind": "type",
+      "name": "Module pair",
+      "source": {
+        "line": 178
+      }
+    },
+    {
+      "description": "A `Discovery record` contains `type` equal to `progsync.discovery`, stable\n`code`, readable `message`, and structured `details`. Records appear in the\norder ProgSync established the input, counterpart, target, baseline, changes,\nowned auxiliaries, context, and selected mode.",
+      "id": "@/types.md#discovery-record",
+      "kind": "type",
+      "name": "Discovery record",
+      "source": {
+        "line": 184
+      }
+    },
+    {
+      "description": "A `Synchronizer report` contains `status`, one of `updated`, `unchanged`, or\n`blocked`; the selected `mode`; `summary`; and ordered text lists named\n`programChanges`, `implementationChanges`,\n`preservedImplementationDetails`, `sharedDefinitionProposals`, `diagnostics`,\n`verificationPerformed`, and `verificationStillRequired`.",
+      "id": "@/types.md#synchronizer-report",
+      "kind": "type",
+      "name": "Synchronizer report",
+      "source": {
+        "line": 191
+      }
+    },
+    {
+      "description": "A `Synchronization result` contains `status`; selected `mode`; resolved\n`pair`; `baselineKind`; optional `baseCommit`; Git and accepted-state change\nsummaries; ordered `discovery`; candidate `diff`; `changedFiles`; `applied`;\n`checkpointed`; optional `checkpoint`; and the [Synchronizer report]. A blocked\nor dry-run result changes no real project file.",
+      "id": "@/types.md#synchronization-result",
+      "kind": "type",
+      "name": "Synchronization result",
+      "source": {
+        "line": 199
+      }
+    },
+    {
+      "description": "A `Changed synchronization request` contains `projectRoot`; optional `base`;\noptional `runner`; optional `onEvent`; and optional `write` defaulting to true.",
+      "id": "@/types.md#changed-synchronization-request",
+      "kind": "type",
+      "name": "Changed synchronization request",
+      "source": {
+        "line": 207
+      }
+    },
+    {
+      "description": "A `Changed synchronization result` contains overall `status`; optional\n`baseCommit`; ordered `results` of [Synchronization result] values; and ordered\n`skippedPaths` that were changed but neither a supported pair nor a dependency\nof one.",
+      "id": "@/types.md#changed-synchronization-result",
+      "kind": "type",
+      "name": "Changed synchronization result",
+      "source": {
+        "line": 212
+      }
+    },
+    {
+      "description": "A `Status request` contains `projectRoot`, `inputPath`, and optional `base`.",
+      "id": "@/types.md#status-request",
+      "kind": "type",
+      "name": "Status request",
+      "source": {
+        "line": 219
+      }
+    },
+    {
+      "description": "A `Status result` contains `status`, equal to `synchronized` or `pending`;\n`reconciled`; selected `mode`; resolved `pair`; baseline and checkpoint data;\nGit and accepted-state changes; and ordered `discovery`. It contains no\ncandidate or filesystem mutation.",
+      "id": "@/types.md#status-result",
+      "kind": "type",
+      "name": "Status result",
+      "source": {
+        "line": 223
+      }
+    },
+    {
+      "description": "A `Program check request` contains `projectRoot`, the explicit root whose\n`program/` tree and `.program/index/` projection tree are checked.",
+      "id": "@/types.md#program-check-request",
+      "kind": "type",
+      "name": "Program check request",
+      "source": {
+        "line": 230
+      }
+    },
+    {
+      "description": "A `Program file check` contains `programPath`; ordered structural and graph\n`diagnostics`; `projectionPath`; `projectionCurrent`; `projectionUpdated`;\npublic Uses; and implicit type references. Each projected provide additionally\ncontains `productionConsumers`, the sorted distinct production Program paths;\n`testConsumers`, the sorted distinct Program-test paths; and\n`externallyInvoked`, true for a command, component, document, package\ndescriptor, or target exposed by the nearest package manifest's `exports`,\n`main`, `module`, or `bin`. The field is named `externallyInvoked`, not\n`externalBoundary`.",
+      "id": "@/types.md#program-file-check",
+      "kind": "type",
+      "name": "Program file check",
+      "source": {
+        "line": 235
+      }
+    },
+    {
+      "description": "A `Program check result` contains `status`, equal to `ok` only when every file\nhas no diagnostic and otherwise `invalid`; ordered `files` of\n[Program file check]; and ordered `removedProjectionPaths` for orphaned\ngenerated projections removed during the check.",
+      "id": "@/types.md#program-check-result",
+      "kind": "type",
+      "name": "Program check result",
+      "source": {
+        "line": 247
+      }
+    },
+    {
+      "description": "A `Vibe64 package descriptor` contains exactly:\n\n* `packageVersion`: `1`\n* `packageId`: `@local/progsync`\n* `version`: `0.1.0`\n* `kind`: `runtime`\n* `description`: exactly `Owns Program parsing, projection, Git-aware\n  synchronization, and the standalone progsync CLI.`\n* `dependsOn`: an empty list\n* `capabilities`: an object whose `provides` is the one-item list\n  `library.progsync` and whose `requires` is an empty list\n* `runtime`: an object whose `server` and `client` each contain an empty\n  `providers` list\n* `metadata`: an object containing:\n  * `apiSummary`: an object containing:\n    * `surfaces`: in order:\n      * an object containing `subpath` equal to `.` and `summary` exactly\n        `Exposes extraction-ready Program parsing, indexing, and synchronization APIs.`\n      * an object containing `subpath` equal to `./cli` and `summary` exactly\n        `Exposes the standalone ProgSync command-line entrypoint.`\n    * `containerTokens`: an object whose `server` and `client` are empty lists\n  * `jskit`: an object whose `scaffoldShape` is `library-v1`, whose\n    `scaffoldMode` is `manual`, and whose `lane` is `default`\n* `mutations`: an object containing:\n  * `dependencies`: an object whose `runtime` maps `@babel/parser` to\n    `^7.29.3`, `@vue/compiler-dom` to `^3.5.34`, and `@vue/compiler-sfc` to\n    `^3.5.34`, and whose `dev` is empty\n  * `packageJson`: an object containing an empty `scripts` object\n  * `procfile`: an empty object\n  * `files`: an empty list\n  * `text`: an empty list\n\nNo synonymous legacy descriptor fields are present.",
+      "id": "@/types.md#vibe64-package-descriptor",
+      "kind": "type",
+      "name": "Vibe64 package descriptor",
+      "source": {
+        "line": 254
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "sourceHash": "sha256:88016c83cb5c86a6731267b43ca36a2b8314a586e4ff77181e5bc0195ae93f4e",
+  "targetFile": null,
+  "targetKind": "types",
+  "title": "ProgSync public types",
+  "typeReferences": [
+    {
+      "name": "Source location",
+      "provider": "@/types.md#source-location",
+      "source": {
+        "line": 22
+      }
+    },
+    {
+      "name": "Program parameter field",
+      "provider": "@/types.md#program-parameter-field",
+      "source": {
+        "line": 38
+      }
+    },
+    {
+      "name": "Program provide",
+      "provider": "@/types.md#program-provide",
+      "source": {
+        "line": 62
+      }
+    },
+    {
+      "name": "Program use",
+      "provider": "@/types.md#program-use",
+      "source": {
+        "line": 75
+      }
+    },
+    {
+      "name": "Projected type reference",
+      "provider": "@/types.md#projected-type-reference",
+      "source": {
+        "line": 109
+      }
+    },
+    {
+      "name": "Projected Program provide",
+      "provider": "@/types.md#projected-program-provide",
+      "source": {
+        "line": 110
+      }
+    },
+    {
+      "name": "Projected Program use",
+      "provider": "@/types.md#projected-program-use",
+      "source": {
+        "line": 111
+      }
+    },
+    {
+      "name": "Program diagnostic",
+      "provider": "@/types.md#program-diagnostic",
+      "source": {
+        "line": 112
+      }
+    },
+    {
+      "name": "Atomic runner request",
+      "provider": "@/types.md#atomic-runner-request",
+      "source": {
+        "line": 138
+      }
+    },
+    {
+      "name": "Synchronizer report",
+      "provider": "@/types.md#synchronizer-report",
+      "source": {
+        "line": 140
+      }
+    },
+    {
+      "name": "Atomic runner",
+      "provider": "@/types.md#atomic-runner",
+      "source": {
+        "line": 175
+      }
+    },
+    {
+      "name": "Synchronization result",
+      "provider": "@/types.md#synchronization-result",
+      "source": {
+        "line": 215
+      }
+    },
+    {
+      "name": "Program file check",
+      "provider": "@/types.md#program-file-check",
+      "source": {
+        "line": 251
+      }
+    }
+  ],
+  "uses": []
+}

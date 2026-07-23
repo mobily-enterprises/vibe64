@@ -17,7 +17,6 @@
   "dependencies": {
     "@babel/parser": "^7.29.3",
     "@vue/compiler-dom": "^3.5.34",
-    "@vue/compiler-sfc": "^3.5.34",
-    "@local/vibe64-execution": "0.1.0"
+    "@vue/compiler-sfc": "^3.5.34"
   }
 }

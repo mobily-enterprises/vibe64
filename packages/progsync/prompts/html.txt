@@ -14,5 +14,9 @@ Program symbol is the document or fragment, not every element.
   details unless Program gives them meaning.
 - Do not add scripts, tracking, analytics, network calls, remote assets, custom
   elements, or form destinations absent from Program or resolved references.
-- Do not create or edit a separate stylesheet or script unless it is explicitly
-  listed as an allowed owned auxiliary path.
+- Treat malformed markup and unparseable embedded classic or module JavaScript
+  as invalid implementation. A balanced element tree does not make a broken
+  inline script acceptable.
+- Create or edit a separate stylesheet or script only when its path is inside
+  the supplied owned auxiliary root. Preserve every compatible existing
+  auxiliary refinement.

@@ -1,0 +1,387 @@
+{
+  "auxiliaryRoot": "src/index/",
+  "diagnostics": [],
+  "preamble": "Synchronizes readable Program modules with persistent managed implementation\nwhile keeping private realization out of the public Program graph.",
+  "programFile": "program/src/index.js.md",
+  "provides": [
+    {
+      "behavior": "1. It normalizes line endings and recognizes Markdown headings only outside\n   CommonMark fenced code. An opening run of at least three backticks or tildes\n   may be followed immediately by an information string such as `markdown`; a\n   closing fence uses the same marker and at least the opening length. Neither\n   headings nor type syntax inside the complete fence are parsed. Every section\n   scan ends at the next heading of equal or higher level, or at the finite end\n   of the source when there is no such heading; no scan reads beyond the final\n   source line. It requires exactly one H1 title, one `## Uses`, and one\n   `## Provides`.\n2. It parses Uses as either the sole sentence `- Nothing outside this file.` or\n   unique Markdown links with backticked symbols. An exact link may occur only\n   once, and one visible symbol may name only one provider; repeating the same\n   symbol with another provider is ambiguous and invalid. Project providers must be\n   `@/<file>.md#<anchor>` without traversal; package and platform providers must\n   have an anchor; asset identities must be relative and traversal-free. Types\n   are rejected from Uses because `[Type name]` resolves implicitly.\n3. It parses top-level provided symbols from exact backticked H3 headings under\n   Provides. An exported class is declared by the canonical linked-list form\n   defined in `Program authoring prompt`, receives exactly one matching\n   level-two class section, and owns exactly one constructor plus its public\n   level-three instance and explicitly prefixed static methods. Constructors,\n   instance methods, and static methods remain distinct public member kinds.\n   Kind is derived in this order: `program/types.md` provides types; `.vue.md`\n   provides a component; `.html.md` provides a document; a path below\n   `program/bin/` ending in `.js.md` or `.mjs.md` provides a command when its\n   symbol is the target filename without the JavaScript extension; a symbol\n   ending in `()` is a function; and remaining symbols are values or root\n   Program-library definitions. A remaining symbol is a `library` only when\n   its file has no implementation target and is itself a root Program library;\n   a remaining symbol in any targeted file is a `value`. Command recognition\n   occurs before generic\n   JavaScript classification: `program/bin/example.js.md` providing `example`\n   is a command, not an exported JavaScript value.\n4. Every function, method, and command must contain exactly one\n   `#### Parameters`, `#### What it does`, and `#### Returns` section in that\n   order. Parameters is either `No parameters.` or one bullet per argument;\n   nested bullets are allowed only beneath an argument described as an object\n   containing those exact fields. Positional and nested field names must be\n   backticked. Each present valid section is retained even when another section\n   is missing. A missing or repeated required section produces\n   `INVALID_PARAMETERS_COUNT`, `INVALID_WHAT_IT_DOES_COUNT`, or\n   `INVALID_RETURNS_COUNT`; any other level-four operation section produces\n   `UNEXPECTED_OPERATION_SECTION`; and incorrect ordering produces\n   `INVALID_OPERATION_SECTION_ORDER`.\n5. It discovers each distinct `[Type name]` reference outside Markdown links,\n   inline code spans, and fenced code, retains source lines, rejects empty or\n   duplicate public identities, and emits diagnostics in source order without\n   interpreting behavior prose. The following source contains only the type\n   reference `Result`:\n\n   ```markdown\n   A [Result]; the literal syntax `[Not a type]` and [`link`](@/other.md#link).\n   ```",
+      "description": "#### Parameters\n\n* `programSource`: complete Program Markdown as text\n* an optional [Parse options] object containing the following field and defaulting to an empty object:\n  * `programPath`: the canonical Program path, defaulting to `program/unknown.js.md`\n\n#### What it does\n\n1. It normalizes line endings and recognizes Markdown headings only outside\n   CommonMark fenced code. An opening run of at least three backticks or tildes\n   may be followed immediately by an information string such as `markdown`; a\n   closing fence uses the same marker and at least the opening length. Neither\n   headings nor type syntax inside the complete fence are parsed. Every section\n   scan ends at the next heading of equal or higher level, or at the finite end\n   of the source when there is no such heading; no scan reads beyond the final\n   source line. It requires exactly one H1 title, one `## Uses`, and one\n   `## Provides`.\n2. It parses Uses as either the sole sentence `- Nothing outside this file.` or\n   unique Markdown links with backticked symbols. An exact link may occur only\n   once, and one visible symbol may name only one provider; repeating the same\n   symbol with another provider is ambiguous and invalid. Project providers must be\n   `@/<file>.md#<anchor>` without traversal; package and platform providers must\n   have an anchor; asset identities must be relative and traversal-free. Types\n   are rejected from Uses because `[Type name]` resolves implicitly.\n3. It parses top-level provided symbols from exact backticked H3 headings under\n   Provides. An exported class is declared by the canonical linked-list form\n   defined in `Program authoring prompt`, receives exactly one matching\n   level-two class section, and owns exactly one constructor plus its public\n   level-three instance and explicitly prefixed static methods. Constructors,\n   instance methods, and static methods remain distinct public member kinds.\n   Kind is derived in this order: `program/types.md` provides types; `.vue.md`\n   provides a component; `.html.md` provides a document; a path below\n   `program/bin/` ending in `.js.md` or `.mjs.md` provides a command when its\n   symbol is the target filename without the JavaScript extension; a symbol\n   ending in `()` is a function; and remaining symbols are values or root\n   Program-library definitions. A remaining symbol is a `library` only when\n   its file has no implementation target and is itself a root Program library;\n   a remaining symbol in any targeted file is a `value`. Command recognition\n   occurs before generic\n   JavaScript classification: `program/bin/example.js.md` providing `example`\n   is a command, not an exported JavaScript value.\n4. Every function, method, and command must contain exactly one\n   `#### Parameters`, `#### What it does`, and `#### Returns` section in that\n   order. Parameters is either `No parameters.` or one bullet per argument;\n   nested bullets are allowed only beneath an argument described as an object\n   containing those exact fields. Positional and nested field names must be\n   backticked. Each present valid section is retained even when another section\n   is missing. A missing or repeated required section produces\n   `INVALID_PARAMETERS_COUNT`, `INVALID_WHAT_IT_DOES_COUNT`, or\n   `INVALID_RETURNS_COUNT`; any other level-four operation section produces\n   `UNEXPECTED_OPERATION_SECTION`; and incorrect ordering produces\n   `INVALID_OPERATION_SECTION_ORDER`.\n5. It discovers each distinct `[Type name]` reference outside Markdown links,\n   inline code spans, and fenced code, retains source lines, rejects empty or\n   duplicate public identities, and emits diagnostics in source order without\n   interpreting behavior prose. The following source contains only the type\n   reference `Result`:\n\n   ```markdown\n   A [Result]; the literal syntax `[Not a type]` and [`link`](@/other.md#link).\n   ```\n\n#### Returns\n\nA [Parsed Program]. Invalid Program returns `valid` as false with complete\ndiagnostics; malformed authored input is not thrown as a parser exception.",
+      "id": "@/src/index.js.md#parseprogram",
+      "kind": "function",
+      "name": "parseProgram()",
+      "parameters": [
+        {
+          "description": "`programSource`: complete Program Markdown as text",
+          "fields": [],
+          "name": "programSource"
+        },
+        {
+          "description": "an optional [Parse options] object containing the following field and defaulting to an empty object:",
+          "fields": [
+            {
+              "description": "`programPath`: the canonical Program path, defaulting to `program/unknown.js.md`",
+              "name": "programPath"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "A [Parsed Program]. Invalid Program returns `valid` as false with complete\ndiagnostics; malformed authored input is not thrown as a parser exception.",
+      "source": {
+        "line": 18
+      }
+    },
+    {
+      "behavior": "It uses the supplied parsed Program or calls the module's own Program parser on\nthe supplied source. It deterministically creates the schema-version-2 City\nrecord, infers the target by removing the final `.md`, derives the private\nauxiliary root by removing the target's final extension, assigns stable\n`@/file.md#anchor` identities, separates runtime Uses from implicit type\nreferences, preserves function parameters, behavior, and returns as distinct\nfields, omits optional fields rather than emitting them as `null` or empty text,\nincludes local diagnostics and source locations, and hashes the exact\nnormalized Program source with SHA-256. Object keys and arrays have stable\nordering for identical Program input. A symbol anchor removes a trailing `()`,\nnormalizes Unicode with NFKD, lowercases it, replaces each run outside ASCII\nletters and digits with one `-`, and trims leading or trailing `-`; the special\nsymbol `*` has anchor `all-exports`.",
+      "description": "#### Parameters\n\n* a [Projection request] object containing:\n  * `parsedProgram`: an optional already parsed [Parsed Program], defaulting to absent\n  * `programPath`: the canonical project-relative Program path\n  * `programSource`: the complete Program Markdown, required when `parsedProgram` is absent\n\n#### What it does\n\nIt uses the supplied parsed Program or calls the module's own Program parser on\nthe supplied source. It deterministically creates the schema-version-2 City\nrecord, infers the target by removing the final `.md`, derives the private\nauxiliary root by removing the target's final extension, assigns stable\n`@/file.md#anchor` identities, separates runtime Uses from implicit type\nreferences, preserves function parameters, behavior, and returns as distinct\nfields, omits optional fields rather than emitting them as `null` or empty text,\nincludes local diagnostics and source locations, and hashes the exact\nnormalized Program source with SHA-256. Object keys and arrays have stable\nordering for identical Program input. A symbol anchor removes a trailing `()`,\nnormalizes Unicode with NFKD, lowercases it, replaces each run outside ASCII\nletters and digits with one `-`, and trims leading or trailing `-`; the special\nsymbol `*` has anchor `all-exports`.\n\n#### Returns\n\nThe [Program projection] for the requested module. It does not read or write a\nprojection file.",
+      "id": "@/src/index.js.md#buildprogramprojection",
+      "kind": "function",
+      "name": "buildProgramProjection()",
+      "parameters": [
+        {
+          "description": "a [Projection request] object containing:",
+          "fields": [
+            {
+              "description": "`parsedProgram`: an optional already parsed [Parsed Program], defaulting to absent",
+              "name": "parsedProgram"
+            },
+            {
+              "description": "`programPath`: the canonical project-relative Program path",
+              "name": "programPath"
+            },
+            {
+              "description": "`programSource`: the complete Program Markdown, required when `parsedProgram` is absent",
+              "name": "programSource"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "The [Program projection] for the requested module. It does not read or write a\nprojection file.",
+      "source": {
+        "line": 87
+      }
+    },
+    {
+      "behavior": "It reads `Program authoring prompt` as UTF-8 text so another AI can be\ninstructed to apply the same module, data-flow, type, and golden-rule\nconstraints. A read failure passes to the caller.",
+      "description": "#### Parameters\n\nNo parameters.\n\n#### What it does\n\nIt reads `Program authoring prompt` as UTF-8 text so another AI can be\ninstructed to apply the same module, data-flow, type, and golden-rule\nconstraints. A read failure passes to the caller.\n\n#### Returns\n\nThe complete Program-authoring prompt text without modification.",
+      "id": "@/src/index.js.md#readprogramauthorprompt",
+      "kind": "function",
+      "name": "readProgramAuthorPrompt()",
+      "parameters": [],
+      "returns": "The complete Program-authoring prompt text without modification.",
+      "source": {
+        "line": 117
+      }
+    },
+    {
+      "behavior": "1. It resolves the input to one Program/implementation pair, infers the\n   JavaScript, Vue, or HTML target from the final implementation extension, and\n   requires an explicit project root inside a Git worktree. A missing side is\n   created from the existing side; a side that existed at the accepted baseline\n   and disappeared requires an explicit deletion or rename instead of being\n   inferred. A root outside Git fails with `GIT_REPOSITORY_REQUIRED`; any\n   symlink in the selected module path fails with `SYMLINKED_PROJECT_PATH`\n   before the linked target is read or changed. `projectRoot` may be the\n   worktree root or a nested subtree; every Git-tree and checkpoint path is\n   prefixed by that subtree's repository-relative path while every reported\n   module path remains relative to `projectRoot`.\n2. It serializes the pair for the duration of discovery, candidate generation,\n   installation, verification, and checkpointing. A concurrent live owner\n   fails with `PAIR_BUSY`; claims abandoned by a crashed process are recovered\n   after a bounded stale interval instead of permanently blocking the pair. It\n   compares the current\n   Program, primary target, and every regular file below the deterministic\n   auxiliary root with the last applicable private checkpoint. An exact\n   checkpoint remains applicable across a branch switch; otherwise it is used\n   only when its branch history continues. An explicit `base` uses that Git\n   revision instead; when it is present, no private-checkpoint fact, including\n   a recorded dependency or context hash, affects the selected baseline or\n   mode. File comparison uses Git-tracked modes: every regular file with no\n   executable bit is normalized to `0644`, and every regular file with any\n   executable bit is normalized to `0755`. Differences such as filesystem mode\n   `0664` versus Git mode `0644` are not changes. Content, existence, and this\n   normalized tracked mode are compared independently.\n3. It selects exactly one mode: `CREATE_PROGRAM` when only implementation\n   exists; `CREATE_IMPLEMENTATION` when only Program exists;\n   `PROGRAM_TO_IMPLEMENTATION` when only Program differs from the accepted\n   baseline; `IMPLEMENTATION_TO_PROGRAM` when only the primary implementation\n   or any owned auxiliary differs; `RECONCILE_BOTH` when both Program and\n   implementation differ; and `NO_CHANGE` when neither differs. A dependency\n   is changed only when its current existence, content, or normalized tracked\n   mode differs from its corresponding accepted or Git-baseline state; merely\n   discovering a dependency does not make it changed. A changed\n   reachable Program dependency or retained package interface forces\n   `PROGRAM_TO_IMPLEMENTATION` when implementation is otherwise unchanged and\n   `RECONCILE_BOTH` when implementation also changed. An auxiliary-only\n   realization refinement therefore selects `IMPLEMENTATION_TO_PROGRAM`, not\n   `RECONCILE_BOTH`.\n4. It reads `Atomic synchronizer prompt`, all target instructions, and\n   `Synchronizer result schema` relative to the installed ProgSync package that\n   provides this function. These compiler-owned assets never resolve relative\n   to the request's `projectRoot`; that root is the unrelated project being\n   synchronized and need not contain ProgSync prompts or schemas. It assembles\n   a closed capsule containing those exact assets, complete previous and current\n   Program, primary implementation, owned auxiliaries, mechanically extracted\n   public source facts, reachable Uses and complex types, retained package\n   context including package entrypoints, runner identity, and exact write\n   paths. When Program may be recovered from implementation, the capsule also\n   identifies each implementation export's distinct production\n   consumers, test-only consumers, and external package or process boundary.\n   Its `sourceSurfaceEvidence` is a [Source surface evidence], so incomplete or\n   ambiguous consumer analysis is represented explicitly instead of being\n   silently omitted.\n   It obtains that evidence from tracked and non-ignored untracked source\n   without supplying consumer implementations to the Atomic runner. Missing or\n   ambiguous public providers or source-surface evidence block rather than\n   being guessed. Package boundary evidence expands `*` patterns in manifest\n   targets, including targets nested inside conditional export objects.\n   Malformed Program, unresolved required Uses or types, and incomplete source\n   evidence may block synchronization. Golden-module policy diagnostics such as\n   too few production consumers or a test Program module remain deterministic\n   `checkProgram()` findings; they do not prevent an otherwise valid individual\n   pair from synchronizing while a project graph is still being assembled.\n5. For a mode requiring translation, it gives the capsule to the supplied\n   [Atomic runner]. Without one, it calls `spawn()` without a shell in the\n   disposable candidate workspace, feeds the prompt through standard input,\n   and invokes `codex` with these arguments in order:\n\n   * `exec --model gpt-5.6-sol --config model_reasoning_effort=\"xhigh\"`\n   * `--ephemeral --ignore-user-config --ignore-rules`\n   * `--dangerously-bypass-approvals-and-sandbox`\n   * one `--disable` pair for each of `shell_tool`, `web_search`, `apps`,\n     `multi_agent`, `goals`, `hooks`, `memories`, `remote_plugin`, and\n     `shell_snapshot`\n   * `--config web_search=\"disabled\" --color never --json`\n   * `--output-schema` followed by the installed package path of\n     `Synchronizer result schema`\n   * `--output-last-message` followed by a temporary report path\n   * `--cd` followed by the candidate workspace, then `-`\n\n   It never supplies `--sandbox` or `--skip-git-repo-check`. Danger bypass is a\n   deliberate prototype runner choice because the supported workspace sandbox\n   is not reliable in every host environment. The structured result path\n   remains inside the disposable workspace and is removed after it is read.\n   On platforms with\n   process groups it starts Codex as the group leader. It accepts at most 16 MiB\n   across standard output and error and allows at most sixty minutes. Exceeding\n   either limit immediately sends `SIGKILL` to the complete group and does not\n   return failure until the group has closed, so no descendant survives. It\n   also handles `SIGINT` or `SIGTERM` received while Codex is active by killing\n   the complete Codex group, waiting for it to close, and then terminating the\n   caller with the originally received signal, so cancellation leaves no\n   detached descendant. These temporary parent-signal handlers exist only for\n   the Codex execution; concurrent Git and target-check subprocesses do not add\n   their own process signal handlers. It reports a timeout as `CODEX_TIMEOUT`;\n   a nonzero exit or output overflow as\n   `CODEX_EXEC_FAILED`; and a missing or malformed final report as\n   `CODEX_RESULT_MISSING` or `CODEX_RESULT_INVALID`. It validates the final\n   report with `Synchronizer result schema`.\n6. It permits candidate writes only to the selected Program file, primary\n   target, controlled shared `program/types.md` when appropriate, and regular\n   files below the owned auxiliary root. It rejects deletion, symlinks, writes\n   elsewhere, mismatched reports, malformed Program, unparseable targets\n   (including invalid JavaScript in an embedded HTML script),\n   incorrect public exports or argument grouping, unresolved Program Uses,\n   unrelated shared-type edits, and candidates that omit stated Program\n   behavior. A primary JavaScript target may directly declare a public symbol\n   or forward it from one of its owned auxiliary files; forwarded functions are\n   resolved through that file so their callability and parameter grouping can\n   be checked. A write outside the boundary fails immediately with\n   `ATOMIC_WRITE_BOUNDARY_VIOLATION`, includes the sorted offending paths in\n   `details.forbidden`, and is never retried.\n   `CREATE_PROGRAM`, `IMPLEMENTATION_TO_PROGRAM`, and `RECONCILE_BOTH` may\n   create `program/types.md` when absent or update only shared complex types\n   referenced by the selected module; implementation-directed modes cannot\n   edit shared types. Every structural rejection identifies the exact observed\n   and required public facts. In particular, a missing expected export uses\n   `PAIR_SURFACE_MISMATCH` and a message containing\n   `Program provides <symbol>, but implementation does not export it`; it does\n   not report only that the surfaces differ. Extra exports, wrong callability,\n   and wrong argument grouping likewise name the affected symbols and include\n   structured expected and actual evidence. Before installation it also links\n   every relative JavaScript import within the primary target and owned\n   auxiliary root without executing the candidate: every target must exist and\n   every named import must be exported by that target. Exact retained asset\n   targets supplied through Uses participate in this link graph even when they\n   are outside the auxiliary root; a relative import of a retained JSON asset\n   resolves to that supplied file and may use its default JSON value after the\n   file parses successfully. An exact project Use similarly validates its\n   provider read-only and follows relative forwarding exports recursively\n   through that provider's owned auxiliary files; a public barrel still exports\n   a symbol whose declaration lives in its private auxiliary tree. A failure\n   states whether the target is unresolved or the named symbol is not exported;\n   names the importer, requested symbol or specifier, and intended provider;\n   includes those same values as structured evidence; and is repairable in the\n   same candidate workspace. The explanatory wording is not otherwise\n   prescribed.\n   Every Git operation ignores inherited `GIT_*` routing variables. Candidate\n   baseline commits additionally use an invocation-local identity with signing\n   and hooks disabled, so host Git configuration cannot redirect or prevent an\n   otherwise valid synchronization.\n7. Only candidate failures with code `INVALID_IMPLEMENTATION`,\n   `INVALID_PROGRAM`, `IMPLEMENTATION_MODE_MISMATCH`,\n   `PAIR_SURFACE_MISMATCH`, or `UNSUPPORTED_VUE_SCRIPT` are repairable. Their\n   complete structured diagnostic is appended and the rejected candidate\n   remains in the same disposable workspace for repair, for up to three total\n   attempts. The retry explicitly says `Repair that candidate in place` and\n   `Re-audit the complete Program`, warns that the first mismatch is not proof\n   of full coverage, retains every earlier diagnostic, and includes the exact\n   failure code and messages such as `Program provides greet()` so the runner\n   can correct the candidate without reconstructing it. Every other failure\n   passes to the caller immediately.\n8. Unless `write` is false, it installs all effective writes and deterministic\n   projections as one guarded operation. It first confirms that the real pair,\n   owned auxiliaries, and writable shared types still equal the snapshot\n   captured before the Atomic runner began. That expected shared-type snapshot\n   is never refreshed after candidate generation; a concurrent edit made while\n   the runner works therefore aborts the entire installation before any write.\n   An ordinary staging or installation failure restores displaced files in\n   reverse order; a concurrent edit is never overwritten. If another process\n   recreates a target after its original was displaced, ProgSync retains both\n   the external replacement and the original at the reported recovery path.\n   Unsafe incomplete recovery is reported with its recovery paths rather than\n   hidden.\n9. It re-reads and validates the complete installed module, then records exact\n   Program, primary, auxiliary, permission, context, Git-branch, and runner\n   state in the single worktree-private ref `refs/worktree/progsync/state`.\n   Checkpoint updates preserve other modules through compare-and-swap retries\n   and never change HEAD, the project index, branch history, or ordinary push\n   contents. If that ref already contains a missing, malformed, unsupported, or\n   non-commit object, ProgSync treats its state as inapplicable but still uses\n   the exact raw object as the compare-and-swap expected value. It atomically\n   replaces that object and uses it as a commit parent only when Git confirms\n   that it is a commit.\n10. `NO_CHANGE` invokes no AI, but still validates conformance, refreshes a stale\n   projection, and ensures a Program command is executable. A dry run produces\n   the complete candidate diff and report, including every created file and\n   content or executable-mode change, but changes neither project files nor\n   accepted state. Every path, mode, baseline, change source, and decision is\n   recorded as ordered discovery evidence.\n\nThese guarantees exist so large batches can be synchronized file-atomically\nwithout losing either public meaning or mature private implementation work.",
+      "description": "#### Parameters\n\n* a [Synchronization request] object containing:\n  * `base`: an optional explicit Git revision, defaulting to private accepted state and then HEAD\n  * `dependencyChanged`: whether a reachable dependency changed, defaulting to false\n  * `inputPath`: the selected Program or implementation path\n  * `onEvent`: an optional operation receiving ordered progress records\n  * `operation`: `sync`, `import`, or `compile`, defaulting to `sync`\n  * `projectRoot`: the explicit project root inside a Git worktree\n  * `runner`: an optional [Atomic runner], defaulting to the isolated Codex runner\n  * `write`: whether accepted writes are installed, defaulting to true\n\n#### What it does\n\n1. It resolves the input to one Program/implementation pair, infers the\n   JavaScript, Vue, or HTML target from the final implementation extension, and\n   requires an explicit project root inside a Git worktree. A missing side is\n   created from the existing side; a side that existed at the accepted baseline\n   and disappeared requires an explicit deletion or rename instead of being\n   inferred. A root outside Git fails with `GIT_REPOSITORY_REQUIRED`; any\n   symlink in the selected module path fails with `SYMLINKED_PROJECT_PATH`\n   before the linked target is read or changed. `projectRoot` may be the\n   worktree root or a nested subtree; every Git-tree and checkpoint path is\n   prefixed by that subtree's repository-relative path while every reported\n   module path remains relative to `projectRoot`.\n2. It serializes the pair for the duration of discovery, candidate generation,\n   installation, verification, and checkpointing. A concurrent live owner\n   fails with `PAIR_BUSY`; claims abandoned by a crashed process are recovered\n   after a bounded stale interval instead of permanently blocking the pair. It\n   compares the current\n   Program, primary target, and every regular file below the deterministic\n   auxiliary root with the last applicable private checkpoint. An exact\n   checkpoint remains applicable across a branch switch; otherwise it is used\n   only when its branch history continues. An explicit `base` uses that Git\n   revision instead; when it is present, no private-checkpoint fact, including\n   a recorded dependency or context hash, affects the selected baseline or\n   mode. File comparison uses Git-tracked modes: every regular file with no\n   executable bit is normalized to `0644`, and every regular file with any\n   executable bit is normalized to `0755`. Differences such as filesystem mode\n   `0664` versus Git mode `0644` are not changes. Content, existence, and this\n   normalized tracked mode are compared independently.\n3. It selects exactly one mode: `CREATE_PROGRAM` when only implementation\n   exists; `CREATE_IMPLEMENTATION` when only Program exists;\n   `PROGRAM_TO_IMPLEMENTATION` when only Program differs from the accepted\n   baseline; `IMPLEMENTATION_TO_PROGRAM` when only the primary implementation\n   or any owned auxiliary differs; `RECONCILE_BOTH` when both Program and\n   implementation differ; and `NO_CHANGE` when neither differs. A dependency\n   is changed only when its current existence, content, or normalized tracked\n   mode differs from its corresponding accepted or Git-baseline state; merely\n   discovering a dependency does not make it changed. A changed\n   reachable Program dependency or retained package interface forces\n   `PROGRAM_TO_IMPLEMENTATION` when implementation is otherwise unchanged and\n   `RECONCILE_BOTH` when implementation also changed. An auxiliary-only\n   realization refinement therefore selects `IMPLEMENTATION_TO_PROGRAM`, not\n   `RECONCILE_BOTH`.\n4. It reads `Atomic synchronizer prompt`, all target instructions, and\n   `Synchronizer result schema` relative to the installed ProgSync package that\n   provides this function. These compiler-owned assets never resolve relative\n   to the request's `projectRoot`; that root is the unrelated project being\n   synchronized and need not contain ProgSync prompts or schemas. It assembles\n   a closed capsule containing those exact assets, complete previous and current\n   Program, primary implementation, owned auxiliaries, mechanically extracted\n   public source facts, reachable Uses and complex types, retained package\n   context including package entrypoints, runner identity, and exact write\n   paths. When Program may be recovered from implementation, the capsule also\n   identifies each implementation export's distinct production\n   consumers, test-only consumers, and external package or process boundary.\n   Its `sourceSurfaceEvidence` is a [Source surface evidence], so incomplete or\n   ambiguous consumer analysis is represented explicitly instead of being\n   silently omitted.\n   It obtains that evidence from tracked and non-ignored untracked source\n   without supplying consumer implementations to the Atomic runner. Missing or\n   ambiguous public providers or source-surface evidence block rather than\n   being guessed. Package boundary evidence expands `*` patterns in manifest\n   targets, including targets nested inside conditional export objects.\n   Malformed Program, unresolved required Uses or types, and incomplete source\n   evidence may block synchronization. Golden-module policy diagnostics such as\n   too few production consumers or a test Program module remain deterministic\n   `checkProgram()` findings; they do not prevent an otherwise valid individual\n   pair from synchronizing while a project graph is still being assembled.\n5. For a mode requiring translation, it gives the capsule to the supplied\n   [Atomic runner]. Without one, it calls `spawn()` without a shell in the\n   disposable candidate workspace, feeds the prompt through standard input,\n   and invokes `codex` with these arguments in order:\n\n   * `exec --model gpt-5.6-sol --config model_reasoning_effort=\"xhigh\"`\n   * `--ephemeral --ignore-user-config --ignore-rules`\n   * `--dangerously-bypass-approvals-and-sandbox`\n   * one `--disable` pair for each of `shell_tool`, `web_search`, `apps`,\n     `multi_agent`, `goals`, `hooks`, `memories`, `remote_plugin`, and\n     `shell_snapshot`\n   * `--config web_search=\"disabled\" --color never --json`\n   * `--output-schema` followed by the installed package path of\n     `Synchronizer result schema`\n   * `--output-last-message` followed by a temporary report path\n   * `--cd` followed by the candidate workspace, then `-`\n\n   It never supplies `--sandbox` or `--skip-git-repo-check`. Danger bypass is a\n   deliberate prototype runner choice because the supported workspace sandbox\n   is not reliable in every host environment. The structured result path\n   remains inside the disposable workspace and is removed after it is read.\n   On platforms with\n   process groups it starts Codex as the group leader. It accepts at most 16 MiB\n   across standard output and error and allows at most sixty minutes. Exceeding\n   either limit immediately sends `SIGKILL` to the complete group and does not\n   return failure until the group has closed, so no descendant survives. It\n   also handles `SIGINT` or `SIGTERM` received while Codex is active by killing\n   the complete Codex group, waiting for it to close, and then terminating the\n   caller with the originally received signal, so cancellation leaves no\n   detached descendant. These temporary parent-signal handlers exist only for\n   the Codex execution; concurrent Git and target-check subprocesses do not add\n   their own process signal handlers. It reports a timeout as `CODEX_TIMEOUT`;\n   a nonzero exit or output overflow as\n   `CODEX_EXEC_FAILED`; and a missing or malformed final report as\n   `CODEX_RESULT_MISSING` or `CODEX_RESULT_INVALID`. It validates the final\n   report with `Synchronizer result schema`.\n6. It permits candidate writes only to the selected Program file, primary\n   target, controlled shared `program/types.md` when appropriate, and regular\n   files below the owned auxiliary root. It rejects deletion, symlinks, writes\n   elsewhere, mismatched reports, malformed Program, unparseable targets\n   (including invalid JavaScript in an embedded HTML script),\n   incorrect public exports or argument grouping, unresolved Program Uses,\n   unrelated shared-type edits, and candidates that omit stated Program\n   behavior. A primary JavaScript target may directly declare a public symbol\n   or forward it from one of its owned auxiliary files; forwarded functions are\n   resolved through that file so their callability and parameter grouping can\n   be checked. A write outside the boundary fails immediately with\n   `ATOMIC_WRITE_BOUNDARY_VIOLATION`, includes the sorted offending paths in\n   `details.forbidden`, and is never retried.\n   `CREATE_PROGRAM`, `IMPLEMENTATION_TO_PROGRAM`, and `RECONCILE_BOTH` may\n   create `program/types.md` when absent or update only shared complex types\n   referenced by the selected module; implementation-directed modes cannot\n   edit shared types. Every structural rejection identifies the exact observed\n   and required public facts. In particular, a missing expected export uses\n   `PAIR_SURFACE_MISMATCH` and a message containing\n   `Program provides <symbol>, but implementation does not export it`; it does\n   not report only that the surfaces differ. Extra exports, wrong callability,\n   and wrong argument grouping likewise name the affected symbols and include\n   structured expected and actual evidence. Before installation it also links\n   every relative JavaScript import within the primary target and owned\n   auxiliary root without executing the candidate: every target must exist and\n   every named import must be exported by that target. Exact retained asset\n   targets supplied through Uses participate in this link graph even when they\n   are outside the auxiliary root; a relative import of a retained JSON asset\n   resolves to that supplied file and may use its default JSON value after the\n   file parses successfully. An exact project Use similarly validates its\n   provider read-only and follows relative forwarding exports recursively\n   through that provider's owned auxiliary files; a public barrel still exports\n   a symbol whose declaration lives in its private auxiliary tree. A failure\n   states whether the target is unresolved or the named symbol is not exported;\n   names the importer, requested symbol or specifier, and intended provider;\n   includes those same values as structured evidence; and is repairable in the\n   same candidate workspace. The explanatory wording is not otherwise\n   prescribed.\n   Every Git operation ignores inherited `GIT_*` routing variables. Candidate\n   baseline commits additionally use an invocation-local identity with signing\n   and hooks disabled, so host Git configuration cannot redirect or prevent an\n   otherwise valid synchronization.\n7. Only candidate failures with code `INVALID_IMPLEMENTATION`,\n   `INVALID_PROGRAM`, `IMPLEMENTATION_MODE_MISMATCH`,\n   `PAIR_SURFACE_MISMATCH`, or `UNSUPPORTED_VUE_SCRIPT` are repairable. Their\n   complete structured diagnostic is appended and the rejected candidate\n   remains in the same disposable workspace for repair, for up to three total\n   attempts. The retry explicitly says `Repair that candidate in place` and\n   `Re-audit the complete Program`, warns that the first mismatch is not proof\n   of full coverage, retains every earlier diagnostic, and includes the exact\n   failure code and messages such as `Program provides greet()` so the runner\n   can correct the candidate without reconstructing it. Every other failure\n   passes to the caller immediately.\n8. Unless `write` is false, it installs all effective writes and deterministic\n   projections as one guarded operation. It first confirms that the real pair,\n   owned auxiliaries, and writable shared types still equal the snapshot\n   captured before the Atomic runner began. That expected shared-type snapshot\n   is never refreshed after candidate generation; a concurrent edit made while\n   the runner works therefore aborts the entire installation before any write.\n   An ordinary staging or installation failure restores displaced files in\n   reverse order; a concurrent edit is never overwritten. If another process\n   recreates a target after its original was displaced, ProgSync retains both\n   the external replacement and the original at the reported recovery path.\n   Unsafe incomplete recovery is reported with its recovery paths rather than\n   hidden.\n9. It re-reads and validates the complete installed module, then records exact\n   Program, primary, auxiliary, permission, context, Git-branch, and runner\n   state in the single worktree-private ref `refs/worktree/progsync/state`.\n   Checkpoint updates preserve other modules through compare-and-swap retries\n   and never change HEAD, the project index, branch history, or ordinary push\n   contents. If that ref already contains a missing, malformed, unsupported, or\n   non-commit object, ProgSync treats its state as inapplicable but still uses\n   the exact raw object as the compare-and-swap expected value. It atomically\n   replaces that object and uses it as a commit parent only when Git confirms\n   that it is a commit.\n10. `NO_CHANGE` invokes no AI, but still validates conformance, refreshes a stale\n   projection, and ensures a Program command is executable. A dry run produces\n   the complete candidate diff and report, including every created file and\n   content or executable-mode change, but changes neither project files nor\n   accepted state. Every path, mode, baseline, change source, and decision is\n   recorded as ordered discovery evidence.\n\nThese guarantees exist so large batches can be synchronized file-atomically\nwithout losing either public meaning or mature private implementation work.\n\n#### Returns\n\nA [Synchronization result]. A semantic conflict returns `blocked`; invalid\ninputs, unsafe candidates, concurrent changes, Git failures, and incomplete\nrecovery fail with a stable diagnostic code and structured evidence.",
+      "id": "@/src/index.js.md#synchronizefile",
+      "kind": "function",
+      "name": "synchronizeFile()",
+      "parameters": [
+        {
+          "description": "a [Synchronization request] object containing:",
+          "fields": [
+            {
+              "description": "`base`: an optional explicit Git revision, defaulting to private accepted state and then HEAD",
+              "name": "base"
+            },
+            {
+              "description": "`dependencyChanged`: whether a reachable dependency changed, defaulting to false",
+              "name": "dependencyChanged"
+            },
+            {
+              "description": "`inputPath`: the selected Program or implementation path",
+              "name": "inputPath"
+            },
+            {
+              "description": "`onEvent`: an optional operation receiving ordered progress records",
+              "name": "onEvent"
+            },
+            {
+              "description": "`operation`: `sync`, `import`, or `compile`, defaulting to `sync`",
+              "name": "operation"
+            },
+            {
+              "description": "`projectRoot`: the explicit project root inside a Git worktree",
+              "name": "projectRoot"
+            },
+            {
+              "description": "`runner`: an optional [Atomic runner], defaulting to the isolated Codex runner",
+              "name": "runner"
+            },
+            {
+              "description": "`write`: whether accepted writes are installed, defaulting to true",
+              "name": "write"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "A [Synchronization result]. A semantic conflict returns `blocked`; invalid\ninputs, unsafe candidates, concurrent changes, Git failures, and incomplete\nrecovery fail with a stable diagnostic code and structured evidence.",
+      "source": {
+        "line": 133
+      }
+    },
+    {
+      "behavior": "1. It obtains tracked and untracked paths changed from the requested Git base,\n   ignoring generated `.program/index/` projections. It maps supported Program\n   and implementation paths to unique module pairs and records unrelated or\n   unsupported paths separately.\n2. It parses the Program graph without AI. Changes to a Program provider,\n   `types.md`, a retained asset, or package context schedule every transitively\n   affected target-bound consumer. A `types.md` change schedules target-bound\n   modules that contain at least one implicit shared-type reference, not modules\n   with no type reference. A retained asset change schedules only modules that\n   use that exact asset. A retained package-context change schedules every\n   target-bound module in that package. Type, runtime, and generation\n   dependencies remain distinct graph relationships.\n3. It calls the module's own single-file synchronization behavior for each\n   queued pair in deterministic order, passing through `runner`, `onEvent`,\n   `base`, and `write`. When a synchronization changes a Program boundary, its\n   newly affected consumers are appended once. Processing stops after a blocked\n   result so later modules are not reconciled against an unresolved boundary.",
+      "description": "#### Parameters\n\n* a [Changed synchronization request] object containing:\n  * `base`: an optional explicit Git revision\n  * `onEvent`: an optional operation receiving ordered progress records\n  * `projectRoot`: the explicit project root inside a Git worktree\n  * `runner`: an optional [Atomic runner], defaulting to the isolated Codex runner\n  * `write`: whether accepted writes are installed, defaulting to true\n\n#### What it does\n\n1. It obtains tracked and untracked paths changed from the requested Git base,\n   ignoring generated `.program/index/` projections. It maps supported Program\n   and implementation paths to unique module pairs and records unrelated or\n   unsupported paths separately.\n2. It parses the Program graph without AI. Changes to a Program provider,\n   `types.md`, a retained asset, or package context schedule every transitively\n   affected target-bound consumer. A `types.md` change schedules target-bound\n   modules that contain at least one implicit shared-type reference, not modules\n   with no type reference. A retained asset change schedules only modules that\n   use that exact asset. A retained package-context change schedules every\n   target-bound module in that package. Type, runtime, and generation\n   dependencies remain distinct graph relationships.\n3. It calls the module's own single-file synchronization behavior for each\n   queued pair in deterministic order, passing through `runner`, `onEvent`,\n   `base`, and `write`. When a synchronization changes a Program boundary, its\n   newly affected consumers are appended once. Processing stops after a blocked\n   result so later modules are not reconciled against an unresolved boundary.\n\n#### Returns\n\nA [Changed synchronization result] whose status is `blocked` when any processed\nmodule blocked, otherwise `updated` when any module updated, and otherwise\n`unchanged`.",
+      "id": "@/src/index.js.md#syncchanged",
+      "kind": "function",
+      "name": "syncChanged()",
+      "parameters": [
+        {
+          "description": "a [Changed synchronization request] object containing:",
+          "fields": [
+            {
+              "description": "`base`: an optional explicit Git revision",
+              "name": "base"
+            },
+            {
+              "description": "`onEvent`: an optional operation receiving ordered progress records",
+              "name": "onEvent"
+            },
+            {
+              "description": "`projectRoot`: the explicit project root inside a Git worktree",
+              "name": "projectRoot"
+            },
+            {
+              "description": "`runner`: an optional [Atomic runner], defaulting to the isolated Codex runner",
+              "name": "runner"
+            },
+            {
+              "description": "`write`: whether accepted writes are installed, defaulting to true",
+              "name": "write"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "A [Changed synchronization result] whose status is `blocked` when any processed\nmodule blocked, otherwise `updated` when any module updated, and otherwise\n`unchanged`.",
+      "source": {
+        "line": 342
+      }
+    },
+    {
+      "behavior": "It performs the same path resolution, Git/checkpoint baseline selection,\nprimary and owned-auxiliary comparison, context closure, mode selection, and\ndiscovery reporting as synchronization, but invokes no runner, changes no file,\ndoes not refresh projections, and records no checkpoint.",
+      "description": "#### Parameters\n\n* a [Status request] object containing:\n  * `base`: an optional explicit Git revision\n  * `inputPath`: the selected Program or implementation path\n  * `projectRoot`: the explicit project root inside a Git worktree\n\n#### What it does\n\nIt performs the same path resolution, Git/checkpoint baseline selection,\nprimary and owned-auxiliary comparison, context closure, mode selection, and\ndiscovery reporting as synchronization, but invokes no runner, changes no file,\ndoes not refresh projections, and records no checkpoint.\n\n#### Returns\n\nA [Status result] with `reconciled` true exactly when the selected mode is\n`NO_CHANGE`.",
+      "id": "@/src/index.js.md#statusfile",
+      "kind": "function",
+      "name": "statusFile()",
+      "parameters": [
+        {
+          "description": "a [Status request] object containing:",
+          "fields": [
+            {
+              "description": "`base`: an optional explicit Git revision",
+              "name": "base"
+            },
+            {
+              "description": "`inputPath`: the selected Program or implementation path",
+              "name": "inputPath"
+            },
+            {
+              "description": "`projectRoot`: the explicit project root inside a Git worktree",
+              "name": "projectRoot"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "A [Status result] with `reconciled` true exactly when the selected mode is\n`NO_CHANGE`.",
+      "source": {
+        "line": 379
+      }
+    },
+    {
+      "behavior": "1. It finds every Markdown file below `program/` in stable path order and\n   parses it without AI. Its projection path removes the leading `program/`\n   from the Program path, prefixes `.program/index/`, and appends `.json`.\n   Thus `program/src/name.js.md` maps exactly to\n   `.program/index/src/name.js.md.json`, and `program/types.md` maps to\n   `.program/index/types.md.json`; `.program/index/program/` is never created.\n   It refuses a symlink anywhere in the projection path and never follows one\n   while reading, writing, or removing projections.\n   It materializes each byte-stable projection when absent or stale and removes\n   only projection files at that exact mapping whose Program source no longer\n   exists.\n2. It validates every project Uses link against the exact provided identity and\n   resolves every implicit type reference through `program/types.md`.\n3. It builds production and test consumer sets separately. A path containing a\n   `test` or `tests` segment, or whose target name contains `.test.` or `.spec.`,\n   is a Program test and receives `PROGRAM_TEST_MODULE_FORBIDDEN`. Tests never\n   count as production consumers. A callable that is not an external package,\n   command, framework, document, or component boundary receives\n   `PROGRAM_SYMBOL_HAS_TOO_FEW_PRODUCTION_CONSUMERS` when used by fewer than two\n   distinct production Program modules; a callable used by tests but no\n   production module instead receives `TEST_ONLY_PROGRAM_SYMBOL`.\n4. It identifies external boundaries from commands, framework/document kinds,\n   package descriptors, and the nearest package manifest's `exports`, `main`,\n   `module`, and `bin` targets. Package target patterns containing `*` match the\n   corresponding implementation segment, including nested conditional export\n   objects. It attaches consumer and external-boundary data\n   to the returned provided symbols so the City can display runtime, type, and\n   generation edges without interpreting English. An unresolved project Use\n   receives `UNRESOLVED_PROGRAM_USE`; an implicit type absent from\n   `program/types.md` receives `UNRESOLVED_PROGRAM_TYPE`.",
+      "description": "#### Parameters\n\n* a [Program check request] object containing:\n  * `projectRoot`: the explicit root whose `program/` tree is checked\n\n#### What it does\n\n1. It finds every Markdown file below `program/` in stable path order and\n   parses it without AI. Its projection path removes the leading `program/`\n   from the Program path, prefixes `.program/index/`, and appends `.json`.\n   Thus `program/src/name.js.md` maps exactly to\n   `.program/index/src/name.js.md.json`, and `program/types.md` maps to\n   `.program/index/types.md.json`; `.program/index/program/` is never created.\n   It refuses a symlink anywhere in the projection path and never follows one\n   while reading, writing, or removing projections.\n   It materializes each byte-stable projection when absent or stale and removes\n   only projection files at that exact mapping whose Program source no longer\n   exists.\n2. It validates every project Uses link against the exact provided identity and\n   resolves every implicit type reference through `program/types.md`.\n3. It builds production and test consumer sets separately. A path containing a\n   `test` or `tests` segment, or whose target name contains `.test.` or `.spec.`,\n   is a Program test and receives `PROGRAM_TEST_MODULE_FORBIDDEN`. Tests never\n   count as production consumers. A callable that is not an external package,\n   command, framework, document, or component boundary receives\n   `PROGRAM_SYMBOL_HAS_TOO_FEW_PRODUCTION_CONSUMERS` when used by fewer than two\n   distinct production Program modules; a callable used by tests but no\n   production module instead receives `TEST_ONLY_PROGRAM_SYMBOL`.\n4. It identifies external boundaries from commands, framework/document kinds,\n   package descriptors, and the nearest package manifest's `exports`, `main`,\n   `module`, and `bin` targets. Package target patterns containing `*` match the\n   corresponding implementation segment, including nested conditional export\n   objects. It attaches consumer and external-boundary data\n   to the returned provided symbols so the City can display runtime, type, and\n   generation edges without interpreting English. An unresolved project Use\n   receives `UNRESOLVED_PROGRAM_USE`; an implicit type absent from\n   `program/types.md` receives `UNRESOLVED_PROGRAM_TYPE`.\n\n#### Returns\n\nA [Program check result]. Checking may update or remove generated projection\nfiles but never changes Program, implementation, package data, tests, or\naccepted synchronization state and never invokes AI.",
+      "id": "@/src/index.js.md#checkprogram",
+      "kind": "function",
+      "name": "checkProgram()",
+      "parameters": [
+        {
+          "description": "a [Program check request] object containing:",
+          "fields": [
+            {
+              "description": "`projectRoot`: the explicit root whose `program/` tree is checked",
+              "name": "projectRoot"
+            }
+          ],
+          "name": null
+        }
+      ],
+      "returns": "A [Program check result]. Checking may update or remove generated projection\nfiles but never changes Program, implementation, package data, tests, or\naccepted synchronization state and never invokes AI.",
+      "source": {
+        "line": 400
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "sourceHash": "sha256:e18e09baf4a7c20cc6f8861f8ac3811cd06b0739a3f84ab23e7721b4485eacee",
+  "targetFile": "src/index.js",
+  "targetKind": "javascript",
+  "title": "ProgSync library",
+  "typeReferences": [
+    {
+      "name": "Parse options",
+      "provider": "@/types.md#parse-options",
+      "source": {
+        "line": 23
+      }
+    },
+    {
+      "name": "Parsed Program",
+      "provider": "@/types.md#parsed-program",
+      "source": {
+        "line": 84
+      }
+    },
+    {
+      "name": "Projection request",
+      "provider": "@/types.md#projection-request",
+      "source": {
+        "line": 91
+      }
+    },
+    {
+      "name": "Program projection",
+      "provider": "@/types.md#program-projection",
+      "source": {
+        "line": 114
+      }
+    },
+    {
+      "name": "Synchronization request",
+      "provider": "@/types.md#synchronization-request",
+      "source": {
+        "line": 137
+      }
+    },
+    {
+      "name": "Atomic runner",
+      "provider": "@/types.md#atomic-runner",
+      "source": {
+        "line": 144
+      }
+    },
+    {
+      "name": "Source surface evidence",
+      "provider": "@/types.md#source-surface-evidence",
+      "source": {
+        "line": 202
+      }
+    },
+    {
+      "name": "Synchronization result",
+      "provider": "@/types.md#synchronization-result",
+      "source": {
+        "line": 338
+      }
+    },
+    {
+      "name": "Changed synchronization request",
+      "provider": "@/types.md#changed-synchronization-request",
+      "source": {
+        "line": 346
+      }
+    },
+    {
+      "name": "Changed synchronization result",
+      "provider": "@/types.md#changed-synchronization-result",
+      "source": {
+        "line": 375
+      }
+    },
+    {
+      "name": "Status request",
+      "provider": "@/types.md#status-request",
+      "source": {
+        "line": 383
+      }
+    },
+    {
+      "name": "Status result",
+      "provider": "@/types.md#status-result",
+      "source": {
+        "line": 397
+      }
+    },
+    {
+      "name": "Program check request",
+      "provider": "@/types.md#program-check-request",
+      "source": {
+        "line": 404
+      }
+    },
+    {
+      "name": "Program check result",
+      "provider": "@/types.md#program-check-result",
+      "source": {
+        "line": 442
+      }
+    }
+  ],
+  "uses": [
+    {
+      "description": "runs Git, Codex, and target checks without a shell.",
+      "kind": "runtime",
+      "provider": "package:npm/node:child_process#spawn",
+      "source": {
+        "line": 8
+      },
+      "symbol": "spawn()"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:prompts/program-author.txt",
+      "source": {
+        "line": 9
+      },
+      "symbol": "Program authoring prompt"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:prompts/atomic-base.txt",
+      "source": {
+        "line": 10
+      },
+      "symbol": "Atomic synchronizer prompt"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:prompts/javascript.txt",
+      "source": {
+        "line": 11
+      },
+      "symbol": "JavaScript target instructions"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:prompts/html.txt",
+      "source": {
+        "line": 12
+      },
+      "symbol": "HTML target instructions"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:prompts/vue.txt",
+      "source": {
+        "line": 13
+      },
+      "symbol": "Vue target instructions"
+    },
+    {
+      "kind": "generation",
+      "provider": "asset:schemas/synchronizer-result.schema.json",
+      "source": {
+        "line": 14
+      },
+      "symbol": "Synchronizer result schema"
+    }
+  ]
+}

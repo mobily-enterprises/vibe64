@@ -1,15 +1,26 @@
 import process from "node:process";
 
-import { asDiagnostic, ProgSyncError } from "./errors.js";
 import {
   checkProgram,
-  compileProgram,
-  importProgram,
+  readProgramAuthorPrompt,
   syncChanged,
-  syncFile,
-  statusFile
-} from "./service.js";
-import { readProgramAuthorPrompt } from "./prompts.js";
+  statusFile,
+  synchronizeFile
+} from "./index.js";
+
+function cliError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function asDiagnostic(error) {
+  return {
+    code: error?.code || "UNEXPECTED_ERROR",
+    message: error?.message || String(error),
+    ...(error?.details ? { details: error.details } : {})
+  };
+}
 
 const HELP = `ProgSync keeps Program and managed implementation synchronized.
 
@@ -45,7 +56,7 @@ const COMMANDS = new Set([
 function optionValue(option, args) {
   const value = args.shift();
   if (!value || value.startsWith("--")) {
-    throw new ProgSyncError(
+    throw cliError(
       "OPTION_VALUE_REQUIRED",
       `${option} requires a value.`
     );
@@ -55,7 +66,7 @@ function optionValue(option, args) {
 
 function rejectOption(condition, option, command) {
   if (condition) {
-    throw new ProgSyncError(
+    throw cliError(
       "OPTION_NOT_APPLICABLE",
       `${option} is not valid with ${command}.`
     );
@@ -101,7 +112,7 @@ function validateCommandOptions(command, options) {
   }
   rejectOption(options.write, "--write", command);
   if (options.changed && options.path) {
-    throw new ProgSyncError(
+    throw cliError(
       "CONFLICTING_TARGETS",
       "sync accepts either one module path or --changed, not both."
     );
@@ -149,15 +160,15 @@ function parseArguments(argv) {
     } else if (argument === "--base") {
       options.base = optionValue(argument, args);
     } else if (argument?.startsWith("-")) {
-      throw new ProgSyncError("UNKNOWN_OPTION", `Unknown option: ${argument}`);
+      throw cliError("UNKNOWN_OPTION", `Unknown option: ${argument}`);
     } else if (!options.path) {
       options.path = argument;
     } else {
-      throw new ProgSyncError("TOO_MANY_PATHS", "ProgSync accepts one module path at a time.");
+      throw cliError("TOO_MANY_PATHS", "ProgSync accepts one module path at a time.");
     }
   }
   if (options.write && options.dryRun) {
-    throw new ProgSyncError("CONFLICTING_OPTIONS", "--write and --dry-run cannot be combined.");
+    throw cliError("CONFLICTING_OPTIONS", "--write and --dry-run cannot be combined.");
   }
   validateCommandOptions(command, options);
   return { command, options };
@@ -285,20 +296,22 @@ async function runCli(argv = process.argv.slice(2)) {
     let result;
     if (command === "import") {
       if (!options.path) {
-        throw new ProgSyncError("PATH_REQUIRED", "import requires an implementation path.");
+        throw cliError("PATH_REQUIRED", "import requires an implementation path.");
       }
-      result = await importProgram({
+      result = await synchronizeFile({
         ...shared,
         inputPath: options.path,
+        operation: "import",
         write: options.write
       });
     } else if (command === "compile") {
       if (!options.path) {
-        throw new ProgSyncError("PATH_REQUIRED", "compile requires a Program path.");
+        throw cliError("PATH_REQUIRED", "compile requires a Program path.");
       }
-      result = await compileProgram({
+      result = await synchronizeFile({
         ...shared,
         inputPath: options.path,
+        operation: "compile",
         write: !options.dryRun
       });
     } else if (command === "sync") {
@@ -309,11 +322,12 @@ async function runCli(argv = process.argv.slice(2)) {
         });
       } else {
         if (!options.path) {
-          throw new ProgSyncError("PATH_REQUIRED", "sync requires a path or --changed.");
+          throw cliError("PATH_REQUIRED", "sync requires a path or --changed.");
         }
-        result = await syncFile({
+        result = await synchronizeFile({
           ...shared,
           inputPath: options.path,
+          operation: "sync",
           write: !options.dryRun
         });
       }
@@ -321,7 +335,7 @@ async function runCli(argv = process.argv.slice(2)) {
       result = await checkProgram({ projectRoot: options.projectRoot });
     } else if (command === "status") {
       if (!options.path) {
-        throw new ProgSyncError("PATH_REQUIRED", "status requires a module path.");
+        throw cliError("PATH_REQUIRED", "status requires a module path.");
       }
       result = await statusFile({
         base: options.base,
@@ -329,7 +343,7 @@ async function runCli(argv = process.argv.slice(2)) {
         projectRoot: options.projectRoot
       });
     } else {
-      throw new ProgSyncError("UNKNOWN_COMMAND", `Unknown command: ${command}`);
+      throw cliError("UNKNOWN_COMMAND", `Unknown command: ${command}`);
     }
     printResult(result, options.json);
     return result.status === "blocked" || result.status === "invalid" ? 2 : 0;
@@ -354,7 +368,5 @@ async function runCli(argv = process.argv.slice(2)) {
 }
 
 export {
-  HELP,
-  parseArguments,
   runCli
 };

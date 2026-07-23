@@ -1,12 +1,10 @@
-export default Object.freeze({
+const descriptor = {
   packageVersion: 1,
   packageId: "@local/progsync",
   version: "0.1.0",
   kind: "runtime",
   description: "Owns Program parsing, projection, Git-aware synchronization, and the standalone progsync CLI.",
-  dependsOn: [
-    "@local/vibe64-execution"
-  ],
+  dependsOn: [],
   capabilities: {
     provides: [
       "library.progsync"
@@ -60,4 +58,15 @@ export default Object.freeze({
     files: [],
     text: []
   }
-});
+};
+
+function deepFreeze(value) {
+  for (const nested of Object.values(value)) {
+    if (nested !== null && typeof nested === "object") {
+      deepFreeze(nested);
+    }
+  }
+  return Object.freeze(value);
+}
+
+export default deepFreeze(descriptor);

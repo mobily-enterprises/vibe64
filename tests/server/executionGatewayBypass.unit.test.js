@@ -36,7 +36,22 @@ const DIRECT_EXECUTION_PATTERNS = Object.freeze([
   }
 ]);
 
-const DIRECT_EXECUTION_ALLOWLIST = new Map(Object.entries({}));
+const DIRECT_EXECUTION_ALLOWLIST = new Map(Object.entries({
+  "packages/progsync/src/index/command.js": {
+    "child_process import": "Phase 1/1: ProgSync is an extractable standalone package and owns its bounded, no-shell process runner.",
+    "spawn call": "Phase 1/1: ProgSync is an extractable standalone package and owns its bounded, no-shell process runner."
+  },
+  "packages/progsync/test/cli-public.test.js": {
+    "child_process import": "Phase 1/1: The standalone CLI oracle invokes the public executable as an external process."
+  },
+  "packages/progsync/test/oracle-helpers.js": {
+    "child_process import": "Phase 1/1: The independent package oracle drives temporary Git repositories through public process behavior."
+  },
+  "packages/progsync/test/synchronization-public.test.js": {
+    "child_process import": "Phase 1/1: Public cancellation and descendant-cleanup tests require real external process boundaries.",
+    "spawn call": "Phase 1/1: Public cancellation and descendant-cleanup tests require real external process boundaries."
+  }
+}));
 
 const ENV_POLICY_PATTERNS = Object.freeze([
   {
@@ -65,7 +80,11 @@ const ENV_POLICY_PATTERNS = Object.freeze([
   }
 ]);
 
-const ENV_POLICY_ALLOWLIST = new Map(Object.entries({}));
+const ENV_POLICY_ALLOWLIST = new Map(Object.entries({
+  "packages/progsync/test/synchronization-public.test.js": {
+    "HOME object key": "Phase 1/1: The independent candidate-Git oracle points HOME at a hostile fixture to prove ProgSync neutralizes inherited Git configuration."
+  }
+}));
 
 async function listJavaScriptFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });

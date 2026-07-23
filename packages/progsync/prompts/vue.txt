@@ -23,5 +23,7 @@ managed implementation.
   timing.
 - Preserve recognized custom blocks such as `<route lang="json">` as part of
   the Vue file.
+- Auxiliary styles or scripts may be created only below the supplied owned
+  auxiliary root and remain precious implementation thereafter.
 - An ordinary non-setup `<script>` is unsupported in this prototype. Return
   blocked rather than converting it.

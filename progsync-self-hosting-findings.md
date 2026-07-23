@@ -1,9 +1,376 @@
 # ProgSync self-hosting findings
 
-Status: active experiment. The current source-free implementation passes 51 of
-73 untouched original tests after Program and compiler improvements. This is a
-failure ledger and structural-improvement record, not a claim that self-hosting
-already passes. A second clean generation has not yet been attempted.
+Status: v2 evidence milestone complete. The 33-module, 73-test experiment below
+is retained as a historical failure ledger, but its Program graph has been
+superseded. The current v2 experiment uses four production modules, one shared
+type module, and 55 independent public-oracle tests. It has demonstrated one
+clean source-free reconstruction and subsequent incremental evolution. It has
+not yet demonstrated repeated stochastic reproducibility or generality beyond
+ProgSync. No generated implementation was hand-repaired.
+
+## V2 architecture reset and clean-generation evidence (2026-07-23)
+
+The original assimilation copied too much accidental JavaScript architecture
+into Program. In particular, helpers exported for one caller or white-box tests
+became public Program functions. More exact prose could not rescue that graph:
+it was describing the wrong architecture in greater detail.
+
+The v2 rule is now normative:
+
+> A callable is a Program symbol only when it is a genuine external boundary or
+> is intentionally consumed by at least two distinct production Program
+> modules. Tests never count. Everything else is private implementation owned
+> by the nearest surviving Program module.
+
+Correctness is behavioral, not genealogical. The old JavaScript is evidence
+used while assimilating Program; it is not a clone oracle for a clean
+implementation. A different private file graph, helper set, algorithm, state
+encoding, or diagnostic wording is acceptable when Program and the public
+contracts still hold.
+
+The word *omission* is correspondingly narrow in this document. It means
+required observable meaning was absent, wrong, or materially ambiguous in
+Program. An observable failure can instead be a compiler or implementation
+defect even when Program was sufficient. A difference that does not cause a
+public failure is neither an omission nor a defect.
+
+### Primary research finding: managed implementation is durable source
+
+The clean self-hosting experiment falsified the simple disposable-output model.
+Program already said that an explicit Git base bypasses private accepted state,
+yet the independently generated compiler still allowed an older dependency hash
+to promote `NO_CHANGE` into `PROGRAM_TO_IMPLEMENTATION`. The independent oracle
+caught the observable error. A later Sol/xhigh reconciliation changed only two
+conditions in one private implementation file and preserved everything else.
+
+This was not a Program omission and not an acceptable private variation. It was
+a clear generated-implementation defect despite sufficient readable source.
+Therefore, one successful AI translation cannot be treated as an infallible
+compiler result, and later regeneration must not casually discard verified
+repair work.
+
+ProgSync has two writable artifacts but performs a three-way reconciliation:
+
+~~~
+last accepted pair (P0, I0)
+          + current Program P1
+          + current managed implementation I1
+          + independent verification evidence
+          → next accepted pair
+~~~
+
+- Program owns observable meaning and intentional public composition.
+- Managed implementation owns compatible, accumulated realization knowledge,
+  including verified repairs, optimizations, private structure, and visual
+  refinement.
+- The accepted pair is the common ancestor used to distinguish changes on both
+  sides.
+- Verification evidence adjudicates conformance; it is not a hidden third
+  source of behavior.
+
+Fresh generation remains valuable as a sufficiency and portability experiment.
+It is not the normal update operation for a mature module. Normal development
+must make the smallest reconciled change and preserve every compatible,
+previously verified implementation detail.
+
+The production Program corpus was therefore rewritten from scratch as:
+
+- `program/src/index.js.md`, providing the seven package-root operations and
+  owning private implementation below `src/index/`;
+- `program/src/cli.js.md`, providing only `runCli()`;
+- `program/bin/progsync.js.md`, providing the executable boundary;
+- `program/package.descriptor.mjs.md`, providing the descriptor; and
+- `program/types.md`, providing shared complex public data contracts.
+
+There are no Program test modules. The oracle imports only the package root,
+the public `./cli` subpath, the external descriptor, or the executable. Its 55
+tests never import a private helper. The mature implementation passes all 55
+tests after moving its private files beneath `src/index/`; that move does not
+change its package exports.
+
+### Clean-run chronology
+
+1. The first v2 root generation remained productive past the original
+   30-minute limit. Terminating the Node wrapper revealed that its native Codex
+   descendant survived. The mature runner now starts an isolated process group,
+   sends `SIGKILL` to the complete group on timeout or combined-output overflow,
+   and waits for group closure. A black-box fake-parent/fake-descendant test
+   proves that no descendant remains. The bounded compiler timeout is now 60
+   minutes and the pair-lock stale window is two hours.
+2. A subsequent attempt showed that the root Program named the author prompt
+   only abstractly. The model invented a shorter prompt and a familiar but
+   weaker Codex invocation. Every exact retained prompt and the result schema is
+   now an explicit asset Use; capsule v3 includes their complete content and
+   hashes.
+3. The first complete source-free v2 package then generated all four production
+   targets. Its own Program graph check reported five valid files and zero
+   diagnostics. Only after generation completed were the 23 oracle tests copied
+   into the repository.
+4. That withheld oracle exposed a set of differences initially treated as
+   Program omissions: a synonymous CLI placeholder, parser diagnostic names,
+   the projection's `id` and trailing auxiliary-root slash, graph diagnostic
+   names and enrichment fields, forwarding exports through owned auxiliaries,
+   non-retryable boundary violations, exact Git/symlink diagnostics, the
+   complete Codex argument list, and immediate full-process-group termination
+   on output overflow. This records what was tightened at that stage, not a
+   conclusion that every mature spelling or private representation was a
+   necessary public contract. The later implementation-neutral oracle audit
+   removed constraints that could not be traced to observable Program meaning.
+5. The oracle also exposed one invalid fixture: its fake runner reported status
+   `updated` but an empty `implementationChanges` list. Because Program requires
+   mismatched reports to be rejected, the fixture now reports the change it
+   actually makes. This changes no product assertion and keeps the oracle
+   independent.
+6. Several public operations still described a single opaque `request`
+   parameter even though their JavaScript boundary destructured exact fields.
+   The Program now uses the canonical nested `object containing` form for every
+   such function. The author prompt explicitly forbids hiding an object's Lego
+   connections behind only `request`, `options`, or a shared type name.
+7. A later clean root generation produced a complete candidate but made one
+   private-file syntax error. Deterministic validation rejected it before
+   installation with the exact path, line, and parser message. At that point a
+   retry still received a new empty candidate workspace, so it spent another
+   full generation reconstructing otherwise useful work. Repairable retries now
+   keep the rejected candidate in the same disposable workspace and explicitly
+   tell a fresh Sol/xhigh runner to repair it in place. A black-box runner test
+   proves that the second attempt sees both the same workspace and the rejected
+   file while the real project remains untouched.
+8. The structurally accepted diagnostic root then passed 17 of 22 withheld
+   root-library oracle tests. Three failures exercised exact contracts that had
+   already been added after that run's snapshot: in-place retry diagnostics,
+   atomic-boundary details, and runner error mapping. Two exposed remaining
+   omissions: the parser requirement did not name inline code precisely enough,
+   and mode selection lacked an explicit auxiliary-only branch. Program now
+   includes a normative fenced example, an explicit state-selection truth
+   table, and matching compiler guidance for parser exclusion zones and state
+   transitions. Generated JavaScript was not patched.
+9. The next complete clean package generated every production target on its
+   first candidate and passed its own five-file, zero-diagnostic Program check.
+   The withheld oracle passed 23 of 27 tests. Its four failures identified
+   literal descriptor fields, Git-mode normalization, command-path
+   classification precedence, and repair-grade public-surface diagnostics.
+   Each became an exact Program or compiler rule rather than a generated-code
+   patch.
+10. The following clean root parsed and exposed exactly seven operations, but a
+    real module load found a private named import whose provider did not export
+    that name. Candidate validation had checked syntax and the public surface
+    without linking private auxiliaries. Deterministic validation now resolves
+    every relative import across the complete owned tree and verifies named
+    exports before installation. A new independent test raised the oracle to
+    28 tests.
+11. A third clean root loaded correctly but its own Program checker reported
+    seven diagnostics. Its Markdown parser mishandled a fenced block whose
+    opening marker had an immediate information string, and its projection
+    mapper retained `program/` beneath `.program/index/`. Program now states
+    both algorithms and concrete path examples exactly, the compiler prompt
+    calls them out, and a fenced-block regression raised the oracle to 29
+    tests.
+12. A fourth source-free package generated all four targets on their first
+    candidates. Every file parsed, the library and CLI exposed exactly their
+    Program surfaces, the executable ran, the descriptor was recursively
+    immutable, and its own Program check returned five files with zero
+    diagnostics. The withheld oracle initially passed 27 of 29 tests. Both
+    failures were invalid oracle assertions. The CLI used the stable code
+    `CLI_ARGUMENT_ERROR` and the exact offending argument, while the test
+    required the mature implementation's undocumented spelling
+    `UNKNOWN_OPTION`. A private-link retry likewise
+    contained the missing symbol, importer, provider, structured evidence, and
+    repair instruction, but the test required the mature implementation's
+    particular phrase `Private import`. The oracle now checks the required
+    status, category shape, and information rather than incidental wording;
+    Program explicitly leaves those private spellings free.
+13. With those implementation-specific assertions removed, the fourth clean
+    package passed all 29 then-current oracle tests without changing generated
+    source. A subsequent cancellation probe found a real omission: interrupting
+    the parent CLI left its detached Codex process group alive. Program now
+    requires `SIGINT` and `SIGTERM` cleanup, the mature runner removes temporary
+    handlers and terminates the complete group before preserving the original
+    parent signal, and an independent black-box test raises the oracle to 30.
+    This narrow Program change was applied to the clean generated package by
+    incremental synchronization rather than whole-package regeneration. The
+    root reconciliation took 86 seconds and the CLI reconciliation took 47
+    seconds. Revalidating the unchanged executable and descriptor in parallel
+    took 14 and 23 seconds. The evolved package passed all 30 tests without a
+    hand edit to generated source.
+14. Comparing deterministic City projections exposed a genuine semantic
+    disagreement rather than a generation failure. The clean implementation
+    correctly classified a targeted descriptor default export as a `value`,
+    while the mature implementation called it a `library`. Conversely, the
+    clean implementation emitted `null` and empty text for absent optional
+    projection fields, while Program requires those fields to be omitted. The
+    rule is now explicit: a target-backed default export is a value, only an
+    untargeted root document is a library, and absent optional fields are not
+    serialized. A regression raised the oracle to 31.
+15. The first cancellation repair attached temporary signal listeners around
+    every child process. A wide status operation could therefore trigger
+    Node's `MaxListenersExceededWarning` while many short Git checks were in
+    flight. Program now limits parent-signal forwarding to the long-lived Codex
+    subprocess; ordinary Git, checking, and inspection subprocesses do not add
+    process-wide handlers. A wide-module CLI regression raised the oracle to
+    32.
+16. The final compiler handoff exposed one private-state migration defect. The
+    generated compiler stores its accepted state as a Git blob, while the
+    mature compiler stores a commit. The mature compiler correctly treated the
+    blob as an inapplicable checkpoint and fell back to Git, but checkpoint
+    installation then repeatedly compared against an absent ref instead of the
+    blob actually occupying it. It now compares-and-swaps against the exact raw
+    ref object while using a parent only when that object resolves to a commit.
+    An implementation-neutral regression verifies that an incompatible private
+    state is replaced, reaches `NO_CHANGE`, and never invokes the runner. The
+    oracle therefore contains 33 tests. A final Sol/xhigh root reconciliation
+    took 62.62 seconds, made no source change, and recorded the new checkpoint
+    on its first attempt.
+17. The public oracle was then expanded to 53 tests covering shared-type
+    concurrency, retained assets, parser end-of-file behavior, command
+    cancellation, checkpoint recovery, atomic installation, and broader public
+    boundary cases. The oracle itself was re-audited against Program. Assertions
+    tied only to the mature compiler's evidence-field spelling, lock directory
+    and owner-record schema, auxiliary-root string spelling, or exact retry
+    sentence were removed or replaced with implementation-neutral behavioral
+    assertions.
+18. A later clean-generated package passed 47 of those 53 tests. The six
+    failures separated cleanly into two groups. Three were real behavioral
+    errors: a concurrent `program/types.md` edit could be overwritten, a valid
+    retained JSON dependency was rejected during linking, and an incompatible
+    private checkpoint object could crash synchronization instead of starting
+    a safe new accepted epoch. Three were legal implementation differences:
+    private source-evidence field names, the lock record/layout, and whether an
+    internal auxiliary-root string retained a trailing slash. Only the first
+    group changed Program or compiler guidance. The second group changed the
+    over-specific oracle. Program-driven minimal reconciliation then brought
+    both the mature and independently generated implementations to 53 of 53
+    without hand-editing generated JavaScript.
+19. The definitive scratch experiment began from a committed tree containing
+    the five Program files and retained package inputs, but no production
+    `src/`, executable, package descriptor implementation, old JavaScript, or
+    tests. The executable, descriptor, CLI, and root module were generated by
+    separate fresh Sol/xhigh invocations. All four candidates were accepted on
+    their first attempt. Approximate elapsed times were 58 seconds, 68 seconds,
+    4 minutes 29 seconds, and 37 minutes 30 seconds respectively. Production
+    source was committed before the withheld oracle was introduced.
+20. The first definitive oracle run passed 44 of the then-current 53 tests.
+    The failures reduced to four observable implementation errors: shared-type
+    changes scheduled modules that did not reference those types; individual
+    synchronization treated project-wide golden-module diagnostics as fatal;
+    source assimilation could not represent incomplete or ambiguous consumer
+    evidence; and dry-run output omitted newly created files. One oracle
+    assertion also required incidental diagnostic wording. That assertion was
+    generalized; actual behavior was repaired through Program and prompt
+    changes followed by atomic Sol/xhigh reconciliation.
+21. The first reconciliation reached 52 of 53. The remaining dry-run failure
+    was then stated more explicitly in Program, and one further root
+    reconciliation reached 53 of 53. No generated JavaScript was edited by
+    hand.
+22. A no-Codex handoff then exposed a real validation defect: a consumer of the
+    root public barrel was rejected because the generated validator did not
+    follow a project provider's forwarding export into its provider-owned
+    auxiliary tree. An implementation-neutral regression raised the oracle to
+    54. One root-module reconciliation changed only `src/index/validate.js`,
+    after which the complete 54-test oracle passed.
+23. The next no-Codex handoff exposed a second clear implementation defect.
+    With an explicit Git base selecting `NO_CHANGE`, the generated compiler
+    still allowed an older private dependency hash to force
+    `PROGRAM_TO_IMPLEMENTATION`. Program already required the explicit base to
+    bypass accepted state; a clarifying sentence made that precedence
+    impossible to miss. The 55th oracle test reproduced the failure. One
+    Sol/xhigh root reconciliation changed two conditions in
+    `src/index/sync.js`.
+24. After that repair, the generated package passed all 55 public-oracle tests
+    and its own five-file, zero-diagnostic Program check. With `codex` absent
+    from `PATH`, all four production modules first accepted the committed
+    `HEAD` as a new private checkpoint and then, under ordinary default
+    invocation, independently returned `NO_CHANGE`. Both passes changed no
+    tracked file, and before/after hashes were byte-identical.
+25. The mature Vibe64-integrated package then passed the same 55-test public
+    oracle, its five-file Program check, package lint, and a 48-file package
+    dry run. The complete Vibe64 repository passed 1,433 server tests, 633
+    client tests, its production build, all 19 workspace package contracts,
+    and project doctor.
+
+The four clean production candidates were all accepted on their first attempt:
+the root module took 2,092.44 seconds, the CLI 247.21 seconds, the executable
+28.30 seconds, and the descriptor 35.04 seconds. These timings show why the
+small modules should run in parallel and why incremental reconciliation matters;
+they are not performance claims for a finished compiler.
+
+The mature and clean-generated compilers use different private encodings for
+their accepted-state checkpoints. That difference is not a public Program or
+package contract. At compiler handoff, a committed generated baseline lets the
+new compiler fall back to Git history, establish its own checkpoint, and reach
+`NO_CHANGE` without invoking Codex. The mature implementation also tolerates
+and atomically replaces a differently encoded private ref. Checkpoint formats
+should remain private unless a future cross-compiler migration requirement
+makes them explicit.
+
+The corrected Program now deterministically checks with zero diagnostics and
+conforms to the mature package's seven root signatures. Its clean capsule
+contains the exact retained assets, all directly and transitively reachable
+public types, explicit parameter groups, and no dependency implementation or
+test source.
+
+The active acceptance rule remains strict: generate from that closed capsule,
+then introduce the independent oracle. If it fails, amend Program, shared
+types, prompts, or deterministic orchestration and start clean again. Never
+patch generated JavaScript into compliance.
+
+## Executive finding
+
+ProgSync has now demonstrated one complete, installable, source-free
+reconstruction from a deliberately small Program architecture and retained
+inputs. After semantically calibrating two overfitted oracle assertions, that
+clean package passed all 29 then-current independent tests without any change to
+generated source. It then accepted a narrow Program evolution through minimal
+reconciliation and passed the expanded 30-test oracle, again without a hand
+patch. Subsequent hardening and compiler-handoff checks expanded the
+implementation-neutral oracle to 55 tests. After correcting genuine behavioral
+defects and removing private-representation assertions, both the mature and
+evolved clean-generated packages pass all 55. The generated package's own
+Program check reports five
+files and zero diagnostics; with Codex removed from `PATH`, all four production
+modules return `NO_CHANGE`, change zero files, and leave every implementation
+and projection hash byte-identical.
+
+This is evidence that readable Program can reconstruct and evolve a substantial
+compiler-like package. It is not yet evidence of repeatable stochastic success:
+the clean generation has not been repeated across several fresh model sessions,
+models, or materially different applications.
+
+The main weakness is not JavaScript syntax generation. The generated package
+usually parses, exports plausible symbols, and runs. The weakness is preserving
+exact data contracts at module boundaries:
+
+- how several values are grouped into arguments;
+- the exact fields and provenance of returned objects;
+- callback input field names;
+- exact status, mode, reason, diagnostic, and discriminator literals;
+- the shape of shared structural records;
+- the depth and contents of bounded dependency context; and
+- small but observable parser and filesystem edge cases.
+
+These boundary errors compound. A single wrong field in a central snapshot
+object, or one collapsed call to a Git command runner, can fail dozens of tests
+in modules that are otherwise correct. The first failure count therefore
+overstated the number of independent defects, but it accurately exposed why the
+original one-file-per-JavaScript-module Program graph was not sufficient.
+
+The correct conclusion is:
+
+> The programming model has passed its first clean reconstruction and
+> incremental-evolution benchmark. Vibe64 should still adopt it behind review
+> and verification until repeated clean runs and broader application corpora
+> establish reliability beyond this one package.
+
+The natural-language body should remain readable. The answer is not to turn it
+into pseudocode. The answer is to make the small set of facts that software must
+link across files—symbols, argument groups, object fields, return shapes, exact
+literals, effects, and providers—available to deterministic tooling.
+
+## Historical v1 failure ledger
+
+The sections from `Purpose` through `Historical remaining failure clusters`
+record the superseded 33-module assimilation experiment. Their counts and
+remaining failures describe that historical run, not the current four-module
+v2 corpus.
 
 ## Purpose
 
@@ -24,43 +391,6 @@ Generated JavaScript is never patched directly to make this experiment pass.
 After the repair cycle succeeds, the generated tree must be discarded and a
 second clean generation must pass from Program alone. That clean repetition is
 the evidence that the system improved structurally.
-
-## Executive finding
-
-ProgSync has demonstrated that a fresh model can generate a complete,
-installable JavaScript package from Program, and that relatively small Program
-and compiler-contract improvements can remove broad classes of failures. It has
-not yet demonstrated dependable behavioral reconstruction of a complex package.
-
-The main weakness is not JavaScript syntax generation. The generated package
-usually parses, exports plausible symbols, and runs. The weakness is preserving
-exact data contracts at module boundaries:
-
-- how several values are grouped into arguments;
-- the exact fields and provenance of returned objects;
-- callback input field names;
-- exact status, mode, reason, diagnostic, and discriminator literals;
-- the shape of shared structural records;
-- the depth and contents of bounded dependency context; and
-- small but observable parser and filesystem edge cases.
-
-These omissions compound. A single wrong field in a central snapshot object, or
-one collapsed call to a Git command runner, can fail dozens of tests in modules
-that are otherwise correct. The first failure count therefore overstated the
-number of independent defects, but it accurately exposed that the prototype did
-not yet make those contracts mechanically explicit.
-
-The correct conclusion is:
-
-> The programming model is viable enough to continue, but Vibe64 should not yet
-> depend on one-shot natural-language regeneration. ProgSync first needs a
-> stronger deterministic semantic spine, behavioral verification as a mandatory
-> compilation phase, and a clean-generation conformance benchmark.
-
-The natural-language body should remain readable. The answer is not to turn it
-into pseudocode. The answer is to make the small set of facts that software must
-link across files—symbols, argument groups, object fields, return shapes, exact
-literals, effects, and providers—available to deterministic tooling.
 
 ## Repositories used
 
@@ -477,7 +807,7 @@ explicit Program behavior and required candidate validation to finish source
 fact extraction before returning. All nine untouched structural tests passed,
 raising the full oracle from 48 to 51.
 
-## Current remaining failure clusters
+## Historical remaining failure clusters at the v1 stop point
 
 The latest untouched run has 22 failures. These are clusters, not 22 independent
 design problems:
@@ -493,7 +823,7 @@ Some context and service failures are consequences of the Program parser or
 structural extractor. Repair should therefore continue from the lowest shared
 layer upward rather than patching tests in numerical order.
 
-## How to make ProgSync dependable enough for Vibe64
+## Current v2 implications: making ProgSync dependable enough for Vibe64
 
 ### 1. Add a deterministic semantic contract beside the prose
 
@@ -657,14 +987,19 @@ model says it is correct.
 Vibe64 should not make ProgSync its default write path until all of the following
 are true:
 
-- A clean source-free generation passes the complete untouched 73-test oracle.
+- The fully reconciled clean-generated package passes all 55 current public
+  oracle tests. The clean 29-test baseline, first 30-test evolution, and evolved
+  55-test result are established; later contract additions must remain green as
+  they are reconciled.
 - Repeating that clean generation with fresh model sessions passes again.
-- All generated package tests pass, while remaining explicitly secondary to the
-  untouched oracle.
+- The corpus is broadened beyond this self-hosted compiler package to ordinary
+  services and user-facing applications.
 - No generated JavaScript was manually repaired between Program and passing
-  output.
-- Every discovered omission has a regression test in creator, parser,
-  projection, conformance, or compilation behavior.
+  output. This gate is satisfied by the evidence run and must remain invariant.
+- Every actual failure has an implementation-neutral regression at the right
+  layer. Program changes only when the failure exposed missing observable
+  meaning; compiler and verification defects do not become invented Program
+  requirements.
 - Running synchronization again with unchanged inputs produces no patch.
 - An implementation-only realization change survives a later Program change.
 - A Program-only behavioral change produces the smallest compatible
@@ -689,19 +1024,21 @@ installation.
 The first self-hosting run did not invalidate the idea. It identified the
 compiler work that the initial prototype had deferred: natural-language source
 needs deterministic boundary contracts and independent behavioral evidence.
-Those are finite, testable engineering problems. The clean second generation
-will determine whether the current approach solves them without making Program
-unreadable.
+Those are finite, testable engineering problems. The v2 clean reconstruction
+shows that the corrected public-module abstraction can solve them without
+making Program mirror private JavaScript architecture. Repeated clean runs and
+broader application corpora now determine how dependable that result is.
+
+## Resolved findings
+
+### Reachable shared-type invalidation
+
+The definitive oracle showed that a change to `program/types.md` scheduled
+modules that did not refer to the changed types. ProgSync now computes each
+module's reachable type closure and schedules only consumers of the changed
+definitions. The black-box retained-type test covers this behavior.
 
 ## Open findings
-
-### Over-broad context invalidation
-
-A change to `program/types.md` currently schedules modules that do not refer to
-the changed types because the complete shared-types file contributes to their
-context hash. This is correct but unnecessarily expensive. Context hashing
-should eventually use only the reachable type closure so a large project does
-not recompile unrelated modules.
 
 ### Natural-language signature validation remains intentionally narrow
 

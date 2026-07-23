@@ -1,12 +1,38 @@
 # ProgSync Git-backed synchronization state
 
-Status: implemented foundation and durable decision record. The later
-whole-tree runner and history compaction remain intentionally deferred.
+Status: implemented and superseded in detail by ProgSync v2. This document
+remains the rationale for Git-backed accepted state; where its early prototype
+examples conflict with the update below, the update and
+`software_development_revolution.md` control.
 
-This document records the Git-backed state model that must be implemented
-before ProgSync grows a whole-tree command. It is intentionally detailed so
-the work can continue correctly after conversation compaction or an interrupted
-implementation session.
+## V2 implementation update
+
+- `progsync sync --changed` is implemented. It discovers changed pairs and
+  schedules transitive Program consumers one module at a time; it does not
+  create a worktree per file.
+- Accepted state schema version 3 checkpoints the Program file, primary target,
+  every regular file below the module's deterministic auxiliary root, modes,
+  hashes, context, branch, and pinned runner profile in the single
+  `refs/worktree/progsync/state` history.
+- A target `src/name.js` owns private implementation below `src/name/`. Those
+  files participate in comparison, guarded installation, rollback, and
+  checkpointing but never become Program Provides or Uses.
+- An explicit project root may be a nested subtree of a larger Git worktree;
+  alternate-index checkpoint paths retain the repository prefix correctly.
+- The public library exposes `synchronizeFile()`, `syncChanged()`,
+  `statusFile()`, `checkProgram()`, `parseProgram()`,
+  `buildProgramProjection()`, and `readProgramAuthorPrompt()`. Import and
+  compile are operation choices, not duplicate public wrappers.
+- Deterministic Program projections use schema version 2. The state receipt and
+  projection schemas are unrelated and version independently.
+- No auto-commit is made on the checked-out branch. The private ref remains the
+  accepted baseline, and temporary candidate repositories are removed after
+  each invocation.
+
+This document records the implemented Git-backed state model behind both
+single-pair synchronization and the changed-file scheduler. It remains
+intentionally detailed so later maintenance and the deferred whole-tree import
+workflow retain the original safety constraints.
 
 ## 1. Objective
 
@@ -83,9 +109,10 @@ This implementation includes:
 10. Tests proving that state does not touch the branch, project index, working
     tree, or ordinary project history.
 
-This implementation does not yet include the final whole-tree command. The
-state design is deliberately suitable for hundreds of sequential files, and
-the later tree command is specified in section 17.
+This implementation includes `sync --changed`, but not a complete first-time
+whole-tree import, resumable import run, or final private-history compaction.
+The state design is deliberately suitable for hundreds of sequential files,
+and that deferred import workflow is specified in section 17.
 
 It also does not infer deletion or rename. Missing files that existed at the
 accepted baseline remain explicit diagnostics.
@@ -228,13 +255,18 @@ from the two accepted files. Its initial shape is:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "pairId": "sha256:...",
   "programPath": "program/src/server/alerts.js.md",
   "implementationPath": "src/server/alerts.js",
   "targetKind": "javascript",
   "programHash": "sha256:...",
   "implementationHash": "sha256:...",
+  "programMode": 420,
+  "implementationMode": 420,
+  "auxiliaryFiles": [
+    { "path": "src/server/alerts/private.js", "hash": "sha256:...", "mode": 420 }
+  ],
   "branch": "main",
   "head": "<project HEAD when accepted>",
   "mode": "PROGRAM_TO_IMPLEMENTATION",
@@ -442,10 +474,12 @@ different purposes:
 - Private checkpoint: remembers the last accepted pair across invocations.
 - Disposable candidate repository: constrains and validates one AI patch.
 
-## 17. Later whole-tree operation and 700-file behavior
+## 17. Deferred whole-tree import and 700-file behavior
 
-The later whole-tree command must reuse the same single worktree-local state
-ref; it must not create one worktree or one permanent ref per file.
+The deferred whole-tree import workflow must reuse the same single
+worktree-local state ref; it must not create one worktree or one permanent ref
+per file. The implemented `sync --changed` scheduler already follows this
+single-ref, one-module-at-a-time model.
 
 Expected flow:
 
@@ -486,15 +520,14 @@ sync is classified.
 
 ## 18. Library API changes
 
-The package should expose:
+The implemented package exposes:
 
-- `syncFile(options)` as the automatic single-pair operation.
-- `statusFile(options)` as read-only deterministic inspection.
-- Existing explicit `importProgram()` and `compileProgram()` may remain as
-  compatibility/library operations, but normal CLI use should not require the
-  caller to select them.
-- Low-level checkpoint readers should be exported only where tests or future
-  orchestration need them; private Git layout is not Program source API.
+- `synchronizeFile(options)` as the automatic single-pair operation, with
+  optional `sync`, `import`, or `compile` operation selection;
+- `statusFile(options)` as read-only deterministic inspection;
+- `syncChanged(options)` as the sequential changed-tree orchestrator; and
+- no low-level checkpoint API, duplicate directed wrapper, or private Git
+  layout through the package root.
 
 The default library operation still requires `projectRoot`. The CLI defaults it
 to the current directory.
@@ -647,8 +680,8 @@ This work is complete when all of the following are true:
 
 ## 23. Implementation record
 
-Update this section as work proceeds so the document remains a reliable handoff
-rather than a speculative plan.
+This section records the completed implementation and verification evidence so
+the document remains a reliable handoff rather than a speculative plan.
 
 - [x] Design agreed and recorded.
 - [x] Private checkpoint module implemented.
@@ -661,45 +694,84 @@ rather than a speculative plan.
 
 Implemented in `packages/progsync`:
 
-- `src/checkpoint.js` owns pair IDs, receipts, checkpoint reads, conservative
+- `src/index/checkpoint.js` owns pair IDs, receipts, checkpoint reads, conservative
   applicability, alternate-index tree construction, private commits, and
   compare-and-swap ref updates.
-- `src/service.js` uses private state before Git fallback, returns structured
+- `src/index/service.js` uses private state before Git fallback, returns structured
   discovery, invalidates changed dependency context, schedules declared
   consumers, advances accepted state only after successful writable results,
   and exposes read-only `statusFile()`.
-- `src/lock.js` serializes same-pair work without creating one ref or worktree
+- `src/index/lock.js` serializes same-pair work without creating one ref or worktree
   per file.
-- `src/structural.js` uses Babel and Vue compiler parsers for JavaScript, Vue,
-  and HTML facts; `src/conformance.js` rejects structural surface drift.
-- `src/candidate.js` validates in a disposable repository, rejects stale real
+- `src/index/structural.js` uses Babel and Vue compiler parsers for JavaScript,
+  Vue, and HTML facts; `src/index/conformance.js` rejects structural surface drift.
+- `src/index/candidate.js` validates in a disposable repository, rejects stale real
   pairs, preserves executable modes, and stages writes with rollback.
 - `src/cli.js` treats a bare path as automatic synchronization, prints
   discovery decisions, and provides `status`.
-- `src/command.js` permits the narrowly required alternate-index environment
-  and temporary allowed root through the existing Vibe64 execution seam.
-- `test/checkpoint.test.js` covers state isolation, history retention,
+- `src/index/command.js` starts subprocesses directly through Node without a
+  Vibe64 runtime dependency and terminates their complete process group on
+  timeout or output overflow.
+- The independent public oracle covers state isolation, owned auxiliaries,
   Git/index/worktree non-mutation, dirty-but-reconciled idempotence,
-  realization-only acceptance, dry-run and blocked safety, explicit bases,
-  branch behavior, and linked worktrees.
-- `test/cli.test.js` covers bare-path parsing and a real CLI status/bootstrap/
-  repeated-no-op sequence.
+  realization-only acceptance, dry-run and boundary safety, nested project
+  roots, process cleanup, pinned runner isolation, and the public CLI.
 
-Current focused verification on 2026-07-22:
+Current focused verification on 2026-07-23:
 
-- 53 ProgSync package tests passed without invoking an LLM; injected runners
-  simulate candidate edits and the Codex runner protocol.
+- 55 independent public-oracle tests pass without invoking a real LLM; injected
+  runners simulate candidate edits and the Codex runner protocol. The added
+  coverage includes external cancellation without orphaned Codex descendants,
+  deterministic omission of absent projection fields, default-export value
+  classification, subprocess-listener scoping under a wide status run, and
+  recovery from an incompatible private state object without invoking a runner,
+  provider-owned forwarding exports, and explicit Git baselines that completely
+  bypass stale accepted dependency context.
+  The oracle is implementation-neutral: it rejects observable contract failures
+  but does not require the mature implementation's private helper graph, state
+  encoding, lock layout, evidence-field spelling, or diagnostic prose.
 - ProgSync ESLint passed.
 - All 19 workspace package contracts passed.
-- Full Vibe64 verification passed: 1,418 server tests, 633 client tests,
+- Full Vibe64 verification passed: 1,433 server tests, 633 client tests,
   production build, and project doctor.
 - `git diff --check` passed.
 
+Self-hosting evidence on 2026-07-23:
+
+- A clean package was generated from four production Program modules,
+  `types.md`, and retained non-Program inputs with the pinned Sol/xhigh runner.
+  No generated implementation file was hand-patched.
+- The initial clean generation passed the then-current semantic public oracle,
+  29/29. Later Program changes were applied to that generated package through
+  incremental synchronization rather than full regeneration; the evolved
+  package passed the then-current 30/30 oracle milestone. Those counts are
+  historical experiment checkpoints; the current mature oracle contains 55
+  tests as recorded above. The independently generated package also passes all
+  55 after incremental evolution.
+- Incremental synchronization preserved the generated package's unrelated
+  implementation and changed only the owned files needed by the Program delta.
+- The generated compiler contained an observable explicit-baseline bug even
+  though Program already stated the correct precedence. The independent oracle
+  found it, and one Program-driven reconciliation changed two conditions in one
+  private file. This establishes that managed implementation is durable,
+  verified realization source rather than disposable AI output.
+- The mature compiler and the independently generated compiler used different
+  encodings for their private accepted checkpoints. That representation is
+  intentionally not a public interchange format. At compiler handoff, the
+  generated package established a new accepted epoch from an explicit committed
+  Git base; Program, managed implementation, public synchronization behavior,
+  and ordinary project history remain the compatibility contract.
+- A final handoff regression proved that an incompatible private ref is
+  replaced atomically without invoking the runner. With Codex absent, every
+  generated production module accepted that explicit base and then returned
+  `NO_CHANGE` under ordinary default invocation, changed zero files, and
+  preserved byte-identical implementation and projection hashes.
+
 Deliberately deferred:
 
-- The whole-tree import command, per-run resume orchestration, and final
-  history compaction described in section 17.
-- Declared auxiliary ownership and multi-artifact synchronization; the current
-  write boundary is one Program file and one primary target.
+- Whole-tree import/resume orchestration and final history compaction beyond
+  the current changed-file scheduler, as described in section 17. One Program
+  module may already own its primary target and regular private files below its
+  deterministic auxiliary root.
 - City Explorer consumption of the deterministic projections.
 - An externally enforced filesystem sandbox for the Codex process.

@@ -1,12 +1,12 @@
 TARGET INSTRUCTIONS: JAVASCRIPT
 
-This target is one `.js` or `.mjs` module. `.mjs` is ESM. For `.js`, preserve
+This target has one primary `.js` or `.mjs` module and may have private owned
+artifacts below the supplied auxiliary root. `.mjs` is ESM. For `.js`, preserve
 the module system established by the current implementation and retained
 package context.
 
-- For every exported callable, including a command entrypoint, its opening
-  signature sentence must explicitly say what it returns or that it returns no
-  value. Never end that first sentence after listing only its parameters.
+- Read every callable boundary from its `Parameters`, `What it does`, and
+  `Returns` sections. Do not infer an older opening-signature convention.
 - Source facts expose `parameterGroups`; each entry is one actual argument.
   Preserve that grouping exactly. A group whose kind is `object` is one object
   argument containing its listed field names, never several positional
@@ -17,15 +17,21 @@ package context.
   previously flattened incorrectly. Emit one argument and pass one object at
   every affected call site. Public object keys come from Program; target-local
   destructuring aliases are private realization details.
-- When an opening signature combines positional arguments with an object
-  argument, preserve every group in the stated order. For example, “`source`
-  as text and one object containing `path`” means `(source, { path })`, never
+- When Parameters combines positional arguments with an object argument,
+  preserve every top-level bullet in the stated order. A `source` bullet
+  followed by an object containing `path` means `(source, { path })`, never
   `(source, options)` and never `({ source, options })`.
-- Preserve exact named, default, forwarded, CommonJS, and side-effect export
-  shape.
+- The primary target must expose exactly the Program Provides surface. It may
+  use named, default, forwarded, or CommonJS exports as appropriate to the
+  retained package context. Exports inside the owned auxiliary root are private
+  implementation and do not add Program symbols.
 - A callable default export is provided as `default()`. A forwarding export
   uses its exact public exported name; `export *` is represented by `*` while
   its provider Uses enumerate the reachable forwarded public symbols.
+- Resolve a project provider's forwarding exports transitively through its
+  read-only owned auxiliary tree when validating a consumer. A provider barrel
+  is a valid public boundary even when the final declaration is private to that
+  provider module.
 - When an import has a local alias, the Uses text names the local symbol while
   its link targets the exact provider symbol supplied in the capsule.
 - Describe standalone exported functions, intentionally public exported class
@@ -37,15 +43,13 @@ package context.
 - ProgSync enforces executable permission bits for a provided command
   deterministically. Preserve or create its shebang, but do not block solely
   because your file-editing tools cannot change permission bits.
-- A `name.test.js` or `name.test.mjs` file provides one test suite named
-  exactly `name tests`, using a level-three backticked heading without
-  parentheses. Describe every registered test's setup, operation, assertions,
-  and meaningful failure evidence. The suite is observable entrypoint behavior,
-  not a JavaScript export; same-file test helpers remain implementation details.
+- Do not create Program test counterparts. Existing tests are independent
+  verification and remain outside the atomic write boundary.
 - Registries, action collections, re-exports, and commands are ordinary
   JavaScript surfaces, not special Program constructs.
-- Same-file functions, private or convention-private methods, closures, fields,
-  nested classes, and helper objects remain implementation details.
+- Same-file functions, owned-auxiliary functions, private or
+  convention-private methods, closures, fields, nested classes, and helper
+  objects remain implementation details.
 - Treat JSDoc records and object shapes crossing exported function or class
   boundaries as candidate shared complex types. Reuse the exact existing type
   when one matches; otherwise define it in `program/types.md` when that path is
@@ -57,13 +61,31 @@ package context.
 - Resolve every meaningful imported operation through supplied source facts or
   resolved Program references. A member chain such as `this.stores.alertEmails`
   does not establish an origin by itself.
+- Preserve the ownership of retained assets. An asset owned by the package being
+  generated must be resolved relative to that installed package at runtime; do
+  not redirect it through an unrelated project-root argument merely because the
+  package operates on other projects.
+- Include project-owned retained asset files supplied in the capsule when
+  validating relative module links. JSON assets may satisfy a relative default
+  import after successful JSON parsing even though they are not owned
+  implementation and cannot be edited.
+- Preserve the complete source-surface evidence record used for assimilation.
+  It must distinguish complete evidence from partial or ambiguous analysis and
+  list evidence per exported symbol; do not collapse it into a name-keyed map
+  with no completeness state.
 - Preserve exact arguments, object-field meanings, used return values, call
   order, completion dependencies, mutation, repetition, concurrency, and
   failure behavior.
+- For line-oriented parsers, make an absent following section boundary equal to
+  the finite input length. Every loop must stop before it can read a missing
+  line, including when the final section extends to end of file.
 - A resolved complex return type is a field-level contract. Generate its exact
   public keys and populate each from the source stated by Program. Exact status,
   mode, reason, and discriminator literals are observable data and must not be
   shortened or paraphrased.
+- Diagnostic codes and required message forms stated by Program are likewise
+  observable data. Preserve them literally rather than inventing a shared
+  generic error code or paraphrasing the message.
 - An outside-call sentence that states an argument count and uses semicolons to
   separate its groups is an exact call boundary. Generate that many arguments;
   “one object containing ...” is one of them. Never collapse all groups into a
@@ -90,6 +112,11 @@ package context.
   realization mechanism out of Program.
 - Do not invent a database, filesystem, service, global, package, retry,
   persistence effect, authorization rule, or logging behavior.
+- A detached subprocess must not outlive externally cancelled work when
+  Program says cancellation leaves no descendants. Install and remove the
+  necessary parent-signal handling, terminate the complete owned process
+  group, await closure, and preserve the original parent signal. Apply this
+  only to the named long-running boundary, not every unrelated short command.
 - Browser and Node ambient APIs are outside capabilities. Describe them when
   they contribute observable behavior, using the supplied `platform:` identity
   or return blocked when no exact identity is available.

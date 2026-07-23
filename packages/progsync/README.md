@@ -2,9 +2,16 @@
 
 ProgSync keeps readable Program modules and their managed implementations
 synchronized. It currently incubates inside Vibe64 as an independent workspace
-package. Core synchronization is isolated in this package; its temporary
-`command.js` adapter uses Vibe64's execution gateway. Extracting the package
-requires replacing that single process-execution seam.
+package. It has no Vibe64 runtime dependency: the default runner starts Codex
+directly, and the package can be moved to its own repository without changing
+its public API.
+
+Program and managed implementation are complementary source. Program owns
+observable meaning and intentional public composition. Managed implementation
+owns compatible accumulated realization knowledge, including private structure,
+optimizations, visual refinement, and verified repairs to synthesis errors.
+ProgSync reconciles both against their last accepted pair; it does not treat a
+working implementation as disposable compiler output.
 
 ## CLI
 
@@ -31,7 +38,8 @@ performs the same discovery without invoking AI or writing anything.
 retained as explicit compatibility commands and apply validated candidates
 unless `--dry-run` is supplied. Every operation accepts `--project-root` and
 `--base`. An explicit `--base` bypasses private accepted state for that
-invocation. `check` validates the complete Program graph and materializes any
+invocation, including every recorded context or dependency hash. `check`
+validates the complete Program graph and materializes any
 missing or stale deterministic `.program/index/**/*.md.json` projections
 while removing orphaned per-file projections, without invoking AI. It does not
 build the project or prove behavioral
@@ -45,19 +53,19 @@ be composed with any project-aware agent runner.
 
 The package exports:
 
-- `importProgram()`
-- `compileProgram()`
-- `syncFile()`
+- `synchronizeFile()`
 - `statusFile()`
 - `syncChanged()`
 - `checkProgram()`
-- Program path, parser, validation, and projection functions
+- `parseProgram()`
+- `buildProgramProjection()`
 - `readProgramAuthorPrompt()` for the strict default project-programming prompt
-- `createCodexExecRunner()` for non-interactive Codex execution
 
 Every project operation requires an explicit `projectRoot`. Library callers can
-inject a synchronizer runner for tests; the default invokes `codex exec` through
-the host execution adapter.
+inject a synchronizer runner for tests; the default starts an ephemeral
+`codex exec` process pinned to `gpt-5.6-sol` with `xhigh` reasoning and a
+60-minute bound. A timeout or output-limit failure terminates the complete
+subprocess group so a native Codex descendant cannot outlive its wrapper.
 
 ## Prototype boundaries
 
@@ -97,15 +105,18 @@ directory.
 
 The strict default prompt for a project-aware AI that authors Program is
 `prompts/program-author.txt`. It is distinct from the atomic synchronization
-prompt. A proposed future `progsync doctor` command will apply deterministic
-checks followed by isolated, read-only semantic review; it is specified but not
-implemented in this prototype.
+prompt. `progsync check` performs the deterministic part of the Program doctor:
+it validates the canonical Parameters/What it does/Returns structure, links,
+implicit shared types, projections, and the production-consumer rule. A future
+semantic review may supplement those checks without replacing them.
 
 The Codex runner receives a complete capsule in an ephemeral invocation, with
 shell, web search, connectors, and collaboration disabled. Codex edits only a
 disposable candidate tree through its patch mechanism. ProgSync rejects any
 candidate path outside the selected module boundary, validates the result, and
-only then applies it to the project.
+only then applies it to the project. A repairable deterministic rejection keeps
+that candidate tree intact and gives a fresh runner the complete diagnostic so
+it can repair the candidate in place; no rejected write reaches the project.
 
 Each pair is locked from snapshot through checkpoint. ProgSync rechecks that
 neither real file changed while Codex was working, stages candidate writes,
@@ -121,16 +132,19 @@ The ephemeral candidate is a small standalone temporary Git repository, not a
 uses the single private ref above, so synchronizing hundreds of files does not
 create hundreds of worktrees or refs.
 
-Declared auxiliary ownership is not implemented in this first package. The
-ordinary write boundary is exactly one Program file and one primary target.
+Each target-bound Program module owns one primary target and a deterministic
+private auxiliary root: remove the target's final extension and append `/`.
+For example, `program/src/index.js.md` owns `src/index.js` and every regular
+file below `src/index/`. The Atomic Synchronizer may create and minimally
+maintain those files in the same transaction, while its public conformance
+surface remains the primary target. Auxiliary exports and imports are private
+implementation links and never become Program Provides or Uses.
+
 Source-to-Program synchronization may additionally update `program/types.md`
 when the implementation establishes a new or changed complex public type. It
 may change only definitions used by that module and preserves unrelated shared
-types.
-
-Standalone CSS and other auxiliary artifacts are preserved because ProgSync
-does not touch them; creating or synchronizing them awaits an explicit
-ownership format.
+types. Standalone CSS normally remains an owned auxiliary of a Vue, HTML, or
+shared presentation module rather than receiving a `.css.md` counterpart.
 
 JavaScript facts come from Babel's parser rather than regular expressions. Vue
 uses the compiler SFC/DOM parsers and accepts `<script setup>` regardless of

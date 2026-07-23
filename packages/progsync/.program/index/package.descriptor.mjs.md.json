@@ -1,0 +1,32 @@
+{
+  "auxiliaryRoot": "package.descriptor/",
+  "diagnostics": [],
+  "preamble": "Declares the temporary Vibe64 package boundary without participating in runtime\nsynchronization.",
+  "programFile": "program/package.descriptor.mjs.md",
+  "provides": [
+    {
+      "description": "The default export is the immutable [Vibe64 package descriptor]. Every nested\nfield uses the exact shape and literal defined by that type; no legacy\ndescriptor aliases are emitted.",
+      "id": "@/package.descriptor.mjs.md#default",
+      "kind": "value",
+      "name": "default",
+      "source": {
+        "line": 12
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "sourceHash": "sha256:2d5f306726f0063596255191a15500dcf7930a45934b5d379ab0f06a23383ed9",
+  "targetFile": "package.descriptor.mjs",
+  "targetKind": "javascript",
+  "title": "Vibe64 ProgSync package descriptor",
+  "typeReferences": [
+    {
+      "name": "Vibe64 package descriptor",
+      "provider": "@/types.md#vibe64-package-descriptor",
+      "source": {
+        "line": 14
+      }
+    }
+  ],
+  "uses": []
+}
