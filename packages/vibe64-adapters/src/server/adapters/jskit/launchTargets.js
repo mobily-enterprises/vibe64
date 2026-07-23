@@ -76,6 +76,10 @@ const JSKIT_LOCAL_PACKAGE_SOURCE_TYPES = new Set([
   "app-local-package",
   "local-package"
 ]);
+const JSKIT_CATALOG_RELATIVE_PATHS = [
+  "node_modules/@jskit-ai/jskit-cli/node_modules/@jskit-ai/jskit-catalog/catalog/packages.json",
+  "node_modules/@jskit-ai/jskit-catalog/catalog/packages.json"
+];
 
 const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
   ".env",
@@ -522,6 +526,19 @@ async function readOptionalJsonFile(worktreePath = "", relativePath = "") {
   }
 }
 
+async function readInstalledJskitCatalog(worktreePath = "") {
+  for (const relativePath of JSKIT_CATALOG_RELATIVE_PATHS) {
+    const file = await readOptionalJsonFile(worktreePath, relativePath);
+    if (file.present) {
+      return file;
+    }
+  }
+  return {
+    present: false,
+    value: null
+  };
+}
+
 function packageLockJskitVersions(lock = {}) {
   const lockedPackages = lock?.packages;
   if (!lockedPackages || typeof lockedPackages !== "object" || Array.isArray(lockedPackages)) {
@@ -573,6 +590,20 @@ function sourceLockJskitState(lock = {}) {
   };
 }
 
+function catalogJskitVersions(catalog = {}) {
+  if (!Array.isArray(catalog?.packages)) {
+    return null;
+  }
+  const packages = catalog.packages.map((entry) => ({
+    packageId: String(entry?.packageId || "").trim(),
+    version: String(entry?.version || "").trim()
+  }));
+  if (packages.some(({ packageId, version }) => !packageId || !version)) {
+    return null;
+  }
+  return new Map(packages.map(({ packageId, version }) => [packageId, version]));
+}
+
 function packageVersionsInclude(expectedVersions = new Map(), requiredVersions = new Map()) {
   return [...requiredVersions].every(([packageId, version]) => {
     return expectedVersions.get(packageId) === version;
@@ -597,33 +628,44 @@ async function jskitDependencyReadiness(session = {}, worktreePath = sessionSour
       ready: false
     };
   }
-  const hasJskitCli = await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"))
-    || await fileExists(path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli"));
-  const [packageLockFile, sourceLockFile] = await Promise.all([
+  const installedJskitCliPath = path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli");
+  const hasInstalledJskitCli = await fileExists(installedJskitCliPath);
+  const hasJskitCli = hasInstalledJskitCli ||
+    await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"));
+  const [catalogFile, packageLockFile, sourceLockFile] = await Promise.all([
+    readInstalledJskitCatalog(worktreePath),
     readOptionalJsonFile(worktreePath, "package-lock.json"),
     readOptionalJsonFile(worktreePath, ".jskit/lock.json")
   ]);
+  const catalogVersions = catalogFile.present
+    ? catalogJskitVersions(catalogFile.value)
+    : null;
   const packageLockVersions = packageLockFile.present
     ? packageLockJskitVersions(packageLockFile.value)
     : null;
   const sourceLockState = sourceLockFile.present
     ? sourceLockJskitState(sourceLockFile.value)
     : null;
-  if (sourceLockFile.present && (!sourceLockState || !sourceLockState.migrationsSynchronized) ||
-    packageLockVersions && sourceLockState &&
-      !packageVersionsInclude(packageLockVersions, sourceLockState.versions)) {
+  const sourceVersions = sourceLockState?.versions;
+  const sourceMetadataOutOfSync = sourceLockFile.present && (
+    !sourceLockState ||
+    !sourceLockState.migrationsSynchronized ||
+    packageLockVersions && !packageVersionsInclude(packageLockVersions, sourceVersions) ||
+    catalogVersions && !packageVersionsInclude(catalogVersions, sourceVersions)
+  );
+  if (sourceMetadataOutOfSync) {
     return {
       message: UPDATE_JSKIT_DEPENDENCIES_MESSAGE,
       ready: false
     };
   }
-  if (packageLockFile.present && packageLockVersions === null) {
+  if (packageLockFile.present && !packageLockVersions || hasInstalledJskitCli && !catalogVersions) {
     return {
       message: REINSTALL_JSKIT_DEPENDENCIES_MESSAGE,
       ready: false
     };
   }
-  const expectedVersions = packageLockVersions || sourceLockState?.versions;
+  const expectedVersions = packageLockVersions || sourceVersions;
   if (expectedVersions && (
     !hasJskitCli || !await installedJskitPackagesMatchVersions(worktreePath, expectedVersions)
   )) {

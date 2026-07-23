@@ -1322,6 +1322,19 @@ test("jskit launch targets reject incoherent source and installed dependency ver
         lockVersion: 1
       }, null, 2));
     };
+    const writeCatalog = async (version) => {
+      await writeProjectFile(
+        targetRoot,
+        "node_modules/@jskit-ai/jskit-catalog/catalog/packages.json",
+        JSON.stringify({
+          packages: [{
+            packageId: "@jskit-ai/shell-web",
+            version
+          }],
+          schemaVersion: 1
+        }, null, 2)
+      );
+    };
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         "db:migrate": "jskit migrations changed && knex migrate:latest",
@@ -1340,6 +1353,10 @@ test("jskit launch targets reject incoherent source and installed dependency ver
     }, null, 2));
     await writeSourceLock(sourceVersion);
     await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
+    await writeProjectFile(targetRoot, "node_modules/@jskit-ai/jskit-cli/package.json", JSON.stringify({
+      version: "0.2.150"
+    }, null, 2));
+    await writeCatalog(expectedVersion);
     await writeProjectFile(targetRoot, "node_modules/@jskit-ai/shell-web/package.json", JSON.stringify({
       version: staleVersion
     }, null, 2));
@@ -1390,6 +1407,24 @@ test("jskit launch targets reject incoherent source and installed dependency ver
     );
 
     await writeSourceLock(expectedVersion);
+    await writeCatalog(staleVersion);
+    const staleCatalogLockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
+    const staleCatalogSpec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.deepEqual(staleCatalogSpec, {
+      message: updateMessage,
+      ok: false
+    });
+    assert.equal(
+      await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8"),
+      staleCatalogLockBeforeLaunch
+    );
+
+    await writeCatalog(expectedVersion);
     const coherentLockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
     const staleLaunchTarget = (await listJskitLaunchTargets({ session }))
       .find((target) => target.id === "dev");
