@@ -1289,14 +1289,39 @@ test("jskit launch targets accept dependencies installed by the agent", async ()
   });
 });
 
-test("jskit launch targets reject stale installed package versions before migrations run", async () => {
+test("jskit launch targets reject incoherent source and installed dependency versions before migrations run", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const expectedVersion = "0.1.130";
+    const sourceVersion = "0.1.131";
     const staleVersion = "0.1.125";
+    const updateMessage = [
+      "JSKIT source metadata is not synchronized with the project's packages.",
+      "Update the project's JSKIT packages and migrations before running the app."
+    ].join(" ");
     const reinstallMessage = [
       "Installed JSKIT packages do not match package-lock.json.",
       "Reinstall dependencies before running the app."
     ].join(" ");
+    const writeSourceLock = async (version, migrationSyncVersion = version) => {
+      await writeProjectFile(targetRoot, ".jskit/lock.json", JSON.stringify({
+        installedPackages: {
+          "@jskit-ai/shell-web": {
+            source: {
+              type: "npm-installed-package"
+            },
+            version,
+            migrationSyncVersion
+          },
+          "@local/main": {
+            source: {
+              type: "local-package"
+            },
+            version: "0.1.0"
+          }
+        },
+        lockVersion: 1
+      }, null, 2));
+    };
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         "db:migrate": "jskit migrations changed && knex migrate:latest",
@@ -1313,23 +1338,7 @@ test("jskit launch targets reject stale installed package versions before migrat
         }
       }
     }, null, 2));
-    await writeProjectFile(targetRoot, ".jskit/lock.json", JSON.stringify({
-      installedPackages: {
-        "@jskit-ai/shell-web": {
-          source: {
-            type: "npm-installed-package"
-          },
-          version: expectedVersion
-        },
-        "@local/main": {
-          source: {
-            type: "local-package"
-          },
-          version: "0.1.0"
-        }
-      },
-      lockVersion: 1
-    }, null, 2));
+    await writeSourceLock(sourceVersion);
     await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
     await writeProjectFile(targetRoot, "node_modules/@jskit-ai/shell-web/package.json", JSON.stringify({
       version: staleVersion
@@ -1344,6 +1353,44 @@ test("jskit launch targets reject stale installed package versions before migrat
     };
     const lockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
 
+    const incoherentLaunchTarget = (await listJskitLaunchTargets({ session }))
+      .find((target) => target.id === "dev");
+    const incoherentSpec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.equal(incoherentLaunchTarget?.available, false);
+    assert.equal(incoherentLaunchTarget?.disabledReason, updateMessage);
+    assert.deepEqual(incoherentSpec, {
+      message: updateMessage,
+      ok: false
+    });
+    assert.equal(
+      await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8"),
+      lockBeforeLaunch
+    );
+
+    await writeSourceLock(expectedVersion, staleVersion);
+    const unsynchronizedLockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
+    const unsynchronizedSpec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.deepEqual(unsynchronizedSpec, {
+      message: updateMessage,
+      ok: false
+    });
+    assert.equal(
+      await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8"),
+      unsynchronizedLockBeforeLaunch
+    );
+
+    await writeSourceLock(expectedVersion);
+    const coherentLockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
     const staleLaunchTarget = (await listJskitLaunchTargets({ session }))
       .find((target) => target.id === "dev");
     const staleSpec = await createJskitLaunchTargetTerminalSpec({
@@ -1360,7 +1407,7 @@ test("jskit launch targets reject stale installed package versions before migrat
     });
     assert.equal(
       await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8"),
-      lockBeforeLaunch
+      coherentLockBeforeLaunch
     );
 
     await writeProjectFile(targetRoot, "node_modules/@jskit-ai/shell-web/package.json", JSON.stringify({

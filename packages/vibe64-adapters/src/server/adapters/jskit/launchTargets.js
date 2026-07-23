@@ -67,7 +67,15 @@ const REINSTALL_JSKIT_DEPENDENCIES_MESSAGE = [
   "Installed JSKIT packages do not match package-lock.json.",
   "Reinstall dependencies before running the app."
 ].join(" ");
+const UPDATE_JSKIT_DEPENDENCIES_MESSAGE = [
+  "JSKIT source metadata is not synchronized with the project's packages.",
+  "Update the project's JSKIT packages and migrations before running the app."
+].join(" ");
 const JSKIT_NODE_MODULE_PATH_PREFIX = "node_modules/@jskit-ai/";
+const JSKIT_LOCAL_PACKAGE_SOURCE_TYPES = new Set([
+  "app-local-package",
+  "local-package"
+]);
 
 const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
   ".env",
@@ -491,26 +499,36 @@ async function readInstalledPackageVersion(worktreePath = "", packageId = "") {
   }
 }
 
-async function installedJskitPackagesMatchPackageLock(worktreePath = "") {
-  let lock;
+async function readOptionalJsonFile(worktreePath = "", relativePath = "") {
   try {
-    lock = JSON.parse(await readFile(path.join(worktreePath, "package-lock.json"), "utf8"));
+    return {
+      present: true,
+      value: JSON.parse(await readFile(path.join(worktreePath, relativePath), "utf8"))
+    };
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return null;
+      return {
+        present: false,
+        value: null
+      };
     }
     if (error instanceof SyntaxError) {
-      return false;
+      return {
+        present: true,
+        value: null
+      };
     }
     throw error;
   }
+}
 
+function packageLockJskitVersions(lock = {}) {
   const lockedPackages = lock?.packages;
   if (!lockedPackages || typeof lockedPackages !== "object" || Array.isArray(lockedPackages)) {
-    return false;
+    return null;
   }
 
-  const expectedPackages = Object.entries(lockedPackages)
+  const packages = Object.entries(lockedPackages)
     .filter(([packagePath]) => {
       const relativePackagePath = String(packagePath || "").slice(JSKIT_NODE_MODULE_PATH_PREFIX.length);
       return String(packagePath || "").startsWith(JSKIT_NODE_MODULE_PATH_PREFIX) &&
@@ -521,16 +539,55 @@ async function installedJskitPackagesMatchPackageLock(worktreePath = "") {
       packageId: String(packagePath || "").slice("node_modules/".length),
       version: String(entry?.version || "").trim()
     }));
-  if (expectedPackages.some(({ packageId, version }) => !packageId || !version)) {
-    return false;
+  if (packages.length === 0 || packages.some(({ packageId, version }) => !packageId || !version)) {
+    return null;
   }
-  if (expectedPackages.length === 0) {
-    return false;
+  return new Map(packages.map(({ packageId, version }) => [packageId, version]));
+}
+
+function sourceLockJskitState(lock = {}) {
+  const installedPackages = lock?.installedPackages;
+  if (!installedPackages || typeof installedPackages !== "object" || Array.isArray(installedPackages)) {
+    return null;
   }
-  const installedVersions = await Promise.all(expectedPackages.map(({ packageId }) => {
+
+  const packages = Object.entries(installedPackages)
+    .filter(([packageId, entry]) => {
+      const sourceType = String(entry?.source?.type || "").trim();
+      return String(packageId || "").startsWith("@jskit-ai/") &&
+        !JSKIT_LOCAL_PACKAGE_SOURCE_TYPES.has(sourceType);
+    })
+    .map(([packageId, entry]) => ({
+      migrationSyncVersion: String(entry?.migrationSyncVersion || "").trim(),
+      packageId: String(packageId || "").trim(),
+      version: String(entry?.version || "").trim()
+    }));
+  if (packages.some(({ packageId, version }) => !packageId || !version)) {
+    return null;
+  }
+  return {
+    migrationsSynchronized: packages.every(({ migrationSyncVersion, version }) => {
+      return migrationSyncVersion === version;
+    }),
+    versions: new Map(packages.map(({ packageId, version }) => [packageId, version]))
+  };
+}
+
+function packageVersionsInclude(expectedVersions = new Map(), requiredVersions = new Map()) {
+  return [...requiredVersions].every(([packageId, version]) => {
+    return expectedVersions.get(packageId) === version;
+  });
+}
+
+async function installedJskitPackagesMatchVersions(worktreePath = "", expectedVersions = new Map()) {
+  if (expectedVersions.size === 0) {
+    return true;
+  }
+  const packages = [...expectedVersions].map(([packageId, version]) => ({ packageId, version }));
+  const installedVersions = await Promise.all(packages.map(({ packageId }) => {
     return readInstalledPackageVersion(worktreePath, packageId);
   }));
-  return expectedPackages.every(({ version }, index) => installedVersions[index] === version);
+  return packages.every(({ version }, index) => installedVersions[index] === version);
 }
 
 async function jskitDependencyReadiness(session = {}, worktreePath = sessionSourcePath(session)) {
@@ -542,8 +599,34 @@ async function jskitDependencyReadiness(session = {}, worktreePath = sessionSour
   }
   const hasJskitCli = await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"))
     || await fileExists(path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli"));
-  const lockMatchesInstalledPackages = await installedJskitPackagesMatchPackageLock(worktreePath);
-  if (lockMatchesInstalledPackages !== null && (!hasJskitCli || !lockMatchesInstalledPackages)) {
+  const [packageLockFile, sourceLockFile] = await Promise.all([
+    readOptionalJsonFile(worktreePath, "package-lock.json"),
+    readOptionalJsonFile(worktreePath, ".jskit/lock.json")
+  ]);
+  const packageLockVersions = packageLockFile.present
+    ? packageLockJskitVersions(packageLockFile.value)
+    : null;
+  const sourceLockState = sourceLockFile.present
+    ? sourceLockJskitState(sourceLockFile.value)
+    : null;
+  if (sourceLockFile.present && (!sourceLockState || !sourceLockState.migrationsSynchronized) ||
+    packageLockVersions && sourceLockState &&
+      !packageVersionsInclude(packageLockVersions, sourceLockState.versions)) {
+    return {
+      message: UPDATE_JSKIT_DEPENDENCIES_MESSAGE,
+      ready: false
+    };
+  }
+  if (packageLockFile.present && packageLockVersions === null) {
+    return {
+      message: REINSTALL_JSKIT_DEPENDENCIES_MESSAGE,
+      ready: false
+    };
+  }
+  const expectedVersions = packageLockVersions || sourceLockState?.versions;
+  if (expectedVersions && (
+    !hasJskitCli || !await installedJskitPackagesMatchVersions(worktreePath, expectedVersions)
+  )) {
     return {
       message: REINSTALL_JSKIT_DEPENDENCIES_MESSAGE,
       ready: false
