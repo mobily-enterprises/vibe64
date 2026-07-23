@@ -62,6 +62,12 @@ const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
 const AGENT_RUNS_DIR_NAME = "agent-runs";
+const INSTALL_DEPENDENCIES_MESSAGE = "Install dependencies before running the app.";
+const REINSTALL_JSKIT_DEPENDENCIES_MESSAGE = [
+  "Installed JSKIT packages do not match package-lock.json.",
+  "Reinstall dependencies before running the app."
+].join(" ");
+const JSKIT_NODE_MODULE_PATH_PREFIX = "node_modules/@jskit-ai/";
 
 const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
   ".env",
@@ -468,22 +474,93 @@ function jskitLaunchTargetWithPreviewOptions(id, label, {
   });
 }
 
-async function jskitDependenciesReady(session = {}, worktreePath = sessionSourcePath(session)) {
-  if (String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes") {
-    return true;
+async function readInstalledPackageVersion(worktreePath = "", packageId = "") {
+  const nodeModulesRoot = path.resolve(worktreePath, "node_modules");
+  const packageJsonPath = path.resolve(nodeModulesRoot, packageId, "package.json");
+  if (!packageJsonPath.startsWith(`${nodeModulesRoot}${path.sep}`)) {
+    return "";
   }
-  if (!worktreePath) {
-    return false;
+  try {
+    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+    return String(packageJson?.version || "").trim();
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) {
+      return "";
+    }
+    throw error;
   }
-  return await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"))
-    || await fileExists(path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli"));
 }
 
-function markLaunchTargetDependencyBlocked(launchTarget) {
+async function installedJskitPackagesMatchPackageLock(worktreePath = "") {
+  let lock;
+  try {
+    lock = JSON.parse(await readFile(path.join(worktreePath, "package-lock.json"), "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    if (error instanceof SyntaxError) {
+      return false;
+    }
+    throw error;
+  }
+
+  const lockedPackages = lock?.packages;
+  if (!lockedPackages || typeof lockedPackages !== "object" || Array.isArray(lockedPackages)) {
+    return false;
+  }
+
+  const expectedPackages = Object.entries(lockedPackages)
+    .filter(([packagePath]) => {
+      const relativePackagePath = String(packagePath || "").slice(JSKIT_NODE_MODULE_PATH_PREFIX.length);
+      return String(packagePath || "").startsWith(JSKIT_NODE_MODULE_PATH_PREFIX) &&
+        relativePackagePath &&
+        !relativePackagePath.includes("/");
+    })
+    .map(([packagePath, entry]) => ({
+      packageId: String(packagePath || "").slice("node_modules/".length),
+      version: String(entry?.version || "").trim()
+    }));
+  if (expectedPackages.some(({ packageId, version }) => !packageId || !version)) {
+    return false;
+  }
+  if (expectedPackages.length === 0) {
+    return false;
+  }
+  const installedVersions = await Promise.all(expectedPackages.map(({ packageId }) => {
+    return readInstalledPackageVersion(worktreePath, packageId);
+  }));
+  return expectedPackages.every(({ version }, index) => installedVersions[index] === version);
+}
+
+async function jskitDependencyReadiness(session = {}, worktreePath = sessionSourcePath(session)) {
+  if (!worktreePath) {
+    return {
+      message: INSTALL_DEPENDENCIES_MESSAGE,
+      ready: false
+    };
+  }
+  const hasJskitCli = await fileExists(path.join(worktreePath, "node_modules", ".bin", "jskit"))
+    || await fileExists(path.join(worktreePath, "node_modules", "@jskit-ai", "jskit-cli"));
+  const lockMatchesInstalledPackages = await installedJskitPackagesMatchPackageLock(worktreePath);
+  if (lockMatchesInstalledPackages !== null && (!hasJskitCli || !lockMatchesInstalledPackages)) {
+    return {
+      message: REINSTALL_JSKIT_DEPENDENCIES_MESSAGE,
+      ready: false
+    };
+  }
+  const metadataSaysInstalled = String(session.metadata?.dependencies_installed || "").trim().toLowerCase() === "yes";
+  return {
+    message: INSTALL_DEPENDENCIES_MESSAGE,
+    ready: metadataSaysInstalled || hasJskitCli
+  };
+}
+
+function markLaunchTargetDependencyBlocked(launchTarget, message = INSTALL_DEPENDENCIES_MESSAGE) {
   return {
     ...launchTarget,
     available: false,
-    disabledReason: "Install dependencies before running the app."
+    disabledReason: message
   };
 }
 
@@ -964,9 +1041,13 @@ async function listJskitLaunchTargets({
       previewRoutes
     }));
   }
-  return await jskitDependenciesReady(session, worktreePath)
+  const dependencyReadiness = await jskitDependencyReadiness(session, worktreePath);
+  return dependencyReadiness.ready
     ? launchTargets
-    : launchTargets.map(markLaunchTargetDependencyBlocked);
+    : launchTargets.map((launchTarget) => markLaunchTargetDependencyBlocked(
+        launchTarget,
+        dependencyReadiness.message
+      ));
 }
 
 async function createJskitBuiltLaunchDescriptor({
@@ -1094,9 +1175,6 @@ async function createJskitLaunchTargetTerminalSpec({
       message: `Unknown JSKIT launch target: ${launchTargetId || "(empty)"}.`
     };
   }
-  const launchTarget = context.launchTarget || jskitLaunchTargetWithPreviewOptions(launchTargetId, launchTargetId, {
-    config: context.config || {}
-  });
   const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
@@ -1104,22 +1182,24 @@ async function createJskitLaunchTargetTerminalSpec({
       message: "Create the session clone before running the app."
     };
   }
-  if (!await jskitDependenciesReady(session, worktreePath)) {
-    return {
-      ok: false,
-      message: "Install dependencies before running the app."
-    };
-  }
   const availableLaunchTargets = await listJskitLaunchTargets({
     config: context.config || {},
     session
   });
-  if (!availableLaunchTargets.some((availableTarget) => availableTarget.id === launchTargetId)) {
+  const availableLaunchTarget = availableLaunchTargets.find((target) => target.id === launchTargetId);
+  if (!availableLaunchTarget) {
     return {
       ok: false,
       message: `JSKIT launch target ${launchTargetId} is not configured.`
     };
   }
+  if (availableLaunchTarget.available === false) {
+    return {
+      ok: false,
+      message: availableLaunchTarget.disabledReason
+    };
+  }
+  const launchTarget = context.launchTarget || availableLaunchTarget;
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
   const launchConfigRoot = worktreePath;

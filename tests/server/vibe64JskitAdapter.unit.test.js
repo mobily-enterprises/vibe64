@@ -1289,6 +1289,99 @@ test("jskit launch targets accept dependencies installed by the agent", async ()
   });
 });
 
+test("jskit launch targets reject stale installed package versions before migrations run", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const expectedVersion = "0.1.130";
+    const staleVersion = "0.1.125";
+    const reinstallMessage = [
+      "Installed JSKIT packages do not match package-lock.json.",
+      "Reinstall dependencies before running the app."
+    ].join(" ");
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        "db:migrate": "jskit migrations changed && knex migrate:latest",
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+    await writeProjectFile(targetRoot, "package-lock.json", JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "": {},
+        "node_modules/@jskit-ai/shell-web": {
+          version: expectedVersion
+        }
+      }
+    }, null, 2));
+    await writeProjectFile(targetRoot, ".jskit/lock.json", JSON.stringify({
+      installedPackages: {
+        "@jskit-ai/shell-web": {
+          source: {
+            type: "npm-installed-package"
+          },
+          version: expectedVersion
+        },
+        "@local/main": {
+          source: {
+            type: "local-package"
+          },
+          version: "0.1.0"
+        }
+      },
+      lockVersion: 1
+    }, null, 2));
+    await writeProjectFile(targetRoot, "node_modules/.bin/jskit", "#!/usr/bin/env node\n");
+    await writeProjectFile(targetRoot, "node_modules/@jskit-ai/shell-web/package.json", JSON.stringify({
+      version: staleVersion
+    }, null, 2));
+    const session = {
+      metadata: {
+        dependencies_installed: "yes",
+        source_path: targetRoot
+      },
+      sessionId: "jskit_launch_with_stale_dependencies",
+      targetRoot
+    };
+    const lockBeforeLaunch = await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8");
+
+    const staleLaunchTarget = (await listJskitLaunchTargets({ session }))
+      .find((target) => target.id === "dev");
+    const staleSpec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.equal(staleLaunchTarget?.available, false);
+    assert.equal(staleLaunchTarget?.disabledReason, reinstallMessage);
+    assert.deepEqual(staleSpec, {
+      message: reinstallMessage,
+      ok: false
+    });
+    assert.equal(
+      await readFile(path.join(targetRoot, ".jskit", "lock.json"), "utf8"),
+      lockBeforeLaunch
+    );
+
+    await writeProjectFile(targetRoot, "node_modules/@jskit-ai/shell-web/package.json", JSON.stringify({
+      version: expectedVersion
+    }, null, 2));
+
+    const readyLaunchTarget = (await listJskitLaunchTargets({ session }))
+      .find((target) => target.id === "dev");
+    const readySpec = await createJskitLaunchTargetTerminalSpec({
+      launchTargetId: "dev",
+      session,
+      targetRoot
+    });
+
+    assert.ok(readyLaunchTarget);
+    assert.equal(readyLaunchTarget.disabledReason, undefined);
+    assert.equal(readySpec.ok, true);
+    assert.equal(readySpec.metadata.migrationCommand, "npm run db:migrate");
+  });
+});
+
 test("jskit launch targets use the managed session source metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "session-with-managed-source";
