@@ -407,9 +407,13 @@
 
       <Vibe64SessionRecoveryNotice
         v-if="sessionRecovery"
+        :decision-required="sessionRecoveryDecisionRequired"
         :error="sessionRecoveryError"
         :recovery="sessionRecovery"
+        :repair-requested="sessionRecoveryRepairRequested"
+        :repairing="sessionRecoveryRepairSending"
         :resolving-key="sessionRecoveryResolvingKey"
+        @repair="requestSessionRecoveryRepair"
         @resolve="resolveSessionRecovery"
       />
 
@@ -1045,6 +1049,7 @@ const {
   returnToCommandFailureRecovery,
   requestAgentInterrupt,
   requestCommandAiFix,
+  requestSessionRecoveryRepair,
   resolveSessionRecovery,
   resendOptimisticComposerTurn,
   loadMoreChatTurns,
@@ -1067,7 +1072,10 @@ const {
   selectedWorkflowButtonControls,
   sessionId,
   sessionRecovery,
+  sessionRecoveryDecisionRequired,
   sessionRecoveryError,
+  sessionRecoveryRepairRequested,
+  sessionRecoveryRepairSending,
   sessionRecoveryResolvingKey,
   sessionConfigEditable,
   sessionSourceRoot,

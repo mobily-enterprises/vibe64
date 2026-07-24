@@ -9,6 +9,7 @@ import {
   resolveGithubHomeForStoredActor
 } from "@local/vibe64-execution/server";
 import {
+  SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   sessionGitCommandActorFromMetadata,
   sessionRequiresGithubActor
 } from "./sessionGitCommandActor.js";
@@ -46,6 +47,12 @@ const VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV = "VIBE64_CODEX_GIT_COMMAND_SESSIO
 const VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV = "VIBE64_CODEX_GIT_COMMAND_SOCKET";
 const VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV = "VIBE64_CODEX_GIT_COMMAND_TOKEN";
 const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
+const CODEX_GIT_COMMAND_METADATA_NAMES = Object.freeze([
+  ...SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
+  "agent_identity_conversation_id",
+  "github_repository",
+  "workflow_driver_username"
+]);
 
 const commandServers = new Map();
 
@@ -324,6 +331,40 @@ function gitCommandActorFromSession(session = {}, {
   };
 }
 
+async function readGitCommandSession(projectService = {}, sessionId = "") {
+  if (typeof projectService.createSessionStore !== "function") {
+    throw new TypeError("Codex git commands require the project session-store boundary.");
+  }
+  const store = await projectService.createSessionStore({
+    sessionId
+  });
+  if (
+    typeof store?.readSessionSourceDescriptor !== "function" ||
+    typeof store?.readMetadataValue !== "function"
+  ) {
+    throw new TypeError("Codex git commands require bounded session source and metadata reads.");
+  }
+  const [
+    sourceDescriptor,
+    metadataEntries
+  ] = await Promise.all([
+    store.readSessionSourceDescriptor(sessionId),
+    Promise.all(CODEX_GIT_COMMAND_METADATA_NAMES.map(async (name) => [
+      name,
+      await store.readMetadataValue(sessionId, name)
+    ]))
+  ]);
+  return {
+    ...sourceDescriptor,
+    id: sessionId,
+    sessionId,
+    metadata: {
+      ...(sourceDescriptor?.metadata || {}),
+      ...Object.fromEntries(metadataEntries)
+    }
+  };
+}
+
 function normalizeHostCwd(cwd = "", actor = {}) {
   const normalizedCwd = normalizeText(cwd);
   if (!normalizedCwd) {
@@ -466,12 +507,13 @@ function createCodexGitCommandService({
     if (!sessionId) {
       return finish(responseError("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
     }
-    const runtime = await projectService.createRuntime({
-      input: {
-        sessionId
-      }
-    });
-    const session = await runtime.getSession(sessionId);
+    // Codex probes Git frequently while its TUI is active. Git authorization
+    // owns only source and actor metadata; constructing a workflow runtime here
+    // previously reread complete action and conversation history for every
+    // `git status` subcommand (hundreds of MB every few seconds on long-lived
+    // sessions). Keep this hot path structurally bounded—never hide a full
+    // session read here behind caching or throttling.
+    const session = await readGitCommandSession(projectService, sessionId);
     const actor = gitCommandActorFromSession(session, {
       command
     });

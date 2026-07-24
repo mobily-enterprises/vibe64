@@ -1495,6 +1495,80 @@ test("codex provider reads thread status without requesting turns", async () => 
   ]);
 });
 
+test("codex provider resumes threads without returning their history", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push({
+        method,
+        params
+      });
+      return {
+        thread: {
+          id: "thread-1",
+          turns: []
+        }
+      };
+    }
+  });
+
+  const result = await provider.resumeThread("thread-1", {
+    cwd: "/repo/worktree"
+  });
+
+  assert.equal(result.id, "thread-1");
+  assert.deepEqual(requests, [
+    {
+      method: "thread/resume",
+      params: {
+        cwd: "/repo/worktree",
+        excludeTurns: true,
+        threadId: "thread-1"
+      }
+    }
+  ]);
+});
+
+test("codex provider lists a bounded page of thread turns", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push({
+        method,
+        params
+      });
+      return {
+        data: [{
+          id: "turn-1",
+          items: [],
+          status: "inProgress"
+        }]
+      };
+    }
+  });
+
+  const result = await provider.listThreadTurns("thread-1", {
+    itemsView: "full",
+    limit: 1,
+    sortDirection: "desc"
+  });
+
+  assert.equal(result.data[0].id, "turn-1");
+  assert.deepEqual(requests, [
+    {
+      method: "thread/turns/list",
+      params: {
+        itemsView: "full",
+        limit: 1,
+        sortDirection: "desc",
+        threadId: "thread-1"
+      }
+    }
+  ]);
+});
+
 test("codex provider coalesces concurrent availability checks", async () => {
   const provider = new CodexAppServerAgentProvider({});
   let activeClientCalls = 0;

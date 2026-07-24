@@ -4,6 +4,21 @@ import {
 } from "../../src/lib/vibe64TerminalMatchers.js";
 
 describe("Vibe64 terminal matchers", () => {
+  it("does not normalize terminal history when no matchers are configured", () => {
+    const engine = createTerminalMatcherEngine();
+    const output = {
+      toString() {
+        throw new Error("terminal history should remain untouched");
+      }
+    };
+
+    expect(engine.inspect({
+      output,
+      sessionId: "terminal-1",
+      source: "append"
+    })).toEqual([]);
+  });
+
   it("matches plain terminal content that spans streamed chunks", () => {
     const onMatch = vi.fn();
     const engine = createTerminalMatcherEngine({

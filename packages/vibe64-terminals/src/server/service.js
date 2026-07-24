@@ -1312,9 +1312,13 @@ function createService({
     },
 
     writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, context)
-      ));
+      // A terminal write targets an already-open, namespace-owned PTY. It is
+      // transport, not a new assistant operation: putting raw input through
+      // runMainAgentWrite() hydrated the complete workflow session and acquired
+      // the assistant-operation lock for every WebSocket input chunk—often
+      // every keystroke. Long-lived sessions therefore became progressively
+      // slower and terminal restarts contended with ordinary typing.
+      return sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
     },
 
     writeGlobalCodexTerminal(terminalSessionId, data) {

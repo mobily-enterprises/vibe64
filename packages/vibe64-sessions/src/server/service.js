@@ -3702,8 +3702,12 @@ function createService({
 
     async inspectSessionSourceSafety(sessionId) {
       return sessionResult(async () => {
-        const runtime = await projectService.createRuntime(controlRuntimeScopeForSession(sessionId));
-        return inspectSessionSourceSafety(await storedSession(runtime, sessionId));
+        const store = await projectService.createSessionStore({
+          sessionId
+        });
+        return inspectSessionSourceSafety(
+          await store.readSessionSourceDescriptor(sessionId)
+        );
       }, {
         publicResponse: false
       });

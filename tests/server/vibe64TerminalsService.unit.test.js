@@ -2707,6 +2707,9 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
         async createRuntime() {
           return runtime;
         },
+        async createSessionStore() {
+          return runtime.store;
+        },
         async projectConfigEnvironment() {
           return {};
         }
@@ -2798,6 +2801,9 @@ test("Vibe64 Codex visible terminal stays off until requested and its close kill
         async createRuntime() {
           return runtime;
         },
+        async createSessionStore() {
+          return runtime.store;
+        },
         async projectConfigEnvironment() {
           return {};
         }
@@ -2852,7 +2858,7 @@ test("Vibe64 Codex visible terminal stays off until requested and its close kill
   });
 });
 
-test("Vibe64 Codex visible terminal attaches to an active tracked turn without readiness recovery", async () => {
+test("Vibe64 Codex visible terminal subscribes before attaching to an active tracked turn", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-active-turn-attach";
     const threadId = "00000000-0000-4000-8000-000000000217";
@@ -2905,7 +2911,14 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     const providerCalls = {
       ensureRuntime: 0,
       readThreadStatus: [],
-      resumeThread: []
+      resumeThread: [],
+      subscribe: 0
+    };
+    const appServerRuntime = {
+      endpoint: `unix://${path.join(targetRoot, "app-server.sock")}`,
+      runtimeDir: path.join(targetRoot, "app-server"),
+      socketPath: path.join(targetRoot, "app-server.sock"),
+      transport: "unix"
     };
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
@@ -2918,7 +2931,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
         },
         async ensureRuntime() {
           providerCalls.ensureRuntime += 1;
-          throw new Error("Stop before launching the visible terminal.");
+          return appServerRuntime;
         },
         async readThreadStatus(readThreadId) {
           providerCalls.readThreadStatus.push(readThreadId);
@@ -2938,11 +2951,170 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
           };
         },
         subscribe() {
+          providerCalls.subscribe += 1;
           return () => {};
         }
       }),
       codexToolHomeRequired: true,
       codexToolHomeSource: toolHomeSource,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      runCommand(request = {}) {
+        return startTerminalSession({
+          args: [
+            "-e",
+            "process.stdin.resume(); setInterval(() => {}, 1000);"
+          ],
+          command: process.execPath,
+          commandPreview: request.terminal.commandPreview,
+          cwd: request.cwd,
+          detachedIdleTimeoutMs: request.terminal.detachedIdleTimeoutMs,
+          metadata: request.terminal.metadata,
+          namespace: request.terminal.namespace,
+          onClose: request.terminal.onClose,
+          reuseRunning: request.terminal.reuseRunning
+        });
+      }
+    });
+
+    const result = await controller.startTerminal(sessionId, {
+      originId: "tab:test"
+    });
+    const session = await runtime.getSession(sessionId);
+    const run = codexAppServerAgentRunSnapshot(session);
+
+    assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+    assert.equal(providerCalls.ensureRuntime, 2);
+    assert.deepEqual(providerCalls.resumeThread, [threadId]);
+    assert.deepEqual(providerCalls.readThreadStatus, [threadId]);
+    assert.equal(providerCalls.subscribe, 1);
+    assert.equal(run.active, true);
+    assert.equal(run.state, "active");
+    assert.equal(run.providerStatus, "inProgress");
+    assert.equal(run.providerThreadId, threadId);
+    assert.equal(run.providerTurnId, turnId);
+    assert.equal(session.stepMachine?.status, "awaiting_agent_result");
+
+    await controller.closeTerminal(sessionId, result.id);
+  });
+});
+
+test("Vibe64 Codex visible terminal settles an interrupted tracked turn while subscribing", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "visible-terminal-interrupted-turn-reconcile";
+    const threadId = "00000000-0000-4000-8000-000000000218";
+    const turnId = "codex-visible-terminal-interrupted-turn";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        agent_workflow_result_transport: "dynamic_tool_v1",
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_id: "codex_app_server",
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeStepState(sessionId, "maintenance_conversation", {
+      inputPrompt: "Waiting for Codex.",
+      schemaVersion: 1,
+      status: "awaiting_agent_result"
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        inputSource: "workflow",
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      ensureRuntime: 0,
+      listThreadTurns: 0,
+      readThreadStatus: 0,
+      resumeThread: 0,
+      subscribe: 0
+    };
+    const appServerRuntime = {
+      endpoint: `unix://${path.join(targetRoot, "app-server.sock")}`,
+      runtimeDir: path.join(targetRoot, "app-server"),
+      socketPath: path.join(targetRoot, "app-server.sock"),
+      transport: "unix"
+    };
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async ensureRuntime() {
+          providerCalls.ensureRuntime += 1;
+          if (providerCalls.ensureRuntime === 1) {
+            return appServerRuntime;
+          }
+          throw new Error("Stop after thread reconciliation.");
+        },
+        async listThreadTurns() {
+          providerCalls.listThreadTurns += 1;
+          return {
+            data: [{
+              id: turnId,
+              items: [],
+              status: "interrupted"
+            }]
+          };
+        },
+        async readThreadStatus() {
+          providerCalls.readThreadStatus += 1;
+          return {
+            raw: {
+              status: {
+                type: "idle"
+              }
+            }
+          };
+        },
+        async resumeThread() {
+          providerCalls.resumeThread += 1;
+          return {
+            id: threadId
+          };
+        },
+        subscribe() {
+          providerCalls.subscribe += 1;
+          return () => {};
+        }
+      }),
+      codexToolHomeRequired: true,
+      codexToolHomeSource: homedir(),
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -2961,16 +3133,17 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     const run = codexAppServerAgentRunSnapshot(session);
 
     assert.equal(result.ok, false);
-    assert.match(result.error, /Stop before launching the visible terminal/u);
-    assert.equal(providerCalls.ensureRuntime, 1);
-    assert.deepEqual(providerCalls.resumeThread, []);
-    assert.deepEqual(providerCalls.readThreadStatus, []);
-    assert.equal(run.active, true);
-    assert.equal(run.state, "active");
-    assert.equal(run.providerStatus, "inProgress");
+    assert.match(result.error, /Stop after thread reconciliation/u);
+    assert.equal(providerCalls.ensureRuntime, 2);
+    assert.equal(providerCalls.resumeThread, 1);
+    assert.equal(providerCalls.subscribe, 1);
+    assert.equal(providerCalls.readThreadStatus, 1);
+    assert.equal(providerCalls.listThreadTurns, 1);
+    assert.equal(run.active, false);
+    assert.equal(run.state, VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+    assert.equal(run.providerStatus, "interrupted");
     assert.equal(run.providerThreadId, threadId);
     assert.equal(run.providerTurnId, turnId);
-    assert.equal(session.stepMachine?.status, "awaiting_agent_result");
   });
 });
 
@@ -3639,7 +3812,7 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
   });
 });
 
-test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread without resuming it", async () => {
+test("Vibe64 Codex app-server reconciliation joins an already loaded thread once per connection", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "loaded-thread-session";
     const threadId = "00000000-0000-4000-8000-000000000111";
@@ -3666,7 +3839,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
 
     const providerCalls = {
       listLoadedThreads: 0,
-      resumeThread: 0,
+      resumeThread: [],
       startThread: 0,
       subscribe: 0
     };
@@ -3694,9 +3867,14 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
                 nextCursor: null
               };
             },
-            async resumeThread() {
-              providerCalls.resumeThread += 1;
-              throw new Error("loaded thread should not be resumed");
+            async resumeThread(resumedThreadId, params) {
+              providerCalls.resumeThread.push({
+                params,
+                threadId: resumedThreadId
+              });
+              return {
+                id: resumedThreadId
+              };
             },
             async startThread() {
               providerCalls.startThread += 1;
@@ -3715,6 +3893,9 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
         targetRoot,
         async createRuntime() {
           return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
         }
       }
     });
@@ -3724,7 +3905,12 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
     assert.equal(result.ok, true);
     assert.equal(result.results[0].status, "loaded");
     assert.equal(providerCalls.listLoadedThreads, 1);
-    assert.equal(providerCalls.resumeThread, 0);
+    assert.deepEqual(providerCalls.resumeThread, [{
+      params: {
+        cwd: worktree
+      },
+      threadId
+    }]);
     assert.equal(providerCalls.startThread, 0);
     assert.equal(providerCalls.subscribe, 1);
 
@@ -3748,7 +3934,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
     assert.equal(secondResult.ok, true);
     assert.equal(secondResult.results[0].status, "alreadySubscribed");
     assert.equal(providerCalls.listLoadedThreads, 2);
-    assert.equal(providerCalls.resumeThread, 0);
+    assert.equal(providerCalls.resumeThread.length, 1);
     assert.equal(providerCalls.startThread, 0);
     assert.equal(providerCalls.subscribe, 1);
     const healedSession = await runtime.getSession(sessionId);
@@ -3786,6 +3972,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
     const providerCalls = {
       listLoadedThreads: 0,
       readThreadStatus: 0,
+      resumeThread: [],
       subscribe: 0,
       unsubscribe: 0
     };
@@ -3820,6 +4007,15 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
                   activeTurnId: threadTurnId,
                   status: threadStatus
                 }
+              };
+            },
+            async resumeThread(resumedThreadId, params) {
+              providerCalls.resumeThread.push({
+                params,
+                threadId: resumedThreadId
+              });
+              return {
+                id: resumedThreadId
               };
             },
             subscribe() {
@@ -3857,12 +4053,162 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
     assert.equal(thirdResult.results[0].status, "resubscribed");
     assert.equal(providerCalls.listLoadedThreads, 3);
     assert.equal(providerCalls.readThreadStatus, 3);
+    assert.deepEqual(providerCalls.resumeThread, [
+      {
+        params: {
+          cwd: worktree
+        },
+        threadId
+      },
+      {
+        params: {
+          cwd: worktree
+        },
+        threadId
+      }
+    ]);
     assert.equal(providerCalls.subscribe, 2);
     assert.equal(providerCalls.unsubscribe, 1);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, threadTurnId);
+  });
+});
+
+test("Vibe64 Codex app-server wellbeing keeps an active subscription without hydrating the session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "active-thread-lightweight-wellbeing";
+    const threadId = "00000000-0000-4000-8000-000000000124";
+    const turnId = "active-turn-lightweight-wellbeing";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_id: "codex_app_server",
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "codex_app_server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+
+    let getSessionCalls = 0;
+    const countedRuntime = new Proxy(runtime, {
+      get(target, property) {
+        if (property === "getSession") {
+          return async (...args) => {
+            getSessionCalls += 1;
+            return target.getSession(...args);
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+    });
+    const providerCalls = {
+      listLoadedThreads: 0,
+      readThreadStatus: 0,
+      resumeThread: 0,
+      subscribe: 0
+    };
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerDaemonWellbeingMs: 20,
+        codexAppServerProviderFactory() {
+          return {
+            currentConnectionGeneration() {
+              return 1;
+            },
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async listLoadedThreads() {
+              providerCalls.listLoadedThreads += 1;
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            async readThreadStatus() {
+              providerCalls.readThreadStatus += 1;
+              return {
+                raw: {
+                  activeTurnId: turnId,
+                  status: {
+                    type: "active"
+                  }
+                }
+              };
+            },
+            async resumeThread() {
+              providerCalls.resumeThread += 1;
+              return {
+                id: threadId
+              };
+            },
+            async stopRuntime() {
+              return {
+                removed: true
+              };
+            },
+            subscribe() {
+              providerCalls.subscribe += 1;
+              return () => null;
+            }
+          };
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return countedRuntime;
+        },
+        async createSessionStore() {
+          return runtime.store;
+        }
+      }
+    });
+
+    const result = await terminalService.reconcileAgentSessions([{ sessionId }]);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    const hydratedAfterReconcile = getSessionCalls;
+    await waitForCondition(
+      () => providerCalls.readThreadStatus >= 2,
+      "Timed out waiting for the lightweight Codex wellbeing heartbeat."
+    );
+    await delay(30);
+
+    assert.equal(providerCalls.listLoadedThreads, 1);
+    assert.equal(providerCalls.subscribe, 1);
+    assert.equal(providerCalls.resumeThread, 1);
+    assert.equal(getSessionCalls, hydratedAfterReconcile);
+
+    await terminalService.closeSessionTerminals(sessionId);
   });
 });
 
@@ -4354,6 +4700,9 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
         targetRoot,
         async createRuntime() {
           return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
         },
         async projectConfigEnvironment() {
           return {};
@@ -4897,21 +5246,25 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
     });
     assert.equal(terminal.ok, true);
 
+    const runtime = {
+      async getSession() {
+        return session;
+      }
+    };
     const terminalService = createTestTerminalService({
       projectService: {
         targetRoot,
         async createRuntime() {
-          return {
-            async getSession() {
-              return session;
-            }
-          };
+          return runtime;
         }
       }
     });
 
     try {
-      let state = await terminalService.agentSessionState(sessionId);
+      let state = await terminalService.agentSessionState(sessionId, {
+        runtime,
+        session
+      });
       assert.equal(state.terminal.status, "running");
       assert.equal(state.terminal.transmitting, undefined);
       assert.equal(state.terminal.attentionRequired, undefined);
@@ -4923,7 +5276,10 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
           providerTurnId: "turn-1"
         })
       ];
-      state = await terminalService.agentSessionState(sessionId);
+      state = await terminalService.agentSessionState(sessionId, {
+        runtime,
+        session
+      });
       assert.equal(state.turn.active, true);
       assert.equal(state.turn.state, "active");
       assert.equal(state.turn.status, "inProgress");
@@ -4938,7 +5294,10 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
           state: "active"
         })
       ];
-      state = await terminalService.agentSessionState(sessionId);
+      state = await terminalService.agentSessionState(sessionId, {
+        runtime,
+        session
+      });
       assert.equal(state.turn.active, true);
       assert.equal(state.turn.state, "active");
       assert.equal(state.turn.status, "inProgress");
@@ -4969,20 +5328,24 @@ test("Vibe64 Codex terminal state has no stale process fallback when memory atta
       sessionRoot,
       targetRoot
     };
+    const runtime = {
+      async getSession() {
+        return session;
+      }
+    };
     const terminalService = createTestTerminalService({
       projectService: {
         targetRoot,
         async createRuntime() {
-          return {
-            async getSession() {
-              return session;
-            }
-          };
+          return runtime;
         }
       }
     });
 
-    const state = await terminalService.agentSessionState(sessionId);
+    const state = await terminalService.agentSessionState(sessionId, {
+      runtime,
+      session
+    });
 
     assert.equal(state.ok, true);
     assert.equal(state.terminal, null);
@@ -4990,16 +5353,29 @@ test("Vibe64 Codex terminal state has no stale process fallback when memory atta
   });
 });
 
-test("Vibe64 Codex terminal state reuses the supplied session runtime", async () => {
+test("Vibe64 Codex terminal state projects supplied active state without recovery or hydration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_terminal_existing_runtime";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const session = {
-      metadata: {},
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerThreadId: "019c65d8-64a0-7b23-85ca-d9ec99f2cf69",
+          providerTurnId: "019c65d8-64a0-7b23-85ca-d9ec99f2cf70",
+          state: VIBE64_AGENT_RUN_STATE.ACTIVE
+        })
+      ],
+      metadata: {
+        agent_transport_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "codex-app-server"),
+        ...testSourceMetadataForPath(worktree)
+      },
       sessionId,
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     let createRuntimeCalls = 0;
     let getSessionCalls = 0;
+    let readThreadStatusCalls = 0;
     const runtime = {
       async getSession() {
         getSessionCalls += 1;
@@ -5007,6 +5383,18 @@ test("Vibe64 Codex terminal state reuses the supplied session runtime", async ()
       }
     };
     const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory: () => ({
+          async readThreadStatus() {
+            readThreadStatusCalls += 1;
+            return {
+              raw: {
+                status: "inProgress"
+              }
+            };
+          }
+        })
+      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -5022,8 +5410,10 @@ test("Vibe64 Codex terminal state reuses the supplied session runtime", async ()
     });
 
     assert.equal(state.ok, true);
+    assert.equal(state.turn?.active, true);
     assert.equal(createRuntimeCalls, 0);
     assert.equal(getSessionCalls, 0);
+    assert.equal(readThreadStatusCalls, 0);
   });
 });
 
@@ -6194,6 +6584,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       };
     }
     const startupEvents = [];
+    let createRuntimeCalls = 0;
+    let getSessionCalls = 0;
     const runtime = {
       adapter: {
         async listExecutionEnvironmentPreparations() {
@@ -6211,6 +6603,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       stateRoot,
       targetRoot,
       async getSession() {
+        getSessionCalls += 1;
         return session;
       },
       async promptSessionForAction(currentSession) {
@@ -6246,6 +6639,18 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         return session;
       },
       store: {
+        async readAgentRun(_sessionId, runId) {
+          return codexAppServerAgentRunSnapshot(session, runId);
+        },
+        async readMetadataValue(_sessionId, name) {
+          return String(session.metadata[name] || "").trim();
+        },
+        async readCurrentStep() {
+          return session.currentStep;
+        },
+        async readStepState() {
+          return session.stepMachine;
+        },
         async mutateSession(_sessionId, operation) {
           return operation();
         },
@@ -6594,7 +6999,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           };
         },
         async createRuntime() {
+          createRuntimeCalls += 1;
           return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
         }
       },
       publishSessionChanged: async (_sessionId, event = {}) => {
@@ -7335,6 +7744,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "terminal-turn-1"
       }
     });
+    const createRuntimeCallsBeforeTerminalReasoning = createRuntimeCalls;
+    const getSessionCallsBeforeTerminalReasoning = getSessionCalls;
     providerSubscribers[0]({
       method: "item/reasoning/summaryTextDelta",
       params: {
@@ -7346,6 +7757,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(30);
+    assert.equal(createRuntimeCalls, createRuntimeCallsBeforeTerminalReasoning);
+    assert.equal(getSessionCalls, getSessionCallsBeforeTerminalReasoning);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
@@ -7439,6 +7852,38 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       true
     );
     session.stepMachine.status = "done";
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Continuing the long-running goal.",
+              type: "text"
+            }
+          ],
+          id: "terminal-assistant-commentary-1",
+          phase: "commentary",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .flatMap((turn) => (turn.thinking || []).map((message) => message.text))
+        .includes("Continuing the long-running goal."),
+      true
+    );
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.assistant?.text)
+        .filter(Boolean)
+        .includes("Continuing the long-running goal."),
+      false
+    );
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -8671,11 +9116,11 @@ test("Vibe64 Codex terminal websocket input writes directly without actor bookke
     await mkdir(worktree, {
       recursive: true
     });
-    const controller = createCodexTerminalController({
-      codexAuthPreflight: noopCodexAuthPreflight,
+    const terminalService = createTestTerminalService({
       projectService: {
+        targetRoot,
         createRuntime() {
-          throw new Error("Terminal websocket input must not load the project runtime.");
+          throw new Error("Terminal websocket input must not hydrate the workflow session.");
         }
       }
     });
@@ -8697,7 +9142,7 @@ test("Vibe64 Codex terminal websocket input writes directly without actor bookke
     });
 
     try {
-      const result = await controller.writeTerminal(sessionId, terminal.id, "a", {
+      const result = await terminalService.writeAgentTerminal(sessionId, terminal.id, "a", {
         originId: "tab:ada",
         vibe64User: {
           username: "ada"
@@ -9458,6 +9903,541 @@ test("Vibe64 Codex app-server checks live provider state before releasing a fail
     assert.equal(idleEvent.payload?.clientRefresh?.includeLaunchTargets, true);
     assert.equal(Number.isSafeInteger(idleEvent.session?.revision), true);
     assert.equal(idleEvent.session.sessionId, sessionId);
+  });
+});
+
+test("Vibe64 Codex app-server adopts automatic goal continuation turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_goal_continuation";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const threadId = "00000000-0000-4000-8000-000000000220";
+    const firstTurnId = "codex-app-server-goal-turn-1";
+    const recoveredTurnId = "codex-app-server-goal-turn-2";
+    const continuedTurnId = "codex-app-server-goal-turn-3";
+    const runtimeDir = path.join(
+      targetRoot,
+      ".vibe64",
+      "runtime",
+      "agent-providers",
+      "codex-app-server-goal-continuation"
+    );
+    const socketPath = path.join(runtimeDir, "app-server.sock");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_endpoint: `unix://${socketPath}`,
+        agent_transport_id: "codex_app_server",
+        agent_transport_kind: "unix",
+        agent_transport_runtime_dir: runtimeDir,
+        agent_transport_socket_path: socketPath,
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeStepState(sessionId, "maintenance_conversation", {
+      inputPrompt: "Waiting for Codex.",
+      schemaVersion: 1,
+      status: "awaiting_agent_result"
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        inputSource: "workflow",
+        provider: "codex",
+        providerInterface: "codex_app_server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: firstTurnId,
+        state: "active"
+      }
+    });
+
+    let providerTurnId = recoveredTurnId;
+    const providerSubscribers = [];
+    const providerCalls = {
+      interruptTurn: [],
+      readThreadStatus: [],
+      steerTurn: []
+    };
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerActiveReconcileMs: 60_000,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {
+      },
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async ensureRuntime() {
+          return {
+            endpoint: `unix://${socketPath}`,
+            runtimeDir,
+            socketPath,
+            transport: "unix"
+          };
+        },
+        async interruptTurn(interruptedThreadId, interruptedTurnId) {
+          providerCalls.interruptTurn.push({
+            threadId: interruptedThreadId,
+            turnId: interruptedTurnId
+          });
+          return {
+            ok: true
+          };
+        },
+        async listLoadedThreads() {
+          return {
+            data: [
+              threadId
+            ]
+          };
+        },
+        async readThreadStatus(readThreadId) {
+          providerCalls.readThreadStatus.push(readThreadId);
+          return {
+            raw: {
+              activeTurnId: providerTurnId,
+              status: {
+                activeFlags: [],
+                type: "active"
+              }
+            }
+          };
+        },
+        async resumeThread(resumedThreadId) {
+          return {
+            id: resumedThreadId
+          };
+        },
+        async steerTurn(steeredThreadId, steeredTurnId, message, params = {}) {
+          providerCalls.steerTurn.push({
+            message,
+            params,
+            threadId: steeredThreadId,
+            turnId: steeredTurnId
+          });
+          return {
+            ok: true,
+            turnId: steeredTurnId
+          };
+        },
+        async stopRuntime() {
+          return {
+            removed: true
+          };
+        },
+        subscribe(callback) {
+          providerSubscribers.push(callback);
+          return () => null;
+        }
+      }),
+      codexGitCommand: {
+        run: async () => ({
+          ok: true
+        })
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment() {
+          return {};
+        }
+      }
+    });
+
+    const reconciled = await controller.reconcileThreads([sessionId]);
+
+    assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
+    assert.equal(providerSubscribers.length, 1);
+    let session = await runtime.getSession(sessionId);
+    let run = codexAppServerAgentRunSnapshot(session);
+    assert.equal(run.state, "active");
+    assert.equal(run.providerTurnId, recoveredTurnId);
+    assert.equal(
+      run.events.some((event) => (
+        event.kind === "codex-app-server-turn-continued" &&
+        event.previousProviderTurnId === firstTurnId &&
+        event.providerTurnId === recoveredTurnId
+      )),
+      true
+    );
+
+    providerTurnId = continuedTurnId;
+    providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        status: "completed",
+        threadId,
+        turnId: recoveredTurnId
+      }
+    });
+    providerSubscribers[0]({
+      method: "turn/started",
+      params: {
+        status: "inProgress",
+        threadId,
+        turnId: continuedTurnId
+      }
+    });
+
+    await waitForCondition(async () => {
+      const current = await runtime.getSession(sessionId);
+      return codexAppServerAgentRunSnapshot(current).providerTurnId === continuedTurnId;
+    }, "Timed out waiting for Vibe64 to adopt the goal continuation turn.");
+
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryPartAdded",
+      params: {
+        itemId: "goal-continuation-summary",
+        summaryIndex: 0,
+        threadId,
+        turnId: continuedTurnId
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "Continuing the active goal in the successor turn.",
+        itemId: "goal-continuation-summary",
+        summaryIndex: 0,
+        threadId,
+        turnId: continuedTurnId
+      }
+    });
+    await waitForCondition(async () => {
+      const conversation = await runtime.store.readConversationLog(sessionId);
+      return conversation.some((turn) => (
+        (turn.thinking || []).some((message) => (
+          message.text === "Continuing the active goal in the successor turn."
+        ))
+      ));
+    }, "Timed out waiting for successor-turn progress to reach the conversation.");
+
+    const messageResult = await controller.sendMessage(sessionId, {
+      message: "Please include this in the active goal.",
+      originId: "tab:test"
+    });
+
+    assert.equal(messageResult.ok, true, JSON.stringify(messageResult));
+    assert.equal(messageResult.delivered, true);
+    assert.equal(providerCalls.steerTurn.length, 1);
+    assert.equal(providerCalls.steerTurn[0].threadId, threadId);
+    assert.equal(providerCalls.steerTurn[0].turnId, continuedTurnId);
+
+    const interrupted = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
+
+    assert.equal(interrupted.ok, true, JSON.stringify(interrupted));
+    assert.deepEqual(providerCalls.interruptTurn, [
+      {
+        threadId,
+        turnId: continuedTurnId
+      }
+    ]);
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    assert.equal(run.state, "interrupted");
+    assert.equal(run.providerStatus, "interrupted");
+    assert.equal(run.providerTurnId, continuedTurnId);
+  });
+});
+
+test("Vibe64 Codex app-server recovers external goal turns from bounded snapshots", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_external_goal_snapshot";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const threadId = "00000000-0000-4000-8000-000000000221";
+    const previousTurnId = "codex-app-server-external-goal-previous";
+    const activeTurnId = "codex-app-server-external-goal-active";
+    const runtimeDir = path.join(
+      targetRoot,
+      ".vibe64",
+      "runtime",
+      "agent-providers",
+      "codex-app-server-external-goal-snapshot"
+    );
+    const socketPath = path.join(runtimeDir, "app-server.sock");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        agent_transport_endpoint: `unix://${socketPath}`,
+        agent_transport_id: "codex_app_server",
+        agent_transport_kind: "unix",
+        agent_transport_runtime_dir: runtimeDir,
+        agent_transport_socket_path: socketPath,
+        ...testSourceMetadataForPath(worktree)
+      },
+      sessionId,
+      workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "completed"
+      },
+      patch: {
+        inputSource: "terminal",
+        provider: "codex",
+        providerInterface: "codex_app_server",
+        providerStatus: "completed",
+        providerThreadId: threadId,
+        providerTurnId: previousTurnId,
+        state: "completed"
+      }
+    });
+
+    const items = [
+      {
+        id: "external-goal-item-1",
+        phase: "commentary",
+        text: "Recovered external goal progress one.",
+        type: "agentMessage"
+      },
+      {
+        id: "external-goal-item-2",
+        phase: "commentary",
+        text: "Recovered external goal progress two.",
+        type: "agentMessage"
+      }
+    ];
+    let turnStatus = "inProgress";
+    let connectionGeneration = 1;
+    const listThreadTurnsCalls = [];
+    const providerSubscribers = [];
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerActiveReconcileMs: 60_000,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {
+      },
+      codexAppServerProviderFactory: () => ({
+        currentConnectionGeneration() {
+          return connectionGeneration;
+        },
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async ensureRuntime() {
+          return {
+            endpoint: `unix://${socketPath}`,
+            runtimeDir,
+            socketPath,
+            transport: "unix"
+          };
+        },
+        async listLoadedThreads() {
+          return {
+            data: [
+              threadId
+            ]
+          };
+        },
+        async listThreadTurns(listedThreadId, params = {}) {
+          listThreadTurnsCalls.push({
+            params,
+            threadId: listedThreadId
+          });
+          return {
+            data: [{
+              id: activeTurnId,
+              items: items.map((item) => ({
+                ...item
+              })),
+              itemsView: "summary",
+              status: turnStatus
+            }]
+          };
+        },
+        async readThreadStatus() {
+          return {
+            raw: {
+              status: {
+                type: turnStatus === "inProgress" ? "active" : "idle"
+              }
+            }
+          };
+        },
+        async resumeThread(resumedThreadId) {
+          return {
+            id: resumedThreadId
+          };
+        },
+        subscribe(callback) {
+          providerSubscribers.push(callback);
+          return () => null;
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
+        }
+      }
+    });
+
+    const first = await controller.reconcileThreads([sessionId]);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    let session = await runtime.getSession(sessionId);
+    let run = codexAppServerAgentRunSnapshot(session);
+    assert.equal(run.state, "active");
+    assert.equal(run.providerStatus, "inProgress");
+    assert.equal(run.providerThreadId, threadId);
+    assert.equal(run.providerTurnId, activeTurnId);
+    assert.deepEqual(run.providerSnapshotCursor, {
+      itemId: "external-goal-item-2",
+      turnId: activeTurnId
+    });
+    let thinking = (await runtime.store.readConversationLog(sessionId))
+      .flatMap((turn) => turn.thinking || [])
+      .map((message) => message.text);
+    assert.deepEqual(thinking, [
+      "Recovered external goal progress one.",
+      "Recovered external goal progress two."
+    ]);
+
+    const repeated = await controller.reconcileThreads([sessionId]);
+    assert.equal(repeated.ok, true, JSON.stringify(repeated));
+    thinking = (await runtime.store.readConversationLog(sessionId))
+      .flatMap((turn) => turn.thinking || [])
+      .map((message) => message.text);
+    assert.deepEqual(thinking, [
+      "Recovered external goal progress one.",
+      "Recovered external goal progress two."
+    ]);
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    assert.equal(run.state, "active");
+    assert.equal(run.providerTurnId, activeTurnId);
+    assert.equal(providerSubscribers.length, 1);
+
+    providerSubscribers.at(-1)({
+      method: "item/completed",
+      params: {
+        item: {
+          id: "external-goal-live-item-3",
+          phase: "commentary",
+          text: "Recovered external goal progress three.",
+          type: "agentMessage"
+        },
+        threadId,
+        turnId: activeTurnId
+      }
+    });
+    await waitForCondition(async () => {
+      const progress = (await runtime.store.readConversationLog(sessionId))
+        .flatMap((turn) => turn.thinking || [])
+        .map((message) => message.text);
+      return progress.includes("Recovered external goal progress three.");
+    }, "Live external-goal progress was not persisted.", 3_000);
+    items.push({
+      id: "external-goal-summary-item-3",
+      phase: "commentary",
+      text: "Recovered external goal progress three.",
+      type: "agentMessage"
+    });
+    connectionGeneration += 1;
+    const continued = await controller.reconcileThreads([sessionId]);
+    assert.equal(continued.ok, true, JSON.stringify(continued));
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    assert.deepEqual(run.providerSnapshotCursor, {
+      itemId: "external-goal-summary-item-3",
+      turnId: activeTurnId
+    });
+    thinking = (await runtime.store.readConversationLog(sessionId))
+      .flatMap((turn) => turn.thinking || [])
+      .map((message) => message.text);
+    assert.deepEqual(thinking, [
+      "Recovered external goal progress one.",
+      "Recovered external goal progress two.",
+      "Recovered external goal progress three."
+    ]);
+
+    items.push({
+      id: "external-goal-item-4",
+      phase: "final_answer",
+      text: "The recovered external goal is complete.",
+      type: "agentMessage"
+    });
+    turnStatus = "completed";
+    connectionGeneration += 1;
+    const completed = await controller.reconcileThreads([sessionId]);
+    assert.equal(completed.ok, true, JSON.stringify(completed));
+    session = await runtime.getSession(sessionId);
+    run = codexAppServerAgentRunSnapshot(session);
+    assert.equal(run.state, "completed");
+    assert.equal(run.providerStatus, "completed");
+    assert.equal(run.providerTurnId, activeTurnId);
+    assert.deepEqual(run.providerSnapshotCursor, {
+      itemId: "external-goal-item-4",
+      turnId: activeTurnId
+    });
+    let assistant = (await runtime.store.readConversationLog(sessionId))
+      .map((turn) => turn.assistant?.text)
+      .filter(Boolean);
+    assert.deepEqual(assistant, [
+      "The recovered external goal is complete."
+    ]);
+
+    const completedAgain = await controller.reconcileThreads([sessionId]);
+    assert.equal(completedAgain.ok, true, JSON.stringify(completedAgain));
+    assistant = (await runtime.store.readConversationLog(sessionId))
+      .map((turn) => turn.assistant?.text)
+      .filter(Boolean);
+    assert.deepEqual(assistant, [
+      "The recovered external goal is complete."
+    ]);
+    assert.equal(listThreadTurnsCalls.length, 3);
+    for (const call of listThreadTurnsCalls) {
+      assert.equal(call.threadId, threadId);
+      assert.deepEqual(call.params, {
+        itemsView: "summary",
+        limit: 1,
+        sortDirection: "desc"
+      });
+    }
+    await controller.closeAllForSession(sessionId);
   });
 });
 

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import test from "node:test";
 import {
   MAX_TERMINAL_BUFFER_LENGTH,
+  MAX_TERMINAL_BUFFER_ROWS,
   closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
@@ -61,7 +62,42 @@ test("terminal session callbacks receive resolved env", async () => {
 });
 
 test("terminal sessions retain a bounded output buffer", () => {
-  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 2 * 1024 * 1024);
+  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 256 * 1024);
+  assert.equal(MAX_TERMINAL_BUFFER_ROWS, 300);
+});
+
+test("terminal sessions retain only the latest 300 output rows", async () => {
+  const namespace = `terminal-output-rows-${crypto.randomUUID()}`;
+  const lines = Array.from({
+    length: MAX_TERMINAL_BUFFER_ROWS + 20
+  }, (_value, index) => `line-${index + 1}`);
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      `process.stdout.write(${JSON.stringify(lines.join("\n"))});`
+    ],
+    command: process.execPath,
+    commandPreview: "node rows",
+    namespace
+  });
+
+  try {
+    await waitFor(() => readTerminalSession(session.id, {
+      namespace
+    }).status === "exited");
+    const output = readTerminalSession(session.id, {
+      namespace
+    }).output;
+
+    assert.doesNotMatch(output, /line-20\r?\n/u);
+    assert.match(output, /line-21\r?\n/u);
+    assert.match(output, /line-320/u);
+    assert.ok(output.split(/\r?\n/u).length <= MAX_TERMINAL_BUFFER_ROWS);
+  } finally {
+    await closeTerminalSession(session.id, {
+      namespace
+    });
+  }
 });
 
 test("terminal sessions identify a missing server terminal structurally", () => {

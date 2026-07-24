@@ -132,15 +132,19 @@ function createTerminalMatcherEngine({
       reset(sessionId);
     }
 
+    const activeMatchers = normalizeMatchers(
+      typeof matchers === "function" ? matchers() : matchers
+    );
+    if (activeMatchers.length < 1) {
+      return [];
+    }
     const rawOutput = String(context.output || "");
     const plainOutput = Object.hasOwn(context, "plainOutput")
       ? String(context.plainOutput || "")
       : stripTerminalControlSequences(rawOutput);
     const emitted = [];
 
-    for (const matcher of normalizeMatchers(
-      typeof matchers === "function" ? matchers() : matchers
-    )) {
+    for (const matcher of activeMatchers) {
       const state = matcherState(matcher.id);
       if (state.complete) {
         continue;

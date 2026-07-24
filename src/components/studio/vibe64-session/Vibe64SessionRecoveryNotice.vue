@@ -46,6 +46,22 @@
       </div>
     </article>
 
+    <div class="session-recovery__codex-repair">
+      <v-btn
+        color="primary"
+        :disabled="repairRequested || Boolean(resolvingKey)"
+        :loading="repairing"
+        :prepend-icon="mdiRobotOutline"
+        size="small"
+        type="button"
+        variant="flat"
+        @click="requestRepair"
+      >
+        {{ repairButtonLabel }}
+      </v-btn>
+      <p>{{ repairHint }}</p>
+    </div>
+
     <p v-if="error" class="session-recovery__error" role="alert">
       {{ error }}
     </p>
@@ -54,9 +70,13 @@
 
 <script setup>
 import { computed } from "vue";
-import { mdiAlertCircleOutline } from "@mdi/js";
+import { mdiAlertCircleOutline, mdiRobotOutline } from "@mdi/js";
 
 const props = defineProps({
+  decisionRequired: {
+    default: false,
+    type: Boolean
+  },
   error: {
     default: "",
     type: String
@@ -68,12 +88,33 @@ const props = defineProps({
   resolvingKey: {
     default: "",
     type: String
+  },
+  repairRequested: {
+    default: false,
+    type: Boolean
+  },
+  repairing: {
+    default: false,
+    type: Boolean
   }
 });
 
-const emit = defineEmits(["resolve"]);
+const emit = defineEmits(["repair", "resolve"]);
 const recoveryIssues = computed(() => (
   Array.isArray(props.recovery?.issues) ? props.recovery.issues : []
+));
+const repairButtonLabel = computed(() => {
+  if (props.repairRequested) {
+    return "Codex repair requested";
+  }
+  return props.decisionRequired
+    ? "Ask Codex for guidance"
+    : "Ask Codex to repair";
+});
+const repairHint = computed(() => (
+  props.decisionRequired
+    ? "Codex can inspect and explain the recovery choices, but only you can choose."
+    : "Codex will inspect the actual state, preserve your work, and ask before any unsafe or ambiguous action."
 ));
 
 function resolve(issue = {}, option = {}) {
@@ -82,6 +123,10 @@ function resolve(issue = {}, option = {}) {
     optionId: String(option.id || ""),
     signature: String(issue.signature || "")
   });
+}
+
+function requestRepair() {
+  emit("repair");
 }
 </script>
 
@@ -154,6 +199,19 @@ function resolve(issue = {}, option = {}) {
   gap: 0.5rem;
 }
 
+.session-recovery__codex-repair {
+  align-items: flex-start;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  display: flex;
+  gap: 0.75rem;
+  margin-left: 1.75rem;
+  padding-top: 0.85rem;
+}
+
+.session-recovery__codex-repair p {
+  margin-top: 0.1rem;
+}
+
 .session-recovery__error {
   color: rgb(var(--v-theme-error));
   padding-left: 1.75rem;
@@ -166,6 +224,12 @@ function resolve(issue = {}, option = {}) {
 
   .session-recovery__issue {
     padding-left: 0;
+  }
+
+  .session-recovery__codex-repair {
+    align-items: stretch;
+    flex-direction: column;
+    margin-left: 0;
   }
 
   .session-recovery__evidence {

@@ -63,6 +63,7 @@ import {
   INVALID_TERMINAL_SIZE_ERROR,
   STUDIO_TERMINAL_SCROLLBACK_ROWS,
   reportableTerminalSize,
+  terminalTranscriptTail,
   terminalResizeErrorMessage
 } from "../../src/lib/studioTerminalSize.js";
 import {
@@ -139,6 +140,20 @@ describe("useVibe64Terminal", () => {
     await terminal.setupTerminalUi();
 
     expect(xtermMock.FakeTerminal.instances[0]?.options.scrollback).toBe(STUDIO_TERMINAL_SCROLLBACK_ROWS);
+    expect(STUDIO_TERMINAL_SCROLLBACK_ROWS).toBe(300);
+  });
+
+  it("retains only the shared 300-row transcript tail", () => {
+    const transcript = Array.from({
+      length: STUDIO_TERMINAL_SCROLLBACK_ROWS + 20
+    }, (_value, index) => `line-${index + 1}`).join("\n");
+
+    const tail = terminalTranscriptTail(transcript);
+
+    expect(tail).not.toContain("line-20\n");
+    expect(tail).toContain("line-21\n");
+    expect(tail).toContain("line-320");
+    expect(tail.split("\n")).toHaveLength(STUDIO_TERMINAL_SCROLLBACK_ROWS);
   });
 
   it("aborts terminal setup when the host is cleared while modules load", async () => {
@@ -236,6 +251,41 @@ describe("useVibe64Terminal", () => {
       outputVersion: 0,
       source: "append"
     });
+  });
+
+  it("bounds the rolling websocket transcript without truncating the live chunk", async () => {
+    const onOutput = vi.fn();
+    const terminal = useVibe64Terminal({
+      onOutput,
+      driver: testTerminalDriver()
+    });
+    const transcript = Array.from({
+      length: STUDIO_TERMINAL_SCROLLBACK_ROWS + 1
+    }, (_value, index) => `line-${index + 1}`).join("\n");
+
+    terminal.applyTerminalSession({
+      id: "terminal-1",
+      status: "running"
+    });
+    const connected = terminal.connectTerminalSocket();
+    const socket = FakeWebSocket.instances[0];
+    socket.dispatch("open");
+    await expect(connected).resolves.toBe(true);
+    socket.dispatch("message", {
+      data: JSON.stringify({
+        chunk: transcript,
+        outputVersion: 1,
+        type: "output"
+      })
+    });
+
+    expect(terminal.terminalOutput.value).not.toContain("line-1\n");
+    expect(terminal.terminalOutput.value).toContain("line-2\n");
+    expect(terminal.terminalOutput.value).toContain("line-301");
+    expect(onOutput).toHaveBeenLastCalledWith(expect.objectContaining({
+      chunk: transcript,
+      source: "append"
+    }));
   });
 
   it("reconnects an attached terminal and restores its authoritative snapshot", async () => {

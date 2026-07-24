@@ -301,6 +301,42 @@ test("session service updates the project current-session alias without source s
   });
 });
 
+test("session source safety reads only the bounded source descriptor", async () => {
+  let descriptorReads = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        assert.fail("Source safety must not create a session runtime.");
+      },
+      async createSessionStore() {
+        return {
+          async readSession() {
+            assert.fail("Source safety must not hydrate the full session.");
+          },
+          async readSessionSourceDescriptor(sessionId) {
+            descriptorReads += 1;
+            return {
+              metadata: {
+                source_removed: "yes"
+              },
+              sessionId,
+              sessionRoot: "/runtime/session",
+              targetRoot: "/runtime/project"
+            };
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.inspectSessionSourceSafety("session-source-safety");
+
+  assert.equal(descriptorReads, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.available, false);
+  assert.equal(result.sessionId, "session-source-safety");
+});
+
 function composerMessageRuntimeHarness(initialSession = {}) {
   let currentSession = {
     actions: [

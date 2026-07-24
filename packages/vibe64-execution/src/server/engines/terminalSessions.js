@@ -3,7 +3,8 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { spawn as spawnPty } from "node-pty";
 
-const MAX_TERMINAL_BUFFER_LENGTH = 2 * 1024 * 1024;
+const MAX_TERMINAL_BUFFER_LENGTH = 256 * 1024;
+const MAX_TERMINAL_BUFFER_ROWS = 300;
 const DEFAULT_TERMINAL_COLS = 100;
 const DEFAULT_TERMINAL_ROWS = 28;
 const MIN_TERMINAL_COLS = 20;
@@ -47,10 +48,21 @@ function namespacesForPrefix(namespacePrefix = "") {
 }
 
 function trimBuffer(output) {
-  if (output.length <= MAX_TERMINAL_BUFFER_LENGTH) {
-    return output;
+  let transcript = String(output || "");
+  let rowBoundary = transcript.length;
+  for (let row = 0; row < MAX_TERMINAL_BUFFER_ROWS; row += 1) {
+    rowBoundary = transcript.lastIndexOf("\n", rowBoundary - 1);
+    if (rowBoundary < 0) {
+      break;
+    }
   }
-  return output.slice(output.length - MAX_TERMINAL_BUFFER_LENGTH);
+  if (rowBoundary >= 0) {
+    transcript = transcript.slice(rowBoundary + 1);
+  }
+  if (transcript.length > MAX_TERMINAL_BUFFER_LENGTH) {
+    transcript = transcript.slice(transcript.length - MAX_TERMINAL_BUFFER_LENGTH);
+  }
+  return transcript;
 }
 
 function isRunningSession(session = {}) {
@@ -971,6 +983,7 @@ async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
 
 export {
   MAX_TERMINAL_BUFFER_LENGTH,
+  MAX_TERMINAL_BUFFER_ROWS,
   closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForCwdRoot,

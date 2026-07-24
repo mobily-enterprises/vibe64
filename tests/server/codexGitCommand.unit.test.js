@@ -114,15 +114,42 @@ function githubSession(root = "", sessionId = "github-session") {
 
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
+  metadataReads = null,
   runGatewayCommand
 } = {}) {
+  const sourceMetadataNames = new Set([
+    "base_commit",
+    "repository_mode",
+    "source",
+    "source_kind",
+    "source_path",
+    "source_path_authority",
+    "source_removed",
+    "workflow_repository_profile"
+  ]);
   return createCodexGitCommandService({
     authorizeActorAccess,
     projectService: {
       async createRuntime() {
+        throw new Error("Codex git commands must not hydrate a workflow runtime.");
+      },
+      async createSessionStore() {
         return {
-          async getSession() {
-            return session;
+          async readMetadataValue(sessionId, name) {
+            assert.equal(sessionId, session.sessionId);
+            metadataReads?.push(name);
+            return session.metadata?.[name] || "";
+          },
+          async readSessionSourceDescriptor(sessionId) {
+            assert.equal(sessionId, session.sessionId);
+            return {
+              metadata: Object.fromEntries(Object.entries(session.metadata || {}).filter(([name]) => (
+                sourceMetadataNames.has(name)
+              ))),
+              sessionId,
+              sessionRoot: session.sessionRoot,
+              targetRoot: session.targetRoot
+            };
           }
         };
       }
@@ -139,7 +166,9 @@ test("Codex git command allows local-source git without GitHub actor metadata", 
     });
 
     let gatewayCall = null;
+    const metadataReads = [];
     const service = serviceForSession(session, {
+      metadataReads,
       authorizeActorAccess: async () => {
         throw new Error("local-source git must not use GitHub actor authorization");
       },
@@ -177,6 +206,7 @@ test("Codex git command allows local-source git without GitHub actor metadata", 
       session.metadata.source_path
     ]);
     assert.deepEqual(gatewayCall.runtimes, ["git", "gh"]);
+    assert.ok(metadataReads.includes("workflow_driver_username"));
   });
 });
 

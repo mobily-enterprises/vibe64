@@ -1687,6 +1687,7 @@ class CodexAppServerAgentProvider {
     const client = await this.activeClient();
     const response = await this.runRequest(
       () => client.request("thread/resume", {
+        excludeTurns: true,
         ...params,
         threadId: normalizeAgentText(threadId || params.threadId)
       }),
@@ -1738,6 +1739,17 @@ class CodexAppServerAgentProvider {
       }),
       response
     };
+  }
+
+  async listThreadTurns(threadId = "", params = {}) {
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/turns/list", {
+        ...params,
+        threadId: normalizeAgentText(threadId || params.threadId)
+      }),
+      "codex-app-server-thread-turns-list"
+    );
   }
 
   async listLoadedThreads(params = {}) {

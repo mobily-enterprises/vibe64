@@ -6,6 +6,7 @@ import {
 import {
   STUDIO_TERMINAL_SCROLLBACK_ROWS,
   reportableTerminalSize,
+  terminalTranscriptTail,
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
 import { stripTerminalControlSequences } from "@/lib/codexOutput.js";
@@ -227,7 +228,6 @@ function useVibe64Terminal({
       metadata: terminalMetadata.value,
       output: terminalOutput.value,
       outputVersion: terminalOutputVersion,
-      plainOutput: terminalPlainOutput.value,
       sessionId: currentSessionId(),
       source,
       status: terminalStatus.value
@@ -805,7 +805,7 @@ function useVibe64Terminal({
     replace = false
   } = {}) {
     const previousOutput = terminalLatestOutput;
-    const nextOutput = String(output || "");
+    const nextOutput = terminalTranscriptTail(output);
     const nextOutputVersion = normalizedOutputVersion(outputVersion);
     if (
       nextOutputVersion &&
@@ -868,7 +868,12 @@ function useVibe64Terminal({
     ) {
       return false;
     }
-    terminalLatestOutput += outputChunk;
+    // The PTY stream is incremental; this string is only its reconnect,
+    // matcher, and copy tail. Keeping complete terminal history here made
+    // every active Codex repaint rescan and copy an ever-growing transcript
+    // (hundreds of MB in seconds for long sessions). Keep history bounded at
+    // its owner instead of masking the feedback with timers or throttles.
+    terminalLatestOutput = terminalTranscriptTail(terminalLatestOutput + outputChunk);
     terminalOutputVersion = Math.max(terminalOutputVersion, nextOutputVersion);
     terminalOutput.value = terminalLatestOutput;
     const outputEvent = {

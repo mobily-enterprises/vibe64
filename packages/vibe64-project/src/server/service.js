@@ -2939,17 +2939,14 @@ function createService({
     targetRootValue = currentTargetRoot(),
     workflowCreationBaseline = null
   } = {}) {
-    const sessionId = normalizeSessionId(runtimeInput?.sessionId);
-    const resolvedSourceRoot = sessionId
-      ? await projectConfigSourceRoot(runtimeInput, {
-          allowMissingSessionSource: true
-        })
-      : currentSourceRoot() || targetRootValue;
-    const store = createVibe64SessionStore({
-      projectLocalRoot: projectRuntimeRoot(targetRootValue),
-      projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
-      targetRoot: resolvedSourceRoot
+    const {
+      resolvedSourceRoot,
+      store
+    } = await sessionStoreFromStoredState({
+      runtimeInput,
+      targetRootValue
     });
+    const sessionId = normalizeSessionId(runtimeInput?.sessionId);
     const session = sessionId ? await store.readSession(sessionId) : null;
     const adapterId = normalizeText(
       session?.manifest?.adapterId || session?.promptContextSnapshot?.adapter?.id
@@ -2976,6 +2973,26 @@ function createService({
       targetRootValue,
       workflowCreationBaseline
     });
+  }
+
+  async function sessionStoreFromStoredState({
+    runtimeInput = {},
+    targetRootValue = currentTargetRoot()
+  } = {}) {
+    const sessionId = normalizeSessionId(runtimeInput?.sessionId);
+    const resolvedSourceRoot = sessionId
+      ? await projectConfigSourceRoot(runtimeInput, {
+          allowMissingSessionSource: true
+        })
+      : currentSourceRoot() || targetRootValue;
+    return {
+      resolvedSourceRoot,
+      store: createVibe64SessionStore({
+        projectLocalRoot: projectRuntimeRoot(targetRootValue),
+        projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
+        targetRoot: resolvedSourceRoot
+      })
+    };
   }
 
   async function createRuntime(options = {}) {
@@ -3135,6 +3152,21 @@ function createService({
 
     async createRuntime(options = {}) {
       return createRuntime(options);
+    },
+
+    // This is the non-hydrating boundary for high-frequency session metadata
+    // and agent-run work. Do not replace it with createRuntime(): stored-state
+    // runtime construction reads the full session to restore its adapter. Fix
+    // callers at this boundary instead of adding caches or polling throttles.
+    async createSessionStore(options = {}) {
+      const targetRootValue = requireSelectedTargetRoot();
+      const runtimeInput = options?.input && typeof options.input === "object" && !Array.isArray(options.input)
+        ? options.input
+        : options;
+      return (await sessionStoreFromStoredState({
+        runtimeInput,
+        targetRootValue
+      })).store;
     },
 
     async readCurrentProject() {

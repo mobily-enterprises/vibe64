@@ -116,8 +116,20 @@ const CONVERSATION_MESSAGE_ROLES = deepFreeze([
   "thinking",
   "user"
 ]);
-const CONVERSATION_MESSAGE_FILE_PATTERN = /^(user|assistant|system|thinking)\.(\d{8}T\d{9}Z)\.md$/u;
+const CONVERSATION_MESSAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const CONVERSATION_MESSAGE_FILE_PATTERN =
+  /^(user|assistant|system|thinking)\.(\d{8}T\d{9}Z)(?:\.([A-Za-z0-9][A-Za-z0-9_-]{0,127}))?\.md$/u;
 const CONVERSATION_TURN_ID_PATTERN = /^\d{6}$/u;
+const SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES = Object.freeze([
+  "base_commit",
+  "repository_mode",
+  "source",
+  "source_kind",
+  "source_path",
+  "source_path_authority",
+  "source_removed",
+  "workflow_repository_profile"
+]);
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const PRIVATE_INPUT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -1008,12 +1020,20 @@ function conversationTurnRoot(sessionPaths, turnId) {
   return path.join(sessionPaths.conversationLogRoot, normalizedTurnId);
 }
 
-function conversationMessageFileName(role = "", date) {
+function conversationMessageFileName(role = "", date, messageId = "") {
   const normalizedRole = normalizeText(role);
   if (!CONVERSATION_MESSAGE_ROLES.includes(normalizedRole)) {
     throw vibe64Error(`Invalid vibe64 conversation role: ${normalizedRole || "(empty)"}`, "vibe64_invalid_conversation_role");
   }
-  return `${normalizedRole}.${timestampForConversationFile(date)}.md`;
+  const normalizedMessageId = normalizeText(messageId);
+  if (normalizedMessageId && !CONVERSATION_MESSAGE_ID_PATTERN.test(normalizedMessageId)) {
+    throw vibe64Error(
+      `Invalid vibe64 conversation message id: ${normalizedMessageId}`,
+      "vibe64_invalid_conversation_message_id"
+    );
+  }
+  const idSuffix = normalizedMessageId ? `.${normalizedMessageId}` : "";
+  return `${normalizedRole}.${timestampForConversationFile(date)}${idSuffix}.md`;
 }
 
 function nextConversationTurnId(turnIds = []) {
@@ -1528,6 +1548,23 @@ function createVibe64SessionStore({
     return Object.fromEntries(metadataEntries);
   }
 
+  async function readSessionSourceDescriptor(sessionId) {
+    return withReadableSessionPaths(sessionId, async (sessionPaths) => {
+      const metadataEntries = await Promise.all(
+        SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.map(async (name) => [
+          name,
+          normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
+        ])
+      );
+      return {
+        metadata: Object.fromEntries(metadataEntries),
+        sessionId: sessionPaths.sessionId,
+        sessionRoot: sessionPaths.sessionRoot,
+        targetRoot: sessionPaths.targetRoot
+      };
+    });
+  }
+
   async function sessionNameForSession(sessionPaths, metadata = {}) {
     const existingSessionName = sessionNameFromIssueWord(metadata[ISSUE_WORD_ARTIFACT]);
     if (existingSessionName) {
@@ -2022,10 +2059,12 @@ function createVibe64SessionStore({
     if (!match) {
       return null;
     }
+    const messageId = normalizeText(match[3]);
     return {
       at: isoFromConversationTimestamp(match[2]),
       role: match[1],
-      text: normalizeText(await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), fileName)))
+      text: normalizeText(await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), fileName))),
+      ...(messageId ? { messageId } : {})
     };
   }
 
@@ -2056,6 +2095,32 @@ function createVibe64SessionStore({
       await readDirectoryEntries(sessionPaths.conversationLogRoot),
       (name) => CONVERSATION_TURN_ID_PATTERN.test(name)
     );
+  }
+
+  async function conversationMessageIdExistsFromPaths(sessionPaths, messageId = "") {
+    const normalizedMessageId = normalizeText(messageId);
+    if (!normalizedMessageId) {
+      return false;
+    }
+    if (!CONVERSATION_MESSAGE_ID_PATTERN.test(normalizedMessageId)) {
+      throw vibe64Error(
+        `Invalid vibe64 conversation message id: ${normalizedMessageId}`,
+        "vibe64_invalid_conversation_message_id"
+      );
+    }
+    const suffix = `.${normalizedMessageId}.md`;
+    const turnIds = await conversationTurnIds(sessionPaths);
+    for (const turnId of [...turnIds].reverse()) {
+      const entries = await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId));
+      if (entries.some((entry) => (
+        entry.isFile() &&
+        entry.name.endsWith(suffix) &&
+        CONVERSATION_MESSAGE_FILE_PATTERN.test(entry.name)
+      ))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async function tailOpenConversationTurnId(sessionPaths) {
@@ -2168,18 +2233,29 @@ function createVibe64SessionStore({
   }
 
   async function writeConversationAssistantMessage(sessionId, {
+    messageId = "",
     text = ""
   } = {}) {
     const messageText = normalizeText(text);
+    const normalizedMessageId = normalizeText(messageId);
     if (!messageText) {
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
+      if (
+        normalizedMessageId &&
+        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
+      ) {
+        return null;
+      }
       const turnId = await tailOpenConversationTurnId(sessionPaths) ||
         nextConversationTurnId(await conversationTurnIds(sessionPaths));
       const createdAt = now();
       await writeTextFile(
-        path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("assistant", createdAt)),
+        path.join(
+          conversationTurnRoot(sessionPaths, turnId),
+          conversationMessageFileName("assistant", createdAt, normalizedMessageId)
+        ),
         `${messageText}\n`
       );
       return readConversationTurn(sessionPaths, turnId);
@@ -2218,14 +2294,22 @@ function createVibe64SessionStore({
 
   async function writeConversationThinkingMessage(sessionId, {
     at = "",
+    messageId = "",
     requireOpenTurn = false,
     text = ""
   } = {}) {
     const messageText = normalizeText(text);
+    const normalizedMessageId = normalizeText(messageId);
     if (!messageText) {
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
+      if (
+        normalizedMessageId &&
+        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
+      ) {
+        return null;
+      }
       const createdAt = at ? toDate(at) : now();
       const openTurnId = await tailOpenConversationTurnId(sessionPaths);
       if (requireOpenTurn && !openTurnId) {
@@ -2236,7 +2320,10 @@ function createVibe64SessionStore({
       });
       const turnId = openTurnId || thinkingOnlyTurnId || nextConversationTurnId(await conversationTurnIds(sessionPaths));
       await writeTextFile(
-        path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("thinking", createdAt)),
+        path.join(
+          conversationTurnRoot(sessionPaths, turnId),
+          conversationMessageFileName("thinking", createdAt, normalizedMessageId)
+        ),
         `${messageText}\n`
       );
       return readConversationTurn(sessionPaths, turnId);
@@ -3050,6 +3137,7 @@ function createVibe64SessionStore({
     readMetadataValue,
     readPromptContextSnapshot,
     readSession,
+    readSessionSourceDescriptor,
     readSessionSummary,
     readStatus,
     readStepState,

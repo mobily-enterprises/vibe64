@@ -21,7 +21,9 @@ import {
   vibe64RuntimePolicyFailure
 } from "@local/vibe64-core/shared";
 import {
-  VIBE64_DEFAULT_AGENT_PROVIDER_ID
+  VIBE64_DEFAULT_AGENT_PROVIDER_ID,
+  vibe64SessionRecoveryAgentPrompt,
+  vibe64SessionRecoveryNeedsDecision
 } from "@local/vibe64-runtime/shared";
 import {
   useVibe64AutopilotComposer
@@ -364,6 +366,15 @@ function useVibe64AutopilotView(props, emit) {
   });
   const sessionRecoveryResolvingKey = ref("");
   const sessionRecoveryError = ref("");
+  const sessionRecoveryRepairSending = ref(false);
+  const sessionRecoveryRepairRequestedSignature = ref("");
+  const sessionRecoveryDecisionRequired = computed(() => (
+    vibe64SessionRecoveryNeedsDecision(sessionRecovery.value)
+  ));
+  const sessionRecoveryRepairRequested = computed(() => Boolean(
+    sessionRecovery.value?.signature &&
+    sessionRecoveryRepairRequestedSignature.value === sessionRecovery.value.signature
+  ));
 
   async function resolveSessionRecovery({
     issueId = "",
@@ -393,6 +404,48 @@ function useVibe64AutopilotView(props, emit) {
       sessionRecoveryResolvingKey.value = "";
     }
   }
+
+  async function requestSessionRecoveryRepair() {
+    const recovery = sessionRecovery.value;
+    const prompt = vibe64SessionRecoveryAgentPrompt(recovery);
+    if (!prompt || sessionRecoveryRepairSending.value) {
+      return false;
+    }
+    const displayMessage = sessionRecoveryDecisionRequired.value
+      ? "Help me understand these recovery choices and recover this session safely."
+      : "Repair this session safely without losing any work.";
+    sessionRecoveryRepairSending.value = true;
+    sessionRecoveryError.value = "";
+    try {
+      const accepted = await props.sendAgentMessage({
+        agentSettings: requestAgentSettings.value,
+        displayFields: {
+          conversationRequest: displayMessage
+        },
+        fields: {
+          conversationRequest: prompt
+        },
+        message: prompt
+      }) !== false;
+      if (accepted) {
+        sessionRecoveryRepairRequestedSignature.value = String(recovery.signature || "");
+      } else {
+        sessionRecoveryError.value = "Codex could not be asked to repair this session.";
+      }
+      return accepted;
+    } catch (error) {
+      sessionRecoveryError.value = String(
+        error?.message || error || "Codex could not be asked to repair this session."
+      );
+      return false;
+    } finally {
+      sessionRecoveryRepairSending.value = false;
+    }
+  }
+
+  watch(() => String(sessionRecovery.value?.signature || ""), () => {
+    sessionRecoveryRepairRequestedSignature.value = "";
+  });
   const {
     canDispatchNextOperation,
     clearFailure,
@@ -2858,6 +2911,7 @@ function useVibe64AutopilotView(props, emit) {
     returnToCommandFailureRecovery,
     requestAgentInterrupt,
     requestCommandAiFix,
+    requestSessionRecoveryRepair,
     resolveSessionRecovery,
     resendOptimisticComposerTurn,
     loadMoreChatTurns,
@@ -2885,7 +2939,10 @@ function useVibe64AutopilotView(props, emit) {
     selectedScreenControlVisible,
     sessionId,
     sessionRecovery,
+    sessionRecoveryDecisionRequired,
     sessionRecoveryError,
+    sessionRecoveryRepairRequested,
+    sessionRecoveryRepairSending,
     sessionRecoveryResolvingKey,
     sessionConfigEditable,
     sessionConfigSourceReady,

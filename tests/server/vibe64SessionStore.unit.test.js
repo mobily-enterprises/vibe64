@@ -610,6 +610,50 @@ test("vibe64 session summaries include current step lifecycle state", async () =
   });
 });
 
+test("vibe64 session store reads the bounded source descriptor without session history", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      targetRoot
+    });
+    const sourcePath = path.join(targetRoot, "sessions", "active", "source_descriptor", "source");
+    await store.createSession({
+      metadata: {
+        base_commit: "abc123",
+        repository_mode: "github",
+        source_kind: "session_clone",
+        source_path: sourcePath,
+        source_path_authority: "managed_session_source",
+        unrelated_large_history_field: "must not be projected",
+        workflow_repository_profile: "canonical_git"
+      },
+      sessionId: "source_descriptor"
+    });
+
+    const descriptor = await store.readSessionSourceDescriptor("source_descriptor");
+
+    assert.deepEqual(descriptor, {
+      metadata: {
+        base_commit: "abc123",
+        repository_mode: "github",
+        source: "",
+        source_kind: "session_clone",
+        source_path: sourcePath,
+        source_path_authority: "managed_session_source",
+        source_removed: "",
+        workflow_repository_profile: "canonical_git"
+      },
+      sessionId: "source_descriptor",
+      sessionRoot: path.join(
+        projectLocalRoot(targetRoot),
+        "sessions",
+        "active",
+        "source_descriptor"
+      ),
+      targetRoot
+    });
+  });
+});
+
 test("vibe64 session store persists background task status with retry metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({
@@ -866,6 +910,51 @@ test("vibe64 session store persists conversation turns as one file per message",
         user: null
       }
     ]);
+  });
+});
+
+test("vibe64 session store durably deduplicates provider messages by message id", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "conversation_message_ids"
+    });
+    await store.writeConversationUserMessage("conversation_message_ids", {
+      text: "Keep following the goal."
+    });
+
+    const first = await store.writeConversationThinkingMessage("conversation_message_ids", {
+      messageId: "codex-progress-abc123",
+      text: "Inspecting the active goal."
+    });
+    const duplicate = await store.writeConversationThinkingMessage("conversation_message_ids", {
+      messageId: "codex-progress-abc123",
+      text: "This duplicate must not replace the first message."
+    });
+
+    assert.equal(first.turnId, "000001");
+    assert.equal(duplicate, null);
+    const paths = resolveTestSessionPaths({
+      sessionId: "conversation_message_ids",
+      targetRoot
+    });
+    assert.deepEqual(
+      (await readdir(path.join(paths.conversationLogRoot, "000001")))
+        .filter((fileName) => fileName.startsWith("thinking.")),
+      ["thinking.20260516T010203456Z.codex-progress-abc123.md"]
+    );
+    assert.deepEqual(
+      (await store.readConversationLog("conversation_message_ids"))[0].thinking,
+      [{
+        at: "2026-05-16T01:02:03.456Z",
+        messageId: "codex-progress-abc123",
+        role: "thinking",
+        text: "Inspecting the active goal."
+      }]
+    );
   });
 });
 
