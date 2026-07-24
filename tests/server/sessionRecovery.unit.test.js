@@ -43,7 +43,8 @@ function committedWorkflowAdapter() {
 }
 
 async function withRecoveryRuntime(callback, {
-  completeAtBase = true
+  completeAtBase = true,
+  recordTemplateAtBase = false
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-recovery-"));
   const sourceRoot = path.join(root, "source");
@@ -62,6 +63,15 @@ async function withRecoveryRuntime(callback, {
     runGit(sourceRoot, ["commit", "-m", "Initial application"]);
     const baseCommit = runGit(sourceRoot, ["rev-parse", "HEAD"]);
     await writeFile(projectRecordPath, `${JSON.stringify({
+      ...(recordTemplateAtBase
+        ? {
+            bootstrap: {
+              mode: "new",
+              status: "pending",
+              templateCommit: baseCommit
+            }
+          }
+        : {}),
       repository: {
         defaultBranch: "main",
         mode: "github"
@@ -127,6 +137,18 @@ test("setup recovery ignores application files added after the starting commit",
     assert.notEqual(session.presentation.auto.nextOperation, null);
   }, {
     completeAtBase: false
+  });
+});
+
+test("setup recovery accepts the recorded ready-made template commit", async () => {
+  await withRecoveryRuntime(async ({ runtime, sessionId }) => {
+    const session = await runtime.getSession(sessionId);
+
+    assert.equal(session.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.equal(session.recovery, undefined);
+    assert.notEqual(session.presentation.auto.nextOperation, null);
+  }, {
+    recordTemplateAtBase: true
   });
 });
 

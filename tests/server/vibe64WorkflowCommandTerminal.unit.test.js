@@ -416,7 +416,8 @@ test("workflow command specs describe intent without gateway execution policy", 
       targetRoot
     });
     assert.equal(createSourceSpec.ok, true);
-    assert.deepEqual(createSourceSpec.runtimes, ["git"]);
+    assert.deepEqual(createSourceSpec.runtimes, ["git", "gh"]);
+    assert.equal(createSourceSpec.requiresHostGithubCredentials, true);
     assertWorkflowCommandSpecHasNoGatewayPolicy(createSourceSpec);
 
     await mkdir(path.dirname(sourcePath), {

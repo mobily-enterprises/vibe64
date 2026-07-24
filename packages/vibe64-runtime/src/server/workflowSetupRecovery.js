@@ -8,6 +8,12 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
+  readProjectRecordMetadata
+} from "@local/vibe64-core/server/projectBootstrapConfig";
+import {
+  pendingProjectBootstrap
+} from "@local/vibe64-core/server/projectLifecycle";
+import {
   PROJECT_SETUP_KIND_INITIALIZATION,
   PROJECT_SETUP_KIND_SEED,
   projectSetupSessionKind
@@ -99,6 +105,19 @@ async function inspectStartingWorkflow(runtime, session = {}) {
     : null;
 }
 
+async function startingCommitIsRecordedTemplate(runtime, startingWorkflow = {}) {
+  const projectRecordPath = normalizeText(runtime?.projectRecordPath);
+  const startingCommit = normalizeText(startingWorkflow.baseCommit).toLowerCase();
+  if (!projectRecordPath || !startingCommit) {
+    return false;
+  }
+  const metadata = await readProjectRecordMetadata(projectRecordPath);
+  const bootstrap = metadata.bootstrap
+    ? pendingProjectBootstrap(metadata.bootstrap)
+    : null;
+  return normalizeText(bootstrap?.templateCommit).toLowerCase() === startingCommit;
+}
+
 function setupRecoveryDescription(expectedKind = "") {
   if (expectedKind === PROJECT_SETUP_KIND_SEED) {
     return {
@@ -181,6 +200,12 @@ function createWorkflowSetupRecoveryProvider() {
       const startingWorkflow = await inspectStartingWorkflow(runtime, session);
       const expectedSeedRequired = expectedKind === PROJECT_SETUP_KIND_SEED;
       if (!startingWorkflow || startingWorkflow.seedRequired === expectedSeedRequired) {
+        return null;
+      }
+      if (
+        expectedKind === PROJECT_SETUP_KIND_SEED &&
+        await startingCommitIsRecordedTemplate(runtime, startingWorkflow)
+      ) {
         return null;
       }
       const target = workflowRecoveryTarget(runtime, session, expectedKind);

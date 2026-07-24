@@ -434,6 +434,9 @@ test("create worktree creates an isolated clone from project repository metadata
     assert.equal(spec.successMetadata.source_kind, "session_clone");
     assert.equal(spec.successMetadata.source_remote_url, remoteRoot);
     assert.equal(spec.commandPreview, `git clone ${remoteRoot} ${sourcePath}`);
+    assert.match(spec.args.at(-1), /git clone --single-branch --branch "\$BASE_BRANCH" "\$VIBE64_GIT_CACHE_PATH"/u);
+    assert.match(spec.args.at(-1), /remote set-url origin "\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.doesNotMatch(spec.args.at(-1), /--reference-if-able/u);
 
     runCommand(spec.command, spec.args, {
       cwd: spec.cwd,
@@ -1036,8 +1039,9 @@ test("create worktree terminal specs branch existing PR sessions from the source
     assert.equal(spec.successMetadata.base_commit, "abc123");
 
     const script = spec.args.at(-1);
-    assert.match(script, /--reference-if-able "\$VIBE64_GIT_CACHE_PATH" --dissociate/u);
-    assert.match(script, /git clone .*--single-branch --branch "\$CLONE_BASE_BRANCH" .*"\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.match(script, /git clone --single-branch --branch "\$CLONE_BASE_BRANCH" "\$VIBE64_GIT_CACHE_PATH"/u);
+    assert.match(script, /remote set-url origin "\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.doesNotMatch(script, /--reference-if-able/u);
     assert.match(script, /git -C .* fetch origin "pull\/\$SOURCE_PR_NUMBER\/head:\$PR_FETCH_REF"/u);
     assert.match(script, /FETCHED_PR_SHA=/u);
     assert.match(script, /Existing PR #%s moved from %s to %s/u);
