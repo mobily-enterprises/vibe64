@@ -289,6 +289,11 @@ test("agent session reconciliation repairs session source alternates from summar
                 nextCursor: null
               };
             },
+            async resumeThread() {
+              return {
+                id: threadId
+              };
+            },
             subscribe() {
               providerCalls.subscribe += 1;
               return () => null;
@@ -301,6 +306,9 @@ test("agent session reconciliation repairs session source alternates from summar
         targetRoot,
         async createRuntime() {
           return runtime;
+        },
+        async createSessionStore() {
+          return runtime.store;
         },
         async projectConfigEnvironment() {
           return {};
