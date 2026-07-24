@@ -5,6 +5,7 @@ import {
   useRealtimeSocket
 } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -24,7 +25,8 @@ import {
   mountedSessionDetailLoadState,
   mountedSessionDetailRefreshReason,
   mountedSessionRealtimeShouldRefresh,
-  mountedSessionRecord
+  mountedSessionRecord,
+  sessionRecordHasActiveAgentWork
 } from "@/lib/vibe64MountedSessionState.js";
 import {
   enrichVibe64SessionForDisplay
@@ -66,6 +68,7 @@ function useVibe64MountedSessionData({
   const detailRecord = ref(null);
   const composerMenu = ref(null);
   const agentTurnOverlay = ref(null);
+  const agentConnectionStatus = ref("disconnected");
   const activeSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const activeSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const listSession = computed(() => {
@@ -274,12 +277,89 @@ function useVibe64MountedSessionData({
   });
 
   const realtimeSocket = useRealtimeSocket({ required: false });
+  let connectionGeneration = realtimeSocket.connected ? 1 : 0;
+  let reconciliationInFlight = null;
+  let reconciliationPending = false;
+
+  // Provider recovery belongs to connection lifecycle, never passive session
+  // reads or status polling. A reconnect is the bounded point where a mounted
+  // session can resume its provider thread and settle a stale active turn.
+  async function reconcileMountedAgentSession(reason = "realtime-connect") {
+    if (!realtimeSocket.connected || !activeSessionId.value || !activeSessionsApiPath.value) {
+      return null;
+    }
+    if (reconciliationInFlight) {
+      reconciliationPending = true;
+      return reconciliationInFlight;
+    }
+    const generation = connectionGeneration;
+    agentConnectionStatus.value = "reconciling";
+    reconciliationInFlight = (async () => {
+      await refresh({ reason });
+      if (!realtimeSocket.connected || generation !== connectionGeneration) {
+        return null;
+      }
+      if (sessionRecordHasActiveAgentWork(session.value)) {
+        const result = await getUsersWebHttpClient().request(
+          vibe64SessionPath(
+            activeSessionsApiPath.value,
+            activeSessionId.value,
+            "/agent-session"
+          ),
+          {
+            body: {},
+            method: "POST"
+          }
+        );
+        if (result?.ok === false) {
+          throw new Error(result.error || "Assistant status could not be reconciled.");
+        }
+        await refresh({ reason: "agent-session-reconciled" });
+      }
+      if (realtimeSocket.connected && generation === connectionGeneration) {
+        agentConnectionStatus.value = "connected";
+      }
+      return session.value;
+    })().catch((error) => {
+      if (realtimeSocket.connected && generation === connectionGeneration) {
+        agentConnectionStatus.value = "unknown";
+      }
+      vibe64SessionDebugLog("client.mountedSession.agentConnection.error", {
+        error: vibe64SessionDebugError(error),
+        reason,
+        sessionId: activeSessionId.value
+      });
+      return null;
+    }).finally(() => {
+      reconciliationInFlight = null;
+      if (reconciliationPending) {
+        reconciliationPending = false;
+        void reconcileMountedAgentSession("realtime-reconnected");
+      }
+    });
+    return reconciliationInFlight;
+  }
+
   const reconcileAfterRealtimeConnect = () => {
-    refreshInBackground("realtime-connect");
+    connectionGeneration += 1;
+    void reconcileMountedAgentSession();
+  };
+  const markRealtimeDisconnected = () => {
+    agentConnectionStatus.value = "disconnected";
   };
   realtimeSocket.on("connect", reconcileAfterRealtimeConnect);
+  realtimeSocket.on("connect_error", markRealtimeDisconnected);
+  realtimeSocket.on("disconnect", markRealtimeDisconnected);
+  if (realtimeSocket.connected) {
+    agentConnectionStatus.value = "reconciling";
+    queueMicrotask(() => {
+      void reconcileMountedAgentSession("initial-realtime-connect");
+    });
+  }
   onScopeDispose(() => {
     realtimeSocket.off("connect", reconcileAfterRealtimeConnect);
+    realtimeSocket.off("connect_error", markRealtimeDisconnected);
+    realtimeSocket.off("disconnect", markRealtimeDisconnected);
   });
 
   watch(detailResource.data, (candidate) => {
@@ -354,7 +434,9 @@ function useVibe64MountedSessionData({
 
   return {
     acceptSessionResponse,
+    agentConnectionStatus,
     detailState,
+    reconcileMountedAgentSession,
     refresh,
     resource: detailResource,
     session

@@ -6,10 +6,14 @@ const endpointMocks = vi.hoisted(() => ({
   resource: null,
   useEndpointResource: vi.fn()
 }));
+const httpMocks = vi.hoisted(() => ({
+  request: vi.fn()
+}));
 const realtimeMocks = vi.hoisted(() => ({
   events: [],
   handlers: new Map(),
   socket: {
+    connected: false,
     off: vi.fn(),
     on: vi.fn()
   }
@@ -17,6 +21,12 @@ const realtimeMocks = vi.hoisted(() => ({
 
 vi.mock("@jskit-ai/users-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: endpointMocks.useEndpointResource
+}));
+
+vi.mock("@jskit-ai/users-web/client/lib/httpClient", () => ({
+  getUsersWebHttpClient() {
+    return httpMocks;
+  }
 }));
 
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
@@ -42,12 +52,17 @@ describe("useVibe64MountedSessionData", () => {
   beforeEach(() => {
     realtimeMocks.events.length = 0;
     realtimeMocks.handlers.clear();
+    realtimeMocks.socket.connected = false;
     realtimeMocks.socket.off.mockReset();
     realtimeMocks.socket.on.mockReset();
     realtimeMocks.socket.on.mockImplementation((event, handler) => {
       realtimeMocks.handlers.set(event, handler);
     });
     endpointMocks.options = null;
+    httpMocks.request.mockReset();
+    httpMocks.request.mockResolvedValue({
+      ok: true
+    });
     endpointMocks.resource = {
       data: ref(null),
       isFetching: ref(false),
@@ -137,8 +152,11 @@ describe("useVibe64MountedSessionData", () => {
     expect(controller.session.value.agentSession.turn.active).toBe(false);
     expect(controller.session.value.revision).toBe(11);
 
+    realtimeMocks.socket.connected = true;
     realtimeMocks.handlers.get("connect")();
-    await nextTick();
+    await vi.waitFor(() => {
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
     expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(1);
 
     scope.stop();
@@ -146,6 +164,105 @@ describe("useVibe64MountedSessionData", () => {
       "connect",
       expect.any(Function)
     );
+    expect(realtimeMocks.socket.off).toHaveBeenCalledWith(
+      "connect_error",
+      expect.any(Function)
+    );
+    expect(realtimeMocks.socket.off).toHaveBeenCalledWith(
+      "disconnect",
+      expect.any(Function)
+    );
+  });
+
+  it("reconciles an active provider once at the connection boundary", async () => {
+    const scope = effectScope();
+    const controller = scope.run(() => useVibe64MountedSessionData({
+      sessionId: ref("session-a"),
+      sessionsApiPath: ref("/api/vibe64/sessions"),
+      summarySession: ref(null)
+    }));
+    endpointMocks.resource.data.value = {
+      agentSession: {
+        turn: {
+          active: true,
+          id: "turn-a",
+          state: "active"
+        }
+      },
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 10,
+      sessionId: "session-a"
+    };
+    endpointMocks.resource.isInitialLoading.value = false;
+    endpointMocks.resource.isLoading.value = false;
+    await nextTick();
+
+    realtimeMocks.socket.connected = true;
+    realtimeMocks.handlers.get("connect")();
+    await vi.waitFor(() => {
+      expect(httpMocks.request).toHaveBeenCalledWith(
+        "/api/vibe64/sessions/session-a/agent-session",
+        {
+          body: {},
+          method: "POST"
+        }
+      );
+    });
+    await vi.waitFor(() => {
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
+    expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(2);
+
+    realtimeMocks.socket.connected = false;
+    realtimeMocks.handlers.get("disconnect")();
+    expect(controller.agentConnectionStatus.value).toBe("disconnected");
+
+    scope.stop();
+  });
+
+  it("leaves active assistant status unknown when reconnect reconciliation fails", async () => {
+    httpMocks.request.mockResolvedValue({
+      error: "Provider unavailable.",
+      ok: false
+    });
+    const scope = effectScope();
+    const controller = scope.run(() => useVibe64MountedSessionData({
+      sessionId: ref("session-a"),
+      sessionsApiPath: ref("/api/vibe64/sessions"),
+      summarySession: ref(null)
+    }));
+    endpointMocks.resource.data.value = {
+      agentSession: {
+        turn: {
+          active: true,
+          id: "turn-a",
+          state: "active"
+        }
+      },
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 10,
+      sessionId: "session-a"
+    };
+    endpointMocks.resource.isInitialLoading.value = false;
+    endpointMocks.resource.isLoading.value = false;
+    await nextTick();
+
+    realtimeMocks.socket.connected = true;
+    realtimeMocks.handlers.get("connect")();
+    await vi.waitFor(() => {
+      expect(controller.agentConnectionStatus.value).toBe("unknown");
+    });
+
+    scope.stop();
   });
 
   it("does not let a stale response replace a newer fixed-session snapshot", async () => {

@@ -6,6 +6,7 @@
     <Vibe64AutopilotView
       :actions="actions"
       :active="autopilotModeActive"
+      :agent-connection-status="agentConnectionStatus"
       :automation-enabled="autopilotAutomationEnabled"
       :autopilot-steps="autopilotNavigationSteps"
       :chat-collapsed="props.chatCollapsed"
@@ -140,6 +141,7 @@ const emit = defineEmits([
 const {
   actions,
   activeCodexTerminalState,
+  agentConnectionStatus,
   autopilotAutomationEnabled,
   autopilotCommandRunner,
   autopilotModeActive,

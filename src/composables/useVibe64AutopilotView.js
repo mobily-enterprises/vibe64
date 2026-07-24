@@ -178,6 +178,10 @@ const vibe64AutopilotViewProps = {
     default: true,
     type: Boolean
   },
+  agentConnectionStatus: {
+    default: "connected",
+    type: String
+  },
   automationEnabled: {
     default: true,
     type: Boolean
@@ -302,6 +306,21 @@ const vibe64AutopilotViewProps = {
 
 function normalizedAgentTurnText(value = "") {
   return String(value || "").trim();
+}
+
+function agentConnectionThinkingLabel({
+  active = false,
+  status = "connected"
+} = {}) {
+  if (!active || status === "connected") {
+    return "";
+  }
+  if (status === "disconnected") {
+    return "Connection lost — assistant status unknown.";
+  }
+  return status === "reconciling"
+    ? "Checking assistant status..."
+    : "Assistant status could not be verified.";
 }
 
 function agentTurnHasProviderIds(session = {}, turn = {}) {
@@ -835,7 +854,10 @@ function useVibe64AutopilotView(props, emit) {
   const thinkingLabel = computed(() => (
     commandRunning.value
       ? "Running command..."
-      : composerSubmissionStatus.value.thinkingLabel
+      : agentConnectionThinkingLabel({
+          active: activeAgentTurn.value.active === true,
+          status: props.agentConnectionStatus
+        }) || composerSubmissionStatus.value.thinkingLabel
   ));
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) &&
@@ -2990,6 +3012,7 @@ function useVibe64AutopilotView(props, emit) {
 }
 
 export {
+  agentConnectionThinkingLabel,
   composerInputDisabledReason,
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,

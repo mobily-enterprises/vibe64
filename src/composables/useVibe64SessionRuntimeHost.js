@@ -242,6 +242,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     summarySession: selectedListSession
   });
   const selectedSession = mountedSessionData.session;
+  const agentConnectionStatus = mountedSessionData.agentConnectionStatus;
   const selectedSessionDetailState = mountedSessionData.detailState;
   const selectedSessionTitle = computed(() => {
     return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
@@ -778,9 +779,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
 
   watch(() => props.active, (active, previousActive) => {
     if (active && previousActive === false) {
-      void mountedSessionData.refresh({
-        reason: "selected"
-      }).catch(() => null);
+      void mountedSessionData.reconcileMountedAgentSession("selected");
       void conversationLog.reload().catch(() => null);
     }
   });
@@ -869,6 +868,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   return {
     actions,
     activeCodexTerminalState,
+    agentConnectionStatus,
     autopilotAutomationEnabled,
     autopilotCommandRunner,
     autopilotInteractionLocked,

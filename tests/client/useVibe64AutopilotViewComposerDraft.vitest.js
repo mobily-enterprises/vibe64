@@ -479,6 +479,33 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     })).toBe("");
   });
 
+  it("does not claim an active assistant is working while its connection is unverified", async () => {
+    const {
+      agentConnectionThinkingLabel
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+
+    expect(agentConnectionThinkingLabel({
+      active: true,
+      status: "disconnected"
+    })).toBe("Connection lost — assistant status unknown.");
+    expect(agentConnectionThinkingLabel({
+      active: true,
+      status: "reconciling"
+    })).toBe("Checking assistant status...");
+    expect(agentConnectionThinkingLabel({
+      active: true,
+      status: "unknown"
+    })).toBe("Assistant status could not be verified.");
+    expect(agentConnectionThinkingLabel({
+      active: true,
+      status: "connected"
+    })).toBe("");
+    expect(agentConnectionThinkingLabel({
+      active: false,
+      status: "disconnected"
+    })).toBe("");
+  });
+
   it("keeps one primary composer draft while active work switches to the steering composer", async () => {
     const {
       useVibe64AutopilotView
