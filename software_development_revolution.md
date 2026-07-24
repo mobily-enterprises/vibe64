@@ -225,6 +225,34 @@ Auxiliary ownership must be deterministic and auditable, but auxiliary file
 names and private symbols are managed implementation state rather than public
 Program meaning.
 
+Every accepted target-bound Program module must therefore have a committed,
+machine-readable ownership record. The record contains:
+
+- the Program module path;
+- the primary implementation target;
+- the target kind;
+- the exact project-relative paths currently managed by that module, including
+  the primary target;
+- each managed file's role as primary or auxiliary; and
+- executable-mode intent where it is not implied by the Program surface.
+
+The ownership record contains paths and roles, not implementation contents,
+hashes, private symbols, or hidden Program behavior. Exact accepted contents
+and modes remain in the private Git checkpoint.
+
+Ownership records live below `.program/ownership/` with one mechanical mapping
+per target-bound Program module. They are committed project state and change
+atomically with an accepted ownership change. The semantic
+`.program/index/**/*.md.json` projections must not be overloaded with this
+information: projections remain pure deterministic views of Program Markdown,
+while ownership records describe the current managed target realization.
+
+An ownership record is authoritative about which current files ProgSync may
+preserve, change, remove, or compare for that module. It is not a requirement
+that an independent fresh generation reproduce the same private file names or
+decomposition. A fresh candidate produces its own proposed ownership record,
+and inventory differences become explicit comparison evidence.
+
 ### 0.7 Tests do not define Program architecture
 
 Committed target-language tests must not automatically receive one-to-one
@@ -564,7 +592,8 @@ project/
 │           └── src/server/service.js.md
 ├── src/
 ├── .program/
-│   └── index/
+│   ├── index/
+│   └── ownership/
 └── packages/
 ~~~
 
@@ -613,6 +642,13 @@ use a deterministic directory named after the primary target where practical.
 Existing shared or unusually located artifacts require explicit ownership
 metadata. Atomic synchronization includes those artifacts in the module's
 write boundary.
+
+`.program/ownership/` materializes the exact current managed-file inventory for
+each target-bound Program module. Directory convention remains the default
+ownership proposal, but the committed record—not an unrecorded directory scan—
+is the accepted inventory. ProgSync updates an ownership record only as part of
+the same guarded operation that validates, installs, and checkpoints the
+corresponding implementation ownership change.
 
 Actual JSON and other retained inputs remain in their normal project paths.
 They do not receive `.json.md` counterparts. Generated Program projections
@@ -1598,26 +1634,151 @@ idempotence.
 
 ### 13.6 Existing-project assimilation
 
-An existing codebase begins with an assimilation phase:
+An existing codebase is assimilated without regenerating its working
+implementation. The objective is to discover and adopt the smallest desired
+Program architecture while preserving the proven implementation as precious
+realization state.
 
-1. Mechanically scan files, exports, imports, framework declarations, and
-   available types.
-2. Establish the mirrored `program/` tree.
-3. Establish `types.md` and initial Program libraries.
-4. Invoke one isolated implementation-to-Program synchronization per supported
-   file.
-5. Supply each importer the complete owned implementation and only the public
-   interfaces of direct dependencies.
-6. Review unresolved types, dynamic dependencies, implicit globals, and
-   ambiguous boundaries.
-7. Have a project-aware agent reconcile vocabulary and cross-file identities.
-8. Have humans review and accept each Program module.
-9. Record the accepted `P0` and `I0` baseline.
-10. Begin synchronized development, with planned feature work normally starting
-    in Program.
+Assimilation proceeds as follows:
+
+1. Begin from a clean branch with the existing build and behavioral tests
+   passing.
+2. Mechanically scan implementation files, exports, imports, package and
+   framework entrypoints, production consumers, test-only consumers, available
+   types, retained inputs, and language-specific structure.
+3. Classify every apparent entrypoint as externally invoked, used by at least
+   two independent production modules, single-consumer, test-only, unused, or
+   unresolved. Tests never make a symbol public.
+4. Propose the desired Program modules, their minimal Provides and Uses, their
+   primary targets, and the existing files each module should privately own.
+   This proposal is not a one-Program-file-per-source-file mirror.
+5. Rewrite tests that import test-only helpers so they verify Program-visible
+   behavior. Promote a helper only when it independently satisfies the golden
+   shared-function or external-interface rule.
+6. Reorganize implementation files according to the built-in target-language
+   ownership convention. For JavaScript, a primary target may own private
+   implementation below the deterministic same-basename auxiliary directory.
+   Other targets define their own conventions. Each reorganization is a
+   behavior-preserving migration guarded by the existing tests.
+7. Establish `program/types.md`, required Program libraries, and the proposed
+   Program modules. Each isolated importer receives the complete primary and
+   owned implementation, production-consumer evidence, and only public
+   interfaces of dependencies.
+8. Materialize and review the semantic projections and committed exact
+   ownership records. Resolve dynamic dependencies, implicit globals,
+   ambiguous boundaries, shared-type duplication, and unsupported files.
+9. Run the complete existing verification suite. Assimilation must not change
+   application behavior merely to make Program generation easier.
+10. Have humans or an authorized project agent accept each Program module and
+    ownership record, then record the accepted `P0` and `I0` baseline.
+11. Confirm no-change convergence before beginning synchronized development.
+    Planned feature work then normally starts in Program.
 
 Assimilation may use a system-aware indexing pass to construct bounded
 capsules. Individual Program module generation remains atomic.
+
+#### The Genesis Compiler
+
+The project-level command is called the **Genesis Compiler**:
+
+~~~text
+progsync genesis --project-root <path>
+progsync genesis --project-root <path> --write
+progsync genesis --project-root <path> --resume
+~~~
+
+`progsync import <implementation>` remains the atomic one-module assimilation
+primitive. `progsync genesis` is the repository compiler that turns an existing
+implementation codebase into a ProgSync codebase.
+
+Genesis is not a deterministic filesystem loop. It is a resumable orchestrated
+workflow that combines deterministic tools with fresh, versioned AI prompts:
+
+- deterministic scanners inventory files, language syntax, exports, imports,
+  framework entrypoints, package boundaries, production and test consumers,
+  retained inputs, and existing verification commands;
+- a project-architecture agent proposes the minimal Program surface, module
+  boundaries, ownership assignments, and unresolved decisions;
+- target-specific migration agents reorganize implementation according to the
+  selected language's ownership conventions;
+- test-migration agents replace test-only entrypoints with assertions through
+  real Program-visible behavior;
+- atomic import agents write individual Program modules and propose reachable
+  shared complex types;
+- deterministic validators build semantic projections and ownership records,
+  enforce non-overlapping ownership, verify public surfaces and links, and run
+  the existing project oracle; and
+- the accepted result establishes converged Program/implementation baselines
+  without regenerating the preserved implementation.
+
+The non-writing form produces the complete boundary, ownership, retained-file,
+unsupported-file, type, test-migration, implementation-reorganization, and
+Program proposal. `--write` executes only an accepted plan. `--resume` continues
+from durable phase and module receipts rather than conversational memory.
+
+The Genesis Compiler stores its complete prompt versions, plan, decisions,
+completed phases, module results, verification evidence, and pending work in
+machine-readable orchestration state. Every AI phase is a fresh bounded
+invocation that receives its complete governing prompt again. No phase relies
+on an agent remembering instructions across context compaction.
+
+Genesis may parallelize read-only discovery and independent candidate work, but
+it serializes conflicting ownership changes, shared-type changes, installation,
+and accepted-state updates. A failed or interrupted run leaves already accepted
+modules resumable and never treats a partially migrated module as complete.
+
+Genesis must not create one Program module for every supported implementation
+file. Its essential compilation result is the desired public Program
+architecture plus the language-specific mapping from that architecture to
+precious managed implementation.
+
+### 13.7 Genesis clean-generation experiment
+
+Status: **deferred; required before claiming reproducible clean generation**.
+
+A Program module is ongoing source, not a separate one-time genesis prompt.
+When its implementation is missing, the ordinary compiler performs genesis.
+Normal assimilation and evolution do not delete an existing implementation to
+prove that genesis remains possible.
+
+The Genesis Compiler must later provide an explicit clean-generation mode:
+
+~~~text
+progsync genesis [<Program-module>] --clean --output <isolated-path>
+progsync genesis --clean --output <isolated-path>
+~~~
+
+Clean Genesis must:
+
+1. require an explicit isolated empty destination and never replace the accepted
+   implementation in place;
+2. compile from current Program, reachable types and Program libraries,
+   retained inputs, built-in target instructions, and public dependency
+   interfaces without reading current managed implementation contents;
+3. use the committed ownership records to prove that every accepted managed
+   file belongs to a known module and to define the comparison baseline, not to
+   force the fresh generator to copy the old private decomposition;
+4. produce a proposed ownership record containing the exact primary and
+   auxiliary files generated for every candidate module;
+5. build and run the independently retained public test, integration, browser,
+   and visual oracle appropriate to the project;
+6. compare current and regenerated ownership inventories, public surfaces,
+   Program Uses realization, dependencies, executable intent, build outputs,
+   performance or size budgets, and other versioned project criteria;
+7. report private file additions, removals, moves, and decomposition changes as
+   evidence rather than failures unless a committed comparison policy makes a
+   particular layout constraint intentional;
+8. treat textual similarity, helper names, internal algorithms, and private
+   file count as non-authoritative by default;
+9. classify every observable failure as a Program, synchronizer/binding,
+   implementation, verification, or external problem; and
+10. leave promotion of the regenerated candidate as a separate explicit,
+    reviewed operation.
+
+The future mode requires a versioned comparison-policy format and
+implementation-neutral oracle contract. It must be added only after
+ordinary Genesis assimilation, committed ownership records, and
+incremental synchronization are proven.
 
 ## 14. State, provenance, and reproducibility
 
