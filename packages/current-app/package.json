@@ -48,7 +48,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.181",
+    "@jskit-ai/kernel": "0.1.183",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-project": "0.1.0",
