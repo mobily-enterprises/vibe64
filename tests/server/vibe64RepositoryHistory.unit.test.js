@@ -385,8 +385,14 @@ test("merge history follows its first parent and pages renamed, binary and trunc
       assert.equal(full.parent, firstParent);
       assert.equal(full.truncated, false);
       assert.match(full.diff, /^@@ -0,0 \+1,12 @@$/mu);
-      assert.equal(full.totalLines, 18);
-      assert.equal(full.shownLines, 18);
+      const native = await execFileAsync("git", [
+        "diff", "--no-ext-diff", "--find-renames", "--unified=3", firstParent, mergeCommit, "--", "notes.txt"
+      ], { cwd: root, encoding: "utf8" });
+      assert.equal(full.diff, native.stdout);
+      assert.equal(full.diff.endsWith("\n"), true);
+      // The diff renderer retains Git's final newline as its last empty row.
+      assert.equal(full.totalLines, 19);
+      assert.equal(full.shownLines, 19);
 
       const shortened = await repositoryVersionFileDiff({ ...versionInput, path: "notes.txt", lineLimit: 8 });
       assert.equal(shortened.parent, firstParent);
