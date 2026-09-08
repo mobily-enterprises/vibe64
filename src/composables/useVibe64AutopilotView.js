@@ -440,6 +440,7 @@ function useVibe64AutopilotView(props, emit, {
     diagnosticsBusy: false
   });
   let messageSequence = 0;
+  let repositoryRequestSequence = 0;
 
   const shortActionDismissalsStorageKey = computed(() => {
     const slug = normalizedAgentTurnText(projectSlug.value);
@@ -592,10 +593,14 @@ function useVibe64AutopilotView(props, emit, {
     !interrupting.value &&
     !composerSending.value
   ));
-  const thinkingVisible = computed(() => Boolean(agentActive.value || composerSending.value));
+  const assistantConnectionReady = computed(() => props.agentConnectionStatus === "connected");
+  const thinkingVisible = computed(() => Boolean(
+    agentActive.value || composerSending.value ||
+    (!assistantConnectionReady.value && !sessionInteractionDisabled.value)
+  ));
   const thinkingLabel = computed(() => (
     agentConnectionThinkingLabel({
-      active: agentActive.value,
+      active: !sessionInteractionDisabled.value,
       status: props.agentConnectionStatus
     }) ||
     (agentActive.value ? "Assistant is working..." : "") ||
@@ -1232,6 +1237,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const saveWorkDisabled = computed(() => Boolean(
     sessionInteractionDisabled.value ||
+    !assistantConnectionReady.value ||
     agentActive.value ||
     composerSending.value ||
     saveWorkSending.value ||
@@ -1253,6 +1259,11 @@ function useVibe64AutopilotView(props, emit, {
     props.active && sessionId.value
   ));
   const saveWorkTitle = computed(() => {
+    if (!assistantConnectionReady.value) {
+      return props.agentConnectionStatus === "reconciling"
+        ? "Checking the assistant connection before saving or updating"
+        : "Waiting for the assistant to reconnect before saving or updating";
+    }
     if (repositoryOperationActive.value || saveWorkRepositoryBusy.value) {
       return "Wait for the current repository operation to finish";
     }
@@ -1365,8 +1376,13 @@ function useVibe64AutopilotView(props, emit, {
       .filter(Boolean)
       .join("\n")
     : ""));
-  const saveWorkStatus = computed(() => String(saveWorkOperation.value?.status || ""));
-  const saveWorkStage = computed(() => String(saveWorkOperation.value?.stage || ""));
+  const saveWorkStatus = computed(() => String(
+    saveWorkOperation.value?.status || (saveWorkSending.value ? "starting" : "")
+  ));
+  const saveWorkStage = computed(() => String(
+    saveWorkOperation.value?.stage ||
+    (saveWorkSending.value && !saveWorkOperation.value ? "Waiting for the session to be ready" : "")
+  ));
   watch(() => ({
     code: String(saveWorkOperation.value?.code || ""),
     details: saveWorkOperation.value?.details || null,
@@ -1403,9 +1419,11 @@ function useVibe64AutopilotView(props, emit, {
   ));
 
   async function updateBeforeSave() {
+    const requestSequence = ++repositoryRequestSequence;
     const updatingSessionId = sessionId.value;
     const updatingProjectSlug = projectSlug.value;
     const requestIsCurrent = () => (
+      requestSequence === repositoryRequestSequence &&
       sessionId.value === updatingSessionId && projectSlug.value === updatingProjectSlug
     );
     saveWorkAttempt.value = {
@@ -1460,6 +1478,14 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function dismissSaveWorkActivity() {
+    if (saveWorkSending.value || saveWorkOperationActive.value) {
+      return false;
+    }
+    if (!saveWorkActivityKey.value && saveWorkError.value) {
+      saveWorkError.value = "";
+      saveWorkFailure.value = null;
+      return true;
+    }
     return dismissShortAction("saveWork", saveWorkActivityKey.value);
   }
 
@@ -1471,6 +1497,13 @@ function useVibe64AutopilotView(props, emit, {
     if (saveWorkDisabled.value) {
       return false;
     }
+    const requestSequence = ++repositoryRequestSequence;
+    const savingSessionId = sessionId.value;
+    const savingProjectSlug = projectSlug.value;
+    const requestIsCurrent = () => (
+      requestSequence === repositoryRequestSequence &&
+      sessionId.value === savingSessionId && projectSlug.value === savingProjectSlug
+    );
     saveWorkAttempt.value = {
       kind: "save",
       operationId: ""
@@ -1482,6 +1515,9 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkConfirmOpen.value = false;
     try {
       const result = await props.saveSessionWork();
+      if (!requestIsCurrent()) {
+        return false;
+      }
       const saveCommit = normalizedAgentTurnText(result?.saveCommit);
       if (result?.reconciled === true && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/iu.test(saveCommit)) {
         savedCommitDeslop.value = saveCommit;
@@ -1489,6 +1525,9 @@ function useVibe64AutopilotView(props, emit, {
       saveWorkAttempt.value = null;
       return result;
     } catch (error) {
+      if (!requestIsCurrent()) {
+        return false;
+      }
       saveWorkFailure.value = error && typeof error === "object"
         ? {
             code: String(error.code || error.response?.code || ""),
@@ -1501,7 +1540,9 @@ function useVibe64AutopilotView(props, emit, {
         : String(error || "Session work could not be saved.");
       return false;
     } finally {
-      saveWorkSending.value = false;
+      if (requestIsCurrent()) {
+        saveWorkSending.value = false;
+      }
     }
   }
 
@@ -1884,6 +1925,8 @@ function useVibe64AutopilotView(props, emit, {
   }, { immediate: true });
 
   watch([sessionId, projectSlug], () => {
+    repositoryRequestSequence += 1;
+    saveWorkConfirmOpen.value = false;
     saveWorkSending.value = false;
     saveWorkAttempt.value = null;
     saveWorkError.value = "";

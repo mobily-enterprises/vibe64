@@ -133,6 +133,7 @@ async function terminalServiceFixture(t, lock, {
     }
   };
   const sessionStore = createVibe64SessionStore({
+    logger,
     projectContextRoot,
     projectRuntimeRoot,
     projectSessionSourceRoot: path.join(root, "managed", "sessions")
@@ -352,6 +353,82 @@ test("assistant reconciliation retains structured failure diagnostics", async (t
   assert.equal(failed.error, failure.message);
   assert.equal(warnings[1].code, failure.code);
   assert.equal(warnings[1].event, "vibe64.agent_session.reconciliation_failed");
+});
+
+for (const method of ["saveSessionWork", "updateSessionWork"]) {
+  test(`${method} waits behind preparation and admits repository work exactly once`, { timeout: 15_000 }, async (t) => {
+    const contended = deferred();
+    const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
+      logger: {
+        info() {},
+        warn(event) { if (event.event === "vibe64.session_lock.contended") contended.resolve(event); }
+      }
+    });
+    const entered = deferred();
+    const release = deferred();
+    const preparing = runVibe64AgentWriteExclusive(runtime, session.sessionId, async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await entered.promise;
+    const admitted = new Error("Repository admission reached; no Git or AI work needed for this test");
+    let acquisitions = 0;
+    const requested = service[method](session.sessionId, {
+      onRepositoryWriteAcquired() { acquisitions += 1; throw admitted; }
+    }).catch((error) => error);
+    try {
+      const contention = await contended.promise;
+      assert.equal(contention.waitMs, 10_000);
+      assert.equal(contention.owner.operation, "prepare-agent-session");
+      assert.equal(acquisitions, 0);
+    } finally {
+      release.resolve();
+      await preparing;
+    }
+    assert.equal(await requested, admitted);
+    assert.equal(acquisitions, 1);
+  });
+}
+
+test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
+  const contended = deferred();
+  const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
+    logger: { info() {}, warn(event) { if (event.event.endsWith(".contended")) contended.resolve(); } }
+  });
+  const entered = deferred();
+  const release = deferred();
+  const preparing = runVibe64AgentWriteExclusive(runtime, session.sessionId, async () => {
+    entered.resolve();
+    await release.promise;
+  }, { operation: "prepare-agent-session" });
+  await entered.promise;
+  const requested = service.saveSessionWork(session.sessionId, {
+    onRepositoryWriteAcquired() { assert.fail("Active assistant must prevent repository work"); }
+  }).catch((error) => error);
+  try {
+    await contended.promise;
+    session.agentRuns = [{ active: true, state: "active", runId: "started-during-wait" }];
+  } finally {
+    release.resolve();
+    await preparing;
+  }
+  assert.equal((await requested).code, "vibe64_session_save_agent_active");
+});
+
+test("Save preparation timeout returns an actionable retry without starting repository work", async (t) => {
+  const { runtime, service, session } = await terminalServiceFixture(t, { store: {} });
+  runtime.store.runSessionExclusive = async (_sessionId, _lockName, _operation, options) => {
+    assert.equal(options.waitMs, 10_000);
+    return { acquired: false, value: null, blockingOperation: "prepare-agent-session" };
+  };
+  await assert.rejects(service.saveSessionWork(session.sessionId, {
+    onRepositoryWriteAcquired() { assert.fail("Timed out Save must not start"); }
+  }), {
+    code: "vibe64_agent_write_mode_busy",
+    message: "The assistant is still reconnecting. Wait until it is ready, then try again.",
+    details: { blockingOperation: "prepare-agent-session" },
+    retryable: true
+  });
 });
 
 test("rebase, assistant preparation and temporary repair identify their lock requests", async (t) => {

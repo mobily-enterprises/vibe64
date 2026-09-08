@@ -694,6 +694,7 @@ async function quarantineAbandonedSessionLock(lockPath = "") {
 
 async function acquireSessionLock(sessionPaths, lockName = "", {
   logger = null,
+  onRejected = null,
   operation = "",
   processPlatform = process.platform,
   waitMs = 0
@@ -782,8 +783,11 @@ async function acquireSessionLock(sessionPaths, lockName = "", {
       }
       const waitedMs = Date.now() - startedAtMs;
       const rejected = waitedMs >= waitMs;
-      if (operation && (rejected || !contentionLogged)) {
+      if (rejected || (operation && !contentionLogged)) {
         const owner = await readSessionLockOwner(lockPath);
+        if (rejected) {
+          onRejected?.(normalizeText(owner?.operation));
+        }
         const acquiredAtMs = Date.parse(owner?.createdAt);
         logLockEvent(rejected ? "rejected" : "contended", {
           waitedMs,
@@ -1774,13 +1778,16 @@ function createVibe64SessionStore({
         finishSessionOperation(inheritedContext.lease, participant);
       }
     }
+    let blockingOperation = "";
     const release = await acquireStoreSessionLock(sessionPaths, operationName, {
+      onRejected: (ownerOperation) => { blockingOperation = ownerOperation; },
       operation: diagnosticOperation,
       waitMs
     });
     if (!release) {
       return {
         acquired: false,
+        blockingOperation,
         value: null
       };
     }

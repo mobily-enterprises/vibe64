@@ -95,12 +95,16 @@ test.describe("direct chat", () => {
     );
     await routeApiEndpoint(
       page,
-      `/vibe64/sessions/${SESSION_ID}/message-suggestions`,
+      `/vibe64/sessions/${SESSION_ID}/prompt-hints`,
       async (route) => {
         await fulfillJson(route, {
-          canManage: true,
           ok: true,
-          suggestions: []
+          status: "ready",
+          suggestions: [
+            { label: "Plan first version", prompt: longPrompt },
+            { label: "Shape app idea", prompt: "Help me shape my app idea" },
+            { label: "Decide first steps", prompt: "What should we decide first?" }
+          ]
         });
       }
     );
@@ -261,6 +265,89 @@ test.describe("direct chat", () => {
     await expect(dialog).not.toBeVisible();
   });
 
+  test("keeps Save unavailable until assistant preparation completes", async ({ page }) => {
+    await mockDirectChat(page);
+    let releasePreparation = () => {};
+    const preparing = new Promise<void>((resolve) => { releasePreparation = resolve; });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, async (route) => {
+      await preparing;
+      await fulfillJson(route, { ok: true });
+    });
+    try {
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      const save = page.getByRole("button", { name: "Save selected session work", exact: true });
+      await expect(save).toBeVisible();
+      await expect(save).toBeDisabled();
+      await expect(page.locator(".vibe64-prompt-hints__assistant-status")).toHaveText("Checking assistant status...");
+      releasePreparation();
+      await expect(save).toBeEnabled();
+      await save.click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+    } finally {
+      releasePreparation();
+    }
+  });
+
+  for (const width of [390, 821, 1280]) {
+    for (const update of [false, true]) {
+      test(`recovers an early ${update ? "Update" : "Save"} rejection at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await mockDirectChat(page, { workState: { unsaved: true, updateAvailable: update } });
+        const error = "The assistant is still reconnecting. Wait until it is ready, then try again.";
+        let attempts = 0;
+        await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/${update ? "updates/apply" : "save"}`, async (route) => {
+          attempts += 1;
+          await route.fulfill({
+            status: 409,
+            contentType: "application/json",
+            body: JSON.stringify({ ok: false, code: "vibe64_agent_write_mode_busy", error, retryable: true })
+          });
+        });
+        await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+        const header = page.getByRole("button", {
+          name: update ? "Update selected session (rebase)" : "Save selected session work", exact: true
+        });
+        const confirm = async () => {
+          if (!update) await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+        };
+        await header.click();
+        await confirm();
+        const summary = page.locator(".vibe64-temporary-action-terminal__summary").filter({ hasText: error });
+        await expect(summary).toBeVisible();
+        await expect(summary.locator(".vibe64-temporary-action-terminal__status")).toHaveCount(0);
+        for (const paneWidth of [240, 360, 600]) {
+          await summary.evaluate((element, size) => { element.parentElement!.style.width = `${size}px`; }, paneWidth);
+          const bounds = await summary.boundingBox();
+          const buttons = await summary.getByRole("button").all();
+          expect(buttons).toHaveLength(3);
+          let previousRight = 0;
+          for (const button of buttons) {
+            const box = (await button.boundingBox())!;
+            expect(box.width).toBeGreaterThanOrEqual(40);
+            expect(box.x).toBeGreaterThanOrEqual(previousRight);
+            expect(box.x + box.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+            previousRight = box.x + box.width;
+          }
+          expect(await summary.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+        }
+        await summary.evaluate((element) => { element.parentElement!.style.width = ""; });
+        const title = update ? "Update this session (rebase)" : "Save work";
+        await summary.getByRole("button", { name: `Show ${title} details`, exact: true }).click();
+        await page.getByRole("button", { name: "Collapse", exact: true }).click();
+        await summary.getByRole("button", { name: `Retry ${title}`, exact: true }).click();
+        await confirm();
+        await expect.poll(() => attempts).toBe(2);
+        await expect(summary).toBeVisible();
+        await summary.getByRole("button", { name: `Dismiss ${title}`, exact: true }).press("Enter");
+        await expect(summary).not.toBeVisible();
+        await header.click();
+        await confirm();
+        await expect.poll(() => attempts).toBe(3);
+        await expect(summary).toBeVisible();
+      });
+    }
+  }
+
   test("disables Save work while the agent is active", async ({ page }) => {
     await mockDirectChat(page, {
       agentActive: true
@@ -407,7 +494,8 @@ test.describe("direct chat", () => {
       await expect(navigation.getByRole("button", { name: "Main chat", exact: true })).toBeVisible();
       await workspace.getByLabel("Message temporary AI").fill("Inspect this without changing it.");
       await workspace.getByRole("button", { name: "Send to temporary AI" }).click();
-      await expect(workspace.getByLabel("Temporary AI progress").getByText(
+      await workspace.getByRole("button", { name: "Show all 1 progress update", exact: true }).click();
+      await expect(workspace.getByText(
         "Inspecting the project.",
         { exact: true }
       )).toBeVisible();
@@ -461,6 +549,7 @@ test.describe("direct chat", () => {
         "page"
       );
       await navigation.getByRole("button", { name: "Temporary 1", exact: true }).click();
+      await workspace.getByRole("button", { name: "Show all 1 progress update", exact: true }).click();
       await expect(workspace.getByText("Continued while Main chat was visible.", { exact: true })).toBeVisible();
       await expect(workspace.getByText("Finished while Main chat was visible.", { exact: true })).toBeVisible();
       await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveAttribute(
@@ -600,6 +689,9 @@ test.describe("direct chat", () => {
         expectedPrompt: [
           recovery.promptLead,
           REPOSITORY_RECOVERY_GIT_BOUNDARY,
+          ...(recovery.action === "Update" ? [
+            "When your repair is complete, Vibe64 will run Update to verify it and show the result here. If you need a decision, return a continue result instead."
+          ] : []),
           diagnostic
         ].join("\n\n"),
         promptLabel: `Resolve ${recovery.action}`

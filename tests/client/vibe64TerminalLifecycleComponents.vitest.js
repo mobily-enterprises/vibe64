@@ -178,6 +178,33 @@ function nodeText(node) {
 }
 
 describe("Vibe64 terminal lifecycle components", () => {
+  it("dismisses early failures without a server operation and shows a later identical failure", async () => {
+    const state = reactive({ active: false, error: "The assistant is still reconnecting." });
+    const { app, container } = mount(defineComponent({
+      render: () => h(Vibe64TemporaryActionTerminal, {
+        ...state,
+        onDismiss: () => { state.error = ""; },
+        title: "Save work"
+      })
+    }));
+    const dismiss = () => findNode(container, (node) => (
+      node.type === "button" && node.props?.["aria-label"] === "Dismiss Save work"
+    ));
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__status"))).toBeNull();
+    expect(dismiss()).toBeTruthy();
+    dismiss().props.onClick();
+    await nextTick();
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBeNull();
+    state.active = true;
+    await nextTick();
+    expect(dismiss()).toBeNull();
+    state.active = false;
+    state.error = "The assistant is still reconnecting.";
+    await nextTick();
+    expect(dismiss()).toBeTruthy();
+    app.unmount();
+  });
+
   it("allows collapse while active and dismissal only after the operation finishes", async () => {
     const state = reactive({
       active: false,

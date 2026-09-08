@@ -149,3 +149,31 @@ test("operation failure releases the lock, and a broken logger cannot change adm
     assert.equal((await run("update-session-work", () => "retried")).value, "retried");
   });
 });
+
+test("preparation timeout identifies the actual blocker without exposing lock ownership secrets", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { run } = await fixture(targetRoot);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holder = run("prepare-agent-session", async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    let result;
+    try {
+      result = await run("save-session-work", () => assert.fail("must not save during preparation"), 60);
+      assert.equal(result.acquired, false);
+      assert.equal(result.value.code, "vibe64_agent_write_mode_busy");
+      assert.equal(result.value.retryable, true);
+      assert.equal(result.value.error, "The assistant is still reconnecting. Wait until it is ready, then try again.");
+      assert.deepEqual(result.value.details, { blockingOperation: "prepare-agent-session" });
+      assert.equal(/token|pid|projectRoot|attemptId/.test(JSON.stringify(result.value)), false);
+    } finally {
+      release.resolve();
+      await holder;
+    }
+    assert.equal(result.value.details.blockingOperation, "prepare-agent-session");
+    assert.equal((await run("save-session-work", () => "saved", 60)).value, "saved");
+  });
+});

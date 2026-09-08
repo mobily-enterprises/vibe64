@@ -34,6 +34,10 @@ requiring a page reload or interrupting the assistant's work.
 Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
+Save and Update wait for the assistant connection to be ready. A request that
+overlaps preparation waits briefly at the server and explains a timeout. Failed
+requests remain readable and dismissible even before an operation starts;
+their recovery controls fit the chat pane, including on small screens.
 People can explore a project's database through a readable relationship diagram,
 starting with its keys and expanding detail when needed. Large diagrams load
 without blocking typing or navigation while their connections are calculated.

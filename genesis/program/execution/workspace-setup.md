@@ -58,6 +58,10 @@ concise visible request instead of the complete operational prompt. A compact
 heading shows repair status while the AI works; the result appears afterward. Every
 product surface that offers this ephemeral repair path uses the same Fix it with
 AI control and handoff presentation.
+The shared action banner fits its containing pane, wraps failure messages, and
+keeps Retry, details, Dismiss and Fix it with AI independently usable. Narrow
+panes give actions their own wrapping row; the repair control can wrap its label
+when magnification leaves less room than its usual width.
 
 After an accepted repair turn completes or fails, Vibe64—not the assistant—runs
 the deterministic preparation retry and records its result. This includes a

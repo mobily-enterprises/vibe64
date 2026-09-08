@@ -708,10 +708,11 @@ function createService({
       }
       await options.onRepositoryWriteAcquired?.();
       return operation(context);
-    }, { operation: operationName });
+    }, { operation: operationName, waitMs: 10_000 });
     if (result?.ok === false && result?.code === "vibe64_agent_write_mode_busy") {
       const error = new Error(result.error || "Another session operation is starting. Try again in a moment.");
       error.code = result.code;
+      error.details = result.details;
       error.retryable = true;
       throw error;
     }

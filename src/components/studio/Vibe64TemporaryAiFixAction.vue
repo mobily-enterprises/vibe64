@@ -38,7 +38,11 @@ const emit = defineEmits(["click"]);
 
 <style scoped>
 .vibe64-temporary-ai-fix-action {
-  min-inline-size: 8.5rem;
+  block-size: auto;
+  max-inline-size: 100%;
+  min-block-size: 1.75rem;
+  min-inline-size: min(8.5rem, 100%);
+  white-space: normal;
 }
 
 @media (pointer: coarse) {

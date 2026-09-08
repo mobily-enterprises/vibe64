@@ -652,6 +652,7 @@
         <v-card-text>
           Vibe64 will save this session to the project's canonical repository. It preserves concurrent canonical
           changes and stops before publishing only when another open session has changes that Git cannot merge cleanly.
+          <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -661,7 +662,7 @@
           <v-btn
             :aria-busy="saveWorkSending ? 'true' : undefined"
             color="primary"
-            :disabled="saveWorkSending"
+            :disabled="saveWorkDisabled"
             type="button"
             variant="flat"
             @click="confirmSaveWork"

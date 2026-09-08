@@ -27,7 +27,13 @@ async function runVibe64AgentWriteExclusive(runtime, sessionId = "", operation, 
     ? exclusive
     : {
         acquired: false,
-        value: VIBE64_AGENT_WRITE_BUSY_RESULT
+        value: exclusive.blockingOperation === "prepare-agent-session"
+          ? {
+              ...VIBE64_AGENT_WRITE_BUSY_RESULT,
+              error: "The assistant is still reconnecting. Wait until it is ready, then try again.",
+              details: { blockingOperation: exclusive.blockingOperation }
+            }
+          : VIBE64_AGENT_WRITE_BUSY_RESULT
       };
 }
 

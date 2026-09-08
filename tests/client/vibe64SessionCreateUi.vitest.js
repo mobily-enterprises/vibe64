@@ -19,6 +19,10 @@ vi.mock("vuetify/components/VChip", () => ({
   VChip: passthroughComponent("button")
 }));
 
+vi.mock("vuetify/components/VTooltip", () => ({
+  VTooltip: passthroughComponent("aside")
+}));
+
 vi.mock("@/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue", () => ({
   default: emptyComponent()
 }));
@@ -130,6 +134,7 @@ async function renderToolbar({
   app.component("VBtn", passthroughComponent("button"));
   app.component("VChip", passthroughComponent("button"));
   app.component("VIcon", passthroughComponent("span"));
+  app.component("VTooltip", passthroughComponent("aside"));
   return renderToString(app);
 }
 

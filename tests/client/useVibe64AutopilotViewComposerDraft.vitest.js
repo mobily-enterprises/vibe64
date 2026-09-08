@@ -1777,6 +1777,140 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOutput.value).toBe("");
   });
 
+  it.each(["reconciling", "disconnected", "unknown"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
+    const { props, view } = await createViewWithProps({
+      agentConnectionStatus: connectionStatus,
+      workState: { unsaved: true }
+    });
+    expect(view.saveWorkDisabled.value).toBe(true);
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).not.toBe("");
+    expect(view.requestSaveWork()).toBe(false);
+    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(props.saveSessionWork).not.toHaveBeenCalled();
+    props.workState.updateAvailable = true;
+    await nextTick();
+    expect(view.requestSaveWork()).toBe(false);
+    expect(props.updateSessionWork).not.toHaveBeenCalled();
+    props.agentConnectionStatus = "connected";
+    await nextTick();
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.thinkingVisible.value).toBe(false);
+    await expect(view.requestSaveWork()).resolves.toMatchObject({ ok: true });
+    expect(props.updateSessionWork).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks readiness when confirming Save and clears the dialog when switching sessions", async () => {
+    const { props, view } = await createViewWithProps({ workState: { unsaved: true } });
+    expect(view.requestSaveWork()).toBe(true);
+    props.agentConnectionStatus = "reconciling";
+    await nextTick();
+    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(props.saveSessionWork).not.toHaveBeenCalled();
+    expect(view.saveWorkTitle.value).toContain("Checking the assistant connection");
+    props.session = { ...props.session, sessionId: "session-2" };
+    await nextTick();
+    expect(view.saveWorkConfirmOpen.value).toBe(false);
+  });
+
+  it.each([false, true])("dismisses and retries a request rejected before an operation exists (update=%s)", async (update) => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    const rejected = vi.fn(async () => { throw new Error("The assistant is still reconnecting."); });
+    const { props, view } = await createViewWithProps({
+      saveSessionWork: rejected,
+      updateSessionWork: rejected,
+      workState: {
+        unsaved: true,
+        updateAvailable: update,
+        operation: { operationId: "old-failed-save", status: "failed", error: "Older Save failed" }
+      }
+    });
+    const attempt = async () => {
+      if (update) await view.requestSaveWork();
+      else { view.requestSaveWork(); await view.confirmSaveWork(); }
+    };
+    await attempt();
+    expect(view.saveWorkOperation.value).toBeNull();
+    expect(view.saveWorkActivityKey.value).toBe("");
+    expect(view.saveWorkError.value).toContain("still reconnecting");
+    expect(view.dismissSaveWorkActivity()).toBe(true);
+    await nextTick();
+    expect(view.saveWorkError.value).toBe("");
+    expect(view.saveWorkFailure.value).toBeNull();
+    props.workState.operation = { ...props.workState.operation };
+    await nextTick();
+    expect(view.saveWorkError.value).toBe("");
+    await attempt();
+    expect(view.saveWorkError.value).toContain("still reconnecting");
+    expect(view.saveWorkActivityDismissed.value).toBe(false);
+    expect(rejected).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])("ignores a late request failure after switching away and back (update=%s)", async (update) => {
+    const response = deferredResult();
+    const { props, view } = await createViewWithProps({
+      saveSessionWork: () => response.promise,
+      updateSessionWork: () => response.promise,
+      workState: { unsaved: true, updateAvailable: update }
+    });
+    const originalSession = props.session;
+    const pending = update ? view.requestSaveWork() : view.confirmSaveWork();
+    expect(view.saveWorkSending.value).toBe(true);
+    expect(view.saveWorkStage.value).toBe("Waiting for the session to be ready");
+    expect(view.dismissSaveWorkActivity()).toBe(false);
+    props.session = { ...originalSession, sessionId: "session-2" };
+    await nextTick();
+    props.session = originalSession;
+    await nextTick();
+    response.reject(new Error("Failure from previous request"));
+    await expect(pending).resolves.toBe(false);
+    expect(view.saveWorkError.value).toBe("");
+    expect(view.saveWorkSending.value).toBe(false);
+  });
+
+  it("finishes Save across ordinary session data refreshes", async () => {
+    const response = deferredResult();
+    const { props, view } = await createViewWithProps({
+      saveSessionWork: () => response.promise,
+      workState: { unsaved: true }
+    });
+    const pending = view.confirmSaveWork();
+    props.session = { ...props.session, updatedAt: "2026-09-08T10:28:30Z" };
+    await nextTick();
+    response.resolve({ ok: true, status: "saved" });
+    await expect(pending).resolves.toEqual({ ok: true, status: "saved" });
+    expect(view.saveWorkSending.value).toBe(false);
+  });
+
+  it.each([false, true])("keeps a new request active when an earlier session visit succeeds late (update=%s)", async (update) => {
+    const oldResponse = deferredResult();
+    const newResponse = deferredResult();
+    const send = vi.fn()
+      .mockReturnValueOnce(oldResponse.promise)
+      .mockReturnValueOnce(newResponse.promise);
+    const { props, view } = await createViewWithProps({
+      saveSessionWork: send,
+      updateSessionWork: send,
+      workState: { unsaved: true, updateAvailable: update }
+    });
+    const originalSession = props.session;
+    const oldRequest = update ? view.requestSaveWork() : view.confirmSaveWork();
+    props.session = { ...originalSession, sessionId: "session-2" };
+    await nextTick();
+    props.session = originalSession;
+    await nextTick();
+    const newRequest = update ? view.requestSaveWork() : view.confirmSaveWork();
+    oldResponse.resolve({ ok: true, reconciled: true, saveCommit: "a".repeat(40) });
+    await expect(oldRequest).resolves.toBe(false);
+    expect(view.saveWorkSending.value).toBe(true);
+    expect(view.savedCommitDeslop.value).toBe("");
+    newResponse.reject(new Error("Current request failed"));
+    await expect(newRequest).resolves.toBe(false);
+    expect(view.saveWorkSending.value).toBe(false);
+    expect(view.saveWorkError.value).toBe("Current request failed");
+  });
+
   it("keeps a rejected Save separate from newer completed Update history", async () => {
     const error = Object.assign(new Error("Another assistant operation is starting. Try again in a moment."), {
       code: "vibe64_agent_write_mode_busy"

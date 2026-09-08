@@ -1,57 +1,58 @@
 <template>
-  <v-sheet
-    v-if="visible && !detailsOpen"
-    class="vibe64-temporary-action-terminal__summary"
-    :class="{ 'vibe64-temporary-action-terminal__summary--error': Boolean(error) }"
-    rounded="lg"
-    color="surface-variant"
-    :role="error ? 'alert' : 'status'"
-  >
-    <strong class="vibe64-temporary-action-terminal__title">{{ title }}</strong>
-    <v-chip
-      v-if="status"
-      class="vibe64-temporary-action-terminal__status"
-      size="x-small"
-      variant="tonal"
+  <div v-if="visible && !detailsOpen" class="vibe64-temporary-action-terminal">
+    <v-sheet
+      class="vibe64-temporary-action-terminal__summary"
+      :class="{ 'vibe64-temporary-action-terminal__summary--error': Boolean(error) }"
+      rounded="lg"
+      color="surface-variant"
+      :role="error ? 'alert' : 'status'"
     >
-      {{ status }}
-    </v-chip>
-    <span class="vibe64-temporary-action-terminal__line">
-      {{ summaryText }}
-    </span>
-    <div class="vibe64-temporary-action-terminal__actions">
-      <slot v-if="error" name="error-actions" />
-      <v-btn
-        v-if="error && retryable"
-        :aria-busy="starting ? 'true' : undefined"
-        :aria-label="`Retry ${title}`"
-        :disabled="starting"
-        :icon="mdiRefresh"
-        size="small"
-        :title="`Retry ${title}`"
-        variant="text"
-        @click="$emit('retry')"
-      />
-      <v-btn
-        :aria-label="`Show ${title} details`"
-        :color="error ? 'error' : undefined"
-        :icon="error ? mdiAlertCircleOutline : mdiConsoleLine"
-        size="small"
-        :title="`Show ${title} details`"
-        variant="text"
-        @click="openDetails"
-      />
-      <v-btn
-        v-if="canDismiss"
-        :aria-label="`Dismiss ${title}`"
-        :icon="mdiClose"
-        size="small"
-        :title="`Dismiss ${title}`"
-        variant="text"
-        @click="dismiss"
-      />
-    </div>
-  </v-sheet>
+      <strong class="vibe64-temporary-action-terminal__title">{{ title }}</strong>
+      <v-chip
+        v-if="status"
+        class="vibe64-temporary-action-terminal__status"
+        size="x-small"
+        variant="tonal"
+      >
+        {{ status }}
+      </v-chip>
+      <span class="vibe64-temporary-action-terminal__line">
+        {{ summaryText }}
+      </span>
+      <div class="vibe64-temporary-action-terminal__actions">
+        <slot v-if="error" name="error-actions" />
+        <v-btn
+          v-if="error && retryable"
+          :aria-busy="starting ? 'true' : undefined"
+          :aria-label="`Retry ${title}`"
+          :disabled="starting"
+          :icon="mdiRefresh"
+          size="small"
+          :title="`Retry ${title}`"
+          variant="text"
+          @click="$emit('retry')"
+        />
+        <v-btn
+          :aria-label="`Show ${title} details`"
+          :color="error ? 'error' : undefined"
+          :icon="error ? mdiAlertCircleOutline : mdiConsoleLine"
+          size="small"
+          :title="`Show ${title} details`"
+          variant="text"
+          @click="openDetails"
+        />
+        <v-btn
+          v-if="canDismiss"
+          :aria-label="`Dismiss ${title}`"
+          :icon="mdiClose"
+          size="small"
+          :title="`Dismiss ${title}`"
+          variant="text"
+          @click="dismiss"
+        />
+      </div>
+    </v-sheet>
+  </div>
 
   <Vibe64TerminalSurface
     v-else-if="visible"
@@ -201,10 +202,16 @@ watch(() => props.active, (active, previousActive) => {
 </script>
 
 <style scoped>
+.vibe64-temporary-action-terminal {
+  container-type: inline-size;
+  min-width: 0;
+}
+
 .vibe64-temporary-action-terminal__summary {
   align-items: center;
   display: grid;
   gap: 0.5rem;
+  grid-template-areas: "title status line actions";
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   min-height: 2.75rem;
   padding: 0.35rem 0.45rem 0.35rem 0.8rem;
@@ -217,6 +224,22 @@ watch(() => props.active, (active, previousActive) => {
 .vibe64-temporary-action-terminal__actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
+  grid-area: actions;
+  justify-content: flex-end;
+}
+
+.vibe64-temporary-action-terminal__title {
+  grid-area: title;
+}
+
+.vibe64-temporary-action-terminal__status {
+  grid-area: status;
+}
+
+.vibe64-temporary-action-terminal__summary--error .vibe64-temporary-action-terminal__line {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .vibe64-temporary-action-terminal__title,
@@ -229,30 +252,16 @@ watch(() => props.active, (active, previousActive) => {
 .vibe64-temporary-action-terminal__line {
   color: rgb(var(--v-theme-on-surface-variant));
   font-size: 0.82rem;
+  grid-area: line;
 }
 
-@media (max-width: 600px) {
+@container (max-width: 36rem) {
   .vibe64-temporary-action-terminal__summary {
     grid-template-areas:
-      "title actions"
-      "line line";
+      "title status"
+      "line line"
+      "actions actions";
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .vibe64-temporary-action-terminal__status {
-    display: none;
-  }
-
-  .vibe64-temporary-action-terminal__title {
-    grid-area: title;
-  }
-
-  .vibe64-temporary-action-terminal__line {
-    grid-area: line;
-  }
-
-  .vibe64-temporary-action-terminal__actions {
-    grid-area: actions;
   }
 }
 </style>

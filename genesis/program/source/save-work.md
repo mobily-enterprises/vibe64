@@ -6,6 +6,9 @@ Git commands.
 
 ## Sources
 
+- `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/agentWriteLock.js`
+- `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-sessions/src/server/service.js`
@@ -59,6 +62,25 @@ confirmed Update action.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.
+
+Save and Update use the mounted assistant connection's existing readiness state.
+Reconnection is visible and disables both the header action and an already-open
+Save confirmation. The server remains authoritative: a repository request waits
+up to ten seconds for assistant-write admission, then rechecks active assistant
+work before entering repository work. If preparation still owns the lock at
+timeout, the failure identifies reconnection and offers a later retry. The lock
+is never bypassed and the browser does not automatically resubmit publication.
+
+An admission failure with no server operation identity is dismissed by clearing
+that request's local error. It does not borrow an identity from older history.
+Switching sessions retires pending local replies, including when the person
+returns before the old request finishes. Normal data refreshes retain the
+current request. Active work cannot be dismissed.
+
+The shared short-action banner assigns explicit grid positions to its optional
+status, message and controls. Its layout follows the available pane width;
+narrow panes put actions on their own wrapping row. Errors wrap in full instead
+of truncating the explanation, and recovery controls remain separately usable.
 
 The current activity is causally bound to the Save or Update command the person
 actually invoked. If admission fails before that command creates a durable
