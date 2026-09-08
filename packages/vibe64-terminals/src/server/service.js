@@ -11,6 +11,8 @@ import {
 } from "./agent/providers/opencodeSessionAgentProvider.js";
 import { createOpenCodeTerminalController } from "./opencodeTerminal.js";
 import process from "node:process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
@@ -43,8 +45,12 @@ import {
   createSessionSource as createManagedSessionSource
 } from "./sessionSource.js";
 import {
+  GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
-  refreshGenesisCities
+  inspectGenesisProjectFormat,
+  inspectGenesisSkills,
+  refreshGenesisCities,
+  syncGenesisSkills
 } from "@local/vibe64-genesis/server";
 import {
   codexTerminalNamespace,
@@ -98,6 +104,7 @@ import {
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
+  VIBE64_AGENT_WORKSPACE_WRITE_POLICY,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
@@ -564,6 +571,28 @@ function createService({
 
   async function authorizeGlobalCodexTerminal(options = {}) {
     await sessionAgent.requireAssistantAccessForEngine("codex", options);
+  }
+
+  async function prepareAgentSkillsInsideAgentWrite(sessionId, context) {
+    await sessionAgent.requireAssistantAccess(sessionId, context);
+    if (sessionHasActiveAgentRun(context.session)) return;
+    const projectRoot = terminalWorktreePath(context.session);
+    if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
+    const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
+    if (temporary.active) return;
+    const format = await inspectGenesisProjectFormat({ projectRoot });
+    if (format.status !== "current") return;
+    const inspection = await inspectGenesisSkills({ projectRoot });
+    if (!["missing", "outdated"].includes(inspection.status)) return;
+    const result = await projectService.runProjectSourceExclusive(
+      () => syncGenesisSkills({ projectRoot }),
+      { operation: "sync-agent-skills" }
+    );
+    if (result.changedFiles.length > 0) {
+      await publishTerminalSessionChanged("agentTerminal", sessionId, "agent-skills-updated", {
+        changedFiles: result.changedFiles
+      });
+    }
   }
 
   async function assistantSessionOptions(sessionId = "", options = {}) {
@@ -2188,6 +2217,7 @@ function createService({
               messageId: input.messageId,
               sessionId
             });
+            await prepareAgentSkillsInsideAgentWrite(sessionId, context);
             const delivered = await sessionAgent.sendMessage(sessionId, input, context);
             vibe64SessionDebugLog("server.terminals.agentMessage.providerDone", {
               durationMs: Date.now() - startedAt,
@@ -2372,16 +2402,20 @@ function createService({
     },
 
     startAgentTerminal(sessionId, input = {}, options = {}) {
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.startTerminal(sessionId, input, context)
-      ), { operation: "start-agent-terminal" });
+      return runMainAgentWrite(sessionId, options, async (context) => {
+        await prepareAgentSkillsInsideAgentWrite(sessionId, context);
+        return sessionAgent.startTerminal(sessionId, input, context);
+      }, { operation: "start-agent-terminal" });
     },
 
     startAgentConversationTurn(sessionId, input = {}, options = {}) {
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.startConversationTurn(sessionId, input, context)
-      ), { operation: "start-agent-turn" });
+      return runMainAgentWrite(sessionId, options, async (context) => {
+        if (input.policy === VIBE64_AGENT_WORKSPACE_WRITE_POLICY) {
+          await prepareAgentSkillsInsideAgentWrite(sessionId, context);
+        }
+        return sessionAgent.startConversationTurn(sessionId, input, context);
+      }, { operation: "start-agent-turn" });
     },
 
     startEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {

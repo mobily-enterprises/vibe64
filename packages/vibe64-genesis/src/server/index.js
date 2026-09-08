@@ -44,11 +44,13 @@ const {
   inspectEngineering,
   inspectEnvironment,
   inspectProject,
+  inspectSkills,
   inspectStackSection,
   projectSessionContext,
   listTemplates,
   setCollaboration,
   setEngineeringProfile,
+  syncSkills,
   withTrustedGitRepository
 } = genesisCompiler;
 
@@ -152,6 +154,14 @@ function addGenesisStack(options = {}) {
 
 function initializeGenesisProject(options = {}) {
   return runGenesisOperation(initialize, options);
+}
+
+function inspectGenesisSkills(options = {}) {
+  return runGenesisOperation(inspectSkills, options);
+}
+
+function syncGenesisSkills(options = {}) {
+  return runGenesisOperation(syncSkills, options);
 }
 
 function refreshGenesisCities(options = {}) {
@@ -379,6 +389,7 @@ export {
   inspectGenesisEngineering,
   inspectGenesisProjectFormat,
   inspectGenesisProject,
+  inspectGenesisSkills,
   listGenesisTemplates,
   inspectGenesisStackSection,
   inspectVibe64Deployment,
@@ -392,6 +403,7 @@ export {
   renderGenesisPrompt,
   setGenesisCollaboration,
   setGenesisEngineeringProfile,
+  syncGenesisSkills,
   vibe64Driver,
   vibe64HostContextResolverPath,
   withGenesisCommandShim

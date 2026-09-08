@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
   access,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -34,6 +35,11 @@ import {
 import {
   createService as createTerminalService
 } from "../../packages/vibe64-terminals/src/server/service.js";
+import {
+  genesisPackageBinDirectory,
+  initializeGenesisProject,
+  inspectGenesisSkills
+} from "../../packages/vibe64-genesis/src/server/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -95,6 +101,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
 
   return {
     attempts,
+    get held() { return active; },
     firstEntered: firstEntered.promise,
     releaseFirst: releaseFirst.resolve,
     store: {
@@ -106,6 +113,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
 
 async function terminalServiceFixture(t, lock, {
   logger = null,
+  opencodeTerminalController = {},
   publishSessionChanged = {}
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-work-admission-"));
@@ -201,6 +209,7 @@ async function terminalServiceFixture(t, lock, {
       VIBE64_WORKSPACE: "test"
     },
     projectService,
+    opencodeTerminalController,
     publishSessionChanged
   });
   t.after(async () => {
@@ -209,12 +218,94 @@ async function terminalServiceFixture(t, lock, {
   });
   return {
     attachmentRoot,
+    projectService,
     root,
     runtime,
     service,
     session
   };
 }
+
+async function outdatedSkillFixture(projectRoot) {
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  const compilerRoot = path.join(projectRoot, "node_modules/genesis-compiler");
+  await mkdir(compilerRoot, { recursive: true });
+  await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({
+    dependencies: { "genesis-compiler": "0.0.0-fixture" }
+  }));
+  await writeFile(path.join(compilerRoot, "package.json"), JSON.stringify({
+    name: "genesis-compiler", version: "0.0.0-fixture"
+  }));
+  await cp(
+    path.join(genesisPackageBinDirectory(), "../genesis-compiler/skills"),
+    path.join(compilerRoot, "skills"),
+    { recursive: true }
+  );
+  await initializeGenesisProject({ projectRoot });
+  const skillPath = path.join(projectRoot, ".agents/skills/genesis-project/SKILL.md");
+  const original = await readFile(skillPath, "utf8");
+  const expected = `${original}\nUpdated installed skill guidance.\n`;
+  await writeFile(path.join(compilerRoot, "skills/genesis-project/SKILL.md"), expected);
+  assert.equal((await inspectGenesisSkills({ projectRoot })).status, "outdated");
+  return { skillPath, original, expected };
+}
+
+test("foreground assistant work refreshes skills under both write locks and preserves source customization", async (t) => {
+  const lock = agentWriteLockHarness();
+  const events = [];
+  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+    opencodeTerminalController: {
+      createServerProcess() { throw new Error("The test does not start an AI provider."); }
+    },
+    publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
+  });
+  const projectRoot = session.metadata.source_path;
+  const { skillPath, expected } = await outdatedSkillFixture(projectRoot);
+  const customPath = path.join(projectRoot, ".agents/skills/genesis-program/SKILL.md");
+  const custom = `${await readFile(customPath, "utf8")}\nKeep the project's custom rule.\n`;
+  await writeFile(customPath, custom);
+  let sourceWrites = 0;
+  projectService.runProjectSourceExclusive = async (operation, options) => {
+    assert.equal(lock.held, true);
+    assert.equal(options.operation, "sync-agent-skills");
+    sourceWrites += 1;
+    return operation();
+  };
+
+  // Provider delivery is unavailable in this fixture; preparation is deterministic.
+  await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+  assert.equal(sourceWrites, 1);
+  assert.equal(await readFile(skillPath, "utf8"), expected);
+  assert.equal(await readFile(customPath, "utf8"), custom);
+  assert.equal(events.some((event) => event.reason === "agent-skills-updated"), true);
+  await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+  assert.equal(sourceWrites, 1);
+});
+
+test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+    opencodeTerminalController: {
+      createServerProcess() { throw new Error("The test does not start an AI provider."); }
+    }
+  });
+  const { skillPath, original } = await outdatedSkillFixture(session.metadata.source_path);
+  let sourceWrites = 0;
+  projectService.runProjectSourceExclusive = async () => {
+    sourceWrites += 1;
+    assert.fail("This operation must remain read-only.");
+  };
+  await service.ensureAgentSession(session.sessionId, { engineId: "opencode" }).catch(() => null);
+  assert.equal(await readFile(skillPath, "utf8"), original);
+  await service.startAgentConversationTurn(session.sessionId, {
+    conversationId: "read-only-conversation", message: "Explain this project."
+  }, { engineId: "opencode" }).catch(() => null);
+  assert.equal(await readFile(skillPath, "utf8"), original);
+  session.agentRuns = [{ state: "active", runId: "main-turn" }];
+  await service.sendAgentMessage(session.sessionId, { message: "One more detail." }, { engineId: "opencode" }).catch(() => null);
+  assert.equal(await readFile(skillPath, "utf8"), original);
+  assert.equal(sourceWrites, 0);
+});
 
 test("output attempts invalidate output state in other clients", async (t) => {
   const published = [];

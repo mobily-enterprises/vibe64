@@ -55,6 +55,12 @@ created and refreshed after compaction without becoming a visible message or
 extra agent turn. For a new project, the opening conversation first establishes
 what the person wants to make, who it is for, and the first useful outcome, then
 asks before selecting any technology.
+Before starting foreground assistant work in an idle session, Vibe64 refreshes
+outdated unmodified Genesis skills through Genesis's own synchronization.
+Customized skills are preserved and changes remain visible in the source diff.
+Background connection checks and active-turn steering do not perform this write.
+Already-loaded guidance becomes current through the assistant's normal context
+refresh lifecycle.
 
 People can choose the name Vibe64 uses in welcomes and collaboration cues.
 Project owners can set a shared tone, answer length, assumed experience,

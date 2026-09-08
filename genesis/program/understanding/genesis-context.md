@@ -9,6 +9,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-system-graph/src/server/service.js`
@@ -23,6 +24,21 @@ passed to each Genesis operation. That grant stays within the operation's
 async context, so shared Unix ownership does not prevent inspection and
 concurrent projects cannot inherit each other's trust. Git configuration,
 repository ownership, and filesystem permissions remain unchanged.
+
+Before a foreground message, conversation turn allowed to edit source, or
+interactive agent terminal starts in an idle session, the terminal service asks
+Genesis to inspect selected skills. Missing or outdated unmodified copies are
+synchronized through the same public operation as `genesis skills sync`, inside
+the existing agent-write and project-source mutation boundaries. Genesis chooses
+the source version, validates ownership, and preserves customized or unmanaged
+skills. Changed files are ordinary session work and trigger the normal
+session-change event.
+An active main or temporary turn skips this preparation. Routine connection
+verification and read-only temporary conversations remain read-only. Project
+format migration remains a separate operation, and skill maintenance does not
+initialize source, run setup, or build indexes. Existing assistant context is
+refreshed only through its native lifecycle; file synchronization alone does not
+claim that loaded instructions have changed.
 
 New projects begin with Genesis and existing repositories can be adopted without
 moving their source. Agent turns receive Genesis task guidance, while new and
