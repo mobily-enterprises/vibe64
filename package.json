@@ -134,7 +134,7 @@
     "diff2html": "^3.4.56",
     "execa": "^9.6.1",
     "fastify": "^5.7.4",
-    "genesis-compiler": "1.5.0",
+    "genesis-compiler": "1.5.1",
     "genesis-stack": "1.1.0",
     "get-port": "^7.2.0",
     "json-rest-schema": "^1.0.16",
