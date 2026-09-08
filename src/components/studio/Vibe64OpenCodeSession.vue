@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
 
 .vibe64-opencode-session__start-copy span,
 .vibe64-opencode-session__command {
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.82rem;
 }
 

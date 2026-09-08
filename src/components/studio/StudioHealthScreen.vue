@@ -149,7 +149,7 @@ const summaryText = computed(() => {
 
 .studio-health__eyebrow,
 .studio-health__check-heading span {
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -185,6 +185,6 @@ const summaryText = computed(() => {
 }
 
 .studio-health__check-copy small {
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>
