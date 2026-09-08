@@ -1173,120 +1173,137 @@ test("@preview-identity switches between real app identities and Guest without r
   expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
 });
 
-test("@preview-identity exposes exact app errors and remains recoverable on mobile", async ({ page }) => {
-  await page.setViewportSize({
-    height: 844,
-    width: 390
-  });
-  await mockLaunchTerminalSocket(page);
-  const recoveryRequests: TemporaryAiRecoveryRequests = {
-    mainMessages: [],
-    temporaryStarts: [],
-    temporaryTurns: []
-  };
-  const launchSession = await mockLaunchSession(page, {
-    previewIdentity: previewIdentityCapability(),
-    previewIdentityExchange: (selection) => {
-      if (selection.selector?.value === "missing@example.com") {
+for (const width of [390, 1440]) {
+  test(`@preview-identity exposes exact app errors and remains recoverable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({
+      height: 844,
+      width
+    });
+    await mockLaunchTerminalSocket(page);
+    const recoveryRequests: TemporaryAiRecoveryRequests = {
+      mainMessages: [],
+      temporaryStarts: [],
+      temporaryTurns: []
+    };
+    const launchSession = await mockLaunchSession(page, {
+      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
+      previewIdentity: previewIdentityCapability(),
+      previewIdentityExchange: (selection) => {
+        if (selection.selector?.value === "missing@example.com") {
+          return {
+            code: "auth_user_not_found",
+            error: "User not found.",
+            ok: false,
+            signedOut: true,
+            status: 404
+          };
+        }
         return {
-          code: "auth_user_not_found",
-          error: "User not found.",
-          ok: false,
-          signedOut: true,
-          status: 404
+          identity: {
+            email: selection.selector?.type === "email" ? selection.selector.value : "",
+            selector: selection.selector,
+            userId: "app-user-admin",
+            username: "Ada App"
+          },
+          ok: true
         };
-      }
-      return {
-        identity: {
-          email: selection.selector?.type === "email" ? selection.selector.value : "",
-          selector: selection.selector,
-          userId: "app-user-admin",
-          username: "Ada App"
-        },
-        ok: true
-      };
-    },
-    temporaryAiRecoveryRequests: recoveryRequests
-  });
+      },
+      temporaryAiRecoveryRequests: recoveryRequests
+    });
 
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  await page.getByRole("button", { name: "Show project" }).click();
-  await page.getByRole("button", { name: "Show preview controls" }).click();
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    const chatToggle = width === 390 ? "Show project" : "Collapse chat";
+    await page.getByRole("button", { name: chatToggle, exact: true }).click();
+    const chat = page.getByRole("region", { name: "Session chat", exact: true });
+    const project = page.getByRole("region", { name: "Project", exact: true });
+    await expect(chat).toBeHidden();
+    await expect(project).toBeVisible();
+    if (width === 390) {
+      await page.getByRole("button", { name: "Show preview controls" }).click();
+    }
 
-  const identityButton = page.getByRole("button", {
-    name: "Previewing as admin — ada@example.com"
-  });
-  await expect(identityButton).toBeVisible();
-  await identityButton.click();
-  await page.locator(".vibe64-launch-controls__identity-menu")
-    .getByText("missing", { exact: true })
-    .click();
+    const identityButton = page.getByRole("button", {
+      name: "Previewing as admin — ada@example.com"
+    });
+    await expect(identityButton).toBeVisible();
+    await identityButton.click();
+    await page.locator(".vibe64-launch-controls__identity-menu")
+      .getByText("missing", { exact: true })
+      .click();
 
-  await expect(page.getByText("User not found.", { exact: true })).toBeVisible();
-  const failedIdentityButton = page.getByRole("button", {
-    name: "Preview identity failed: User not found."
-  });
-  await expect(failedIdentityButton).toBeVisible();
-  await failedIdentityButton.click();
+    await expect(page.getByText("User not found.", { exact: true })).toBeVisible();
+    const failedIdentityButton = page.getByRole("button", {
+      name: "Preview identity failed: User not found."
+    });
+    await expect(failedIdentityButton).toBeVisible();
+    await failedIdentityButton.click();
 
-  await page.locator(".vibe64-launch-controls__identity-menu")
-    .getByRole("button", {
-      name: "Fix it with AI",
+    await page.locator(".vibe64-launch-controls__identity-menu")
+      .getByRole("button", {
+        name: "Fix it with AI",
+        exact: true
+      })
+      .click();
+
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+    await expect(chat).toBeVisible();
+    if (width === 390) {
+      await expect(project).toBeHidden();
+      await expect.poll(async () => Math.round((await chat.boundingBox())?.width || 0)).toBe(width);
+    } else {
+      await expect(project).toBeVisible();
+    }
+    await expect(workspace).toBeVisible();
+    await expect(workspace.getByRole("button", {
+      name: "Fix preview identity",
       exact: true
-    })
-    .click();
+    })).toBeVisible();
+    await expect(workspace.getByRole("button", {
+      name: "Read/write: temporary AI may edit this session",
+      exact: true
+    })).toBeVisible();
 
-  const chat = page.getByRole("region", { name: "Session chat", exact: true });
-  const project = page.getByRole("region", { name: "Project", exact: true });
-  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-  await expect(chat).toBeVisible();
-  await expect(project).toBeHidden();
-  await expect(workspace).toBeVisible();
-  await expect.poll(async () => Math.round((await chat.boundingBox())?.width || 0)).toBe(390);
-  await expect(workspace.getByRole("button", {
-    name: "Fix preview identity",
-    exact: true
-  })).toBeVisible();
-  await expect(workspace.getByRole("button", {
-    name: "Read/write: temporary AI may edit this session",
-    exact: true
-  })).toBeVisible();
+    const expectedRecoveryPrompt = [
+      "The managed preview could not sign in as `missing` (email: `missing@example.com`):",
+      "User not found.",
+      "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
+    ].join("\n\n");
+    await expect.poll(() => recoveryRequests.temporaryStarts).toHaveLength(1);
+    expect(recoveryRequests.temporaryStarts[0]).toEqual(expect.objectContaining({
+      policy: "workspace_write"
+    }));
+    await expect.poll(() => recoveryRequests.temporaryTurns).toHaveLength(1);
+    expect(recoveryRequests.temporaryTurns[0]).toEqual(expect.objectContaining({
+      message: expectedRecoveryPrompt,
+      policy: "workspace_write",
+      promptLabel: "Fix preview identity"
+    }));
+    await expect(workspace.getByText("Temporary identity recovery complete.", {
+      exact: true
+    })).toBeVisible();
+    expect(recoveryRequests.temporaryStarts).toHaveLength(1);
+    expect(recoveryRequests.temporaryTurns).toHaveLength(1);
+    expect(recoveryRequests.mainMessages).toHaveLength(0);
+    await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    await page.screenshot({
+      path: testInfo.outputPath(`preview-identity-recovery-${width}.png`),
+      animations: "disabled"
+    });
 
-  const expectedRecoveryPrompt = [
-    "The managed preview could not sign in as `missing` (email: `missing@example.com`):",
-    "User not found.",
-    "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
-  ].join("\n\n");
-  await expect.poll(() => recoveryRequests.temporaryStarts).toHaveLength(1);
-  expect(recoveryRequests.temporaryStarts[0]).toEqual(expect.objectContaining({
-    policy: "workspace_write"
-  }));
-  await expect.poll(() => recoveryRequests.temporaryTurns).toHaveLength(1);
-  expect(recoveryRequests.temporaryTurns[0]).toEqual(expect.objectContaining({
-    message: expectedRecoveryPrompt,
-    policy: "workspace_write",
-    promptLabel: "Fix preview identity"
-  }));
-  await expect(workspace.getByText("Temporary identity recovery complete.", {
-    exact: true
-  })).toBeVisible();
-  expect(recoveryRequests.temporaryStarts).toHaveLength(1);
-  expect(recoveryRequests.temporaryTurns).toHaveLength(1);
-  expect(recoveryRequests.mainMessages).toHaveLength(0);
+    await page.getByRole("button", { name: chatToggle, exact: true }).click();
+    await page.getByRole("button", {
+      name: "Preview identity failed: User not found."
+    }).click();
+    await page.locator(".vibe64-launch-controls__identity-menu")
+      .getByText("admin", { exact: true })
+      .click();
+    await expect(page.getByRole("button", {
+      name: "Previewing as admin — ada@example.com"
+    })).toBeVisible();
 
-  await page.getByRole("button", { name: "Show project" }).click();
-  await page.getByRole("button", {
-    name: "Preview identity failed: User not found."
-  }).click();
-  await page.locator(".vibe64-launch-controls__identity-menu")
-    .getByText("admin", { exact: true })
-    .click();
-  await expect(page.getByRole("button", {
-    name: "Previewing as admin — ada@example.com"
-  })).toBeVisible();
-
-  expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
-});
+    expect(launchSession.getLaunchStartPayloads()).toHaveLength(0);
+  });
+}
 
 test("@preview-lifecycle attaches multiple visible preview frames and stops each shared tab stream", async ({ page }) => {
   await page.addInitScript(() => {
