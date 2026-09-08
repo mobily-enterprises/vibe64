@@ -139,6 +139,99 @@ async function renderToolbar({
 }
 
 describe("session creation controls", () => {
+  it.each([false, true])("suppresses tooltip reopening after selection (initially open: %s) until a fresh mouse entry", async (initiallyOpen) => {
+    const nodes = [];
+    const renderer = VueRuntime.createRenderer({
+      createElement(type) {
+        const node = { type, props: {} };
+        nodes.push(node);
+        return node;
+      },
+      createText: (text) => ({ text }),
+      createComment: (text) => ({ text }),
+      insert() {},
+      remove() {},
+      parentNode: () => null,
+      nextSibling: () => null,
+      patchProp(node, key, _previous, value) { node.props[key] = value; },
+      setElementText(node, text) { node.text = text; },
+      setText(node, text) { node.text = text; }
+    });
+    const selectSession = vi.fn();
+    const app = renderer.createApp(Vibe64SessionToolbar, {
+      archive: { command: { isRunning: false } },
+      createVisible: false,
+      toolbar: {
+        selectSession,
+        sessions: [{ sessionId: "session-1" }, { sessionId: "session-2" }]
+      }
+    });
+    app.provide(VueRuntime.ssrContextKey, { modules: new Set() });
+    app.component("VBtn", passthroughComponent("button"));
+    app.component("VChip", passthroughComponent("button"));
+    app.component("VIcon", passthroughComponent("span"));
+    app.component("VTooltip", passthroughComponent("aside"));
+    app.mount({});
+    try {
+      const tabs = nodes.filter((node) => node.props["data-vibe64-session-id"]);
+      const tooltips = nodes.filter((node) => node.type === "aside");
+      const info = nodes.find((node) => node.props["aria-label"] === "Session info: session-1");
+      const requestOpen = (index) => tooltips[index].props["onUpdate:modelValue"](true);
+      const visible = (index) => tooltips[index].props["model-value"];
+
+      if (initiallyOpen) requestOpen(0);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(initiallyOpen);
+
+      tabs[0].props.onClick();
+      await VueRuntime.nextTick();
+      expect(selectSession).toHaveBeenCalledWith("session-1");
+      expect(visible(0)).toBe(false);
+      requestOpen(0); // A delayed hover or click-induced focus must not reopen it.
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(false);
+
+      requestOpen(1);
+      await VueRuntime.nextTick();
+      expect(visible(1)).toBe(true);
+      tabs[1].props.onClick();
+      requestOpen(1);
+      await VueRuntime.nextTick();
+      expect(visible(1)).toBe(false);
+
+      tabs[0].props.onMouseenter();
+      requestOpen(0);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+      requestOpen(1);
+      await VueRuntime.nextTick();
+      expect(visible(1)).toBe(false);
+
+      tabs[0].props.onClick();
+      await VueRuntime.nextTick();
+      tabs[0].props.onFocusin({ target: { matches: () => false } });
+      requestOpen(0);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(false);
+      tabs[0].props.onFocusin({ target: { matches: (selector) => selector === ":focus-visible" } });
+      requestOpen(0);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+
+      tabs[0].props.onClick();
+      await VueRuntime.nextTick();
+      info.props.onClick({ stopPropagation() {} });
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+      expect(selectSession).toHaveBeenCalledTimes(4);
+      tooltips[0].props["onUpdate:modelValue"](false);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(false);
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("uses stable accessible pending feedback without a circular loader", async () => {
     const toolbar = await renderCreateButton({ iconOnly: true, running: true });
     const preview = await renderCreateButton({ running: true });

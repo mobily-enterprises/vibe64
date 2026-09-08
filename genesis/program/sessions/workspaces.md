@@ -37,6 +37,11 @@ full name, status, assistant and model when available, save state, identifier,
 branch, and creation time. A touch-visible info button opens the same tooltip
 without selecting or archiving the session. This uses the loaded session data
 and does not fetch or poll for details.
+Selecting a tab dismisses its tooltip and suppresses automatic hover/focus
+opening until the pointer enters that tab again from outside. Pending tooltip
+requests cannot reopen it after selection. A new keyboard-visible focus also
+reenables the tooltip, while mouse-induced focus does not; the explicit info
+button still works.
 
 Renewal creates a fresh native assistant conversation. Its review step defaults
 to the current session's AI but can select another connected engine, provider,

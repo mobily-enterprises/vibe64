@@ -17,6 +17,8 @@
         :data-vibe64-session-id="sessionItem.sessionId"
         variant="flat"
         @click="selectSession(sessionItem.sessionId)"
+        @mouseenter="suppressedSessionInfo.delete(sessionItem.sessionId)"
+        @focusin="$event.target.matches(':focus-visible') && suppressedSessionInfo.delete(sessionItem.sessionId)"
       >
         <span class="studio-ai-sessions__tab-main">
           <span
@@ -70,7 +72,7 @@
           color="surface-variant"
           location="bottom"
           :max-width="320"
-          @update:model-value="setSessionInfo(sessionItem.sessionId, $event)"
+          @update:model-value="(!$event || !suppressedSessionInfo.has(sessionItem.sessionId)) && setSessionInfo(sessionItem.sessionId, $event)"
         >
           <div class="studio-ai-sessions__info">
             <strong>{{ sessionTabLabel(sessionItem) }}</strong>
@@ -153,6 +155,7 @@ const props = defineProps({
 
 const emit = defineEmits(["select-session"]);
 const infoSessionId = ref("");
+const suppressedSessionInfo = ref(new Set());
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -195,6 +198,7 @@ function sessionInfoFacts(sessionItem) {
 }
 
 function selectSession(sessionId = "") {
+  suppressedSessionInfo.value.add(sessionId);
   infoSessionId.value = "";
   emit("select-session", sessionId);
   props.toolbar.selectSession?.(sessionId);
