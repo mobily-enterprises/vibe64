@@ -286,6 +286,34 @@ test("foreground assistant work refreshes skills under both write locks and pres
   assert.equal(sourceWrites, 1);
 });
 
+test("missing project-pinned skills leave chat delivery and preparation recovery available", async (t) => {
+  const lock = agentWriteLockHarness();
+  const warnings = [];
+  const events = [];
+  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+    logger: { warn(event) { warnings.push(event); } },
+    publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
+  });
+  const projectRoot = session.metadata.source_path;
+  const { skillPath, original } = await outdatedSkillFixture(projectRoot);
+  await rm(path.join(projectRoot, "node_modules/genesis-compiler"), { recursive: true });
+  session.workspaceSetup = { status: "succeeded", recipeHash: "unchanged-install-command" };
+  projectService.runProjectSourceExclusive = async () => assert.fail("Unavailable skills must not change source.");
+
+  await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "AGENT_SKILL_UNAVAILABLE" });
+  // Delivery reaches the provider's own admission; this fixture has no AI account.
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Help repair dependencies." }, { engineId: "opencode" }),
+  { code: "vibe64_opencode_selection_required" });
+  assert.equal(session.workspaceSetup.status, "required");
+  assert.equal(session.workspaceSetup.recipeHash, "");
+  assert.match(session.workspaceSetup.diagnostic, /genesis-compiler/u);
+  assert.equal(events.some((event) => event.reason === "workspace-setup-updated"), true);
+  assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.preparation_required"), true);
+  assert.equal(await readFile(skillPath, "utf8"), original);
+  await assert.rejects(access(path.join(projectRoot, "node_modules/genesis-compiler")), { code: "ENOENT" });
+});
+
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {
   const lock = agentWriteLockHarness();
   const { service, session, projectService } = await terminalServiceFixture(t, lock, {

@@ -6,6 +6,8 @@ contract transported by the project's Stack.
 ## Sources
 
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-runtime/src/server/workspaceSetupState.js`
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-genesis/src/server/index.js`
@@ -27,6 +29,15 @@ argv with the project's resolved environment. It runs once for a fresh recipe,
 records progress and exact recipe identity, waits before dependent work, and
 exposes retry after failure. Missing or ambiguous declarations remain explicit;
 Vibe64 never guesses an installer or reads a retired grammar.
+
+Before Update or its interrupted-operation recovery replaces session source,
+the terminal service invalidates preparation durably. The `required` state
+clears the successful recipe identity and retains the earlier transcript with
+the reason for invalidation. An unchanged installer command cannot certify
+dependencies for updated source. A no-op Update retains preparation. The next
+preparation uses the existing managed execution and admission path; Update
+does not run installers itself. An explicit preparation retry reruns even a
+previously successful recipe, allowing repair of removed installed files.
 
 Preview can inspect whether the current recipe already succeeded without taking
 assistant-write admission. If preparation is needed, it rereads the session under

@@ -33,6 +33,11 @@ the existing agent-write and project-source mutation boundaries. Genesis chooses
 the source version, validates ownership, and preserves customized or unmanaged
 skills. Changed files are ordinary session work and trigger the normal
 session-change event.
+If Genesis reports a selected skill package unavailable, Vibe64 records a
+visible preparation-required diagnostic and lets provider delivery proceed.
+It preserves the installed project skills, leaves the declared package version
+authoritative, and neither substitutes the host package nor installs dependencies
+as part of sending a message. Other inspection errors still propagate.
 An active main or temporary turn skips this preparation. Routine connection
 verification and read-only temporary conversations remain read-only. Project
 format migration remains a separate operation, and skill maintenance does not

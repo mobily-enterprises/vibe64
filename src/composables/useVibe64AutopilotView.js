@@ -624,7 +624,7 @@ function useVibe64AutopilotView(props, emit, {
   });
   const workspaceSetupStatus = computed(() => {
     const status = normalizedAgentTurnText(workspaceSetup.value?.status);
-    return ["ambiguous", "failed", "running", "succeeded"].includes(status)
+    return ["ambiguous", "failed", "required", "running", "succeeded"].includes(status)
       ? status
       : "unconfigured";
   });
@@ -640,7 +640,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const workspaceSetupRunning = computed(() => workspaceSetupStatus.value === "running");
   const workspaceSetupNeedsAttention = computed(() => (
-    workspaceSetupStatus.value === "failed" || workspaceSetupStatus.value === "ambiguous"
+    ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
   ));
   const workspaceSetupOutput = computed(() => (
     normalizedAgentTurnText(workspaceSetup.value?.transcript) || workspaceSetupDiagnostic.value
@@ -648,6 +648,7 @@ function useVibe64AutopilotView(props, emit, {
   const workspaceSetupTitle = computed(() => ({
     ambiguous: "Workspace setup needs a choice",
     failed: "Workspace preparation failed",
+    required: "Workspace preparation required",
     running: "Preparing workspace…",
     succeeded: "Workspace prepared"
   })[workspaceSetupStatus.value] || "");

@@ -1752,6 +1752,7 @@ async function applySessionUpdate(runCommand, context, {
 }
 
 async function updateSessionWork({
+  beforeSourceChange = async () => {},
   commandOptions = {},
   conflictRecovery = null,
   derivedArtifactPaths = [],
@@ -1888,6 +1889,7 @@ async function updateSessionWork({
         stage: "prepared"
       });
       await onProgress({ kind: "update", message: "Updating this session (rebase).", stage: "mutating" });
+      await beforeSourceChange();
       const reconciliation = await applySessionUpdate(runCommand, context, {
         canonicalCommit,
         checkpointCommit: checkpoint.commit,
@@ -1984,6 +1986,7 @@ async function updateSessionWork({
       stage: "prepared"
     });
     await onProgress({ kind: "update", message: "Updating this session (rebase).", stage: "mutating" });
+    await beforeSourceChange();
     const reconciliation = await applySessionUpdate(runCommand, context, {
       canonicalCommit,
       checkpointCommit: checkpoint.commit,
@@ -2017,6 +2020,7 @@ async function updateSessionWork({
 }
 
 async function recoverSessionWorkUpdate({
+  beforeSourceChange = async () => {},
   commandOptions = {},
   project = {},
   recovery = {},
@@ -2066,6 +2070,7 @@ async function recoverSessionWorkUpdate({
         "vibe64_session_update_recovery_changed"
       );
     }
+    await beforeSourceChange();
     if (treeIsCheckpoint) {
       await git(runCommand, context, ["read-tree", "--reset", "-u", recovery.mergedCommit], {
         commandOptions,

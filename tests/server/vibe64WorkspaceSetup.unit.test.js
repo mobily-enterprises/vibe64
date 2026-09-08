@@ -151,6 +151,35 @@ test("workspace preparation executes declared argv in order through the managed 
   });
 });
 
+test("source invalidation survives restart and reruns an unchanged preparation recipe", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    let installs = 0;
+    const options = {
+      inspect: () => readySetup(),
+      projectService: {},
+      async runCommand() { installs += 1; return { ok: true }; }
+    };
+    const runner = createWorkspaceSetupRunner(options);
+    await (await runner.start({ runtime, session })).completion;
+    const prepared = await runtime.getSession(session.sessionId, { inspectSource: false });
+    assert.equal(await runner.isPrepared({ runtime, session: prepared }), true);
+    assert.equal((await runner.start({ runtime, session: prepared })).completion, null);
+
+    await runner.invalidate({ runtime, session: prepared, diagnostic: "Source updated; preparation is required." });
+    const restored = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const restartedRunner = createWorkspaceSetupRunner(options);
+    assert.equal(restored.workspaceSetup.status, "required");
+    assert.equal(await restartedRunner.isPrepared({ runtime, session: restored }), false);
+    assert.equal((await (await restartedRunner.start({ runtime, session: restored })).completion).status, "succeeded");
+    assert.equal(installs, 2);
+
+    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    await (await restartedRunner.start({ runtime, session: current, retry: true })).completion;
+    assert.equal(installs, 3, "Explicit preparation retries must also repair a previously successful installation.");
+  });
+});
+
 test("workspace preparation state bounds and normalizes durable transcripts", () => {
   const oldState = workspaceSetupStateFromMetadata({
     workspace_setup: JSON.stringify({

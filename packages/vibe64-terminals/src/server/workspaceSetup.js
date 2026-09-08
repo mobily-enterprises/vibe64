@@ -578,8 +578,9 @@ function createWorkspaceSetupRunner({
     }
     if (
       !migrationTranscript &&
+      retry !== true &&
       stateBase.recipeHash === recipe.recipeHash &&
-      (stateBase.status === "succeeded" || (stateBase.status === "failed" && retry !== true))
+      ["succeeded", "failed"].includes(stateBase.status)
     ) {
       return {
         completion: null,
@@ -645,6 +646,18 @@ function createWorkspaceSetupRunner({
   }
 
   return Object.freeze({
+    async invalidate({ runtime, session, diagnostic } = {}) {
+      const previous = workspaceSetupState(session.workspaceSetup);
+      return persist(runtime, session.sessionId, {
+        currentLabel: "",
+        diagnostic,
+        finishedAt: "",
+        recipeHash: "",
+        startedAt: "",
+        status: "required",
+        transcript: appendWorkspaceSetupTranscript(previous.transcript, diagnostic)
+      });
+    },
     async isPrepared({ runtime, session } = {}) {
       if (activeRuns.has(workspaceSetupRunKey(session?.sessionId))) {
         return false;

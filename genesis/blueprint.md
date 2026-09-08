@@ -64,6 +64,11 @@ Customized skills are preserved and changes remain visible in the source diff.
 Background connection checks and active-turn steering do not perform this write.
 Already-loaded guidance becomes current through the assistant's normal context
 refresh lifecycle.
+An unavailable project skill package leaves chat usable and identifies the
+workspace preparation needed to restore the project's declared dependencies.
+Update marks preparation as required before replacing session source, even
+when its setup commands stay the same. People can also explicitly rerun a
+previously successful preparation to repair missing installed dependencies.
 
 People can choose the name Vibe64 uses in welcomes and collaboration cues.
 Project owners can set a shared tone, answer length, assumed experience,

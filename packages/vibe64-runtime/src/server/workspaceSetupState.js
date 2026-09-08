@@ -10,6 +10,7 @@ const WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER = "[Earlier workspace preparat
 const WORKSPACE_SETUP_STATUSES = new Set([
   "ambiguous",
   "failed",
+  "required",
   "running",
   "succeeded",
   "unconfigured"

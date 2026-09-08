@@ -702,6 +702,46 @@ test("Update preserves unsaved session work while advancing to newer GitHub work
   }
 });
 
+for (const localEdits of [false, true]) {
+  test(`Update invalidates preparation before replacing source (local edits: ${localEdits})`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-preparation-"));
+    try {
+      const fixture = await createRemoteFixture(root);
+      const session = await sessionForRemote(root, fixture);
+      const canonicalWriter = path.join(root, "canonical-writer");
+      await git(root, ["clone", "--branch", "main", fixture.remote, canonicalWriter]);
+      const manifest = '{"devDependencies":{"genesis-compiler":"1.5.0"}}\n';
+      await writeFile(path.join(canonicalWriter, "package.json"), manifest);
+      await git(canonicalWriter, ["add", "package.json"]);
+      await git(canonicalWriter, ["commit", "-m", "Declare project dependencies"]);
+      await git(canonicalWriter, ["push", "origin", "main"]);
+      if (localEdits) await writeFile(path.join(session.sourcePath, "local.txt"), "Keep local work.\n");
+      const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+      await assert.rejects(updateSessionWork({
+        ...input,
+        beforeSourceChange: async () => { throw new Error("Preparation state could not be persisted."); }
+      }), /Preparation state could not be persisted/u);
+      assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+      await assert.rejects(readFile(path.join(session.sourcePath, "package.json")), { code: "ENOENT" });
+
+      let invalidations = 0;
+      const beforeSourceChange = async () => {
+        assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+        await assert.rejects(readFile(path.join(session.sourcePath, "package.json")), { code: "ENOENT" });
+        invalidations += 1;
+      };
+      assert.equal((await updateSessionWork({ ...input, beforeSourceChange })).status, "updated");
+      assert.equal(invalidations, 1);
+      assert.equal(await readFile(path.join(session.sourcePath, "package.json"), "utf8"), manifest);
+      assert.equal((await updateSessionWork({ ...input, beforeSourceChange })).status, "already_current");
+      assert.equal(invalidations, 1, "A no-op Update must retain preparation.");
+      if (localEdits) assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "Keep local work.\n");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+}
+
 test("Update resolves Genesis-derived overlap by regenerating from the merged authored source", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
   try {
@@ -962,13 +1002,19 @@ test("interrupted Update recovery applies the prepared result exactly once", asy
       session
     }), /simulated restart/u);
 
+    let invalidated = false;
     const result = await recoverSessionWorkUpdate({
+      beforeSourceChange: async () => {
+        assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), recovery.oldHead);
+        invalidated = true;
+      },
       project: githubProject(root, fixture.remote),
       recovery,
       runCommand: commandRunner,
       session
     });
     assert.equal(result.recovered, true);
+    assert.equal(invalidated, true);
     assert.equal(result.status, "updated");
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), recovery.canonicalCommit);
     assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "local\n");

@@ -71,6 +71,11 @@ work before entering repository work. If preparation still owns the lock at
 timeout, the failure identifies reconnection and offers a later retry. The lock
 is never bypassed and the browser does not automatically resubmit publication.
 
+Before Update replaces source, including interrupted Update recovery, it
+invalidates the session's workspace preparation. That durable write must
+succeed before source changes; an unchanged setup recipe must run again for
+the updated source. An already-current Update leaves preparation intact.
+
 An admission failure with no server operation identity is dismissed by clearing
 that request's local error. It does not borrow an identity from older history.
 Switching sessions retires pending local replies, including when the person

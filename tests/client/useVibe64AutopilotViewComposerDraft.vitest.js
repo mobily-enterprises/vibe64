@@ -857,6 +857,7 @@ describe("useVibe64AutopilotView direct chat", () => {
   });
 
   it.each([
+    ["required", "Workspace preparation required", "Source updated; preparation is required."],
     ["failed", "Workspace preparation failed", "Dependency installation exited with code 1."],
     ["ambiguous", "Workspace setup needs a choice", "Two Stack components declare different setup recipes."]
   ])("routes %s workspace recovery through Temporary AI", async (status, title, diagnostic) => {

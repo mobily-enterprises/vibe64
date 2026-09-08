@@ -582,7 +582,21 @@ function createService({
     if (temporary.active) return;
     const format = await inspectGenesisProjectFormat({ projectRoot });
     if (format.status !== "current") return;
-    const inspection = await inspectGenesisSkills({ projectRoot });
+    let inspection;
+    try {
+      inspection = await inspectGenesisSkills({ projectRoot });
+    } catch (error) {
+      if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;
+      await invalidateWorkspaceSetup(context,
+        `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`);
+      logOperationalEvent(logger, "warn", {
+        code: error.code,
+        component: "vibe64.agent_skills",
+        event: "vibe64.agent_skills.preparation_required",
+        sessionId
+      }, "Project skill refresh requires workspace preparation.");
+      return;
+    }
     if (!["missing", "outdated"].includes(inspection.status)) return;
     const result = await projectService.runProjectSourceExclusive(
       () => syncGenesisSkills({ projectRoot }),
@@ -603,6 +617,11 @@ function createService({
       inspectSource: false
     });
     return { ...options, runtime, session };
+  }
+
+  async function invalidateWorkspaceSetup(context, diagnostic = "Source is being updated. Run workspace preparation for the updated source.") {
+    await workspaceSetup.invalidate({ ...context, diagnostic });
+    await publishTerminalSessionChanged("agentTerminal", context.session.sessionId, "workspace-setup-updated");
   }
 
   async function prepareWorkspaceSetup(sessionId = "", options = {}) {
@@ -1755,6 +1774,7 @@ function createService({
       }, async (context) => {
         const { execution, session } = await sessionWorkExecution(sessionId, context, "session-update");
         return updateManagedSessionWork({
+          beforeSourceChange: () => invalidateWorkspaceSetup(context),
           commandOptions: execution.commandOptions,
           conflictRecovery: input.conflictRecovery,
           identity: execution.identity,
@@ -1778,6 +1798,7 @@ function createService({
           "session-update-recovery"
         );
         return recoverManagedSessionWorkUpdate({
+          beforeSourceChange: () => invalidateWorkspaceSetup(context),
           commandOptions: execution.commandOptions,
           project: await projectService.readCurrentProject(),
           recovery: input.recovery || {},
