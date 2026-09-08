@@ -1037,6 +1037,9 @@ function createOpenCodeTerminalController({
       opencodeTerminalNamespace(target.sessionId)
     );
     target.abortController.abort();
+    await Promise.all([...temporaryConversations.values()]
+      .filter((entry) => entry.target?.abortController === target.abortController)
+      .map((entry) => entry.completion?.catch(() => null)));
     if (processes.get(target.key) === target) {
       processes.delete(target.key);
       sessionEnvironments.delete(target.key);
@@ -1903,7 +1906,7 @@ function createOpenCodeTerminalController({
     };
   }
 
-  async function readDetachedConversation(target = {}, conversationId = "") {
+  async function readDetachedConversation(target = {}, conversationId = "", tracked = null) {
     const messages = await target.server.client.messages(conversationId, {
       limit: 100,
       order: "desc"
@@ -1911,9 +1914,12 @@ function createOpenCodeTerminalController({
     const result = lastAssistantResult(messages);
     return {
       conversationId,
-      error: result.error,
-      ok: !result.error,
-      status: result.error ? "failed" : "completed",
+      error: text(tracked?.error?.message) || result.error,
+      ok: !tracked?.error && !result.error,
+      runId: tracked?.runId || "",
+      status: tracked?.active ? "inProgress"
+        : tracked?.interrupted ? "interrupted"
+        : tracked?.error || result.error ? "failed" : "completed",
       text: result.text
     };
   }
@@ -2005,6 +2011,7 @@ function createOpenCodeTerminalController({
       context,
       conversationId,
       key,
+      tracked: temporaryConversations.get(key) || null,
       target: temporaryConversations.get(key)?.target || processes.get(context.key) || null
     };
   }
@@ -2018,7 +2025,9 @@ function createOpenCodeTerminalController({
     );
   }
 
-  async function runDetachedChatTurn(sessionId = "", input = {}, options = {}) {
+  async function runDetachedChatTurn(sessionId = "", input = {}, options = {}, {
+    waitForCompletion = true
+  } = {}) {
     const prompt = openCodeDetachedPrompt(input);
     if (!prompt) {
       throw openCodeError("vibe64_opencode_prompt_empty", "OpenCode prompt input is empty.", {}, 400);
@@ -2031,20 +2040,35 @@ function createOpenCodeTerminalController({
       target,
       tracked
     } = await detachedTarget(sessionId, input, options);
-    options.onEvent?.({
-      threadId: conversationId,
-      type: "thread"
-    });
+    if (tracked.active) {
+      throw openCodeError("vibe64_opencode_conversation_busy", "This conversation is still working.", {}, 409);
+    }
+    tracked.active = true;
+    tracked.error = null;
+    tracked.interrupted = false;
+    tracked.abortController = new AbortController();
     const inputMessageId = upstreamMessageId(input.messageId || input.operationId || randomUUID());
-    const admitted = await target.server.client.prompt(conversationId, {
-      agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
-      delivery: "queue",
-      id: inputMessageId,
-      model: openCodeModel(context.selection, executionProfile),
-      prompt: { text: prompt },
-      attachments: input.attachments,
-      resume: true
-    });
+    let admitted;
+    try {
+      options.onEvent?.({
+        threadId: conversationId,
+        type: "thread"
+      });
+      admitted = await target.server.client.prompt(conversationId, {
+        agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
+        delivery: "queue",
+        id: inputMessageId,
+        model: openCodeModel(context.selection, executionProfile),
+        prompt: { text: prompt },
+        attachments: input.attachments,
+        resume: true
+      });
+    } catch (error) {
+      tracked.active = false;
+      tracked.error = error;
+      throw error;
+    }
+    tracked.runId = text(admitted.id);
     const eventAbort = new AbortController();
     const events = typeof options.onEvent === "function"
       ? consumeEvents({ ...target, upstreamSessionId: conversationId }, context, null, {
@@ -2057,35 +2081,54 @@ function createOpenCodeTerminalController({
           }
         })
       : Promise.resolve();
-    tracked.active = true;
-    try {
-      const timeoutMs = openCodeExecutionTimeout(input, executionProfile);
-      await waitForOpenCodeMessages(target.server.client, conversationId, inputMessageId, {
-        signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined
-      });
-    } catch (error) {
-      await target.server.client.interrupt(conversationId).catch(() => null);
-      throw error;
-    } finally {
-      tracked.active = false;
-      eventAbort.abort();
-      await events;
-    }
-    const conversation = boundedOpenCodeExecutionOutput(
-      await readDetachedConversation(target, conversationId),
-      executionProfile
-    );
-    const result = {
-      ...conversation,
-      text: input.outputSchema
-        ? openCodeStructuredOutput(conversation.text)
-        : conversation.text
-    };
-    return {
-      ...result,
-      runId: text(admitted.id),
+    tracked.completion = (async () => {
+      try {
+        const timeoutMs = openCodeExecutionTimeout(input, executionProfile);
+        await waitForOpenCodeMessages(target.server.client, conversationId, inputMessageId, {
+          signal: AbortSignal.any([
+            target.abortController.signal,
+            tracked.abortController.signal,
+            ...(timeoutMs ? [AbortSignal.timeout(timeoutMs)] : [])
+          ])
+        });
+        const conversation = boundedOpenCodeExecutionOutput(
+          await readDetachedConversation(target, conversationId),
+          executionProfile
+        );
+        return {
+          ...conversation,
+          runId: tracked.runId,
+          threadId: conversationId,
+          turnId: tracked.runId,
+          text: input.outputSchema
+            ? openCodeStructuredOutput(conversation.text)
+            : conversation.text
+        };
+      } catch (error) {
+        if (tracked.interrupted) {
+          return { conversationId, ok: true, runId: tracked.runId, status: "interrupted", text: "" };
+        }
+        if (!target.abortController.signal.aborted) {
+          await target.server.client.interrupt(conversationId, {
+            signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+          }).catch(() => null);
+        }
+        throw error;
+      } finally {
+        tracked.active = false;
+        eventAbort.abort();
+        await events;
+      }
+    })();
+    // Keep a failed admitted turn observable to the client's conversation reads.
+    void tracked.completion.catch((error) => { tracked.error = error; });
+    return waitForCompletion ? tracked.completion : {
+      conversationId,
+      ok: true,
+      runId: tracked.runId,
+      status: "inProgress",
       threadId: conversationId,
-      turnId: text(admitted.id)
+      turnId: tracked.runId
     };
   }
 
@@ -2371,7 +2414,7 @@ function createOpenCodeTerminalController({
     closeTerminal,
     createConversation,
     async deleteConversation(sessionId, input = {}, options = {}) {
-      const { context, conversationId, target } = await existingDetachedTarget(
+      const { context, conversationId, target, tracked } = await existingDetachedTarget(
         sessionId,
         input,
         options
@@ -2382,6 +2425,11 @@ function createOpenCodeTerminalController({
         return { conversationId, deleted: false, ok: true };
       }
       await target.server.client.deleteSession(conversationId);
+      if (tracked) {
+        tracked.interrupted = true;
+        tracked.abortController?.abort();
+        await tracked.completion?.catch(() => null);
+      }
       temporaryConversations.delete(`${context.key}\0${conversationId}`);
       await writeSessionEnvironmentRegistry();
       const providerExit = context.assistantScope
@@ -2562,11 +2610,11 @@ function createOpenCodeTerminalController({
       };
     },
     async readConversation(sessionId, input = {}, options = {}) {
-      const { conversationId, target } = await existingDetachedTarget(sessionId, input, options);
+      const { conversationId, target, tracked } = await existingDetachedTarget(sessionId, input, options);
       if (!target) {
         throw openCodeReadUnavailable();
       }
-      return readDetachedConversation(target, conversationId);
+      return readDetachedConversation(target, conversationId, tracked);
     },
     readTerminal,
     async reconcileSessions(sessions = [], options = {}) {
@@ -2615,30 +2663,46 @@ function createOpenCodeTerminalController({
       };
     },
     async startConversationTurn(sessionId, input = {}, options = {}) {
-      const result = await runDetachedChatTurn(sessionId, input, options);
-      return {
-        ...result,
-        runId: result.turnId,
-        status: result.ok === false ? "failed" : "completed"
-      };
+      return runDetachedChatTurn(sessionId, input, options, { waitForCompletion: false });
     },
     startTerminal,
     async stopConversation(sessionId, input = {}, options = {}) {
-      const { conversationId, target } = await existingDetachedTarget(sessionId, input, options);
+      const { conversationId, target, tracked } = await existingDetachedTarget(sessionId, input, options);
       if (!target) {
         return { conversationId, ok: true, stopped: false };
       }
-      await target.server.client.interrupt(conversationId);
+      try {
+        const confirmed = await target.server.client.interrupt(conversationId, {
+          signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+        });
+        if (confirmed !== true) {
+          throw openCodeError("vibe64_opencode_interrupt_unconfirmed", "OpenCode did not confirm Stop. Try Stop again.", {}, 502);
+        }
+      } catch (error) {
+        if (error?.name === "TimeoutError") {
+          throw openCodeError("vibe64_opencode_interrupt_timeout", "OpenCode did not confirm Stop within 5 seconds. Try Stop again.", {}, 504);
+        }
+        throw error;
+      }
+      if (tracked) {
+        tracked.interrupted = true;
+        tracked.abortController?.abort();
+        await tracked.completion?.catch(() => null);
+        tracked.active = false;
+      }
       return { conversationId, ok: true, stopped: true };
     },
     streamDetachedChatTurn: runDetachedChatTurn,
     subscribeTerminal,
     async waitForConversationTurn(sessionId, input = {}, options = {}) {
-      const { conversationId, target } = await existingDetachedTarget(sessionId, input, options);
+      const { conversationId, target, tracked } = await existingDetachedTarget(sessionId, input, options);
       if (!target) {
         throw openCodeReadUnavailable();
       }
-      await waitForOpenCodeMessages(target.server.client, conversationId, "", {
+      if (tracked?.completion && !input.timeoutMs) {
+        return tracked.completion;
+      }
+      await waitForOpenCodeMessages(target.server.client, conversationId, tracked?.runId || "", {
         signal: input.timeoutMs ? AbortSignal.timeout(Number(input.timeoutMs)) : undefined
       });
       return readDetachedConversation(target, conversationId);

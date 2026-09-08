@@ -106,6 +106,14 @@ Interactive Codex temporary turns have no fixed completion deadline. They remain
 observable until completion, Stop, deletion, or loss/replacement of the shared
 provider connection. Short helper turns retain their bounded deadlines.
 
+OpenCode temporary Start returns the accepted turn immediately, keeping Stop
+available while the existing controller observes completion. Conversation reads
+retain working or failed state for that turn. Stop requires provider confirmation
+within five seconds; a refusal or timeout leaves the turn available for retry.
+A confirmed Stop cancels only that conversation's pending reads. Deleting a
+conversation retires only its observer; provider shutdown drains all observers
+using that provider.
+
 Temporary and lightweight helper conversations use the parent session's
 selected Codex or OpenCode service, but they do not start or retain a second
 resident assistant service. A user-visible temporary conversation receives one
