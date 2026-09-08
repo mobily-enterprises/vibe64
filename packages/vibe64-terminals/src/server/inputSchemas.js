@@ -1,5 +1,6 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+import { VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
 
 const optionalText = {
   type: "string",
@@ -101,6 +102,11 @@ const temporaryConversationStopActionInputValidator = validator({
   sessionId: sessionIdField
 });
 const sessionPromptHintsActionInputValidator = validator({
+  draft: {
+    ...optionalText,
+    // Schema lengths use UTF-16 units; normalization bounds Unicode characters.
+    maxLength: VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS * 2
+  },
   operationId: {
     type: "string",
     maxLength: 128,

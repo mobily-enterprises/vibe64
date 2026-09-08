@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
-  VIBE64_PROMPT_HINT_STATIC_STARTERS,
+  normalizedPromptHintDraft,
   normalizedPromptHintSuggestion,
   normalizedPromptHintSuggestions
 } from "@local/vibe64-runtime/shared";
@@ -16,7 +16,7 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
-const PROMPT_HINT_DEBOUNCE_MS = 320;
+const PROMPT_HINT_DEBOUNCE_MS = 750;
 const PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT = 8;
 let promptHintOperationSequence = 0;
 
@@ -73,6 +73,7 @@ function useVibe64PromptHints({
     readRefOrGetterValue(sessionsApiPath)
   ));
   const currentPolicy = computed(() => readRefOrGetterValue(policy) || {});
+  const currentDraft = computed(() => normalizedPromptHintDraft(readRefOrGetterValue(draft)));
   const policyKey = computed(() => [
     currentPolicy.value.enabled === false ? "off" : "on",
     currentPolicy.value.ready === true ? "ready" : "loading",
@@ -82,6 +83,7 @@ function useVibe64PromptHints({
   const requestKey = computed(() => [
     currentSessionId.value,
     normalizedPromptHintText(readRefOrGetterValue(conversationKey)),
+    currentDraft.value,
     policyKey.value,
     readRefOrGetterValue(blankConversation) === true ? "blank" : "history",
     readRefOrGetterValue(existingProject) === true ? "existing" : "greenfield"
@@ -163,6 +165,7 @@ function useVibe64PromptHints({
         operation.sessionId
       ), {
         body: {
+          draft: currentDraft.value,
           operationId,
           originId
         },
@@ -177,11 +180,11 @@ function useVibe64PromptHints({
       ) {
         return;
       }
-      const nextSuggestions = response?.status === "ready"
+      const nextSuggestions = ["ready", "static"].includes(response?.status)
         ? normalizedPromptHintSuggestions(response.suggestions)
         : [];
       suggestions.value = nextSuggestions;
-      status.value = nextSuggestions.length === 3 ? "ready" : "idle";
+      status.value = nextSuggestions.length === 3 ? response.status : "idle";
     } catch {
       if (revision === requestRevision && currentOperation === operation) {
         suggestions.value = [];
@@ -203,15 +206,6 @@ function useVibe64PromptHints({
     }
     const key = requestKey.value;
     scheduledKey = key;
-    if (readRefOrGetterValue(blankConversation) === true) {
-      suggestions.value = normalizedPromptHintSuggestions(
-        readRefOrGetterValue(existingProject) === true
-          ? VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject
-          : VIBE64_PROMPT_HINT_STATIC_STARTERS.greenfield
-      );
-      status.value = "static";
-      return;
-    }
     loading.value = true;
     status.value = "loading";
     const revision = requestRevision;

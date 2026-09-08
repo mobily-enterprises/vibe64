@@ -1,5 +1,11 @@
 const VIBE64_PROMPT_HINT_LABEL_MAX_CHARACTERS = 24;
 const VIBE64_PROMPT_HINT_PROMPT_MAX_CHARACTERS = 108;
+const VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS = 4_000;
+
+function normalizedPromptHintDraft(value = "") {
+  return Array.from(String(value ?? "").replace(/\r\n?/gu, "\n").trim())
+    .slice(-VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS).join("");
+}
 
 const VIBE64_PROMPT_HINT_OUTPUT_SCHEMA = Object.freeze({
   additionalProperties: false,
@@ -111,6 +117,8 @@ function normalizedPromptHintSuggestions(value = []) {
 }
 
 export {
+  VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS,
+  normalizedPromptHintDraft,
   VIBE64_PROMPT_HINT_LABEL_MAX_CHARACTERS,
   VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
   VIBE64_PROMPT_HINT_PROMPT_MAX_CHARACTERS,

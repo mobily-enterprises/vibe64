@@ -60,6 +60,9 @@ source. Those choices apply when a conversation next establishes stable
 context; they do not rewrite past conversation or get repeated with every
 message. Personal names and prompt suggestions remain separate Vibe64 conveniences
 and are not added to agent prompts.
+Prompt suggestions follow the person's current draft first, then the latest
+conversation, grounded in the project's purpose. They help express the current
+intent instead of repeating finished work or proposing unrelated generic tasks.
 
 The chat selector stays focused on choosing among AIs that are already
 configured and connected. A host may contribute an always-available built-in

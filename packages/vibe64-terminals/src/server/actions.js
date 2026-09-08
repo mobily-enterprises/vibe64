@@ -130,6 +130,7 @@ function createTerminalActions({ terminals } = {}) {
       idempotency: "none",
       input: sessionPromptHintsActionInputValidator,
       execute: (input) => terminals.generateSessionPromptHints(input.sessionId, {
+        draft: input.draft || "",
         operationId: input.operationId,
         originId: input.originId || "",
         vibe64User: input.vibe64User || null

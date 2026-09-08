@@ -486,6 +486,7 @@ function bodyWithSessionId(routes) {
 function promptHintRouteInput(routes, request) {
   const body = routes.requestBody(request);
   return withVibe64User(request, {
+    draft: body.draft,
     operationId: body.operationId,
     originId: body.originId,
     sessionId: request.params.sessionId

@@ -488,7 +488,7 @@ test("unsafe Blueprint filesystem entries fail hints closed before provider work
   }
 });
 
-test("prompt hints stop at the project toggle and blank-session static starters without using a provider", async () => {
+test("prompt hints stop at the toggle and use static starters only without any context", async () => {
   const disabled = createFixture({
     promptHints: projectPromptHints({ promptHints: false })
   });
@@ -507,6 +507,7 @@ test("prompt hints stop at the project toggle and blank-session static starters 
   assert.equal(disabled.calls.run.length, 0);
 
   const blank = createFixture({
+    readBlueprintText: async () => "",
     conversation: {
       conversationLog: [],
       pagination: {
@@ -531,6 +532,91 @@ test("prompt hints stop at the project toggle and blank-session static starters 
   assert.equal(blank.calls.access.length, 0);
   assert.equal(blank.calls.resolve.length, 0);
   assert.equal(blank.calls.run.length, 0);
+});
+
+test("an empty conversation uses its Blueprint or draft instead of generic starters", async (t) => {
+  for (const draft of ["", "Make appointments easier to cancel"]) {
+    await t.test(draft ? "draft" : "Blueprint", async () => {
+      const fixture = createFixture({
+        conversation: { conversationLog: [] },
+        readBlueprintText: async () => draft ? "" : "A dog grooming appointment manager."
+      });
+      const result = await fixture.service.generateSessionPromptHints("session-1", {
+        ...generateInput("hint:empty-context"),
+        draft
+      });
+      assert.equal(result.status, "ready");
+      assert.equal(fixture.calls.run.length, 1);
+      assert.match(fixture.calls.run[0].input.prompt, draft ? /Make appointments easier to cancel/u : /dog grooming appointment manager/u);
+      assert.equal(fixture.calls.access.length, 1);
+    });
+  }
+});
+
+test("draft intent is primary and participates in cache identity without entering diagnostics", async () => {
+  const fixture = createFixture();
+  const draft = "Actually keep bookings; only remove payment collection";
+  const input = { ...generateInput("hint:draft-first"), draft };
+  const first = await fixture.service.generateSessionPromptHints("session-1", input);
+  assert.equal(first.status, "ready");
+  const prompt = fixture.calls.run[0].input.prompt;
+  assert.match(prompt, /highest first: the person's current unsent draft/u);
+  assert.match(prompt, /Newer user corrections override older plans/u);
+  const context = JSON.parse(prompt.split("<context>\n")[1].split("\n</context>")[0]);
+  assert.equal(context.draft, draft);
+  assert.match(context.blueprint, /shared task tracker/u);
+  assert.deepEqual(context.conversation.map(({ text }) => text), [
+    "Build a shared team task tracker.", "The task list is now visible."
+  ]);
+  const cached = await fixture.service.generateSessionPromptHints("session-1", {
+    ...input, operationId: "hint:draft-cached"
+  });
+  assert.equal(cached.cached, true);
+  const changed = await fixture.service.generateSessionPromptHints("session-1", {
+    ...input, operationId: "hint:draft-changed", draft: "Keep payment collection too"
+  });
+  assert.equal(changed.cached, false);
+  assert.notEqual(changed.basis.draftRevision, first.basis.draftRevision);
+  const cleared = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:draft-cleared"));
+  assert.equal(cleared.cached, false);
+  assert.equal(fixture.calls.run.length, 3);
+  assert.doesNotMatch(JSON.stringify(first.basis), /remove payment collection/u);
+  assert.doesNotMatch(JSON.stringify(fixture.calls.diagnostic), /remove payment collection/u);
+});
+
+test("a newer draft supersedes in-flight suggestions for the older intent", async () => {
+  const started = deferred();
+  const release = deferred();
+  let generations = 0;
+  const fixture = createFixture({
+    async runAgentTurn({ options }) {
+      const number = ++generations;
+      const threadId = `draft-thread-${number}`;
+      options.onEvent({ threadId, turnId: `draft-turn-${number}`, type: "turn" });
+      if (number === 1) {
+        started.resolve();
+        await release.promise;
+      }
+      return readyAgentResult({ threadId, turnId: `draft-turn-${number}` });
+    }
+  });
+  const first = fixture.service.generateSessionPromptHints("session-1", {
+    ...generateInput("hint:draft-old"), draft: "Remove payments"
+  });
+  await started.promise;
+  const second = await fixture.service.generateSessionPromptHints("session-1", {
+    ...generateInput("hint:draft-new"), draft: "Actually keep payments"
+  });
+  release.resolve();
+  assert.equal(second.status, "ready");
+  assert.equal((await first).status, "cancelled");
+  assert.equal(fixture.calls.interrupt.length, 1);
+  assert.equal(fixture.calls.interrupt[0].input.threadId, "draft-thread-1");
+  const latest = await fixture.service.generateSessionPromptHints("session-1", {
+    ...generateInput("hint:draft-latest"), draft: "Actually keep payments"
+  });
+  assert.equal(latest.cached, true);
+  assert.equal(generations, 2);
 });
 
 test("restricted prompt hints stop before provider inspection and cannot reuse an authorized cache", async () => {

@@ -17,6 +17,7 @@ import {
   VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
   VIBE64_PROMPT_HINT_PROMPT_MAX_CHARACTERS,
   VIBE64_PROMPT_HINT_STATIC_STARTERS,
+  normalizedPromptHintDraft,
   normalizedPromptHintSuggestions,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
@@ -30,7 +31,7 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 
-const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v1";
+const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v2";
 const PROMPT_HINT_CACHE_TTL_MS = 5 * 60 * 1000;
 const PROMPT_HINT_CACHE_MAX_ENTRIES = 128;
 const PROMPT_HINT_RECENT_TURN_LIMIT = 8;
@@ -155,16 +156,18 @@ function sessionStateForHints(session = {}, {
   };
 }
 
-function promptHintBasis(context = {}) {
+function promptHintBasis(context = {}, draft = "") {
   const pagination = isRecord(context.conversation?.pagination)
     ? context.conversation.pagination
     : {};
   const conversation = visibleConversation(context.conversation);
   const settings = normalizedPromptHints(context.promptHints);
   const blueprint = boundedText(context.blueprint, PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS);
+  const currentDraft = normalizedPromptHintDraft(draft);
   return {
     basis: {
       blueprintRevision: canonicalHash(blueprint),
+      draftRevision: canonicalHash(currentDraft),
       conversationRevision: canonicalHash({
         newestTurnId: normalizeText(pagination.newestTurnId),
         totalTurnCount: Number.isSafeInteger(pagination.totalTurnCount)
@@ -176,7 +179,8 @@ function promptHintBasis(context = {}) {
       sessionRevision: canonicalHash(context.sessionState)
     },
     blueprint,
-    conversation
+    conversation,
+    draft: currentDraft
   };
 }
 
@@ -226,10 +230,17 @@ function promptHintContextStatus(context = {}) {
 function promptHintPrompt({
   blueprint = "",
   conversation = [],
+  draft = "",
   sessionState = {}
 } = {}) {
   return [
     "Suggest exactly three useful next prompts for the person in this product-building chat.",
+    "Context priority, highest first: the person's current unsent draft, the most recent user messages and assistant replies, then the project Blueprint.",
+    "When a draft is present, all three suggestions must help express or develop that intent, including unfinished sentences. Preserve its direction and constraints; do not switch to unrelated project work.",
+    "When there is no draft, use the latest conversation's unresolved request or concrete next step. Newer user corrections override older plans and Blueprint assumptions.",
+    "Use the Blueprint to ground suggestions in this project's purpose and users, including when the conversation is empty; do not invent requirements or progress.",
+    "Suggest messages the person could send, not answers to them. Avoid generic tours, reviews, tests, commits, or deployment unless the current context specifically calls for them.",
+    "Do not repeat work the conversation says is finished, rejected, or already underway. Each suggestion should offer a distinct, specific way forward, not three paraphrases or a repetition of the draft.",
     "Each suggestion must contain a label and a prompt.",
     `Make each label a distinct action of two to four words and no longer than ${VIBE64_PROMPT_HINT_LABEL_MAX_CHARACTERS} characters.`,
     `Make each prompt concrete, friendly, no longer than ${VIBE64_PROMPT_HINT_PROMPT_MAX_CHARACTERS} characters, and do not assume work is already complete.`,
@@ -240,6 +251,7 @@ function promptHintPrompt({
     JSON.stringify({
       blueprint,
       conversation,
+      draft,
       session: {
         status: sessionState.status,
         workspaceSetupStatus: sessionState.workspaceSetupStatus
@@ -649,6 +661,7 @@ function createSessionPromptHintsService({
       const prompt = promptHintPrompt({
         blueprint: job.snapshot.blueprint,
         conversation: job.snapshot.conversation,
+        draft: job.snapshot.draft,
         sessionState: job.context.sessionState
       });
       if (Array.from(prompt).length > job.identity.profile.limits.maxInputCharacters) {
@@ -747,7 +760,7 @@ function createSessionPromptHintsService({
       });
       return promptHintResponse("stale", { basis: job.snapshot.basis });
     }
-    const currentSnapshot = promptHintBasis(current);
+    const currentSnapshot = promptHintBasis(current, job.snapshot.draft);
     if (job.cancelRequested) {
       return promptHintResponse("cancelled", { basis: job.snapshot.basis });
     }
@@ -848,7 +861,7 @@ function createSessionPromptHintsService({
       reportDiagnostic("vibe64_prompt_hints_context_failed", error, { sessionId });
       return promptHintResponse("unavailable");
     }
-    const snapshot = promptHintBasis(context);
+    const snapshot = promptHintBasis(context, request.draft);
     request.snapshot = snapshot;
     if (request.cancelled) {
       return promptHintResponse("cancelled", { basis: snapshot.basis });
@@ -857,7 +870,7 @@ function createSessionPromptHintsService({
     if (status !== "ready") {
       return promptHintResponse(status, { basis: snapshot.basis });
     }
-    if (!snapshot.conversation.length) {
+    if (!snapshot.conversation.length && !snapshot.draft && !snapshot.blueprint) {
       return promptHintResponse("static", {
         basis: snapshot.basis,
         suggestions: promptHintStaticSuggestions(context)
@@ -903,7 +916,7 @@ function createSessionPromptHintsService({
         }
         if (
           promptHintContextStatus(current) === "ready" &&
-          samePromptHintBasis(snapshot.basis, promptHintBasis(current).basis)
+          samePromptHintBasis(snapshot.basis, promptHintBasis(current, request.draft).basis)
         ) {
           return promptHintResponse("ready", {
             basis: cached.basis,
@@ -951,6 +964,7 @@ function createSessionPromptHintsService({
     const request = {
       actorId,
       cancelled: false,
+      draft: normalizedPromptHintDraft(input.draft),
       job: null,
       operationId,
       originId,

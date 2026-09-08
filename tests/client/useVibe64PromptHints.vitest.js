@@ -1,5 +1,10 @@
 import { effectScope, nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS,
+  VIBE64_PROMPT_HINT_STATIC_STARTERS,
+  normalizedPromptHintDraft
+} from "../../packages/vibe64-runtime/src/shared/promptHints.js";
 
 import {
   PROMPT_HINT_DEBOUNCE_MS,
@@ -41,7 +46,13 @@ function createHints(overrides = {}, dependencies = {}) {
     ...overrides
   };
   const scope = effectScope();
-  const hints = scope.run(() => useVibe64PromptHints(state, dependencies));
+  const hints = scope.run(() => useVibe64PromptHints(state, {
+    request: vi.fn(async () => ({
+      status: "ready",
+      suggestions: VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject
+    })),
+    ...dependencies
+  }));
   return { hints, scope, state };
 }
 
@@ -54,10 +65,15 @@ describe("useVibe64PromptHints", () => {
     vi.useRealTimers();
   });
 
-  it("shows project-aware static starters immediately without a model request", () => {
-    const request = vi.fn();
+  it("asks the server about empty conversations so their Blueprint is not bypassed", async () => {
+    const request = vi.fn(async () => ({
+      status: "static",
+      suggestions: VIBE64_PROMPT_HINT_STATIC_STARTERS.greenfield
+    }));
     const greenfield = createHints({ blankConversation: ref(true) }, { request });
 
+    expect(greenfield.hints.suggestions.value).toEqual([]);
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
     expect(greenfield.hints.status.value).toBe("static");
     expect(greenfield.hints.suggestions.value).toEqual([
       promptHint("Shape app idea", "Help me shape my app idea"),
@@ -65,19 +81,29 @@ describe("useVibe64PromptHints", () => {
       promptHint("Decide first steps", "What should we decide first?")
     ]);
     expect(greenfield.hints.visible.value).toBe(true);
-    expect(request).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
     greenfield.scope.stop();
 
+    request.mockResolvedValue({
+      status: "ready",
+      suggestions: [
+        promptHint("Add grooming slots", "Add grooming appointments to the calendar"),
+        promptHint("Track dog visits", "Track each dog's previous visits"),
+        promptHint("Show free groomers", "Show which groomers are available")
+      ]
+    });
     const existing = createHints({
       blankConversation: ref(true),
       existingProject: ref(true)
     }, { request });
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(existing.hints.status.value).toBe("ready");
     expect(existing.hints.suggestions.value).toEqual([
-      promptHint("Tour this project", "Give me a quick tour of this project"),
-      promptHint("Find first improvement", "What should I improve first?"),
-      promptHint("Plan safe change", "Help me plan a small safe change")
+      promptHint("Add grooming slots", "Add grooming appointments to the calendar"),
+      promptHint("Track dog visits", "Track each dog's previous visits"),
+      promptHint("Show free groomers", "Show which groomers are available")
     ]);
-    expect(request).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(2);
     existing.scope.stop();
   });
 
@@ -124,6 +150,7 @@ describe("useVibe64PromptHints", () => {
     expect(request.mock.calls[0][0]).toBe("/api/vibe64/sessions/session-1/prompt-hints");
     expect(request.mock.calls[0][1]).toMatchObject({
       body: {
+        draft: "",
         operationId: expect.stringMatching(/^hint:/u),
         originId: expect.stringMatching(/^tab:/u)
       },
@@ -176,12 +203,14 @@ describe("useVibe64PromptHints", () => {
     scope.stop();
   });
 
-  it("keeps suggestions available while the person types and suppresses hover preview", async () => {
-    const generated = deferredResult();
+  it("debounces the latest draft, cancels superseded work and ignores stale suggestions", async () => {
+    const oldResult = deferredResult();
+    const newResult = deferredResult();
+    let generationCount = 0;
     const request = vi.fn((path) => (
       path.endsWith("/cancel")
         ? Promise.resolve({ ok: true, status: "cancelled" })
-        : generated.promise
+        : (++generationCount === 1 ? oldResult.promise : newResult.promise)
     ));
     const draft = ref("");
     const { hints, scope } = createHints({ draft }, { request });
@@ -189,13 +218,21 @@ describe("useVibe64PromptHints", () => {
     await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
     expect(request).toHaveBeenCalledTimes(1);
 
-    draft.value = "I already know what to ask";
+    draft.value = "Make booking";
     await nextTick();
-
     expect(hints.visible.value).toBe(true);
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(request.mock.calls[1][0]).toMatch(/\/cancel$/u);
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS - 1);
+    expect(generationCount).toBe(1);
+    draft.value = "Make booking cancellation easier";
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS - 1);
+    expect(generationCount).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(generationCount).toBe(2);
+    expect(request.mock.calls[2][1].body.draft).toBe(draft.value);
 
-    generated.resolve({
+    oldResult.resolve({
       ok: true,
       status: "ready",
       suggestions: [
@@ -206,14 +243,25 @@ describe("useVibe64PromptHints", () => {
     });
     await Promise.resolve();
     await Promise.resolve();
+    expect(hints.suggestions.value).toEqual([]);
+    newResult.resolve({
+      status: "ready",
+      suggestions: [
+        promptHint("Simplify cancellation", "Simplify cancelling a booking"),
+        promptHint("Confirm cancellation", "Add a clear booking cancellation confirmation"),
+        promptHint("Explain refund rules", "Show refund rules before cancelling a booking")
+      ]
+    });
+    await vi.advanceTimersByTimeAsync(0);
     expect(hints.suggestions.value).toHaveLength(3);
+    expect(hints.suggestions.value[0].label).toBe("Simplify cancellation");
     expect(hints.previewPromptHint(hints.suggestions.value[0])).toBe(false);
     expect(hints.preview.value).toBe("");
     expect(hints.visible.value).toBe(true);
     scope.stop();
   });
 
-  it("previews only an empty composer and replaces its draft on every selection", () => {
+  it("previews only an empty composer and inserts editable text on selection", async () => {
     const draft = ref("");
     const onSelect = vi.fn((text) => {
       draft.value = text;
@@ -225,6 +273,7 @@ describe("useVibe64PromptHints", () => {
       onSelect
     });
 
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
     const selected = hints.suggestions.value[1];
     const malformed = { ...selected, icon: "not allowed" };
     expect(hints.previewPromptHint(malformed)).toBe(false);
@@ -238,6 +287,8 @@ describe("useVibe64PromptHints", () => {
     expect(onSelect).toHaveBeenCalledWith(selected.prompt);
     expect(draft.value).toBe(selected.prompt);
     expect(hints.preview.value).toBe("");
+    expect(hints.suggestions.value).toEqual([]);
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
     expect(hints.suggestions.value).toHaveLength(3);
     expect(hints.visible.value).toBe(true);
 
@@ -247,6 +298,30 @@ describe("useVibe64PromptHints", () => {
     expect(draft.value).toBe(replacement.prompt);
     expect(onSelect).toHaveBeenLastCalledWith(replacement.prompt);
     expect(hints.visible.value).toBe(true);
+    scope.stop();
+  });
+
+  it("sends a restored draft immediately after debounce and refreshes when it is cleared", async () => {
+    const draft = ref("Keep appointments, but remove payment collection");
+    const request = vi.fn(async () => ({ status: "unavailable" }));
+    const { scope } = createHints({ draft, blankConversation: ref(true) }, { request });
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request.mock.calls[0][1].body.draft).toBe(draft.value);
+    draft.value = "";
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request.mock.calls[1][1].body.draft).toBe("");
+    scope.stop();
+  });
+
+  it("bounds draft context to the newest Unicode characters without changing the composer", async () => {
+    const draft = ref("old context " + "😀".repeat(VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS));
+    const original = draft.value;
+    const request = vi.fn(async () => ({ status: "unavailable" }));
+    const { scope } = createHints({ draft }, { request });
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request.mock.calls[0][1].body.draft).toBe("😀".repeat(VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS));
+    expect(draft.value).toBe(original);
+    expect(normalizedPromptHintDraft("  a\r\nb  ")).toBe("a\nb");
     scope.stop();
   });
 

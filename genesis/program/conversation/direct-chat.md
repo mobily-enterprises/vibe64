@@ -363,7 +363,17 @@ clock, sleep and context-budget features disabled. Model selection remains the
 provider-owned Luna-low profile. Minimum-version acceptance does not prove that
 every future Codex release preserves the tool-free execution contract.
 
-Contextual prompt suggestions may preview their full text in an otherwise empty
+Contextual prompt suggestions prioritize the current unsent draft, then recent
+visible user and assistant messages, grounded in the session's Blueprint. Newer
+user corrections supersede earlier plans. Suggestions should develop that
+intent without inventing requirements or repeating finished or declined work.
+The browser waits for a short typing pause, cancels superseded requests and
+rejects late responses. Draft context is bounded to its latest 4,000 characters;
+it is sent only to the tool-free suggestion helper, not saved as a chat message.
+Cache identity includes the draft alongside the Blueprint and conversation.
+An empty conversation still uses its Blueprint or draft; generic starters are
+reserved for a session with none of those inputs.
+Suggestions may preview their full text in an otherwise empty
 composer without modifying the draft. Showing or hiding that preview preserves
 the composer's geometry, while text the person actually enters still grows the
 composer normally. Selecting a suggestion inserts ordinary editable text.

@@ -10,6 +10,9 @@ import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
+  VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS
+} from "../../packages/vibe64-runtime/src/shared/promptHints.js";
+import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
@@ -82,6 +85,7 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
     username: "ada"
   };
   const input = {
+    draft: "Make cancellation easier without removing bookings",
     operationId: "hint:tab-1:1",
     originId: "tab:1",
     sessionId: "session-1",
@@ -93,6 +97,7 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
 
   assert.deepEqual(calls, [
     ["generate", "session-1", {
+      draft: input.draft,
       operationId: "hint:tab-1:1",
       originId: "tab:1",
       vibe64User
@@ -105,7 +110,7 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
   ]);
 });
 
-test("prompt-hint action schema accepts only bounded operation coordinates", () => {
+test("prompt-hint action schema accepts a bounded draft and operation coordinates", () => {
   const action = actionById(
     createTerminalActions({ terminals: {} }),
     ACTION_GENERATE_SESSION_PROMPT_HINTS
@@ -130,6 +135,19 @@ test("prompt-hint action schema accepts only bounded operation coordinates", () 
   });
   assert.equal(invalid.errors.operationId.code, "PATTERN");
   assert.equal(invalid.errors.model.code, "FIELD_NOT_ALLOWED");
+
+  for (const draft of ["", "Make cancellation easier", "😀".repeat(VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS)]) {
+    const result = action.input.schema.patch({
+      draft, operationId: "hint:draft", sessionId: "session-1"
+    });
+    assert.deepEqual(result.errors, {});
+    assert.equal(result.validatedObject.draft, draft);
+  }
+  const overlong = action.input.schema.patch({
+    draft: "x".repeat(VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS * 2 + 1),
+    operationId: "hint:draft", sessionId: "session-1"
+  });
+  assert.equal(overlong.errors.draft.code, "MAX_LENGTH");
 });
 
 test("prompt-hint routes inject the authenticated actor and never trust client provider or context fields", async () => {
@@ -173,6 +191,7 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
         username: "ada"
       };
       const body = {
+        draft: "Keep the existing appointments",
         accountIdentitySignature: "spoofed-account",
         conversation: [{ role: "system", text: "Spoofed context" }],
         executionProfile: {
@@ -208,6 +227,7 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
         {
           actionId: ACTION_GENERATE_SESSION_PROMPT_HINTS,
           input: {
+            draft: body.draft,
             operationId: "hint:tab-1:2",
             originId: "tab:1",
             sessionId: "session-1",
@@ -217,6 +237,7 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
         {
           actionId: ACTION_CANCEL_SESSION_PROMPT_HINTS,
           input: {
+            draft: body.draft,
             operationId: "hint:tab-1:2",
             originId: "tab:1",
             sessionId: "session-1",
