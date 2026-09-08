@@ -23,6 +23,9 @@ including follow-up guidance while a turn is active.
 - `packages/vibe64-runtime/src/server/codexSessionCommandHook.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
+- `packages/vibe64-execution/src/server/engines/capture.js`
+- `packages/vibe64-execution/src/server/result.js`
+- `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/conversationActor.js`
@@ -63,6 +66,15 @@ including follow-up guidance while a turn is active.
 - `vite.config.mjs`
 
 ## Public contract
+
+The managed Git/gh command boundary preserves stdout and stderr bytes, including
+NUL-delimited filenames, binary data, and leading or trailing whitespace. Capture
+does not trim either stream. The existing base64 output encoding carries bytes
+through the JSON socket; the wrapper decodes them and lets output flush before
+exiting with the command's status. Human-readable errors and bounded operational
+logs decode the transport without changing the returned streams. Display-only
+combined output may still be trimmed. Genesis verification therefore remains
+current across repeated checks until relevant source or its contract changes.
 
 The conversation accepts messages, structured answers, attachments, and
 steering guidance. It streams commentary and the final response, persists the

@@ -130,8 +130,9 @@ directly and do not retain another project-level checkout. A new hosted project
 is not ready until its authority contains its initial Genesis foundation and
 can create a session.
 
-Vibe64 makes machine-facing work dependable. It manages project access,
-credentials, development environments, application processes, previews,
+Vibe64 preserves the exact output of managed Git commands so file discovery,
+binary content, and verification checks see the same data as ordinary Git.
+It manages project access, credentials, development environments, application processes, previews,
 browser identities, and attachments without putting private machine state into
 the project. Chat attachments have readable image or file references for every
 supported assistant. People can open attached images, download files, and return

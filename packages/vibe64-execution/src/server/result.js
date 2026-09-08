@@ -13,6 +13,7 @@ function commandResult({
   exitCode = 0,
   ok = null,
   output = "",
+  outputEncoding = "utf8",
   pid = null,
   signal = "",
   stderr = "",
@@ -33,8 +34,9 @@ function commandResult({
     output: normalizedOutput,
     pid: Number.isSafeInteger(Number(pid)) ? Number(pid) : null,
     signal: normalizeText(signal),
-    stderr: normalizedStderr.trim(),
-    stdout: normalizedStdout.trim(),
+    stderr: normalizedStderr,
+    stdout: normalizedStdout,
+    ...(outputEncoding === "base64" ? { outputEncoding } : {}),
     timedOut: timedOut === true,
     ...(execution && typeof execution === "object" && !Array.isArray(execution)
       ? { execution }
@@ -52,8 +54,8 @@ function commandErrorResult(message = "", code = "vibe64_command_failed", extra 
     exitCode: 1,
     ok: false,
     output: normalizeText(extra.output) || error,
-    stderr: normalizeText(extra.stderr) || error,
-    stdout: normalizeText(extra.stdout)
+    stderr: extra.stderr ?? (extra.outputEncoding === "base64" ? Buffer.from(error).toString("base64") : error),
+    stdout: extra.stdout ?? ""
   });
 }
 

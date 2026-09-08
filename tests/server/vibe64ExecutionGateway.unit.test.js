@@ -1470,7 +1470,7 @@ test("execution gateway rejects detached real-user commands when the process is 
   assert.equal(result.code, "vibe64_command_detached_real_user_unsupported");
 });
 
-test("execution gateway normalizes capture stdout, stderr, output, and exit code", async () => {
+test("execution gateway preserves captured streams and normalizes the display result", async () => {
   const result = await runVibe64Command({
     command: process.execPath,
     args: [
@@ -1481,8 +1481,8 @@ test("execution gateway normalizes capture stdout, stderr, output, and exit code
 
   assert.equal(result.ok, false);
   assert.equal(result.exitCode, 7);
-  assert.equal(result.stdout, "out");
-  assert.equal(result.stderr, "err");
+  assert.equal(result.stdout, "out\n");
+  assert.equal(result.stderr, "err\n");
   assert.match(result.output, /out/u);
   assert.match(result.output, /err/u);
 });
@@ -1513,8 +1513,23 @@ test("execution gateway captures binary output without text decoding", async () 
   });
 
   assert.equal(result.ok, true, result.output);
+  assert.equal(result.outputEncoding, "base64");
   assert.equal(result.stdout, expected.toString("base64"));
   assert.deepEqual(Buffer.from(result.stdout, "base64"), expected);
+});
+
+test("capture preserves stdout and stderr whitespace on success and failure", async () => {
+  for (const exitCode of [0, 7]) {
+    for (const expected of ["", "no newline", " \t\nvalue\n\n \t", "nul\0terminated\0"]) {
+      const result = await runVibe64Command({
+        command: process.execPath,
+        args: ["-e", `process.stdout.write(${JSON.stringify(expected)}); process.stderr.write(${JSON.stringify(expected)}); process.exitCode = ${exitCode};`]
+      });
+      assert.equal(result.exitCode, exitCode);
+      assert.equal(result.stdout, expected);
+      assert.equal(result.stderr, expected);
+    }
+  }
 });
 
 test("execution gateway rejects an actor HOME mismatch", () => {

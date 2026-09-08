@@ -314,18 +314,12 @@ try {
 }
 
 if (payload.stdout) {
-  process.stdout.write(String(payload.stdout));
-  if (!String(payload.stdout).endsWith("\\n")) {
-    process.stdout.write("\\n");
-  }
+  process.stdout.write(Buffer.from(String(payload.stdout), payload.outputEncoding === "base64" ? "base64" : "utf8"));
 }
 if (payload.stderr) {
-  process.stderr.write(String(payload.stderr));
-  if (!String(payload.stderr).endsWith("\\n")) {
-    process.stderr.write("\\n");
-  }
+  process.stderr.write(Buffer.from(String(payload.stderr), payload.outputEncoding === "base64" ? "base64" : "utf8"));
 }
-if (payload.ok === false && !payload.stderr && payload.error) {
+if (payload.ok === false && !payload.stderr && payload.error && payload.code !== "vibe64_codex_git_command_failed") {
   const prefix = payload.code === "vibe64_agent_control_unavailable"
     ? "vibe64_agent_control_unavailable: "
     : "";
@@ -333,7 +327,7 @@ if (payload.ok === false && !payload.stderr && payload.error) {
 }
 
 const exitCode = Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
-process.exit(exitCode);
+process.exitCode = exitCode;
 `;
 }
 
@@ -480,7 +474,10 @@ function localGitCommandToolHome() {
 }
 
 function commandOutput(result = {}) {
-  return normalizeText(result.stderr || result.stdout || result.output || result.error);
+  const captured = result.stderr || result.stdout;
+  return normalizeText(captured
+    ? Buffer.from(captured, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
+    : result.error || result.output);
 }
 
 function commandOutputTail(value = "", limit = 1000) {
@@ -600,8 +597,8 @@ async function readGithubToken({
 function logGitCommandResult(logger, result = {}, fields = {}) {
   const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
   const args = Array.isArray(fields.args) ? fields.args : [];
-  const stdoutTail = ok ? "" : commandOutputTail(result.stdout);
-  const stderrTail = ok ? "" : commandOutputTail(result.stderr);
+  const stdoutTail = ok ? "" : commandOutputTail(commandOutput({ stdout: result.stdout, outputEncoding: result.outputEncoding }));
+  const stderrTail = ok ? "" : commandOutputTail(commandOutput({ stderr: result.stderr, outputEncoding: result.outputEncoding }));
   const outputTail = ok ? "" : commandOutputTail(commandOutput(result));
   return logOperationalEvent(logger, ok ? "info" : "warn", {
     code: result?.code || "",
@@ -841,6 +838,7 @@ function createCodexGitCommandService({
       gitTransport: command === "git" && githubToken.token ? "github-token" : "none",
       input: inputBuffer,
       mode: "capture",
+      outputEncoding: "base64",
       project: {
         ownerUserKey: actor.githubRequired === false
           ? ""
@@ -858,10 +856,11 @@ function createCodexGitCommandService({
       userKey: gatewayUserKey
     });
     return finish({
-      code: result.ok ? "" : "vibe64_codex_git_command_failed",
+      code: result.ok ? "" : result.code || "vibe64_codex_git_command_failed",
       error: result.ok ? "" : commandOutput(result),
       exitCode: Number(result.exitCode ?? (result.ok ? 0 : 1)),
       ok: result.ok === true,
+      outputEncoding: result.outputEncoding || "utf8",
       signal: result.signal || "",
       stderr: result.stderr || "",
       stdout: result.stdout || "",

@@ -32,6 +32,7 @@ async function runCaptureCommand(command = "", args = [], {
       maxBuffer,
       reject: false,
       stdin: input === undefined || input === null ? "ignore" : "pipe",
+      stripFinalNewline: false,
       timeout
     });
     processGroupId = Number(subprocess.pid);
@@ -47,10 +48,13 @@ async function runCaptureCommand(command = "", args = [], {
     const result = await subprocess;
     const exitCode = typeof result.exitCode === "number" ? result.exitCode : 1;
     outcome = commandResult({
-      code: result.timedOut === true ? "vibe64_command_capture_timed_out" : "",
+      code: result.timedOut === true
+        ? "vibe64_command_capture_timed_out"
+        : result.code ? "vibe64_command_capture_failed" : "",
       error: exitCode === 0 ? "" : result.shortMessage,
       exitCode,
       output: result.all || (exitCode === 0 ? "" : result.shortMessage),
+      outputEncoding,
       signal: result.signal,
       stderr: result.stderr,
       stdout: result.stdout,
@@ -62,6 +66,7 @@ async function runCaptureCommand(command = "", args = [], {
       execution,
       exitCode: typeof error.exitCode === "number" ? error.exitCode : 1,
       output: error.all,
+      outputEncoding,
       signal: error.signal,
       stderr: error.stderr,
       stdout: error.stdout,
@@ -79,6 +84,7 @@ async function runCaptureCommand(command = "", args = [], {
       {
         execution,
         output: outcome?.output,
+        outputEncoding,
         stderr: outcome?.stderr,
         stdout: outcome?.stdout
       }

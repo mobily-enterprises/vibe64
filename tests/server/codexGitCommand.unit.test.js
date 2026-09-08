@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
+
+import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
+import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 
 import {
   currentOsUser
@@ -45,17 +50,19 @@ function runProcessWithInput(command, args = [], {
       env,
       stdio: ["pipe", "pipe", "pipe"]
     });
-    let stderr = "";
-    let stdout = "";
+    const stderrChunks = [];
+    const stdoutChunks = [];
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString("utf8");
+      stdoutChunks.push(chunk);
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString("utf8");
+      stderrChunks.push(chunk);
     });
     child.once("error", reject);
     child.once("close", (exitCode, signal) => {
-      resolve({ exitCode, signal, stderr, stdout });
+      const stdoutBytes = Buffer.concat(stdoutChunks);
+      const stderrBytes = Buffer.concat(stderrChunks);
+      resolve({ exitCode, signal, stderr: stderrBytes.toString("utf8"), stdout: stdoutBytes.toString("utf8"), stderrBytes, stdoutBytes });
     });
     child.stdin.end(input);
   });
@@ -162,6 +169,7 @@ test("Codex runs local Git inside the managed session source", async () => {
     assert.equal(gatewayCall.cwd, session.metadata.source_path);
     assert.equal(gatewayCall.gitTransport, "none");
     assert.equal(gatewayCall.purpose, "codex");
+    assert.equal(gatewayCall.outputEncoding, "base64");
     assert.equal(gatewayCall.session.sessionId, session.sessionId);
     assert.ok(metadataReads.includes("github_repository"));
     assert.ok(metadataReads.includes("source_remote_url"));
@@ -602,5 +610,105 @@ test("Codex reports the underlying GitHub token lookup failure", async () => {
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_codex_git_command_github_auth_unavailable");
     assert.equal(result.error, "GitHub token lookup failed in the user home.");
+  });
+});
+
+
+test("the real Git gateway and generated wrapper preserve bytes and command failures", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = sessionSource(root, "byte-output");
+    const cwd = session.metadata.source_path;
+    await mkdir(cwd, { recursive: true });
+    let commandOverride = null;
+    const service = serviceForSession(session, {
+      runGatewayCommand: (request) => runVibe64Command({ ...request, ...commandOverride })
+    });
+    const prepared = await prepareCodexGitCommand({
+      commandService: service,
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+      sessionId: session.sessionId,
+      stateRoot: root
+    });
+    const env = { ...process.env, ...prepared.env };
+    const git = (args, input = "") => runProcessWithInput(path.join(prepared.hostWrapperDir, "git"), args, { cwd, env, input });
+    assert.equal((await git(["init", "--quiet"])).exitCode, 0);
+    for (const expected of [
+      Buffer.alloc(0), Buffer.from("no final newline"), Buffer.from(" \t\nline\n\n \t"),
+      Buffer.from([0, 255, 128, 0, 10, 13]), Buffer.alloc(1024 * 1024, 0xff)
+    ]) {
+      const stored = await git(["hash-object", "-w", "--stdin"], expected);
+      assert.equal(stored.exitCode, 0, stored.stderr);
+      const output = await git(["cat-file", "blob", stored.stdout.trim()]);
+      assert.equal(output.exitCode, 0, output.stderr);
+      assert.deepEqual(output.stdoutBytes, expected);
+      assert.deepEqual(output.stderrBytes, Buffer.alloc(0));
+    }
+    const names = [" leading space", "embedded\nnewline", "trailing space "];
+    for (const name of names) await writeFile(path.join(cwd, name), "file");
+    await git(["add", "--", ...names]);
+    const listed = await git(["ls-files", "-z"]);
+    assert.deepEqual(listed.stdoutBytes, Buffer.from(names.sort().join("\0") + "\0"));
+    const failed = await git(["-c", "alias.probe=!printf ' \\tno newline' >&2; exit 7", "probe"]);
+    assert.equal(failed.exitCode, 7);
+    assert.equal(failed.stderr, " \tno newline");
+    assert.equal(failed.stdout, "");
+    const silentFailure = await git(["-c", "alias.probe=!printf 'stdout only'; exit 7", "probe"]);
+    assert.equal(silentFailure.exitCode, 7);
+    assert.equal(silentFailure.stdout, "stdout only");
+    assert.equal(silentFailure.stderr, "");
+    const denied = await service.run({ command: "git", args: ["status"], sessionId: session.sessionId, cwd: path.dirname(cwd) });
+    assert.equal(denied.ok, false);
+    assert.match(denied.error, /inside the active project/u);
+    commandOverride = { command: path.join(root, "missing-git") };
+    const unavailable = await git(["status"]);
+    assert.equal(unavailable.exitCode, 1);
+    assert.match(unavailable.stderr, /ENOENT/u);
+    commandOverride = { command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], timeout: 100 };
+    const timedOut = await git(["status"]);
+    assert.equal(timedOut.exitCode, 1);
+    assert.match(timedOut.stderr, /timed out/u);
+  });
+});
+
+test("Genesis verification stays current through the actual Git wrapper until source changes", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = sessionSource(root, "genesis-verification");
+    const cwd = session.metadata.source_path;
+    await mkdir(cwd, { recursive: true });
+    const initial = await runProcessWithInput("git", ["init", "--quiet"], { cwd });
+    assert.equal(initial.exitCode, 0, initial.stderr);
+    await initializeGenesisProject({ projectRoot: cwd });
+    await writeFile(path.join(cwd, "genesis/blueprint.md"), "# Blueprint\n\nA verification fixture.\n");
+    await writeFile(path.join(cwd, "genesis/stack.md"), '# Stack\n\n## Components\n\n## Verification\n\n- Verify `fixture`: `node` `-e` `process.exit(0)`\n');
+    await writeFile(path.join(cwd, ".gitignore"), "node_modules/\n");
+    await writeFile(path.join(cwd, "value.js"), "export const value = 1;\n");
+    const require = createRequire(new URL("../../packages/vibe64-genesis/package.json", import.meta.url));
+    const compiler = pathToFileURL(require.resolve("genesis-compiler")).href;
+    const prepared = await prepareCodexGitCommand({
+      commandService: serviceForSession(session, { runGatewayCommand: runVibe64Command }),
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+      sessionId: session.sessionId, stateRoot: root
+    });
+    const proof = await runProcessWithInput(process.execPath, ["--input-type=module", "-e", `
+      import assert from "node:assert/strict";
+      import { execFileSync } from "node:child_process";
+      import { writeFile } from "node:fs/promises";
+      import { check, verify } from ${JSON.stringify(compiler)};
+      const projectRoot = ${JSON.stringify(cwd)};
+      for (const tracked of [false, true]) {
+        await writeFile(projectRoot + "/value.js", "export const value = 1;\\n");
+        const verified = await verify({ projectRoot });
+        assert.equal(verified.status, "passed", JSON.stringify(verified));
+        if (tracked) execFileSync("git", ["add", "-f", ".genesis/verification.json"], { cwd: projectRoot });
+        for (let i = 0; i < 2; i++) {
+          assert.equal((await verify({ projectRoot })).status, "passed");
+          assert.equal((await check({ projectRoot })).verification, "current");
+          assert.equal((await check({ projectRoot })).verification, "current");
+        }
+        await writeFile(projectRoot + "/value.js", "export const value = 2;\\n");
+        assert.equal((await check({ projectRoot })).verification, "stale");
+      }
+    `], { cwd, env: { ...process.env, ...prepared.env, PATH: `${prepared.hostWrapperDir}${path.delimiter}${process.env.PATH}` } });
+    assert.equal(proof.exitCode, 0, proof.stderr);
   });
 });
