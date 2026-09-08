@@ -121,11 +121,14 @@ async function terminalServiceFixture(t, lock, {
   const projectContextRoot = path.join(root, "authority");
   const projectRuntimeRoot = path.join(root, "runtime");
   const attachmentRoot = path.join(root, "attachments");
+  const codexToolHomeSource = path.join(root, "codex-home");
   await Promise.all([
     mkdir(sourcePath, { recursive: true }),
     mkdir(projectContextRoot, { recursive: true }),
-    mkdir(projectRuntimeRoot, { recursive: true })
+    mkdir(projectRuntimeRoot, { recursive: true }),
+    mkdir(path.join(codexToolHomeSource, ".codex"), { recursive: true })
   ]);
+  await writeFile(path.join(codexToolHomeSource, ".codex", "auth.json"), JSON.stringify({ auth_mode: "apikey" }));
   const session = {
     metadata: {
       repository_mode: "local_source",
@@ -201,7 +204,8 @@ async function terminalServiceFixture(t, lock, {
   const service = createTerminalService({
     logger,
     codexTerminalController: {
-      codexToolHomeRequired: false
+      codexToolHomeRequired: false,
+      codexToolHomeSource
     },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot,

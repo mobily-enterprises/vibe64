@@ -98,7 +98,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.181",
+    "@jskit-ai/kernel": "0.1.183",
     "@local/vibe64-execution": "0.1.0"
   }
 }
