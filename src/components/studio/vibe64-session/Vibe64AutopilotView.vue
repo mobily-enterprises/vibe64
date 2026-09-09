@@ -26,6 +26,7 @@
       <header class="studio-autopilot__session-header">
         <Vibe64SessionToolbar
           v-if="sessionToolbarVisible"
+          :active="props.active"
           :archive="props.sessionArchive"
           compact
           :create-visible="props.sessionToolbar.createSessionVisible === true"

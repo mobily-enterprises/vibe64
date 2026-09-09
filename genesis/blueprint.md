@@ -12,8 +12,9 @@ confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the
 new-session plus when all three slots are occupied, and groups Save beside the
 session actions.
-Hovering or keyboard-focusing a session tab shows its basic details. Touch users
-can tap its info button to read the same details without switching sessions.
+Hovering or keyboard-focusing a session tab for one second shows its basic
+details. Touch users can tap its info button to read the same details without
+switching sessions.
 Selecting a session keeps those details closed until the pointer leaves and
 enters its tab again. Deliberate keyboard focus and its info button still make
 the details available on demand.

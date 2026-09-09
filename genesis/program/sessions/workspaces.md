@@ -12,7 +12,9 @@ the canonical project and from other sessions.
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
+- `src/components/studio/Vibe64SessionPanel.vue`
 - `src/lib/vibe64SessionInfo.js`
+- `src/lib/vibe64SessionTooltip.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/composables/useArchivedVibe64Sessions.js`
 - `src/composables/useVibe64SessionRenewal.js`
@@ -32,14 +34,16 @@ The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session
 plus is hidden when those visible slots are full and returns when a slot opens.
 Save sits directly beside the session actions so the tabs retain that space.
-Each tab shows a basic-info tooltip on hover or keyboard focus, including its
-full name, status, assistant and model when available, save state, identifier,
+Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
+including its full name, status, assistant and model when available, save state, identifier,
 branch, and creation time. A touch-visible info button opens the same tooltip
 without selecting or archiving the session. This uses the loaded session data
 and does not fetch or poll for details.
 Selecting a tab dismisses its tooltip and suppresses automatic hover/focus
-opening until the pointer enters that tab again from outside. Pending tooltip
-requests cannot reopen it after selection. A new keyboard-visible focus also
+opening until the pointer leaves and enters that tab again from outside. The
+panel shares click suppression across its retained session toolbars; revealing
+a toolbar under a stationary pointer does not reset it. Hidden toolbars dismiss
+their details and cannot open pending tooltips. A new keyboard-visible focus also
 reenables the tooltip, while mouse-induced focus does not; the explicit info
 button still works.
 

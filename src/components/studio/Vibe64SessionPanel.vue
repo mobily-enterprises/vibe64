@@ -3,6 +3,8 @@
     rounded="lg"
     class="studio-ai-sessions studio-ai-sessions--autopilot studio-screen__panel"
     :class="{ 'studio-ai-sessions--resizing': chatColumnResizing }"
+    @pointermove="sessionTooltip.trackPointer"
+    @pointerleave="sessionTooltip.resumeHover"
   >
     <Transition name="studio-ai-sessions-error">
       <div
@@ -194,7 +196,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, provide } from "vue";
 import { mdiArchiveArrowDownOutline } from "@mdi/js";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
@@ -211,9 +213,15 @@ import {
 import {
   focusCreatedVibe64SessionTab
 } from "@/lib/vibe64SessionFocus.js";
+import {
+  createVibe64SessionTooltipState,
+  VIBE64_SESSION_TOOLTIP_KEY
+} from "@/lib/vibe64SessionTooltip.js";
 
 const emit = defineEmits(vibe64SessionPanelEmits);
 const props = defineProps(vibe64SessionPanelProps);
+const sessionTooltip = createVibe64SessionTooltipState();
+provide(VIBE64_SESSION_TOOLTIP_KEY, sessionTooltip);
 
 const {
   chatCollapsed,

@@ -17,8 +17,7 @@
         :data-vibe64-session-id="sessionItem.sessionId"
         variant="flat"
         @click="selectSession(sessionItem.sessionId)"
-        @mouseenter="suppressedSessionInfo.delete(sessionItem.sessionId)"
-        @focusin="$event.target.matches(':focus-visible') && suppressedSessionInfo.delete(sessionItem.sessionId)"
+        @focusin="active && $event.target.matches(':focus-visible') && sessionTooltip.resumeHover()"
       >
         <span class="studio-ai-sessions__tab-main">
           <span
@@ -64,7 +63,8 @@
           :id="`${infoId}-${sessionItem.sessionId}`"
           activator="parent"
           :model-value="infoSessionId === sessionItem.sessionId"
-          :open-delay="350"
+          :disabled="!active"
+          :open-delay="1000"
           :close-delay="150"
           :open-on-click="false"
           open-on-focus
@@ -72,7 +72,7 @@
           color="surface-variant"
           location="bottom"
           :max-width="320"
-          @update:model-value="(!$event || !suppressedSessionInfo.has(sessionItem.sessionId)) && setSessionInfo(sessionItem.sessionId, $event)"
+          @update:model-value="(!$event || sessionTooltip.suppressedSessionId.value !== sessionItem.sessionId) && setSessionInfo(sessionItem.sessionId, $event)"
         >
           <div class="studio-ai-sessions__info">
             <strong>{{ sessionTabLabel(sessionItem) }}</strong>
@@ -100,7 +100,7 @@
 </template>
 
 <script setup>
-import { computed, ref, useId } from "vue";
+import { computed, inject, ref, useId, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiArchiveOutline,
@@ -114,11 +114,16 @@ import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
 import { vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
+import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   visibleVibe64ToolbarSessions
 } from "@/lib/vibe64SessionToolbarVisibility.js";
 
 const props = defineProps({
+  active: {
+    default: true,
+    type: Boolean
+  },
   archive: {
     default: () => ({}),
     type: Object
@@ -155,7 +160,7 @@ const props = defineProps({
 
 const emit = defineEmits(["select-session"]);
 const infoSessionId = ref("");
-const suppressedSessionInfo = ref(new Set());
+const sessionTooltip = inject(VIBE64_SESSION_TOOLTIP_KEY);
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -163,10 +168,15 @@ const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 function setSessionInfo(sessionId, visible) {
+  if (visible && !props.active) return;
   if (visible || infoSessionId.value === sessionId) {
     infoSessionId.value = visible ? sessionId : "";
   }
 }
+
+watch(() => props.active, (active) => {
+  if (!active) infoSessionId.value = "";
+}, { flush: "sync" });
 
 function sessionInfoFacts(sessionItem) {
   const selection = sessionItem.assistantSelection || {};
@@ -198,7 +208,7 @@ function sessionInfoFacts(sessionItem) {
 }
 
 function selectSession(sessionId = "") {
-  suppressedSessionInfo.value.add(sessionId);
+  sessionTooltip.suppressedSessionId.value = sessionId;
   infoSessionId.value = "";
   emit("select-session", sessionId);
   props.toolbar.selectSession?.(sessionId);
