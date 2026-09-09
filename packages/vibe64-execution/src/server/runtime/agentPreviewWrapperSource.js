@@ -184,7 +184,7 @@ async function streamingControlRequest(requestPath, input = {}) {
           if (!finalPayload) {
             throw new Error("Vibe64 browser-test execution returned an incomplete response.");
           }
-          if (finalPayload.ok === false && !receivedOutput && finalPayload.error) {
+          if (finalPayload.ok === false && (!receivedOutput || finalPayload.code === "vibe64_preview_restore_failed") && finalPayload.error) {
             process.stderr.write(errorText(finalPayload.error) + "\\n");
           }
           resolve(payloadExitCode(finalPayload));
@@ -407,6 +407,9 @@ try {
       cwd: process.cwd(),
       managedNodePath,
       parentExecutionId: String(process.env.VIBE64_EXECUTION_ID || "").trim(),
+      targetId: String(process.env.VIBE64_PLAYWRIGHT_OUTPUT_TARGET || "").trim(),
+      testRunToken: String(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN || "").trim(),
+      identity: String(process.env.VIBE64_PLAYWRIGHT_TARGET_IDENTITY || "").trim(),
       playwrightEnv: Object.fromEntries([
         "PLAYWRIGHT_BASE_URL",
         "PLAYWRIGHT_BROWSERS_PATH",

@@ -224,7 +224,9 @@ function childEnv(runtime = {}, preview = {}, authentication = null) {
   return {
     ...process.env,
     PATH: [path.dirname(runtime.cliPath), process.env.PATH || ""].filter(Boolean).join(":"),
-    PLAYWRIGHT_BASE_URL: preview.baseUrl,
+    PLAYWRIGHT_BASE_URL: preview.baseUrl || "",
+    VIBE64_PLAYWRIGHT_OUTPUT_TARGET: "",
+    VIBE64_PLAYWRIGHT_TARGET_IDENTITY: "",
     PLAYWRIGHT_BROWSERS_PATH: runtime.browsersPath,
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
     VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
@@ -273,8 +275,18 @@ function runManaged(runner = "", args = [], options = {}) {
 
 function managedExecution(runtime = {}, applicationRoot = "", {
   identity = "default",
-  identityExplicit = false
+  identityExplicit = false,
+  targetId = ""
 } = {}) {
+  if (targetId) {
+    return {
+      env: {
+        ...childEnv(runtime),
+        VIBE64_PLAYWRIGHT_OUTPUT_TARGET: targetId,
+        VIBE64_PLAYWRIGHT_TARGET_IDENTITY: identityExplicit ? identity : ""
+      }
+    };
+  }
   const preview = managedPreview(applicationRoot, {
     identityExplicit
   });
@@ -297,8 +309,16 @@ function parseInvocation(values = []) {
   const args = [...values];
   let identity = "default";
   let identityExplicit = false;
+  let targetId = "";
   while (args.length > 0) {
     const option = String(args[0] || "");
+    if (option === "--target" || option.startsWith("--target=")) {
+      if (targetId) fail("Specify --target only once.", 64);
+      args.shift();
+      targetId = option === "--target" ? String(args.shift() || "") : option.slice("--target=".length);
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId)) fail("--target requires an exact declared Preview target id.", 64);
+      continue;
+    }
     if (option !== "--identity" && !option.startsWith("--identity=")) {
       break;
     }
@@ -318,7 +338,8 @@ function parseInvocation(values = []) {
     args,
     command: String(args.shift() || "").trim(),
     identity,
-    identityExplicit
+    identityExplicit,
+    targetId
   };
 }
 
@@ -344,22 +365,27 @@ const {
   args,
   command,
   identity,
-  identityExplicit
+  identityExplicit,
+  targetId
 } = invocation;
+if (!command && (identityExplicit || targetId)) {
+  fail("Specify test or npm-run after --target and --identity options.", 64);
+}
 if (!command || command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "Usage:",
-    "  vibe64-playwright [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-playwright [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "  vibe64-playwright status",
     "",
-    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest."
+    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
+    "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-preview targets --json."
   ].join("\\n") + "\\n");
   process.exit(0);
 }
 if (command === "status") {
-  if (identityExplicit) {
-    fail("--identity applies only to test and npm-run commands.", 64);
+  if (identityExplicit || targetId) {
+    fail("--identity and --target apply only to test and npm-run commands.", 64);
   }
   process.stdout.write(JSON.stringify({
     browsersPath: runtime.browsersPath,
@@ -369,33 +395,30 @@ if (command === "status") {
   }, null, 2) + "\\n");
   process.exit(0);
 }
+if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {
+  fail("--target uses its own managed Preview URL and identity. Remove PLAYWRIGHT_BASE_URL and VIBE64_PLAYWRIGHT_STORAGE_STATE.", 64);
+}
+let runner;
+let runnerArgs;
 if (command === "test") {
-  const execution = managedExecution(runtime, applicationRoot, {
-    identity,
-    identityExplicit
-  });
-  runManaged("node", [project.cliPath, "test", ...args], {
-    cleanupRoot: execution.cleanupRoot,
-    cwd: applicationRoot,
-    env: execution.env
-  });
+  runner = "node";
+  runnerArgs = [project.cliPath, "test", ...args];
 } else if (command === "npm-run") {
   const script = String(args.shift() || "").trim();
   if (!script) {
     fail("A package script name is required.", 64);
   }
-  const execution = managedExecution(runtime, applicationRoot, {
-    identity,
-    identityExplicit
-  });
-  runManaged("npm", ["run", script, ...args], {
-    cleanupRoot: execution.cleanupRoot,
-    cwd: applicationRoot,
-    env: execution.env
-  });
+  runner = "npm";
+  runnerArgs = ["run", script, ...args];
 } else {
   fail("Unsupported managed Playwright command: " + command + ". Browser installation is never permitted.", 64);
 }
+const execution = managedExecution(runtime, applicationRoot, { identity, identityExplicit, targetId });
+runManaged(runner, runnerArgs, {
+  cleanupRoot: execution.cleanupRoot,
+  cwd: applicationRoot,
+  env: execution.env
+});
 `;
 }
 

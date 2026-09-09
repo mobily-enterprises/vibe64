@@ -161,6 +161,12 @@ environment require the source lock. A ready preview replaces any stale error
 from an overlapping start request.
 People can inspect and explicitly restart the application while the assistant
 is working; automatic startup waits until that work is idle.
+Agents can run a browser suite against a project's declared test Preview target.
+Vibe64 starts that target, waits for readiness, uses its application identity,
+and restores the previous Preview when the test command finishes. The project
+owns disposable test data and suppression of external effects. Competing target
+changes are refused while the suite owns Preview, and cleanup failures remain
+visible. The same commands and instructions apply to every assistant.
 If another assistant operation briefly blocks automatic preview startup, Preview
 waits and retries without raising an error. Other startup failures appear once
 with a retry action.

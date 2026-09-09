@@ -8,6 +8,10 @@ without leaving the coding workspace.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
+- `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
+- `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/outputResults.js`
@@ -35,6 +39,34 @@ inspection diagnostic instead of claiming that the project has no output.
 Declared targets blocked by missing resources remain visible but disabled.
 Working directories resolve relative to the session source. An ordinary name
 such as `..build` is valid; a path resolving outside that source is rejected.
+
+Agents discover declared targets through `vibe64-preview targets --json`.
+`vibe64-playwright --target <id> test ...` and `npm-run <script>` temporarily
+select an available web target through the same output controller. The server
+holds the session's target selection while the existing managed runner obtains
+its URL and native application identity and executes the suite. It restores a
+previously running target and waits for readiness, or stops the test Preview
+when there was no running target. Failures and cancellation use the same cleanup;
+restoration failures preserve the test failure and make the command fail.
+Closing the session suppresses restoration. Host-service termination cannot
+execute an in-process cleanup; after a platform restart inspect Preview and
+explicitly select the normal target before resuming work.
+
+The scoped runner uses existing finite execution ownership, including the
+assistant parent and descendant cancellation. Other sessions remain independent.
+Target starts, restarts and individual stops are refused while the test owns
+Preview; status and reads remain available. An ordinary ensure can reuse that
+exact running test target but cannot restart its fixtures during the suite.
+`vibe64-preview ensure --target <id> --wait --json` is deliberate persistent
+selection and does not arrange automatic restoration.
+
+Target selection does not change managed environment values or certify data
+safety. Application-owned scripts must select the designated disposable data,
+prepare fixtures before readiness, suppress external effects, and verify the
+actual server's test identity before destructive tests. A test target's preview
+identity command must select the same data. Provider-neutral session guidance
+explains these requirements, the commands, and the project work needed when a
+test target is absent. See `docs/managed-browser-tests.md` for the portable setup.
 
 Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the

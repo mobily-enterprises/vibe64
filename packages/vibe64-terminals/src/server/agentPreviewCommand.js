@@ -49,7 +49,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "9";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "10";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
   "/agent-preview-command/browser-start",
@@ -169,7 +169,8 @@ function responseError(message = "", code = "vibe64_agent_preview_command_failed
 function usageText() {
   return [
     "Usage:",
-    "  vibe64-preview ensure [--wait] [--json] [--timeout-ms <ms>]",
+    "  vibe64-preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
+    "  vibe64-preview targets [--json]",
     "  vibe64-preview status [--json]",
     "  vibe64-preview inspect-url",
     "  vibe64-preview screenshot [--output <path>]",
@@ -182,8 +183,8 @@ function usageText() {
     "  vibe64-preview browser close",
     "  vibe64-preview logs [--lines <count>] [--json]",
     "  vibe64-preview restart [--wait] [--json] [--timeout-ms <ms>]",
-    "  vibe64-playwright [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-playwright [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "",
     "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
     "This is the canonical preview server for the configured primary application.",
@@ -209,11 +210,17 @@ function optionValue(args = [], name = "") {
 function parsePreviewCommandArgs(args = []) {
   const values = Array.isArray(args) ? args.map((arg) => String(arg || "").trim()).filter(Boolean) : [];
   const command = values.find((arg) => !arg.startsWith("-")) || "";
+  const targetOptions = values.filter((value) => value === "--target" || value.startsWith("--target="));
+  const targetId = optionValue(values, "--target");
   return {
     command,
+    error: targetOptions.length && (command !== "ensure" || targetOptions.length > 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId))
+      ? "Use --target once with an exact declared target id on vibe64-preview ensure."
+      : "",
     json: hasFlag(values, "--json"),
     lines: normalizeLogLines(optionValue(values, "--lines")),
     timeoutMs: normalizeTimeoutMs(optionValue(values, "--timeout-ms")),
+    targetId,
     wait: hasFlag(values, "--wait")
   };
 }
@@ -481,11 +488,13 @@ function outputTargetIdFromStatus(status = {}) {
 
 async function waitForPreviewReady(launchTarget, sessionId = "", {
   terminalSessionId = "",
+  signal = null,
   timeoutMs = DEFAULT_PREVIEW_WAIT_TIMEOUT_MS
 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let latestStatus = null;
   while (Date.now() <= deadline) {
+    signal?.throwIfAborted();
     latestStatus = await launchTarget.launchStatus(sessionId);
     if (latestStatus?.ok === false) {
       return {
@@ -493,7 +502,7 @@ async function waitForPreviewReady(launchTarget, sessionId = "", {
         status: latestStatus
       };
     }
-    if (previewReady(latestStatus)) {
+    if (previewReady(latestStatus) && (!terminalSessionId || latestStatus.activeTerminal?.id === terminalSessionId)) {
       return {
         ok: true,
         status: latestStatus
@@ -672,6 +681,7 @@ function createAgentPreviewCommandService({
     if (!sessionId) {
       return finish(responseError("Vibe64 preview command session id is required.", "vibe64_agent_preview_command_session_required"));
     }
+    if (parsed.error) return finish(responseError(parsed.error, "vibe64_preview_target_invalid"));
     if (!launchTarget || typeof launchTarget.launchStatus !== "function") {
       return finish(responseError("Vibe64 preview control is not available.", "vibe64_agent_preview_command_unavailable"));
     }
@@ -682,13 +692,34 @@ function createAgentPreviewCommandService({
         stdout: usageText()
       });
     }
-    if (parsed.command === "status") {
+    if (["status", "targets"].includes(parsed.command)) {
       const status = await launchTarget.launchStatus(sessionId);
       if (status?.ok === false) {
         return finish({
           ...status,
           exitCode: 1,
           stderr: `${status.error || "Vibe64 preview status failed."}\n`
+        });
+      }
+      if (parsed.command === "targets") {
+        const targets = (status.outputTargets || []).map((target) => ({
+          id: target.id,
+          label: target.label,
+          default: target.default === true,
+          available: target.available !== false,
+          presentation: target.presentation?.kind || "",
+          disabledReason: target.disabledReason || ""
+        }));
+        const output = parsed.json
+          ? JSON.stringify({ targets }, null, 2)
+          : targets.map((target) => {
+              const reason = target.disabledReason ? ` — ${target.disabledReason}` : "";
+              return `${target.id}: ${target.label} (${target.presentation})${reason}`;
+            }).join("\n");
+        return finish({
+          ok: true,
+          exitCode: 0,
+          stdout: `${output}\n`
         });
       }
       return finish({
@@ -758,7 +789,9 @@ function createAgentPreviewCommandService({
 
     let started;
     if (ensuring) {
-      started = await launchTarget.ensurePreview(sessionId);
+      started = parsed.targetId
+        ? await launchTarget.ensurePreview(sessionId, { outputTargetId: parsed.targetId })
+        : await launchTarget.ensurePreview(sessionId);
     } else {
       started = await launchTarget.restartPreview(sessionId);
     }
@@ -821,11 +854,28 @@ function createAgentPreviewCommandService({
       stopOwnedExecutions
     }),
     closeAllForSession,
-    playwrightRun: (sessionId, input, options = {}) => runRegisteredPlaywrightCommand(sessionId, input, {
-      browserWorkers,
-      onOutput: options.onOutput,
-      runCommand: runManagedCommand
-    }),
+    playwrightRun: (sessionId, input, options = {}) => {
+      const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
+      if (admission) return admission;
+      return runRegisteredPlaywrightCommand(sessionId, input, {
+        browserWorkers,
+        onOutput: options.onOutput,
+        runCommand: runManagedCommand,
+        withTarget: (targetId, operation) => launchTarget.withPreviewTarget(sessionId, targetId, operation, {
+          waitUntilReady: async (terminal, { restoring = false } = {}) => {
+            const waited = await waitForPreviewReady(launchTarget, sessionId, {
+              terminalSessionId: terminal.id,
+              signal: restoring ? null : options.signal
+            });
+            if (!waited.ok) {
+              throw new Error(waited.status?.error || (waited.timeout
+                ? "Timed out waiting for Preview readiness."
+                : "Preview failed to become ready."));
+            }
+          }
+        })
+      });
+    },
     registerBrowserWorker,
     releaseControlForSession,
     run
@@ -1161,7 +1211,8 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
 async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   browserWorkers = new Map(),
   onOutput = null,
-  runCommand = runVibe64Command
+  runCommand = runVibe64Command,
+  withTarget = null
 } = {}) {
   const registered = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
   if (registered.error) {
@@ -1223,13 +1274,19 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   }
 
   const requestedEnv = isRecord(input.playwrightEnv) ? input.playwrightEnv : {};
+  const targetId = normalizeText(input.targetId);
+  if (targetId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId)) {
+    return responseError("Choose an exact declared Preview target id.", "vibe64_preview_target_invalid");
+  }
   let baseUrl = "";
   try {
-    const parsed = new URL(normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL));
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      throw new Error("Unsupported preview protocol.");
+    if (!targetId) {
+      const parsed = new URL(normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL));
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Unsupported preview protocol.");
+      }
+      baseUrl = normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL);
     }
-    baseUrl = normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL);
   } catch {
     return responseError(
       "Browser testing requires a valid managed HTTP preview URL.",
@@ -1258,7 +1315,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       "vibe64_managed_playwright_storage_state_invalid"
     );
   }
-  return runCommand({
+  const request = {
     actor: "daemon",
     allowedRoots: [descriptor.worktreePath],
     args,
@@ -1294,7 +1351,27 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       sessionId: descriptor.sessionId
     },
     timeout: DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS
-  });
+  };
+  if (!targetId) return runCommand(request);
+  if (requestedEnv.PLAYWRIGHT_BASE_URL || storageStatePath) {
+    return responseError("--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.", "vibe64_preview_target_conflict");
+  }
+  return withTarget(targetId, (testRunToken) => runCommand({
+    ...request,
+    execution: { ...request.execution, kind: "control", label: "Browser test setup" },
+    command: descriptor.managedNodePath,
+    args: [
+      descriptor.playwrightWrapperPath,
+      ...(input.identity ? ["--identity", String(input.identity)] : []),
+      ...(runner === "node" ? ["test", ...args.slice(2)] : ["npm-run", ...args.slice(1)])
+    ],
+    env: {
+      ...request.env, ...descriptor.env,
+      VIBE64_PLAYWRIGHT_TARGET_RUN: testRunToken,
+      PLAYWRIGHT_BASE_URL: "",
+      VIBE64_PLAYWRIGHT_STORAGE_STATE: ""
+    }
+  }));
 }
 
 async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
@@ -1568,6 +1645,10 @@ async function ensureAgentPreviewCommandServerUnlocked({
           return;
         }
         if (request.url === "/agent-preview-command/playwright-run") {
+          const cancellation = new AbortController();
+          response.once("close", () => {
+            if (!response.writableEnded) cancellation.abort(new Error("Browser-test command was cancelled or disconnected."));
+          });
           response.writeHead(200, {
             "Content-Type": "application/x-ndjson; charset=utf-8"
           });
@@ -1579,6 +1660,7 @@ async function ensureAgentPreviewCommandServerUnlocked({
           let payload;
           try {
             payload = await commandService.playwrightRun(sessionId, input, {
+              signal: cancellation.signal,
               onOutput: (chunk) => writeFrame({
                 data: Buffer.from(String(chunk || ""), "utf8").toString("base64"),
                 type: "output"
@@ -1734,6 +1816,7 @@ async function prepareAgentPreviewCommand({
     },
     managedNodePath,
     managedNpmPath,
+    playwrightWrapperPath: agentPlaywrightHostPath(normalizedWrapperHostDir),
     metadataPath: browserMetadataHostPath(normalizedWrapperHostDir),
     project: isRecord(project) ? project : {},
     runtimeRoot: packRoot,

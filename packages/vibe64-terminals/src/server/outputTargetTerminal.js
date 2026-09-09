@@ -731,6 +731,15 @@ function findOutputTarget(targets = [], outputTargetId = "") {
   return targets.find((target) => target.id === normalizedOutputTargetId) || null;
 }
 
+function previewTargetError(target, outputTargetId) {
+  if (target && target.available !== false && target.presentation?.kind === "web") {
+    return null;
+  }
+  return Object.assign(new Error(`Preview target ${outputTargetId} must be an available declared web target.`), {
+    code: "vibe64_preview_target_unavailable"
+  });
+}
+
 function managedPreviewUnavailableMessage(outputTargets = []) {
   const reasons = [...new Set(outputTargets
     .map((target) => String(target?.disabledReason || "").trim())
@@ -745,13 +754,24 @@ function managedPreviewUnavailableMessage(outputTargets = []) {
 
 function managedPreviewLaunchPlan({
   outputTargets = [],
+  outputTargetId = "",
   previewStatus = {},
   restart = false,
   savedOutputTarget = null
 } = {}) {
   const activeTerminal = previewStatus.activeTerminal || null;
   const previewState = String(previewStatus.preview?.state || "").trim();
-  if (!restart && (
+  const requestedTarget = outputTargetId ? findOutputTarget(outputTargets, outputTargetId) : null;
+  const targetError = outputTargetId ? previewTargetError(requestedTarget, outputTargetId) : null;
+  if (targetError) {
+    return {
+      code: targetError.code,
+      error: targetError.message,
+      ready: false
+    };
+  }
+  const sameTarget = !outputTargetId || activeTerminal?.metadata?.outputTargetId === outputTargetId;
+  if (!restart && sameTarget && (
     previewState === "ready" ||
     (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))
   )) {
@@ -782,7 +802,7 @@ function managedPreviewLaunchPlan({
       ready: false
     };
   }
-  const outputTarget = (
+  const outputTarget = requestedTarget || (
     previousTarget && previousTarget.available !== false
       ? previousTarget
       : null
@@ -1997,6 +2017,7 @@ function createOutputTargetTerminalController({
   });
   const launchReadyWrites = new Map();
   const launchStartLocks = new Map();
+  const previewTestRuns = new Map();
   const outputResultWrites = new Map();
 
   async function ensureReadyLaunchPreviewProxy(context = {}, terminal = {}, {
@@ -2169,6 +2190,7 @@ function createOutputTargetTerminalController({
 
   const controller = {
     async close() {
+      for (const testRun of previewTestRuns.values()) testRun.closing = true;
       await Promise.allSettled([
         ...launchReadyWrites.values(),
         ...outputResultWrites.values()
@@ -2177,6 +2199,8 @@ function createOutputTargetTerminalController({
     },
 
     async closeAllForSession(sessionId) {
+      const testRun = previewTestRuns.get(sessionId);
+      if (testRun) testRun.closing = true;
       return withLaunchStartLock(sessionId, async () => {
         await launchPreviewProxies.close({
           sessionId
@@ -2196,6 +2220,9 @@ function createOutputTargetTerminalController({
     },
 
     async closeTerminal(sessionId, terminalSessionId) {
+      if (previewTestRuns.has(sessionId)) {
+        return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before closing Preview." };
+      }
       await launchPreviewProxies.close({
         sessionId,
         terminalSessionId
@@ -2290,10 +2317,101 @@ function createOutputTargetTerminalController({
       });
     },
 
-    ensurePreview(sessionId) {
+    ensurePreview(sessionId, input = {}) {
       return controller.startTerminal(sessionId, {
+        outputTargetId: input.outputTargetId,
         ensurePreview: true
       });
+    },
+
+    async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady }) {
+      const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
+      const previous = await withLaunchStartLock(sessionId, async () => {
+        if (previewTestRuns.has(sessionId)) {
+          throw Object.assign(new Error("Browser tests already own this session's Preview. Wait for them to finish."), {
+            code: "vibe64_preview_test_busy"
+          });
+        }
+        const context = await createLaunchContext(projectService, sessionId);
+        const unavailable = launchAdmissionFailure(sessionId, context.session);
+        if (unavailable) throw Object.assign(new Error(unavailable.error), unavailable);
+        const targets = await listOutputTargets(context);
+        const targetError = previewTargetError(findOutputTarget(targets, outputTargetId), outputTargetId);
+        if (targetError) {
+          throw targetError;
+        }
+        const status = await resolveLaunchPreviewStatus({
+          context, launchPreviewProxies, outputTargets: targets, markReady: markLaunchReady,
+          options: { env, projectService, runCommand }, publishSessionChanged, sessionId
+        });
+        previewTestRuns.set(sessionId, testRun);
+        return {
+          running: launchTerminalIsRunning(status.activeTerminal || {}),
+          targetId: status.activeTerminal?.metadata?.outputTargetId || "",
+          savedTarget: outputTargetFromMetadata(context.session.metadata),
+          store: context.runtime.store
+        };
+      });
+      async function ensureTargetReady(targetId, options) {
+        const started = await controller.startTerminal(sessionId, {
+          ensurePreview: true,
+          outputTargetId: targetId,
+          previewTestRun: testRun
+        });
+        if (started?.ok === false) {
+          throw Object.assign(new Error(started.error), started);
+        }
+        await waitUntilReady(started, options);
+      }
+
+      let result;
+      try {
+        await ensureTargetReady(outputTargetId);
+        if (testRun.closing) {
+          throw new Error("The session closed before browser tests could start.");
+        }
+        result = await operation(testRun.token);
+      } catch (error) {
+        result = { ok: false, exitCode: 1, error: error.message, code: error.code };
+      }
+      try {
+        if (testRun.closing) {
+          return result;
+        }
+        if (previous.running && previous.targetId) {
+          await ensureTargetReady(previous.targetId, { restoring: true });
+        } else {
+          await withLaunchStartLock(sessionId, async () => {
+            await launchPreviewProxies.close({ sessionId });
+            const closed = await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));
+            if (closed?.ok === false) throw new Error(closed.error);
+            await clearLaunchMetadata(previous.store, sessionId);
+            if (previous.savedTarget) {
+              await previous.store.mutateSession(sessionId, async () => {
+                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, previous.savedTarget.id);
+                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, previous.savedTarget.label);
+              });
+            }
+          });
+        }
+      } catch (error) {
+        result = {
+          ...result, ok: false, exitCode: result?.exitCode || 1,
+          code: "vibe64_preview_restore_failed",
+          error: [result?.error, `Could not restore Preview: ${error.message}`].filter(Boolean).join("\n")
+        };
+      } finally {
+        previewTestRuns.delete(sessionId);
+      }
+      return result;
+    },
+
+    previewTestRunAdmission(sessionId, token = "") {
+      const testRun = previewTestRuns.get(sessionId);
+      if ((!testRun && token) || (testRun && (testRun.closing || testRun.token !== token))) {
+        return { ok: false, code: "vibe64_preview_test_busy", error: "Another browser test owns this Preview, or this test run has ended. Wait for it to finish, then retry." };
+      }
+      return null;
     },
 
     restartPreview(sessionId) {
@@ -2338,6 +2456,13 @@ function createOutputTargetTerminalController({
 
     async startTerminal(sessionId, input = {}) {
       return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
+        const testRun = previewTestRuns.get(sessionId);
+        if (testRun && input.previewTestRun !== testRun) {
+          if (input.ensurePreview !== true || (input.outputTargetId && input.outputTargetId !== testRun.targetId)) {
+            return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Wait for them to finish before changing or restarting its target." };
+          }
+          input = { ...input, outputTargetId: testRun.targetId };
+        }
         const admission = beginTerminalNamespaceOperation(outputTargetTerminalNamespace(sessionId));
         if (admission.ok === false) {
           return launchAdmissionFailure(sessionId) || admission;
@@ -2380,12 +2505,16 @@ function createOutputTargetTerminalController({
             });
             const launchPlan = managedPreviewLaunchPlan({
               outputTargets,
+              outputTargetId,
               previewStatus,
               restart: restartPreview,
               savedOutputTarget
             });
             if (launchPlan.ready) {
               return launchPlan.terminal;
+            }
+            if (testRun && input.previewTestRun !== testRun) {
+              return { ok: false, code: "vibe64_preview_test_not_ready", error: "The browser-test Preview stopped. Tests cannot restart it while using its fixtures." };
             }
             if (launchPlan.error) {
               return {
@@ -2776,6 +2905,9 @@ function createOutputTargetTerminalController({
     },
 
     async stopTerminal(sessionId, terminalSessionId) {
+      if (previewTestRuns.has(sessionId)) {
+        return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before stopping Preview." };
+      }
       await launchPreviewProxies.close({
         sessionId,
         terminalSessionId
