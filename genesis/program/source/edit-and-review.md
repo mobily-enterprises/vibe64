@@ -5,6 +5,9 @@ from saved project work, and inspect one exact file change at a time.
 
 ## Sources
 
+- `src/components/studio/IntegrationsPanel.vue`
+- `src/composables/useVibe64Integrations.js`
+- `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
 - `packages/vibe64-source-editor/src/server/service.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
@@ -31,6 +34,187 @@ from saved project work, and inspect one exact file change at a time.
 - `src/pages/app/project/[slug]/dashboard/repository/index.vue`
 
 ## Public contract
+
+Integrations is a typed form over the selected session's `integrations.json`.
+JSKIT owns configuration validation and provider field components. Vibe64 uses
+the existing source path policy and agent-write lock, validates before writing,
+requires the previously read file hash for replacement, and creates a missing
+file exclusively. Creates and saves publish the ordinary source-file event.
+The catalogue supplies forms for Google Calendar, Gmail, Drive, Sheets, Docs,
+Slides, Search Console, Resend, Firecrawl, Airtable, Notion, Brevo, ElevenLabs,
+GitHub API, Apify, Calendly, HubSpot, Linear, Pipedrive, GitLab API, Tally,
+Contentful, Asana, Stripe, Replicate, Sentry, incident.io, Fireflies,
+HeyGen, Perplexity, Supabase, Google Analytics, BigQuery, Paddle, Mailgun,
+Fireworks AI, GatewayAPI, Polar, Storyblok, Oura, Twitch, Slack, Algolia, Twilio, Gong, PostHog,
+Chargebee, Ashby, Lexware, Sevdesk, Apollo.io, Attention, Clay, Telegram, KLIPY, Mapbox,
+Logo.dev, Google Maps Platform, WooCommerce, PrestaShop, ClickHouse, WordPress (self-hosted), WordPress.com,
+n8n, Sanity, Inngest, Amplitude, Atlassian, Canva, Figma, Miro, AWS S3, AWS Athena, Amazon Redshift, Xero, Semrush,
+Microsoft Outlook, OneDrive, Excel, Teams, OneNote, Word, PowerPoint and
+SharePoint, and preserves other provider records and application extensions.
+Microsoft forms identify delegated permissions and account types. The Directory
+(tenant) ID field accepts an applicable audience keyword or a directory GUID;
+the same setting selects runtime authorization and refresh endpoints. Changing
+it requires reconnecting existing grants. Word and PowerPoint browse matching
+files and folders and read file metadata, with no document editing or download
+in these initial adapters. Excel identifies its required file write permission. New integrations
+use the provider's first declared account mode; Oura exposes only individual
+user accounts and defaults to daily-summary permission, with optional personal
+profile and email permissions.
+Twitch retains 23 permission choices and defaults to email/profile and followed
+channel reads. Its application-specific Client ID, secret reference, callback
+reference and ownership mode use the same file. Other permissions can be saved
+without claiming that their operations are implemented. The runtime validates
+Twitch tokens before data reads; startup and hourly validation of maintained
+idle connections remains an explicit application responsibility.
+Slack selects a connected user or an installed bot independently of application
+ownership. Its form shows 52 user or 49 bot permissions from 57 distinct choices;
+changing identity preserves compatible selections and removes incompatible ones.
+The same parser rejects incompatible scopes in CLI configuration. Identity,
+registration references and remaining permissions survive saving and reloading.
+An individually owned bot connection still acts as a workspace bot, not a person.
+The initial runtime lists conversations and checks identity; other saved scopes
+do not imply implemented message operations or application login.
+AWS S3 and Athena expose the same 18-region selector and explicit access-key ID,
+secret-key and optional session-token references. S3 adds a bucket and local
+read/write operation limits; the form explains that AWS policies decide actual
+access. Athena adds a workgroup (default primary) and optional result location.
+Clearing optional references removes them from the file. Both use signed backend
+requests, without OAuth callbacks or a fallback to host credentials. S3 checks
+listing before connection and can construct temporary GET/PUT URLs; Athena
+checks workgroup metadata and exposes separate query lifecycle operations.
+Saving fields does not contact AWS, issue a URL or run SQL. Managed AWS account
+assignments, IAM provisioning and STS renewal remain host work.
+Redshift selects its shared settings schema from the deployment type. Serverless
+requires a workgroup name; provisioned requires a cluster identifier and accepts
+an optional database user. Switching type removes inactive fields while retaining
+the database, region and credential references; CLI mixed-mode fields are rejected
+by the same schema. Its region selector has 34 choices, subject to AWS availability.
+The shared-account runtime checks table metadata and offers explicit query start,
+status, results and cancellation operations. It checks statement targets before
+returning results or cancelling; application authorization still owns each query.
+Saving does not execute SQL. Per-user Identity Center federation remains unfinished.
+Xero exposes 24 permission choices with read-only defaults. New registrations
+automatically select HTTP Basic client authentication while retaining ordinary
+Client ID, secret-reference and callback-reference fields. The shared runtime
+discovers tenant connections, checks organisation access before accounting reads,
+and offers organisation metadata, contacts and invoice summary pages. The host
+still authorizes which organisation each caller may use; data access does not
+implement application login or managed registration assignment.
+Semrush identifies its V4 API-key reference and supports shared or assistant
+ownership. It exposes no OAuth fields for this key flow. The runtime reads
+project pages and individual project metadata with validated IDs and provider
+errors; captured OAuth permissions and managed account allocation remain unfinished.
+OAuth forms edit app registrations and
+permissions; API-key forms edit the credential reference. Reference fields reject
+pasted HTTP/HTTPS URLs while preserving named environment and custom bindings.
+Paddle exposes its
+sandbox/live environment, Mailgun its US/EU API region, GatewayAPI its Global/EU
+platform, Polar its sandbox/production environment, and Storyblok its five
+space regions. Algolia adds a validated application ID and a separate optional
+frontend key reference; clearing that optional field removes it from the saved
+file. Its primary API-key reference remains for backend access. Twilio provides
+US1, IE1 and AU1 region choices, validates separate Account and API Key SIDs,
+and labels its primary credential as an API key secret reference. Gong provides
+an access key, a secret reference and an optional company API origin. It rejects
+unrelated hosts and restores the default Gong origin when the field is cleared.
+PostHog records a numeric project ID, EU/US region and public project-token
+reference. Its credential hint explains that the token is publishable and cannot
+read private analytics. Runtime verification uses the token; it cannot confirm
+that the separately saved project ID matches that token.
+Chargebee validates a site name without a URL or domain suffix and pairs it with
+an API-key reference; its guidance distinguishes test/live sites and the
+transactional read permission required by the customer-list operation.
+Ashby and Lexware edit API-key references with provider-specific setup guidance;
+Lexware's Public API key remains a private credential. Sevdesk labels the same
+reference field as an API token reference and links to its token-reveal steps.
+Telegram labels its credential as a bot token reference and explains bot ownership;
+KLIPY edits its own app-key reference and links to Partner Panel setup. Both use
+the shared file configuration. Runtime verification reads bot information or
+trending clips, with credentials attached only by the backend runtime.
+Mapbox edits a backend token reference and a separate optional public browser
+token reference. Removing the optional value removes it from source. Backend
+verification does not verify that browser token. Google Maps Platform similarly
+edits separate server and optional browser key references. Its guidance explains
+that runtime verification needs an explicit address and can incur geocoding usage.
+Logo.dev edits a publishable
+key reference; its browser library constructs public image URLs, with delivery
+reported by image load/error events. It does not create a server connection grant.
+WooCommerce and self-hosted WordPress preserve HTTPS installation paths and
+validate the site's URL alongside its consumer key or username. The matching
+secret or Application Password remains an environment reference. WordPress
+runtime verification reads the authenticated user, rather than public posts;
+WooCommerce product verification does not establish order permission.
+PrestaShop similarly preserves the HTTPS store's installation path and saves a
+Webservice API key reference. Its setup instructions identify GET permissions
+and multistore key association. The runtime uses Basic authentication with an
+empty password, verifies product reads, and returns explicit product/order
+pages without modifying the store. No OAuth registration is needed.
+ClickHouse saves the HTTPS database endpoint, optional username and password
+reference. Its Authentication selector distinguishes Basic credentials from
+No credentials. Switching to No credentials removes the username and password
+reference; switching back starts with empty fields. Empty password references
+are omitted from the file. Both modes require runtime verification, and changing
+mode or destination invalidates an existing connection. The runtime performs
+fixed SELECT queries with typed parameters for table, column and bounded row
+reads. It does not expose arbitrary SQL or establish an application's login.
+WordPress.com has its own OAuth registration and permission form. User, site
+and post permissions default on; the remaining five permission families default
+off. The runtime reads the authenticated profile to check the token's client
+and actual permissions. This is a provider-data connection, not app login.
+n8n and Sanity use assistant-only MCP token configurations. n8n validates its
+HTTPS server endpoint, including any installation path; Sanity uses a fixed
+hosted endpoint. Both save token references and expose setup instructions.
+Saving does not attach tools to an assistant or authorize a tool call. The
+shared runtime passes tool names and arguments to the assistant host's policy.
+Amplitude instead uses an assistant OAuth registration, with US/EU region
+selection and separate read, write and refresh permissions. Its form saves the
+client ID, secret/callback references and chosen scopes. The JSKIT setup helper
+can register a confidential client explicitly; saving this form does not invoke
+that helper or begin consent. The runtime binds consent and token requests to
+the selected regional resource and verifies tool discovery before saving a grant.
+Atlassian uses an assistant OAuth registration for Rovo MCP v2 and exposes 32
+product/profile permission choices. Jira and Confluence read/search permissions
+start selected; writes, deletes and administration start unselected. The form
+preserves independently chosen permissions and credential references across
+reload. The runtime uses its v2 resource and authorization server, verifies tool
+discovery and delegates exact tool/site authorization to the assistant host.
+It does not reuse old v1 grants or provide application login.
+Canva uses a hosted client metadata URL and a callback reference. New Canva
+registrations explicitly select authentication without a client secret; the
+form hides that field and validates the metadata URL. It exposes 16 permissions
+and starts with profile, design and folder reads. The shared JSKIT helper builds
+the public client metadata document, which the host must serve at the configured
+URL; neither saving nor building metadata publishes it or obtains Canva's
+callback approval. Changes to client authentication invalidate existing grants
+and pending consent. Runtime grants remain encrypted text files.
+Figma and Miro use assistant OAuth registrations with client IDs and secret/callback
+references. Figma's single MCP permission can expose writes; its setup guidance
+requires approval for new clients, and the host authorizes exact tools and arguments.
+Miro starts with board reads and separately offers writes, identity and email scopes.
+Its consent flow selects a team; reconnecting selects a different team. These
+definitions use the shared forms and runtime. Saving does not register clients,
+connect accounts, configure app login or attach tools to a chat.
+Inngest edits separate Signing Key and Event Key references and an optional
+ASCII branch name. Clearing the branch removes it from source. Metadata
+verification uses only the Signing Key; it does not validate the Event Key or
+run a workflow. The runtime sends an event only after application policy
+authorizes its name and payload. A delivery receipt does not prove completion.
+Apollo.io guidance requests saved-account search permission and explains its
+workspace-wide key limits. Attention guidance uses organization administrator
+key creation and replacement steps.
+Clay identifies its Public API key separately from its legacy workspace key.
+Verification reads user/workspace identity. Query creation and each next-page
+request are explicit authorized operations because Clay advances a stateful
+search iterator. Its form stores only the key reference; no OAuth callback
+or registration is required for this flow.
+Known provider settings
+use shared schema validation and defaults on save; custom provider records remain
+editable without installing their runtime in the editor. Each provider has
+setup instructions. Secret values remain outside the source;
+the form records their references. A saved configuration is distinct from an
+account grant verified by the application runtime.
+An outside change reloads a clean form or preserves and flags a dirty draft.
+Leaving the page or changing sessions warns before discarding unsaved edits.
 
 The source browser lists, searches, opens, edits, and saves allowed project
 files inside the selected session source. It rejects paths outside that source

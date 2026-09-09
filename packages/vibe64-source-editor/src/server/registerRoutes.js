@@ -94,6 +94,26 @@ function registerRoutes(
     tags: ["studio", "vibe64-source-editor"]
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/integrations", {
+    summary: "Read the session's portable integration configuration."
+  }, (request) => sourceEditor.readIntegrations({ sessionId: request.params.sessionId }));
+
+  routes.serviceRoute("PUT", "/sessions/:sessionId/integrations", {
+    bodyLimit: 2 * 1024 * 1024,
+    summary: "Validate and save the session's portable integration configuration."
+  }, async (request) => {
+    const body = routes.requestBody(request);
+    const result = await sourceEditor.saveIntegrations({
+      sessionId: request.params.sessionId,
+      baseHash: body.baseHash,
+      configuration: body.configuration,
+      originId: body.originId,
+      projectSlug: request.params.slug
+    });
+    await publishFileChanged(result, { operation: body.baseHash === null ? "created" : "saved" });
+    return result;
+  });
+
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/tree", {
     summary: "Read the editable source tree for a Vibe64 session."
   }, (request) => {

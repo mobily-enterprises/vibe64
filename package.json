@@ -90,6 +90,9 @@
     "jskit:check": "jskit check"
   },
   "dependencies": {
+    "@jskit-ai/connectors-core": "0.1.0",
+    "@jskit-ai/connectors-web": "0.1.0",
+    "@jskit-ai/connector-google-calendar": "0.1.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-cpp": "^6.0.3",
     "@codemirror/lang-html": "^6.4.11",
@@ -148,7 +151,8 @@
     "vue": "^3.5.13",
     "vue-router": "5.0.7",
     "vuetify": "^4.0.0",
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "@jskit-ai/connectors-catalog": "0.1.0"
   },
   "devDependencies": {
     "@jskit-ai/agent-docs": "0.1.155",

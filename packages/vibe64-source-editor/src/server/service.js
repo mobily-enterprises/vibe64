@@ -3,6 +3,9 @@ import { constants } from "node:fs";
 import { copyFile, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseIntegrationConfiguration, validateIntegrationConfiguration } from "@jskit-ai/connectors-core/shared/configuration";
+import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
+import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
 
 import {
   isMissingPathError,
@@ -785,6 +788,38 @@ function createService({
   }
 
   return Object.freeze({
+    async readIntegrations(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        let file;
+        try {
+          file = await readSourceEditorFile(context, "integrations.json");
+        } catch (error) {
+          if (!isMissingPathError(error)) throw error;
+          return { ok: true, baseHash: null, configuration: { schemaVersion: 1, integrations: {}, registrations: {} } };
+        }
+        return { ok: true, baseHash: file.hash, configuration: parseIntegrationConfiguration(file.text) };
+      });
+    },
+
+    async saveIntegrations(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const configuration = validateIntegrationConfiguration(input.configuration, {
+          providers: [googleCalendarDefinition, ...connectorDefinitions], allowUnknownProviders: true
+        });
+        if (input.baseHash !== null && !/^[a-f0-9]{64}$/u.test(String(input.baseHash || ""))) {
+          throw sourceEditorError("Reload the integration configuration before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
+        }
+        return runSourceEditorWriteExclusive(input, async (context) => {
+          const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
+          const file = input.baseHash === null
+            ? await createSourceEditorFile(context, change)
+            : await saveSourceEditorFile(context, change);
+          return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file) };
+        });
+      });
+    },
+
     async readTree(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
@@ -1205,7 +1240,8 @@ function sourceEditorErrorResponse(error) {
       fallbackCode: "vibe64_source_editor_failed",
       fallbackMessage: "Source editor operation failed."
     }),
-    statusCode: error?.statusCode || 400
+    statusCode: error?.statusCode || 400,
+    ...(error?.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
   };
 }
 
@@ -1997,6 +2033,12 @@ async function ensureSourceEditorParentDirectory(context = {}, parentRelativePat
 }
 
 async function createSourceEditorFile(context = {}, input = {}) {
+  const text = String(input.text ?? "");
+  const buffer = Buffer.from(text, "utf8");
+  if (buffer.byteLength > context.policy.maxFileBytes) {
+    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large", {}, 413);
+  }
+  assertTextBuffer(buffer, input.path);
   const relativePath = normalizeNewSourceEditorFilePath(input.path);
   if (sourceEditorPathExcluded(context.policy, relativePath)) {
     throw sourceEditorError("The selected file is excluded from source editing.", "vibe64_source_editor_file_excluded", {
@@ -2009,7 +2051,7 @@ async function createSourceEditorFile(context = {}, input = {}) {
     ? ""
     : path.posix.dirname(relativePath));
   try {
-    await writeFile(absolutePath, "", {
+    await writeFile(absolutePath, text, {
       encoding: "utf8",
       flag: "wx"
     });

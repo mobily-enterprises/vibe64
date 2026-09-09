@@ -73,6 +73,13 @@ Update marks preparation as required before replacing session source, even
 when its setup commands stay the same. People can also explicitly rerun a
 previously successful preparation to repair missing installed dependencies.
 
+People can configure application integrations in the session's Integrations
+page. The form reads and writes the same portable configuration a person or AI
+can edit from the command line. Secrets stay in Env. Conflicting source edits
+preserve the form draft and require a reload before saving. Saving configuration
+does not claim that an account has connected; the application verifies account
+access through its own connection flow.
+
 People can choose the name Vibe64 uses in welcomes and collaboration cues.
 Project owners can set a shared tone, answer length, assumed experience,
 explanation style, and project-specific communication requirements in the
