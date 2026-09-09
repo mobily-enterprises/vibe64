@@ -699,6 +699,60 @@ test.describe("direct chat", () => {
     });
   }
 
+  for (const width of [390, 1600]) {
+    test(`renders numbered question Markdown at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ height: 900, width });
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      const assistantPrompt = [
+        "Recorded all three, including **no admin approval for roster conflicts**.",
+        "[1] After an online booking is confirmed, should it **remain yellow** to show that it originated online?",
+        "Possible answers:",
+        "- **Yes**, keep `yellow` (Recommended)",
+        "- No, use the [billing guide](docs/billing.md)",
+        "[2] Does the owner's **“Invoiced” switch** mean the existing monthly-billing preference?",
+        "[3] Should the **10% VIP discount** use `vip_discount`, keeping <b>literal HTML</b> and [unsafe](javascript:alert) as text?"
+      ].join("\n");
+      await mockDirectChat(page, {
+        includeWorktreePaths: true,
+        conversationLog: [{
+          assistant: { at: "2026-08-14T01:03:00.000Z", role: "assistant", text: assistantPrompt },
+          turnId: "turn-markdown-questions"
+        }, {
+          user: { at: "2026-08-14T01:04:00.000Z", role: "user", text: "[1] Yes\n[2] Please clarify\n[3] Yes" },
+          turnId: "turn-markdown-answers"
+        }]
+      });
+      const openedPaths: string[] = [];
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/source-editor/file`, async (route) => {
+        const path = new URL(route.request().url()).searchParams.get("path") || "";
+        openedPaths.push(path);
+        await fulfillJson(route, { ok: true, file: { path, text: "# Billing guide", hash: "billing-guide" } });
+      });
+
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      const questions = page.locator(".studio-conversation-log__questions");
+      await expect(questions).toBeVisible();
+      await expect(questions.locator(".studio-conversation-log__question-number")).toHaveText(["1", "2", "3"]);
+      await expect(questions.locator(".studio-conversation-log__question-text strong")).toHaveText([
+        "remain yellow", "“Invoiced” switch", "10% VIP discount"
+      ]);
+      await expect(questions.locator("code")).toHaveText(["yellow", "vip_discount"]);
+      await expect(questions.locator(".studio-conversation-log__question-choices strong")).toHaveText("Yes");
+      await expect(questions).toContainText("Recommended");
+      await expect(questions).not.toContainText("**");
+      await expect(questions).toContainText("<b>literal HTML</b>");
+      await expect(questions.locator("b, a[href^='javascript:']")).toHaveCount(0);
+      expect(await questions.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: testInfo.outputPath("numbered-questions.png") });
+
+      await questions.getByRole("link", { name: "billing guide" }).click();
+      await expect.poll(() => openedPaths).toContain("docs/billing.md");
+      await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/files`));
+      expect(errors).toEqual([]);
+    });
+  }
+
   test("submits assistant numbered questions through the same chat endpoint", async ({ page }) => {
     const messages: Record<string, unknown>[] = [];
     const assistantPrompt = [

@@ -233,13 +233,21 @@
                 >
                   <span class="studio-conversation-log__question-number">{{ question.number }}</span>
                   <div class="studio-conversation-log__question-content">
-                    <span class="studio-conversation-log__question-text">{{ question.label }}</span>
+                    <span class="studio-conversation-log__question-text">
+                      <LongTextInlineParts
+                        :text="question.label"
+                        @link-click="handleLongTextLinkClick"
+                      />
+                    </span>
                     <ul
                       v-if="question.choices.length"
                       class="studio-conversation-log__question-choices"
                     >
                       <li v-for="choice in question.choices" :key="choice.value">
-                        {{ choice.label }}<span v-if="choice.recommended"> · Recommended</span>
+                        <LongTextInlineParts
+                          :text="choice.label"
+                          @link-click="handleLongTextLinkClick"
+                        /><span v-if="choice.recommended"> · Recommended</span>
                       </li>
                     </ul>
                   </div>
@@ -279,6 +287,7 @@ import {
   mdiRobotOutline
 } from "@mdi/js";
 import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
+import LongTextInlineParts from "@/components/studio/LongTextInlineParts.vue";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import Vibe64ConversationProgress from "@/components/studio/vibe64-session/Vibe64ConversationProgress.vue";
 import Vibe64ConversationAttachments from "@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue";

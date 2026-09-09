@@ -82,6 +82,9 @@ conversation in order, restores it after reconnection, and lets the person
 interrupt the current turn without deleting the session. Agent questions may
 be answered as free text or through suggested choices while the submitted
 reply remains ordinary conversation text.
+Numbered question labels and their suggested choices use the shared inline
+Markdown renderer, preserving bold text, code, and links without interpreting
+raw HTML. Their file links use the same source-editor navigation as prose.
 The shared Markdown renderer sizes table columns from their content, wraps
 prose at word boundaries, and preserves declared column alignment. Table cells
 override the inline renderer's arbitrary word breaking; long identifiers remain
