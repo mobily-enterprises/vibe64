@@ -2871,7 +2871,7 @@ test("new sessions publish running workspace preparation and its eventual result
   assert.equal(publications[1][1].session.workspaceSetup.status, "succeeded");
 });
 
-test("workspace preparation starts newly configured recipes and retries failed attempts", async () => {
+test("workspace preparation starts required or newly configured recipes and retries failed attempts", async () => {
   let admissionBlocked = false;
   let status = "succeeded";
   let startCount = 0;
@@ -2934,6 +2934,13 @@ test("workspace preparation starts newly configured recipes and retries failed a
   assert.equal(startCount, 2);
   assert.deepEqual(retryValues, [true, true]);
 
+  status = "required";
+  const required = await service.retryWorkspaceSetup("session-1");
+  assert.equal(required.ok, true);
+  assert.equal(required.workspaceSetup.status, "running");
+  assert.equal(startCount, 3);
+  assert.deepEqual(retryValues, [true, true, true]);
+
   status = "failed";
   admissionBlocked = true;
   const blocked = await service.retryWorkspaceSetup("session-1");
@@ -2941,5 +2948,5 @@ test("workspace preparation starts newly configured recipes and retries failed a
   assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
   assert.equal(blocked.retryable, true);
   assert.equal(status, "failed");
-  assert.equal(startCount, 3);
+  assert.equal(startCount, 4);
 });

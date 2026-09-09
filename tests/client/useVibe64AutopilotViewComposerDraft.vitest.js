@@ -817,6 +817,26 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerHint.value).toBe("");
   });
 
+  it.each(["assistant", "update", "pending"])("does not run required setup over an active %s operation", async (operation) => {
+    const retryWorkspaceSetup = vi.fn(async () => true);
+    const view = await createView({
+      retryWorkspaceSetup,
+      session: {
+        ...viewProps().session,
+        agentSession: { turn: { active: operation === "assistant" } },
+        workspaceSetup: { status: "required" }
+      },
+      workState: operation === "update" ? {
+        activeOperation: { kind: "update", operationId: "update-1" },
+        updateOperation: { operationId: "update-1", status: "running" }
+      } : {}
+    });
+    if (operation === "pending") view.saveWorkSending.value = true;
+    expect(view.workspaceSetupRetryDisabled.value).toBe(true);
+    await expect(view.retryWorkspaceSetup()).resolves.toBe(false);
+    expect(retryWorkspaceSetup).not.toHaveBeenCalled();
+  });
+
   it("retains bounded workspace preparation output without showing a completed collapsed action", async () => {
     const view = await createView({
       session: {
@@ -987,6 +1007,69 @@ describe("useVibe64AutopilotView direct chat", () => {
     }, report);
     expect(updateSessionWork).not.toHaveBeenCalled();
     expect(report).not.toHaveBeenCalled();
+  });
+
+  it("checks a prepared continue result on explicit request without starting another repair", async () => {
+    const pending = deferredResult();
+    const updateSessionWork = vi.fn(() => pending.promise);
+    const view = await createView({ updateSessionWork });
+    const report = vi.fn();
+    const task = {
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "continue"
+    };
+    const checking = view.handleTemporaryAiTaskFinished(task, report, { force: true });
+    await expect(view.handleTemporaryAiTaskFinished(task, report, { force: true })).resolves.toBe(false);
+    expect(updateSessionWork).toHaveBeenCalledTimes(1);
+    pending.resolve({ ok: true, status: "updated" });
+    await checking;
+    expect(report).toHaveBeenLastCalledWith(task.id, {
+      status: "succeeded", message: "Session updated. Your changes were preserved. Nothing was published."
+    });
+  });
+
+  it("allows an explicit Update check even when the current session has no work to save", async () => {
+    const updateSessionWork = vi.fn().mockResolvedValue({ ok: true, status: "already_current" });
+    const view = await createView({ updateSessionWork, workState: { unsaved: false, updateAvailable: false } });
+    expect(view.saveWorkDisabled.value).toBe(true);
+    expect(view.updateWorkDisabled.value).toBe(false);
+    const report = vi.fn();
+    await view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "continue"
+    }, report, { force: true });
+    expect(report).toHaveBeenLastCalledWith("repair", expect.objectContaining({ status: "succeeded" }));
+  });
+
+  it.each([{ busy: true }, { status: "inProgress" }, { sessionId: "other" }])(
+    "does not force an Update over an active or different session repair: %j", async (override) => {
+      const updateSessionWork = vi.fn();
+      const view = await createView({ updateSessionWork });
+      await expect(view.handleTemporaryAiTaskFinished({
+        id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+        status: "completed", outcomeKind: "continue", ...override
+      }, vi.fn(), { force: true })).resolves.toBe(false);
+      expect(updateSessionWork).not.toHaveBeenCalled();
+    }
+  );
+
+  it("hands remaining conflicts back with their identity and an explicit same-chat completion contract", async () => {
+    const failure = Object.assign(new Error("Remaining conflict: messages.vue"), {
+      code: "vibe64_session_update_conflict",
+      details: { conflictPaths: ["messages.vue"], conflictRecovery: { canonicalCommit: "canonical-2" } }
+    });
+    const view = await createView({ updateSessionWork: vi.fn().mockRejectedValue(failure) });
+    const report = vi.fn();
+    await view.handleTemporaryAiTaskFinished({
+      id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
+      status: "completed", outcomeKind: "complete"
+    }, report);
+    const outcome = report.mock.calls.at(-1)[1];
+    expect(outcome.status).toBe("failed");
+    expect(JSON.parse(outcome.retryKey)).toEqual([failure.code, "canonical-2", ["messages.vue"]]);
+    expect(outcome.retryMessage).toContain(failure.message);
+    expect(outcome.retryMessage).toContain("Return kind=complete");
+    expect(outcome.retryMessage).toContain("this same conversation");
   });
 
   it.each(["success", "failure"])("does not report an old Update %s into another session", async (outcome) => {

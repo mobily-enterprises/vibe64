@@ -497,6 +497,48 @@ describe("Temporary AI recovery workspace accessibility", () => {
     app.unmount();
   });
 
+  it("keeps Check Update outside the transcript, disables it during work, and shows verified success", async () => {
+    const temporary = temporaryAiTestState(deferred());
+    temporary.tasks.value = [{
+      agentSettings: {}, attachments: [], busy: false, draft: "", error: "", id: "repair",
+      messages: [], policy: "workspace_write", recoveryNotice: "Repair this Update.",
+      recoveryOperation: "update", outcomeKind: "continue", status: "completed", title: "Resolve Update"
+    }];
+    temporary.activeTaskId.value = "repair";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const checkUpdate = vi.fn();
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, {
+      onCheckUpdate: checkUpdate, sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
+    });
+    try {
+      await flushWorkspaceReveal();
+      const button = findNode(container, (node) => node.props?.["data-temporary-ai-check-update"] === "");
+      const messages = findNode(container, (node) => node.props?.class === "vibe64-temporary-ai__messages");
+      expect(button).toBeTruthy();
+      expect(findNode(messages, (node) => node === button)).toBeNull();
+      expect(button.props.disabled).toBeFalsy();
+      expect(nodeText(container)).toContain("Update not yet verified");
+      button.props.onClick();
+      expect(checkUpdate).toHaveBeenCalledWith(temporary.tasks.value[0]);
+      temporary.tasks.value[0].busy = true;
+      await nextTick();
+      expect(button.props.disabled).toBe(true);
+      temporary.tasks.value[0].busy = false;
+      temporary.tasks.value[0].recoveryOutcome = "checking";
+      await nextTick();
+      expect(button.props.disabled).toBe(true);
+      expect(nodeText(container)).toContain("Checking Update…");
+      temporary.tasks.value[0].recoveryOutcome = "succeeded";
+      await nextTick();
+      expect(nodeText(container)).toContain("Session updated");
+      expect(findNode(container, (node) => node.props?.["data-temporary-ai-check-update"] === "")).toBeNull();
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("scrolls an ordinary newly active task into view without stealing focus", async () => {
     const startResult = deferred();
     const temporary = temporaryAiTestState(startResult);
@@ -593,7 +635,8 @@ describe("Temporary AI recovery workspace accessibility", () => {
       path.resolve("src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"),
       "utf8"
     );
-    expect(workspaceComponentSource).toContain("position: sticky");
+    expect(workspaceComponentSource).not.toContain("position: sticky");
+    expect(mainChatButton.parent).not.toBe(currentTaskButton.parent.parent);
     app.unmount();
   });
 });

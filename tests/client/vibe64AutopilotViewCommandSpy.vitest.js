@@ -106,7 +106,11 @@ describe("Vibe64 direct session view", () => {
     expect(composable).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
     expect(composable).toContain("leave both byte-for-byte unchanged");
     expect(composable).toContain("Resolve only by editing the conflicting working-tree files");
-    expect(composable).toContain("keep the latest saved version's overlapping lines byte-for-byte");
+    expect(composable).toContain("Preserve the intended behavior of both the latest saved work and this session");
+    expect(component).toContain('@click="requestSessionSaveWork"');
+    expect(component).toContain('@check-update="checkTemporaryAiUpdate"');
+    expect(component).toContain("temporaryAiWorkspace.value?.updateRepairTask");
+    expect(component).toContain("{ force: true }");
     expect(component).toContain(':active="saveWorkOperationActive || saveWorkSending"');
     expect(component).toContain(':dismissed="saveWorkActivityDismissed"');
     expect(component).toContain(':operation-key="saveWorkActivityKey"');
@@ -145,6 +149,11 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain("<Vibe64TemporaryAiFixAction");
     expect(temporaryAiFixAction).toContain("Fix it with AI");
     expect(component).toContain("<Vibe64TemporaryAiWorkspace");
+    expect(temporaryAi).toContain("grid-row: 3 / -1");
+    expect(temporaryAi).not.toContain("position: sticky");
+    expect(temporaryAi.indexOf("data-temporary-ai-check-update")).toBeLessThan(
+      temporaryAi.indexOf('class="vibe64-temporary-ai__messages"')
+    );
     expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
     // Switching sessions retains the temporary workspace; Main chat closes it.
     expect(component).not.toContain("activateRealSession");

@@ -1132,10 +1132,6 @@ function normalizedConflictRecovery(value = {}) {
     : recovery;
 }
 
-function samePaths(left = [], right = []) {
-  return left.length === right.length && left.every((entry, index) => entry === right[index]);
-}
-
 function conflictMessage(conflictPaths = [], reason = "") {
   const count = conflictPaths.length;
   const files = conflictPaths.slice(0, 3).join(", ");
@@ -1164,6 +1160,7 @@ async function resolvedConflictTree(runCommand, context, {
   checkpointTree,
   commandOptions,
   currentRecovery,
+  derivedArtifactPaths = [],
   previousRecovery,
   project
 }) {
@@ -1171,28 +1168,30 @@ async function resolvedConflictTree(runCommand, context, {
   if (!previous) {
     throw conflictRecoveryError(currentRecovery);
   }
+  const originalConflictPaths = new Set(previous.conflictPaths);
   const stable = [
     "baseCommit",
     "canonicalCommit",
     "oldHead",
     "oldIndexTree"
   ].every((key) => previous[key] === currentRecovery[key]) &&
-    samePaths(previous.conflictPaths, currentRecovery.conflictPaths);
+    currentRecovery.conflictPaths.every((entry) => originalConflictPaths.has(entry));
   if (!stable) {
     throw conflictRecoveryError(currentRecovery);
   }
-  const changedAfterFailure = await changedPathsBetween(
+  const derivedPaths = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
+  const changedAfterFailure = (await changedPathsBetween(
     runCommand,
     context,
     previous.checkpointTree,
     checkpointTree,
     { commandOptions, project }
-  );
-  if (!changedAfterFailure.length) {
+  )).filter((entry) => !derivedPaths.has(entry));
+  const changedPaths = new Set(changedAfterFailure);
+  if (!currentRecovery.conflictPaths.every((entry) => changedPaths.has(entry))) {
     throw conflictRecoveryError(currentRecovery, "unchanged");
   }
-  const conflictPathSet = new Set(currentRecovery.conflictPaths);
-  if (changedAfterFailure.some((entry) => !conflictPathSet.has(entry))) {
+  if (changedAfterFailure.some((entry) => !originalConflictPaths.has(entry))) {
     throw conflictRecoveryError(currentRecovery, "outside");
   }
   return writeGitWorktreeTree({
@@ -1952,6 +1951,7 @@ async function updateSessionWork({
           checkpointTree: checkpoint.tree,
           commandOptions,
           currentRecovery,
+          derivedArtifactPaths,
           previousRecovery: conflictRecovery,
           project
       })

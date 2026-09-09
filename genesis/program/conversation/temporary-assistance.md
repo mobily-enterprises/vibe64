@@ -58,6 +58,9 @@ before their task can be closed. Stop does not reset source files, HEAD, or the
 index, and a late response cannot turn a cancelled repair into an automatic
 Update. Partial application edits remain subject to review; cancellation does
 not claim the application is repaired.
+Stop errors appear above the composer and Close errors inside the confirmation,
+so a notification cannot cover the retry control. Visible repair results do not
+also raise a duplicate toast; background completion still notifies the person.
 Task attachments use the shared upload queue, text references and preview/download
 dialog. They retain the temporary upload lease and exact-file cleanup when the
 task closes; they are not copied into the durable main conversation's artifacts.
@@ -72,7 +75,9 @@ scrollable transcript. The fixed status above the composer uses normal chat's
 shared plain status component and says “AI is working…”. The transcript has no
 second working indicator and the status never repeats reasoning paragraphs.
 Long progress cannot push Stop or the composer out of view. The temporary
-workspace leaves the project session tabs available above it.
+workspace leaves the project session tabs and shared Save/Update activity
+available above it. Main chat stays outside the horizontally scrolling temporary
+tabs, so selecting or scrolling a task cannot cover the Main chat control.
 
 Every product-owned repair entry uses the shared Fix it with AI control. It
 opens, selects, and focuses a separate Temporary AI task immediately. That task
@@ -97,10 +102,25 @@ the user with a false failure conclusion.
 An Update repair that explicitly reports completion triggers Vibe64's existing
 Update operation. The repair chat shows “Checking Update…” while that operation
 runs and blocks new AI edits until it settles. Only a successful Update shows
-“Repair verified”; a failed check shows the latest error and permits another
-repair turn. Questions, interrupted or failed turns, stale session completions,
-and duplicate completion notifications do not trigger Update. Save repairs do
-not automatically publish work.
+“Session updated”. Repair prompts define completion as file edits ready for
+Vibe64 verification, not an AI-owned Git operation, and reserve continue results
+for actual user decisions. A failed conflict check supplies its latest diagnostic
+to the same conversation. It permits at most three automatic follow-ups and
+pauses when the same canonical version and conflict diagnostic recur. A pending
+reply or attachment, read-only policy, Stop, departure, or active repository work
+prevents automatic follow-up. Provider/admission failures stay visible for manual
+retry rather than looping. Questions, interrupted or failed turns, stale session
+completions, and duplicate completion notifications do not automatically run
+Update.
+
+The compact repair status and Check Update action remain outside the scrolling
+transcript. Check Update deliberately verifies an idle repair, including one
+whose AI returned a continue result. The header's Update action uses that same
+check when an unresolved repair exists. Repair launchers reuse the session's
+existing unresolved Update task even when diagnostics change, preserving unsent
+replies and attachments. Verification diagnostics remain available to subsequent
+turns instead of being cleared by a follow-up question. Save repairs do not
+automatically publish work, and Update itself never publishes.
 
 Interactive Codex temporary turns have no fixed completion deadline. They remain
 observable until completion, Stop, deletion, or loss/replacement of the shared
@@ -118,7 +138,10 @@ Temporary and lightweight helper conversations use the parent session's
 selected Codex or OpenCode service, but they do not start or retain a second
 resident assistant service. A user-visible temporary conversation receives one
 stable Genesis and Vibe64 context for its read-only or workspace-writing kind,
-while each human turn contains only the person's authored text. It keeps the
+while ordinary human turns contain only the person's authored text. Update
+repair follow-ups additionally carry the latest Vibe64 verification diagnostic;
+the visible bubble keeps the person's text or a concise automatic retry label.
+It keeps the
 session directory and appropriate command boundary.
 
 The terminal service also exposes one generic non-project ephemeral

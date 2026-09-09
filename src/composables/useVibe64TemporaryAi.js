@@ -60,6 +60,7 @@ function temporaryAiTurnMessages(messages = [], runId = "", update = {}) {
 function useVibe64TemporaryAi({
   agentSettings = () => defaultVibe64AgentSettings(),
   onTaskFinished = null,
+  operationBusy = () => false,
   sessionId,
   sessionsApiPath
 } = {}) {
@@ -75,6 +76,10 @@ function useVibe64TemporaryAi({
   const activeTask = computed(() => (
     tasks.value.find((task) => task.id === activeTaskId.value) || tasks.value[0] || null
   ));
+  const updateRepairTask = computed(() => [...tasks.value].reverse().find((task) => (
+    task.sessionId === currentSessionId() && task.recoveryOperation === "update" &&
+    task.recoveryOutcome !== "succeeded"
+  )) || null);
 
   function currentSessionId() {
     return temporaryAiText(readRefOrGetterValue(sessionId));
@@ -154,6 +159,9 @@ function useVibe64TemporaryAi({
       recoveryOutcomeMessage: "",
       recoveryNotice: temporaryAiText(recoveryNotice),
       recoveryOperation: recoveryOperation === "update" ? "update" : "",
+      recoveryContext: "",
+      recoveryRetryKeys: [],
+      recoveryAutoPaused: false,
       runId: "",
       sessionId: currentSessionId(),
       status: "ready",
@@ -179,6 +187,22 @@ function useVibe64TemporaryAi({
       });
     }
     const dedupeKey = temporaryAiText(input.dedupeKey);
+    const repair = input.recoveryOperation === "update" ? updateRepairTask.value : null;
+    if (repair) {
+      selectTask(repair.id);
+      if (repair.busy || repair.recoveryOutcome === "checking" || closingTaskIds.has(repair.id)) {
+        return { ok: true, reused: true, started: false, taskId: repair.id };
+      }
+      // A deliberate retry may use fresh diagnostics, but never replace an unsent reply.
+      if ((repair.draft.trim() || repair.attachments.length) && !repair.pendingMessageId) {
+        return { ok: true, reused: true, started: false, taskId: repair.id };
+      }
+      if (!repair.pendingMessageId) {
+        updateTask(repair.id, { draft: message, displayMessage: "Continue repairing this Update.", recoveryRetryKeys: [] });
+      }
+      const started = await send(repair.id);
+      return { ok: started, reused: true, started, taskId: repair.id };
+    }
     const existingTask = dedupeKey
       ? [...tasks.value].reverse().find((task) => (
           task.dedupeKey === dedupeKey && (
@@ -263,16 +287,39 @@ function useVibe64TemporaryAi({
 
   function reportRecoveryOutcome(taskId = "", {
     message = "",
-    status = ""
+    status = "",
+    retryMessage = "",
+    retryKey = ""
   } = {}) {
     const outcome = temporaryAiText(status);
-    if (!tasks.value.some((task) => task.id === taskId) || !["checking", "failed", "succeeded"].includes(outcome)) {
+    const task = tasks.value.find((task) => task.id === taskId);
+    if (disposed || !task || closingTaskIds.has(taskId) || !["checking", "failed", "succeeded"].includes(outcome)) {
       return false;
     }
     updateTask(taskId, {
       recoveryOutcome: outcome,
-      recoveryOutcomeMessage: temporaryAiText(message)
+      recoveryAutoPaused: false,
+      recoveryOutcomeMessage: temporaryAiText(message),
+      ...(outcome !== "checking" ? { recoveryContext: outcome === "failed" ? retryMessage || message : message } : {})
     });
+    if (outcome === "failed" && task.recoveryOperation === "update" && retryMessage && retryKey &&
+        !readRefOrGetterValue(operationBusy) && !stoppingTaskIds.has(taskId) &&
+        !task.busy && task.status !== "interrupted" && task.policy === TEMPORARY_AI_WORKSPACE_WRITE_POLICY) {
+      const retries = task.recoveryRetryKeys || [];
+      if (retries.includes(retryKey) || retries.length >= 3) {
+        updateTask(taskId, {
+          recoveryAutoPaused: true,
+          recoveryOutcomeMessage: `${message}\nAutomatic repair paused after repeated conflicts. Review the result, then continue here or check Update again.`
+        });
+      } else if (!task.draft.trim() && !task.attachments.length) {
+        updateTask(taskId, {
+          recoveryRetryKeys: [...retries, retryKey],
+          draft: "Continue repairing the remaining conflicts from Vibe64's latest Update check.",
+          displayMessage: "Continue repairing the remaining conflicts."
+        });
+        void send(taskId);
+      }
+    }
     return true;
   }
 
@@ -366,7 +413,8 @@ function useVibe64TemporaryAi({
 
   async function send(taskId = "") {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
-    if (disposed || !task || task.busy || task.recoveryOutcome === "checking") {
+    if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
+        readRefOrGetterValue(operationBusy) || task.busy || task.recoveryOutcome === "checking") {
       return false;
     }
     const payload = chatMessagePayload(task.draft, task.attachments);
@@ -380,8 +428,8 @@ function useVibe64TemporaryAi({
       error: "",
       pendingMessageId: messageId,
       outcomeKind: "",
-      recoveryOutcome: "",
-      recoveryOutcomeMessage: "",
+      recoveryOutcome: task.recoveryOutcome === "failed" ? "failed" : "",
+      recoveryOutcomeMessage: task.recoveryOutcome === "failed" ? task.recoveryOutcomeMessage : "",
       status: "starting"
     });
     let conversationId = task.conversationId;
@@ -414,7 +462,9 @@ function useVibe64TemporaryAi({
             agentSettings: task.agentSettings,
             ...(payload.attachmentIds?.length ? { attachmentIds: payload.attachmentIds } : {}),
             messageId,
-            message: payload.message,
+            message: task.recoveryOperation === "update" && task.recoveryContext
+              ? `${task.recoveryContext}\n\nUser message:\n${payload.message}`
+              : payload.message,
             policy: task.policy,
             promptLabel: task.title
           },
@@ -514,7 +564,7 @@ function useVibe64TemporaryAi({
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId)) {
       return;
     }
-    if (task.recoveryOutcome === "checking") {
+    if (readRefOrGetterValue(operationBusy) || task.recoveryOutcome === "checking") {
       throw new Error("Wait for Update to finish before closing this repair.");
     }
     closingTaskIds.add(taskId);
@@ -610,6 +660,7 @@ function useVibe64TemporaryAi({
     updateAgentSetting,
     updateAttachments,
     updateDraft,
+    updateRepairTask,
     updatePolicy
   };
 }

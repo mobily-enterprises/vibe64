@@ -36,8 +36,14 @@ clears the successful recipe identity and retains the earlier transcript with
 the reason for invalidation. An unchanged installer command cannot certify
 dependencies for updated source. A no-op Update retains preparation. The next
 preparation uses the existing managed execution and admission path; Update
-does not run installers itself. An explicit preparation retry reruns even a
-previously successful recipe, allowing repair of removed installed files.
+does not run installers itself. The required-state banner offers Prepare
+workspace directly, without requiring AI. Its message remains accurate after
+Update finishes instead of claiming source is still changing. The server accepts
+that explicit request in the required state and runs the full declared recipe,
+not merely an inferred package install. A command run independently in chat
+cannot certify that recipe. An explicit preparation retry at the runner seam
+reruns even a previously successful recipe, allowing repair of removed installed
+files; the public retry action still rejects an already-successful state.
 
 Preview can inspect whether the current recipe already succeeded without taking
 assistant-write admission. If preparation is needed, it rereads the session under

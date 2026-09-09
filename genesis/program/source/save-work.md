@@ -62,6 +62,17 @@ confirmed Update action.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.
+That shared activity remains visible while a Temporary AI repair is selected.
+Checking the existing Update repair does not create a second temporary chat.
+
+Conflict recovery accepts a shrinking subset of the original conflict list only
+while the base, canonical commit, HEAD and index identities remain unchanged.
+Every still-conflicting authored file must have changed since the failed
+checkpoint; changes to other originally conflicting files are allowed. Declared
+derived artifacts are regenerated and do not invalidate that authored-file
+comparison. Unreviewed conflicts, new conflicts, changed repository identities,
+or unrelated authored edits refuse the recovery shortcut and retain source work
+for another check. Application tests do not replace the actual Update check.
 
 Save and Update use the mounted assistant connection's existing readiness state.
 Reconnection is visible and disables both the header action and an already-open

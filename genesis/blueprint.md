@@ -189,6 +189,15 @@ repair warns that partial edits remain, waits for the AI to stop, and keeps the
 chat available when stopping or closing fails. A completed Update repair is
 verified by Vibe64 running Update, with the actual result shown in that chat.
 A request for a decision waits for the person's reply before verification.
+Remaining conflicts return to the same repair conversation instead of opening
+another task. Automatic repair is bounded and pauses on repeated failure. A
+persistent Check Update action lets the person verify prepared edits themselves;
+the header's Update action checks the existing repair too. Update progress stays
+visible above both main and temporary chats, and conversation tabs never overlap.
+Only a successful Update is presented as finished; it does not publish work.
+When updated source needs workspace preparation, a direct Prepare workspace
+action runs the project's declared setup steps. The notice does not claim the
+Update is still running or require an AI repair for routine preparation.
 
 Short actions show one compact progress line that a person can dismiss or open
 for full history. The browser remembers a dismissal for that exact attempt

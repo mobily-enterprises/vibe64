@@ -42,14 +42,14 @@
           :aria-label="saveWorkHeaderAriaLabel"
           class="studio-autopilot__save-work"
           :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
-          :disabled="saveWorkDisabled"
+          :disabled="saveWorkDisabled || temporaryAiWorkspace?.updateRepairTask?.busy"
           height="48"
           :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline"
           :title="saveWorkTitle"
           type="button"
           variant="tonal"
           width="48"
-          @click="requestSaveWork"
+          @click="requestSessionSaveWork"
         />
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
           <v-menu
@@ -209,7 +209,7 @@
           height="clamp(8rem, 22vh, 14rem)"
           :operation-key="workspaceSetupActivityKey"
           :output="workspaceSetupOutput"
-          :retryable="workspaceSetupNeedsAttention && !workspaceSetupRetryDisabled"
+          :retryable="workspaceSetupNeedsAttention && workspaceSetupStatus !== 'required' && !workspaceSetupRetryDisabled"
           :stage="workspaceSetupCurrentLabel"
           :starting="workspaceSetupRunning || workspaceSetupRetrying"
           :status="workspaceSetupStatus"
@@ -220,7 +220,19 @@
           @retry="retryWorkspaceSetup"
         >
           <template v-if="workspaceSetupNeedsAttention" #error-actions>
+            <v-btn
+              v-if="workspaceSetupStatus === 'required'"
+              :disabled="workspaceSetupRetryDisabled"
+              :loading="workspaceSetupRetrying"
+              size="small"
+              title="Run all declared workspace setup steps, including any database preparation"
+              variant="tonal"
+              @click="retryWorkspaceSetup"
+            >
+              Prepare workspace
+            </v-btn>
             <Vibe64TemporaryAiFixAction
+              v-else
               :disabled="workspaceSetupAskDisabled"
               :pending="workspaceSetupFixSending"
               :title="assistantDirectAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantRestrictionMessage"
@@ -466,9 +478,14 @@
 
       <Vibe64TemporaryAiWorkspace
         ref="temporaryAiWorkspace"
+        :active="props.active"
         :agent-settings="currentAgentSettings"
         :session-id="sessionId"
         :sessions-api-path="props.sessionsApiPath"
+        :repository-busy="saveWorkOperationActive || saveWorkSending"
+        :update-disabled="updateWorkDisabled"
+        :update-disabled-reason="saveWorkTitle"
+        @check-update="checkTemporaryAiUpdate"
         @select-main-chat="showMainChat"
         @task-finished="finishTemporaryAiTask"
       />
@@ -935,6 +952,7 @@ const {
   saveWorkActivityIsUpdate,
   saveWorkActivityLabel,
   saveWorkDisabled,
+  updateWorkDisabled,
   saveWorkError,
   saveWorkHeaderAriaLabel,
   saveWorkHeaderVisible,
@@ -1256,6 +1274,22 @@ async function finishTemporaryAiTask(task = {}) {
     reportVerifiedWorkspaceRecovery();
   }
   return true;
+}
+
+function checkTemporaryAiUpdate(task) {
+  if (updateWorkDisabled.value) return false;
+  return handleTemporaryAiTaskFinished(task, (taskId, outcome) => (
+    temporaryAiWorkspace.value?.reportTaskRecovery?.(taskId, outcome)
+  ), { force: true });
+}
+
+function requestSessionSaveWork() {
+  const repair = temporaryAiWorkspace.value?.updateRepairTask;
+  if (saveWorkRequiresUpdate.value && repair) {
+    temporaryAiWorkspace.value?.selectTask?.(repair.id);
+    return checkTemporaryAiUpdate(repair);
+  }
+  return requestSaveWork();
 }
 
 async function showMainChat() {

@@ -1,4 +1,4 @@
-import { computed, inject, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
@@ -307,14 +307,18 @@ const REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY = [
   "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
   "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
   "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files so the user can retry the Vibe64 operation.",
-  "For an overlapping edit, keep the latest saved version's overlapping lines byte-for-byte and preserve this session's additional intent in adjacent non-overlapping content. Do not report success while Git has unmerged index entries or while HEAD/index differ from their initial values."
+  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
+  "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
 
 const UPDATE_REPAIR_MESSAGES = {
-  completion: "AI repair finished. Vibe64 will check Update when the repair is complete.",
+  completion: "File repairs prepared. Vibe64 must check Update before this repair is finished.",
   nextStep: "Vibe64 will check Update after the repair.",
-  handoff: "When your repair is complete, Vibe64 will run Update to verify it and show the result here. If you need a decision, return a continue result instead."
+  handoff: [
+    "Your task is to prepare the file repair, not to run or complete the rebase yourself. Return kind=complete with a factual report as soon as the edits and focused checks are ready for Vibe64 to try Update. Vibe64 then runs Update automatically and returns remaining conflicts to this same conversation.",
+    "Return kind=continue only when you need an actual user decision, and ask that specific question. Do not wait for the user to click Rebase or tell them to open another repair chat.",
+    "Describe progress in terms of the user's features and remaining work. Keep HEAD/index/ref bookkeeping in the technical checks, not routine progress or the final reply. Passing application tests is not proof that Update succeeded."
+  ].join("\n")
 };
 
 const TEMPORARY_AI_RECOVERY_NOTICE = "This is a separate temporary chat. Temporary AI can edit this session to make the repair. Follow progress here and reply below if it needs a decision.";
@@ -663,6 +667,9 @@ function useVibe64AutopilotView(props, emit, {
   const workspaceSetupRetryDisabled = computed(() => Boolean(
     workspaceSetupRunning.value ||
     workspaceSetupRetrying.value ||
+    saveWorkSending.value ||
+    saveWorkOperationActive.value ||
+    agentActive.value ||
     !sessionId.value ||
     props.sessionSelectionArchived
   ));
@@ -735,21 +742,24 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
 
-  async function handleTemporaryAiTaskFinished(task = {}, reportRecovery = () => {}) {
+  async function handleTemporaryAiTaskFinished(task = {}, reportRecovery = () => {}, { force = false } = {}) {
     const taskId = normalizedAgentTurnText(task?.id);
     const status = normalizedAgentTurnText(task?.status);
     if (task.recoveryOperation === "update") {
       const runId = normalizedAgentTurnText(task.runId);
       if (
         !taskId || !runId || task.sessionId !== sessionId.value ||
-        status !== "completed" || task.outcomeKind !== "complete" ||
-        checkedUpdateRepairRuns.get(taskId) === runId
+        task.busy || ["starting", "inProgress"].includes(status) ||
+        saveWorkSending.value || saveWorkOperationActive.value ||
+        (!force && (status !== "completed" || task.outcomeKind !== "complete" ||
+          checkedUpdateRepairRuns.get(taskId) === runId))
       ) {
         return false;
       }
       checkedUpdateRepairRuns.set(taskId, runId);
       reportRecovery(taskId, { status: "checking", message: "Checking Update…" });
       const result = await updateBeforeSave();
+      await nextTick();
       if (task.sessionId !== sessionId.value) {
         return false;
       }
@@ -757,8 +767,20 @@ function useVibe64AutopilotView(props, emit, {
       reportRecovery(taskId, {
         status: succeeded ? "succeeded" : "failed",
         message: succeeded
-          ? "Update succeeded. Your session includes the latest saved work and keeps your local edits."
-          : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`
+          ? "Session updated. Your changes were preserved. Nothing was published."
+          : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`,
+        ...(!succeeded && saveWorkCanResolveWithTemporaryAi.value ? {
+          retryKey: JSON.stringify([
+            saveWorkFailure.value?.code,
+            saveWorkFailure.value?.details?.conflictRecovery?.canonicalCommit || "",
+            saveWorkFailure.value?.details?.conflictPaths || saveWorkError.value
+          ]),
+          retryMessage: [
+            "Vibe64 ran Update after the prepared repair, but it did not succeed. The working-tree edits remain. Inspect the current state and repair only the remaining conflicts; do not start over or repeat completed work.",
+            `Latest Update diagnostic:\n${saveWorkError.value}`,
+            UPDATE_REPAIR_MESSAGES.handoff
+          ].join("\n\n")
+        } : {})
       });
       return "repository-update";
     }
@@ -1236,7 +1258,7 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkRepositoryBusy = computed(() => ["saving", "updating"].includes(
     String(toolbarRepositoryWorkState.value?.state || "")
   ));
-  const saveWorkDisabled = computed(() => Boolean(
+  const updateWorkDisabled = computed(() => Boolean(
     sessionInteractionDisabled.value ||
     !assistantConnectionReady.value ||
     agentActive.value ||
@@ -1244,7 +1266,10 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkSending.value ||
     saveWorkRepositoryBusy.value ||
     saveWorkRepositoryState.value?.loading ||
-    saveWorkRepositoryState.value?.error ||
+    saveWorkRepositoryState.value?.error
+  ));
+  const saveWorkDisabled = computed(() => Boolean(
+    updateWorkDisabled.value ||
     (!saveWorkRequiresUpdate.value && !assistantDirectAllowed.value) ||
     (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
   ));
@@ -1269,7 +1294,7 @@ function useVibe64AutopilotView(props, emit, {
       return "Wait for the current repository operation to finish";
     }
     if (agentActive.value || composerSending.value) {
-      return "Wait for the assistant turn to finish before saving";
+      return "Wait for the assistant turn to finish before saving or updating";
     }
     if (saveWorkRepositoryState.value?.loading) {
       return "Checking whether this session has work to save";
@@ -2061,6 +2086,7 @@ function useVibe64AutopilotView(props, emit, {
     rightPaneTabMounted,
     saveWorkConfirmOpen,
     saveWorkDisabled,
+    updateWorkDisabled,
     saveWorkActivityDismissed,
     saveWorkActivityKey,
     saveWorkActivityIsUpdate,

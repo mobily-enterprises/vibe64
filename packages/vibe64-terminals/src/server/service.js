@@ -619,7 +619,7 @@ function createService({
     return { ...options, runtime, session };
   }
 
-  async function invalidateWorkspaceSetup(context, diagnostic = "Source is being updated. Run workspace preparation for the updated source.") {
+  async function invalidateWorkspaceSetup(context, diagnostic = "Run this session's declared setup steps after updating its source.") {
     await workspaceSetup.invalidate({ ...context, diagnostic });
     await publishTerminalSessionChanged("agentTerminal", context.session.sessionId, "workspace-setup-updated");
   }

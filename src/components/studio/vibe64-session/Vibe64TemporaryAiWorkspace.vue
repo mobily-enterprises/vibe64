@@ -20,49 +20,52 @@
           Main chat
         </button>
       </div>
-      <div
-        v-for="task in temporary.tasks.value"
-        :key="task.id"
-        class="vibe64-temporary-ai__tab"
-        :class="{ 'vibe64-temporary-ai__tab--active': task.id === temporary.activeTaskId.value }"
-      >
-        <button
-          :ref="(element) => setTaskTabButton(task.id, element)"
-          :aria-current="task.id === temporary.activeTaskId.value ? 'page' : undefined"
-          class="vibe64-temporary-ai__tab-select"
-          :data-temporary-ai-task-id="task.id"
-          type="button"
-          @click="temporary.selectTask(task.id)"
+      <div class="vibe64-temporary-ai__task-tabs">
+        <div
+          v-for="task in temporary.tasks.value"
+          :key="task.id"
+          class="vibe64-temporary-ai__tab"
+          :class="{ 'vibe64-temporary-ai__tab--active': task.id === temporary.activeTaskId.value }"
         >
-          <span>{{ task.title }}</span>
-          <span v-if="task.busy" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
-        </button>
+          <button
+            :ref="(element) => setTaskTabButton(task.id, element)"
+            :aria-current="task.id === temporary.activeTaskId.value ? 'page' : undefined"
+            class="vibe64-temporary-ai__tab-select"
+            :data-temporary-ai-task-id="task.id"
+            :title="task.title"
+            type="button"
+            @click="temporary.selectTask(task.id)"
+          >
+            <span>{{ task.title }}</span>
+            <span v-if="task.busy" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
+          </button>
+          <v-btn
+            :aria-label="`Close ${task.title}`"
+            class="vibe64-temporary-ai__tab-close"
+            :disabled="props.repositoryBusy || task.recoveryOutcome === 'checking' || closingTask || stoppingTaskId === task.id"
+            height="32"
+            :icon="mdiClose"
+            min-width="32"
+            size="x-small"
+            :title="`Close ${task.title}`"
+            type="button"
+            variant="text"
+            @click="requestCloseTask(task)"
+          />
+        </div>
         <v-btn
-          :aria-label="`Close ${task.title}`"
-          class="vibe64-temporary-ai__tab-close"
-          :disabled="task.recoveryOutcome === 'checking' || closingTask || stoppingTaskId === task.id"
+          aria-label="New temporary AI task"
+          class="vibe64-temporary-ai__new-task"
           height="32"
-          :icon="mdiClose"
+          :icon="mdiPlus"
           min-width="32"
           size="x-small"
-          :title="`Close ${task.title}`"
+          title="New temporary AI task"
           type="button"
           variant="text"
-          @click="requestCloseTask(task)"
+          @click="temporary.openTask()"
         />
       </div>
-      <v-btn
-        aria-label="New temporary AI task"
-        class="vibe64-temporary-ai__new-task"
-        height="32"
-        :icon="mdiPlus"
-        min-width="32"
-        size="x-small"
-        title="New temporary AI task"
-        type="button"
-        variant="text"
-        @click="temporary.openTask()"
-      />
       <span class="vibe64-temporary-ai__tabs-spacer" />
       <v-btn
         v-if="activeTask"
@@ -87,12 +90,12 @@
     </nav>
 
     <template v-if="activeTask">
-      <div class="vibe64-temporary-ai__messages" aria-live="polite">
+      <div class="vibe64-temporary-ai__recovery-row">
         <v-alert
           v-if="activeTask.recoveryNotice"
           aria-live="polite"
           class="vibe64-temporary-ai__recovery"
-          :color="activeTaskRecoveryVerified ? 'success' : 'primary'"
+          :color="activeTaskRecoveryVerified ? 'success' : undefined"
           data-temporary-ai-recovery
           density="compact"
           :icon="activeTaskRecoveryVerified ? mdiCheckCircleOutline : mdiRobotOutline"
@@ -101,7 +104,22 @@
           variant="tonal"
         >
           <p v-if="activeTaskRecoveryStatus && !activeTask.busy">{{ activeTaskRecoveryStatus }}</p>
+          <v-btn
+            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
+            class="vibe64-temporary-ai__check-update"
+            data-temporary-ai-check-update
+            :disabled="props.updateDisabled || taskInputDisabled(activeTask)"
+            :loading="activeTaskRecoveryChecking"
+            :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
+            size="small"
+            variant="tonal"
+            @click="emit('check-update', activeTask)"
+          >
+            Check Update
+          </v-btn>
         </v-alert>
+      </div>
+      <div class="vibe64-temporary-ai__messages" aria-live="polite">
         <Vibe64EphemeralConversationMessages
           :session-id="props.sessionId"
           :messages="activeTask.messages"
@@ -110,9 +128,12 @@
       </div>
 
       <div
-        v-if="activeTask.error || activeTask.busy || activeTaskRecoveryChecking"
+        v-if="activeTask.error || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
         class="vibe64-temporary-ai__feedback"
       >
+        <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
+          {{ actionErrors[activeTask.id] }}
+        </div>
         <div
           v-if="activeTask.error"
           class="vibe64-temporary-ai__error"
@@ -211,6 +232,9 @@
         <v-card-text>
           Partial edits will stay in this session and may still need repair.
           Closing does not undo those edits or complete Update.
+          <p v-if="actionErrors[taskToClose.id]" class="vibe64-temporary-ai__error" role="alert">
+            {{ actionErrors[taskToClose.id] }}
+          </p>
         </v-card-text>
         <v-card-actions class="flex-wrap">
           <v-btn :disabled="closingTask" @click="closeTaskId = ''">Keep chat open</v-btn>
@@ -250,8 +274,12 @@ import {
 } from "@/composables/useVibe64TemporaryAi.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
-const emit = defineEmits(["select-main-chat", "task-finished"]);
+const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
+  active: Boolean,
+  repositoryBusy: Boolean,
+  updateDisabled: Boolean,
+  updateDisabledReason: { type: String, default: "" },
   agentSettings: {
     default: () => ({}),
     type: Object
@@ -276,8 +304,10 @@ const temporaryAiFeedback = useUiFeedback({
 });
 const temporary = useVibe64TemporaryAi({
   agentSettings: computed(() => props.agentSettings),
+  operationBusy: () => props.repositoryBusy,
   onTaskFinished(task = {}) {
     emit("task-finished", task);
+    if (props.active && temporary.open.value && temporary.activeTaskId.value === task.id) return;
     if (task.status === "completed") {
       if (task.outcomeKind === "continue" || task.recoveryOperation === "update") {
         return;
@@ -301,6 +331,7 @@ const closeTitleId = useId();
 const closeTaskId = ref("");
 const closingTask = ref(false);
 const stoppingTaskId = ref("");
+const actionErrors = ref({});
 const taskToClose = computed(() => temporary.tasks.value.find((task) => task.id === closeTaskId.value));
 const activeTaskRecoveryChecking = computed(() => activeTask.value?.recoveryOutcome === "checking");
 const activeTaskRecoveryVerified = computed(() => (
@@ -310,18 +341,21 @@ const activeTaskRecoveryTitle = computed(() => {
   if (activeTaskRecoveryChecking.value) {
     return "Checking Update…";
   }
-  if (activeTask.value?.recoveryOutcome === "failed") {
-    return "Update needs attention";
-  }
-  if (activeTask.value?.outcomeKind === "continue") {
-    return "Waiting for your reply";
-  }
-  if (activeTaskRecoveryVerified.value) {
-    return "Repair verified";
-  }
   const status = String(activeTask.value?.status || "").trim();
   if (["starting", "inProgress"].includes(status)) {
     return "AI repair in progress";
+  }
+  if (activeTask.value?.recoveryOutcome === "failed") {
+    return "Update needs attention";
+  }
+  if (activeTaskRecoveryVerified.value) {
+    return activeTask.value?.recoveryOperation === "update" ? "Session updated" : "Repair verified";
+  }
+  if (activeTask.value?.recoveryOperation === "update") {
+    return "Update not yet verified";
+  }
+  if (activeTask.value?.outcomeKind === "continue") {
+    return "Waiting for your reply";
   }
   if (status === "completed") {
     return "AI repair finished";
@@ -336,14 +370,25 @@ const activeTaskRecoveryTitle = computed(() => {
 });
 const activeTaskRecoveryStatus = computed(() => {
   const task = activeTask.value || {};
-  if (task.recoveryOutcome === "checking" || task.outcomeKind === "continue") {
+  if (task.recoveryOutcome === "checking") {
     return "";
   }
   if (task.recoveryOutcome === "succeeded") {
     return task.recoveryOutcomeMessage || "Vibe64 independently verified that the repair succeeded.";
   }
+  if (task.recoveryOperation === "update" && props.updateDisabled && props.updateDisabledReason) {
+    return props.updateDisabledReason;
+  }
   if (task.recoveryOutcome === "failed") {
-    return task.recoveryOutcomeMessage || "Vibe64 checked the repair, but the original operation still needs attention.";
+    return task.recoveryAutoPaused
+      ? "Automatic repair paused after repeated conflicts. Continue here or check Update again; the latest diagnostic is in the activity panel above."
+      : "The Update check did not succeed. Continue this repair or check Update again; the latest diagnostic is in the activity panel above.";
+  }
+  if (task.recoveryOperation === "update" && task.outcomeKind === "continue") {
+    return "Reply if a decision is needed, or use Check Update to verify the prepared edits.";
+  }
+  if (task.outcomeKind === "continue") {
+    return "";
   }
   const status = String(task.status || "").trim();
   if (status === "completed") {
@@ -371,11 +416,12 @@ function requestCloseTask(task) {
 
 async function closeTask(taskId) {
   closingTask.value = true;
+  delete actionErrors.value[taskId];
   try {
     await temporary.closeTask(taskId);
     closeTaskId.value = "";
   } catch (error) {
-    temporaryAiFeedback.error(error, "Temporary AI could not be closed. The chat is still open; try again.");
+    actionErrors.value[taskId] = error?.message || "Temporary AI could not be closed. The chat is still open; try again.";
   } finally {
     closingTask.value = false;
   }
@@ -383,17 +429,18 @@ async function closeTask(taskId) {
 
 async function stopTask(taskId) {
   stoppingTaskId.value = taskId;
+  delete actionErrors.value[taskId];
   try {
     await temporary.stopTask(taskId);
   } catch (error) {
-    temporaryAiFeedback.error(error, "Temporary AI could not be stopped. Try again.");
+    actionErrors.value[taskId] = error?.message || "Temporary AI could not be stopped. Try again.";
   } finally {
     stoppingTaskId.value = "";
   }
 }
 
 function taskInputDisabled(task) {
-  return task.busy || task.recoveryOutcome === "checking";
+  return props.repositoryBusy || task.busy || task.recoveryOutcome === "checking";
 }
 
 function taskPrompt(taskId = "") {
@@ -449,7 +496,8 @@ async function startTask(options = {}) {
 
 function reportTaskRecovery(taskId = "", outcome = {}) {
   const reported = temporary.reportRecoveryOutcome(taskId, outcome);
-  if (reported && outcome.status === "succeeded") {
+  if (reported && outcome.status === "succeeded" &&
+      !(props.active && temporary.open.value && temporary.activeTaskId.value === taskId)) {
     temporaryAiFeedback.success(
       outcome.message || "Vibe64 independently verified that the repair succeeded."
     );
@@ -528,8 +576,10 @@ defineExpose({
   closeWorkspace: temporary.closeWorkspace,
   openTask: temporary.openTask,
   reportTaskRecovery,
+  selectTask: temporary.selectTask,
   startTask,
-  showWorkspace
+  showWorkspace,
+  updateRepairTask: temporary.updateRepairTask
 });
 </script>
 
@@ -541,8 +591,9 @@ defineExpose({
   bottom: 0.3rem;
   box-shadow: 0 14px 38px rgba(15, 23, 42, 0.22);
   display: grid;
-  grid-row: 2 / -1;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-row: 3 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   left: 0.3rem;
   min-height: 0;
   overflow: hidden;
@@ -563,8 +614,16 @@ defineExpose({
   border-bottom: 1px solid rgba(var(--v-theme-tertiary), 0.18);
   display: flex;
   gap: 0.25rem;
-  overflow-x: auto;
   padding: 0.25rem 0.35rem;
+}
+
+.vibe64-temporary-ai__task-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .vibe64-temporary-ai__tab {
@@ -575,6 +634,7 @@ defineExpose({
   color: inherit;
   display: inline-flex;
   flex: 0 0 auto;
+  max-width: 100%;
   min-height: 2rem;
   padding-left: 0.15rem;
 }
@@ -588,7 +648,18 @@ defineExpose({
   cursor: pointer;
   display: inline-flex;
   gap: 0.35rem;
+  min-width: 0;
   padding: 0.2rem 0.35rem 0.2rem 0.55rem;
+}
+
+.vibe64-temporary-ai__tab-select > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vibe64-temporary-ai__tab-close {
+  flex: 0 0 auto;
 }
 
 .vibe64-temporary-ai:focus-visible,
@@ -606,9 +677,6 @@ defineExpose({
 .vibe64-temporary-ai__tab--main {
   background: rgb(var(--v-theme-surface));
   border-color: rgba(var(--v-theme-tertiary), 0.22);
-  inset-inline-start: 0;
-  position: sticky;
-  z-index: 1;
 }
 
 .vibe64-temporary-ai__new-task {
@@ -642,6 +710,21 @@ defineExpose({
 
 .vibe64-temporary-ai__recovery {
   flex: 0 0 auto;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-temporary-ai__recovery-row:not(:empty) {
+  padding: 0.35rem 0.55rem 0;
+}
+
+.vibe64-temporary-ai__recovery :deep(.v-alert-title) {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.vibe64-temporary-ai__check-update {
+  margin-top: 0.4rem;
 }
 
 .vibe64-temporary-ai__recovery p {
@@ -672,6 +755,7 @@ defineExpose({
 
 .vibe64-temporary-ai :deep(.studio-autopilot-prompt-textarea) {
   margin: 4px;
+  width: auto;
 }
 
 .vibe64-temporary-ai__composer-actions {
@@ -697,6 +781,7 @@ defineExpose({
   .vibe64-temporary-ai__new-task,
   .vibe64-temporary-ai__policy,
   .vibe64-temporary-ai__tab-close,
+  .vibe64-temporary-ai__check-update,
   .vibe64-temporary-ai__composer-actions .v-btn {
     min-height: 3rem !important;
     min-width: 3rem !important;

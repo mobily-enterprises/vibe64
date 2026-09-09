@@ -181,8 +181,101 @@ describe("useVibe64TemporaryAi", () => {
     );
     await expect(temporary.send(task.id)).resolves.toBe(true);
     await flushPromises();
-    expect(temporary.activeTask.value.recoveryOutcome).toBe("");
+    expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
+    expect(mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1)[1].body.message)
+      .toContain("Still conflicts.");
     expect(observer).toHaveBeenLastCalledWith(expect.objectContaining({ runId: "turn-2", outcomeKind: "continue" }));
+  });
+
+  it("reuses a completed Update repair even when the conflict diagnostic changes", async () => {
+    const temporary = await temporaryAi();
+    const input = { recoveryOperation: "update", policy: "workspace_write", message: "Repair eight conflicts." };
+    mocks.responses.push(
+      { ok: true, conversationId: "conversation-1" },
+      { ok: true, runId: "turn-1", status: "inProgress" },
+      { ok: true, status: "completed", outcome: { kind: "continue" } }
+    );
+    const first = await temporary.startTask({ ...input, dedupeKey: "eight-files" });
+    await flushPromises();
+    mocks.responses.push(
+      { ok: true, runId: "turn-2", status: "inProgress" },
+      { ok: true, status: "completed", outcome: { kind: "complete" } }
+    );
+    await expect(temporary.startTask({ ...input, message: "One conflict remains.", dedupeKey: "one-file" }))
+      .resolves.toMatchObject({ reused: true, started: true, taskId: first.taskId });
+    await flushPromises();
+    expect(temporary.tasks.value).toHaveLength(1);
+    expect(mocks.requests.filter(([path, options]) => path.endsWith("/temporary-conversations") && options.method === "POST"))
+      .toHaveLength(1);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1)[0]).toContain("conversation-1");
+    temporary.reportRecoveryOutcome(first.taskId, { status: "succeeded" });
+    expect(temporary.updateRepairTask.value).toBeNull();
+  });
+
+  it.each(["draft", "attachment", "checking", "busy"])("preserves an existing repair with %s instead of opening another", async (state) => {
+    const temporary = await temporaryAi();
+    const task = temporary.openTask({ recoveryOperation: "update", policy: "workspace_write" });
+    if (state === "draft") temporary.updateDraft(task.id, "Keep my question.");
+    if (state === "attachment") temporary.updateAttachments(task.id, [{ attachmentId: "attachment-1" }]);
+    if (state === "checking") temporary.reportRecoveryOutcome(task.id, { status: "checking" });
+    if (state === "busy") temporary.tasks.value[0].busy = true;
+    await expect(temporary.startTask({ recoveryOperation: "update", message: "Retry." }))
+      .resolves.toMatchObject({ reused: true, started: false, taskId: task.id });
+    expect(temporary.tasks.value).toHaveLength(1);
+    expect(mocks.requests).toHaveLength(0);
+    if (state === "draft") expect(temporary.activeTask.value.draft).toBe("Keep my question.");
+    if (state === "attachment") expect(temporary.activeTask.value.attachments).toHaveLength(1);
+  });
+
+  it.each(["repeated", "limit"])("returns exact Update diagnostics to the same chat and pauses at the %s retry boundary", async (boundary) => {
+    const temporary = await temporaryAi();
+    const task = temporary.openTask({ recoveryOperation: "update", policy: "workspace_write" });
+    Object.assign(temporary.tasks.value[0], { conversationId: "conversation-1", status: "completed", runId: "turn-1" });
+    const attempts = boundary === "repeated" ? 1 : 3;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      mocks.responses.push(
+        { ok: true, runId: `turn-${attempt + 2}`, status: "inProgress" },
+        { ok: true, status: "completed", outcome: { kind: "complete" } }
+      );
+      temporary.reportRecoveryOutcome(task.id, {
+        status: "failed", message: "Update did not succeed.",
+        retryKey: `conflict-${attempt}`, retryMessage: `Exact remaining conflict: file-${attempt}.vue`
+      });
+      await flushPromises();
+      const request = mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1);
+      expect(request[0]).toContain("conversation-1");
+      expect(request[1].body.message).toContain(`Exact remaining conflict: file-${attempt}.vue`);
+      expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
+    }
+    const requestCount = mocks.requests.length;
+    temporary.reportRecoveryOutcome(task.id, {
+      status: "failed", message: "Still conflicts.",
+      retryKey: boundary === "repeated" ? "conflict-0" : "conflict-3", retryMessage: "Latest failure."
+    });
+    await flushPromises();
+    expect(mocks.requests).toHaveLength(requestCount);
+    expect(temporary.activeTask.value).toMatchObject({ recoveryAutoPaused: true, busy: false });
+    expect(temporary.tasks.value).toHaveLength(1);
+  });
+
+  it.each(["draft", "attachment", "stopped", "read-only", "repository-busy"])("does not auto-retry over %s", async (state) => {
+    const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
+    const temporary = useVibe64TemporaryAi({ sessionId: () => "session-1", operationBusy: () => state === "repository-busy" });
+    const task = temporary.openTask({ recoveryOperation: "update", policy: state === "read-only" ? "read" : "workspace_write" });
+    if (state === "draft") temporary.updateDraft(task.id, "My decision.");
+    if (state === "attachment") temporary.updateAttachments(task.id, [{ attachmentId: "attachment-1" }]);
+    if (state === "stopped") temporary.tasks.value[0].status = "interrupted";
+    temporary.reportRecoveryOutcome(task.id, {
+      status: "failed", message: "Still conflicts.", retryKey: "one", retryMessage: "File still conflicts."
+    });
+    await flushPromises();
+    expect(mocks.requests).toHaveLength(0);
+    expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
+    if (state === "repository-busy") {
+      temporary.updateDraft(task.id, "Try again.");
+      await expect(temporary.send(task.id)).resolves.toBe(false);
+      await expect(temporary.closeTask(task.id)).rejects.toThrow("Wait for Update");
+    }
   });
 
   it("opens and selects a recovery task synchronously before automatically sending it", async () => {

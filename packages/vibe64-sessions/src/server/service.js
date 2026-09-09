@@ -1546,9 +1546,9 @@ function createService({
         const session = await runtime.getSession(sessionId, {
           inspectSource: false
         });
-        if (!["ambiguous", "failed", "unconfigured"].includes(text(session.workspaceSetup?.status))) {
+        if (!["ambiguous", "failed", "required", "unconfigured"].includes(text(session.workspaceSetup?.status))) {
           const error = new Error(
-            "Workspace preparation can only be started when it is newly configured, failed, or needs a recipe choice."
+            "Workspace preparation can only be started when it is required, newly configured, failed, or needs a recipe choice."
           );
           error.code = "vibe64_workspace_setup_retry_not_available";
           throw error;

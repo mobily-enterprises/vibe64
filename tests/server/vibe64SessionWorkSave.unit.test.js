@@ -937,6 +937,83 @@ test("Update leaves HEAD, index, and worktree untouched when newer work conflict
   }
 });
 
+for (const scenario of ["repaired", "unreviewed", "unrelated", "derived", "upstream"]) {
+  test(`Update retains recovery when the conflict list shrinks: ${scenario}`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-shrinking-"));
+    try {
+      const fixture = await createRemoteFixture(root);
+      await writeFile(path.join(fixture.seed, "second.txt"), "initial\n");
+      await git(fixture.seed, ["add", "second.txt"]);
+      await git(fixture.seed, ["commit", "-m", "second baseline"]);
+      await git(fixture.seed, ["push", "origin", "main"]);
+      fixture.baseCommit = await git(fixture.seed, ["rev-parse", "HEAD"]);
+      const session = await sessionForRemote(root, fixture);
+      for (const filename of ["shared.txt", "second.txt"]) {
+        await writeFile(path.join(fixture.seed, filename), "remote\n");
+        await writeFile(path.join(session.sourcePath, filename), "local\n");
+      }
+      await git(fixture.seed, ["add", "shared.txt", "second.txt"]);
+      await git(fixture.seed, ["commit", "-m", "saved changes"]);
+      await git(fixture.seed, ["push", "origin", "main"]);
+      const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+      let conflictRecovery;
+      await assert.rejects(updateSessionWork({ ...input, operationId: "initial-conflict" }), (error) => {
+        assert.equal(error.code, "vibe64_session_update_conflict");
+        assert.deepEqual(error.details.conflictPaths, ["second.txt", "shared.txt"]);
+        conflictRecovery = error.details.conflictRecovery;
+        return true;
+      });
+      await writeFile(path.join(session.sourcePath, "shared.txt"), "remote\n");
+      if (scenario !== "unreviewed") {
+        await writeFile(path.join(session.sourcePath, "second.txt"), "remote\nlocal\n");
+      }
+      if (scenario === "unrelated") await writeFile(path.join(session.sourcePath, "unrelated.txt"), "New work\n");
+      if (scenario === "upstream") {
+        await writeFile(path.join(fixture.seed, "later.txt"), "Another saved change\n");
+        await git(fixture.seed, ["add", "later.txt"]);
+        await git(fixture.seed, ["commit", "-m", "newer saved version"]);
+        await git(fixture.seed, ["push", "origin", "main"]);
+      }
+      if (scenario === "derived") {
+        await mkdir(path.join(session.sourcePath, ".genesis"));
+        await writeFile(path.join(session.sourcePath, ".genesis/machine-city.json"), "{}\n");
+        input.derivedArtifactPaths = [".genesis/machine-city.json"];
+        input.refreshDerivedArtifacts = async ({ projectRoot }) => {
+          await mkdir(path.join(projectRoot, ".genesis"), { recursive: true });
+          await writeFile(path.join(projectRoot, ".genesis/machine-city.json"), '{"regenerated":true}\n');
+        };
+      }
+      const headBefore = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+      const indexBefore = await git(session.sourcePath, ["write-tree"]);
+      const statusBefore = await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]);
+      const updating = updateSessionWork({ ...input, conflictRecovery, operationId: "check-repair" });
+      if (["unreviewed", "unrelated", "upstream"].includes(scenario)) {
+        await assert.rejects(updating, (error) => {
+          assert.equal(error.code, "vibe64_session_update_conflict");
+          assert.deepEqual(error.details.conflictPaths, ["second.txt"]);
+          if (scenario === "unreviewed") assert.match(error.message, /has not changed since/u);
+          if (scenario === "unrelated") assert.match(error.message, /outside/u);
+          return true;
+        });
+        assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), headBefore);
+        assert.equal(await git(session.sourcePath, ["write-tree"]), indexBefore);
+        assert.equal(await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]), statusBefore);
+      } else {
+        const result = await updating;
+        assert.equal(result.status, "updated");
+        assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "remote\n");
+        assert.equal(await readFile(path.join(session.sourcePath, "second.txt"), "utf8"), "remote\nlocal\n");
+        assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), result.canonicalCommit);
+        if (scenario === "derived") {
+          assert.equal(await readFile(path.join(session.sourcePath, ".genesis/machine-city.json"), "utf8"), '{"regenerated":true}\n');
+        }
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+}
+
 test("Update verifies a repaired document while preserving edits made after the conflict", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-repair-"));
   try {
