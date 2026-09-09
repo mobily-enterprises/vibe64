@@ -496,6 +496,88 @@ describe("useVibe64SourceEditor", () => {
     expect(mocks.requestCalls.some(([url]) => url.endsWith("/source-editor/open-file"))).toBe(false);
   });
 
+  it.each(["vibe64_source_editor_binary_file", "vibe64_source_editor_file_too_large"])(
+    "keeps %s available for download outside the editable buffer",
+    async (code) => {
+      const currentText = ref("");
+      const editor = await createLoadedEditor({ currentText });
+      currentText.value = "saved before switching";
+      editor.updateText();
+      mocks.requestResults.push(
+        fileResponse({ text: currentText.value }),
+        { ok: false, code, error: "Cannot edit this file." }
+      );
+
+      expect(await editor.openFile("docs/staff guide.docx")).toBe(true);
+      expect(editor.downloadOnlyFile.value.path).toBe("docs/staff guide.docx");
+      expect(editor.selectedPath.value).toBe("");
+      expect(editor.text.value).toBe("");
+      expect(editor.savedHash.value).toBe("");
+      expect(editor.dirty.value).toBe(false);
+      expect(editor.loadingPath.value).toBe("");
+      expect(editor.loadError.value).toBe("");
+      expect(mocks.fileSyncOptions[0].path.value).toBe("");
+      const writes = mocks.requestCalls.filter(([, options]) => options?.method === "PUT");
+      expect(writes).toHaveLength(1);
+      expect(writes[0][1].body).toMatchObject({ path: "src/app.js", text: currentText.value });
+
+      mocks.requestResults.push(treeResponse());
+      await editor.refresh();
+      await editor.saveNow();
+      expect(editor.downloadOnlyFile.value.path).toBe("docs/staff guide.docx");
+      expect(mocks.requestCalls.filter(([, options]) => options?.method === "PUT")).toHaveLength(1);
+
+      mocks.requestResults.push(fileResponse());
+      expect(await editor.openFile("src/app.js")).toBe(true);
+      expect(editor.downloadOnlyFile.value).toBeNull();
+      expect(editor.selectedPath.value).toBe("src/app.js");
+    }
+  );
+
+  it("does not turn access or missing-file errors into downloadable selections", async () => {
+    const editor = await createLoadedEditor({ currentText: ref("") });
+    for (const code of ["vibe64_source_editor_file_missing", "forbidden"]) {
+      mocks.requestResults.push({ ok: false, code, error: "File unavailable." });
+      expect(await editor.openFile("docs/staff.docx")).toBe(false);
+      expect(editor.downloadOnlyFile.value).toBeNull();
+      expect(editor.selectedPath.value).toBe("src/app.js");
+      expect(editor.loadError.value).toBe("File unavailable.");
+    }
+  });
+
+  it("discards a late binary response after another selection or session change", async () => {
+    const sessionId = ref("session-1");
+    const editor = await createLoadedEditor({ currentText: ref(""), sessionId });
+    for (const changeSession of [false, true]) {
+      let resolveFile;
+      mocks.requestResults.push(new Promise((resolve) => { resolveFile = resolve; }));
+      const opening = editor.openFile("docs/staff.docx");
+      if (changeSession) {
+        mocks.requestResults.push(treeResponse());
+        sessionId.value = "session-2";
+        await nextTick();
+      } else {
+        mocks.requestResults.push(fileResponse());
+        await editor.openFile("src/app.js");
+      }
+      resolveFile({ ok: false, code: "vibe64_source_editor_binary_file", error: "Binary file." });
+      expect(await opening).toBe(false);
+      expect(editor.downloadOnlyFile.value).toBeNull();
+      expect(editor.selectedPath.value).toBe(changeSession ? "" : "src/app.js");
+    }
+  });
+
+  it("clears the downloadable selection on session change", async () => {
+    const sessionId = ref("session-1");
+    const editor = await createLoadedEditor({ currentText: ref(""), sessionId });
+    mocks.requestResults.push({ ok: false, code: "vibe64_source_editor_binary_file", error: "Binary file." });
+    await editor.openFile("docs/staff.docx");
+    mocks.requestResults.push(treeResponse());
+    sessionId.value = "session-2";
+    await nextTick();
+    expect(editor.downloadOnlyFile.value).toBeNull();
+  });
+
   it("reloads the source tree after another tab creates a file", async () => {
     const currentText = ref("");
     await createLoadedEditor({ currentText });

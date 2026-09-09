@@ -600,6 +600,7 @@ function useVibe64SourceEditor({
   const explanationFollowup = ref("");
   const loadFailure = ref(null);
   const loadError = computed(() => loadFailure.value?.message || "");
+  const downloadOnlyFile = ref(null);
   const saveError = ref("");
   const createFileError = ref("");
   const creatingFile = ref(false);
@@ -948,6 +949,7 @@ function useVibe64SourceEditor({
       return false;
     }
     selectedPath.value = filePath;
+    downloadOnlyFile.value = null;
     selectedRevealTree.value = normalizeTreeNode(response.revealTree);
     if (selectedRevealTree.value) {
       tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
@@ -1000,6 +1002,22 @@ function useVibe64SourceEditor({
       return true;
     } catch (error) {
       if (requestId === fileRequestId) {
+        const code = error?.code || error?.payload?.code;
+        if (code === "vibe64_source_editor_binary_file" || code === "vibe64_source_editor_file_too_large") {
+          // Keep non-text files out of the editable buffer and its autosave/file-sync paths.
+          selectedPath.value = "";
+          selectedRevealTree.value = null;
+          text.value = "";
+          savedHash.value = "";
+          downloadOnlyFile.value = {
+            path: normalizedPath,
+            message: code === "vibe64_source_editor_binary_file"
+              ? "This file cannot be edited as text. Download it to open it in another application."
+              : "This file is too large to edit here. You can download the complete file."
+          };
+          revealLoadedFilePath(normalizedPath);
+          return true;
+        }
         loadFailure.value = {
           operation: "open-file",
           message: String(error?.message || error || "Source file could not be loaded.")
@@ -1851,9 +1869,13 @@ function useVibe64SourceEditor({
       });
     }
     resetDiscoveryState();
+    fileRequestId += 1;
+    loadingFile.value = false;
+    loadingPath.value = "";
     fileRevalidationRequestId += 1;
     pendingFileRevalidation = false;
     selectedPath.value = "";
+    downloadOnlyFile.value = null;
     selectedRevealTree.value = null;
     text.value = "";
     savedHash.value = "";
@@ -1871,6 +1893,7 @@ function useVibe64SourceEditor({
   onBeforeUnmount(() => {
     disposed = true;
     treeRequestId += 1;
+    fileRequestId += 1;
     fileRevalidationRequestId += 1;
     textAtUnmount = currentText();
     const closePending = explanationClosing.value;
@@ -1896,6 +1919,7 @@ function useVibe64SourceEditor({
     creatingFile,
     cursorRequest,
     dirty,
+    downloadOnlyFile,
     explanationBusy,
     explanationClosing,
     explanationError,

@@ -21,6 +21,8 @@ the details available on demand.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.
+Opening a binary or oversized file from chat or Files keeps its filename visible
+and offers Download without placing it in the text editor.
 The file browser keeps starred filenames on one line and starts larger lists
 collapsed.
 Chat responds to confirmed message acceptance and interruption immediately;

@@ -54,6 +54,15 @@ return the saved file's original bytes and filename, including binary files and
 files too large to edit. An unsaved selected file offers Download saved file or
 Save & download; a failed save does not download a supposedly saved draft.
 Source containment, excluded-path and symlink protections also apply to downloads.
+The download handler awaits Fastify's streamed reply so its async completion
+cannot send an empty response before the file stream starts. Route verification
+checks original bytes over real HTTP, including nonempty binary, text, large and
+genuinely empty files.
+Opening a binary or oversized file from a chat link or the file browser shows
+its filename and a Download action. That selection stays outside the editable
+buffer, autosave and text-file observation. Opening another text file restores
+editing; changing sessions discards the selection and ignores pending file-read
+results. Download failures show their error message and leave retry available.
 
 Stars are personal and project-scoped, not Git changes or shared project settings.
 The server stores at most 100 paths per authenticated account in private project

@@ -63,6 +63,9 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
         files[body.path] = body.text;
         return fulfillJson(route, { ok: true, file: { path: body.path, text: body.text, hash: `hash:${body.text}` } });
       }
+      if (Buffer.isBuffer(files[path])) {
+        return route.fulfill({ status: 415, json: { ok: false, code: "vibe64_source_editor_binary_file", error: "The selected file appears to be binary." } });
+      }
       return fulfillJson(route, { ok: true, file: { path, text: String(files[path] || ""), hash: `hash:${files[path]}`, language: "javascript" } });
     }
     if (operation === "download") {
@@ -74,6 +77,108 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
   }, { children: true });
   return { messages };
 }
+
+for (const width of [390, 900, 1600]) {
+  test(`binary chat links and file selections offer usable downloads at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const path = "docs/staff guide.docx";
+    const bytes = Buffer.from([80, 75, 3, 4, 0, 255, 13, 10]);
+    await mockFiles(page, { additionalFiles: { [path]: bytes } });
+    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/conversation-log`, (route) => fulfillJson(route, {
+      ok: true,
+      sessionId: directChatSessionId,
+      conversationLog: [{ turnId: "word-guide", assistant: {
+        at: "2026-08-14T01:03:00.000Z", role: "assistant",
+        text: `[Download the Word staff guide](/managed-source/sessions/active/${directChatSessionId}/source/docs/staff%20guide.docx)`
+      } }],
+      pagination: { count: 1, hasMoreBefore: false, limit: 20, totalTurnCount: 1 }
+    }));
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "PUT" && request.url().includes("/source-editor/file")) writes.push(request.postData() || "");
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}`);
+    await expect(page.getByLabel("Message AI assistant")).toBeAttached();
+    const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+    if (await showChat.isVisible()) await showChat.click();
+    await page.getByRole("link", { name: "Download the Word staff guide", exact: true }).click();
+    const editor = page.getByLabel("Session source editor");
+    await expect(editor.getByRole("heading", { name: "staff guide.docx", exact: true })).toBeVisible();
+    await expect(editor.getByText("This file cannot be edited as text. Download it to open it in another application.")).toBeVisible();
+    await expect(editor.getByText("Select a file to edit.", { exact: true })).toHaveCount(0);
+    await expect(editor.locator(".cm-content")).not.toBeVisible();
+    for (const name of ["Undo", "Redo", "Save now"]) await expect(editor.getByTitle(name, { exact: true })).toBeDisabled();
+    await expect(editor.getByRole("button", { name: "Explain", exact: true })).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath(`binary-download-${width}.png`), animations: "disabled" });
+
+    for (const button of [editor.locator("main").getByRole("button", { name: "Download file", exact: true }), editor.locator("header").getByRole("button", { name: "Download file", exact: true })]) {
+      const downloading = page.waitForEvent("download");
+      await button.click();
+      const download = await downloading;
+      expect(download.suggestedFilename()).toBe("staff guide.docx");
+      expect(await readFile((await download.path())!)).toEqual(bytes);
+    }
+    await editor.getByRole("button", { name: "Star file", exact: true }).click();
+    await expect(editor.getByRole("button", { name: "Unstar file", exact: true })).toBeVisible();
+    await editor.getByTitle("Refresh files", { exact: true }).click();
+    await expect(editor.getByRole("heading", { name: "staff guide.docx", exact: true })).toBeVisible();
+    await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Back to dashboard", exact: true }).click();
+    if (await showChat.isVisible()) await showChat.click();
+    await page.getByRole("link", { name: "Download the Word staff guide", exact: true }).click();
+    await expect(editor.locator("main").getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
+
+    // Reopen text, then choose a binary file directly from the tree.
+    await editor.locator(".vibe64-source-tree__button").filter({ hasText: "README.md" }).click();
+    await expect(editor.locator(".cm-content")).toContainText("# Hello");
+    await editor.locator(".vibe64-source-tree__button").filter({ hasText: "notes.bin" }).click();
+    await expect(editor.getByRole("heading", { name: "notes.bin", exact: true })).toBeVisible();
+    await expect(editor.locator(".cm-content")).not.toBeVisible();
+    expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("oversized files remain downloadable after a delayed read and a failed download", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await mockFiles(page, { additionalFiles: { "large.txt": "The complete saved file." } });
+  const reading = Promise.withResolvers<void>();
+  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/source-editor/file`, async (route) => {
+    if (new URL(route.request().url()).searchParams.get("path") !== "large.txt") return route.fallback();
+    await reading.promise;
+    return route.fulfill({ status: 413, json: { ok: false, code: "vibe64_source_editor_file_too_large", error: "Too large for the editor." } });
+  });
+  let failDownload = true;
+  await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/source-editor/download`, async (route) => {
+    if (!failDownload) return route.fallback();
+    failDownload = false;
+    return route.fulfill({ status: 403, json: { ok: false, error: "Download access denied." } });
+  });
+  try {
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/files`);
+    const editor = page.getByLabel("Session source editor");
+    await editor.locator(".vibe64-source-tree__button").filter({ hasText: "large.txt" }).click();
+    await expect(editor.getByRole("status", { name: "Opening large.txt" })).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Download file", exact: true })).toBeDisabled();
+    reading.resolve();
+    await expect(editor.getByText("This file is too large to edit here. You can download the complete file.")).toBeVisible();
+    const downloadButton = editor.locator("main").getByRole("button", { name: "Download file", exact: true });
+    await downloadButton.click();
+    await expect(page.getByText("Download access denied.", { exact: true })).toBeVisible();
+    await expect(downloadButton).toBeEnabled();
+    const downloading = page.waitForEvent("download");
+    await downloadButton.click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe("large.txt");
+    expect(await readFile((await download.path())!, "utf8")).toBe("The complete saved file.");
+    await editor.locator(".vibe64-source-tree__button").filter({ hasText: "README.md" }).click();
+    await expect(editor.locator(".cm-content")).toContainText("# Hello");
+    await expect(downloadButton).toHaveCount(0);
+  } finally { reading.resolve(); }
+});
 
 test("download offers an explicit save choice and waits for that save", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });

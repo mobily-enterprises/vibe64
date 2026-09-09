@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Readable } from "node:stream";
+import { once } from "node:events";
+import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import Fastify from "fastify";
 
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
 import {
@@ -11,6 +16,57 @@ import {
   withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+
+test("source downloads deliver original file bytes over a real HTTP connection", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiBase, apiRouteBase, projectContext }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "vibe64-download-http-"));
+    const server = Fastify();
+    const handles = [];
+    const closed = [];
+    try {
+      const files = new Map([
+        ["staff guide.docx", Buffer.from([80, 75, 3, 4, 0, 255, 13, 10])],
+        ["résumé.txt", Buffer.from("A saved text file.\n")],
+        ["large.bin", Buffer.alloc(2 * 1024 * 1024, 0x82)],
+        ["empty.txt", Buffer.alloc(0)]
+      ]);
+      for (const [name, bytes] of files) await writeFile(path.join(root, name), bytes);
+      const app = testRouteApp();
+      registerRoutes(app.http, {
+        projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+        sourceEditor: {
+          async readTree() { return { ok: true }; },
+          async downloadFile({ path: name }) {
+            assert.ok(files.has(name));
+            const fileHandle = await open(path.join(root, name), "r");
+            handles.push(fileHandle);
+            closed.push(once(fileHandle, "close"));
+            return { ok: true, fileHandle, name };
+          }
+        }
+      });
+      const route = findRegisteredRoute(app, {
+        method: "GET", path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-editor/download`
+      });
+      server.get(route.path, route.handler);
+      const origin = await server.listen({ host: "127.0.0.1", port: 0 });
+      for (const [name, bytes] of files) {
+        const response = await fetch(`${origin}${apiBase}/vibe64/sessions/session-1/source-editor/download?path=${encodeURIComponent(name)}`);
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "application/octet-stream");
+        assert.equal(response.headers.get("cache-control"), "private, no-store");
+        assert.ok(response.headers.get("content-disposition").includes(encodeURIComponent(name)));
+        assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes, name);
+      }
+      await Promise.all(closed);
+      assert.ok(handles.every((handle) => handle.fd === -1));
+    } finally {
+      await server.close();
+      await Promise.all(handles.map((handle) => handle.close()));
+      await rm(root, { recursive: true, force: true });
+    }
+  }));
+});
 
 test("star routes accept only trusted identity and download responses are private attachments", async () => {
   await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {

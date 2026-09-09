@@ -13,7 +13,7 @@
           :icon="mdiFileCodeOutline"
           size="19"
         />
-        <h2 :title="editor.loadingPath.value || editor.selectedPath.value || 'Choose a source file'">
+        <h2 :title="editor.loadingPath.value || displayedPath || 'Choose a source file'">
           {{ selectedFileName }}
         </h2>
       </div>
@@ -22,21 +22,21 @@
           v-if="fileBookmarks"
           :aria-label="selectedStarred ? 'Unstar file' : 'Star file'"
           :aria-pressed="selectedStarred"
-          :disabled="!editor.selectedPath.value || fileBookmarks.pendingPaths.value.includes(editor.selectedPath.value)"
+          :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
           :icon="selectedStarred ? mdiStar : mdiStarOutline"
           size="small"
           :title="selectedStarred ? 'Unstar file' : 'Star file'"
           variant="text"
-          @click="fileBookmarks.toggle(editor.selectedPath.value)"
+          @click="fileBookmarks.toggle(displayedPath)"
         />
         <v-btn
           aria-label="Download file"
-          :disabled="!editor.selectedPath.value || Boolean(downloadingPath)"
+          :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
           :icon="mdiDownload"
           size="small"
           :title="downloadingPath ? 'Downloading file…' : 'Download file'"
           variant="text"
-          @click="requestDownload(editor.selectedPath.value)"
+          @click="requestDownload(displayedPath)"
         />
         <span
           v-if="editor.statusLabel.value"
@@ -322,7 +322,7 @@
             :load-errors="editor.treeLoadErrors.value"
             :loading-paths="editor.treeLoadingPaths.value"
             :node="editor.tree.value"
-            :selected-path="editor.selectedPath.value"
+            :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
             :ask-codex-available="askCodexAvailable"
             @ask-codex="askCodexAboutPath"
@@ -345,7 +345,21 @@
           {{ editor.loadError.value }}
         </div>
         <div
-          v-if="!editor.selectedPath.value && !editor.loadingFile.value"
+          v-if="editor.downloadOnlyFile.value && !editor.loadingFile.value"
+          class="vibe64-source-editor__empty"
+        >
+          <p class="mb-4">{{ editor.downloadOnlyFile.value.message }}</p>
+          <v-btn
+            color="primary"
+            :disabled="Boolean(downloadingPath)"
+            :prepend-icon="mdiDownload"
+            @click="requestDownload(editor.downloadOnlyFile.value.path)"
+          >
+            {{ downloadingPath ? "Downloading…" : "Download file" }}
+          </v-btn>
+        </div>
+        <div
+          v-else-if="!editor.selectedPath.value && !editor.loadingFile.value"
           class="vibe64-source-editor__empty"
         >
           Select a file to edit.
@@ -636,7 +650,8 @@ const editor = useVibe64SourceEditor({
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
-const selectedStarred = computed(() => props.fileBookmarks?.paths.value.includes(editor.selectedPath.value) || false);
+const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
+const selectedStarred = computed(() => props.fileBookmarks?.paths.value.includes(displayedPath.value) || false);
 const downloadingPath = ref("");
 const downloadDraftOpen = ref(false);
 const downloadSaving = ref(false);
@@ -689,7 +704,7 @@ async function downloadFile(target) {
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   } catch (cause) {
-    downloadFeedback.error(cause.message || "File could not download.");
+    downloadFeedback.error(cause, "File could not download.");
   } finally {
     downloadingPath.value = "";
   }
@@ -786,8 +801,8 @@ const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
 const fastOpenPanelVisible = computed(() => Boolean(editor.fileQuery.value));
 const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || editor.searchResults.value.length > 0);
 const selectedFileName = computed(() => (
-  editor.loadingPath.value || editor.selectedPath.value
-    ? basename(editor.loadingPath.value || editor.selectedPath.value)
+  editor.loadingPath.value || displayedPath.value
+    ? basename(editor.loadingPath.value || displayedPath.value)
     : "Choose a source file"
 ));
 const newFileDirectoryLabel = computed(() => (
@@ -1478,6 +1493,7 @@ onBeforeUnmount(() => {
   align-items: center;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.3);
   display: flex;
+  flex-wrap: wrap;
   gap: 0.48rem;
   justify-content: space-between;
   min-width: 0;

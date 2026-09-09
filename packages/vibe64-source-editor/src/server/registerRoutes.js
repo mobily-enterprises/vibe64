@@ -154,7 +154,8 @@ function registerRoutes(
     const encodedName = encodeURIComponent(result.name).replace(/[!'()*]/gu, (character) =>
       `%${character.codePointAt(0).toString(16).toUpperCase()}`);
     try {
-      reply.header("Content-Type", "application/octet-stream")
+      // An async handler must stay pending until Fastify has sent the file stream.
+      await reply.header("Content-Type", "application/octet-stream")
         .header("Content-Disposition", `attachment; filename*=UTF-8''${encodedName}`)
         .header("Cache-Control", "private, no-store")
         .header("X-Content-Type-Options", "nosniff")
