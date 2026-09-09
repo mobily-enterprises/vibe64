@@ -146,7 +146,7 @@ function mountPromptHints(input = {}) {
 }
 
 describe("Vibe64 prompt hints UI", () => {
-  it("uses one minimal icon-led short-label rail and removes its hidden footprint", () => {
+  it("uses one minimal icon-led short-label rail with a persistent footprint", () => {
     const component = hintComponentSource;
 
     expect(component).toContain("mdiLightbulbOnOutline");
@@ -161,7 +161,7 @@ describe("Vibe64 prompt hints UI", () => {
     expect(component).toContain('size="small"');
     expect(component).toContain('variant="tonal"');
     expect(component).not.toContain("\n          block\n");
-    expect(component).toContain("height: 0;");
+    expect(component).not.toContain("height: 0;");
     expect(component).toContain("height: 2.25rem;");
     expect(component).toContain("grid-template-columns: 1.25rem minmax(0, 1fr);");
     expect(component).toContain("display: flex;");

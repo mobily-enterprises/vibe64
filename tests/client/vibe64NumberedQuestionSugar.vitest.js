@@ -102,6 +102,21 @@ describe("vibe64NumberedQuestionSugar", () => {
     ]);
   });
 
+  it.each(["\n\n", " "])("keeps explanatory sentences after question marks with separator %j", (separator) => {
+    const labels = [
+      "Should VIP status be checked **at checkout**, so an existing unpaid, uninvoiced booking receives the discount even if the owner became VIP after booking? Manual final-price overrides would still take precedence.",
+      "During the **one-hour crate-drying gap**, should both washer and groomer be free to work on other dogs?",
+      "What should happen if someone assigns a dog marked **“not suitable for trainees”** to a junior groomer or washer?"
+    ];
+    const sugar = parseNumberedQuestionPrompt([
+      "Picking up the three unanswered questions:",
+      ...labels.map((label, index) => `[${index + 1}] ${label}`)
+    ].join(separator));
+
+    expect(sugar.questions.map((question) => question.label)).toEqual(labels);
+    expect(numberedQuestionInputFields(sugar.questions)).toHaveLength(3);
+  });
+
   it("accepts a trailing possible-answers hint after numbered questions", () => {
     const sugar = sugarForPrompt([
       "I need confirmations before I start.",
@@ -418,6 +433,7 @@ describe("vibe64NumberedQuestionSugar", () => {
       "[2] What should it contain?"
     ].join("\n")).questions).toEqual([]);
     expect(sugarForPrompt("See [1] the linked reference.").questions).toEqual([]);
+    expect(sugarForPrompt("[1] Read https://example.com/docs?page=1").questions).toEqual([]);
   });
 
   it("keeps numbered recommendations with later answer choices out of question fields", () => {

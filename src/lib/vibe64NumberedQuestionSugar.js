@@ -48,7 +48,7 @@ function trailingAnswerChoiceLine(line = "") {
 }
 
 function numberedQuestionLabelLooksLikeQuestion(label = "") {
-  return /\?(?:[*_`”"'’)\]]*)$/u.test(String(label || "").trim());
+  return /\?(?:[*_`”"'’)\]]*)(?:\s|$)/u.test(String(label || "").trim());
 }
 
 function validNumberedQuestions(questions = []) {

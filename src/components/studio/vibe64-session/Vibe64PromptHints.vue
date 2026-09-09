@@ -124,21 +124,13 @@ const statusAnnouncement = computed(() => {
   display: grid;
   grid-row: 4;
   grid-template-columns: 1.25rem minmax(0, 1fr);
-  height: 0;
+  height: 2.25rem;
   max-width: 100%;
-  min-height: 0;
+  min-height: 2.25rem;
   min-width: 0;
   overflow: hidden;
-  padding-inline: 0;
-  width: 100%;
-}
-
-.vibe64-prompt-hints--assistant,
-.vibe64-prompt-hints--loading,
-.vibe64-prompt-hints--ready {
-  height: 2.25rem;
-  min-height: 2.25rem;
   padding-inline: 0.2rem;
+  width: 100%;
 }
 
 .vibe64-prompt-hints__sr-status {

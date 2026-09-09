@@ -35,6 +35,9 @@ Markdown tables keep words readable and columns sized to their content. Wide
 tables scroll within the message on small screens, including with the keyboard.
 Numbered chat questions and their suggested choices retain the same inline
 Markdown formatting and file links as ordinary assistant messages.
+An explanation after a question does not suppress its answer field.
+The hints row always reserves its height immediately above the message input,
+following the input as it grows without shifting the chat when hints change.
 Provider failures reach the conversation even when no assistant answer is created.
 Confirmed Stop releases chat controls without requiring a final provider message.
 Assistant status recovers automatically after a failed connection check, without

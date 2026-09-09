@@ -1202,8 +1202,8 @@ function handlePromptHintsFocusOut(event = {}) {
 }
 
 function dismissPromptHintsAndFocus() {
-  dismissPromptHints();
   composerInput.value?.focus?.({ preventScroll: true });
+  dismissPromptHints();
 }
 
 function applyPromptHint(text = "") {

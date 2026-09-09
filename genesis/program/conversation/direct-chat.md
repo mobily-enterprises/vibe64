@@ -85,6 +85,15 @@ reply remains ordinary conversation text.
 Numbered question labels and their suggested choices use the shared inline
 Markdown renderer, preserving bold text, code, and links without interpreting
 raw HTML. Their file links use the same source-editor navigation as prose.
+Explicit numbered questions may include explanatory sentences after the question
+mark; those sentences remain attached to their question and do not suppress the
+answer fields. Numbered statements alone still do not create answer fields.
+The shared hints/status row keeps the same 2.25rem height when empty, loading,
+showing suggestions, or reporting assistant activity. It remains a normal grid
+row directly above the composer, moving with the input as that input grows or
+shrinks. Hint transitions do not resize the conversation area.
+Escape returns focus to the composer before dismissing hints, so that focus
+change does not immediately regenerate the dismissed suggestions.
 The shared Markdown renderer sizes table columns from their content, wraps
 prose at word boundaries, and preserves declared column alignment. Table cells
 override the inline renderer's arbitrary word breaking; long identifiers remain

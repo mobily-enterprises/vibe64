@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
 
+import { assistantStatusServer } from "./support/assistant-status-server";
+
 import {
   BASE_URL,
   DASHBOARD_PATH,
@@ -22,6 +24,32 @@ const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
   "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files so the user can retry the Vibe64 operation.",
   "For an overlapping edit, keep the latest saved version's overlapping lines byte-for-byte and preserve this session's additional intent in adjacent non-overlapping content. Do not report success while Git has unmerged index entries or while HEAD/index differ from their initial values."
 ].join("\n");
+
+const hintTest = test.extend<{ hintRealtime: void }>({
+  hintRealtime: [async ({ page }, use) => {
+    const realtime = await assistantStatusServer();
+    try {
+      await page.route("**/socket.io/**", async (route) => {
+        const url = new URL(route.request().url());
+        const response = await route.fetch({ url: `${realtime.url}${url.pathname}${url.search}` });
+        await route.fulfill({ response });
+      });
+      await page.addInitScript((realtimeUrl) => {
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = class extends OriginalWebSocket {
+          constructor(url: string | URL, protocols?: string | string[]) {
+            const target = new URL(url, window.location.href);
+            if (target.pathname === "/socket.io/") target.host = new URL(realtimeUrl).host;
+            super(target, protocols);
+          }
+        };
+      }, realtime.url);
+      await use();
+    } finally {
+      await realtime.close();
+    }
+  }, { auto: true }]
+});
 
 async function openTemporaryAiWorkspace(page: Page) {
   await expect(page.getByRole("region", { name: "Session chat" })).toBeVisible();
@@ -66,10 +94,13 @@ test.describe("direct chat", () => {
     await expect(composer).toHaveValue("");
   });
 
-  test("suggestions preserve composer height while authored input still grows it", async ({ page }) => {
+  hintTest("suggestions preserve composer height while authored input still grows it", async ({ page }) => {
     await page.setViewportSize({ height: 844, width: 390 });
     const longPrompt = "Show me the simplest useful first version";
     await mockDirectChat(page, { includeWorktreePaths: true });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, (route) => fulfillJson(route, {
+      ok: true, ...directSession().agentSession
+    }));
     await routeApiEndpoint(page, "/vibe64/settings", async (route) => {
       await fulfillJson(route, {
         ok: true,
@@ -149,6 +180,114 @@ test.describe("direct chat", () => {
 
     await expect.poll(composerHeight).toBeGreaterThan(initialHeight);
   });
+
+  for (const width of [390, 960, 1600]) {
+    hintTest(`keeps hint space stable and follows the growing composer at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ height: 900, width });
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      const agentTurn = { active: false, id: "", state: "idle" };
+      await mockDirectChat(page, {
+        agentTurn,
+        includeWorktreePaths: true,
+        conversationLog: Array.from({ length: 16 }, (_, index) => scrollTestTurn(index + 1))
+      });
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, (route) => fulfillJson(route, {
+        ok: true, ...directSession({ agentTurn }).agentSession
+      }));
+      let enableHints!: () => void;
+      const policyReady = new Promise<void>((resolve) => { enableHints = resolve; });
+      await routeApiEndpoint(page, "/vibe64/settings", async (route) => {
+        await policyReady;
+        await fulfillJson(route, { ok: true, promptHints: { canEdit: true, enabled: true } });
+      });
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, (route) => fulfillJson(route, {
+        ok: true, available: true, canUse: true
+      }));
+      let showSuggestions!: () => void;
+      const suggestionsReady = new Promise<void>((resolve) => { showSuggestions = resolve; });
+      let failHints = false;
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/prompt-hints`, async (route) => {
+        await suggestionsReady;
+        if (failHints) {
+          await route.fulfill({ status: 503, json: { error: "Suggestions unavailable" } });
+          return;
+        }
+        await fulfillJson(route, { ok: true, status: "ready", suggestions: [
+          { label: "Plan first version", prompt: "Help me plan the first version" },
+          { label: "Explain project", prompt: "Explain the current project" },
+          { label: "Decide next steps", prompt: "Help me decide the next steps" }
+        ] });
+      });
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      const hints = page.locator("[data-vibe64-prompt-hints]");
+      const composer = page.getByLabel("Message AI assistant");
+      const geometry = () => page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
+        const bounds = (selector: string) => {
+          const rect = panel.querySelector(selector)!.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom, height: rect.height };
+        };
+        return {
+          hints: bounds("[data-vibe64-prompt-hints]"),
+          composer: bounds(".studio-autopilot__composer"),
+          conversation: bounds(".studio-autopilot__conversation"),
+          scrollTop: panel.querySelector(".studio-conversation-log__body")!.scrollTop
+        };
+      });
+      await expect(composer).toBeVisible();
+      await expect(hints).toHaveClass(/--hidden/);
+      const conversation = page.locator(".studio-conversation-log__body");
+      await expect.poll(() => conversationDistanceFromBottom(conversation)).toBeLessThanOrEqual(48);
+      await detachConversation(conversation, 600, width === 390 ? "touch" : "wheel");
+      const empty = await geometry();
+      expect(empty.hints.height).toBe(36);
+      expect(empty.hints.bottom).toBe(empty.composer.top);
+
+      enableHints();
+      await expect(hints).toHaveClass(/--loading/);
+      await expect.poll(geometry).toEqual(empty);
+      showSuggestions();
+      await expect(hints).toHaveClass(/--ready/);
+      await expect.poll(geometry).toEqual(empty);
+      const suggestion = hints.getByRole("button").first();
+      await suggestion.focus();
+      await expect.poll(geometry).toEqual(empty);
+      await suggestion.press("Escape");
+      await expect(hints).toHaveClass(/--hidden/);
+      await expect.poll(geometry).toEqual(empty);
+
+      await composer.fill(Array.from({ length: 35 }, (_, index) => `Line ${index + 1}: keep this draft visible.`).join("\n"));
+      await expect(hints).toHaveClass(/--ready/);
+      await expect.poll(async () => (await geometry()).composer.height).toBeGreaterThan(empty.composer.height);
+      const grown = await geometry();
+      expect(grown.composer.top).toBeLessThan(empty.composer.top);
+      expect(grown.hints.height).toBe(empty.hints.height);
+      expect(grown.hints.bottom).toBe(grown.composer.top);
+      expect(grown.conversation.height).toBeLessThan(empty.conversation.height);
+      expect(grown.scrollTop).toBe(empty.scrollTop);
+      expect(await composer.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await suggestion.focus();
+      await suggestion.press("Escape");
+      await expect(hints).toHaveClass(/--hidden/);
+      await expect.poll(geometry).toEqual(grown);
+      await page.screenshot({ path: testInfo.outputPath("growing-composer.png") });
+
+      failHints = true;
+      await composer.fill("");
+      await expect.poll(geometry).toEqual(empty);
+      await expect(hints).toHaveClass(/--hidden/);
+      await expect.poll(geometry).toEqual(empty);
+      Object.assign(agentTurn, { active: true, id: "hint-layout-turn", state: "inProgress" });
+      await page.getByRole("button", { name: "Reload chat" }).click();
+      await expect(hints).toHaveClass(/--assistant/);
+      await expect.poll(geometry).toEqual(empty);
+      Object.assign(agentTurn, { active: false, id: "", state: "idle" });
+      await page.getByRole("button", { name: "Reload chat" }).click();
+      await expect(hints).toHaveClass(/--hidden/);
+      await expect.poll(geometry).toEqual(empty);
+      expect(errors).toEqual([]);
+    });
+  }
 
   test.describe("composer delivery on a phone", () => {
     test.use({
@@ -756,10 +895,11 @@ test.describe("direct chat", () => {
   test("submits assistant numbered questions through the same chat endpoint", async ({ page }) => {
     const messages: Record<string, unknown>[] = [];
     const assistantPrompt = [
-      "Please answer these before I continue.",
-      "[1] What should change?",
-      "[2] What should stay the same?"
-    ].join("\n");
+      "Picking up the three unanswered questions:",
+      "[1] Should VIP status be checked **at checkout**, so an existing unpaid, uninvoiced booking receives the discount even if the owner became VIP after booking? Manual final-price overrides would still take precedence.",
+      "[2] During the **one-hour crate-drying gap**, should both washer and groomer be free to work on other dogs?",
+      "[3] What should happen if someone assigns a dog marked **“not suitable for trainees”** to a junior groomer or washer?"
+    ].join("\n\n");
     await mockDirectChat(page, {
       conversationLog: [{
         assistant: {
@@ -776,14 +916,15 @@ test.describe("direct chat", () => {
 
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    await page.getByLabel("[1] What should change?").fill("Tighten the layout.");
-    await page.getByLabel("[2] What should stay the same?").fill("Keep the current copy.");
+    await page.getByRole("textbox", { name: /^\[1\] Should VIP status/ }).fill("Yes, keep manual overrides.");
+    await page.getByRole("textbox", { name: /^\[2\] During the/ }).fill("Yes, both can work.");
+    await page.getByRole("textbox", { name: /^\[3\] What should happen/ }).fill("Show a warning.");
     await page.getByRole("button", { name: "Send message" }).click();
 
     await expect.poll(() => messages).toHaveLength(1);
     expect(messages[0]).toEqual(expect.objectContaining({
-      displayMessage: "[1] Tighten the layout.\n[2] Keep the current copy.",
-      message: "[1] Tighten the layout.\n[2] Keep the current copy."
+      displayMessage: "[1] Yes, keep manual overrides.\n[2] Yes, both can work.\n[3] Show a warning.",
+      message: "[1] Yes, keep manual overrides.\n[2] Yes, both can work.\n[3] Show a warning."
     }));
   });
 
