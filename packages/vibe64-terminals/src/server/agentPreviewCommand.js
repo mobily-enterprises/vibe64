@@ -25,7 +25,8 @@ import {
   runtimePackBinPaths,
   runtimePackRoot,
   stopVibe64Execution,
-  stopVibe64OwnedExecutions
+  stopVibe64OwnedExecutions,
+  vibe64ManagedExecutionProvider
 } from "@local/vibe64-execution/server";
 import {
   writeExecutableFileIfChanged
@@ -545,9 +546,125 @@ function createAgentPreviewCommandService({
   readSessionUiState = readSessionUiSyncStateForSession,
   runManagedCommand = runVibe64Command,
   stopManagedExecution = stopVibe64Execution,
-  stopOwnedExecutions = stopVibe64OwnedExecutions
+  stopOwnedExecutions = stopVibe64OwnedExecutions,
+  resourceProvider = vibe64ManagedExecutionProvider,
+  publishSessionChanged = async () => {}
 } = {}) {
   const browserWorkers = new Map();
+  const testApprovals = new Map();
+
+  function testApprovalStatus(sessionId) {
+    const pending = testApprovals.get(sessionId);
+    return pending?.admissionId ? { admissionId: pending.admissionId, state: pending.state, expiresAt: pending.expiresAt } : null;
+  }
+
+  function cancelTestApproval({ projectSlug, sessionId, admissionId }, reason = "cancelled") {
+    const pending = testApprovals.get(sessionId);
+    if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId || pending.state !== "waiting") {
+      return responseError("This test request is no longer waiting for approval.", "vibe64_test_approval_unavailable");
+    }
+    pending.cancel(reason);
+    return { ok: true, cancelled: true, sessionId };
+  }
+
+  async function resumeTestApproval({ projectSlug, sessionId, admissionId }, authorizeStart) {
+    const pending = testApprovals.get(sessionId);
+    if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId) {
+      return responseError("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
+    }
+    if (["resuming", "running"].includes(pending.state)) return { ok: true, accepted: true, replayed: true, sessionId };
+    if (pending.state !== "waiting" || Date.now() >= Date.parse(pending.expiresAt) || typeof authorizeStart !== "function") {
+      return responseError("This test approval has expired or is no longer available.", "vibe64_test_approval_unavailable");
+    }
+    // The command's promise remains its result owner. HTTP only acknowledges
+    // the handoff; a lost dashboard response never launches a second test.
+    pending.resume(authorizeStart);
+    await publishSessionChanged(sessionId);
+    return { ok: true, accepted: true, sessionId };
+  }
+
+  async function withTestApproval(sessionId, input, options, targetId, operation, validate) {
+    const run = (startTarget) => launchTarget.withPreviewTarget(sessionId, targetId, async (token) => {
+      const pending = testApprovals.get(sessionId);
+      if (pending?.admissionId) {
+        pending.state = "running";
+        await publishSessionChanged(sessionId);
+      }
+      options.signal?.throwIfAborted();
+      return operation(token);
+    }, {
+      startTarget: startTarget ? (start) => startTarget(async () => {
+        options.signal?.throwIfAborted();
+        await validate();
+        options.signal?.throwIfAborted();
+        return start();
+      }) : undefined,
+      signal: options.signal,
+      waitUntilReady: async (terminal, { restoring = false } = {}) => {
+        const waited = await waitForPreviewReady(launchTarget, sessionId, {
+          terminalSessionId: terminal.id, signal: restoring ? null : options.signal
+        });
+        if (!waited.ok) throw new Error(waited.status?.error || (waited.timeout
+          ? "Timed out waiting for Preview readiness." : "Preview failed to become ready."));
+      }
+    });
+    const result = await run();
+    const admission = result?.details?.admission;
+    if (result?.code !== "vibe64_capacity_rejected" || admission?.outcome !== "tight" ||
+        !admission.actions?.includes("start-anyway")) return result;
+    options.signal?.throwIfAborted();
+    const { descriptor } = await validate();
+    const provider = resourceProvider();
+    const identity = { projectSlug: descriptor.project.slug, sessionId, admissionId: admission.id };
+    const wait = await provider.beginWorkflowApprovalWait({
+      ...identity, parentExecutionId: input.parentExecutionId, controlGenerationId: descriptor.controlGenerationId
+    });
+    let outcome = "interrupted";
+    let timer;
+    const pending = testApprovals.get(sessionId);
+    Object.assign(pending, identity, { state: "waiting", expiresAt: wait.expiresAt });
+    const decision = new Promise((resolve) => {
+      pending.cancel = (reason) => {
+        if (pending.state !== "waiting") return;
+        pending.state = reason;
+        outcome = reason;
+        resolve(null);
+      };
+      pending.resume = (authorize) => {
+        if (pending.state !== "waiting") return;
+        pending.state = "resuming";
+        clearTimeout(timer);
+        resolve(authorize);
+      };
+    });
+    const abort = () => pending.cancel("interrupted");
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) abort();
+    timer = setTimeout(() => pending.cancel("expired"), Math.max(0, Date.parse(wait.expiresAt) - Date.now()));
+    try {
+      options.onOutput?.("Waiting for memory approval. Normal Preview has been restored. Start anyway or Cancel in Vibe64 within five minutes; tests have not run.\n");
+      await publishSessionChanged(sessionId);
+      const authorizeStart = await decision;
+      if (!authorizeStart) return responseError(
+        outcome === "expired" ? "Memory approval expired. Tests were not run."
+          : outcome === "cancelled" ? "Memory approval cancelled. Tests were not run."
+            : "The original test command ended. Tests were not run.",
+        `vibe64_test_approval_${outcome}`, { details: result.details }
+      );
+      options.signal?.throwIfAborted();
+      await validate();
+      outcome = "resumed";
+      return await run(authorizeStart);
+    } catch (error) {
+      if (options.signal?.aborted) outcome = "interrupted";
+      error.details = { ...error.details, admission };
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abort);
+      await provider.endWorkflowApprovalWait({ ...identity, outcome });
+    }
+  }
 
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
     const normalizedSessionId = normalizeText(sessionId);
@@ -591,6 +708,7 @@ function createAgentPreviewCommandService({
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     const existing = sessionWorkers.get(socketPath);
     const sameGeneration = normalizeText(existing?.token) === normalizeText(descriptor.token);
+    if (existing && !sameGeneration) testApprovals.get(normalizedSessionId)?.interrupt();
     sessionWorkers.set(socketPath, {
       ...descriptor,
       executionId: sameGeneration ? normalizeText(existing?.executionId) : "",
@@ -609,6 +727,7 @@ function createAgentPreviewCommandService({
 
   async function closeAllForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
+    testApprovals.get(normalizedSessionId)?.interrupt();
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     browserWorkers.delete(normalizedSessionId);
     let closed = 0;
@@ -629,6 +748,7 @@ function createAgentPreviewCommandService({
 
   async function releaseControlForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
+    testApprovals.get(normalizedSessionId)?.interrupt();
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     for (const descriptor of sessionWorkers.values()) {
       await stopRegisteredBrowserWorker(descriptor, {
@@ -842,6 +962,9 @@ function createAgentPreviewCommandService({
 
   return Object.freeze({
     authorizeBrowserIdentity,
+    testApprovalStatus,
+    resumeTestApproval,
+    cancelTestApproval,
     browserStart: (sessionId, input) => startRegisteredBrowserWorker(sessionId, input, {
       browserWorkers,
       runCommand: runManagedCommand,
@@ -854,27 +977,30 @@ function createAgentPreviewCommandService({
       stopOwnedExecutions
     }),
     closeAllForSession,
-    playwrightRun: (sessionId, input, options = {}) => {
+    playwrightRun: async (sessionId, input, options = {}) => {
+      input = structuredClone(input);
+      if (testApprovals.has(sessionId) && !input.testRunToken) return responseError(
+        "The original browser test is waiting for approval or resuming. Finish or cancel it before starting another.", "vibe64_test_approval_busy"
+      );
       const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
       if (admission) return admission;
-      return runRegisteredPlaywrightCommand(sessionId, input, {
+      const cancellation = new AbortController();
+      const pending = input.targetId ? { state: "preparing", interrupt: () => cancellation.abort() } : null;
+      if (pending) {
+        testApprovals.set(sessionId, pending);
+        options = { ...options, signal: options.signal ? AbortSignal.any([options.signal, cancellation.signal]) : cancellation.signal };
+      }
+      try { return await runRegisteredPlaywrightCommand(sessionId, input, {
         browserWorkers,
         onOutput: options.onOutput,
         runCommand: runManagedCommand,
-        withTarget: (targetId, operation) => launchTarget.withPreviewTarget(sessionId, targetId, operation, {
-          waitUntilReady: async (terminal, { restoring = false } = {}) => {
-            const waited = await waitForPreviewReady(launchTarget, sessionId, {
-              terminalSessionId: terminal.id,
-              signal: restoring ? null : options.signal
-            });
-            if (!waited.ok) {
-              throw new Error(waited.status?.error || (waited.timeout
-                ? "Timed out waiting for Preview readiness."
-                : "Preview failed to become ready."));
-            }
-          }
-        })
-      });
+        withTarget: (targetId, operation, validate) => withTestApproval(sessionId, input, options, targetId, operation, validate)
+      }); } finally {
+        if (pending && testApprovals.get(sessionId) === pending) {
+          testApprovals.delete(sessionId);
+          await publishSessionChanged(sessionId);
+        }
+      }
     },
     registerBrowserWorker,
     releaseControlForSession,
@@ -1231,6 +1357,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     ? input.args.map((value) => String(value ?? ""))
     : [];
   let command = "";
+  let scriptText = "";
   if (runner === "node") {
     const cliPath = path.resolve(normalizeText(args[0]));
     const relativeCliPath = path.relative(path.resolve(descriptor.worktreePath), cliPath);
@@ -1266,6 +1393,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       );
     }
     command = descriptor.managedNpmPath;
+    scriptText = packageRecord.scripts[scriptName];
   } else {
     return responseError(
       "Browser testing requires the registered managed node or npm runner.",
@@ -1356,6 +1484,20 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   if (requestedEnv.PLAYWRIGHT_BASE_URL || storageStatePath) {
     return responseError("--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.", "vibe64_preview_target_conflict");
   }
+  async function validate() {
+    const current = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
+    if (current.error || current.descriptor.token !== descriptor.token ||
+        current.descriptor.controlGenerationId !== descriptor.controlGenerationId) {
+      throw Object.assign(new Error("The original browser-test command generation has ended. Tests were not run."), {
+        code: "vibe64_test_approval_interrupted"
+      });
+    }
+    if (runner === "npm") {
+      const latest = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8"));
+      if (latest.scripts?.[args[1]] !== scriptText) throw new Error("The test script changed while awaiting approval. Run the new command explicitly.");
+    }
+    return current;
+  }
   return withTarget(targetId, (testRunToken) => runCommand({
     ...request,
     execution: { ...request.execution, kind: "control", label: "Browser test setup" },
@@ -1371,7 +1513,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       PLAYWRIGHT_BASE_URL: "",
       VIBE64_PLAYWRIGHT_STORAGE_STATE: ""
     }
-  }));
+  }), validate);
 }
 
 async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
@@ -1675,6 +1817,7 @@ async function ensureAgentPreviewCommandServerUnlocked({
           writeFrame({
             code: normalizeText(payload?.code),
             error: normalizeText(payload?.error || payload?.stderr),
+            ...(isRecord(payload?.details?.admission) ? { details: { admission: payload.details.admission } } : {}),
             exitCode: Number.isInteger(payload?.exitCode) ? payload.exitCode : (payload?.ok === false ? 1 : 0),
             ok: payload?.ok !== false,
             timedOut: payload?.timedOut === true,

@@ -17,8 +17,11 @@ import {
   writeTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import {
+  finishVibe64Workflow,
+  setVibe64WorkflowPhase,
   runVibe64Command
 } from "@local/vibe64-execution/server";
+import { startResourceWorkflow } from "./resourceWorkflow.js";
 import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -93,6 +96,7 @@ import {
 } from "./previewIdentityCommand.js";
 import {
   createVibe64OutputTargetTerminalSpec,
+  inspectVibe64OutputsForContext,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
   outputResultsMarkerLineSeen
@@ -183,6 +187,7 @@ function previewDiagnosticError(error = null) {
   return {
     message: String(error?.message || error || ""),
     ...(error?.code ? { code: String(error.code) } : {}),
+    ...(error?.details?.admission?.id ? { resourceAdmissionId: String(error.details.admission.id).slice(0, 128) } : {}),
     ...(error?.statusCode ? { statusCode: error.statusCode } : {})
   };
 }
@@ -2010,6 +2015,9 @@ function createOutputTargetTerminalController({
   projectService,
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command,
+  startWorkflow = startResourceWorkflow,
+  finishWorkflow = finishVibe64Workflow,
+  setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure = () => null
 } = {}) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry({
@@ -2146,7 +2154,14 @@ function createOutputTargetTerminalController({
     if (existing) {
       return existing;
     }
-    const write = Promise.resolve().then(() => markLaunchTerminalReady(input));
+    const write = Promise.resolve().then(async () => {
+      const result = await markLaunchTerminalReady(input);
+      const metadata = input.terminalSession?.metadata;
+      if (result?.ready && metadata?.outputMode === "interactive") {
+        await setWorkflowPhase(metadata.resourceWorkflowId, "running");
+      }
+      return result;
+    });
     const tracked = write.finally(() => {
       if (launchReadyWrites.get(key) === tracked) {
         launchReadyWrites.delete(key);
@@ -2268,12 +2283,26 @@ function createOutputTargetTerminalController({
             }),
             listOutputResults(context.session)
           ]);
-          return outputStatusResponseFromPreviewStatus({
+          const response = outputStatusResponseFromPreviewStatus({
             outputRuns,
             outputTargets,
             previewStatus,
             previewApplicationIdentities: context.previewApplicationIdentities
           });
+          if (!["ready", "starting"].includes(response.preview.state) && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
+            const root = previewDiagnosticsSessionRoot(context.session);
+            const diagnostic = root ? await readFile(path.join(root, PREVIEW_LAST_FILE_NAME), "utf8")
+              .then((text) => JSON.parse(text)).catch(() => null) : null;
+            if (diagnostic?.sessionId === sessionId && diagnostic.status === "failed" &&
+                diagnostic.error?.code === "vibe64_capacity_rejected" &&
+                /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(diagnostic.error.resourceAdmissionId || "") &&
+                outputTargets.some((target) => target.id === diagnostic.outputTargetId)) {
+              response.resourceAdmissionId = diagnostic.error.resourceAdmissionId;
+              response.preview.state = "failed";
+              response.preview.message = diagnostic.error.message;
+            }
+          }
+          return response;
         } finally {
           admission.release();
         }
@@ -2324,9 +2353,10 @@ function createOutputTargetTerminalController({
       });
     },
 
-    async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady }) {
+    async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady, startTarget = (start) => start(), signal }) {
       const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
       const previous = await withLaunchStartLock(sessionId, async () => {
+        signal?.throwIfAborted();
         if (previewTestRuns.has(sessionId)) {
           throw Object.assign(new Error("Browser tests already own this session's Preview. Wait for them to finish."), {
             code: "vibe64_preview_test_busy"
@@ -2353,11 +2383,14 @@ function createOutputTargetTerminalController({
         };
       });
       async function ensureTargetReady(targetId, options) {
-        const started = await controller.startTerminal(sessionId, {
+        testRun.restoring = options?.restoring === true;
+        const start = () => controller.startTerminal(sessionId, {
           ensurePreview: true,
           outputTargetId: targetId,
           previewTestRun: testRun
         });
+        if (!testRun.restoring) signal?.throwIfAborted();
+        const started = await (testRun.restoring ? start() : startTarget(start));
         if (started?.ok === false) {
           throw Object.assign(new Error(started.error), started);
         }
@@ -2367,12 +2400,14 @@ function createOutputTargetTerminalController({
       let result;
       try {
         await ensureTargetReady(outputTargetId);
+        signal?.throwIfAborted();
         if (testRun.closing) {
           throw new Error("The session closed before browser tests could start.");
         }
         result = await operation(testRun.token);
       } catch (error) {
-        result = { ok: false, exitCode: 1, error: error.message, code: error.code };
+        result = { ok: false, exitCode: 1, error: error.message, code: error.code,
+          ...(error.details ? { details: error.details } : {}) };
       }
       try {
         if (testRun.closing) {
@@ -2626,10 +2661,12 @@ function createOutputTargetTerminalController({
 
           const namespace = outputTargetTerminalNamespace(sessionId);
           let terminalSession;
+          let resourceWorkflow = null;
           let outputResultsMarker = "";
           let readinessMarker = "";
           try {
             const terminalEnvRecords = await loadProjectExecutionEnvRecords({
+              includeResourceConfiguration: true,
               projectService,
               runCommand,
               runtime: context.runtime,
@@ -2682,171 +2719,204 @@ function createOutputTargetTerminalController({
               reusableTerminal: existingReusableTerminal,
               sessionId
             });
-            terminalSession = await runCommand({
-              actor: "daemon",
-              allowedRoots: commandAllowedRoots,
-              args: spec.args || [],
-              command: spec.command,
-              cwd: spec.cwd || cwd,
-              env: launchEnvironment.env,
-              envPolicy: webOutput ? "preview" : "project",
-              execution: outputTargetExecutionDescriptor(outputTarget, spec),
-              mode: "pty",
-              project: commandProject,
-              purpose: webOutput ? "preview" : "output",
-              runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizeRuntimeList(spec.runtimes),
-              session: context.session || {},
-              terminal: {
-                commandPreview: spec.commandPreview,
-                maxRunning: 1,
-                metadata: {
-                  ...(spec.metadata || {}),
-                  attemptedCommand: commandPreview,
-                  envHash: launchEnvHash,
-                  ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
-                  outputTargetId: outputTarget.id,
-                  outputTargetLabel: outputTarget.label,
-                  ...(previewPublicOrigin ? { previewPublicOrigin } : {}),
-                  sessionId,
-                  ...terminalNoGithubActorMetadata({
-                    ownerUserKey: "output-target",
-                    reason: "output-target"
-                  })
+            if (existingReusableTerminal) {
+              terminalSession = existingReusableTerminal;
+            } else {
+              const currentOutputs = await inspectVibe64OutputsForContext(context);
+              if (currentOutputs.stackHash !== spec.stackHash) {
+                throw Object.assign(new Error("The Stack changed while preparing this output. Retry to run the current target."), {
+                  code: "VIBE64_STACK_CHANGED"
+                });
+              }
+              const execution = outputTargetExecutionDescriptor(outputTarget, spec);
+              resourceWorkflow = await startWorkflow({
+                ...spec.resourceWorkflow,
+                configuration: {
+                  ...spec.resourceWorkflow?.configuration,
+                  environmentFingerprint: terminalEnvRecords.resourceConfigurationFingerprint
                 },
-                namespace,
-                namespaceLimitPrefix: namespace,
-                onClose: async (event) => {
-                  if (event.reason === "exit" && event.exitCode === 0) {
-                    await captureOutputResults({
-                      context,
-                      outputTarget,
-                      spec,
-                      terminalSessionId: event.id,
-                      updateMetadata: (metadata) => updateTerminalSessionMetadata(event.id, metadata, {
-                        namespace
-                      })
-                    });
-                  }
-                  if (event.reason === "exit") {
+                session: context.session, sourceRoot: context.sessionSourceRoot,
+                environment: testRun && !testRun.restoring && outputTarget.id === testRun.targetId ? "test" : "development",
+                kind: execution.kind, label: execution.label, env
+              });
+              if (resourceWorkflow?.ok === false) {
+                throw Object.assign(new Error(resourceWorkflow.error || "This output could not be admitted."), {
+                  code: resourceWorkflow.code, details: { admission: resourceWorkflow.admission }
+                });
+              }
+              const admittedOutputs = await inspectVibe64OutputsForContext(context);
+              if (admittedOutputs.stackHash !== spec.stackHash) {
+                throw Object.assign(new Error("The Stack changed while waiting for resources. Retry to run the current target."), {
+                  code: "VIBE64_STACK_CHANGED"
+                });
+              }
+              terminalSession = await runCommand({
+                actor: "daemon",
+                allowedRoots: commandAllowedRoots,
+                args: spec.args || [],
+                command: spec.command,
+                cwd: spec.cwd || cwd,
+                env: launchEnvironment.env,
+                envPolicy: webOutput ? "preview" : "project",
+                execution: { ...execution, ...(resourceWorkflow?.workflow?.id ? { workflowId: resourceWorkflow.workflow.id } : {}) },
+                mode: "pty",
+                project: commandProject,
+                purpose: webOutput ? "preview" : "output",
+                runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizeRuntimeList(spec.runtimes),
+                session: context.session || {},
+                terminal: {
+                  commandPreview: spec.commandPreview,
+                  maxRunning: 1,
+                  metadata: {
+                    ...(spec.metadata || {}),
+                    attemptedCommand: commandPreview,
+                    envHash: launchEnvHash,
+                    ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
+                    outputTargetId: outputTarget.id,
+                    outputTargetLabel: outputTarget.label,
+                    ...(resourceWorkflow?.workflow?.id ? { resourceWorkflowId: resourceWorkflow.workflow.id } : {}),
+                    ...(previewPublicOrigin ? { previewPublicOrigin } : {}),
+                    sessionId,
+                    ...terminalNoGithubActorMetadata({
+                      ownerUserKey: "output-target",
+                      reason: "output-target"
+                    })
+                  },
+                  namespace,
+                  namespaceLimitPrefix: namespace,
+                  onClose: async (event) => {
+                    try {
+                      if (event.reason === "exit" && event.exitCode === 0) {
+                        await captureOutputResults({
+                          context,
+                          outputTarget,
+                          spec,
+                          terminalSessionId: event.id,
+                          updateMetadata: (metadata) => updateTerminalSessionMetadata(event.id, metadata, {
+                            namespace
+                          })
+                        });
+                      }
+                      if (event.reason === "exit") {
+                        await writePreviewDiagnostic(context.session, {
+                          ...diagnosticBase,
+                          commandPreview,
+                          exitCode: event.exitCode ?? null,
+                          outputTargetId: outputTarget.id,
+                          outputTail: event.output,
+                          reason: event.exitCode === 0 ? "process_exited" : "process_exited_nonzero",
+                          status: event.exitCode === 0 ? "exited" : "failed",
+                          terminalSessionId: event.id
+                        });
+                      }
+                      await launchPreviewProxies.close({
+                        sessionId,
+                        terminalSessionId: event.id
+                      });
+                      const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
+                      if (metadataCleared) {
+                        await publishSessionChanged(sessionId, {
+                          reason: "output-target-stale-cleared"
+                        });
+                      }
+                      if (typeof spec.onClose === "function") {
+                        await spec.onClose(event);
+                      }
+                    } finally {
+                      await finishWorkflow(resourceWorkflow?.workflow?.id, {
+                        outcome: event.reason !== "exit" ? "stopped" : event.exitCode === 0 ? "succeeded" : "failed",
+                        defer: true
+                      });
+                    }
+                  },
+                  onStop: async (event) => {
                     await writePreviewDiagnostic(context.session, {
                       ...diagnosticBase,
                       commandPreview,
                       exitCode: event.exitCode ?? null,
                       outputTargetId: outputTarget.id,
                       outputTail: event.output,
-                      reason: event.exitCode === 0 ? "process_exited" : "process_exited_nonzero",
-                      status: event.exitCode === 0 ? "exited" : "failed",
+                      reason: "process_stopped",
+                      status: "stopped",
                       terminalSessionId: event.id
                     });
-                  }
-                  await launchPreviewProxies.close({
-                    sessionId,
-                    terminalSessionId: event.id
-                  });
-                  const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
-                  if (metadataCleared) {
-                    await publishSessionChanged(sessionId, {
-                      reason: "output-target-stale-cleared"
-                    });
-                  }
-                  if (typeof spec.onClose === "function") {
-                    await spec.onClose(event);
-                  }
-                },
-                onStop: async (event) => {
-                  await writePreviewDiagnostic(context.session, {
-                    ...diagnosticBase,
-                    commandPreview,
-                    exitCode: event.exitCode ?? null,
-                    outputTargetId: outputTarget.id,
-                    outputTail: event.output,
-                    reason: "process_stopped",
-                    status: "stopped",
-                    terminalSessionId: event.id
-                  });
-                  await launchPreviewProxies.close({
-                    sessionId,
-                    terminalSessionId: event.id
-                  });
-                  const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
-                  if (metadataCleared) {
-                    await publishSessionChanged(sessionId, {
-                      reason: "output-target-stale-cleared"
-                    });
-                  }
-                  if (typeof spec.onStop === "function") {
-                    await spec.onStop(event);
-                  }
-                },
-                onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
-                  const actions = launchActionsFromOutput(output);
-                  if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
-                    updateMetadata({
-                      actions
-                    });
-                  }
-                  void writePreviewDiagnostic(context.session, {
-                    ...diagnosticBase,
-                    commandPreview,
-                    outputTargetId: outputTarget.id,
-                    outputTail: output,
-                    reason: "process_output",
-                    status: "running",
-                    terminalSessionId: runningTerminalSession.id
-                  }, {
-                    append: false
-                  });
-                  if (outputResultsMarkerLineSeen(output, outputResultsMarker)) {
-                    void captureOutputResults({
-                      context,
-                      outputTarget,
-                      spec,
-                      terminalSessionId: runningTerminalSession.id,
-                      updateMetadata
-                    });
-                  }
-                  if (!readinessMarker || launchReadyConfirmed || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
-                    return;
-                  }
-                  void markLaunchReady({
-                    namespace,
-                    publishSessionChanged,
-                    source: "marker",
-                    store: context.store,
-                    sessionId,
-                    terminalSession: runningTerminalSession,
-                    updateMetadata
-                  }).then(async (result) => {
-                    launchReadyConfirmed = result?.ready === true;
-                    if (launchReadyConfirmed) {
-                      await ensureReadyLaunchPreviewProxy(
-                        context,
-                        result.terminal || runningTerminalSession,
-                        { source: "marker" }
-                      );
-                    }
-                  }).catch((error) => {
-                    vibe64SessionDebugLog("server.outputTargetTerminal.readyMarker.error", {
-                      error: vibe64SessionDebugError(error),
+                    await launchPreviewProxies.close({
                       sessionId,
-                      terminalSessionId: runningTerminalSession.id
-                    }, {
-                      level: "warn"
+                      terminalSessionId: event.id
                     });
-                  });
-                },
-                reuseRunning: forceRestart
-                  ? false
-                  : (runningSession) => {
-                      return launchTerminalCanBeReused(runningSession, {
-                        launchEnvHash,
-                        outputTargetId: outputTarget.id,
-                        spec
+                    const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
+                    if (metadataCleared) {
+                      await publishSessionChanged(sessionId, {
+                        reason: "output-target-stale-cleared"
                       });
                     }
-              }
-            });
+                    if (typeof spec.onStop === "function") {
+                      await spec.onStop(event);
+                    }
+                  },
+                  onOutput: ({ output, session: runningTerminalSession, updateMetadata }) => {
+                    const actions = launchActionsFromOutput(output);
+                    if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
+                      updateMetadata({
+                        actions
+                      });
+                    }
+                    void writePreviewDiagnostic(context.session, {
+                      ...diagnosticBase,
+                      commandPreview,
+                      outputTargetId: outputTarget.id,
+                      outputTail: output,
+                      reason: "process_output",
+                      status: "running",
+                      terminalSessionId: runningTerminalSession.id
+                    }, {
+                      append: false
+                    });
+                    if (outputResultsMarkerLineSeen(output, outputResultsMarker)) {
+                      void captureOutputResults({
+                        context,
+                        outputTarget,
+                        spec,
+                        terminalSessionId: runningTerminalSession.id,
+                        updateMetadata
+                      });
+                    }
+                    if (!readinessMarker || launchReadyConfirmed || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
+                      return;
+                    }
+                    void markLaunchReady({
+                      namespace,
+                      publishSessionChanged,
+                      source: "marker",
+                      store: context.store,
+                      sessionId,
+                      terminalSession: runningTerminalSession,
+                      updateMetadata
+                    }).then(async (result) => {
+                      launchReadyConfirmed = result?.ready === true;
+                      if (launchReadyConfirmed) {
+                        await ensureReadyLaunchPreviewProxy(
+                          context,
+                          result.terminal || runningTerminalSession,
+                          { source: "marker" }
+                        );
+                      }
+                    }).catch((error) => {
+                      vibe64SessionDebugLog("server.outputTargetTerminal.readyMarker.error", {
+                        error: vibe64SessionDebugError(error),
+                        sessionId,
+                        terminalSessionId: runningTerminalSession.id
+                      }, {
+                        level: "warn"
+                      });
+                    });
+                  },
+                  reuseRunning: false
+                }
+              });
+            }
           } catch (error) {
+            await finishWorkflow(resourceWorkflow?.workflow?.id, { outcome: "failed", defer: true });
             releaseLaunchSpecReservation(spec);
             await writePreviewDiagnostic(context.session, {
               ...diagnosticBase,
@@ -2865,6 +2935,7 @@ function createOutputTargetTerminalController({
             releaseLaunchSpecReservation(spec);
           }
           if (terminalSession?.ok === false) {
+            await finishWorkflow(resourceWorkflow?.workflow?.id, { outcome: "failed", defer: true });
             await writePreviewDiagnostic(context.session, {
               ...diagnosticBase,
               commandPreview,
@@ -2884,6 +2955,9 @@ function createOutputTargetTerminalController({
             });
           }
           if (terminalSession?.ok !== false && launchTerminalIsReady(terminalSession, readinessMarker)) {
+            if (terminalSession.metadata?.outputMode === "interactive") {
+              await setWorkflowPhase(terminalSession.metadata.resourceWorkflowId, "running");
+            }
             await writeLaunchMetadata(context.store, sessionId, terminalSession);
             await writePreviewDiagnostic(context.session, {
               ...diagnosticBase,

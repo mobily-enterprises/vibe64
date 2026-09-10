@@ -7,6 +7,7 @@ host provide managed system values separately.
 
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
+- `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/components/studio/RuntimeConfigRecordsTable.vue`
@@ -38,6 +39,22 @@ do not provision resources or materialize project environment files.
 Constructing a session runtime or reading session state does not resolve the
 project environment. Prompt rendering and command execution resolve it when
 needed and share one resolution within that runtime.
+
+Internal setup/output callers may request `includeResourceConfiguration` from
+the same environment read. Its result contains the execution environment and a
+separate SHA-256 configuration fingerprint. The existing environment owner
+hashes effective non-secret project values and logical resource/binding
+declarations. It excludes managed session addresses/credentials and uses the
+existing scoped secret classification; a masked value is never substituted as
+configuration. User overrides supersede defaults. Inherited host variables and
+generated launch ports/tokens are not project settings.
+The fingerprint selects comparable resource observations across sessions;
+changing application settings selects a new generation, while rotating a
+secret or receiving a different managed resource address does not. Failed
+declaration inspection returns an unavailable fingerprint, not proof of empty
+configuration. An unconfigured project can still use its supplied values.
+No additional inspection, provisioning, file projection or persistent store is
+introduced. Ordinary environment reads retain their environment-only result.
 
 Stack declarations are inspected only from a real baseline checkout or an
 explicit session source. A hosted catalog project's metadata namespace is not

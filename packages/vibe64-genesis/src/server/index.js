@@ -26,6 +26,12 @@ import {
 import {
   vibe64Driver
 } from "./promptContext.js";
+import {
+  VIBE64_RESOURCE_ESTIMATES_CONTRACT,
+  VIBE64_RESOURCE_ESTIMATES_SECTION,
+  parseVibe64ResourceEstimatesLines,
+  vibe64ResourceEstimatesInspection
+} from "./resourceEstimates.js";
 
 const require = createRequire(import.meta.url);
 
@@ -289,19 +295,50 @@ function composeVibe64SessionContext({
 }
 
 async function inspectVibe64Outputs(options = {}) {
-  const [section, environment] = await Promise.all([
+  const [section, environment, resourceSection, workspaceSetupSection] = await Promise.all([
     inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options),
-    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
+    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options),
+    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
+    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options)
   ]);
-  return vibe64OutputsInspection({ environment, section });
+  const outputs = vibe64OutputsInspection({ environment, section });
+  return {
+    ...outputs,
+    resourceEstimates: vibe64ResourceEstimatesInspection({
+      section: resourceSection,
+      outputsSection: section,
+      workspaceSetupSection
+    })
+  };
 }
 
 async function inspectVibe64WorkspaceSetup(options = {}) {
-  const section = await inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options);
-  return vibe64WorkspaceSetupInspection({
+  const [section, resourceSection, outputsSection] = await Promise.all([
+    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options),
+    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
+    inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options)
+  ]);
+  const setup = await vibe64WorkspaceSetupInspection({
     projectRoot: options.projectRoot,
     section
   });
+  return {
+    ...setup,
+    resourceEstimates: vibe64ResourceEstimatesInspection({
+      section: resourceSection,
+      outputsSection,
+      workspaceSetupSection: section
+    })
+  };
+}
+
+async function inspectVibe64ResourceEstimates(options = {}) {
+  const [section, outputsSection, workspaceSetupSection] = await Promise.all([
+    inspectGenesisStackSection(VIBE64_RESOURCE_ESTIMATES_SECTION, options),
+    inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options),
+    inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options)
+  ]);
+  return vibe64ResourceEstimatesInspection({ section, outputsSection, workspaceSetupSection });
 }
 
 async function renderGenesisPrompt({
@@ -373,6 +410,8 @@ export {
   VIBE64_OUTPUTS_CONTRACT,
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+  VIBE64_RESOURCE_ESTIMATES_CONTRACT,
+  VIBE64_RESOURCE_ESTIMATES_SECTION,
   VIBE64_WORKSPACE_SETUP_CONTRACT,
   VIBE64_WORKSPACE_SETUP_SECTION,
   addGenesisStack,
@@ -395,8 +434,10 @@ export {
   inspectVibe64Deployment,
   inspectGenesisEnvironment,
   inspectVibe64Outputs,
+  inspectVibe64ResourceEstimates,
   inspectVibe64WorkspaceSetup,
   parseVibe64OutputsLines,
+  parseVibe64ResourceEstimatesLines,
   parseVibe64DeploymentLines,
   parseVibe64WorkspaceSetupLines,
   refreshGenesisCities,

@@ -192,7 +192,7 @@ async function runGit(cwd, args) {
   });
 }
 
-test("launch start awaits preparation, publishes hosted ingress, and cannot retain its preview child", async () => {
+test("launch start awaits preparation, publishes hosted ingress, and cannot retain its preview child", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-workspace-"));
   const sessionId = "session-workspace";
   const projectContextRoot = path.join(root, "project-namespace");
@@ -252,6 +252,10 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       }
     };
     const events = [];
+    const workflowStarts = [];
+    const workflowPhases = [];
+    const workflowFinishes = [];
+    let workflowRejection = null;
     let finishPreparation;
     let preparationStarted;
     const preparationStartedPromise = new Promise((resolve) => {
@@ -270,6 +274,8 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     let holdLaunchCleanupPublication = false;
     let projectEnvironmentStarted = null;
     let releaseProjectEnvironment = null;
+    let changeStackDuringEnvironment = null;
+    let changeStackDuringAdmission = null;
     const launchCleanupPublication = new Promise((resolve) => {
       releaseLaunchCleanupPublication = resolve;
     });
@@ -305,14 +311,17 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
         environmentPreparations += 1;
         return {};
       },
-      async projectInspectionEnvironment() {
+      async projectInspectionEnvironment(input) {
         if (blockProjectEnvironment) {
           projectEnvironmentStarted?.();
           await new Promise((resolve) => {
             releaseProjectEnvironment = resolve;
           });
         }
-        return {};
+        if (input.includeResourceConfiguration) await changeStackDuringEnvironment?.();
+        return input.includeResourceConfiguration
+          ? { environment: {}, resourceConfigurationFingerprint: "a".repeat(64) }
+          : {};
       },
       async readPreviewApplicationIdentities(input) {
         previewIdentityInput = input;
@@ -325,6 +334,14 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       targetRoot: projectContextRoot
     };
     controller = createOutputTargetTerminalController({
+      async startWorkflow(input) {
+        workflowStarts.push(input);
+        await changeStackDuringAdmission?.();
+        if (workflowRejection) return workflowRejection;
+        return { ok: true, workflow: { id: `workflow-${workflowStarts.length}` } };
+      },
+      async setWorkflowPhase(id, phase) { workflowPhases.push({ id, phase }); },
+      async finishWorkflow(id, options) { workflowFinishes.push({ id, ...options }); },
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: previewSocketDir,
         VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
@@ -394,8 +411,16 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     assert.equal(capturedLaunchProject.slug, "launch-project");
     assert.deepEqual(capturedLaunchExecution, {
       kind: "preview",
-      label: "Run app"
+      label: "Run app",
+      workflowId: "workflow-1"
     });
+    assert.deepEqual(workflowStarts[0].operation, { kind: "output", targetId: "app" });
+    assert.equal(workflowStarts[0].sourceRoot, sourceRoot);
+    assert.equal(workflowStarts[0].environment, "development");
+    assert.equal(workflowStarts[0].configuration.environmentFingerprint, "a".repeat(64));
+    assert.equal(workflowStarts[0].configuration.mode, "interactive");
+    assert.deepEqual(workflowStarts[0].steps, [{ argv: ["npm", "run", "develop"], role: "run", workdir: "." }]);
+    assert.deepEqual(workflowPhases, [{ id: "workflow-1", phase: "running" }]);
     assert.deepEqual(previewIdentityInput, {
       sessionId
     });
@@ -453,6 +478,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       ],
       command: "bash",
       commandPreview: "bash launch cleanup deadline",
+      metadata: readyTerminal.metadata,
       namespace,
       onClose: capturedLaunchTerminal.onClose,
       onStop: capturedLaunchTerminal.onStop
@@ -464,6 +490,11 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     const launchProcessIds = /SHELL:(\d+) CHILD:(\d+)/u.exec(
       readTerminalSession(realLaunchTerminal.id, { namespace }).output
     ).slice(1).map(Number);
+
+    const startsBeforeReuse = workflowStarts.length;
+    const reused = await controller.startTerminal(sessionId, { outputTargetId: "app", ensurePreview: true });
+    assert.equal(reused.id, realLaunchTerminal.id, JSON.stringify(reused));
+    assert.equal(workflowStarts.length, startsBeforeReuse, "reusing the ready preview does not create another accounting group");
 
     await assert.rejects(
       closeTerminalSession(realLaunchTerminal.id, {
@@ -486,6 +517,73 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       namespace,
       timeoutMs: 400
     })).closed, true);
+    assert.equal(workflowFinishes.some((item) => item.id === "workflow-2" && item.outcome === "stopped" && item.defer), true);
+
+    const declaredStack = await readFile(stackPath, "utf8");
+    const stackChanges = [
+      ["command", declaredStack.replace("`npm` `run` `develop`", "`npm` `run` `serve`")],
+      ["target identity with the same label", declaredStack.replace("Target `app`", "Target `other`")],
+      ["workspace setup", declaredStack.replace(/## Workspace setup\n[\s\S]*?(?=\n## |$)/u, "## Workspace setup\n\n- Nothing.\n")],
+      ["resource estimates", `${declaredStack.replace(/## Resource estimates\n[\s\S]*?(?=\n## |$)/u, "")}\n## Resource estimates\n\n### Output \`app\`\n- Startup typical MiB: \`128\`\n- Startup high MiB: \`256\`\n- Running typical MiB: \`64\`\n- Running high MiB: \`128\`\n`]
+    ];
+    for (const [phase, name, changedStack] of ["environment preparation", "admission"].flatMap((phase) =>
+      stackChanges.map(([name, changedStack]) => [phase, name, changedStack]))) {
+      await t.test(`launch rejects stale ${name} after ${phase}`, async () => {
+        assert.notEqual(changedStack, declaredStack);
+        const startsBeforeChange = workflowStarts.length;
+        const finishesBeforeChange = workflowFinishes.length;
+        const commandsBeforeChange = events.filter((event) => event === "launch-started").length;
+        if (phase === "environment preparation") changeStackDuringEnvironment = () => writeFile(stackPath, changedStack);
+        else changeStackDuringAdmission = () => writeFile(stackPath, changedStack);
+        try {
+          const stale = await controller.startTerminal(sessionId, { outputTargetId: "app", forceRestart: true });
+          assert.equal(stale.ok, false);
+          assert.equal(stale.code, "VIBE64_STACK_CHANGED");
+          assert.match(stale.error, /Stack changed.*Retry/u);
+          assert.equal(workflowStarts.length, startsBeforeChange + (phase === "admission" ? 1 : 0));
+          if (phase === "admission") assert.deepEqual(workflowFinishes.slice(finishesBeforeChange), [{
+            id: `workflow-${workflowStarts.length}`, outcome: "failed", defer: true
+          }]);
+          assert.equal(events.filter((event) => event === "launch-started").length, commandsBeforeChange);
+          const diagnostic = JSON.parse(await readFile(path.join(sessionRoot, "preview-last.json"), "utf8"));
+          assert.equal(diagnostic.error.code, "VIBE64_STACK_CHANGED");
+          assert.equal(diagnostic.reason, "terminal_start_failed");
+        } finally {
+          changeStackDuringEnvironment = null;
+          changeStackDuringAdmission = null;
+          await writeFile(stackPath, declaredStack);
+        }
+      });
+    }
+
+    workflowRejection = {
+      ok: false, code: "vibe64_capacity_rejected", error: "The preview fits only with reduced peak headroom.",
+      admission: { id: crypto.randomUUID(), outcome: "tight", availableBytes: 1600 * 1024 ** 2, actions: ["start-anyway"] }
+    };
+    const commandsBeforeRefusal = events.filter((event) => event === "launch-started").length;
+    const refusal = await controller.startTerminal(sessionId, { outputTargetId: "app", forceRestart: true });
+    assert.equal(refusal.ok, false);
+    assert.equal(refusal.code, "vibe64_capacity_rejected");
+    assert.deepEqual(refusal.details.admission, workflowRejection.admission);
+    assert.equal(events.filter((event) => event === "launch-started").length, commandsBeforeRefusal);
+    const diagnostic = JSON.parse(await readFile(path.join(sessionRoot, "preview-last.json"), "utf8"));
+    assert.equal(diagnostic.error.resourceAdmissionId, workflowRejection.admission.id);
+    assert.equal(diagnostic.reason, "terminal_start_failed");
+    const refusedStatus = await controller.launchStatus(sessionId);
+    assert.equal(refusedStatus.resourceAdmissionId, workflowRejection.admission.id);
+    assert.equal(refusedStatus.preview.state, "failed");
+    assert.equal(refusedStatus.preview.message, workflowRejection.error);
+    for (const stale of [
+      { ...diagnostic, sessionId: "another-session" },
+      { ...diagnostic, outputTargetId: "removed-target" },
+      { ...diagnostic, status: "ready" },
+      { ...diagnostic, error: { ...diagnostic.error, resourceAdmissionId: "invalid" } }
+    ]) {
+      await writeFile(path.join(sessionRoot, "preview-last.json"), JSON.stringify(stale));
+      assert.equal((await controller.launchStatus(sessionId)).resourceAdmissionId, undefined);
+    }
+    await writeFile(path.join(sessionRoot, "preview-last.json"), "{broken");
+    assert.equal((await controller.launchStatus(sessionId)).resourceAdmissionId, undefined);
   } finally {
     releaseLaunchCleanupPublication?.();
     await controller?.close();

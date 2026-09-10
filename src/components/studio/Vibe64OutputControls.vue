@@ -527,8 +527,20 @@
         <strong>{{ previewNotice.title }}</strong>
         <span>{{ previewNotice.message }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
+          <component
+            :is="resourceRecoveryControl"
+            v-if="resourceRecoveryControl && resourceAdmissionId"
+            :key="`${session?.sessionId}:${resourceAdmissionId}`"
+            :admission-id="resourceAdmissionId"
+            :session-id="session?.sessionId || ''"
+            :disabled="operationBusy && !resourceRetryBusy"
+            @busy="setResourceRetryBusy"
+            @retry-result="acceptResourceRetry"
+            @recheck="recheckResourceAdmission"
+          />
           <v-btn
             v-if="previewRecoveryVisible"
+            :disabled="resourceRetryBusy"
             color="primary"
             :prepend-icon="mdiRefresh"
             size="small"
@@ -706,7 +718,8 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import {
   mdiAccountCircleOutline,
   mdiAccountOffOutline,
@@ -740,7 +753,8 @@ import {
 } from "@/lib/vibe64PreviewDiagnostics.js";
 
 const emit = defineEmits([
-  "preview-attachment-state"
+  "preview-attachment-state",
+  "test-approval"
 ]);
 
 const props = defineProps({
@@ -810,8 +824,19 @@ const props = defineProps({
   }
 });
 
+const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+const resourceRetryBusy = ref(false);
+function setResourceRetryBusy(value) {
+  if (!value && !resourceRetryBusy.value) return;
+  resourceRetryBusy.value = value;
+  operationBusy.value = value;
+}
+
 const {
   embeddedManualStartButtonDisabled,
+  resourceAdmissionId,
+  testApproval,
+  acceptResourceRetry,
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
   embeddedTerminalSurfaceVisible,
@@ -888,6 +913,7 @@ const {
   previewToolbarPosition,
   previewUrl,
   recoverEmbeddedPreview,
+  recheckResourceAdmission,
   reloadPreview,
   retryLaunchStatus,
   requestPreviewDiagnostics,
@@ -1016,6 +1042,10 @@ async function requestCodexPreviewIdentityFix() {
     previewIdentityFixSending.value = false;
   }
 }
+
+watch([() => props.session?.sessionId, testApproval], ([sessionId, approval]) => {
+  emit("test-approval", { sessionId, approval });
+}, { immediate: true });
 
 watch(previewIdentityError, (error) => {
   if (!error) {

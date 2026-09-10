@@ -44,11 +44,14 @@ function workspaceSetupState(value = {}) {
     ? value
     : {};
   const status = normalizeText(source.status);
+  const resourceAdmissionId = normalizeText(source.resourceAdmissionId);
   return {
     currentLabel: boundedText(source.currentLabel, 160),
     diagnostic: boundedText(source.diagnostic, WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH),
     finishedAt: normalizeText(source.finishedAt),
     recipeHash: boundedText(source.recipeHash, 128),
+    ...(status === "failed" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(resourceAdmissionId)
+      ? { resourceAdmissionId } : {}),
     startedAt: normalizeText(source.startedAt),
     status: WORKSPACE_SETUP_STATUSES.has(status) ? status : "unconfigured",
     transcript: workspaceSetupTranscript(source.transcript),

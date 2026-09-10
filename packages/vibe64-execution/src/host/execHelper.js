@@ -3,8 +3,11 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   chownSync,
+  closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readSync,
   renameSync,
@@ -104,10 +107,12 @@ const MANAGED_EXECUTION_TASKS_MIN = 8;
 const MANAGED_EXECUTION_TASKS_MAX = 8192;
 const MANAGED_EXECUTION_STOP_TIMEOUT_MS = 15_000;
 
-main().catch((error) => {
-  process.stderr.write(`${String(error?.message || error)}\n`);
-  process.exit(2);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    process.stderr.write(`${String(error?.message || error)}\n`);
+    process.exit(2);
+  });
+}
 
 async function main() {
   if (process.argv[2] === "run-managed") {
@@ -191,6 +196,12 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
   consumeManagedExecutionRequestPayload(requestPayloadPath, owner);
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
+  if (action.startsWith("workflow-")) {
+    const result = managedWorkflowOperation(payload, owner);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    if (result.ok !== true) process.exitCode = 1;
+    return;
+  }
   const executionId = managedExecutionId(payload.executionId);
   const unitName = managedExecutionUnitName(executionId, owner);
   if (action === "inspect") {
@@ -262,10 +273,23 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
   if (memoryMaxBytes > workMemoryMaxBytes || tasksMax > workTasksMax) {
     throw new Error("Vibe64 exec helper rejected an execution limit above its work-slice limit.");
   }
-  configureManagedExecutionWorkSlice(owner, {
-    memoryMaxBytes: workMemoryMaxBytes,
-    tasksMax: workTasksMax
-  });
+  let executionSlice = managedExecutionSliceName(owner);
+  if (payload.workflow) {
+    const workflow = managedWorkflowIdentity(payload.workflow, owner);
+    const state = managedWorkflowState(workflow);
+    if (state.activeState !== "active" || !state.controlGroup || state.finishedAt) {
+      throw new Error("Vibe64 exec helper rejected an execution without its active workflow group.");
+    }
+    if (memoryMaxBytes > state.memoryMaxBytes || tasksMax > state.tasksMax) {
+      throw new Error("Vibe64 exec helper rejected an execution limit above its workflow limit.");
+    }
+    executionSlice = workflow.unitName;
+  } else {
+    configureManagedExecutionWorkSlice(owner, {
+      memoryMaxBytes: workMemoryMaxBytes,
+      tasksMax: workTasksMax
+    });
+  }
   ensureManagedExecutionRuntimeParents(owner);
   const executionRoot = managedExecutionRuntimeRoot(owner, executionId);
   const runnerPayloadPath = path.join(executionRoot, "command.json");
@@ -297,7 +321,7 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     "--quiet",
     `--unit=${unitName}`,
     "--service-type=exec",
-    `--slice=${managedExecutionSliceName(owner)}`,
+    `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
     `--property=User=${targetUser.username}`,
     `--property=Group=${VIBE64_GROUP}`,
@@ -399,13 +423,16 @@ async function runManagedExecutionPayload(payloadPath = "") {
       terminationTimer = terminateManagedExecutionChild(child);
     }
     const outcome = await new Promise((resolve, reject) => {
+      let exitObservedAt = "";
+      child.once("exit", () => { exitObservedAt = new Date().toISOString(); });
       child.once("error", reject);
-      child.once("close", (status, signal) => resolve({ signal, status }));
+      child.once("close", (status, signal) => resolve({ signal, status, exitObservedAt }));
     });
     const status = typeof outcome.status === "number" ? outcome.status : 1;
     writeManagedExecutionResult(path.dirname(resolved), {
       ...managedRunnerCgroupMeasurements(),
       executionId: managedExecutionId(payload.executionId),
+      exitObservedAt: outcome.exitObservedAt,
       execMainCode: outcome.signal ? "killed" : "exited",
       execMainStatus: outcome.signal || String(status),
       result: outcome.signal ? "signal" : status === 0 ? "success" : "exit-code",
@@ -504,6 +531,354 @@ function configureManagedExecutionWorkSlice(owner = {}, {
     "IOAccounting=yes",
     "TasksAccounting=yes"
   ]);
+}
+
+function managedWorkflowIdentity(input = {}, owner = {}) {
+  const id = managedExecutionId(input.id);
+  for (const key of [input.projectKey, input.sessionKey]) {
+    if (typeof key !== "string" || !/^[a-f0-9]{64}$/u.test(key)) {
+      throw new Error("Vibe64 exec helper rejected an invalid workflow accounting identity.");
+    }
+  }
+  const username = safeUsername(owner.username);
+  if (!username.startsWith(DAEMON_USERNAME_PREFIX)) {
+    throw new Error("Managed workflow accounting requires a workspace daemon owner.");
+  }
+  const workspace = workspaceFromDaemonUsername(username);
+  if (!/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workspace)) {
+    throw new Error("Invalid managed workflow workspace identity.");
+  }
+  const projectUnit = `vibe64-${workspace}-work-p${input.projectKey}.slice`;
+  const sessionUnit = `${projectUnit.slice(0, -6)}-s${input.sessionKey}.slice`;
+  return {
+    id,
+    workspace,
+    projectKey: input.projectKey,
+    sessionKey: input.sessionKey,
+    projectUnit,
+    sessionUnit,
+    unitName: `${sessionUnit.slice(0, -6)}-w${id.replaceAll("-", "")}.slice`
+  };
+}
+
+function managedWorkflowResultPath(workflow) {
+  // Root-owned receipts keep final counters recoverable if the controller
+  // disconnects after group removal. The controller owns durable history.
+  return path.join("/run/vibe64-workflows", workflow.workspace, `${workflow.id}.json`);
+}
+
+function readManagedWorkflowResult(workflow) {
+  try {
+    const result = JSON.parse(readFileSync(managedWorkflowResultPath(workflow), "utf8"));
+    if (result.schema !== "vibe64.managed-workflow.result.v1" || result.unitName !== workflow.unitName ||
+        result.id !== workflow.id) throw new Error("Invalid managed workflow result identity.");
+    return result;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function writeManagedWorkflowResult(workflow, result) {
+  const resultPath = managedWorkflowResultPath(workflow);
+  for (const directory of ["/run/vibe64-workflows", path.dirname(resultPath)]) {
+    try { mkdirSync(directory, { mode: 0o700 }); } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+    const stat = lstatSync(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== 0 || (stat.mode & 0o077) !== 0) {
+      throw new Error("Unsafe managed workflow result directory.");
+    }
+  }
+  const temporary = `${resultPath}.tmp-${process.pid}`;
+  // Opening exclusively before the cleanup block proves we own this temporary
+  // file. A pre-existing receipt temporary must never be removed on EEXIST.
+  const file = openSync(temporary, "wx", 0o600);
+  try {
+    try {
+      writeFileSync(file, `${JSON.stringify({ ...result, schema: "vibe64.managed-workflow.result.v1" })}\n`);
+    } finally {
+      closeSync(file);
+    }
+    renameSync(temporary, resultPath);
+  } catch (error) {
+    try { unlinkSync(temporary); } catch (cleanupError) {
+      if (cleanupError.code !== "ENOENT") throw new AggregateError([error, cleanupError], "Workflow receipt write and cleanup failed.");
+    }
+    throw error;
+  }
+}
+
+function managedWorkflowState(workflow) {
+  const response = runRootCommandAllowFailure("systemctl", [
+    "show", workflow.unitName, "--no-pager",
+    "--property=LoadState,ActiveState,ControlGroup,MemoryMax,TasksMax"
+  ]);
+  const values = Object.fromEntries(String(response.stdout || "").trim().split("\n").map((line) => {
+    const separator = line.indexOf("=");
+    return [line.slice(0, separator), line.slice(separator + 1)];
+  }));
+  const controlGroup = String(values.ControlGroup || "");
+  if (controlGroup && (path.posix.basename(controlGroup) !== workflow.unitName ||
+      !controlGroup.includes(`/vibe64-${workflow.workspace}-work.slice/`))) {
+    throw new Error("Managed workflow group does not belong to its workspace.");
+  }
+  const live = {
+    id: workflow.id,
+    unitName: workflow.unitName,
+    activeState: values.ActiveState || "unknown",
+    controlGroup,
+    memoryMaxBytes: knownCounter(values.MemoryMax),
+    tasksMax: knownCounter(values.TasksMax),
+    ...managedWorkflowCounters(controlGroup ? path.join("/sys/fs/cgroup", controlGroup) : "")
+  };
+  if (response.status === 0 && values.ActiveState === "inactive" && !controlGroup) {
+    live.scopeEmpty = true;
+  }
+  const recorded = readManagedWorkflowResult(workflow);
+  return recorded ? { ...recorded, activeState: live.activeState, controlGroup: live.controlGroup } : live;
+}
+
+function knownCounter(value) {
+  return typeof value === "string" && /^[0-9]+$/u.test(value.trim()) && Number.isSafeInteger(Number(value))
+    ? Number(value) : null;
+}
+
+function managedWorkflowCounters(cgroupPath = "") {
+  function read(name) {
+    if (!cgroupPath) return "";
+    try { return readFileSync(path.join(cgroupPath, name), "utf8"); } catch (error) {
+      if (error.code === "ENOENT" || error.code === "ENODEV") return "";
+      throw error;
+    }
+  }
+  function counters(name) {
+    return Object.fromEntries(read(name).trim().split("\n").map((line) => {
+      const [key, value] = line.trim().split(/\s+/u);
+      return [key, knownCounter(value)];
+    }));
+  }
+  const events = counters("memory.events");
+  const memory = counters("memory.stat");
+  const group = counters("cgroup.events");
+  const pressure = read("memory.pressure");
+  return {
+    sampledAt: new Date().toISOString(),
+    sampledMonotonicMs: Number(process.hrtime.bigint() / 1_000_000n),
+    scopeEmpty: group.populated === 0 ? true : group.populated === 1 ? false : null,
+    memoryCurrentBytes: knownCounter(read("memory.current")),
+    memoryPeakBytes: knownCounter(read("memory.peak")),
+    memorySwapCurrentBytes: knownCounter(read("memory.swap.current")),
+    memoryAnonBytes: memory.anon ?? null,
+    memoryFileBytes: memory.file ?? null,
+    memoryKernelBytes: memory.kernel ?? null,
+    swapInPages: memory.pswpin ?? null,
+    swapOutPages: memory.pswpout ?? null,
+    memoryPressureSomeTotalUsec: knownCounter(/^some\s+.*\btotal=([0-9]+)(?:\s|$)/mu.exec(pressure)?.[1]),
+    oomCount: events.oom ?? null,
+    oomKillCount: events.oom_kill ?? null,
+    limitHitCount: events.max ?? null,
+    reclaimCount: events.high ?? null,
+    tasksCurrent: knownCounter(read("pids.current")),
+    peakScope: "workflow-lifetime"
+  };
+}
+
+function managedWorkflowOperation(payload, owner) {
+  const workflow = managedWorkflowIdentity(payload.workflow, owner);
+  const action = String(payload.action || "");
+  if (action === "workflow-inspect") return { ok: true, ...managedWorkflowState(workflow) };
+  if (action === "workflow-grow" || action === "workflow-limits") return managedWorkflowMemoryOperation(payload, workflow, owner);
+  if (action === "workflow-forget") {
+    const recorded = managedWorkflowState(workflow);
+    if (recorded.scopeEmpty !== true || recorded.activeState !== "inactive") {
+      throw new Error("Only a completed workflow receipt can be acknowledged.");
+    }
+    try { unlinkSync(managedWorkflowResultPath(workflow)); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    return { ok: true, id: workflow.id };
+  }
+  if (action === "workflow-create") {
+    const memoryMaxBytes = managedExecutionInteger(payload.memoryMaxBytes,
+      MANAGED_EXECUTION_MEMORY_MIN_BYTES, MANAGED_EXECUTION_WORK_MEMORY_MAX_BYTES, "workflow memory limit");
+    const tasksMax = managedExecutionInteger(payload.tasksMax,
+      MANAGED_EXECUTION_TASKS_MIN, MANAGED_EXECUTION_TASKS_MAX, "workflow task limit");
+    const workMaximum = knownCounter(runRootCommand("systemctl", [
+      "show", managedExecutionSliceName(owner), "--property=MemoryMax", "--value"
+    ]));
+    if (workMaximum === null || memoryMaxBytes > workMaximum) {
+      throw new Error("Vibe64 exec helper rejected a workflow above its proven work-slice memory limit.");
+    }
+    const previous = managedWorkflowState(workflow);
+    if (previous.finishedAt) throw new Error("A completed workflow identity cannot be reused.");
+    if (previous.activeState === "active") {
+      if (previous.memoryMaxBytes !== memoryMaxBytes || previous.tasksMax !== tasksMax) {
+        throw new Error("An active workflow cannot be reconfigured by retrying creation.");
+      }
+      return { ok: true, ...previous };
+    }
+    // Ancestor limits already belong to host policy. Creation never changes
+    // another workflow, the shared work slice or the host's control reserve.
+    runRootCommand("busctl", [
+      "--system", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+      "org.freedesktop.systemd1.Manager", "StartTransientUnit", "ssa(sv)a(sa(sv))",
+      workflow.unitName, "fail", "6",
+      "MemoryMax", "t", String(memoryMaxBytes), "TasksMax", "t", String(tasksMax),
+      "MemoryAccounting", "b", "true", "CPUAccounting", "b", "true",
+      "IOAccounting", "b", "true", "TasksAccounting", "b", "true", "0"
+    ]);
+    runRootCommand("systemctl", ["start", workflow.unitName]);
+    const state = managedWorkflowState(workflow);
+    if (state.memoryMaxBytes !== memoryMaxBytes || state.tasksMax !== tasksMax || state.scopeEmpty !== true) {
+      throw new Error("Managed workflow creation could not prove its limits and empty accounting group.");
+    }
+    return { ok: true, ...state };
+  }
+  if (action === "workflow-finish") {
+    const state = managedWorkflowState(workflow);
+    if (!state.finishedAt) {
+      if (state.scopeEmpty !== true) {
+        return { ok: false, code: "workflow_not_empty", ...state };
+      }
+      writeManagedWorkflowResult(workflow, { ...state, finishedAt: new Date().toISOString() });
+    }
+    // Both first completion and a lost-acknowledgement retry must prove removal.
+    // A prior stop may have failed after the final receipt was saved.
+    const stop = runRootCommandAllowFailure("systemctl", ["stop", workflow.unitName]);
+    const stopped = managedWorkflowState(workflow);
+    // An empty transient unit may already have been collected by systemd.
+    // A stop-command error alone is neither proof of failure nor completion.
+    if (stopped.activeState !== "inactive" || stopped.controlGroup || stopped.scopeEmpty !== true) {
+      throw new Error(String(stop.stderr || "Managed workflow group did not stop.").trim());
+    }
+    return { ok: true, ...stopped };
+  }
+  throw new Error("Vibe64 exec helper rejected an unknown workflow action.");
+}
+
+function managedWorkflowMemoryLimits(unitName, controlGroup, pageSizeBytes, requestedMaximum) {
+  const values = Object.fromEntries(runRootCommand("systemctl", [
+    "show", unitName, "--no-pager", "--property=ActiveState,ControlGroup,MemoryMax"
+  ]).split("\n").map((line) => {
+    const separator = line.indexOf("=");
+    return [line.slice(0, separator), line.slice(separator + 1)];
+  }));
+  if (values.ActiveState !== "active" || values.ControlGroup !== controlGroup) {
+    throw new Error("Memory growth requires the same active, owned accounting group.");
+  }
+  const kernelMaximum = knownCounter(readFileSync(path.join("/sys/fs/cgroup", controlGroup, "memory.max"), "utf8"));
+  const configuredMaximum = knownCounter(values.MemoryMax);
+  if (configuredMaximum === null || kernelMaximum !== Math.floor(configuredMaximum / pageSizeBytes) * pageSizeBytes) {
+    throw new Error("The effective memory limit could not be verified.");
+  }
+  const high = readFileSync(path.join("/sys/fs/cgroup", controlGroup, "memory.high"), "utf8").trim();
+  if (high !== "max" && (knownCounter(high) === null || requestedMaximum > Number(high))) {
+    throw Object.assign(new Error("Memory growth is blocked by the target's memory.high limit."), {
+      limitingGroup: { controlGroup, limit: "memory.high", maximumBytes: knownCounter(high), requestedBytes: requestedMaximum ?? null }
+    });
+  }
+  return { unitName, controlGroup, memoryMaxBytes: configuredMaximum, effectiveMemoryMaxBytes: kernelMaximum,
+    memoryHighBytes: high === "max" ? null : knownCounter(high) };
+}
+
+function managedWorkflowAncestorLimits(controlGroup, memoryMaxBytes) {
+  const ancestors = [];
+  for (let group = path.posix.dirname(controlGroup); group !== "/"; group = path.posix.dirname(group)) {
+    const limits = { controlGroup: group };
+    for (const [file, key] of [["memory.max", "memoryMaxBytes"], ["memory.high", "memoryHighBytes"]]) {
+      const value = readFileSync(path.join("/sys/fs/cgroup", group, file), "utf8").trim();
+      const maximum = value === "max" ? null : knownCounter(value);
+      if (value !== "max" && (maximum === null || memoryMaxBytes > maximum)) {
+        throw Object.assign(new Error(`Memory growth is blocked by an ancestor ${file} limit.`), {
+          limitingGroup: { controlGroup: group, limit: file, maximumBytes: maximum, requestedBytes: memoryMaxBytes }
+        });
+      }
+      limits[key] = maximum;
+    }
+    ancestors.push(limits);
+  }
+  return ancestors;
+}
+
+function managedWorkflowMemoryOperation(payload, workflow, owner) {
+  const readOnly = payload.action === "workflow-limits";
+  let attempted = false;
+  let before = [];
+  let after = [];
+  let targets = [];
+  let ancestors = [];
+  let pageSizeBytes = null;
+  try {
+    const state = managedWorkflowState(workflow);
+    if (state.activeState !== "active" || !state.controlGroup || state.finishedAt) {
+      throw new Error("Memory growth requires an active workflow.");
+    }
+    const memoryMaxBytes = managedExecutionInteger(payload.memoryMaxBytes,
+      MANAGED_EXECUTION_MEMORY_MIN_BYTES, MANAGED_EXECUTION_WORK_MEMORY_MAX_BYTES, "workflow memory limit");
+    if (!Array.isArray(payload.executions) || payload.executions.length > 128) {
+      throw new Error("Memory growth requires a bounded list of owned executions.");
+    }
+    pageSizeBytes = knownCounter(runRootCommand("getconf", ["PAGESIZE"]));
+    if (!pageSizeBytes || pageSizeBytes > MANAGED_EXECUTION_MEMORY_MIN_BYTES) {
+      throw new Error("The kernel memory limit granularity is unavailable.");
+    }
+    // Kernel limits are whole pages. Round down here so applying a byte budget
+    // never grants more memory than the provider has reserved.
+    targets = [{ unitName: workflow.unitName, controlGroup: state.controlGroup,
+      memoryMaxBytes: Math.floor(memoryMaxBytes / pageSizeBytes) * pageSizeBytes,
+      expectedMemoryMaxBytes: payload.expectedMemoryMaxBytes }];
+    for (const execution of payload.executions) {
+      const unitName = managedExecutionUnitName(execution?.id, owner);
+      if (targets.some((target) => target.unitName === unitName)) throw new Error("Duplicate memory growth execution.");
+      const maximum = managedExecutionInteger(execution.memoryMaxBytes,
+        MANAGED_EXECUTION_MEMORY_MIN_BYTES, MANAGED_EXECUTION_MEMORY_MAX_BYTES, "execution memory limit");
+      if (maximum > memoryMaxBytes) throw new Error("Execution memory growth exceeds its workflow allowance.");
+      targets.push({ unitName, controlGroup: `${state.controlGroup}/${unitName}`,
+        memoryMaxBytes: Math.floor(maximum / pageSizeBytes) * pageSizeBytes,
+        expectedMemoryMaxBytes: execution.expectedMemoryMaxBytes });
+    }
+    // Validate every target and ancestor before the first write. Unit names
+    // come only from owner-scoped identities; caller paths never select a unit.
+    before = targets.map((target) => managedWorkflowMemoryLimits(target.unitName, target.controlGroup, pageSizeBytes,
+      readOnly ? undefined : target.memoryMaxBytes));
+    if (readOnly) return { ok: true, id: workflow.id, pageSizeBytes, before, after: before,
+      ancestors: managedWorkflowAncestorLimits(state.controlGroup) };
+    for (const [index, target] of targets.entries()) {
+      if (target.expectedMemoryMaxBytes !== before[index].memoryMaxBytes ||
+          target.memoryMaxBytes < before[index].effectiveMemoryMaxBytes) {
+        throw new Error("Memory growth cannot lower a live limit or apply to stale limits.");
+      }
+    }
+    ancestors = managedWorkflowAncestorLimits(state.controlGroup, targets[0].memoryMaxBytes);
+    for (const [index, target] of targets.entries()) {
+      if (before[index].memoryMaxBytes === target.memoryMaxBytes) continue;
+      attempted = true;
+      // Parent first, then explicitly requested children. Never shrink to roll
+      // back a partial change: the provider retains its enlarged reservation.
+      runRootCommand("systemctl", ["set-property", "--runtime", target.unitName, `MemoryMax=${target.memoryMaxBytes}`]);
+    }
+    after = targets.map((target) => managedWorkflowMemoryLimits(target.unitName, target.controlGroup, pageSizeBytes, target.memoryMaxBytes));
+    ancestors = managedWorkflowAncestorLimits(state.controlGroup, targets[0].memoryMaxBytes);
+    if (!after.every((limit, index) => limit.memoryMaxBytes === targets[index].memoryMaxBytes)) {
+      throw new Error("Memory growth readback did not match the requested limits.");
+    }
+    return { ok: true, id: workflow.id, changeState: attempted ? "applied" : "unchanged", pageSizeBytes, before, after, ancestors };
+  } catch (error) {
+    let changeState = "unchanged";
+    if (attempted) {
+      // A failed command can have applied its change. Only a complete readback
+      // equal to the original limits proves capacity may be released.
+      after = targets.map((target) => {
+        try { return managedWorkflowMemoryLimits(target.unitName, target.controlGroup, pageSizeBytes); } catch { return null; }
+      });
+      changeState = after.some((limit) => limit === null) ? "unknown"
+        : after.every((limit, index) => limit.memoryMaxBytes === before[index].memoryMaxBytes) ? "unchanged" : "partial";
+    }
+    return { ok: false, id: workflow.id, code: "workflow_memory_growth_failed", changeState,
+      error: String(error?.message || error), limitingGroup: error?.limitingGroup ?? null,
+      pageSizeBytes, before, after, ancestors };
+  }
 }
 
 function managedExecutionTargetUser(payload = {}, owner = {}) {
@@ -644,6 +1019,7 @@ function managedRunnerCgroupMeasurements() {
     memoryPeak: cgroupSingleValue(path.join(cgroupPath, "memory.peak")),
     memorySwapCurrent: cgroupSingleValue(path.join(cgroupPath, "memory.swap.current")),
     oomKillCount: String(Number(memoryEvents.oom_kill || 0)),
+    taskLimit: managedExecutionTaskLimitCounters(cgroupPath),
     tasksCurrent: cgroupSingleValue(path.join(cgroupPath, "pids.current")),
     tasksPeak: cgroupSingleValue(path.join(cgroupPath, "pids.peak"))
   };
@@ -659,6 +1035,26 @@ function cgroupSingleValue(filePath = "") {
     }
     throw error;
   }
+}
+
+function managedExecutionTaskLimitCounters(cgroupPath, read = readFileSync) {
+  if (!cgroupPath) return null;
+  try {
+    const counter = (name) => {
+      try { return knownCounter(/^max\s+(\d+)$/mu.exec(read(path.join(cgroupPath, name), "utf8"))?.[1]); }
+      catch { return null; }
+    };
+    const local = counter("pids.events.local");
+    const total = counter("pids.events");
+    const count = local > 0 ? local : total;
+    if (!(count > 0)) return null;
+    // With pids_localevents, "max" counts originating fork failures, not
+    // enforcement at this boundary. Never attribute those to this group's cap.
+    const mount = read("/proc/self/mountinfo", "utf8").split("\n").find((line) =>
+      line.split(" ")[4] === "/sys/fs/cgroup" && line.includes(" - cgroup2 "));
+    return { source: "cgroup-pids-events", count,
+      scope: local > 0 && mount && !mount.split(/[ ,]/u).includes("pids_localevents") ? "execution" : "unknown" };
+  } catch { return null; } // Diagnostics must not prevent exit/cleanup recording.
 }
 
 function cgroupKeyValues(filePath = "") {
@@ -704,7 +1100,8 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
     "show",
     unitName,
     "--no-pager",
-    "--property=LoadState,ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,MainPID,ControlGroup,MemoryCurrent,MemoryPeak,MemorySwapCurrent,TasksCurrent,TasksMax,CPUUsageNSec,IOReadBytes,IOWriteBytes"
+    "--timestamp=us+utc",
+    "--property=LoadState,ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,MainPID,ControlGroup,MemoryCurrent,MemoryPeak,MemorySwapCurrent,TasksCurrent,TasksMax,CPUUsageNSec,IOReadBytes,IOWriteBytes"
   ]);
   const values = {};
   for (const line of String(stateResult.stdout || "").split(/\r?\n/u)) {
@@ -728,12 +1125,21 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
     }
   }
   const recorded = executionId ? readManagedExecutionResult(owner, executionId) : {};
+  // Prefer the runner's child-exit observation to the later wrapper exit.
+  // systemd still supplies evidence if OOM killed the runner before its receipt.
+  const runnerExit = Date.parse(recorded.exitObservedAt || "");
+  const exitTimeSource = Number.isFinite(runnerExit) ? "runner" : "systemd";
+  const exitTime = Number.isFinite(runnerExit) ? runnerExit : Date.parse(values.ExecMainExitTimestamp || "");
+  const exitObservedAt = Number.isFinite(exitTime) && exitTime > 0 && exitTime <= Date.now()
+    ? new Date(exitTime).toISOString() : "";
   return {
     activeState: String(values.ActiveState || (recorded.executionId ? "inactive" : "unknown")),
     controlGroup,
     cpuUsageNSec: maximumCounter(values.CPUUsageNSec, recorded.cpuUsageNSec),
     execMainCode: String(values.ExecMainCode || recorded.execMainCode || ""),
     execMainStatus: String(values.ExecMainStatus || recorded.execMainStatus || ""),
+    exitObservedAt,
+    exitTimeSource: exitObservedAt ? exitTimeSource : "",
     ioReadBytes: maximumCounter(values.IOReadBytes, recorded.ioReadBytes),
     ioWriteBytes: maximumCounter(values.IOWriteBytes, recorded.ioWriteBytes),
     loadState: String(
@@ -748,9 +1154,11 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
     memoryPeak: maximumCounter(values.MemoryPeak, recorded.memoryPeak),
     memorySwapCurrent: maximumCounter(values.MemorySwapCurrent, recorded.memorySwapCurrent),
     oomKillCount: maximumCounter(recorded.oomKillCount),
+    taskLimit: recorded.taskLimit || managedExecutionTaskLimitCounters(cgroupPath),
     result: String(values.Result || recorded.result || ""),
     signal: String(recorded.signal || ""),
     scopeEmpty,
+    startedAt: values.ExecMainStartTimestamp || "",
     subState: String(values.SubState || "unknown"),
     tasksCurrent: maximumCounter(values.TasksCurrent, recorded.tasksCurrent),
     tasksPeak: maximumCounter(recorded.tasksPeak),
@@ -767,11 +1175,131 @@ function maximumCounter(...values) {
 }
 
 function writeManagedExecutionState(unitName = "", executionId = "", owner = {}) {
+  const state = managedExecutionState(unitName, executionId, owner);
+  let oomBoundary = null;
+  let taskLimit = state.taskLimit;
+  const startedAt = Date.parse(state.startedAt);
+  const exitedAt = Date.parse(state.exitObservedAt);
+  if ((state.result === "oom-kill" || Number(state.oomKillCount) > 0) &&
+      startedAt > 0 && exitedAt >= startedAt) {
+    // Failure-only, current-boot lookup. Never forward raw journal messages or
+    // infer the binding limit from a configured maximum or victim's cgroup.
+    const until = Math.min(Date.now(), exitedAt + 1000);
+    const journal = spawnSync("journalctl", [
+      "-k", "--boot=0", "--no-pager", "--output=json",
+      "--output-fields=__REALTIME_TIMESTAMP,__SEQNUM_ID,__SEQNUM,_BOOT_ID,_SOURCE_MONOTONIC_TIMESTAMP,MESSAGE",
+      "--lines=65", "--case-sensitive=yes",
+      `--since=@${startedAt / 1000}`, `--until=@${until / 1000}`,
+      `--grep=^oom-kill:|^/[^,]*/${unitName.replaceAll(".", "\\.")}(?:/[^,]*)?,task=`
+    ], { encoding: "utf8", timeout: 2000, maxBuffer: 128 * 1024 });
+    if (!journal.error && journal.status === 0) {
+      oomBoundary = managedExecutionOomBoundary(journal.stdout, {
+        unitName, workspace: workspaceFromDaemonUsername(owner.username), startedAt, until
+      });
+    }
+  }
+  if (!taskLimit && state.result && state.result !== "success" && startedAt > 0 && exitedAt >= startedAt) {
+    const until = Math.min(Date.now(), exitedAt + 1000);
+    const journal = spawnSync("journalctl", [
+      "-k", "--boot=0", "--no-pager", "--output=json", "--output-fields=__REALTIME_TIMESTAMP,MESSAGE",
+      "--lines=65", "--case-sensitive=yes", `--since=@${startedAt / 1000}`, `--until=@${until / 1000}`,
+      `--grep=^cgroup: fork rejected by pids controller in /.*${unitName.replaceAll(".", "\\.")}(?:/|$)`
+    ], { encoding: "utf8", timeout: 2000, maxBuffer: 128 * 1024 });
+    if (!journal.error && journal.status === 0) taskLimit = managedExecutionTaskLimitJournal(journal.stdout, {
+      unitName, workspace: workspaceFromDaemonUsername(owner.username), startedAt, until
+    });
+  }
   process.stdout.write(`${JSON.stringify({
     executionId,
     ok: true,
-    ...managedExecutionState(unitName, executionId, owner)
+    ...state,
+    oomBoundary,
+    taskLimit
   })}\n`);
+}
+
+function managedExecutionTaskLimitJournal(text, { unitName, workspace, startedAt, until }) {
+  if (typeof text !== "string" || Buffer.byteLength(text) > 128 * 1024) return null;
+  const lines = text.trim().split(/\r?\n/u);
+  if (lines.length > 64) return null;
+  for (const line of lines) {
+    let entry;
+    try { entry = JSON.parse(line); } catch { continue; }
+    const time = Number(entry?.__REALTIME_TIMESTAMP) / 1000;
+    if (!Number.isFinite(time) || time < startedAt || time > until) continue;
+    const group = typeof entry.MESSAGE === "string" &&
+      /^cgroup: fork rejected by pids controller in (\/[a-zA-Z0-9_./-]{1,2048})$/u.exec(entry.MESSAGE)?.[1];
+    if (!group) continue;
+    const parts = group.split("/");
+    const workIndex = parts.indexOf(`vibe64-${workspace}-work.slice`);
+    if (parts[1] !== "vibe64.slice" || workIndex < 2 || parts.indexOf(unitName) <= workIndex ||
+        parts.some((part, index) => index > 0 && (!part || part === "." || part === ".."))) continue;
+    // The kernel logs the origin of the denied fork, NOT its limiting ancestor.
+    // It logs only the first denial, so the number of journal rows is no count.
+    return { source: "kernel-journal", scope: "unknown", count: null, recordedAt: new Date(time).toISOString() };
+  }
+  return null;
+}
+
+function managedExecutionOomBoundary(text, { unitName, workspace, startedAt, until }) {
+  if (typeof text !== "string" || Buffer.byteLength(text) > 128 * 1024) return null;
+  const lines = text.trim().split(/\r?\n/u);
+  if (lines.length > 64) return null; // A truncated search is not complete evidence.
+  const entries = lines.flatMap((line) => {
+    try { return [JSON.parse(line)]; } catch { return []; }
+  });
+  let evidence = null;
+  for (const entry of entries) {
+    const time = Number(entry?.__REALTIME_TIMESTAMP) / 1000;
+    if (!Number.isFinite(time) || time < startedAt || time > until) continue;
+    let message = entry.MESSAGE;
+    if (typeof message === "string" && message.startsWith("oom-kill:") && message.endsWith(",task_memcg=")) {
+      // Linux serializes OOM reports with oom_lock, but pr_cont can split long
+      // group paths. Join only the immediately adjacent journal record in the
+      // same boot/sequence, with a complete victim suffix and close kernel time.
+      const next = entries.find((candidate) => /^[a-f0-9]{32}$/u.test(entry.__SEQNUM_ID || "") &&
+        candidate?.__SEQNUM_ID === entry.__SEQNUM_ID && candidate?._BOOT_ID === entry._BOOT_ID &&
+        /^[a-f0-9]{32}$/u.test(entry._BOOT_ID || "") && Number.isSafeInteger(Number(entry.__SEQNUM)) &&
+        Number(candidate.__SEQNUM) === Number(entry.__SEQNUM) + 1 &&
+        Number(candidate._SOURCE_MONOTONIC_TIMESTAMP) >= Number(entry._SOURCE_MONOTONIC_TIMESTAMP) &&
+        Number(candidate._SOURCE_MONOTONIC_TIMESTAMP) - Number(entry._SOURCE_MONOTONIC_TIMESTAMP) <= 1_000_000 &&
+        /^\/[a-zA-Z0-9_./-]+,task=[^,]+,pid=\d+,uid=\d+$/u.test(candidate.MESSAGE || ""));
+      if (next) message += next.MESSAGE;
+    }
+    const match = typeof message === "string" && message.match(
+      /^oom-kill:constraint=(CONSTRAINT_[A-Z_]+),.*?,(?:oom_memcg=(\/[^,]+)|(global_oom)),task_memcg=(\/[^,]+),task=/u
+    );
+    if (!match) continue;
+    const [, constraint, memoryGroup, globalOom, taskGroup] = match;
+    const parts = taskGroup.split("/");
+    const workIndex = parts.indexOf(`vibe64-${workspace}-work.slice`);
+    const executionIndex = parts.indexOf(unitName);
+    if (parts[1] !== "vibe64.slice" || workIndex < 2 || executionIndex <= workIndex ||
+        parts.some((part, index) => index > 0 && (part === "." || part === ".." || !/^[a-zA-Z0-9_.-]+$/u.test(part)))) continue;
+    let scope;
+    if (constraint === "CONSTRAINT_NONE" && globalOom) {
+      scope = "host";
+    } else if (constraint === "CONSTRAINT_MEMCG" && memoryGroup &&
+        (taskGroup === memoryGroup || taskGroup.startsWith(`${memoryGroup}/`))) {
+      const boundary = memoryGroup.split("/").at(-1);
+      const executionGroup = parts.slice(0, executionIndex + 1).join("/");
+      scope = memoryGroup === executionGroup || memoryGroup.startsWith(`${executionGroup}/`) ? "execution"
+        : boundary === `vibe64-${workspace}-work.slice` ? "workspace_work"
+        : boundary === `vibe64-${workspace}.slice` ? "workspace"
+        : boundary === "vibe64.slice" ? "platform"
+        : /-work-p[a-f0-9]{64}-s[a-f0-9]{64}-w[a-f0-9]{32}\.slice$/u.test(boundary) ? "workflow"
+        : /-work-p[a-f0-9]{64}-s[a-f0-9]{64}\.slice$/u.test(boundary) ? "session"
+        : /-work-p[a-f0-9]{64}\.slice$/u.test(boundary) ? "project" : "ancestor";
+    } else {
+      return null; // Placement constraints are not proof of host exhaustion.
+    }
+    const cgroup = memoryGroup || "";
+    if (evidence && evidence.cgroup !== cgroup) return null;
+    if (!evidence || time > Date.parse(evidence.recordedAt)) {
+      evidence = { source: "kernel-journal", scope, cgroup, recordedAt: new Date(time).toISOString() };
+    }
+  }
+  return evidence;
 }
 
 function stopManagedExecution(unitName = "", executionId = "", owner = {}) {
@@ -1680,3 +2208,6 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   env.TMPDIR = workspaceTempRoot(ownerUsername);
   return env;
 }
+
+export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
+  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal };

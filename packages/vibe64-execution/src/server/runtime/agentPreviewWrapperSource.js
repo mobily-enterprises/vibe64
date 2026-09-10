@@ -102,6 +102,9 @@ function writePayload(payload = {}) {
       : "";
     process.stderr.write(prefix + errorText(payload.error) + "\\n");
   }
+  if (payload.ok === false && payload.details?.admission) {
+    process.stderr.write("Resource admission: " + JSON.stringify(payload.details.admission) + "\\n");
+  }
 }
 
 async function controlRequest(requestPath, input = {}) {
@@ -144,7 +147,6 @@ async function streamingControlRequest(requestPath, input = {}) {
   return new Promise((resolve, reject) => {
     let buffer = "";
     let finalPayload = null;
-    let receivedOutput = false;
     const handleLine = (line = "") => {
       const value = String(line || "").trim();
       if (!value) {
@@ -152,7 +154,6 @@ async function streamingControlRequest(requestPath, input = {}) {
       }
       const payload = JSON.parse(value);
       if (payload.type === "output" && payload.data) {
-        receivedOutput = true;
         process.stdout.write(Buffer.from(String(payload.data), "base64"));
         return;
       }
@@ -184,9 +185,7 @@ async function streamingControlRequest(requestPath, input = {}) {
           if (!finalPayload) {
             throw new Error("Vibe64 browser-test execution returned an incomplete response.");
           }
-          if (finalPayload.ok === false && (!receivedOutput || finalPayload.code === "vibe64_preview_restore_failed") && finalPayload.error) {
-            process.stderr.write(errorText(finalPayload.error) + "\\n");
-          }
+          writePayload(finalPayload);
           resolve(payloadExitCode(finalPayload));
         } catch (error) {
           reject(error);

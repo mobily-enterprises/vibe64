@@ -15,14 +15,17 @@ const RUNTIME_PACKS = Object.freeze({
   },
   "bun": {
     binDirs: ["bun/bin"],
+    dependencyFiles: ["package.json", "bun.lock", "bun.lockb", "package-lock.json"],
     managedCommands: ["bun"]
   },
   "composer": {
     binDirs: ["composer/bin"],
+    dependencyFiles: ["composer.json", "composer.lock"],
     managedCommands: ["composer"]
   },
   "cpp": {
     binDirs: ["cpp/bin"],
+    dependencyFiles: ["CMakeLists.txt", "vcpkg.json", "vcpkg-configuration.json", "conanfile.py", "conan.lock"],
     managedCommands: [
       "addr2line",
       "ar",
@@ -86,10 +89,15 @@ const RUNTIME_PACKS = Object.freeze({
   },
   "node26": {
     binDirs: ["node26/bin"],
+    dependencyFiles: ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"],
     managedCommands: ["node", "npm", "npx", "corepack", "pnpm", "yarn"]
   },
   "operator-clis": {
     binDirs: ["managed-bin", "operator-clis/bin"],
+    identityPaths: [
+      "operator-clis/lib/node_modules/@openai/codex/package.json",
+      "operator-clis/lib/node_modules/opencode-ai/package.json"
+    ],
     managedCommands: ["codex", "opencode"]
   },
   "php": {
@@ -98,6 +106,7 @@ const RUNTIME_PACKS = Object.freeze({
   },
   "playwright": {
     binDirs: ["playwright/bin"],
+    identityPaths: ["playwright/runtime.env", "playwright/browsers"],
     managedCommands: ["playwright"]
   },
   "postgresql": {

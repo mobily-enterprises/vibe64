@@ -244,6 +244,24 @@ transports other named Stack sections without interpreting them. Vibe64 owns
 the strict mechanical contracts for workspace setup, launch, preview identity,
 and application deployment, then executes them under its host policy without
 inventing commands from a framework or project shape.
+Projects can also declare initial memory estimates for preparation, application
+startup and running work. These hints are separate from measured use and host
+limits; missing or invalid estimates do not by themselves block a valid
+application or require successful preparation to run again.
+When a host refuses preparation or Preview for resource reasons, people can
+inspect the host's recorded decision and use its recovery controls without
+opening another AI chat. Reloading preserves access to that refusal; a healthy
+running Preview supersedes it. Accepting recovery follows the original start
+instead of launching a duplicate. Rechecking first reads current preview state;
+it never force-restarts an app merely because its start response was lost.
+Test-specific refusals remain test-specific: inspecting or rechecking one must
+not turn it into an ordinary application start.
+When the host offers memory approval for a marginal browser test, the normal
+Preview remains usable during a five-minute decision window. Chat says it is
+waiting for approval, not working. The owner can resume the same test or cancel
+it; expiry also ends the request without running tests. Reloading the page does
+not discard the wait, but losing the owning assistant does. Approval still
+checks current safety and never creates a duplicate test.
 
 Deslop is a deliberate cleanup that preserves behavior, not an automatic extra
 agent turn. After Save, Vibe64 may offer Deslop for the exact commit it just

@@ -273,6 +273,8 @@ function normalizeExecutionDescriptor(value = {}, {
   }
   return Object.freeze({
     controlGenerationId: normalizeExecutionIdentifier(execution.controlGenerationId),
+    ...(execution.workflowId === undefined || execution.workflowId === null || execution.workflowId === ""
+      ? {} : { workflowId: normalizeWorkflowId(execution.workflowId) }),
     id: randomUUID(),
     kind,
     label: normalizeText(execution.label),
@@ -287,6 +289,13 @@ function normalizeExecutionDescriptor(value = {}, {
       execution.sessionId || session.sessionId || session.id
     )
   });
+}
+
+function normalizeWorkflowId(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(value)) {
+    throw commandRequestError("Execution requires a valid managed workflow id.", "vibe64_workflow_id_invalid");
+  }
+  return value.toLowerCase();
 }
 
 function defaultRuntimesForPurpose(purpose = "") {

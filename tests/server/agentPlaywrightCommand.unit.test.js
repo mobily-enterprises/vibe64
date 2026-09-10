@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -124,7 +125,9 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
 async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion, {
   previewFailure = "",
   previewUrl = "http://127.0.0.1:4104/home",
-  withPreviewTarget = null
+  withPreviewTarget = null,
+  resourceProvider,
+  publishSessionChanged
 } = {}) {
   const runtimeRoot = path.join(root, "runtime-packs");
   const projectRoot = path.join(root, "project");
@@ -158,6 +161,8 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     ].join("\n") + "\n"
   );
   const commandService = createAgentPreviewCommandService({
+    resourceProvider,
+    publishSessionChanged,
     launchTarget: {
       withPreviewTarget,
       previewTestRunAdmission() { return null; },
@@ -263,7 +268,7 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
       active = true;
       try {
         await waitUntilReady({ id: "managed-preview-terminal" });
-        return await operation();
+        return await operation("fixture-target-run");
       } finally {
         active = false;
       }
@@ -302,6 +307,128 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
     ...options, env: { ...options.env, PLAYWRIGHT_BASE_URL: "https://production.example" }
   }), /own managed Preview URL/u);
   assert.deepEqual(selected, ["test-app", "test-app"]);
+});
+
+function approvalCommand(command, args, options) {
+  const child = spawn(command, args, { ...options, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const completion = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ ok: code === 0 && !signal, stdout, stderr, code, signal }));
+  });
+  return { child, completion };
+}
+
+test("memory approval retains the original live command across the real wrapper/socket boundary", async (t) => {
+  for (const action of ["accept", "start-failure", "cancel", "expire", "disconnect", "script-change", "session-close", "control-release", "release-during-resume", "generation-change"]) {
+    await t.test(action, { timeout: 15_000 }, async (t) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-approval-"));
+      const admissionId = randomUUID();
+      const waiting = Promise.withResolvers();
+      const authorizing = Promise.withResolvers();
+      const authorizeGate = Promise.withResolvers();
+      const ended = [];
+      const selected = [];
+      let approvals = 0;
+      let fixture;
+      fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
+        resourceProvider: () => ({
+          async beginWorkflowApprovalWait(input) {
+            assert.equal(input.admissionId, admissionId);
+            assert.equal(input.parentExecutionId, "assistant-execution");
+            assert.match(input.controlGenerationId, /^[a-f0-9-]{36}$/u);
+            assert.equal(selected.length, 1, "wait begins after the first target attempt returns");
+            return { expiresAt: new Date(Date.now() + (action === "expire" ? 100 : 300_000)).toISOString() };
+          },
+          async endWorkflowApprovalWait(input) { ended.push(input); }
+        }),
+        async publishSessionChanged(sessionId) {
+          if (fixture?.commandService.testApprovalStatus(sessionId)?.state === "waiting") waiting.resolve();
+        },
+        async withPreviewTarget(sessionId, targetId, operation, { startTarget = (start) => start() }) {
+          selected.push(targetId);
+          if (selected.length === 1) return { ok: false, code: "vibe64_capacity_rejected", error: "Tight memory.",
+            details: { admission: { id: admissionId, outcome: "tight", actions: ["start-anyway"] } } };
+          await startTarget(() => { approvals += 1; });
+          if (action === "start-failure") return { ok: false, exitCode: 1,
+            code: "vibe64_command_failed", error: "The approved test target failed to start." };
+          return operation("fixture-approved-run");
+        }
+      });
+      const sessionId = "playwright-1.61.1";
+      t.after(async () => {
+        await fixture.commandService.closeAllForSession(sessionId);
+        await rm(root, { recursive: true, force: true });
+      });
+      const command = approvalCommand(fixture.prepared.hostPlaywrightWrapperPath, ["--target", "test-app", "npm-run", "e2e"], {
+        cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+      });
+      const completion = command.completion;
+      await waiting.promise;
+      assert.equal(fixture.managedCommands.length, 0, "no test preparation or browser starts while waiting");
+      const identity = { projectSlug: "example", sessionId, admissionId };
+      const wrong = await fixture.commandService.resumeTestApproval({ ...identity, projectSlug: "other" }, () => assert.fail());
+      assert.equal(wrong.ok, false);
+      assert.equal(fixture.commandService.testApprovalStatus(sessionId).state, "waiting");
+      if (["accept", "start-failure", "script-change", "release-during-resume"].includes(action)) {
+        if (action === "script-change") await writeFile(path.join(fixture.projectRoot, "package.json"), JSON.stringify({ scripts: { e2e: "playwright test changed" } }));
+        let authorized = 0;
+        const authorize = async (start) => {
+          authorized += 1;
+          if (action === "release-during-resume") {
+            authorizing.resolve();
+            await authorizeGate.promise;
+          }
+          return start();
+        };
+        const accepted = await Promise.all([
+          fixture.commandService.resumeTestApproval(identity, authorize),
+          fixture.commandService.resumeTestApproval(identity, authorize)
+        ]);
+        assert.ok(accepted.every((result) => result.accepted));
+        if (action === "release-during-resume") {
+          await authorizing.promise;
+          assert.equal(fixture.commandService.testApprovalStatus(sessionId).state, "resuming");
+          const released = fixture.commandService.releaseControlForSession(sessionId);
+          authorizeGate.resolve();
+          await released;
+        }
+        const result = await completion;
+        assert.equal(result.ok, action === "accept");
+        assert.equal(authorized, action === "script-change" ? 0 : 1);
+        if (action === "accept") assert.match(result.stdout, /"managed":"1"/u);
+        else if (action === "start-failure") {
+          assert.match(result.stdout, /Waiting for memory approval/u);
+          assert.match(result.stderr, /The approved test target failed to start\./u);
+          assert.equal(fixture.managedCommands.length, 0, "failed target startup must not run tests");
+        }
+        else if (action === "script-change") assert.match(result.stderr, /script changed/u);
+      } else if (action === "cancel") {
+        assert.equal(fixture.commandService.cancelTestApproval(identity).ok, true);
+      } else if (action === "disconnect") process.kill(-command.child.pid, "SIGTERM");
+      else if (action === "session-close") await fixture.commandService.closeAllForSession(sessionId);
+      else if (action === "control-release") await fixture.commandService.releaseControlForSession(sessionId);
+      else if (action === "generation-change") fixture.commandService.registerBrowserWorker(sessionId, {
+        socketPath: fixture.prepared.hostBrowserSocketPath,
+        metadataPath: fixture.prepared.hostBrowserMetadataPath,
+        worktreePath: fixture.projectRoot,
+        controlGenerationId: randomUUID(), token: randomUUID()
+      });
+      const result = await completion;
+      // A disconnected shell can exit before the server has observed its socket
+      // closure. Closing this exact session drains that original command too.
+      if (action === "disconnect") await fixture.commandService.closeAllForSession(sessionId);
+      assert.equal(result.ok, action === "accept");
+      assert.equal(approvals, ["accept", "start-failure"].includes(action) ? 1 : 0);
+      assert.equal(fixture.commandService.testApprovalStatus(sessionId), null);
+      assert.equal(ended.length, 1);
+      assert.equal(ended[0].outcome, ["accept", "start-failure"].includes(action) ? "resumed" : action === "cancel" ? "cancelled" : action === "expire" ? "expired" : "interrupted");
+      assert.equal((await fixture.commandService.resumeTestApproval(identity, () => assert.fail())).ok, false, "finished requests cannot replay");
+    });
+  }
 });
 
 test("managed Playwright test command uses the exact versioned browser runtime without downloads", async () => {

@@ -2,8 +2,103 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
+  managedExecutionTaskLimitJournal } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
+
+const oomUnit = `vibe64-exec-test-${"c".repeat(32)}.service`;
+const oomWork = "/vibe64.slice/vibe64-test.slice/vibe64-test-work.slice";
+const oomProject = `${oomWork}/vibe64-test-work-p${"a".repeat(64)}.slice`;
+const oomSession = `${oomProject}/vibe64-test-work-p${"a".repeat(64)}-s${"b".repeat(64)}.slice`;
+const oomWorkflow = `${oomSession}/vibe64-test-work-p${"a".repeat(64)}-s${"b".repeat(64)}-w${"d".repeat(32)}.slice`;
+const oomExecution = `${oomWorkflow}/${oomUnit}`;
+const oomQuery = { unitName: oomUnit, workspace: "test", startedAt: 1000, until: 3000 };
+
+test("task denial counters prove only the boundary their mount semantics identify", () => {
+  const mount = "37 28 0:31 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw,nsdelegate";
+  const values = { "/proc/self/mountinfo": mount,
+    "/group/pids.events.local": "max 3\n", "/group/pids.events": "max 5\n" };
+  const read = (name) => { if (!(name in values)) throw new Error("missing"); return values[name]; };
+  assert.deepEqual(managedExecutionTaskLimitCounters("/group", read),
+    { source: "cgroup-pids-events", scope: "execution", count: 3 });
+  values["/proc/self/mountinfo"] += ",pids_localevents";
+  assert.equal(managedExecutionTaskLimitCounters("/group", read).scope, "unknown");
+  values["/proc/self/mountinfo"] = mount;
+  values["/group/pids.events.local"] = "max 0\n";
+  assert.deepEqual(managedExecutionTaskLimitCounters("/group", read),
+    { source: "cgroup-pids-events", scope: "unknown", count: 5 });
+  values["/group/pids.events"] = "max 0\n";
+  assert.equal(managedExecutionTaskLimitCounters("/group", read), null);
+  values["/group/pids.events"] = "max 9007199254740992\n";
+  assert.equal(managedExecutionTaskLimitCounters("/group", read), null);
+  assert.equal(managedExecutionTaskLimitCounters("/missing", read), null);
+});
+
+test("kernel fork-denial records identify the owned activity, never invent the binding ancestor or denial count", () => {
+  const line = (group = oomExecution, time = "2000000") => JSON.stringify({ __REALTIME_TIMESTAMP: time,
+    MESSAGE: `cgroup: fork rejected by pids controller in ${group}` });
+  assert.deepEqual(managedExecutionTaskLimitJournal(line(), oomQuery), {
+    source: "kernel-journal", scope: "unknown", count: null, recordedAt: "1970-01-01T00:00:02.000Z"
+  });
+  for (const text of [line(oomExecution.replace(oomUnit, `other-${oomUnit}`)),
+    line(oomExecution.replaceAll("vibe64-test", "vibe64-foreign")), line(`${oomExecution}/..`),
+    line(oomExecution, "999000"), line(oomExecution, "3001000"), line(oomExecution, "NaN"),
+    "invalid", "", Array(65).fill(line()).join("\n"), "x".repeat(128 * 1024 + 1)
+  ]) assert.equal(managedExecutionTaskLimitJournal(text, oomQuery), null);
+});
+function oomLine(group, { taskGroup = oomExecution, time = "2000000", constraint = "CONSTRAINT_MEMCG" } = {}) {
+  return JSON.stringify({ __REALTIME_TIMESTAMP: time,
+    MESSAGE: `oom-kill:constraint=${constraint},nodemask=(null),cpuset=/,mems_allowed=0,${group ? `oom_memcg=${group}` : "global_oom"},task_memcg=${taskGroup},task=node,pid=123,uid=1000` });
+}
+
+test("kernel OOM attribution distinguishes the exceeded group from the victim's group", () => {
+  for (const [group, scope] of [
+    [oomExecution, "execution"], [oomWorkflow, "workflow"], [oomSession, "session"],
+    [oomProject, "project"], [oomWork, "workspace_work"], ["/vibe64.slice/vibe64-test.slice", "workspace"],
+    ["/vibe64.slice", "platform"]
+  ]) {
+    assert.deepEqual(managedExecutionOomBoundary(oomLine(group), oomQuery), {
+      source: "kernel-journal", scope, cgroup: group, recordedAt: "1970-01-01T00:00:02.000Z"
+    });
+  }
+  assert.equal(managedExecutionOomBoundary(oomLine("", { constraint: "CONSTRAINT_NONE" }), oomQuery).scope, "host");
+});
+
+test("kernel OOM evidence excludes other executions, workspaces, times and placement constraints", () => {
+  for (const line of [
+    oomLine(oomWork, { taskGroup: oomExecution.replace(oomUnit, `other-${oomUnit}`) }),
+    oomLine(oomWork, { taskGroup: oomExecution.replaceAll("vibe64-test", "vibe64-foreign") }),
+    oomLine(oomWork, { time: "999000" }), oomLine(oomWork, { time: "3001000" }),
+    oomLine(oomWork, { time: "NaN" }), oomLine(`${oomWork}/sibling.slice`),
+    oomLine("", { constraint: "CONSTRAINT_CPUSET" }),
+    oomLine("", { constraint: "CONSTRAINT_MEMORY_POLICY" }),
+    JSON.stringify({ MESSAGE: "Killed process 123 (node)" }), "invalid", ""
+  ]) assert.equal(managedExecutionOomBoundary(line, oomQuery), null, line);
+});
+
+test("conflicting or truncated kernel evidence stays unknown and repeated evidence is bounded", () => {
+  assert.equal(managedExecutionOomBoundary([oomLine(oomWork), oomLine(oomExecution)].join("\n"), oomQuery), null);
+  assert.equal(managedExecutionOomBoundary(Array(65).fill(oomLine(oomWork)).join("\n"), oomQuery), null);
+  assert.equal(managedExecutionOomBoundary("x".repeat(128 * 1024 + 1), oomQuery), null);
+  const result = managedExecutionOomBoundary([oomLine(oomWork, { time: "2100000" }), oomLine(oomWork)].join("\n"), oomQuery);
+  assert.equal(result.recordedAt, "1970-01-01T00:00:02.100Z");
+  assert.deepEqual(Object.keys(result).sort(), ["cgroup", "recordedAt", "scope", "source"]);
+});
+
+test("long kernel OOM records require an adjacent same-boot continuation, not timestamp proximity alone", () => {
+  const full = JSON.parse(oomLine(oomWorkflow));
+  const [prefix, suffix] = full.MESSAGE.split(",task_memcg=");
+  const first = { ...full, MESSAGE: `${prefix},task_memcg=`, __SEQNUM_ID: "1".repeat(32),
+    _BOOT_ID: "2".repeat(32), __SEQNUM: "17", _SOURCE_MONOTONIC_TIMESTAMP: "1000" };
+  const second = { ...first, MESSAGE: suffix, __SEQNUM: "18", _SOURCE_MONOTONIC_TIMESTAMP: "1020" };
+  const text = (next) => [next, first].map((entry) => JSON.stringify(entry)).join("\n");
+  assert.equal(managedExecutionOomBoundary(text(second), oomQuery)?.scope, "workflow");
+  for (const change of [{ __SEQNUM: "19" }, { __SEQNUM_ID: "3".repeat(32) }, { _BOOT_ID: "3".repeat(32) },
+    { _SOURCE_MONOTONIC_TIMESTAMP: "900" }, { _SOURCE_MONOTONIC_TIMESTAMP: "1001001" },
+    { MESSAGE: suffix.replace(oomUnit, "foreign.service") }, { MESSAGE: suffix.replace(/,task=.*/u, "") }
+  ]) assert.equal(managedExecutionOomBoundary(text({ ...second, ...change }), oomQuery), null);
+});
 
 async function helperSource() {
   return readFile(HELPER_SOURCE_URL, "utf8");

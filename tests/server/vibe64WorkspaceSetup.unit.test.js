@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   Vibe64SessionRuntime
@@ -21,11 +23,17 @@ import {
   WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
 } from "../../packages/vibe64-terminals/src/server/workspaceSetup.js";
 import {
+  initializeGenesisProject,
+  inspectVibe64WorkspaceSetup
+} from "../../packages/vibe64-genesis/src/server/index.js";
+import {
   projectRuntimeRoot,
   sourceMetadata,
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const execFileAsync = promisify(execFile);
 
 async function workspaceSession(targetRoot, sessionId = "workspace-session") {
   const sourceRoot = sourcePath(targetRoot, sessionId);
@@ -74,7 +82,18 @@ test("workspace preparation executes declared argv in order through the managed 
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session, sourceRoot } = await workspaceSession(targetRoot);
     const calls = [];
+    const workflowCalls = [];
+    const workflowId = "7abcf25f-8c93-4965-91ac-7f6c866ad39b";
     const runner = createWorkspaceSetupRunner({
+      async startWorkflow(input) {
+        workflowCalls.push(input);
+        assert.equal(calls.length, 0);
+        return { ok: true, workflow: { id: workflowId } };
+      },
+      async finishWorkflow(id, options) {
+        workflowCalls.push({ id, ...options });
+        assert.equal(calls.length, 2);
+      },
       inspect: () => readySetup({
         steps: [{
           argv: ["composer", "install", "--no-interaction"],
@@ -89,9 +108,11 @@ test("workspace preparation executes declared argv in order through the managed 
         }]
       }),
       projectService: {
-        async projectExecutionEnvironment() {
+        async projectExecutionEnvironment(input) {
+          assert.equal(input.includeResourceConfiguration, true);
           return {
-            PROJECT_SETTING: "configured-secret-value"
+            environment: { PROJECT_SETTING: "configured-secret-value" },
+            resourceConfigurationFingerprint: "b".repeat(64)
           };
         }
       },
@@ -114,6 +135,19 @@ test("workspace preparation executes declared argv in order through the managed 
     assert.equal(await runner.wait(session.sessionId), await started.completion);
     assert.equal(runner.isRunning(session.sessionId), false);
 
+    assert.equal(workflowCalls.length, 2);
+    assert.deepEqual(workflowCalls[0].operation, { kind: "workspace-setup" });
+    assert.equal(workflowCalls[0].sourceRoot, sourceRoot);
+    assert.deepEqual(workflowCalls[0].configuration, { environmentFingerprint: "b".repeat(64) });
+    assert.equal(JSON.stringify(workflowCalls).includes("configured-secret-value"), false);
+    assert.deepEqual(workflowCalls[0].steps, [
+      { argv: ["composer", "install", "--no-interaction"], workdir: "." },
+      { argv: ["npm", "install"], workdir: "web" }
+    ]);
+    assert.deepEqual(workflowCalls[0].runtimes, ["node26", "composer", "php"]);
+    assert.equal(workflowCalls[0].env.VIBE64_RUNTIME_PACK_ROOT, "/managed/runtime-packs");
+    assert.deepEqual(workflowCalls[1], { id: workflowId, outcome: "succeeded", defer: true });
+
     assert.deepEqual(calls.map(({ command, args, cwd }) => ({ args, command, cwd })), [{
       args: ["install", "--no-interaction"],
       command: "composer",
@@ -124,6 +158,8 @@ test("workspace preparation executes declared argv in order through the managed 
       cwd: path.join(sourceRoot, "web")
     }]);
     for (const call of calls) {
+      assert.equal(call.execution.workflowId, workflowId);
+      assert.equal(call.execution.sessionId, session.sessionId);
       assert.equal(call.actor, "app");
       assert.equal(call.envPolicy, "project");
       assert.deepEqual(call.allowedRoots, [sourceRoot]);
@@ -150,6 +186,88 @@ test("workspace preparation executes declared argv in order through the managed 
     assert.match(stored.transcript, /\[redacted\]/u);
   });
 });
+
+for (const [phase, change] of ["environment preparation", "admission"].flatMap((phase) =>
+  ["command", "removed setup", "estimates", "removed estimates", "invalid estimates"].map((change) => [phase, change]))) {
+  test(`workspace preparation rechecks ${change} after ${phase} before execution`, async () => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const { runtime, session, sourceRoot } = await workspaceSession(targetRoot);
+      await execFileAsync("git", ["init", "--initial-branch=main"], { cwd: sourceRoot });
+      await initializeGenesisProject({ projectRoot: sourceRoot });
+      const stackPath = path.join(sourceRoot, "genesis/stack.md");
+      const setup = "- Prepare `Prepare app` with `nodejs`: `node` `before.js`";
+      const estimates = "## Resource estimates\n\n### Workspace setup\n- Typical MiB: `128`\n- High MiB: `256`\n";
+      const original = `# Stack\n\n## Components\n\n## Workspace setup\n\n${setup}\n\n${estimates}`;
+      const updated = change === "command" ? original.replace("`before.js`", "`after.js`")
+        : change === "removed setup" ? original.replace(setup, "- Nothing.")
+        : change === "estimates" ? original.replace("`256`", "`512`")
+        : change === "removed estimates" ? original.replace(estimates, "")
+        : original.replace("`256`", "`invalid`");
+      await writeFile(stackPath, original);
+      const initial = await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+      assert.equal(initial.status, "ready");
+      assert.equal(initial.resourceEstimates.status, "ready");
+      let environmentCalls = 0;
+      const admissions = [];
+      const commands = [];
+      const finishes = [];
+      const workflowId = "4c6a4b6c-1fde-4364-9f48-5b1cafb2535c";
+      const runner = createWorkspaceSetupRunner({
+        projectService: {
+          async projectExecutionEnvironment() {
+            environmentCalls += 1;
+            if (phase === "environment preparation") await writeFile(stackPath, updated);
+            return { environment: {}, resourceConfigurationFingerprint: "a".repeat(64) };
+          }
+        },
+        async startWorkflow(input) {
+          admissions.push(input);
+          if (phase === "admission") await writeFile(stackPath, updated);
+          return { ok: true, workflow: { id: workflowId } };
+        },
+        async finishWorkflow(id, options) { finishes.push({ id, ...options }); },
+        async runCommand(input) {
+          commands.push(input);
+          return { ok: true, exitCode: 0 };
+        }
+      });
+      const result = await (await runner.start({ runtime, session })).completion;
+      assert.equal(environmentCalls, 1, "Reinspection must not repeat environment provisioning.");
+      assert.equal(await readFile(stackPath, "utf8"), updated);
+      if (phase === "admission" || change === "command" || change === "removed setup") {
+        assert.equal(result.status, "failed");
+        assert.match(result.diagnostic, /Workspace setup changed.*Retry/iu);
+        assert.equal(result.recipeHash, initial.recipeHash);
+        assert.equal(admissions.length, phase === "admission" ? 1 : 0);
+        assert.deepEqual(finishes, phase === "admission" ? [{ id: workflowId, outcome: "failed", defer: true }] : [],
+          "A source change during admission releases the unused workflow.");
+        assert.equal(commands.length, 0);
+        assert.equal(runner.isRunning(session.sessionId), false);
+        if (change === "command") {
+          const retried = await runner.start({
+            runtime,
+            session: await runtime.getSession(session.sessionId, { inspectSource: false }),
+            retry: true
+          });
+          assert.equal((await retried.completion).status, "succeeded");
+          assert.equal(commands.length, 1);
+          assert.deepEqual(commands[0].args, ["after.js"]);
+          assert.deepEqual(admissions.at(-1).steps, [{ argv: ["node", "after.js"], workdir: "." }]);
+        }
+      } else {
+        assert.equal(result.status, "succeeded", result.diagnostic);
+        assert.equal(result.recipeHash, initial.recipeHash, "Optional estimates do not change the setup recipe.");
+        assert.equal(admissions.length, 1);
+        assert.equal(commands.length, 1);
+        const current = await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+        assert.deepEqual(admissions[0].estimates, current.resourceEstimates);
+        assert.notDeepEqual(admissions[0].estimates, initial.resourceEstimates);
+        assert.deepEqual(admissions[0].steps, [{ argv: ["node", "before.js"], workdir: "." }]);
+        assert.deepEqual(commands[0].args, ["before.js"]);
+      }
+    });
+  });
+}
 
 test("source invalidation survives restart and reruns an unchanged preparation recipe", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -198,6 +316,39 @@ test("workspace preparation state bounds and normalizes durable transcripts", ()
   assert.equal(bounded.transcript.startsWith(WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER), true);
   assert.equal(bounded.transcript.endsWith("tail"), true);
   assert.equal(bounded.transcript.includes("\u001b"), false);
+});
+
+test("resource refusal preserves its decision identity across reload and clears it after successful preparation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const id = "cc295f04-3870-4020-9352-900f872848eb";
+    let rejected = true;
+    let commands = 0;
+    const runner = createWorkspaceSetupRunner({
+      inspect: () => readySetup(), projectService: {},
+      async startWorkflow() {
+        return rejected ? { ok: false, code: "vibe64_capacity_rejected", error: "Insufficient peak headroom.", admission: { id } }
+          : { ok: true, workflow: null };
+      },
+      async runCommand() { commands += 1; return { ok: true, exitCode: 0, output: "Prepared." }; }
+    });
+    const state = await (await runner.start({ runtime, session })).completion;
+    assert.equal(state.status, "failed");
+    assert.equal(state.resourceAdmissionId, id);
+    assert.equal(commands, 0);
+    const stored = await runtime.store.readSession(session.sessionId);
+    assert.equal(workspaceSetupStateFromMetadata(stored.metadata).resourceAdmissionId, id);
+    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    assert.equal(current.workspaceSetup.resourceAdmissionId, id);
+    rejected = false;
+    const prepared = await (await runner.start({ runtime, session: current, retry: true })).completion;
+    assert.equal(prepared.status, "succeeded");
+    assert.equal(prepared.resourceAdmissionId, undefined);
+    assert.equal(commands, 1);
+    assert.equal((await runtime.getSession(session.sessionId, { inspectSource: false })).workspaceSetup.resourceAdmissionId, undefined);
+    assert.equal(workspaceSetupState({ status: "failed", resourceAdmissionId: "../forged" }).resourceAdmissionId, undefined);
+    assert.equal(workspaceSetupState({ status: "running", resourceAdmissionId: id }).resourceAdmissionId, undefined);
+  });
 });
 
 test("workspace preparation transcript remains visible after a runtime restart", async () => {
@@ -430,7 +581,7 @@ test("workspace preparation retry migrates a recognized legacy Genesis project b
     const succeeded = await retried.completion;
     assert.equal(succeeded.status, "succeeded");
     assert.equal(formatInspectionCount, 1);
-    assert.equal(inspectionCount, 3);
+    assert.equal(inspectionCount, 5, "The migrated recipe is rechecked after environment preparation and admission.");
     assert.deepEqual(calls.map(({ args, command, cwd }) => ({ args, command, cwd })), [{
       args: ["migrate"],
       command: "genesis",
@@ -564,12 +715,17 @@ test("command failure records a short diagnostic and leaves the session active",
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);
     let shouldFail = true;
+    const workflowOutcomes = [];
     const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
+      async finishWorkflow(id, options) { workflowOutcomes.push({ id, ...options }); },
       inspect: () => readySetup(),
       projectService: {
-        async projectExecutionEnvironment() {
+        async projectExecutionEnvironment(input) {
+          assert.equal(input.includeResourceConfiguration, true);
           return {
-            REGISTRY_TOKEN: "retry-secret"
+            environment: { REGISTRY_TOKEN: "retry-secret" },
+            resourceConfigurationFingerprint: "c".repeat(64)
           };
         }
       },
@@ -597,6 +753,7 @@ test("command failure records a short diagnostic and leaves the session active",
     assert.doesNotMatch(finished.transcript, /retry-secret/u);
     assert.match(finished.transcript, /\[Install JavaScript dependencies\] Failed\./u);
     assert.equal((await runtime.store.readSession(session.sessionId)).status, "active");
+    assert.deepEqual(workflowOutcomes, [{ id: "setup-workflow", outcome: "failed", defer: true }]);
 
     shouldFail = false;
     const retried = await runner.start({
@@ -608,6 +765,7 @@ test("command failure records a short diagnostic and leaves the session active",
     });
     const succeeded = await retried.completion;
     assert.equal(succeeded.status, "succeeded");
+    assert.deepEqual(workflowOutcomes[1], { id: "setup-workflow", outcome: "succeeded", defer: true });
     assert.match(succeeded.transcript, /Workspace preparation retry started\./u);
     assert.match(succeeded.transcript, /Dependencies are current\./u);
     assert.equal(

@@ -600,6 +600,9 @@ function useVibe64OutputControlsSurface(props) {
     launchActions,
     launchButtonsDisabled,
     launchError,
+    resourceAdmissionId,
+    acceptResourceRetry,
+    testApproval,
     launchStatusAttempt,
     launchStatusIdleRecoveryExhausted,
     launchStarting,
@@ -1610,6 +1613,24 @@ function useVibe64OutputControlsSurface(props) {
     return false;
   }
 
+  async function recheckResourceAdmission({ outputTargetId = "", startIfStopped = false } = {}) {
+    if (operationBusy.value) return false;
+    const project = projectSlug.value;
+    const session = props.session?.sessionId;
+    operationBusy.value = true;
+    try {
+      await refreshOutputs();
+      await nextTick();
+    } finally {
+      operationBusy.value = false;
+    }
+    if (project !== projectSlug.value || session !== props.session?.sessionId || loadError.value) return false;
+    // A lost start response must reconnect to existing work, not force-restart it.
+    if (terminalIsRunning.value || ["ready", "starting"].includes(previewState.value)) return true;
+    const target = outputTargets.value.find((item) => item.id === outputTargetId);
+    return startIfStopped && target ? run(target, { applyDefaultDisplay: false }) : false;
+  }
+
   function setTerminalExpanded(expanded) {
     previewLogVisible.value = Boolean(expanded);
     if (expanded) {
@@ -1906,6 +1927,9 @@ function useVibe64OutputControlsSurface(props) {
     launchActions,
     launchButtonsDisabled,
     launchError,
+    resourceAdmissionId,
+    testApproval,
+    acceptResourceRetry,
     launchStatusAttempt,
     launchStatusChipText,
     launchStatusChipTitle,
@@ -1982,6 +2006,7 @@ function useVibe64OutputControlsSurface(props) {
     copyPreviewUrl,
     openPreviewRoute,
     recoverEmbeddedPreview,
+    recheckResourceAdmission,
     reloadPreview,
     retryLaunchStatus,
     requestPreviewDiagnostics,

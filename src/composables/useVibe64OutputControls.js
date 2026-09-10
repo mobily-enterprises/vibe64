@@ -662,6 +662,7 @@ function useVibe64OutputControls({
   const projectSlug = useVibe64ProjectSlug();
   const operationBusy = ref(false);
   const launchError = ref("");
+  const refusedAdmissionId = ref("");
   const launchStarting = ref(false);
   const launchWaiting = ref(false);
   const terminalExpanded = ref(false);
@@ -870,6 +871,10 @@ function useVibe64OutputControls({
         };
   });
   const previewState = computed(() => preview.value.state);
+  const testApproval = computed(() => ["waiting", "resuming"].includes(status.value.testApproval?.state)
+    ? status.value.testApproval : null);
+  const resourceAdmissionId = computed(() => ["ready", "starting"].includes(previewState.value) ? ""
+    : refusedAdmissionId.value || String(status.value.resourceAdmissionId || ""));
   const previewMessage = computed(() => preview.value.message);
   const previewHref = computed(() => preview.value.href);
   const previewTargetHref = computed(() => preview.value.targetHref);
@@ -1116,6 +1121,7 @@ function useVibe64OutputControls({
     launchWaiting.value = false;
     launchError.value = "";
     operationBusy.value = true;
+    refusedAdmissionId.value = "";
     const normalizedAutoStartAttemptKey = String(autoStartAttemptKey || "").trim();
     if (normalizedAutoStartAttemptKey) {
       writeLaunchAutoStartAttempt(normalizedAutoStartAttemptKey);
@@ -1159,6 +1165,7 @@ function useVibe64OutputControls({
       launchError.value = String(
         error?.message || startTerminalCommand.message || "Output target could not be started."
       ).trim();
+      refusedAdmissionId.value = String(error?.details?.admission?.id || "");
       return false;
     } finally {
       launchStarting.value = false;
@@ -1175,6 +1182,15 @@ function useVibe64OutputControls({
       fallbackStatus: "running"
     });
     return true;
+  }
+
+  async function acceptResourceRetry(result = {}) {
+    if (result.ok === false) return;
+    refusedAdmissionId.value = "";
+    launchError.value = "";
+    if (applyLaunchTerminalSession(result)) void connectLaunchTerminal();
+    // A replay has no terminal payload. Read the existing start; never run it again.
+    await refresh();
   }
 
   async function connectLaunchTerminal() {
@@ -1556,6 +1572,7 @@ function useVibe64OutputControls({
   watch([previewState, terminalIndicatorState, launchError], ([state, indicator]) => {
     if (state === "ready" && indicator === "running") {
       launchError.value = "";
+      refusedAdmissionId.value = "";
       launchWaiting.value = false;
     }
   });
@@ -1584,6 +1601,7 @@ function useVibe64OutputControls({
     attachedTerminalId = "";
     autoStartKey.value = "";
     launchError.value = "";
+    refusedAdmissionId.value = "";
     launchWaiting.value = false;
     launchStatusAttempt.value = 0;
     launchStatusAttemptLoading = false;
@@ -1687,11 +1705,16 @@ function useVibe64OutputControls({
     canLoadOutputs.value ? "loadable" : "blocked",
     readRefOrGetterValue(busy) ? "external-busy" : "external-idle",
     operationBusy.value ? "busy" : "idle",
+    resourceAdmissionId.value,
     autoStartTarget.value?.id || "",
     autoStartCooldownVersion.value
   ].join("|"), () => {
     const target = autoStartTarget.value;
     const key = `${launchScopeKey.value}:${target?.id || ""}`;
+    if (resourceAdmissionId.value) {
+      clearAutoStartTimer();
+      return;
+    }
     const ready = shouldScheduleLaunchAutoStart({
       autoStartKey: autoStartKey.value,
       externalBusy: readRefOrGetterValue(busy),
@@ -1781,6 +1804,9 @@ function useVibe64OutputControls({
     launchActions,
     launchButtonsDisabled,
     launchError,
+    resourceAdmissionId,
+    acceptResourceRetry,
+    testApproval,
     launchStatusAttempt,
     launchStatusIdleRecoveryExhausted,
     launchStarting,

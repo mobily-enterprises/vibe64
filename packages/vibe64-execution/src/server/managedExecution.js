@@ -41,6 +41,29 @@ function vibe64ManagedExecutionRequired(env = process.env) {
     .toLowerCase());
 }
 
+async function startVibe64Workflow(input = {}) {
+  if (!installedProvider) {
+    if (vibe64ManagedExecutionRequired()) throw new Error("The managed workflow provider is unavailable.");
+    return { ok: true, workflow: null };
+  }
+  if (typeof installedProvider.startWorkflow !== "function") {
+    throw new Error("The installed managed execution provider does not support workflows.");
+  }
+  return installedProvider.startWorkflow(input);
+}
+
+async function setVibe64WorkflowPhase(workflowId, phase) {
+  if (!workflowId) return;
+  if (!installedProvider?.setWorkflowPhase) throw new Error("The managed workflow provider is unavailable.");
+  return installedProvider.setWorkflowPhase(workflowId, phase);
+}
+
+async function finishVibe64Workflow(workflowId, options = {}) {
+  if (!workflowId) return;
+  if (!installedProvider?.finishWorkflow) throw new Error("The managed workflow provider is unavailable.");
+  return installedProvider.finishWorkflow(workflowId, options);
+}
+
 function vibe64CapacityRejectedResult(execution = {}, {
   code = "vibe64_capacity_rejected",
   estimatedMemoryBytes = 0,
@@ -93,8 +116,11 @@ async function stopVibe64OwnedExecutions(selector = {}, options = {}) {
 }
 
 export {
+  finishVibe64Workflow,
   VIBE64_MANAGED_EXECUTION_REQUIRED_ENV,
   installVibe64ManagedExecutionProvider,
+  setVibe64WorkflowPhase,
+  startVibe64Workflow,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
   vibe64CapacityRejectedResult,

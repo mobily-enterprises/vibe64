@@ -475,6 +475,7 @@ test("web outputs translate through the existing private web-preview terminal se
   t.after(() => spec.releasePortReservation?.());
 
   assert.equal(spec.ok, true);
+  assert.equal(spec.stackHash, "sha256:unit");
   assert.equal(spec.cwd, sourceSubdirectory);
   assert.deepEqual(spec.runtimes, ["node26"]);
   assert.equal(spec.metadata.vibe64OutputsSource, "project");
@@ -509,6 +510,7 @@ test("terminal outputs use a generic PTY spec and exact declared runtimes", asyn
   });
 
   assert.equal(spec.ok, true);
+  assert.equal(spec.stackHash, "sha256:unit");
   assert.equal(spec.command, "bash");
   assert.deepEqual(spec.runtimes, ["cpp"]);
   assert.equal(spec.metadata.outputPresentationKind, "terminal");
@@ -607,6 +609,7 @@ test("finite outputs build once and declare immutable result inputs", async (t) 
   });
 
   assert.equal(spec.ok, true);
+  assert.equal(spec.stackHash, "sha256:unit");
   assert.equal(spec.reuseRunning, false);
   assert.deepEqual(spec.metadata.outputDownloads, target.downloads);
   assert.match(spec.args[1], /cmake --build build/u);

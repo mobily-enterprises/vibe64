@@ -138,6 +138,18 @@
       </header>
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
+        <v-sheet v-if="testApproval && resourceRecoveryControl" class="d-flex flex-wrap align-center justify-space-between ga-2 pa-2" color="surface-variant" rounded="lg">
+          <span class="text-body-small">{{ testApproval.state === 'waiting' ? 'Tests need memory approval' : 'Resuming the original test…' }}</span>
+          <component
+            :is="resourceRecoveryControl"
+            :key="`${sessionId}:${testApproval.admissionId}`"
+            :admission-id="testApproval.admissionId"
+            :session-id="sessionId"
+            :disabled="testApproval.state !== 'waiting'"
+            @retry-result="props.refreshSessionData?.()"
+            @recheck="props.refreshSessionData?.()"
+          />
+        </v-sheet>
         <Vibe64TemporaryActionTerminal
           :active="saveWorkOperationActive || saveWorkSending"
           :dismissed="saveWorkActivityDismissed"
@@ -209,7 +221,7 @@
           height="clamp(8rem, 22vh, 14rem)"
           :operation-key="workspaceSetupActivityKey"
           :output="workspaceSetupOutput"
-          :retryable="workspaceSetupNeedsAttention && workspaceSetupStatus !== 'required' && !workspaceSetupRetryDisabled"
+          :retryable="workspaceSetupNeedsAttention && workspaceSetupStatus !== 'required' && !workspaceSetupRetryDisabled && !resourceRetryBusy"
           :stage="workspaceSetupCurrentLabel"
           :starting="workspaceSetupRunning || workspaceSetupRetrying"
           :status="workspaceSetupStatus"
@@ -220,8 +232,19 @@
           @retry="retryWorkspaceSetup"
         >
           <template v-if="workspaceSetupNeedsAttention" #error-actions>
+            <component
+              :is="resourceRecoveryControl"
+              v-if="resourceRecoveryControl && props.session?.workspaceSetup?.resourceAdmissionId"
+              :key="`${sessionId}:${props.session.workspaceSetup.resourceAdmissionId}`"
+              :admission-id="props.session.workspaceSetup.resourceAdmissionId"
+              :session-id="sessionId"
+              :disabled="workspaceSetupRetryDisabled && !resourceRetryBusy"
+              @busy="resourceRetryBusy = $event"
+              @retry-result="props.refreshSessionData?.()"
+              @recheck="retryWorkspaceSetup"
+            />
             <v-btn
-              v-if="workspaceSetupStatus === 'required'"
+              v-else-if="workspaceSetupStatus === 'required'"
               :disabled="workspaceSetupRetryDisabled"
               :loading="workspaceSetupRetrying"
               size="small"
@@ -660,6 +683,7 @@
             :toolbar-teleport-target="props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
             @preview-attachment-state="updatePreviewAttachmentState"
+            @test-approval="updateTestApproval"
           />
         </Vibe64ProjectOnboarding>
       </div>
@@ -695,7 +719,8 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, nextTick, ref, useId, watch } from "vue";
+import { computed, defineAsyncComponent, inject, nextTick, ref, useId, watch } from "vue";
+import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   mdiAccountArrowRightOutline,
@@ -754,6 +779,8 @@ import {
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
+const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+const resourceRetryBusy = ref(false);
 const sessionRenewalActionPresentation = computed(() => (
   props.sessionRenewal?.actionPresentation ||
   props.sessionRenewal?.advisoryPresentation || {
@@ -784,6 +811,11 @@ const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
 const workspaceRecoveryTaskId = ref("");
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
+const testApproval = ref(null);
+function updateTestApproval(value) {
+  if (value.sessionId === props.session?.sessionId) testApproval.value = value.approval;
+}
+watch(() => props.session?.sessionId, () => { testApproval.value = null; });
 const composerAttachmentState = ref({
   count: 0,
   hasUnresolved: false,
@@ -1048,7 +1080,7 @@ const {
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
 const composerAssistantLabel = computed(() => (
-  openCodeProgressLabel.value ||
+  (testApproval.value?.state === "waiting" ? "Waiting for memory approval" : "") || openCodeProgressLabel.value ||
   (thinkingVisible.value ? thinkingLabel.value : typingLabel.value)
 ));
 watch(agentActive, (active) => {

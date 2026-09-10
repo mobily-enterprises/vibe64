@@ -6,6 +6,7 @@ contract transported by the project's Stack.
 ## Sources
 
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-runtime/src/server/workspaceSetupState.js`
 - `packages/vibe64-sessions/src/server/service.js`
@@ -29,6 +30,24 @@ argv with the project's resolved environment. It runs once for a fresh recipe,
 records progress and exact recipe identity, waits before dependent work, and
 exposes retry after failure. Missing or ambiguous declarations remain explicit;
 Vibe64 never guesses an installer or reads a retired grammar.
+
+When managed workflow accounting is available, the full declared preparation
+sequence shares one accounting group. The runner supplies its exact runtime
+and dependency identity plus optional normalized Stack resource estimates.
+Success and failure both finalize that workflow through the provider; missing
+optional estimates do not block old projects. This adds no commands and does
+not reorder setup, database seeding, imports or migrations. Shared environment
+provisioning remains separately owned.
+
+After environment preparation, the runner re-inspects the current setup before
+requesting admission. Changed or removed steps fail with a direct Retry message
+before any setup command or workflow is started. Estimate-only changes use the
+fresh optional hints, including their missing/invalid fallback, without repeating
+environment provisioning. After admission returns, another inspection verifies
+the recipe and Stack still match the admitted snapshot. A change while waiting
+releases the unused workflow through ordinary finalization and runs no command.
+Explicit Retry reads the new recipe; the runner never silently switches commands
+inside an already-started preparation attempt.
 
 Before Update or its interrupted-operation recovery replaces session source,
 the terminal service invalidates preparation durably. The `required` state

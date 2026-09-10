@@ -451,7 +451,8 @@ function createService({
   });
   const agentPreviewCommand = createAgentPreviewCommandService({
     launchTarget: outputTarget,
-    logger
+    logger,
+    publishSessionChanged: publishSessionChanged.outputTarget
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
@@ -2396,6 +2397,18 @@ function createService({
       return outputTarget.readTerminal(sessionId, terminalSessionId);
     },
 
+    testApprovalStatus(sessionId) {
+      return agentPreviewCommand.testApprovalStatus(sessionId);
+    },
+
+    resumeTestApproval(identity, authorizeStart) {
+      return agentPreviewCommand.resumeTestApproval(identity, authorizeStart);
+    },
+
+    cancelTestApproval(identity) {
+      return agentPreviewCommand.cancelTestApproval(identity);
+    },
+
     async outputTargetStatus(sessionId, options = {}) {
       const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
         "server.terminals.outputTargetStatus.closedProject"
@@ -2403,7 +2416,7 @@ function createService({
       if (closedRuntime) {
         return closedProjectOutputTargetStatus(closedRuntime);
       }
-      return outputTarget.launchStatus(sessionId, options);
+      return { ...await outputTarget.launchStatus(sessionId, options), testApproval: agentPreviewCommand.testApprovalStatus(sessionId) };
     },
 
     openOutputTarget(sessionId) {

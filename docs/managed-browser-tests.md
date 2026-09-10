@@ -25,6 +25,16 @@ person sees the test application in Preview during the run. Other sessions have
 their own target selection; shared resources still require application-level
 coordination. Do not run two suites that reset the same test database at once.
 
+If the host offers approval for a marginal memory fit, this same command can
+wait for up to five minutes after restoring the normal Preview. Chat shows
+Waiting for memory approval. The owner can use Review memory to Start anyway
+or Cancel test; closing the dialog or reloading the page does not cancel it.
+Approval rechecks current capacity and the original assistant owner before
+resuming the same suite. Do not start a replacement command while it waits.
+Cancellation or expiry means tests were not run, not that assertions failed.
+An ended command cannot be resumed later; retry it explicitly only after the
+reported constraint has been addressed. Hard safety failures cannot be approved.
+
 After a host service restart, inspect `vibe64-preview status --json`; the terminated
 service cannot run its cleanup. Select the normal target explicitly if necessary:
 

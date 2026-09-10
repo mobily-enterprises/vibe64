@@ -18,6 +18,7 @@ function executionEnvFingerprint(env = {}) {
 async function loadProjectExecutionEnvRecords({
   prepare = false,
   reusePrepared = false,
+  includeResourceConfiguration = false,
   projectService = {},
   session = {},
   target = ""
@@ -27,18 +28,21 @@ async function loadProjectExecutionEnvRecords({
     : projectService.projectInspectionEnvironment;
   if (typeof resolveEnvironment !== "function") {
     return {
-      runtimeConfigEnv: {}
+      runtimeConfigEnv: {},
+      ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: null } : {})
     };
   }
   const sessionId = String(session?.sessionId || session?.id || "").trim();
   const env = await resolveEnvironment.call(projectService, {
+    ...(includeResourceConfiguration ? { includeResourceConfiguration: true } : {}),
     ...(reusePrepared ? { reusePrepared: true } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(sessionId ? { session } : {}),
     target: String(target || "").trim()
   });
   return {
-    runtimeConfigEnv: normalizeExecutionEnvRecord(env)
+    runtimeConfigEnv: normalizeExecutionEnvRecord(includeResourceConfiguration ? env.environment : env),
+    ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: env.resourceConfigurationFingerprint ?? null } : {})
   };
 }
 

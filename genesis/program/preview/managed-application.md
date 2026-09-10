@@ -8,6 +8,7 @@ without leaving the coding workspace.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
@@ -48,6 +49,37 @@ its URL and native application identity and executes the suite. It restores a
 previously running target and waits for readiness, or stops the test Preview
 when there was no running target. Failures and cancellation use the same cleanup;
 restoration failures preserve the test failure and make the command fail.
+The scoped result retains structured provider refusal details even after
+restoring the normal Preview, including when restoration also fails. An
+explicit retry uses the original test launcher and its isolation/restoration
+lifecycle, never an ordinary development start of the refused target.
+The existing command stream carries the provider's admission object and the
+wrapper prints it with the original error, so the assistant receives the
+decision ID, memory figures and allowed actions instead of a generic readiness
+failure. It does not independently calculate or override host policy.
+Progress output never suppresses the final failure message: approval, startup,
+execution and restoration errors remain visible on stderr after streamed output.
+For an overridable tight-memory refusal, the registered command owner retains
+one live request per session after successful normal-target restoration and
+release of the Preview lock. The host opens a five-minute approval window in
+that rejected workflow's existing record; no test reservation is held. The
+Public slot stores the original command callback only in memory. Output status
+projects its admission ID, waiting/resuming state and expiry through the
+existing session-change stream. Chat shows Waiting for memory approval and the
+host recovery control without covering the normal Preview.
+
+The host's owner-only action acknowledges a handoff to `resumeTestApproval`,
+not test success. The original command revalidates its registered generation,
+source path and exact npm script, then reacquires scoped Preview ownership.
+Host authorization wraps only the test-target start, never restoration; the
+host rechecks the live assistant parent, configuration and current capacity.
+Duplicate handoffs join that request. Running tests use their ordinary progress
+and result stream; completion clears the slot. Cancel and expiry report tests
+not run. Actual command disconnection, session close, control release or
+generation replacement interrupt the original request, including during the
+approval handoff. Closing a dialog, reloading or losing the dashboard WebSocket
+does not cancel it. A missing live slot cannot be replayed from a stored record.
+
 Closing the session suppresses restoration. Host-service termination cannot
 execute an in-process cleanup; after a platform restart inspect Preview and
 explicitly select the normal target before resuming work.
@@ -78,6 +110,24 @@ status polling. Later status inspection verifies the bound socket identity and
 republishes a missing or replaced socket. Finite runs snapshot only their
 declared regular files into bounded immutable result storage and expose
 downloads by generated result identity rather than a caller-supplied path.
+
+New output runs describe one managed accounting workflow to the execution
+provider; ready interactive outputs transition from startup to running.
+Terminal completion reports success, failure or deliberate stop, with deferred
+group finalization after execution cleanup. Already-running Preview reuse
+creates no new group. Optional resource estimates come from the same Outputs
+inspection; older projects without that section retain generic fallback.
+Scoped test targets and the restored normal target have separate accounting
+environments, without changing the application's own data configuration.
+
+The private launch spec retains its inspected Stack identity independently of
+optional estimates. A new terminal re-inspects Outputs after environment and
+old-terminal cleanup, before requesting admission, and once more after admission
+returns. A changed Stack fails with a direct Retry message instead of running a
+stale command or attaching its estimates to a renamed target with the same label.
+The ordinary failure path releases any unused workflow and port reservation.
+Reusing a running Preview performs no new workflow admission or extra launch
+checks. These checks add no file watcher, background polling or stored identity.
 
 Preview startup uses its own launch queue and terminal-namespace admission. It
 does not acquire assistant-write admission for an already prepared workspace.

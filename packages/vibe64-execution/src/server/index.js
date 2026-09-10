@@ -52,7 +52,10 @@ export {
 } from "./engines/capture.js";
 export {
   VIBE64_MANAGED_EXECUTION_REQUIRED_ENV,
+  finishVibe64Workflow,
   installVibe64ManagedExecutionProvider,
+  setVibe64WorkflowPhase,
+  startVibe64Workflow,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
   vibe64CapacityRejectedResult,
@@ -163,6 +166,7 @@ export {
   sharedToolEnvShellExportLines
 } from "./env/sharedToolEnv.js";
 export {
+  RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
   VIBE64_RUNTIME_PACK_ROOT_ENV,
   managedCommandRuntimeEntries,

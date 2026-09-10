@@ -323,11 +323,15 @@ async function createVibe64OutputTargetTerminalSpec({
     };
   }
   if (target.presentation?.kind !== "web") {
-    return createVibe64GenericOutputTargetTerminalSpec({
-      session: context.session || {},
-      target,
-      targetView
-    });
+    return {
+      ...createVibe64GenericOutputTargetTerminalSpec({
+        session: context.session || {},
+        target,
+        targetView
+      }),
+      stackHash: outputs.stackHash,
+      resourceWorkflow: resourceWorkflowRecipe(target, outputs.resourceEstimates)
+    };
   }
   const marker = outputResultsReadyMarker();
   const spec = await createVibe64WebLaunchTargetTerminalSpec({
@@ -344,6 +348,8 @@ async function createVibe64OutputTargetTerminalSpec({
     session: context.session || {}
   });
   if (spec?.ok !== false) {
+    spec.stackHash = outputs.stackHash;
+    spec.resourceWorkflow = resourceWorkflowRecipe(target, outputs.resourceEstimates);
     spec.metadata = {
       ...(spec.metadata || {}),
       outputTargetId: targetView.id,
@@ -353,6 +359,16 @@ async function createVibe64OutputTargetTerminalSpec({
     delete spec.metadata.launchTargetLabel;
   }
   return spec;
+}
+
+function resourceWorkflowRecipe(target, estimates) {
+  return {
+    operation: { kind: "output", targetId: target.id },
+    runtimes: vibe64RuntimePacks(target.runtimeRequirements).runtimes,
+    steps: target.steps.map((step) => ({ argv: step.argv, role: step.role, workdir: target.workdir || "." })),
+    configuration: { mode: target.mode, presentation: target.presentation?.kind || "none" },
+    estimates
+  };
 }
 
 function outputResultsMarkerLineSeen(output = "", marker = "") {

@@ -16,6 +16,7 @@ import {
   sanitizeOperationText
 } from "@local/vibe64-core/server/logging";
 import {
+  finishVibe64Workflow,
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
@@ -32,11 +33,14 @@ import {
   vibe64RuntimePacks
 } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import {
-  loadProjectExecutionEnv
+  loadProjectExecutionEnv,
+  loadProjectExecutionEnvRecords,
+  projectExecutionEnvFromRecords
 } from "@local/vibe64-terminals/server/projectExecutionEnv";
 import {
   terminalNamespace
 } from "./terminalShared.js";
+import { startResourceWorkflow } from "./resourceWorkflow.js";
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
@@ -165,6 +169,8 @@ function createWorkspaceSetupRunner({
   inspect = inspectVibe64WorkspaceSetup,
   inspectProjectFormat = inspectGenesisProjectFormat,
   projectService,
+  startWorkflow = startResourceWorkflow,
+  finishWorkflow = finishVibe64Workflow,
   runCommand = runVibe64Command
 } = {}) {
   if (!projectService) {
@@ -203,6 +209,7 @@ function createWorkspaceSetupRunner({
     diagnostic = "Workspace preparation failed.",
     recipeHash = "",
     redactionSecrets = [],
+    resourceAdmissionId = "",
     renewal = false,
     startedAt = "",
     transcript = ""
@@ -214,6 +221,7 @@ function createWorkspaceSetupRunner({
       diagnostic: safeDiagnostic,
       finishedAt: stateTimestamp(clock),
       recipeHash,
+      resourceAdmissionId,
       startedAt,
       status: "failed",
       transcript: appendWorkspaceSetupTranscript(
@@ -231,84 +239,121 @@ function createWorkspaceSetupRunner({
     sourcePath,
     startedAt
   }) {
-    const projectEnv = await loadProjectExecutionEnv({
+    const environmentRecords = await loadProjectExecutionEnvRecords({
       prepare: true,
+      includeResourceConfiguration: true,
       projectService,
       session,
       target: "workspace-setup"
     });
+    const projectEnv = projectExecutionEnvFromRecords(environmentRecords);
     const redactionSecrets = operationRedactionSecrets(projectEnv);
     context.redactionSecrets = redactionSecrets;
     context.transcript = workspaceSetupTranscript(sanitizeOperationText(
       context.transcript,
       redactionSecrets
     ));
-    for (const [index, step] of recipe.steps.entries()) {
-      const currentLabel = safeSetupLabel(step.label, redactionSecrets);
-      context.currentLabel = currentLabel;
-      if (index > 0) {
+    const environment = await runtime.resolvePromptEnvironment();
+    const currentSetup = await inspect({ environment, projectRoot: sourcePath });
+    if (currentSetup?.status !== "ready" || currentSetup.recipeHash !== recipe.recipeHash) {
+      throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
+    }
+    const resource = await startWorkflow({
+      session, sourceRoot: sourcePath, operation: { kind: "workspace-setup" },
+      runtimes: recipe.runtimes,
+      steps: recipe.steps.map((step) => ({ argv: step.argv, workdir: path.relative(sourcePath, step.cwd) || "." })),
+      estimates: currentSetup.resourceEstimates,
+      configuration: { environmentFingerprint: environmentRecords.resourceConfigurationFingerprint },
+      kind: "job", label: "Preparing workspace", env: environment
+    });
+    if (resource?.ok === false) throw Object.assign(new Error(resource.error || "Workspace preparation could not be admitted."), {
+      code: resource.code, details: { admission: resource.admission }
+    });
+    let outcome = "failed";
+    try {
+      const admittedSetup = await inspect({ environment, projectRoot: sourcePath });
+      if (admittedSetup?.status !== "ready" || admittedSetup.recipeHash !== recipe.recipeHash ||
+          admittedSetup.stackHash !== currentSetup.stackHash) {
+        throw new Error("Workspace setup changed while waiting for resources. Retry preparation to run the current steps.");
+      }
+      for (const [index, step] of recipe.steps.entries()) {
+        const currentLabel = safeSetupLabel(step.label, redactionSecrets);
+        context.currentLabel = currentLabel;
+        if (index > 0) {
+          context.transcript = appendWorkspaceSetupTranscript(
+            context.transcript,
+            stepStatus(currentLabel, "Running", redactionSecrets)
+          );
+        }
+        await persist(runtime, session.sessionId, {
+          currentLabel,
+          diagnostic: "",
+          finishedAt: "",
+          recipeHash: recipe.recipeHash,
+          startedAt,
+          status: "running",
+          transcript: context.transcript
+        }, context.renewal);
+        const result = await runCommand({
+          actor: "app",
+          allowedRoots: [sourcePath],
+          args: step.argv.slice(1),
+          baseEnv: await runtime.resolvePromptEnvironment(),
+          command: step.argv[0],
+          cwd: step.cwd,
+          envPolicy: "project",
+          execution: {
+            kind: "job", label: currentLabel, workflowId: resource?.workflow?.id,
+            ownerId: session.sessionId, sessionId: session.sessionId,
+            projectSlug: currentProjectRequestContext()?.slug
+          },
+          mode: "capture",
+          project: {
+            runtimeConfigEnv: projectEnv
+          },
+          purpose: "source",
+          runtimes: recipe.runtimes,
+          timeout: WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
+        });
         context.transcript = appendWorkspaceSetupTranscript(
           context.transcript,
-          stepStatus(currentLabel, "Running", redactionSecrets)
+          capturedCommandOutput(result, redactionSecrets)
+        );
+        if (result?.ok !== true) {
+          return failed(runtime, session.sessionId, {
+            currentLabel,
+            diagnostic: commandDiagnostic(result, currentLabel, redactionSecrets),
+            recipeHash: recipe.recipeHash,
+            redactionSecrets,
+            renewal: context.renewal,
+            startedAt,
+            transcript: context.transcript
+          });
+        }
+        context.transcript = appendWorkspaceSetupTranscript(
+          context.transcript,
+          stepStatus(currentLabel, "Succeeded", redactionSecrets)
         );
       }
-      await persist(runtime, session.sessionId, {
-        currentLabel,
+      outcome = "succeeded";
+      return await persist(runtime, session.sessionId, {
+        currentLabel: context.currentLabel,
         diagnostic: "",
-        finishedAt: "",
+        finishedAt: stateTimestamp(clock),
         recipeHash: recipe.recipeHash,
         startedAt,
-        status: "running",
-        transcript: context.transcript
+        status: "succeeded",
+        transcript: appendWorkspaceSetupTranscript(
+          context.transcript,
+          "Workspace preparation succeeded."
+        )
       }, context.renewal);
-      const result = await runCommand({
-        actor: "app",
-        allowedRoots: [sourcePath],
-        args: step.argv.slice(1),
-        baseEnv: await runtime.resolvePromptEnvironment(),
-        command: step.argv[0],
-        cwd: step.cwd,
-        envPolicy: "project",
-        mode: "capture",
-        project: {
-          runtimeConfigEnv: projectEnv
-        },
-        purpose: "source",
-        runtimes: recipe.runtimes,
-        timeout: WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
-      });
-      context.transcript = appendWorkspaceSetupTranscript(
-        context.transcript,
-        capturedCommandOutput(result, redactionSecrets)
-      );
-      if (result?.ok !== true) {
-        return failed(runtime, session.sessionId, {
-          currentLabel,
-          diagnostic: commandDiagnostic(result, currentLabel, redactionSecrets),
-          recipeHash: recipe.recipeHash,
-          redactionSecrets,
-          renewal: context.renewal,
-          startedAt,
-          transcript: context.transcript
-        });
-      }
-      context.transcript = appendWorkspaceSetupTranscript(
-        context.transcript,
-        stepStatus(currentLabel, "Succeeded", redactionSecrets)
-      );
+    } catch (error) {
+      outcome = "failed";
+      throw error;
+    } finally {
+      await finishWorkflow(resource?.workflow?.id, { outcome, defer: true });
     }
-    return persist(runtime, session.sessionId, {
-      currentLabel: context.currentLabel,
-      diagnostic: "",
-      finishedAt: stateTimestamp(clock),
-      recipeHash: recipe.recipeHash,
-      startedAt,
-      status: "succeeded",
-      transcript: appendWorkspaceSetupTranscript(
-        context.transcript,
-        "Workspace preparation succeeded."
-      )
-    }, context.renewal);
   }
 
   function observe(sessionId, operation, context) {
@@ -321,6 +366,7 @@ function createWorkspaceSetupRunner({
         diagnostic: normalizeText(error?.message) || "Workspace preparation failed.",
         recipeHash: context.recipeHash,
         redactionSecrets: context.redactionSecrets,
+        resourceAdmissionId: error?.details?.admission?.id,
         renewal: context.renewal,
         startedAt: context.startedAt,
         transcript: context.transcript
@@ -332,6 +378,7 @@ function createWorkspaceSetupRunner({
         ),
         finishedAt: stateTimestamp(clock),
         recipeHash: context.recipeHash,
+        resourceAdmissionId: error?.details?.admission?.id,
         startedAt: context.startedAt,
         status: "failed",
         transcript: appendWorkspaceSetupTranscript(

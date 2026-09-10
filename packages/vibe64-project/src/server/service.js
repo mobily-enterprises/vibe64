@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 import {
   Vibe64SessionRuntime
@@ -16,10 +17,12 @@ import {
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
   normalizeRuntimeConfigKey,
+  normalizeRuntimeConfigRecord,
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
-  runtimeConfigKeyIsVibe64Reserved
+  runtimeConfigKeyIsVibe64Reserved,
+  runtimeConfigRecordsForScope
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   readEnvUserValues,
@@ -244,6 +247,31 @@ function genesisEnvironmentIsUnconfigured(error) {
   return error?.code === "STACK_REQUIRED";
 }
 
+function projectEnvironmentResult(resolved, input, userRecords) {
+  if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
+  const values = [];
+  const userByKey = new Map(runtimeConfigRecordsForScope(userRecords,
+    input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
+    { target: input.target }).map((record) => [record.key, record]));
+  for (const [key, value] of Object.entries(resolved.projectEnvironment)) {
+    // Managed resource addresses/credentials vary by session, not app size.
+    if (Object.hasOwn(resolved.platformEnvironment || {}, key)) continue;
+    const record = userByKey.get(key) || normalizeRuntimeConfigRecord({ key, value });
+    if (!record.secret) values.push([key, value]);
+  }
+  const resources = resolved.resources.map(({ component, resource }) => [
+    component, resource.id, resource.kind,
+    Object.entries(satisfiedAlternative(resource, resolved.effectiveEnvironment)?.bindings || {}).sort(),
+    Object.entries(resource.optionalBindings || {}).sort()
+  ]).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return {
+    environment: resolved.projectEnvironment,
+    resourceConfigurationFingerprint: resolved.environmentInspectionFailed ? null : createHash("sha256")
+      .update(JSON.stringify({ values: values.sort(([left], [right]) => left.localeCompare(right)), resources }))
+      .digest("hex")
+  };
+}
+
 function createService({
   env = process.env,
   logger = null,
@@ -440,6 +468,7 @@ function createService({
     } catch (error) {
       return {
         databaseToolEnvironment: null,
+        environmentInspectionFailed: !genesisEnvironmentIsUnconfigured(error),
         effectiveEnvironment: {
           ...env,
           ...userEnvironment
@@ -1203,19 +1232,21 @@ function createService({
       if (input.reusePrepared === true) {
         // A failed read is not evidence of readiness. The ordinary preparation
         // path below remains responsible for provisioning and its diagnostics.
-        const resolved = await resolvedProjectEnvironment(input, await userEnvRecords()).catch(() => null);
+        const records = await userEnvRecords();
+        const resolved = await resolvedProjectEnvironment(input, records).catch(() => null);
         if (resolved?.resourcesPrepared && await projectEnvironmentFilesAreCurrent({
           environment: resolved.projectEnvironment,
           files: resolved.environmentFiles,
           sourceRoot: resolved.source.sourceRoot
         })) {
-          return resolved.projectEnvironment;
+          return projectEnvironmentResult(resolved, input, records);
         }
       }
       return runSessionSourceWorkExclusive(input, async () => {
+        const records = await userEnvRecords();
         const resolved = await resolvedProjectEnvironment(
           input,
-          await userEnvRecords(),
+          records,
           { provisionResources: true }
         );
         await materializeProjectEnvironmentFiles({
@@ -1223,13 +1254,14 @@ function createService({
           files: resolved.environmentFiles,
           sourceRoot: resolved.source.sourceRoot
         });
-        return resolved.projectEnvironment;
+        return projectEnvironmentResult(resolved, input, records);
       }, "prepare-project-environment");
     },
 
     async projectInspectionEnvironment(input = {}) {
-      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
-      return resolved.projectEnvironment;
+      const records = await userEnvRecords();
+      const resolved = await resolvedProjectEnvironment(input, records);
+      return projectEnvironmentResult(resolved, input, records);
     },
 
     async sessionDatabaseEnvironment(input = {}) {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -33,7 +34,7 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
   ]) assert.ok(instructions.includes(required), required);
 });
 
-async function fixture(t, name) {
+async function fixture(t, name, workflowHooks = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), `vibe64-test-target-${name}-`));
   const sessionId = `target-${name}`;
   const sourceRoot = path.join(root, "sessions", "active", sessionId, "source");
@@ -130,7 +131,11 @@ process.stdout.write(JSON.stringify({
     currentTargetRoot() { return sourceRoot; },
     currentServiceDataRoot() { return root; },
     async projectExecutionEnvironment() { return {}; },
-    async projectInspectionEnvironment() { return {}; },
+    async projectInspectionEnvironment(input) {
+      return input.includeResourceConfiguration
+        ? { environment: {}, resourceConfigurationFingerprint: "d".repeat(64) }
+        : {};
+    },
     async readPreviewApplicationIdentities() {
       return { identities: [{ name: "tester", type: "email", value: "test@example.test" }] };
     },
@@ -175,10 +180,12 @@ process.stdout.write(JSON.stringify({
       child.stdin.end(input.input);
     });
   };
-  const controller = createOutputTargetTerminalController({ projectService, runCommand });
+  const controller = createOutputTargetTerminalController({ projectService, runCommand, ...workflowHooks });
   const commandService = createAgentPreviewCommandService({
     launchTarget: controller, runManagedCommand: runCommand,
-    stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null
+    stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null,
+    resourceProvider: workflowHooks.resourceProvider,
+    publishSessionChanged: workflowHooks.publishSessionChanged
   });
   t.after(async () => {
     for (const child of children) child.kill("SIGKILL");
@@ -259,6 +266,120 @@ test('cancelled test', async ({page}) => {
     })
   };
 }
+
+test("workflow metadata separates real test target runs from development restoration without resource declarations", async t => {
+  const starts = [];
+  const phases = [];
+  const finishes = [];
+  await runWithProjectRequestContext({ slug: "legacy-resource-project" }, async () => {
+    const f = await fixture(t, "resource-workflow", {
+      async startWorkflow(input) {
+        starts.push(input);
+        return { ok: true, workflow: { id: `workflow-${starts.length}` } };
+      },
+      async setWorkflowPhase(id, phase) { phases.push({ id, phase }); },
+      async finishWorkflow(id, options) { finishes.push({ id, ...options }); }
+    });
+    const normal = await f.controller.ensurePreview(f.sessionId);
+    assert.equal(normal.ok, true, JSON.stringify(normal));
+    await f.waitReady(normal);
+    const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
+      const status = await f.controller.launchStatus(f.sessionId);
+      const url = new URL(status.previewTarget.href);
+      url.pathname = `${url.pathname.replace(/\/$/u, "")}/test-state`;
+      const response = await fetch(url);
+      assert.equal(response.ok, true, `${url}: ${await response.clone().text()}`);
+      const state = await response.json();
+      assert.equal(state.mode, "test-app");
+      assert.equal((await f.controller.ensurePreview(f.sessionId)).id, status.activeTerminal.id);
+      assert.equal(starts.length, 2, "a repeated ensure does not start another workflow");
+      return { ok: true, exitCode: 0 };
+    }, { waitUntilReady: f.waitReady });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.deepEqual(starts.map((input) => [input.operation.targetId, input.environment]), [
+      ["app", "development"], ["test-app", "test"], ["app", "development"]
+    ]);
+    assert.equal(starts.every((input) => input.estimates.status === "unconfigured"), true);
+    assert.deepEqual(new Set(phases.map(({ id, phase }) => `${id}:${phase}`)), new Set([
+      "workflow-1:running", "workflow-2:running", "workflow-3:running"
+    ]));
+    await f.controller.closeAllForSession(f.sessionId);
+    assert.deepEqual(finishes.map(({ id, outcome, defer }) => [id, outcome, defer]), [
+      ["workflow-1", "stopped", true], ["workflow-2", "stopped", true], ["workflow-3", "stopped", true]
+    ]);
+  });
+});
+
+test("test-target capacity approval resumes the original suite and restores development outside the approval scope", async t => {
+  await runWithProjectRequestContext({ slug: "test-capacity" }, async () => {
+    const starts = [];
+    const approvalScope = new AsyncLocalStorage();
+    const waiting = Promise.withResolvers();
+    const ends = [];
+    let f;
+    const admission = { id: "76cb5cf2-412d-479d-b06c-5ae0cfaa9551", outcome: "tight", code: "project_memory_tight",
+      availableBytes: 1600 * 1024 ** 2, typicalBytes: 512 * 1024 ** 2, highBytes: 1536 * 1024 ** 2,
+      actions: ["start-anyway", "manage-resources"] };
+    f = await fixture(t, "capacity", {
+      resourceProvider: () => ({
+        async beginWorkflowApprovalWait() {
+          assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.outputTargetId, "app");
+          assert.equal(f.controller.previewTestRunAdmission(f.sessionId), null, "Preview is unlocked before approval wait");
+          return { expiresAt: new Date(Date.now() + 300_000).toISOString() };
+        },
+        async endWorkflowApprovalWait(input) { ends.push(input.outcome); }
+      }),
+      async publishSessionChanged(sessionId) {
+        if (f.commandService.testApprovalStatus(sessionId)?.state === "waiting") waiting.resolve();
+      },
+      async startWorkflow(input) {
+        starts.push([input.operation.targetId, input.environment]);
+        if (input.environment === "development") assert.equal(approvalScope.getStore(), undefined, "restoration cannot inherit a test approval");
+        return !approvalScope.getStore() && input.environment === "test"
+          ? { ok: false, code: "vibe64_capacity_rejected", error: "This test Preview may not fit comfortably.", admission }
+          : { ok: true, workflow: { id: `workflow-${starts.length}` } };
+      },
+      async setWorkflowPhase() {},
+      async finishWorkflow() {}
+    });
+    await f.waitReady(await f.controller.ensurePreview(f.sessionId));
+    const rejected = await f.controller.withPreviewTarget(f.sessionId, "test-app", () => assert.fail("refused tests must not run"), {
+      waitUntilReady: f.waitReady
+    });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, "vibe64_capacity_rejected");
+    assert.equal(rejected.error, "This test Preview may not fit comfortably.");
+    assert.deepEqual(rejected.details.admission, admission);
+    assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.outputTargetId, "app");
+    await assert.rejects(readFile(path.join(f.sourceRoot, "test.json")), { code: "ENOENT" });
+    assert.deepEqual(starts, [["app", "development"], ["test-app", "test"], ["app", "development"]]);
+    const commands = await browserCommands(f);
+    const original = commands.execute(["--target", "test-app", "test", "--grep", "test database round trip"]);
+    const completion = original.then((value) => value, (error) => { throw error; });
+    await waiting.promise;
+    assert.deepEqual(starts.slice(3), [["test-app", "test"], ["app", "development"]]);
+    await assert.rejects(readFile(path.join(f.sourceRoot, "test.json")), { code: "ENOENT" });
+    const normal = await f.controller.launchStatus(f.sessionId);
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.goto(normal.previewTarget.href);
+      assert.equal(await page.locator("h1").textContent(), "app");
+      assert.match(await page.locator("p").textContent(), /42/u);
+    } finally { await browser.close(); }
+    const accepted = await f.commandService.resumeTestApproval({ projectSlug: "test-target", sessionId: f.sessionId, admissionId: admission.id },
+      (start) => approvalScope.run(true, start));
+    assert.equal(accepted.accepted, true);
+    const result = await completion;
+    assert.match(result.stdout, /Waiting for memory approval/u);
+    assert.match(result.stdout, /1 passed/u);
+    assert.deepEqual(starts.slice(5), [["test-app", "test"], ["app", "development"]]);
+    assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.outputTargetId, "app");
+    assert.equal(JSON.parse(await readFile(path.join(f.sourceRoot, "working.json"), "utf8")).count, 42);
+    assert.deepEqual(ends, ["resumed"]);
+    assert.equal(f.commandService.testApprovalStatus(f.sessionId), null);
+  });
+});
 
 test("declared test Preview runs real servers, isolates session state, and restores success/failure/cancellation", async t => {
   await runWithProjectRequestContext({ slug: "test-target" }, async () => {
