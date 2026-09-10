@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/client/erdRelationships.js";
+import { routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
 import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/client/erdRouting.js";
 import { erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/client/erdModel.js";
 
@@ -36,6 +37,30 @@ const relationships = [
 ];
 
 describe("Database ERD relationships", () => {
+  it("routes dense radial actor connections without exhausting the obstacle search", () => {
+    const nodes = [3, 14, 15].flatMap((count, ring) => Array.from({ length: count }, (_, index) => {
+      const angle = -Math.PI / 2 + index * Math.PI * 2 / count;
+      const width = 300 + (index % 5) * 24;
+      const height = 144 + (index % 5) * 12;
+      const radius = [400, 1500, 2200][ring];
+      return {
+        id: `${ring}:${index}`,
+        position: { x: Math.cos(angle) * radius - width / 2, y: Math.sin(angle) * radius - height / 2 },
+        dimensions: { width, height }
+      };
+    }));
+    const edges = nodes.slice(0, 4).flatMap((source) => nodes.filter((target) => target !== source)
+      .map((target) => ({ id: `${source.id}-${target.id}`, source: source.id, target: target.id })));
+    const routes = routeOverviewEdges(nodes, edges);
+    const obstacles = erdObstacles(nodes, 48);
+    expect(routes).toHaveLength(124);
+    for (const [index, route] of routes.entries()) {
+      expect(route.obstructed, route.id).toBe(false);
+      expect(erdPathClear(route.points, obstacles, edges[index].source, edges[index].target), route.id).toBe(true);
+      expect(route.points.slice(1).every((point, i) => point.x === route.points[i].x || point.y === route.points[i].y)).toBe(true);
+    }
+  });
+
   it("routes parent keys to the matching child foreign-key columns", () => {
     const parent = tableNode("parent", 0, ["id", "name"]);
     const child = tableNode("child", 420, ["id", "parent_id", "backup_parent_id"], { y: 340 });

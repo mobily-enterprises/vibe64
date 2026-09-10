@@ -109,6 +109,12 @@ const databaseLayoutInputValidator = validator({
   layout: openObject
 });
 
+const databaseOverviewInputValidator = validator({
+  ...sessionFields,
+  baseHash: optionalText,
+  definition: openObject
+});
+
 const databaseSnippetSaveInputValidator = validator({
   ...sessionFields,
   snippet: openObject
@@ -132,6 +138,7 @@ const databaseAssistantInputValidator = validator({
 });
 
 export {
+  databaseOverviewInputValidator,
   databaseAssistantInputValidator,
   databaseCancelInputValidator,
   databaseCellUpdateInputValidator,

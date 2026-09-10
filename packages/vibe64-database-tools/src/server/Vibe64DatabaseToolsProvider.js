@@ -27,12 +27,14 @@ const Vibe64DatabaseToolsProvider = defineFeature({
     http: "runtime.http",
     logger: "runtime.logger",
     project: "vibe64.project",
+    sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals"
   },
-  setup({ events, http, logger, project, terminals }) {
+  setup({ events, http, logger, project, sourceEditor, terminals }) {
     const databaseTools = createService({
       logger,
       projectService: project,
+      sourceEditor,
       publishLayoutChanged: createDatabaseLayoutChangedPublisher(events),
       terminalService: terminals
     });

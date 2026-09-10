@@ -46,6 +46,8 @@ import {
 import {
   quoteQualifiedTable
 } from "./sqlPolicy.js";
+import { readDataOverview } from "./dataOverview.js";
+import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
 function databaseResult(operation) {
   return vibe64Result(operation, {
@@ -112,6 +114,7 @@ function createService({
   logger = null,
   projectService,
   publishLayoutChanged = async () => {},
+  sourceEditor = null,
   terminalService = null,
   withKnex = withSessionKnex
 } = {}) {
@@ -306,13 +309,35 @@ function createService({
   }
 
   return Object.freeze({
+    async readOverview(input = {}) {
+      return databaseResult(async () => {
+        const context = await sessionContext(input);
+        const schema = await currentSchema(context);
+        const overview = await readDataOverview(context.session);
+        const coverage = dataOverviewCoverage(schema, overview.definition);
+        return {
+          ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length,
+          instructions: DATA_OVERVIEW_INSTRUCTIONS,
+          schema: {
+            database: schema.database, engine: schema.engine, refreshedAt: schema.refreshedAt,
+            tables: schema.tables.map((table) => ({
+              qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
+              keys: table.keys,
+              columns: table.columns.map((column) => ({ name: column.name, nativeType: column.nativeType, nullable: column.nullable, comment: column.comment }))
+            })),
+            relationships: schema.relationships
+          }
+        };
+      });
+    },
     async readState(input = {}) {
       return databaseResult(async () => {
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
-        const [layout, workspace] = await Promise.all([
+        const [layout, workspace, overview] = await Promise.all([
           readErdLayout(context.store, context.sessionId, context.vibe64User),
-          readWorkspace(context.store, context.sessionId, context.vibe64User)
+          readWorkspace(context.store, context.sessionId, context.vibe64User),
+          readDataOverview(context.session)
         ]);
         return {
           assistant: databaseAssistantAvailability(context.session),
@@ -321,6 +346,7 @@ function createService({
             ? defaultQuery(schema.tables[0], schema.engine)
             : "",
           layout,
+          overview,
           ok: true,
           schema,
           workspace,
@@ -336,10 +362,35 @@ function createService({
     async refreshSchema(input = {}) {
       return databaseResult(async () => {
         const context = await sessionContext(input);
+        const schema = await refreshSchema(context, normalizeText(input.source) || "user");
+        await publishLayoutChanged(context.sessionId, context.session);
         return {
           ok: true,
-          schema: await refreshSchema(context, normalizeText(input.source) || "user")
+          schema
         };
+      });
+    },
+
+    async saveOverview(input = {}) {
+      return databaseResult(async () => {
+        const context = await sessionContext(input);
+        const definition = validateDataOverview(input.definition);
+        const text = `${JSON.stringify(definition, null, 2)}\n`;
+        if (Buffer.byteLength(text) > DATA_OVERVIEW_MAX_BYTES) {
+          throw databaseError("Data overview is larger than 256 KiB.", "vibe64_database_overview_invalid");
+        }
+        const current = await readDataOverview(context.session);
+        if (current.present && (!input.baseHash || input.baseHash !== current.hash)) {
+          throw databaseError("The data overview changed. Reload it before saving your grouping.", "vibe64_database_overview_conflict");
+        }
+        if (!current.present && input.baseHash) {
+          throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict");
+        }
+        const payload = { sessionId: context.sessionId, path: DATA_OVERVIEW_PATH, text, baseHash: current.hash, vibe64User: context.vibe64User };
+        const result = current.present ? await sourceEditor.saveFile(payload) : await sourceEditor.createFile(payload);
+        if (result.ok === false) return result;
+        await publishLayoutChanged(context.sessionId, context.session);
+        return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition } };
       });
     },
 

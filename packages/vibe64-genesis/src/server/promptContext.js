@@ -128,7 +128,10 @@ function sessionDriverOutput(input) {
     ...(session.managedPreview ? MANAGED_PREVIEW_INSTRUCTIONS : []),
     ...(session.managedEnvironment && !readOnly ? MANAGED_ENVIRONMENT_INSTRUCTIONS : []),
     ...(session.managedDatabaseRefresh && !readOnly
-      ? ["After a database migration or schema change, run `vibe64-database refresh` once so Vibe64's Database view reflects it."]
+      ? [
+          "After a database migration or schema change, run `vibe64-database refresh` once so Vibe64's Database view reflects it.",
+          "When data-overview.json exists in project source, maintain its main actors and explicit supporting-table groups as the schema changes. Use `vibe64-database overview --json` for the current schema, grouping, coverage and exact format instructions. Preserve authored groupings, classify new tables, fix renamed/removed references, and check coverage afterward. When asked to create a Data overview, use the same command and relevant application source; no one-hop membership rule applies. Never invent foreign keys or cardinalities."
+        ]
       : []),
     ...(session.managedGit ? managedGitInstructions({ readOnly }) : [])
   ];

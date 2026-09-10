@@ -598,6 +598,7 @@
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
+          @request-overview-assistant="startTemporaryAiTask"
         />
       </section>
 

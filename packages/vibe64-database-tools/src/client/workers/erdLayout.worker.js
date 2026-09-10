@@ -2,7 +2,8 @@ import ELK from "elkjs/lib/elk-api.js";
 import ElkWorker from "elkjs/lib/elk-worker.min.js?worker";
 
 import { createErdRelationshipRoutes } from "../erdRelationships.js";
-import { layoutErdGroups } from "./erdLayout.js";
+import { layoutErdGroups, layoutErdRings } from "./erdLayout.js";
+import { routeOverviewEdges } from "../dataOverviewModel.js";
 
 let elk = null;
 
@@ -18,9 +19,25 @@ self.addEventListener("message", async (event) => {
       });
       return;
     }
-    const edges = Array.isArray(request.edges) ? request.edges : [];
-    elk ||= new ELK({ workerFactory: () => new ElkWorker() });
-    const result = await layoutErdGroups(elk, nodes, edges, request.groups);
+    let result;
+    if (request.kind === "overview") {
+      const positioned = layoutErdRings(nodes, request.overviewRings).map(node => ({
+        ...node, ...request.overviewPositions?.[node.id.startsWith("actor:") ? node.id.slice(6) : node.id]
+      }));
+      const positions = new Map(positioned.map((node) => [node.id, { x: node.x, y: node.y }]));
+      const visible = nodes.map((node) => ({
+        id: node.id,
+        position: positions.get(node.id),
+        dimensions: { width: node.width, height: node.height }
+      }));
+      result = { nodes: positioned, overviewRoutes: routeOverviewEdges(visible, request.visibleEdges) };
+    } else if (request.centralTable) {
+      result = { nodes: layoutErdRings(nodes.map((node) => ({ ...node, count: node.id === request.centralTable ? 1 : 0 }))), paths: [] };
+    } else {
+      elk ||= new ELK({ workerFactory: () => new ElkWorker() });
+      const edges = Array.isArray(request.edges) ? request.edges : [];
+      result = await layoutErdGroups(elk, nodes, edges, request.groups);
+    }
     self.postMessage({
       ...result,
       id: request.id,

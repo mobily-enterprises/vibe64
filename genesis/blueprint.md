@@ -59,6 +59,29 @@ and avoid covering tables where space permits. People can search fields, focus
 on a table's neighbours, arrange or group tables, pin important positions, undo
 layout changes, and keep named views. The session's diagram layout is shared
 among its users: moving a table updates the other open diagrams automatically.
+Data overview is the default database view, followed by the detailed ERD and
+the query/data view. The diagram keeps the working space: routine search and Fit
+stay visible, while occasional display and arrangement controls live in an
+options menu. Overview concepts can be dragged continuously without waiting for
+saves or jumping on drop, and retain their positions when reopened. It shows main actors with explicitly assigned supporting tables,
+including tables several relationships away. Opening an actor fades the overview
+behind the real ERD of just its contained tables, with its main table central and
+supporting tables around it. A small loading indicator keeps progress clear
+without covering the diagram area in flashing placeholders. Real tables start fully opaque; selecting a table
+keeps it and its direct neighbours solid while dimming unrelated tables. Hovering
+connections does not change which tables are dimmed. The shared table/field sidebar follows selection.
+Scoped tables cannot be dragged; closing the detail layer restores the unchanged
+overview. Every unassigned table remains available under Other tables. Balanced
+generation targets 5–10 business concepts and their main business connections;
+Very abstract targets 3–5 broader domains. All connections remain inspectable on
+request, retaining actual table endpoints and schema cardinalities. People can edit the
+grouping, promote a supporting table, or merge an actor into another. Their
+configured assistant can generate an unabstracted, balanced, or very abstract
+view and place important actors centrally with supporting actors spreading outward. Collapsed card area reflects table count, with a maximum 2× difference. Generation can replace the whole
+grouping or process only previously unreviewed tables, preserving manual choices;
+tables deliberately left in Other tables are recorded as reviewed. The definition
+lives with project source so it is reviewable, versioned and maintained when the
+schema changes; displaying it does not require an AI call.
 The first project message carries the relevant Genesis task prompt; later
 messages and active-turn steering stay concise instead of rebuilding it. The
 project's shorter durable operating guide is loaded when a conversation is

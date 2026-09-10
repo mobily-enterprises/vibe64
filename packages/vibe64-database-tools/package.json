@@ -23,6 +23,7 @@
         "runtime.http",
         "runtime.logger",
         "vibe64.project",
+        "vibe64.source-editor",
         "vibe64.terminals"
       ]
     },
@@ -73,6 +74,7 @@
     "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-project": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
+    "@local/vibe64-source-editor": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
     "@mdi/js": "^7.4.47",
     "@vue-flow/core": "^1.48.2",

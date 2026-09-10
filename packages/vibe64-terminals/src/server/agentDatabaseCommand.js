@@ -53,9 +53,11 @@ function usageText() {
   return [
     "Usage:",
     "  vibe64-database refresh [--json]",
+    "  vibe64-database overview [--json]",
     "",
     "Run this once after a migration or any other database schema change.",
-    "It refreshes the session Database tool's tables, relationships, indexes, and ERD source."
+    "It refreshes the session Database tool's tables, relationships, indexes, and ERD source.",
+    "Overview reads the current schema, data-overview.json grouping, coverage and authoring instructions. It does not run queries or alter data."
   ].join("\n") + "\n";
 }
 
@@ -99,8 +101,8 @@ function validateCommand(parsed = {}) {
       stdout: usageText()
     };
   }
-  if (parsed.command !== "refresh" || parsed.positionals.length !== 1) {
-    return responseError("The database command accepts only refresh.", "vibe64_agent_database_command_usage", {
+  if (!["refresh", "overview"].includes(parsed.command) || parsed.positionals.length !== 1) {
+    return responseError("The database command accepts refresh or overview.", "vibe64_agent_database_command_usage", {
       exitCode: 2,
       usage: true
     });
@@ -326,21 +328,27 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
       result = validateCommand(parsed);
       if (!result) {
         if (!databaseToolsProvider) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
-        const refreshed = await runInSessionProject(sessionId, () => databaseToolsProvider.refreshSchema({
-          sessionId,
-          source: "agent"
-        }));
-        if (refreshed?.ok === false) throw vibe64Error(refreshed.error || "Database schema refresh failed.", refreshed.code || "vibe64_agent_database_command_failed");
-        const payload = {
-          ok: true,
-          refreshedAt: refreshed.schema?.refreshedAt || "",
-          tableCount: Number(refreshed.schema?.tables?.length || 0)
-        };
-        result = {
-          exitCode: 0,
-          ok: true,
-          stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : `Database schema refreshed: ${payload.tableCount} tables/views.\n`
-        };
+        if (parsed.command === "overview") {
+          const overview = await runInSessionProject(sessionId, () => databaseToolsProvider.readOverview({ sessionId }));
+          if (overview?.ok === false) throw vibe64Error(overview.error, overview.code);
+          result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(overview, null, 2)}\n` };
+        } else {
+          const refreshed = await runInSessionProject(sessionId, () => databaseToolsProvider.refreshSchema({
+            sessionId,
+            source: "agent"
+          }));
+          if (refreshed?.ok === false) throw vibe64Error(refreshed.error || "Database schema refresh failed.", refreshed.code || "vibe64_agent_database_command_failed");
+          const payload = {
+            ok: true,
+            refreshedAt: refreshed.schema?.refreshedAt || "",
+            tableCount: Number(refreshed.schema?.tables?.length || 0)
+          };
+          result = {
+            exitCode: 0,
+            ok: true,
+            stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : `Database schema refreshed: ${payload.tableCount} tables/views.\n`
+          };
+        }
       }
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {

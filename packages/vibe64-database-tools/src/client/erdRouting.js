@@ -2,20 +2,20 @@ const CLEARANCE = 14;
 const STUB = 18;
 const BEND_COST = 32;
 
-export function erdObstacles(nodes = []) {
+export function erdObstacles(nodes = [], clearance = CLEARANCE) {
   return nodes.map((node) => ({
     id: node.id,
-    left: node.position.x - CLEARANCE,
-    right: node.position.x + node.dimensions.width + CLEARANCE,
-    top: node.position.y - CLEARANCE,
-    bottom: node.position.y + node.dimensions.height + CLEARANCE
+    left: node.position.x - clearance,
+    right: node.position.x + node.dimensions.width + clearance,
+    top: node.position.y - clearance,
+    bottom: node.position.y + node.dimensions.height + clearance
   }));
 }
 
-export function segmentBlocked(a, b, obstacles) {
-  return obstacles.some((box) => a.x === b.x
+export function segmentBlocked(a, b, obstacles, ignoreStart = null, ignoreEnd = null) {
+  return obstacles.some((box) => box.id !== ignoreStart && box.id !== ignoreEnd && (a.x === b.x
     ? a.x > box.left && a.x < box.right && Math.max(a.y, b.y) > box.top && Math.min(a.y, b.y) < box.bottom
-    : a.y > box.top && a.y < box.bottom && Math.max(a.x, b.x) > box.left && Math.min(a.x, b.x) < box.right);
+    : a.y > box.top && a.y < box.bottom && Math.max(a.x, b.x) > box.left && Math.min(a.x, b.x) < box.right));
 }
 
 function compact(points) {
@@ -32,8 +32,7 @@ function compact(points) {
 
 export function erdPathClear(points, obstacles, source, target) {
   return points?.length > 1 && points.slice(1).every((point, index) =>
-    !segmentBlocked(points[index], point, obstacles.filter((box) =>
-      !(index === 0 && box.id === source) && !(index === points.length - 2 && box.id === target))));
+    !segmentBlocked(points[index], point, obstacles, index === 0 ? source : null, index === points.length - 2 ? target : null));
 }
 
 function segmentPenalty(a, b, occupied) {
@@ -93,8 +92,12 @@ function pop(queue) {
 export function routeErdConnection(route, obstacles, occupied = [], index = 0, dragging = false) {
   const start = route.start;
   const end = route.end;
-  const from = { x: start.x + (route.sourcePosition === "left" ? -STUB : STUB), y: start.y };
-  const to = { x: end.x + (route.targetPosition === "left" ? -STUB : STUB), y: end.y };
+  const stub = route.stubLength ?? STUB;
+  const offsets = { left: [-stub, 0], right: [stub, 0], top: [0, -stub], bottom: [0, stub] };
+  const [sourceX, sourceY] = offsets[route.sourcePosition];
+  const [targetX, targetY] = offsets[route.targetPosition];
+  const from = { x: start.x + sourceX, y: start.y + sourceY };
+  const to = { x: end.x + targetX, y: end.y + targetY };
   const basic = compact([start, from, { x: route.laneX, y: from.y }, { x: route.laneX, y: to.y }, to, end]);
   if (dragging) return { points: basic, obstructed: !erdPathClear(basic, obstacles, route.source, route.target) };
   // Expanded or overlapping cards can enclose an endpoint. No grid search can
@@ -113,15 +116,19 @@ export function routeErdConnection(route, obstacles, occupied = [], index = 0, d
   const candidates = [
     ...xs.map((x) => compact([start, from, { x, y: from.y }, { x, y: to.y }, to, end])),
     ...ys.map((y) => compact([start, from, { x: from.x, y }, { x: to.x, y }, to, end]))
-  ];
+  ].map((points) => ({
+    points,
+    cost: points.slice(1).reduce((sum, b, i) => sum + Math.abs(points[i].x - b.x) + Math.abs(points[i].y - b.y) + BEND_COST, 0)
+  })).sort((a, b) => a.cost - b.cost);
   let best = null;
   let bestScore = Infinity;
-  for (const points of candidates) {
+  for (const { points, cost } of candidates) {
+    // Crossing penalties only add cost. Longer candidates cannot improve an
+    // already cheaper route, so avoid scoring their runs against every edge.
+    if (cost >= bestScore) break;
     if (!erdPathClear(points, obstacles, route.source, route.target)) continue;
-    const score = points.slice(1).reduce((sum, b, i) => {
-      const a = points[i];
-      return sum + Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + BEND_COST + segmentPenalty(a, b, occupied);
-    }, 0);
+    let score = cost;
+    for (let i = 1; i < points.length && score < bestScore; i += 1) score += segmentPenalty(points[i - 1], points[i], occupied);
     if (!best || score < bestScore) {
       best = points;
       bestScore = score;
@@ -157,11 +164,14 @@ export function routeErdConnection(route, obstacles, occupied = [], index = 0, d
       const b = point(next);
       if (segmentBlocked(a, b, obstacles)) continue;
       const key = next * 2 + direction;
-      const cost = current.cost + distance(a, b) + (direction === current.key % 2 ? 0 : BEND_COST) + segmentPenalty(a, b, occupied);
+      // Corridor candidates already prefer fewer crossings. In the bounded
+      // fallback, prioritise reaching the target around cards: crossing costs
+      // otherwise exhaust the search on large, well-spaced radial diagrams.
+      const cost = current.cost + distance(a, b) + (direction === current.key % 2 ? 0 : BEND_COST);
       if (cost >= (costs.get(key) ?? Infinity)) continue;
       costs.set(key, cost);
       previous.set(key, current.key);
-      push(queue, { key, cost, score: cost + distance(b, to) });
+      push(queue, { key, cost, score: cost + 1.25 * distance(b, to) });
     }
   }
   if (finish === null) {

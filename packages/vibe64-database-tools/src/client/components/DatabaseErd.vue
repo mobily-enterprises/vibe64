@@ -19,46 +19,55 @@
         variant="outlined"
         @update:model-value="locate"
       />
-      <div class="database-erd__toolbar-actions">
-        <v-btn-toggle :model-value="columnMode" mandatory density="compact" @update:model-value="changeColumnMode">
-          <v-btn value="keys" size="small">Keys only</v-btn>
-          <v-btn value="all" size="small">All columns</v-btn>
-        </v-btn-toggle>
-        <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiImageFilterCenterFocus" size="small" variant="text" @click="fitDiagram">Fit</v-btn>
-        <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiRestore" size="small" title="Arrange relationships while preserving pinned tables" variant="tonal" @click="resetPositions">Reset positions</v-btn>
-        <v-btn :disabled="layoutPending || !undoStack.length" :icon="mdiUndo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
-        <v-btn :disabled="layoutPending || !redoStack.length" :icon="mdiRedo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
-        <v-menu :attach="erdRoot">
-          <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text">Views</v-btn></template>
-          <v-list density="compact">
-            <v-list-item title="Save view…" @click="viewName = ''; viewDialog = true" />
-            <v-list-item v-for="view in views" :key="view.id" :title="view.name" @click="loadView(view)">
-              <template #append><v-btn :icon="mdiClose" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
-            </v-list-item>
-          </v-list>
-        </v-menu>
-        <v-btn size="small" variant="text" @click="editGroup()">Groups</v-btn>
-        <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? mdiFullscreenExit : mdiFullscreen" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
-      </div>
+      <v-btn :disabled="layoutPending || !nodes.length" :icon="mdiImageFilterCenterFocus" aria-label="Fit" title="Fit diagram" size="small" variant="text" @click="fitDiagram" />
+      <v-menu v-model="optionsOpen" :attach="erdRoot" :close-on-content-click="false">
+        <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" :icon="mdiTuneVariant" aria-label="Diagram options" title="Diagram options" size="small" variant="text" /></template>
+        <v-sheet class="database-erd__options" rounded="lg" elevation="2" aria-label="Diagram options">
+          <strong>Display</strong>
+          <v-btn-toggle :model-value="columnMode" mandatory density="compact" @update:model-value="changeColumnMode">
+            <v-btn value="keys" size="small">Keys only</v-btn>
+            <v-btn value="all" size="small">All columns</v-btn>
+          </v-btn-toggle>
+          <v-select
+            :model-value="activeGroup" density="compact" :items="groupItems" label="Show tables"
+            :menu-props="{ attach: erdRoot }" variant="outlined"
+            hint="Filter the diagram without changing table data or overview concepts." persistent-hint
+            @update:model-value="changeGroupFilter"
+          />
+          <v-divider />
+          <strong>Arrangement</strong>
+          <div class="database-erd__option-actions">
+            <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiRestore" size="small" title="Arrange relationships while preserving pinned tables" variant="text" @click="resetPositions">Reset positions</v-btn>
+            <v-btn :disabled="layoutPending || !undoStack.length" :icon="mdiUndo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
+            <v-btn :disabled="layoutPending || !redoStack.length" :icon="mdiRedo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
+          </div>
+          <v-divider />
+          <div class="database-erd__option-actions">
+            <v-menu :attach="erdRoot">
+              <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text">Saved views</v-btn></template>
+              <v-list density="compact">
+                <v-list-item title="Save view…" @click="optionsOpen = false; viewName = ''; viewDialog = true" />
+                <v-list-item v-for="view in views" :key="view.id" :title="view.name" @click="loadView(view)">
+                  <template #append><v-btn :icon="mdiClose" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+            <v-btn size="small" variant="text" @click="editGroup()">Edit table groups</v-btn>
+            <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? mdiFullscreenExit : mdiFullscreen" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
+          </div>
+          <slot name="options" :close="() => optionsOpen = false" />
+        </v-sheet>
+      </v-menu>
     </header>
-    <div v-if="focusTable || groups.length || automaticGroups.length || disconnectedCount" class="database-erd__filters">
-      <v-select
-        :model-value="activeGroup"
-        class="database-erd__group-select"
-        density="compact"
-        hide-details
-        :items="groupItems"
-        label="Table group"
-        :menu-props="{ attach: erdRoot }"
-        variant="outlined"
-        @update:model-value="changeGroupFilter"
-      />
-      <v-chip v-if="focusTable" closable @click:close="setFocus('')">Focus: {{ tableName(focusTable) }}</v-chip>
+    <div v-if="focusTable || activeGroup" class="database-erd__filters">
+      <v-chip v-if="activeGroup" size="small" closable @click:close="changeGroupFilter('')">{{ groupItems.find(item => item.value === activeGroup)?.title }}</v-chip>
+      <v-chip v-if="focusTable" size="small" closable @click:close="setFocus('')">Focus: {{ tableName(focusTable) }}</v-chip>
       <span>{{ visibleCount }} / {{ nodes.length }} tables</span>
     </div>
     <div class="database-erd__canvas">
-      <div v-if="layoutPending && !nodes.length" class="database-erd__skeleton" role="status">
-        <v-skeleton-loader v-for="index in 6" :key="index" type="card, list-item-two-line@3" />
+      <div v-if="layoutPending && !nodes.length" class="database-erd__loading" role="status" aria-live="polite">
+        <v-skeleton-loader class="database-erd__loading-preview" type="heading, text@2" :width="180" color="transparent" boilerplate aria-hidden="true" />
+        <span>Preparing diagram…</span>
       </div>
       <VueFlow
         v-else
@@ -71,7 +80,7 @@
         :max-zoom="1.8"
         :min-zoom="0.08"
         :nodes-connectable="false"
-        :nodes-draggable="!layoutPending"
+        :nodes-draggable="draggable && !layoutPending"
         @init="onFlowInit"
         @node-click="onNodeClick"
         @node-drag-start="onNodeDragStart"
@@ -81,6 +90,7 @@
         @edge-mouse-enter="onEdgeHover"
         @edge-mouse-leave="onEdgeLeave"
         @pane-click="clearSelection"
+        @move-start="clearViewportSave"
         @move-end="onViewportMove"
       >
         <template #node-table="nodeProps"><DatabaseErdNode v-bind="nodeProps" /></template>
@@ -137,9 +147,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiClose, mdiFullscreen, mdiFullscreenExit, mdiImageFilterCenterFocus, mdiMagnify, mdiPin, mdiPinOutline, mdiRedo, mdiRestore, mdiUndo } from "@mdi/js";
+import { mdiClose, mdiFullscreen, mdiFullscreenExit, mdiImageFilterCenterFocus, mdiMagnify, mdiPin, mdiPinOutline, mdiRedo, mdiRestore, mdiTuneVariant, mdiUndo } from "@mdi/js";
 import { MarkerType, VueFlow } from "@vue-flow/core";
 import { MiniMap } from "@vue-flow/minimap";
 import DatabaseErdEdge from "./DatabaseErdEdge.vue";
@@ -148,13 +158,17 @@ import { createErdRelationshipRoutes } from "../erdRelationships.js";
 import { ERD_NODE_WIDTH, erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdNodeHeight, erdSearch, placeErdNodes } from "../erdModel.js";
 
 const props = defineProps({
+  draggable: { type: Boolean, default: true },
+  centralTable: { type: String, default: "" },
   layout: { default: () => ({ nodes: [] }), type: Object },
   schema: { default: () => ({ relationships: [], tables: [] }), type: Object }
 });
-const emit = defineEmits(["save-layout", "select-table"]);
+const emit = defineEmits(["save-layout", "select-table", "inspect-table"]);
+defineExpose({ locate });
 const nodes = ref([]);
 const edges = ref([]);
 const erdRoot = ref(null);
+const optionsOpen = ref(false);
 const fullscreen = ref(false);
 const fullscreenAvailable = ref(false);
 const layoutError = ref("");
@@ -184,8 +198,9 @@ const defaultEdgeOptions = {
   type: "relationship",
   markerEnd: { height: 16, width: 16, markerUnits: "userSpaceOnUse", type: MarkerType.ArrowClosed }
 };
-const relationships = computed(() => props.schema.relationships || []);
-const tables = computed(() => props.schema.tables || []);
+// Schema refreshes replace the snapshot; its metadata is immutable between reads.
+const relationships = computed(() => toRaw(props.schema.relationships || []));
+const tables = computed(() => toRaw(props.schema.tables || []));
 const tableItems = computed(() => tables.value.map((table) => ({ title: table.name, value: table.qualifiedName })));
 const searchMatches = computed(() => erdSearch(tables.value, searchText.value || ""));
 const selectedNode = computed(() => nodes.value.find((node) => node.id === selectedTable.value));
@@ -200,11 +215,11 @@ const disconnectedCount = computed(() => tables.value.filter((table) => !connect
 const visibleCount = computed(() => nodes.value.filter((node) => !node.hidden).length);
 const automaticGroups = computed(() => erdLayoutGroups(nodes.value, relationships.value).filter((group) => group.id.startsWith("erd-auto:")));
 const groupItems = computed(() => [
-  { title: "All groups", value: "" },
+  { title: "All tables", value: "" },
   ...groups.value.map((group) => ({ title: group.name, value: group.id })),
-  ...automaticGroups.value.map((group) => ({ title: group.name, value: group.id })),
-  { title: "Related tables", value: "erd-related" },
-  ...(disconnectedCount.value ? [{ title: "Disconnected tables", value: "erd-disconnected" }] : [])
+  ...automaticGroups.value.map((group) => ({ title: `Around ${tableName(group.id.slice("erd-auto:".length))} (${group.tables.length} tables)`, value: group.id })),
+  { title: "All tables with relationships", value: "erd-related" },
+  ...(disconnectedCount.value ? [{ title: "Tables without relationships", value: "erd-disconnected" }] : [])
 ]);
 const matchingView = computed(() => views.value.find((view) => view.name.toLowerCase() === viewName.value.trim().toLowerCase()));
 let flow = null;
@@ -220,6 +235,7 @@ let draggingSnapshot = null;
 let pendingRemoteLayout = null;
 let appliedLayoutRevision = props.layout.revision || 0;
 let disposed = false;
+let viewportSaveTimer = null;
 const layoutResolvers = new Map();
 
 function tableName(id) { return tables.value.find((table) => table.qualifiedName === id)?.name || id; }
@@ -235,7 +251,8 @@ function checkpoint() {
   undoStack.value = [...undoStack.value, snapshot()].slice(-30);
   redoStack.value = [];
 }
-function persistPositions() { emit("save-layout", { ...snapshot(), views: views.value }); }
+function clearViewportSave() { clearTimeout(viewportSaveTimer); viewportSaveTimer = null; }
+function persistPositions() { clearViewportSave(); emit("save-layout", { ...snapshot(), views: views.value }); }
 function buildNodes(saved = storedNodes) {
   const records = new Map(saved.map((node) => [node.table, node]));
   const memberships = new Map(erdLayoutGroups(tables.value.map((table) => ({ id: table.qualifiedName, data: { table, group: records.get(table.qualifiedName)?.group } })), relationships.value)
@@ -245,11 +262,11 @@ function buildNodes(saved = storedNodes) {
     const columns = erdColumns(table, relationships.value, columnMode.value, record.expanded);
     const group = record.group || "";
     return {
-      id: table.qualifiedName, type: "table", draggable: !record.pinned,
+      id: table.qualifiedName, type: "table", draggable: props.draggable && !record.pinned,
       position: { x: record.x || 0, y: record.y || 0 },
       dimensions: { width: ERD_NODE_WIDTH, height: erdNodeHeight(columns, record.collapsed) },
       data: {
-        table, columns, group, collapsed: record.collapsed === true, expanded: record.expanded === true, pinned: record.pinned === true,
+        table: markRaw(table), columns: markRaw(columns), group, collapsed: record.collapsed === true, expanded: record.expanded === true, pinned: record.pinned === true,
         columnMode: columnMode.value, keyColumnCount: erdColumns(table, relationships.value).length,
         primaryColumns: new Set((table.keys || []).filter((key) => key.primary).flatMap((key) => key.columns)),
         uniqueColumns: new Set((table.keys || []).flatMap((key) => key.columns)),
@@ -270,27 +287,39 @@ function applyVisibility() {
   });
 }
 function emphasize() {
-  const relationId = hoveredRelationshipId.value || selectedRelationshipId.value;
-  const highlighted = routes.filter((route) => relationId ? route.relationshipId === relationId :
+  const selectedRoutes = routes.filter((route) => selectedRelationshipId.value ? route.relationshipId === selectedRelationshipId.value :
     selectedTable.value && (route.source === selectedTable.value || route.target === selectedTable.value));
+  const selectedTables = new Set(selectedRoutes.flatMap((route) => [route.source, route.target]));
+  if (selectedTable.value) selectedTables.add(selectedTable.value);
+  const highlighted = hoveredRelationshipId.value ? routes.filter((route) =>
+    route.relationshipId === hoveredRelationshipId.value || selectedRoutes.includes(route)) : selectedRoutes;
   const highlightedIds = new Set(highlighted.map((route) => route.id));
-  const hasSelection = Boolean(relationId || selectedTable.value);
-  nodes.value = nodes.value.map((node) => {
-    const columns = highlighted.flatMap((route) => [
-      ...(route.source === node.id ? [route.sourceColumn] : []),
-      ...(route.target === node.id ? [route.targetColumn] : [])
-    ]).filter(Boolean);
+  const hasSelection = Boolean(selectedRelationshipId.value || selectedTable.value);
+  const columnsByTable = new Map();
+  for (const route of highlighted) {
+    for (const [table, column] of [[route.source, route.sourceColumn], [route.target, route.targetColumn]]) {
+      if (!columnsByTable.has(table)) columnsByTable.set(table, []);
+      if (column) columnsByTable.get(table).push(column);
+    }
+  }
+  // Preserve graph identities: replacing the arrays makes Vue Flow parse every
+  // table and connection again for each pointer crossing.
+  for (const node of nodes.value) {
+    const columns = columnsByTable.get(node.id) || [];
     if (node.id === selectedTable.value && searchColumn.value) columns.push(searchColumn.value);
-    const active = node.id === selectedTable.value || columns.length > 0 || highlighted.some((route) => route.source === node.id || route.target === node.id);
-    return { ...node, data: { ...node.data, highlighted: active, dimmed: hasSelection && !active, highlightedColumns: columns } };
-  });
-  edges.value = edges.value.map((edge) => {
+    node.data.highlighted = node.id === selectedTable.value || columnsByTable.has(node.id);
+    node.data.dimmed = hasSelection && !selectedTables.has(node.id);
+    const previous = node.data.highlightedColumns || [];
+    if (previous.length !== columns.length || previous.some((column, index) => column !== columns[index])) node.data.highlightedColumns = columns;
+  }
+  for (const edge of edges.value) {
     const active = highlightedIds.has(edge.id);
-    return { ...edge, selected: edge.data.relationshipId === selectedRelationshipId.value,
-      data: { ...edge.data, emphasized: active },
-      style: { stroke: "rgb(var(--v-theme-primary))", strokeWidth: active ? 2.4 : 1.6, strokeOpacity: hasSelection && !active ? 0.12 : 0.85, strokeDasharray: edge.data.cardinality.optional ? "6 3" : undefined, strokeLinejoin: "round" }
-    };
-  });
+    edge.selected = edge.data.relationshipId === selectedRelationshipId.value;
+    edge.data.emphasized = active;
+    edge.style ||= { stroke: "rgb(var(--v-theme-primary))", strokeDasharray: edge.data.cardinality.optional ? "6 3" : undefined, strokeLinejoin: "round" };
+    edge.style.strokeWidth = active ? 2.4 : 1.6;
+    edge.style.strokeOpacity = hasSelection && !active ? 0.12 : 0.85;
+  }
 }
 async function refreshGraph({ dragging = false, reset = false, layoutPaths = new Map() } = {}) {
   const request = ++graphRefreshId;
@@ -361,6 +390,7 @@ async function rebuild({ force = false } = {}) {
     const layout = await requestWorker({
       nodes: sourceNodes.map((node) => ({ id: node.id, ...node.dimensions, ports: graph.portsByNode.get(node.id) })),
       edges: graph.routes.map((route) => ({ id: route.id, source: route.source, target: route.target, sourceHandle: route.sourceHandle, targetHandle: route.targetHandle })),
+      centralTable: props.centralTable,
       groups: erdLayoutGroups(sourceNodes, relationships.value)
     });
     if (disposed || request !== rebuildId) return;
@@ -466,7 +496,7 @@ async function onNodeDragStop() {
   if (!await refreshGraph()) return;
   persistPositions();
 }
-function onNodeClick({ node }) { selectedTable.value = node.id; selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
+function onNodeClick({ node }) { selectedTable.value = node.id; emit("inspect-table", node.id); selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
 function onEdgeClick({ edge }) { selectedRelationshipId.value = edge.data.relationshipId; selectedTable.value = ""; emphasize(); }
 function onEdgeHover({ edge }) { hoveredRelationshipId.value = edge.data.relationshipId; emphasize(); }
 function onEdgeLeave() { hoveredRelationshipId.value = ""; emphasize(); }
@@ -490,13 +520,14 @@ async function changeGroupFilter(id) {
   persistPositions();
 }
 async function locate(item) {
-  if (!item) return;
+  if (!item || layoutPending.value || !nodes.value.length) return;
   checkpoint();
   focusTable.value = "";
   activeGroup.value = "";
   selectedRelationshipId.value = "";
   hoveredRelationshipId.value = "";
   selectedTable.value = item.table;
+  emit("inspect-table", item.table);
   searchColumn.value = item.column;
   const saved = snapshot().nodes.map((node) => node.table === item.table ? { ...node, collapsed: false, expanded: Boolean(item.column) || node.expanded } : node);
   nodes.value = placeErdNodes(buildNodes(saved), [], saved);
@@ -518,8 +549,18 @@ async function updateViewport(viewport) {
 }
 function fitDiagram() { return updateViewport(); }
 function onFlowInit(instance) { flow = instance; }
-function onViewportMove() { if (!layoutPending.value && !draggingSnapshot && nodes.value.length) persistPositions(); }
+function onViewportMove() {
+  clearViewportSave();
+  if (layoutPending.value || draggingSnapshot || !nodes.value.length) return;
+  // A wheel gesture ends after a short pause. Save the camera once it settles,
+  // instead of triggering a shared-state reload between successive wheel ticks.
+  viewportSaveTimer = setTimeout(() => {
+    viewportSaveTimer = null;
+    if (!disposed && !layoutPending.value && !draggingSnapshot) persistPositions();
+  }, 600);
+}
 function editGroup(id = "") {
+  optionsOpen.value = false;
   const group = groups.value.find((item) => item.id === id);
   editingGroup.value = group?.id || "";
   groupName.value = group?.name || "";
@@ -559,13 +600,14 @@ function saveView() {
   viewDialog.value = false;
   persistPositions();
 }
-async function loadView(view) { checkpoint(); await restore(view); }
+async function loadView(view) { optionsOpen.value = false; checkpoint(); await restore(view); }
 function removeView(id) { views.value = views.value.filter((view) => view.id !== id); persistPositions(); }
 function onFullscreenChange() {
   fullscreen.value = document.fullscreenElement === erdRoot.value;
   void nextTick().then(() => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(fitDiagram)));
 }
 async function toggleFullscreen() {
+  optionsOpen.value = false;
   try {
     if (fullscreen.value) await document.exitFullscreen();
     else await erdRoot.value.requestFullscreen();
@@ -618,6 +660,7 @@ onMounted(() => {
   void rebuild();
 });
 onBeforeUnmount(() => {
+  clearViewportSave();
   disposed = true;
   rebuildId += 1;
   graphRefreshId += 1;
@@ -635,12 +678,12 @@ onBeforeUnmount(() => {
 @import "@vue-flow/minimap/dist/style.css";
 </style>
 <style scoped>
-.database-erd { display: flex; flex-direction: column; min-height: 0; height: 100%; background: rgb(var(--v-theme-surface)); }
-.database-erd__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12); }
-.database-erd__search { flex: 1 1 220px; min-width: 180px; max-width: 360px; }
-.database-erd__toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.database-erd { container-type: inline-size; display: flex; flex-direction: column; min-height: 0; height: 100%; background: rgb(var(--v-theme-surface)); }
+.database-erd__toolbar { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12); }
+.database-erd__search { flex: 1; min-width: 0; }
+.database-erd__options { display: grid; gap: 12px; padding: 16px; width: min(340px, calc(100vw - 24px)); max-height: 80vh; overflow: auto; }
+.database-erd__option-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .database-erd__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 8px; font-size: 12px; }
-.database-erd__group-select { flex: 0 1 240px; min-width: 180px; }
 .database-erd--fullscreen, .database-erd:fullscreen { width: 100%; height: 100%; }
 .database-erd__canvas { position: relative; flex: 1; min-height: 300px; overflow: hidden; background: rgb(var(--v-theme-surface)); }
 .database-erd__canvas :deep(.vue-flow) { height: 100%; }
@@ -661,6 +704,15 @@ onBeforeUnmount(() => {
 .database-erd__inspector dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 12px 0; }
 .database-erd__inspector dd { margin: 0; }
 .database-erd__inspector-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.database-erd__skeleton { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; padding: 24px; }
-@media (prefers-reduced-motion: reduce) { .database-erd__canvas :deep(.vue-flow__edge) { transition: none; } }
+.database-erd__loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 32px); color: rgba(var(--v-theme-on-surface), 0.7); font-size: 13px; animation: erd-loading-appear 160ms ease-out 150ms both; }
+.database-erd__loading-preview { opacity: 0.35; }
+@keyframes erd-loading-appear { from { opacity: 0; } to { opacity: 1; } }
+@container (max-width: 600px) {
+  .database-erd__canvas { min-height: 0; }
+  .database-erd__inspector { top: auto; bottom: 8px; max-height: 45%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .database-erd__canvas :deep(.vue-flow__edge) { transition: none; }
+  .database-erd__loading { animation: none; }
+}
 </style>

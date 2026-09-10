@@ -32,8 +32,9 @@
         </div>
 
         <v-btn-toggle v-model="activeView" mandatory density="compact" variant="outlined">
-          <v-btn value="data" :prepend-icon="mdiTableSearch" size="small">Data</v-btn>
+          <v-btn value="overview" :prepend-icon="mdiGraphOutline" size="small">Overview</v-btn>
           <v-btn value="erd" :prepend-icon="mdiGraphOutline" size="small">ERD</v-btn>
+          <v-btn value="data" :prepend-icon="mdiTableSearch" size="small">Data</v-btn>
         </v-btn-toggle>
 
         <div class="database-workspace__header-actions">
@@ -66,7 +67,7 @@
 
       <div
         class="database-workspace__body"
-        :class="{ 'database-workspace__body--copilot-open': copilotOpen }"
+        :class="{ 'database-workspace__body--copilot-open': copilotOpen, 'database-workspace__body--overview': activeView === 'overview' }"
       >
         <aside class="database-workspace__navigator">
           <v-text-field
@@ -86,32 +87,15 @@
             <v-btn size="x-small" value="history">History</v-btn>
           </v-btn-toggle>
 
-          <div v-if="navigatorTab === 'tables'" class="database-workspace__nav-scroll">
-            <template v-for="group in filteredSchemas" :key="group.name">
-              <div class="database-workspace__schema-label">
-                <span>{{ group.name || connection.database }}</span>
-                <small>{{ group.tables.length }}</small>
-              </div>
-              <button
-                v-for="table in group.tables"
-                :key="table.qualifiedName"
-                :class="{ 'database-workspace__table-button--active': selectedTableName === table.qualifiedName }"
-                class="database-workspace__table-button"
-                :disabled="running"
-                :title="table.comment || table.qualifiedName"
-                type="button"
-                @click="selectTable(table)"
-              >
-                <v-icon :icon="table.kind.includes('view') ? mdiTableEye : mdiTable" size="15" />
-                <span>
-                  <strong>{{ table.name }}</strong>
-                  <small>{{ table.kind }} · {{ table.columns.length }} fields</small>
-                </span>
-              </button>
+          <DatabaseTableList
+            v-if="navigatorTab === 'tables'"
+            :schema="schema" :selected-table-name="selectedTableName" :search="tableSearch"
+            :database="connection.database" :running="running" @select-table="selectTable"
+          >
+            <template #table-actions>
+              <v-btn :prepend-icon="mdiPlus" size="x-small" title="Insert a row into this table" variant="text" @click="openInsertDialog">Add row</v-btn>
             </template>
-            <p v-if="filteredSchemas.length === 0" class="database-workspace__empty-copy">No matching tables or views.</p>
-          </div>
-
+          </DatabaseTableList>
           <div v-else-if="navigatorTab === 'saved'" class="database-workspace__nav-scroll">
             <button
               v-for="snippet in workspace.snippets"
@@ -150,27 +134,23 @@
             </button>
             <p v-if="workspace.history.length === 0" class="database-workspace__empty-copy">Statements you run appear here.</p>
           </div>
-
-          <section v-if="navigatorTab === 'tables' && selectedTable" class="database-workspace__table-detail">
-            <header>
-              <strong>{{ selectedTable.name }}</strong>
-              <v-btn :prepend-icon="mdiPlus" size="x-small" title="Insert a row into this table" type="button" variant="text" @click="openInsertDialog">
-                Add row
-              </v-btn>
-            </header>
-            <p v-if="selectedTable.comment">{{ selectedTable.comment }}</p>
-            <div v-for="column in selectedTable.columns" :key="column.name" :title="column.comment || column.nativeType">
-              <v-icon :icon="columnKeyIcon(column)" size="13" />
-              <span>{{ column.name }}</span>
-              <small>{{ column.nativeType }}</small>
-            </div>
-          </section>
         </aside>
 
         <main class="database-workspace__main">
+          <DatabaseOverview
+            v-if="activeView === 'overview'"
+            :key="sessionId"
+            :schema="schema"
+            :overview="state?.overview || { present: false, hash: '', definition: { version: 1, actors: [] } }"
+            :assistant-available="assistantAvailable"
+            :save-overview="saveOverview"
+            @select-table="selectTableFromErd"
+            @reload="reload"
+            @request-assistant="requestOverviewAssistant"
+          />
           <DatabaseErd
             :key="sessionId"
-            v-if="activeView === 'erd'"
+            v-else-if="activeView === 'erd'"
             :layout="erdLayout"
             :schema="schema"
             @save-layout="saveDiagramLayout"
@@ -573,8 +553,6 @@ import {
   mdiGraphOutline,
   mdiHistory,
   mdiInformationOutline,
-  mdiKeyVariant,
-  mdiLinkVariant,
   mdiMagnify,
   mdiPencilOutline,
   mdiPlay,
@@ -583,8 +561,6 @@ import {
   mdiRestore,
   mdiSend,
   mdiStop,
-  mdiTable,
-  mdiTableEye,
   mdiTableSearch
 } from "@mdi/js";
 
@@ -594,7 +570,10 @@ import {
 import {
   databaseClientDialect
 } from "../databaseDialect.js";
+import DatabaseTableList from "./DatabaseTableList.vue";
 import DatabaseErd from "./DatabaseErd.vue";
+import DatabaseOverview from "./DatabaseOverview.vue";
+import { DATA_OVERVIEW_ABSTRACTIONS } from "../../shared/dataOverview.js";
 import DatabaseSqlEditor from "./DatabaseSqlEditor.vue";
 
 const props = defineProps({
@@ -623,6 +602,21 @@ const props = defineProps({
     type: [String, Object, Function]
   }
 });
+const emit = defineEmits(["request-overview-assistant"]);
+
+function requestOverviewAssistant({ abstraction = "balanced", scope = "all" } = {}) {
+  const level = DATA_OVERVIEW_ABSTRACTIONS.find((item) => item.value === abstraction) || DATA_OVERVIEW_ABSTRACTIONS[1];
+  const scopeInstruction = scope === "new"
+    ? "Process only coverage.unreviewed tables. Preserve existing actors, names, descriptions, memberships and manual choices. New tables may join an existing actor or form a new one. Preserve reviewedTables and add the newly reviewed tables, including those deliberately left under Other tables."
+    : "Regenerate the whole grouping at the selected abstraction level, replacing existing actor choices as needed. Review every current table and record every one in reviewedTables, including those deliberately left under Other tables.";
+  emit("request-overview-assistant", {
+    title: "Data overview",
+    displayMessage: `${scope === "new" ? "Process new tables only" : "Regenerate the data overview"}: ${level.title}.`,
+    message: `Create or review this project's Data overview. Run \`vibe64-database overview --json\` to read its current definition, refreshed schema and exact authoring instructions. Inspect the relevant application source to understand the main actors. Selected abstraction: ${level.title} (${level.value}). ${level.description} ${scopeInstruction} Save the grouping in data-overview.json with abstraction set to "${level.value}". Supporting tables may be several relationships away. Change only this grouping file; do not change database records, schema or other application files. Run \`vibe64-database refresh\` followed by \`vibe64-database overview --json\`, fix invalid or missing references, and report coverage plus any tables left under Other tables.`,
+    dedupeKey: "database-overview",
+    policy: "workspace_write"
+  });
+}
 
 const database = useVibe64DatabaseTools({
   active: computed(() => props.active),
@@ -648,6 +642,7 @@ const {
   runQuery,
   running,
   saveLayout,
+  saveOverview,
   saveSnippet,
   searchLookup,
   state,
@@ -655,7 +650,7 @@ const {
   updating
 } = database;
 
-const activeView = ref("data");
+const activeView = ref("overview");
 const copilotOpen = ref(false);
 const erdLayout = ref({ nodes: [] });
 const diagramSavesPending = ref(0);
@@ -725,15 +720,6 @@ const currentQueryIsDefault = computed(() => Boolean(
   selectedTable.value && sqlText.value.trim() === defaultTableSql(selectedTable.value)
 ));
 const refreshedLabel = computed(() => shortDate(schema.value.refreshedAt));
-const filteredSchemas = computed(() => {
-  const search = tableSearch.value.trim().toLowerCase();
-  return (schema.value.schemas || []).map((group) => ({
-    ...group,
-    tables: (schema.value.tables || []).filter((table) => (
-      table.schema === group.name && (!search || `${table.qualifiedName} ${table.comment}`.toLowerCase().includes(search))
-    ))
-  })).filter((group) => group.tables.length > 0);
-});
 const filterColumnOptions = computed(() => (selectedTable.value?.columns || []).map((column) => ({ title: `${column.name} · ${column.nativeType}`, value: column.name })));
 const editingColumn = computed(() => editingCell.value ? queryResult.value?.columns?.[editingCell.value.columnIndex] : null);
 const insertColumns = computed(() => (selectedTable.value?.columns || []).filter((column) => !column.immutable));
@@ -769,7 +755,7 @@ const resultSubtitle = computed(() => {
   return `${queryResult.value.durationMs || 0} ms${truncation}${editHint}`;
 });
 
-watch([state, () => props.active], ([next, active]) => {
+watch([state, () => props.active, activeView], ([next, active]) => {
   if (!active || !next) return;
   const sessionChanged = hydratedSessionId.value !== props.sessionId;
   if (sessionChanged) {
@@ -782,9 +768,12 @@ watch([state, () => props.active], ([next, active]) => {
     assistantMessages.value = [];
     copilotOpen.value = false;
     erdLayout.value = next.layout || { nodes: [] };
+  }
+  if (activeView.value !== "data") return;
+  if (!selectedTableName.value) {
     const firstTable = next.schema?.tables?.[0];
     if (firstTable) void openTable(firstTable, { rememberCurrent: false });
-  } else if (selectedTableName.value) {
+  } else {
     const stillPresent = next.schema?.tables?.some((table) => table.qualifiedName === selectedTableName.value);
     if (!stillPresent) {
       const firstTable = next.schema?.tables?.[0];
@@ -801,7 +790,10 @@ watch([state, () => props.active], ([next, active]) => {
 }, { immediate: true });
 
 watch(() => props.sessionId, () => {
-  if (hydratedSessionId.value !== props.sessionId) hydratedSessionId.value = "";
+  if (hydratedSessionId.value !== props.sessionId) {
+    hydratedSessionId.value = "";
+    activeView.value = "overview";
+  }
 }, { immediate: true });
 
 watch([() => state.value?.layout, () => props.active, diagramSavesPending], ([layout, active, pending]) => {
@@ -1191,13 +1183,6 @@ async function askCopilot() {
     rememberSelectedTableState();
   }
 }
-
-function columnKeyIcon(column = {}) {
-  const primary = selectedTable.value?.keys?.some((key) => key.primary && key.columns.includes(column.name));
-  if (primary) return mdiKeyVariant;
-  const foreign = schema.value.relationships?.some((relationship) => relationship.sourceTable === selectedTable.value?.qualifiedName && relationship.columns.includes(column.name));
-  return foreign ? mdiLinkVariant : mdiTable;
-}
 </script>
 
 <style scoped>
@@ -1236,32 +1221,26 @@ function columnKeyIcon(column = {}) {
 
 .database-workspace__body, .database-workspace__loading { position: relative; display: grid; grid-template-columns: 15rem minmax(0, 1fr); min-height: 0; }
 .database-workspace__body--copilot-open { grid-template-columns: 15rem minmax(0, 1fr) 20rem; }
+.database-workspace__body--overview { grid-template-columns: minmax(0, 1fr); }
+.database-workspace__body--overview.database-workspace__body--copilot-open { grid-template-columns: minmax(0, 1fr) 20rem; }
+.database-workspace__body--overview > .database-workspace__navigator { display: none; }
 .database-workspace__loading { height: 100%; }
 .database-workspace__loading > * { padding: 1rem; border-right: 1px solid rgba(var(--v-theme-outline), 0.14); }
 .database-workspace__navigator, .database-workspace__copilot { display: grid; min-height: 0; overflow: hidden; background: rgb(var(--v-theme-surface-container-lowest)); }
-.database-workspace__navigator { grid-template-rows: auto auto minmax(8rem, 1fr) auto; padding: 0.7rem; border-right: 1px solid rgba(var(--v-theme-outline), 0.16); }
+.database-workspace__navigator { grid-template-rows: auto auto minmax(8rem, 1fr); padding: 0.7rem; border-right: 1px solid rgba(var(--v-theme-outline), 0.16); }
 .database-workspace__table-search { margin-bottom: 0.45rem; }
 .database-workspace__nav-scroll { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; margin-top: 0.45rem; scrollbar-gutter: stable; }
-.database-workspace__schema-label { display: flex; min-width: 0; gap: 0.35rem; justify-content: space-between; padding: 0.7rem 0.45rem 0.3rem; color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.database-workspace__schema-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.database-workspace__table-button, .database-workspace__saved-query { display: grid; box-sizing: border-box; width: 100%; min-width: 0; min-height: 2.65rem; grid-template-columns: 1.25rem minmax(0, 1fr); gap: 0.35rem; align-items: center; padding: 0.3rem 0.45rem; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.database-workspace__saved-query { grid-template-columns: 1.25rem minmax(0, 1fr) auto; }
-.database-workspace__table-button:hover, .database-workspace__saved-query:hover { background: rgba(var(--v-theme-on-surface), 0.055); }
-.database-workspace__table-button:focus-visible, .database-workspace__saved-query:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
-.database-workspace__table-button--active { background: rgba(var(--v-theme-primary), 0.11) !important; color: rgb(var(--v-theme-primary)); }
-.database-workspace__table-button span, .database-workspace__saved-query span { min-width: 0; }
-.database-workspace__table-button strong, .database-workspace__table-button small, .database-workspace__saved-query strong, .database-workspace__saved-query small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.database-workspace__table-button strong, .database-workspace__saved-query strong { font-size: 0.75rem; }
-.database-workspace__table-button small, .database-workspace__saved-query small { color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.62rem; }
+.database-workspace__saved-query { display: grid; box-sizing: border-box; width: 100%; min-width: 0; min-height: 2.65rem; grid-template-columns: 1.25rem minmax(0, 1fr) auto; gap: 0.35rem; align-items: center; padding: 0.3rem 0.45rem; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.database-workspace__saved-query:hover { background: rgba(var(--v-theme-on-surface), 0.055); }
+.database-workspace__saved-query:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
+.database-workspace__saved-query span { min-width: 0; }
+.database-workspace__saved-query strong, .database-workspace__saved-query small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-workspace__saved-query strong { font-size: 0.75rem; }
+.database-workspace__saved-query small { color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.62rem; }
 .database-workspace__empty-copy { padding: 1rem; color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.74rem; text-align: center; }
-.database-workspace__table-detail { max-height: 16rem; overflow: auto; margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px solid rgba(var(--v-theme-outline), 0.16); }
-.database-workspace__table-detail header { display: flex; align-items: center; justify-content: space-between; }
-.database-workspace__table-detail p { color: rgba(var(--v-theme-on-surface), 0.65); font-size: 0.68rem; }
-.database-workspace__table-detail > div { display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto; gap: 0.3rem; padding: 0.22rem; font-size: 0.66rem; }
-.database-workspace__table-detail > div small { max-width: 6rem; overflow: hidden; color: rgba(var(--v-theme-on-surface), 0.5); text-overflow: ellipsis; white-space: nowrap; }
 
 .database-workspace__main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(16rem, 1fr); }
-.database-workspace__main > .database-erd { grid-row: 1 / -1; }
+.database-workspace__main > .database-erd, .database-workspace__main > .database-overview { grid-row: 1 / -1; }
 .database-workspace__query { display: grid; grid-template-rows: auto 5.25rem; min-height: 0; border-bottom: 1px solid rgba(var(--v-theme-outline), 0.18); }
 .database-workspace__query-toolbar { justify-content: space-between; min-height: 3.2rem; padding: 0.45rem 0.65rem; }
 .database-workspace__query-actions { min-width: 0; flex-wrap: wrap; }
@@ -1314,6 +1293,7 @@ function columnKeyIcon(column = {}) {
 
 @container (max-width: 1180px) {
   .database-workspace__body, .database-workspace__loading, .database-workspace__body--copilot-open { grid-template-columns: 13rem minmax(0, 1fr); }
+  .database-workspace__body--overview, .database-workspace__body--overview.database-workspace__body--copilot-open { grid-template-columns: minmax(0, 1fr); }
   .database-workspace__copilot { position: absolute; z-index: 4; inset: 0 0 0 auto; width: min(22rem, calc(100% - 13rem)); border-left: 1px solid rgba(var(--v-theme-outline), 0.16); box-shadow: 0 8px 24px rgba(var(--v-theme-on-surface), 0.18); }
   .database-workspace__header { grid-template-columns: minmax(12rem, 1fr) auto auto; }
 }

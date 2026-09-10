@@ -1998,6 +1998,11 @@ async function ensureSourceEditorParentDirectory(context = {}, parentRelativePat
 
 async function createSourceEditorFile(context = {}, input = {}) {
   const relativePath = normalizeNewSourceEditorFilePath(input.path);
+  const content = Buffer.from(String(input.text ?? ""), "utf8");
+  if (content.byteLength > context.policy.maxFileBytes) {
+    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large");
+  }
+  assertTextBuffer(content, relativePath);
   if (sourceEditorPathExcluded(context.policy, relativePath)) {
     throw sourceEditorError("The selected file is excluded from source editing.", "vibe64_source_editor_file_excluded", {
       path: relativePath
@@ -2009,7 +2014,7 @@ async function createSourceEditorFile(context = {}, input = {}) {
     ? ""
     : path.posix.dirname(relativePath));
   try {
-    await writeFile(absolutePath, "", {
+    await writeFile(absolutePath, content, {
       encoding: "utf8",
       flag: "wx"
     });

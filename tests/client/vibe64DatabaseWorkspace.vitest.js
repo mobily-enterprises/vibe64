@@ -12,6 +12,9 @@ vi.mock("../../packages/vibe64-database-tools/src/client/composables/useVibe64Da
 vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseErd.vue", () => ({
   default: { render: () => null }
 }));
+vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseOverview.vue", () => ({
+  default: { render: () => null }
+}));
 vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseSqlEditor.vue", () => ({
   default: {
     props: { modelValue: { type: String, required: true } },
@@ -82,7 +85,7 @@ async function flushWorkspace(runQuery) {
   await Vue.nextTick();
 }
 
-function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn() } = {}) {
+function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn(), view = "data" } = {}) {
   const props = Vue.reactive({ active, sessionId: "database-session" });
   const state = Vue.ref(initialState);
   const runQuery = vi.fn(async () => ({
@@ -128,6 +131,7 @@ function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   const container = { type: "root", children: [], props: {} };
   app.mount(container);
+  app._instance.subTree.component.setupState.activeView = view;
   return {
     container, props, state, runQuery,
     workspace: app._instance.subTree.component.setupState,
@@ -149,6 +153,25 @@ const firstState = {
 const secondState = { ...firstState, schema: { ...firstState.schema, tables: [secondTable] } };
 
 describe("Database Workspace automatic table admission", () => {
+  it("opens Overview without querying records and only admits a query when Data is selected", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      fixture.workspace.activeView = "erd";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      fixture.workspace.activeView = "data";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+      fixture.workspace.activeView = "overview";
+      fixture.workspace.activeView = "data";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+    } finally { await fixture.close(); }
+  });
+
   it.each(["cached", "late"])("defers %s hidden schema until activation without requiring another state update", async (arrival) => {
     const fixture = mountDatabaseWorkspace({
       active: arrival === "late", initialState: arrival === "cached" ? firstState : null

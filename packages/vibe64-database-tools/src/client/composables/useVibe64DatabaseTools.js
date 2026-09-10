@@ -122,6 +122,12 @@ function useVibe64DatabaseTools({
     placement: "layout.save",
     suppressSuccessMessage: true
   });
+  const overviewCommand = databaseCommand({
+    fallback: "The main actor grouping could not be saved.",
+    method: "PUT",
+    placement: "overview.save",
+    success: "Main actors saved in project source."
+  });
   const snippetCommand = databaseCommand({
     fallback: "The SQL snippet could not be saved.",
     method: "PUT",
@@ -203,6 +209,12 @@ function useVibe64DatabaseTools({
     });
   }
 
+  async function saveOverview(payload) {
+    const result = await overviewCommand.run({ path: `${sessionPath.value}/overview`, payload });
+    if (result?.ok !== false) await reload();
+    return result;
+  }
+
   function saveSnippet(snippet = {}) {
     return snippetCommand.run({
       path: `${sessionPath.value}/snippets`,
@@ -246,6 +258,7 @@ function useVibe64DatabaseTools({
       queryCommand.isRunning === true || defaultQueryCommand.isRunning === true
     )),
     saveLayout,
+    saveOverview,
     saveSnippet,
     searchLookup,
     state: computed(() => stateResource.data.value || null),

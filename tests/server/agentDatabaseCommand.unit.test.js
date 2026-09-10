@@ -92,6 +92,24 @@ test("agent database command refreshes only its bound session schema", async () 
   assert.equal(otherSession.code, "vibe64_agent_database_command_session_unbound");
 });
 
+test("agent database overview exposes schema and authoring guidance only for its bound session", async () => {
+  const project = projectService();
+  const command = createAgentDatabaseCommandService({ projectService: project });
+  const reads = [];
+  command.setDatabaseToolsProvider({
+    refreshSchema() { assert.fail("Overview should use the existing snapshot"); },
+    async readOverview(input) { reads.push(input); return { ok: true, schema: { tables: [] }, coverage: { total: 0 }, instructions: "Group main actors" }; }
+  });
+  await command.bindSession("overview-session");
+  const result = await command.run({ args: ["overview", "--json"], sessionId: "overview-session" });
+  assert.equal(result.ok, true);
+  assert.equal(JSON.parse(result.stdout).instructions, "Group main actors");
+  assert.deepEqual(reads, [{ sessionId: "overview-session" }]);
+  const denied = await command.run({ args: ["overview", "--json"], sessionId: "not-bound" });
+  assert.equal(denied.code, "vibe64_agent_database_command_session_unbound");
+  assert.equal(reads.length, 1);
+});
+
 test("agent database command refuses a stale project binding", async () => {
   const project = projectService();
   const command = createAgentDatabaseCommandService({ projectService: project });

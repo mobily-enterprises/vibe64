@@ -28,7 +28,8 @@ function databaseStatusCode(response = {}) {
   if ([
     "vibe64_database_edit_conflict",
     "vibe64_database_delete_conflict",
-    "vibe64_database_query_id_active"
+    "vibe64_database_query_id_active",
+    "vibe64_database_overview_conflict"
   ].includes(response?.code)) {
     return 409;
   }
@@ -110,6 +111,11 @@ function registerRoutes(http, {
     bodyLimit: 512 * 1024,
     summary: "Persist the shared selected-session ERD layout and notify its viewers."
   }, (request) => databaseTools.saveLayout(withUser(request, routes.requestBody(request))));
+
+  route("PUT", "/overview", {
+    bodyLimit: 512 * 1024,
+    summary: "Save main actors and their explicit table memberships in project source."
+  }, (request) => databaseTools.saveOverview(withUser(request, routes.requestBody(request))));
 
   route("PUT", "/snippets", {
     bodyLimit: 768 * 1024,

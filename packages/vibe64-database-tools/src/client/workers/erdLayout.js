@@ -157,3 +157,36 @@ export function fallbackErdLayout(nodes = [], edges = []) {
   }
   return positions;
 }
+
+// Shared by the actor map and the physical ERD opened over it.
+export function layoutErdRings(nodes, authoredRings) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const ordered = [...nodes].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+  const authored = authoredRings?.length ? authoredRings : ordered.length ? [[ordered[0].id]] : [];
+  const placed = new Set(authored.flat());
+  const rings = authored.map((ring) => ring.map((id) => byId.get(id)).filter(Boolean)).filter((ring) => ring.length);
+  const remaining = ordered.filter((node) => !placed.has(node.id));
+  if (authoredRings?.length && remaining.length) {
+    rings.at(-1).push(...remaining);
+  } else {
+    for (let start = 0, size = 8; start < remaining.length; start += size, size += 8) {
+      rings.push(remaining.slice(start, start + size));
+    }
+  }
+  const positioned = [];
+  let outerRadius = 0;
+  for (const [ringIndex, ring] of rings.entries()) {
+    const diameter = Math.max(...ring.map((node) => Math.hypot(node.width, node.height)));
+    // Bounding circles leave routing space around cards of different sizes.
+    const radius = ringIndex === 0 && ring.length === 1 ? 0 : Math.max(
+      outerRadius + diameter / 2 + 220,
+      ring.length > 1 ? (diameter + 220) / (2 * Math.sin(Math.PI / ring.length)) : 0
+    );
+    for (const [index, node] of ring.entries()) {
+      const angle = -Math.PI / 2 + index * Math.PI * 2 / ring.length;
+      positioned.push({ ...node, x: Math.cos(angle) * radius - node.width / 2, y: Math.sin(angle) * radius - node.height / 2 });
+    }
+    outerRadius = radius + diameter / 2;
+  }
+  return positioned;
+}

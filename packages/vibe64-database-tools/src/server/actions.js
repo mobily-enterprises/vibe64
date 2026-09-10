@@ -1,4 +1,5 @@
 import {
+  databaseOverviewInputValidator,
   databaseAssistantInputValidator,
   databaseCancelInputValidator,
   databaseCellUpdateInputValidator,
@@ -14,6 +15,7 @@ import {
 } from "./inputSchemas.js";
 
 const ACTION_DATABASE_STATE_READ = "vibe64.database.state.read";
+const ACTION_DATABASE_OVERVIEW_SAVE = "vibe64.database.overview.save";
 const ACTION_DATABASE_SCHEMA_REFRESH = "vibe64.database.schema.refresh";
 const ACTION_DATABASE_QUERY_RUN = "vibe64.database.query.run";
 const ACTION_DATABASE_QUERY_CANCEL = "vibe64.database.query.cancel";
@@ -48,6 +50,11 @@ function createDatabaseActions({ databaseTools } = {}) {
     throw new TypeError("createDatabaseActions requires databaseTools.");
   }
   return Object.freeze([
+    action({
+      execute: (input) => databaseTools.saveOverview(input),
+      id: ACTION_DATABASE_OVERVIEW_SAVE,
+      input: databaseOverviewInputValidator
+    }),
     action({
       execute: (input) => databaseTools.readState(input),
       id: ACTION_DATABASE_STATE_READ,
@@ -114,6 +121,7 @@ function createDatabaseActions({ databaseTools } = {}) {
 }
 
 export {
+  ACTION_DATABASE_OVERVIEW_SAVE,
   ACTION_DATABASE_ASSISTANT_ASK,
   ACTION_DATABASE_CELL_UPDATE,
   ACTION_DATABASE_LAYOUT_SAVE,

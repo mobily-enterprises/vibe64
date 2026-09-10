@@ -643,6 +643,14 @@ test("source editor creates new files without overwriting existing or excluded p
     });
     assert.equal(traversalResponse.ok, false);
     assert.equal(traversalResponse.errors[0].code, "vibe64_invalid_source_editor_path");
+
+    const text = '{"version":1,"actors":[]}\n';
+    const initialized = await fixture.service.createFile({ path: "data-overview.json", sessionId: "session-1", text });
+    assert.equal(initialized.ok, true);
+    assert.equal(initialized.file.text, text);
+    assert.equal(await readFile(path.join(fixture.sourceRoot, "data-overview.json"), "utf8"), text);
+    const binary = await fixture.service.createFile({ path: "invalid.json", sessionId: "session-1", text: "a\u0000b" });
+    assert.equal(binary.ok, false);
   } finally {
     await rm(fixture.root, {
       force: true,
