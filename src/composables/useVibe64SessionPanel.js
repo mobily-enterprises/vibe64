@@ -158,7 +158,8 @@ function useVibe64SessionPanel(props, emit) {
         visibleSessionIds.add(mountedSessionId);
       }
     }
-    return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
+    const archivingIds = new Set((toolbar.sessions || []).filter((session) => session.archiving).map((session) => session.sessionId));
+    return mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId) && !archivingIds.has(sessionId));
   });
   const emptyStateActivity = computed(() => sessionPanelEmptyStateActivity({
     createSessionRunning: sessionData.createSessionRunning.value,

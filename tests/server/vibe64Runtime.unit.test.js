@@ -757,3 +757,35 @@ test("plain runtime cannot expose or use a private renewal successor", async () 
     );
   });
 });
+
+test("archive recovery remains listable after source removal and resumes its recovery path", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "archive-source-removed";
+    const runtime = new Vibe64SessionRuntime({
+      inspectSourceByDefault: false,
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    await runtime.store.createSession({
+      sessionId,
+      runtimeKind: "genesis",
+      metadata: {
+        ...sourceMetadata(targetRoot, sessionId),
+        session_archive_operation: JSON.stringify({ status: "running", phase: "source" }),
+        session_closing_reason: "archived",
+        source_recovery_saved: "yes",
+        source_removed: "yes"
+      }
+    });
+    assert.deepEqual((await runtime.listSessionSummaries({ statusGroup: "open" })).map(s => s.sessionId), [sessionId]);
+    let recoveryCalled = false;
+    runtime.archiveSessionSource = async (id) => {
+      assert.equal(id, sessionId);
+      recoveryCalled = true;
+      throw new Error("Keep the recovery evidence for retry");
+    };
+    await assert.rejects(runtime.archiveSession(sessionId), /Keep the recovery evidence/);
+    assert.equal(recoveryCalled, true);
+    assert.equal((await runtime.getSession(sessionId)).metadata.session_closing_reason, "archived");
+  });
+});

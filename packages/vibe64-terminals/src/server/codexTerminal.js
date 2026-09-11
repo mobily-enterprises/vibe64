@@ -7717,7 +7717,7 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
-    if (codexSessionWorktreeIsUnavailable(session)) {
+    if (codexSessionWorktreeWasRemoved(session)) {
       return blockCodexAppServerForUnavailableWorktree(
         runtime,
         sessionId,

@@ -294,7 +294,7 @@ describe("Vibe64 recovery chat attention", () => {
     app.component("Vibe64AutopilotView", RecoveryAutopilot);
     app.component("Vibe64CodexSession", emptyComponent("Vibe64CodexSession"));
     app.component("Vibe64CreateSessionButton", emptyComponent("Vibe64CreateSessionButton"));
-    app.component("Vibe64SessionDialogs", emptyComponent("Vibe64SessionDialogs"));
+    app.component("Vibe64SessionRenewalDialog", emptyComponent("Vibe64SessionRenewalDialog"));
     app.component("Vibe64SessionPanel", SessionPanel);
     app.component("Vibe64SessionRuntimeHost", SessionRuntimeHost);
     app.component("Vibe64SessionToolbar", emptyComponent("Vibe64SessionToolbar"));

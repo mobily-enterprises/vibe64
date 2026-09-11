@@ -82,6 +82,14 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "output-target-closed",
   "output-target-stopped"
 ]);
+function sessionArchiveOperation(session) {
+  try {
+    return JSON.parse(session?.metadata?.session_archive_operation || "null");
+  } catch {
+    return { status: "failed", error: "Session archive state could not be read." };
+  }
+}
+
 function sessionIdExistsInList(sessionId = "", nextSessions = []) {
   const normalizedSessionId = String(sessionId || "").trim();
   return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
@@ -298,12 +306,7 @@ function useVibe64SessionData({
       }
     }
     return visibleVibe64Sessions([...items.values()]).map((session) => {
-      let operation = null;
-      try {
-        operation = JSON.parse(session.metadata?.session_archive_operation || "null");
-      } catch {
-        operation = { status: "failed", error: "Session archive state could not be read." };
-      }
+      const operation = sessionArchiveOperation(session);
       return {
         ...session,
         archiveError: operation?.status === "failed" ? operation.error : "",
@@ -525,12 +528,7 @@ function useVibe64SessionData({
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
       if (attempt.succeeded || archive.archivingSessionId === id) continue;
       const session = items.find((item) => item.sessionId === id);
-      let operation = null;
-      try {
-        operation = JSON.parse(session?.metadata?.session_archive_operation || "null");
-      } catch {
-        operation = { status: "failed" };
-      }
+      const operation = sessionArchiveOperation(session);
       if (!session || operation?.status === "failed" || (
         operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived"
       )) {

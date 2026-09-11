@@ -840,7 +840,7 @@ function createService({
           phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
             ? "stopping"
             : previous.phase || (currentSession.metadata?.source_recovery_saved === "yes" ? "source" : "stopping"),
-          startedAt: previous.startedAt || new Date().toISOString(),
+          startedAt: previous.status === "running" && previous.startedAt || new Date().toISOString(),
           status: "running"
         };
         const persist = () => runtime.store.writeMetadataValue(
