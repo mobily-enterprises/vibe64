@@ -10,7 +10,8 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 function useVibe64SessionDialogs({
-  clearSelectedSession = () => null,
+  beginArchive = () => null,
+  finishArchive = () => null,
   isSelectedSessionArchived,
   refreshSessionData = async () => null,
   selectedSessionId,
@@ -36,7 +37,7 @@ function useVibe64SessionDialogs({
       error: "Vibe64 session could not be archived.",
       success: "Vibe64 session archived."
     },
-    onRunSuccess: async (response, { context } = {}) => {
+    onRunSuccess: async (response) => {
       if (response?.ok !== true) {
         throw new Error(
           response?.errors?.[0]?.message ||
@@ -44,13 +45,6 @@ function useVibe64SessionDialogs({
           "Vibe64 session could not be archived."
         );
       }
-      if (!context?.sessionId || context.sessionId === unref(selectedSessionId)) {
-        clearSelectedSession();
-      }
-      await refreshSessionData({
-        includeList: true,
-        reason: "archive-session"
-      });
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.archive",
@@ -95,12 +89,22 @@ function useVibe64SessionDialogs({
     const sessionId = archiveDialogSessionId.value;
     archivingSessionId.value = sessionId;
     clearArchiveDialog();
+    const archiveScope = beginArchive(sessionId);
+    let succeeded = false;
     try {
-      return await archiveCommand.run({ sessionId });
+      const response = await archiveCommand.run({ sessionId });
+      succeeded = response?.ok === true;
+      return response;
+    } catch {
+      // useCommand reports the failure through shared action feedback. Keep it
+      // out of the newly selected session's runtime and restore the gray tab.
+      return false;
     } finally {
+      finishArchive(sessionId, succeeded, archiveScope);
       if (archivingSessionId.value === sessionId) {
         archivingSessionId.value = "";
       }
+      void refreshSessionData({ includeList: true, reason: "archive-session" }).catch(() => null);
     }
   }
 

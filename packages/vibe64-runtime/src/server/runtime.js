@@ -186,6 +186,9 @@ async function sessionIsListable(session = {}) {
   if (sessionSourceCreationFailed(session)) {
     return true;
   }
+  if (normalizeText(session.metadata?.session_archive_operation)) {
+    return true;
+  }
   const sourcePath = sessionSourcePath(session);
   return Boolean(sourcePath && await pathExists(sourcePath));
 }
@@ -729,7 +732,7 @@ class Vibe64SessionRuntime {
       reason
     });
     try {
-      if (sessionHasSource(session)) {
+      if (sessionHasSource(session) || sessionSourceRecoveryWasSaved(session)) {
         await this.archiveSessionSource(sessionId, {
           reason
         });

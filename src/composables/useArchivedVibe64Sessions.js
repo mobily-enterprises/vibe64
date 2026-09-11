@@ -192,7 +192,9 @@ function useArchivedVibe64SessionDetail() {
     mdiRefresh,
     reload: sessionResource.reload,
     session,
-    sessionId
+    sessionId,
+    sessionsApiPath,
+    projectSlug
   };
 }
 

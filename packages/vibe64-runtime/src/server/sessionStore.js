@@ -889,6 +889,7 @@ function sessionPathsFromRoot({
     archivedSessionsRoot,
     conversationLogRoot: sessionRoot ? path.join(sessionRoot, "conversation-log") : "",
     currentSessionAliasPath,
+    dropZoneRoot: sessionRoot ? path.join(sessionRoot, "drop-zone") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
     projectContextRoot,
@@ -2950,7 +2951,10 @@ function createVibe64SessionStore({
     const archivedAt = now().toISOString();
     try {
       await mkdir(buildRoot, { recursive: true });
-      await cp(sourcePaths.sessionRoot, snapshotRoot, { recursive: true });
+      await cp(sourcePaths.sessionRoot, snapshotRoot, {
+        recursive: true,
+        filter: (source) => source !== sourcePaths.dropZoneRoot
+      });
       const snapshotPaths = pathsForSessionRoot(normalizedSourceSessionId, snapshotRoot);
       await Promise.all([
         "renewal_activated_at",
@@ -3567,6 +3571,7 @@ function createVibe64SessionStore({
         sessionPaths.sessionId
       );
       await validateSessionArchive(archiveRecord.archivePath);
+      await rm(sessionPaths.dropZoneRoot, { force: true, recursive: true });
       if (!retainSessionRoot) {
         await rm(sessionPaths.sessionRoot, {
           force: true,
@@ -3612,6 +3617,7 @@ function createVibe64SessionStore({
         stagedArchivePath,
         "-C",
         rootPaths.closingSessionsRoot,
+        `--exclude=${sessionPaths.sessionId}/drop-zone`,
         sessionPaths.sessionId
       ], {
         allowedRoots: [
@@ -3639,6 +3645,7 @@ function createVibe64SessionStore({
         rootPaths,
         sessionPaths.sessionId
       );
+      await rm(sessionPaths.dropZoneRoot, { force: true, recursive: true });
       if (!retainSessionRoot) {
         await rm(sessionPaths.sessionRoot, {
           force: true,
@@ -3884,6 +3891,7 @@ function createVibe64SessionStore({
         }
         await mkdir(stagedSessionRoot, { recursive: true });
         await Promise.all([
+          mkdir(stagedPaths.dropZoneRoot, { recursive: true }),
           mkdir(stagedPaths.agentRunsRoot, {
             recursive: true
           }),
@@ -4609,26 +4617,32 @@ function createVibe64SessionStore({
     })));
   }
 
+  async function recoverSessionArchives() {
+    const recovered = [];
+    for (const record of await readUnarchivedSessionRecords()) {
+      if (record.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+        const session = await readSessionForRenewal(record.sessionId);
+        if (
+          normalizeText(session.metadata.renewal_id) &&
+          normalizeText(session.metadata.renewed_to)
+        ) {
+          // Renewal owns a reversible close transaction. Ordinary history
+          // reads must neither publish it nor interfere with its rollback.
+          continue;
+        }
+        await publishSessionArchive(record.sessionId);
+        recovered.push(record.sessionId);
+      }
+    }
+    return recovered;
+  }
+
   async function sessionRecordsForList(options = {}) {
     const listOptions = normalizeSessionListOptions(options);
     let unarchivedRecords = await readUnarchivedSessionRecords();
     if (sessionListMayIncludeArchived(listOptions)) {
-      // A process can stop after recording the terminal status but before
-      // publishing the archive. Archived-session reads are the recovery boundary.
-      for (const record of unarchivedRecords) {
-        if (record.status === VIBE64_SESSION_STATUS.ARCHIVED) {
-          const session = await readSessionForRenewal(record.sessionId);
-          if (
-            normalizeText(session.metadata.renewal_id) &&
-            normalizeText(session.metadata.renewed_to)
-          ) {
-            // Renewal owns a reversible close transaction. Ordinary history
-            // reads must neither publish it nor interfere with its rollback.
-            continue;
-          }
-          await publishSessionArchive(record.sessionId);
-        }
-      }
+      // Terminal status plus an unpublished closing tree is resumed atomically.
+      await recoverSessionArchives();
       unarchivedRecords = unarchivedRecords.filter((record) => (
         record.status !== VIBE64_SESSION_STATUS.ARCHIVED
       ));
@@ -4714,6 +4728,7 @@ function createVibe64SessionStore({
     listSessionsForRenewal,
     listSessionRenewalStateSessionIds,
     listSessionSummaries,
+    recoverSessionArchives,
     mutateSession,
     mutateSessionForRenewal,
     paths,

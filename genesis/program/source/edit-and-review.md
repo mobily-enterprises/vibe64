@@ -5,6 +5,10 @@ from saved project work, and inspect one exact file change at a time.
 
 ## Sources
 
+- `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
+- `src/components/studio/vibe64-session/Vibe64SessionFileArea.vue`
+- `src/components/studio/ArchivedVibe64SessionDetail.vue`
+
 - `packages/vibe64-source-editor/src/server/service.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
@@ -31,6 +35,33 @@ from saved project work, and inspect one exact file change at a time.
 - `src/pages/app/project/[slug]/dashboard/repository/index.vue`
 
 ## Public contract
+
+Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
+folder navigation. Repo retains source editing, stars, explanations and selected
+file sync. Drop Zone belongs to the selected session and lives outside its Git
+source. Project members may list, preview, download, upload, create folders,
+rename, edit text and delete files or directory trees there. Upload and file
+drag-and-drop accept multiple files sequentially, up to 100 MiB each, and never
+overwrite an existing item. Larger files placed there by the assistant remain
+downloadable. Drag-and-drop upload is confined to Drop Zone. Unsaved text stays
+in its area when switching tabs; uploads cannot discard it.
+
+Session exposes the complete regular-file runtime tree, including hidden files,
+read-only to the workspace owner. Local loopback editor access acts as ownership.
+Session History exposes the archived runtime tree under the same owner check;
+archive browsing uses the session store's temporary extraction and cleanup.
+Owners can also download the original archive directly without extraction. No Session
+operation writes, including paths descending into its Drop Zone. Both areas use
+relative paths and reject symbolic links and traversal beyond their root.
+
+Every request runs in the resolved project request context. The hosted project
+access gate verifies its authenticated caller on each request; the shared Files
+boundary then checks the requested area and operation and resolves the session
+from that project's store. Bodies cannot supply identity, project roots or an
+alternative session. All Drop Zone mutations run under the session store's
+mutation lease and recheck closing admission before touching files. These API
+rules do not claim Unix or shell isolation.
+
 
 The source browser lists, searches, opens, edits, and saves allowed project
 files inside the selected session source. It rejects paths outside that source
@@ -98,8 +129,9 @@ still unmounts the previous one.
 When its source is not yet known, opening Files or another source-backed tool
 directly waits for the selected session's initial detail read. The Project pane
 shows its existing loading skeleton during that wait, keeping the requested route
-and bringing the pane into view on compact screens. A ready source opens the
-tool; settled missing or failed detail uses the normal environment fallback.
+and bringing the pane into view on compact screens. A loaded session opens Files even when its repository is unavailable, keeping
+Drop Zone and owner Session access useful. Other source-backed tools still need
+a ready source; failed session detail uses the normal environment fallback.
 Navigating elsewhere while detail loads is respected. Only the active session
 host hydrates or redirects the
 shared tool route; a retained hidden host waits until reactivation to reconsider

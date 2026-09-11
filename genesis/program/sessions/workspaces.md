@@ -19,8 +19,20 @@ the canonical project and from other sessions.
 - `src/composables/useArchivedVibe64Sessions.js`
 - `src/composables/useVibe64SessionRenewal.js`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
+- `src/composables/useVibe64SessionData.js`
+- `src/composables/useVibe64SessionDialogs.js`
 
 ## Public contract
+
+Each session owns a `drop-zone` directory alongside its runtime records, outside
+its repository. New sessions and renewal successors start with an empty exchange.
+Ordinary session archives and prepared renewal snapshots omit it. Failed archive
+publication retains the closing session's exchange; successful publication removes
+it, including when the remaining closing tree is retained for lifecycle work.
+Project archival also excludes these temporary exchanges. New mutations are
+rejected once closing begins; an admitted upload finishes under the mutation
+lease before archival can detach the session tree.
+
 
 People can create, select, inspect, and archive sessions. A new session receives
 its own Git source and stable identity. Its conversation, source location,
@@ -29,6 +41,21 @@ across UI refreshes. Archiving stops active work, removes its active workspace,
 and preserves the read-only history needed to recover its conversation and
 understand what happened. Session History reads lightweight archive indexes and
 shows the most recently archived session first.
+
+Archive confirmation immediately selects the preceding available tab and leaves
+the requested session gray and unavailable while its existing request runs.
+Archive state and feedback belong to the project panel. With no selection, the
+empty layout stays usable even when hidden runtimes are retained. Failure
+restores the tab without stealing the current selection.
+
+The server records `session_archive_operation` before cleanup and uses the
+closing marker to reject new work. Preview, active AI turns, and remaining tools
+stop before resources and source are removed. Durable stopping, resources, and
+source stages let startup resume interrupted archives. A failure retains its
+stage and error for explicit retry; source recovery evidence keeps its protection
+marker. Startup also finalizes interrupted archive publication from the immutable
+closing tree. Start, completion, and failure publish `vibe64.session.changed` to
+all clients with a list-refresh hint. Reconnecting clients read persisted state.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

@@ -26,6 +26,8 @@
       :back-to="backTo"
       :conversation-log="conversationLog"
       :session="session"
+      :sessions-api-path="sessionsApiPath"
+      :project-slug="projectSlug"
     />
 
     <v-sheet
@@ -73,7 +75,9 @@ const {
   loading,
   reload,
   session,
-  sessionId
+  sessionId,
+  sessionsApiPath,
+  projectSlug
 } = useArchivedVibe64SessionDetail();
 </script>
 

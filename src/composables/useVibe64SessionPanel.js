@@ -149,7 +149,7 @@ function useVibe64SessionPanel(props, emit) {
   const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
   const sessionLoadError = computed(() => Boolean(sessionData.sessionList.loadError));
   const runtimeHostSessionIds = computed(() => {
-    const visibleSessionIds = new Set((toolbar.sessions || []).map((session) => session.sessionId));
+    const visibleSessionIds = new Set((toolbar.sessions || []).filter((session) => !session.archiving).map((session) => session.sessionId));
     if (selection.selectedSessionId) {
       visibleSessionIds.add(selection.selectedSessionId);
     }
@@ -197,8 +197,8 @@ function useVibe64SessionPanel(props, emit) {
     toolbar.canCreateSession &&
     (toolbar.sessions || []).length < 1
   ));
-  const emptyLayoutVisible = computed(() => Boolean(!selection.selectedSession && runtimeHostSessionIds.value.length < 1));
-  const selectedArchive = computed(() => selectedRuntimeState.value?.toolbarControls?.archive || fallbackArchive);
+  const emptyLayoutVisible = computed(() => !selection.selectedSession);
+  const selectedArchive = computed(() => sessionData.archive || fallbackArchive);
   const selectedSessionArchiving = computed(() => sessionPanelSelectedSessionArchiving({
     archive: selectedArchive.value,
     selectedSessionId: selection.selectedSessionId

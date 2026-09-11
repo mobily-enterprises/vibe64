@@ -44,7 +44,7 @@ test("assistant engines share one complete session command environment", async (
       return { env: { SESSION_BOUNDARY: "ready" }, ok: true };
     },
     project: { slug: "catalogue" },
-    runtime: { stateRoot: "/managed/project-state" },
+    runtime: { stateRoot: "/managed/project-state", store: { paths: (id) => ({ dropZoneRoot: `/managed/project-state/sessions/active/${id}/drop-zone` }) } },
     sessionId: "session-1",
     worktreePath: "/managed/session/source"
   });
@@ -67,7 +67,8 @@ test("assistant engines share one complete session command environment", async (
       ENV_BOUNDARY: "ready",
       GIT_BOUNDARY: "ready",
       PREVIEW_BOUNDARY: "ready",
-      SESSION_BOUNDARY: "ready"
+      SESSION_BOUNDARY: "ready",
+      VIBE64_DROP_ZONE: "/managed/project-state/sessions/active/session-1/drop-zone"
     },
     hostWrapperDir: "/managed/session-wrappers",
     ok: true,

@@ -4297,6 +4297,7 @@ test("an active chat keeps one composed session context while authored turns sta
     });
 
     environmentVersion = "three";
+    await store.writeMetadataValue("session-1", "session_closing_reason", "archived");
     const interrupted = await controller.interruptTurn("session-1", {
       controlRequestId: "interrupt-1"
     });

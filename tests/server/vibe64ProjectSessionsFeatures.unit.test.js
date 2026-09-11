@@ -174,6 +174,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
       renewalWorkClosed = true;
       shutdownEvents.push("close-renewal-admission");
     },
+    async resumeSessionArchives() { return { failures: [] }; },
     async resumeSessionRenewals() {
       resumeCalls += 1;
       return recovery;
@@ -186,6 +187,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   });
 
   assert.equal(bootResult, undefined);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(resumeCalls, 1);
   let shutdownSettled = false;
   const shutdown = Vibe64SessionsProvider.shutdown({
@@ -223,7 +225,8 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   }, {
     outputs: {
       sessions: {
-        async resumeSessionRenewals() {
+        async resumeSessionArchives() { return { failures: [] }; },
+    async resumeSessionRenewals() {
           resumeCalls += 1;
         }
       }
@@ -240,7 +243,8 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   }, {
     outputs: {
       sessions: {
-        async resumeSessionRenewals() {
+        async resumeSessionArchives() { return { failures: [] }; },
+    async resumeSessionRenewals() {
           throw new Error("Expected detached recovery failure");
         }
       }

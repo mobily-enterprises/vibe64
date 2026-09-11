@@ -81,6 +81,7 @@ function agentWriteLockHarness() {
   return {
     attempts,
     store: {
+      async writeMetadataValue() {},
       async runSessionExclusive(sessionId, operationName, operation) {
         attempts.push({ operationName, sessionId });
         if (active) {
@@ -2243,6 +2244,7 @@ test("archiving a session releases its managed resources after terminals stop", 
     status: "active"
   };
   const runtime = {
+    store: { async writeMetadataValue() {} },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -2292,6 +2294,7 @@ test("archiving a source-creation failure does not release resources that were n
     status: "blocked"
   };
   const runtime = {
+    store: { async writeMetadataValue() {} },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };

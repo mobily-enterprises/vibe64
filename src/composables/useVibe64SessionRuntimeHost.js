@@ -3,7 +3,6 @@ import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedba
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ConversationLog } from "@/composables/useVibe64ConversationLog.js";
 import { useVibe64MountedSessionData } from "@/composables/useVibe64MountedSessionData.js";
-import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
 import { useVibe64SessionRenewal } from "@/composables/useVibe64SessionRenewal.js";
 import { sessionRecordHasActiveAgentWork } from "@/lib/vibe64MountedSessionState.js";
 import {
@@ -314,14 +313,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     ]);
   }
 
-  const dialogModels = useVibe64SessionDialogs({
-    clearSelectedSession: props.sessionData.clearSelectedSession,
-    isSelectedSessionArchived: selectedSessionArchived,
-    refreshSessionData,
-    selectedSessionId,
-    selectedSessionTitle,
-    sessionsApiPath: props.sessionData.sessionsApiPath
-  });
   const renewalModel = useVibe64SessionRenewal({
     active: computed(() => Boolean(props.active)),
     focusSession: focusRuntimeSessionChat,
@@ -333,7 +324,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
   const sourceOperationsSuspended = renewalModel.sourceOperationsSuspended;
   const dialogs = proxySessionDialogs({
-    archive: dialogModels.archive,
+    archive: props.sessionData.archive,
     renewal: renewalModel
   });
   const conversationLog = proxyRefs(useVibe64ConversationLog({
@@ -371,7 +362,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     ""
   ));
   const guardedPage = computed(() => ({
-    busy: Boolean(mounted.detailState.value?.loading || dialogModels.busy.value),
+    busy: Boolean(mounted.detailState.value?.loading),
     copyText: async (value = "") => typeof navigator === "undefined"
       ? false
       : navigator.clipboard?.writeText?.(String(value || "")),

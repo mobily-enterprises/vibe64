@@ -378,6 +378,11 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
       eventPrefix,
       sessionId
     });
+    if (result?.ok === false) {
+      const error = new Error(result.error || `Session ${entry.label} could not be stopped.`);
+      error.code = result.code || "vibe64_session_stop_failed";
+      throw error;
+    }
     closed += Number(result?.closed || 0);
   }
   return {
@@ -1093,11 +1098,15 @@ function createService({
 
   function closeAllSessionTerminals(sessionId, controllerOptions = {}) {
     return closeTerminalControllersForSession(sessionId, [
+      { controller: outputTarget, label: "outputTarget" },
+      ...(!controllerOptions.renewalCleanup && controllerOptions.session?.sourceReady !== false ? [{
+        controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
+        label: "assistantTurn"
+      }] : []),
       { controller: agentDatabaseCommand, label: "agentDatabase" },
       { controller: agentEnvCommand, label: "agentEnv" },
       { controller: agentPreviewCommand, label: "agentPreview" },
       { controller: agentSessionCommand, label: "agentSessionCommand" },
-      { controller: outputTarget, label: "outputTarget" },
       {
         controller: {
           closeAllForSession: (id, options) => sessionAgent.closeSession(id, options)
@@ -1550,8 +1559,8 @@ function createService({
       };
     },
 
-    async closeSessionTerminals(sessionId) {
-      return closeAllSessionTerminals(sessionId);
+    async closeSessionTerminals(sessionId, options = {}) {
+      return closeAllSessionTerminals(sessionId, options);
     },
 
     freezeSessionTerminalAdmissionForRenewal(sessionId, options = {}) {

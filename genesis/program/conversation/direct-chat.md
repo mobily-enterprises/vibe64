@@ -67,6 +67,12 @@ including follow-up guidance while a turn is active.
 
 ## Public contract
 
+The shared session command environment exposes `VIBE64_DROP_ZONE`, resolved from
+the session store. Main and task conversations may use that directory to exchange
+files with the person outside Git; runtime-state protections still apply elsewhere.
+Read-only conversations retain their no-write instruction. The exchange is
+per-session and expires on successful archival.
+
 The managed Git/gh command boundary preserves stdout and stderr bytes, including
 NUL-delimited filenames, binary data, and leading or trailing whitespace. Capture
 does not trim either stream. The existing base64 output encoding carries bytes

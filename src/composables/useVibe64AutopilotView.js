@@ -1761,16 +1761,17 @@ function useVibe64AutopilotView(props, emit, {
         title: currentAssistantRestrictionMessage.value
       };
     }
-    if (["editor", "database", "system"].includes(toolId)) {
+    if (toolId === "editor") {
+      return { disabled: !props.session, title: "Browse repository files, Drop Zone and session files" };
+    }
+    if (["database", "system"].includes(toolId)) {
       return {
         disabled: !sessionSourceRoot.value,
         title: sessionSourceRoot.value
           ? (
-              toolId === "editor"
-                ? "Browse session source files"
-                : toolId === "database"
-                  ? "Query and map the active session database"
-                  : "Explore the current project Cities"
+              toolId === "database"
+                ? "Query and map the active session database"
+                : "Explore the current project Cities"
             )
           : "Create the session source first"
       };

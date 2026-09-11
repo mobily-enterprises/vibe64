@@ -7687,6 +7687,7 @@ function createCodexTerminalController({
   }
 
   async function codexAppServerSessionContext(sessionId, {
+    allowClosing = false,
     runtime: providedRuntime = null,
     session: providedSession = null
   } = {}) {
@@ -7700,7 +7701,7 @@ function createCodexTerminalController({
     const session = providedSession?.sessionId === sessionId
       ? providedSession
       : await runtime.getSession(sessionId);
-    if (sessionIsClosing(session)) {
+    if (sessionIsClosing(session) && !allowClosing) {
       const renewing = normalizeText(session.status) === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED;
       return {
         code: renewing ? "vibe64_session_renewal_quiesced" : "vibe64_session_closing",
@@ -12021,7 +12022,7 @@ function createCodexTerminalController({
         turnId: input.turnId || input.codexTurnId
       });
     }
-    const context = await codexAppServerSessionContext(sessionId);
+    const context = await codexAppServerSessionContext(sessionId, { allowClosing: true });
     if (context.ok === false) {
       return context;
     }

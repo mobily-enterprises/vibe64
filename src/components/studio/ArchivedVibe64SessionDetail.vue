@@ -44,6 +44,15 @@
       </section>
     </div>
 
+    <Vibe64SessionFiles
+      v-if="sessionsApiPath"
+      archived
+      :session-id="session.sessionId"
+      :sessions-api-path="sessionsApiPath"
+      :project-slug="projectSlug"
+      style="height: 30rem"
+    />
+
     <section class="studio-archived-session-detail__section studio-archived-session-detail__conversation">
       <h3>Conversation</h3>
       <Vibe64ConversationLog
@@ -73,6 +82,7 @@
 
 <script setup>
 import { computed } from "vue";
+import Vibe64SessionFiles from "./vibe64-session/Vibe64SessionFiles.vue";
 import {
   mdiArchiveCancelOutline,
   mdiArrowLeft
@@ -84,6 +94,8 @@ import {
 } from "@/composables/useArchivedVibe64Sessions.js";
 
 const props = defineProps({
+  sessionsApiPath: { type: String, default: "" },
+  projectSlug: { type: String, default: "" },
   backTo: {
     default: null,
     type: [Object, String]

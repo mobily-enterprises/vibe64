@@ -21,25 +21,7 @@
       </div>
     </Transition>
 
-    <Transition name="studio-ai-sessions-archiving">
-      <section
-        v-if="selectedSessionArchiving"
-        class="studio-ai-sessions__archiving-overlay"
-        aria-label="Archiving session"
-        aria-live="polite"
-        role="status"
-      >
-        <div class="studio-ai-sessions__archiving-card">
-          <v-icon
-            color="primary"
-            :icon="mdiArchiveArrowDownOutline"
-            size="32"
-          />
-          <strong>Archiving session…</strong>
-          <span>Stopping its tools and preserving its state.</span>
-        </div>
-      </section>
-    </Transition>
+    <Vibe64SessionArchiveDialog :archive="selectedArchive" :short-session-id="sessionData.shortSessionId" />
 
     <div
       v-show="!chatCollapsed"
@@ -156,7 +138,7 @@
     </div>
 
     <div
-      v-show="runtimeHostSessionIds.length > 0"
+      v-show="!emptyLayoutVisible && runtimeHostSessionIds.length > 0"
       class="studio-ai-sessions__runtime-stack"
       :aria-hidden="selectedSessionArchiving ? 'true' : undefined"
       :inert="selectedSessionArchiving"
@@ -197,7 +179,7 @@
 
 <script setup>
 import { computed, provide } from "vue";
-import { mdiArchiveArrowDownOutline } from "@mdi/js";
+import Vibe64SessionArchiveDialog from "@/components/studio/vibe64-session/Vibe64SessionArchiveDialog.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
@@ -480,51 +462,6 @@ const {
   position: absolute;
   top: 0.85rem;
   z-index: 12;
-}
-
-.studio-ai-sessions__archiving-overlay {
-  align-items: center;
-  background: rgba(var(--v-theme-background), 0.92);
-  display: grid;
-  inset: 0;
-  justify-items: center;
-  padding: 1rem;
-  position: absolute;
-  z-index: 14;
-}
-
-.studio-ai-sessions__archiving-card {
-  align-items: center;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-primary), 0.22);
-  border-radius: 14px;
-  box-shadow: 0 1rem 2.5rem rgba(15, 23, 42, 0.12);
-  display: grid;
-  gap: 0.65rem;
-  justify-items: center;
-  max-width: min(100%, 26rem);
-  padding: 1.35rem 1.6rem;
-  text-align: center;
-}
-
-.studio-ai-sessions__archiving-card strong {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-}
-
-.studio-ai-sessions__archiving-card span {
-  color: rgba(var(--v-theme-on-surface), 0.66);
-  font-size: 0.86rem;
-}
-
-.studio-ai-sessions-archiving-enter-active,
-.studio-ai-sessions-archiving-leave-active {
-  transition: opacity 120ms ease;
-}
-
-.studio-ai-sessions-archiving-enter-from,
-.studio-ai-sessions-archiving-leave-to {
-  opacity: 0;
 }
 
 .studio-ai-sessions-error-enter-active,

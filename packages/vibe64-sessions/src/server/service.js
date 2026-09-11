@@ -816,6 +816,97 @@ function createService({
     }, "Vibe64 could not approve this message suggestion.");
   }
 
+  async function archiveSession(sessionId, input = {}) {
+    return sessionResult(async () => {
+      if (setupRunner.isRunning(sessionId)) {
+        const error = new Error("Wait for workspace preparation to finish before archiving this session.");
+        error.code = "vibe64_workspace_setup_running";
+        throw error;
+      }
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+        const currentSession = await runtime.getSession(sessionId, {
+          inspectSource: false
+        });
+        const sourceCreationFailed = currentSession.sourceReady !== true &&
+          text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
+        const stored = text(currentSession.metadata?.session_archive_operation);
+        const previous = stored ? JSON.parse(stored) : {};
+        if (stored && (!["running", "failed"].includes(previous.status) ||
+          !["stopping", "resources", "source"].includes(previous.phase))) {
+          throw new Error("Session archive state is invalid; its recovery evidence was preserved.");
+        }
+        const operation = {
+          phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
+            ? "stopping"
+            : previous.phase || (currentSession.metadata?.source_recovery_saved === "yes" ? "source" : "stopping"),
+          startedAt: previous.startedAt || new Date().toISOString(),
+          status: "running"
+        };
+        const persist = () => runtime.store.writeMetadataValue(
+          sessionId, "session_archive_operation", JSON.stringify(operation)
+        );
+        await persist();
+        try {
+          const closingSession = await runtime.markSessionClosing(sessionId, {
+            reason: "archived"
+          });
+          await publishSessionChanged(sessionId, {
+            operation: "updated",
+            originId: text(input.originId),
+            reason: "session-archiving",
+            payload: { clientRefresh: { includeList: true } },
+            session: closingSession
+          });
+          if (operation.phase === "stopping") {
+            await terminals.closeSessionTerminals(sessionId, { session: currentSession });
+            if (typeof terminals.removeOutputResultsForSession === "function") {
+              await terminals.removeOutputResultsForSession(sessionId);
+            }
+            operation.phase = "resources";
+            await persist();
+          }
+          if (operation.phase === "resources") {
+            if (!sourceCreationFailed && typeof project.releaseSessionResources === "function") {
+              const released = await project.releaseSessionResources({ sessionId });
+              if (released?.ok === false) {
+                throw new Error(released.error || "Session resources could not be archived.");
+              }
+            }
+            operation.phase = "source";
+            await persist();
+          }
+          return await runtime.archiveSession(sessionId);
+        } catch (error) {
+          operation.status = "failed";
+          operation.error = text(error?.message) || "Session archive failed. Retry archiving this session.";
+          await persist().catch(() => null);
+          const restoredSession = await runtime.clearSessionClosing(sessionId).catch(() => null);
+          await publishSessionChanged(sessionId, {
+            operation: "updated",
+            originId: text(input.originId),
+            reason: "session-archive-failed",
+            payload: { archiveError: operation.error, clientRefresh: { includeList: true } },
+            session: restoredSession
+          }).catch(() => null);
+          throw error;
+        }
+      }, { operation: "archive-session" });
+      if (!exclusive.acquired) {
+        return exclusive.value;
+      }
+      const session = exclusive.value;
+      await publishSessionChanged(sessionId, {
+        operation: "updated",
+        originId: text(input.originId),
+        reason: "session-archived",
+        payload: { clientRefresh: { includeList: true } },
+        session
+      });
+      return publicSession(session);
+    }, "Vibe64 could not archive this session.");
+  }
+
   return Object.freeze({
     ...renewal,
     closeSessionPresence() {
@@ -856,51 +947,28 @@ function createService({
       }, "Vibe64 could not read this version's file change.");
     },
 
-    async archiveSession(sessionId, input = {}) {
-      return sessionResult(async () => {
-        if (setupRunner.isRunning(sessionId)) {
-          const error = new Error("Wait for workspace preparation to finish before archiving this session.");
-          error.code = "vibe64_workspace_setup_running";
-          throw error;
-        }
-        const runtime = await project.createRuntime();
-        const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-          const currentSession = await runtime.getSession(sessionId, {
-            inspectSource: false
-          });
-          const sourceCreationFailed = currentSession.sourceReady !== true &&
-            text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
-          await runtime.markSessionClosing(sessionId, {
-            reason: "archived"
-          });
-          try {
-            await terminals.closeSessionTerminals(sessionId);
-            if (typeof terminals.removeOutputResultsForSession === "function") {
-              await terminals.removeOutputResultsForSession(sessionId);
-            }
-            if (!sourceCreationFailed && typeof project.releaseSessionResources === "function") {
-              await project.releaseSessionResources({
-                sessionId
-              });
-            }
-            return runtime.archiveSession(sessionId);
-          } catch (error) {
-            await runtime.clearSessionClosing(sessionId).catch(() => null);
-            throw error;
-          }
-        }, { operation: "archive-session" });
-        if (!exclusive.acquired) {
-          return exclusive.value;
-        }
-        const session = exclusive.value;
+    archiveSession,
+    async resumeSessionArchives({ signal = null } = {}) {
+      const runtime = await project.createRuntime({ inspectSource: false });
+      for (const sessionId of await runtime.store.recoverSessionArchives()) {
         await publishSessionChanged(sessionId, {
-          operation: "updated",
-          originId: text(input.originId),
           reason: "session-archived",
-          session
+          payload: { clientRefresh: { includeList: true } }
         });
-        return publicSession(session);
-      }, "Vibe64 could not archive this session.");
+      }
+      const sessions = await runtime.listSessionSummaries({ statusGroup: "open" });
+      const failures = [];
+      for (const session of sessions) {
+        if (signal?.aborted) break;
+        if (session.status === "archived") continue;
+        const stored = text(session.metadata?.session_archive_operation);
+        const operation = stored ? JSON.parse(stored) : null;
+        if (operation?.status === "failed") continue;
+        if (operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived") continue;
+        const result = await archiveSession(session.sessionId);
+        if (result?.ok === false) failures.push({ sessionId: session.sessionId, ...result });
+      }
+      return { failures };
     },
 
     async broadcastSessionPreviewState(sessionId, input = {}) {

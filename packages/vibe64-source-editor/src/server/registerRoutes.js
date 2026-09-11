@@ -73,6 +73,25 @@ async function sendSourceEditorNdjsonStream(reply, run) {
   }
 }
 
+async function sendFileDownload(reply, result) {
+  if (!result.ok) {
+    return result;
+  }
+  const encodedName = encodeURIComponent(result.name).replace(/[!'()*]/gu, (character) =>
+    `%${character.codePointAt(0).toString(16).toUpperCase()}`);
+  try {
+    // An async handler must stay pending until Fastify has sent the file stream.
+    await reply.header("Content-Type", "application/octet-stream")
+      .header("Content-Disposition", `attachment; filename*=UTF-8''${encodedName}`)
+      .header("Cache-Control", "private, no-store")
+      .header("X-Content-Type-Options", "nosniff")
+      .send(result.fileHandle.createReadStream({ autoClose: true }));
+  } catch (error) {
+    await result.fileHandle.close();
+    throw error;
+  }
+}
+
 function registerRoutes(
   http,
   {
@@ -93,6 +112,49 @@ function registerRoutes(
     routeSurface,
     tags: ["studio", "vibe64-source-editor"]
   });
+
+  routes.serviceRoute("GET", "/sessions/:sessionId/files", {
+    summary: "Read the file areas available to this caller for this session."
+  }, (request) => sourceEditor.fileArea({ sessionId: request.params.sessionId }, "areas"));
+
+  // One registration boundary for all areas: select only relative paths and
+  // operation data; identity/project/root are resolved by the trusted context.
+  for (const [method, suffix, operation] of [
+    ["GET", "tree", "tree"],
+    ["GET", "file", "file"],
+    ["GET", "download", "download"],
+    ["GET", "archive", "archive"],
+    ["POST", "upload", "upload"],
+    ["PUT", "file", "save"],
+    ["POST", "rename", "rename"],
+    ["POST", "directory", "mkdir"],
+    ["DELETE", "file", "delete"]
+  ]) {
+    routes.serviceRoute(method, `/sessions/:sessionId/files/:area/${suffix}`, {
+      bodyLimit: operation === "upload" ? 101 * 1024 * 1024 : 2 * 1024 * 1024,
+      summary: "Access files within an authorized session area."
+    }, async (request, reply) => {
+      const data = method === "GET" || operation === "upload"
+        ? routes.requestQuery(request)
+        : routes.requestBody(request);
+      const result = await sourceEditor.fileArea({
+        area: request.params.area,
+        sessionId: request.params.sessionId,
+        path: data.path,
+        offset: data.offset,
+        destination: data.destination,
+        baseHash: data.baseHash,
+        text: data.text
+      }, operation, {
+        readUpload: () => request.parts({
+          throwFileSizeLimit: true,
+          limits: { files: 1, fields: 0, parts: 1, fileSize: 100 * 1024 * 1024 }
+        })
+      });
+      if (operation === "download" || operation === "archive") return sendFileDownload(reply, result);
+      return result;
+    });
+  }
 
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/tree", {
     summary: "Read the editable source tree for a Vibe64 session."
@@ -148,22 +210,7 @@ function registerRoutes(
       sessionId: request.params.sessionId,
       path: routes.requestQuery(request).path
     });
-    if (!result.ok) {
-      return result;
-    }
-    const encodedName = encodeURIComponent(result.name).replace(/[!'()*]/gu, (character) =>
-      `%${character.codePointAt(0).toString(16).toUpperCase()}`);
-    try {
-      // An async handler must stay pending until Fastify has sent the file stream.
-      await reply.header("Content-Type", "application/octet-stream")
-        .header("Content-Disposition", `attachment; filename*=UTF-8''${encodedName}`)
-        .header("Cache-Control", "private, no-store")
-        .header("X-Content-Type-Options", "nosniff")
-        .send(result.fileHandle.createReadStream({ autoClose: true }));
-    } catch (error) {
-      await result.fileHandle.close();
-      throw error;
-    }
+    return sendFileDownload(reply, result);
   });
 
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/stars", {

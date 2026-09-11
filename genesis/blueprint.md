@@ -7,6 +7,12 @@ People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
 application, environment, and the system's explained structure in one place.
 Each session keeps valuable work recoverable and separate from unrelated work.
+Archiving immediately makes a session inactive and selects the previous available
+session. Its gray tab remains while Preview, AI work, and other tools stop and
+its workspace is archived in the background. Success removes the tab; failure
+restores its availability with a warning. All open tabs observe the transition.
+After a server restart, admitted archives resume from durable progress. Failed
+recovery preserves the evidence and requires an explicit retry.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the
@@ -18,6 +24,14 @@ switching sessions.
 Selecting a session keeps those details closed until the pointer leaves and
 enters its tab again. Deliberate keyboard focus and its info button still make
 the details available on demand.
+Files separates the repository, a per-session Drop Zone, and the session's
+read-only runtime tree with distinct area icons. The workspace owner can browse
+Session files, including archived history; other project members see Repo and
+Drop Zone. People and the AI can exchange files outside the repository through
+the Drop Zone. People can upload, drop multiple files, download, edit, rename,
+and delete its contents. This temporary exchange is excluded from saved work
+and archives and disappears after successful archival; a renewed session
+starts with an empty Drop Zone.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.

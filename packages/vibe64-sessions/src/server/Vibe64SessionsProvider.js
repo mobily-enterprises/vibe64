@@ -66,7 +66,10 @@ function createVibe64SessionsFeature() {
     let task = recoveryTasks.get(sessions);
     if (!task) {
       task = createSessionRenewalRecoveryTask({
-        recover: () => sessions.resumeSessionRenewals()
+        recover: async () => {
+          await sessions.resumeSessionArchives();
+          return sessions.resumeSessionRenewals();
+        }
       });
       recoveryTasks.set(sessions, task);
     }

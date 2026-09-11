@@ -10,10 +10,12 @@
         class="studio-ai-sessions__tab"
         :class="{
           'studio-ai-sessions__tab--active': sessionItem.sessionId === selectedSessionId,
-          'studio-ai-sessions__tab--thinking': sessionItem.agentThinking
+          'studio-ai-sessions__tab--thinking': !sessionItem.archiving && sessionItem.agentThinking,
+          'studio-ai-sessions__tab--archiving': sessionItem.archiving
         }"
         :size="compact ? 'small' : 'large'"
         :aria-label="sessionTabAriaLabel(sessionItem)"
+        :disabled="sessionItem.archiving"
         :data-vibe64-session-id="sessionItem.sessionId"
         variant="flat"
         @click="selectSession(sessionItem.sessionId)"
@@ -24,7 +26,7 @@
             class="studio-ai-sessions__status-dot"
             :class="`studio-ai-sessions__status-dot--${sessionItem.status}`"
           />
-          <span class="studio-ai-sessions__tab-label">{{ sessionTabLabel(sessionItem) }}</span>
+          <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
           <v-icon
             class="studio-ai-sessions__repository-state studio-ai-sessions__repository-state--desktop"
             :class="`studio-ai-sessions__repository-state--${repositoryState(sessionItem)}`"
@@ -269,6 +271,9 @@ function repositoryStateIcon(sessionItem = {}) {
 }
 
 function sessionTabAriaLabel(sessionItem = {}) {
+  if (sessionItem.archiving) {
+    return `${sessionTabLabel(sessionItem)}. Inactive. Archiving session.`;
+  }
   return `${sessionTabLabel(sessionItem)}. ${repositoryStateLabel(sessionItem)}.`;
 }
 
@@ -344,6 +349,15 @@ const visibleSessions = computed(() => {
 .studio-ai-sessions__tab--active {
   color: var(--studio-control-text, #202124) !important;
   font-weight: 560;
+}
+
+.studio-ai-sessions__tab--archiving .studio-ai-sessions__tab-main {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.studio-ai-sessions__tab--archiving .studio-ai-sessions__status-dot {
+  background: currentColor;
 }
 
 .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main {

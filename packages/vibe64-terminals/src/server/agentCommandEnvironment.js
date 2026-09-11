@@ -112,8 +112,11 @@ async function prepareAgentSessionCommandEnvironment({
     throw commandBoundaryError(unavailable.name);
   }
   const hostWrapperDir = text(git.hostWrapperDir);
+  const dropZoneRoot = text(runtime?.store?.paths?.(normalizedSessionId)?.dropZoneRoot);
   return {
-    env: Object.assign({}, ...steps.map((step) => record(step.result?.env))),
+    env: Object.assign({}, ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {
+      VIBE64_DROP_ZONE: dropZoneRoot
+    } : {}),
     hostWrapperDir,
     ok: true,
     shimDirs: withGenesisCommandShim([hostWrapperDir])

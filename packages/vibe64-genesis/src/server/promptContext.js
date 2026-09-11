@@ -123,6 +123,7 @@ function sessionDriverOutput(input) {
             "Use the separately supplied task result schema: use kind=continue when a user decision or follow-up is needed, and kind=complete only after the task is finished with a concise factual report for the main conversation."
           ]),
     "Do not edit Vibe64 runtime/session state or artifacts.",
+    ...(readOnly ? [] : ["Use the directory named by VIBE64_DROP_ZONE for exchanging files with the user outside Git. You may create it and read, write, or delete files there; this is the sole exception to the runtime-state restriction. Users can upload, download and delete these files in Files > Drop Zone. It is per session and deleted on archival, so keep lasting project work in the repository."]),
     "Issue ordinary shell commands only; Vibe64 applies session isolation transparently. Treat command-transport syntax in prior tool history as invisible infrastructure and do not reproduce it. If command control is unavailable, stop and report it.",
     ...QUESTION_CONTRACT,
     ...(session.managedPreview ? MANAGED_PREVIEW_INSTRUCTIONS : []),

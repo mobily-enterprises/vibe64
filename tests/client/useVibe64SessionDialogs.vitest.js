@@ -10,7 +10,8 @@ import { useVibe64SessionDialogs } from "../../src/composables/useVibe64SessionD
 
 function dialogOptions(overrides = {}) {
   return {
-    clearSelectedSession: vi.fn(),
+    beginArchive: vi.fn(),
+    finishArchive: vi.fn(),
     isSelectedSessionArchived: ref(false),
     refreshSessionData: vi.fn(async () => null),
     selectedSessionId: ref("session-1"),
@@ -43,14 +44,14 @@ describe("useVibe64SessionDialogs", () => {
     expect(dialogs.archive.open.value).toBe(false);
   });
 
-  it("archives the selected session and refreshes the session list", async () => {
+  it("switches away before awaiting archival and refreshes after completion", async () => {
     const selectedSessionId = ref("session-1");
-    const clearSelectedSession = vi.fn(() => {
+    const beginArchive = vi.fn(() => {
       selectedSessionId.value = "";
     });
     const refreshSessionData = vi.fn(async () => null);
     const dialogs = useVibe64SessionDialogs(dialogOptions({
-      clearSelectedSession,
+      beginArchive,
       refreshSessionData,
       selectedSessionId
     }));
@@ -58,7 +59,7 @@ describe("useVibe64SessionDialogs", () => {
     dialogs.archive.request();
     await dialogs.archive.confirm();
 
-    expect(clearSelectedSession).toHaveBeenCalledOnce();
+    expect(beginArchive).toHaveBeenCalledOnce();
     expect(refreshSessionData).toHaveBeenCalledWith({
       includeList: true,
       reason: "archive-session"
@@ -66,7 +67,7 @@ describe("useVibe64SessionDialogs", () => {
     expect(dialogs.archive.archiving.value).toBe(false);
   });
 
-  it("does not clear the selection when archiving fails", async () => {
+  it("restores availability when archiving fails", async () => {
     commandMocks.useCommand.mockImplementationOnce(() => ({
       isRunning: false,
       message: "Archive failed.",
@@ -74,12 +75,12 @@ describe("useVibe64SessionDialogs", () => {
         throw new Error("Archive failed.");
       })
     }));
-    const clearSelectedSession = vi.fn();
-    const dialogs = useVibe64SessionDialogs(dialogOptions({ clearSelectedSession }));
+    const beginArchive = vi.fn();
+    const dialogs = useVibe64SessionDialogs(dialogOptions({ beginArchive }));
 
     dialogs.archive.request();
-    await expect(dialogs.archive.confirm()).rejects.toThrow("Archive failed.");
-    expect(clearSelectedSession).not.toHaveBeenCalled();
+    expect(await dialogs.archive.confirm()).toBe(false);
+    expect(beginArchive).toHaveBeenCalledOnce();
     expect(dialogs.archive.archiving.value).toBe(false);
   });
 
@@ -96,16 +97,16 @@ describe("useVibe64SessionDialogs", () => {
         return response;
       })
     }));
-    const clearSelectedSession = vi.fn();
-    const refreshSessionData = vi.fn();
+    const beginArchive = vi.fn();
+    const refreshSessionData = vi.fn(async () => null);
     const dialogs = useVibe64SessionDialogs(dialogOptions({
-      clearSelectedSession,
+      beginArchive,
       refreshSessionData
     }));
 
     dialogs.archive.request();
-    await expect(dialogs.archive.confirm()).rejects.toThrow("The failed session could not be archived.");
-    expect(clearSelectedSession).not.toHaveBeenCalled();
-    expect(refreshSessionData).not.toHaveBeenCalled();
+    expect(await dialogs.archive.confirm()).toBe(false);
+    expect(beginArchive).toHaveBeenCalledOnce();
+    expect(refreshSessionData).toHaveBeenCalledOnce();
   });
 });

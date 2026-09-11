@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
-import { constants } from "node:fs";
-import { copyFile, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { constants, createWriteStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { copyFile, link, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -784,7 +786,136 @@ function createService({
     return exclusive.value;
   }
 
+  // Every Files request enters here inside the trusted project request context.
+  // Operations receive a resolved root; neither HTTP bodies nor callers select it.
+  async function fileArea(input, operation, { readUpload = null } = {}) {
+    return runSourceEditorOperation(async () => {
+      const requestContext = currentProjectRequestContext();
+      if (!requestContext) {
+        throw sourceEditorError("Files require a project request.", "vibe64_files_access_required", {}, 403);
+      }
+      const owner = !requestContext.vibe64User || requestContext.vibe64User.role === "owner";
+      const area = String(input.area || "");
+      const writable = area === "drop-zone";
+      const reads = ["tree", "file", "download", "archive"];
+      const writes = ["upload", "save", "rename", "delete", "mkdir"];
+      const writing = writes.includes(operation);
+      if (operation !== "areas" && (
+        !["session", "drop-zone"].includes(area) || (!reads.includes(operation) && !writing)
+      )) {
+        throw sourceEditorError("Unknown file area or operation.", "vibe64_files_invalid_area", {}, 404);
+      }
+      if (area === "session" && !owner) {
+        throw sourceEditorError("Only the workspace owner can read Session files.", "vibe64_files_owner_required", {}, 403);
+      }
+      if (writing && !writable) {
+        throw sourceEditorError("Session files are read only.", "vibe64_files_read_only", {}, 403);
+      }
+      const sessionId = normalizeText(input.sessionId);
+      const runtime = await projectService.createRuntime({ sessionId });
+      // This store belongs to the URL's project, so IDs from another project do
+      // not resolve. Reading the summary also enforces renewal visibility.
+      const session = await runtime.store.readSessionSummary(sessionId);
+      if (operation === "areas") {
+        return { ok: true, areas: ["repo", "drop-zone", ...(owner ? ["session"] : [])] };
+      }
+      const policy = {
+        ...sourceEditorFilePolicy(),
+        exclude: [],
+        protectSourceContract: false,
+        maxTreeDepth: Infinity,
+        maxTreeEntries: Infinity
+      };
+      if (operation === "archive") {
+        if (area !== "session" || !session.archivePath) {
+          throw sourceEditorError("This session has no published archive.", "vibe64_files_archive_unavailable", {}, 404);
+        }
+        return downloadSessionFile({ sourceRoot: path.dirname(session.archivePath), policy }, path.basename(session.archivePath));
+      }
+      const perform = async (sessionPaths) => {
+        const sourceRoot = writable ? sessionPaths.dropZoneRoot : sessionPaths.sessionRoot;
+        const context = { policy, sourceRoot, sourceEditorTempRoot: sourceRoot };
+        await sourceEditorPathStats(sourceRoot);
+        const relativePath = normalizeSourceEditorRelativePath(input.path);
+        if (["mkdir", "delete", "rename"].includes(operation) && !relativePath) {
+          throw sourceEditorError("Choose an item inside the Drop Zone.", "vibe64_invalid_source_editor_path");
+        }
+        switch (operation) {
+          case "tree":
+            return {
+              ok: true,
+              location: writable ? sourceRoot : "",
+              tree: await sourceEditorDirectoryPage(context, {
+                path: relativePath,
+                offset: sourceEditorResultOffset(input.offset)
+              })
+            };
+          case "file":
+            return { ok: true, file: await readSourceEditorFile(context, relativePath) };
+          case "download":
+            return downloadSessionFile(context, relativePath);
+          case "save":
+            return { ok: true, file: { ...await saveSourceEditorFile(context, input), text: String(input.text ?? "") } };
+          case "upload":
+            return uploadDropZoneFile(context, input, readUpload);
+          case "mkdir":
+            await ensureSourceEditorParentDirectory(context, relativePath);
+            return { ok: true };
+          case "delete":
+            await sourceEditorPathStats(sourceRoot, relativePath);
+            await rm(absoluteSourceEditorPath(sourceRoot, relativePath), { recursive: true });
+            return { ok: true };
+          case "rename": {
+            await sourceEditorPathStats(sourceRoot, relativePath);
+            const destination = normalizeNewSourceEditorFilePath(input.destination);
+            const parent = path.posix.dirname(destination);
+            await sourceEditorPathStats(sourceRoot, parent === "." ? "" : parent);
+            const target = absoluteSourceEditorPath(sourceRoot, destination);
+            try {
+              await lstat(target);
+              throw sourceEditorError("An item already exists at that path.", "vibe64_files_exists", {}, 409);
+            } catch (error) {
+              if (!isMissingPathError(error)) throw error;
+            }
+            await rename(absoluteSourceEditorPath(sourceRoot, relativePath), target);
+            return { ok: true };
+          }
+        }
+      };
+      const livePaths = session.sessionRoot ? {
+        sessionRoot: session.sessionRoot,
+        dropZoneRoot: path.join(session.sessionRoot, "drop-zone")
+      } : null;
+      if (!writable) {
+        return livePaths ? perform(livePaths) : runtime.store.withReadableSessionPaths(sessionId, perform);
+      }
+      if (!session.sessionRoot) {
+        if (operation === "tree") return { ok: true, expired: true, tree: directoryNode("", [], { loaded: true }) };
+        throw sourceEditorError("This session's Drop Zone has expired.", "vibe64_files_expired", {}, 410);
+      }
+      if (!writing) {
+        // Normal reads do not mutate session metadata. Older live sessions get
+        // their missing Drop Zone once, under the same archival mutation lease.
+        try {
+          await lstat(livePaths.dropZoneRoot);
+          return perform(livePaths);
+        } catch (error) {
+          if (!isMissingPathError(error)) throw error;
+        }
+      }
+      return runtime.store.mutateSession(sessionId, async (sessionPaths) => {
+        const current = await runtime.store.readSessionSummary(sessionId);
+        if (sessionClosingReason(current) || current.status === "archived") {
+          throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_session_closing", {}, 409);
+        }
+        await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
+        return perform(sessionPaths);
+      });
+    });
+  }
+
   return Object.freeze({
+    fileArea,
     async readTree(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
@@ -817,18 +948,7 @@ function createService({
     async downloadFile(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
-        const file = await sourceEditorExistingFile(context, input.path, { maxFileBytes: Infinity });
-        const handle = await open(file.absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-        try {
-          const stats = await handle.stat();
-          if (!stats.isFile() || stats.dev !== file.stats.dev || stats.ino !== file.stats.ino) {
-            throw sourceEditorError("The file changed while opening. Try downloading again.", "vibe64_source_editor_file_changed", {}, 409);
-          }
-          return { ok: true, fileHandle: handle, name: path.posix.basename(file.relativePath) };
-        } catch (error) {
-          await handle.close();
-          throw error;
-        }
+        return downloadSessionFile(context, input.path);
       });
     },
 
@@ -1168,6 +1288,52 @@ function streamSourceEditorFileChanges(context, file, stream, fileObserver) {
   });
 }
 
+async function uploadDropZoneFile(context, input, readUpload) {
+  if (typeof readUpload !== "function") throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
+  const relativePath = normalizeNewSourceEditorFilePath(input.path);
+  const parent = path.posix.dirname(relativePath);
+  await sourceEditorPathStats(context.sourceRoot, parent === "." ? "" : parent);
+  const target = absoluteSourceEditorPath(context.sourceRoot, relativePath);
+  const staged = path.join(context.sourceRoot, `.upload-${crypto.randomUUID()}`);
+  try {
+    let count = 0;
+    for await (const part of readUpload()) {
+      if (++count !== 1 || part.type !== "file" || part.fieldname !== "file") {
+        part.file?.resume();
+        throw sourceEditorError("Upload exactly one file.", "vibe64_files_invalid_upload");
+      }
+      await pipeline(part.file, createWriteStream(staged, { flags: "wx", mode: 0o660 }));
+      if (part.file.truncated) throw sourceEditorError("Upload exceeds the 100 MiB limit.", "vibe64_files_upload_too_large", {}, 413);
+    }
+    if (count !== 1) throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
+    // Publish without overwriting or making another temporary copy.
+    try {
+      await link(staged, target);
+    } catch (error) {
+      if (error.code === "EEXIST") throw sourceEditorError("An item already exists at that path. Rename it or delete it before uploading again.", "vibe64_files_exists", {}, 409);
+      throw error;
+    }
+    return { ok: true, path: relativePath };
+  } finally {
+    await rm(staged, { force: true });
+  }
+}
+
+async function downloadSessionFile(context, relativePath) {
+  const file = await sourceEditorExistingFile(context, relativePath, { maxFileBytes: Infinity });
+  const handle = await open(file.absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile() || stats.dev !== file.stats.dev || stats.ino !== file.stats.ino) {
+      throw sourceEditorError("The file changed while opening. Try downloading again.", "vibe64_source_editor_file_changed", {}, 409);
+    }
+    return { ok: true, fileHandle: handle, name: path.posix.basename(file.relativePath) };
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+}
+
 async function runSourceEditorOperation(operation) {
   try {
     return await operation();
@@ -1248,7 +1414,7 @@ async function sourceEditorPathStats(sourceRoot = "", relativePath = "") {
   const absolutePath = absoluteSourceEditorPath(sourceRoot, relativePath);
   let currentPath = path.resolve(sourceRoot);
   let stats;
-  for (const segment of path.relative(currentPath, absolutePath).split(path.sep)) {
+  for (const segment of ["", ...path.relative(currentPath, absolutePath).split(path.sep).filter(Boolean)]) {
     currentPath = path.join(currentPath, segment);
     stats = await lstat(currentPath);
     if (stats.isSymbolicLink()) {
@@ -1313,7 +1479,7 @@ function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
 }
 
 function sourceEditorPathExcluded(policy = {}, relativePath = "") {
-  if (sourceEditorSourceContractPathExcluded(relativePath)) {
+  if (policy.protectSourceContract !== false && sourceEditorSourceContractPathExcluded(relativePath)) {
     return true;
   }
   return (Array.isArray(policy.exclude) ? policy.exclude : [])

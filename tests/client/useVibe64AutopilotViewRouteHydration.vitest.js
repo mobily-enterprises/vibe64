@@ -93,7 +93,7 @@ describe("useVibe64AutopilotView route hydration", () => {
   afterEach(() => scope.stop());
 
   it.each([
-    { label: "Files", tool: "editor", segment: "files", component: "Vibe64SessionSourceEditor" },
+    { label: "Files", tool: "editor", segment: "files", component: "Vibe64SessionFiles" },
     { label: "Database", tool: "database", segment: "database", component: "Vibe64DatabaseWorkspace" },
     { label: "Cities", tool: "system", segment: "system", component: "Vibe64SystemWorldView" }
   ])("retains $label inactive across Preview and retires it on an explicit tool switch", async ({ tool, segment, component }) => {
@@ -287,7 +287,7 @@ describe("useVibe64AutopilotView route hydration", () => {
   it.each([
     { outcome: "source unavailable", error: "" },
     { outcome: "detail error", error: "Session could not load." }
-  ])("waits for session detail before falling back from Files on $outcome", async ({ error }) => {
+  ])("settles Files access after session detail on $outcome", async ({ error }) => {
     const props = viewProps();
     if (error) props.session = null;
     props.page = { busy: true, error: "", launchBusy: true };
@@ -312,11 +312,17 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(props.page.busy).toBe(true);
     expect(props.page.error).toBe(error);
     expect(view.sessionSourceRoot.value).toBe("");
-    expect(view.rightPaneTab.value).toBe("dashboard");
     expect(view.sourceToolLoading.value).toBe(false);
-    expect(view.dashboardShellVisible.value).toBe(true);
-    expect(router.replace).toHaveBeenCalledExactlyOnceWith("/app/project/chat-test/dashboard/env");
-    expect(route.path).toBe("/app/project/chat-test/dashboard/env");
+    if (error) {
+      expect(view.rightPaneTab.value).toBe("dashboard");
+      expect(view.dashboardShellVisible.value).toBe(true);
+      expect(router.replace).toHaveBeenCalledExactlyOnceWith("/app/project/chat-test/dashboard/env");
+    } else {
+      expect(view.rightPaneTab.value).toBe("editor");
+      expect(view.dashboardShellVisible.value).toBe(false);
+      expect(router.replace).not.toHaveBeenCalled();
+      expect(route.path).toBe("/app/project/chat-test/dashboard/files");
+    }
     expect(router.push).not.toHaveBeenCalled();
   });
 
@@ -423,7 +429,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     propsA.active = true;
     await nextTick();
 
-    if (outcome === "ready") {
+    if (outcome !== "error") {
       expect(route.path).toBe("/app/project/chat-test/dashboard/files");
       expect(router.replace).not.toHaveBeenCalled();
       expect(viewA.rightPaneTabMounted("editor")).toBe(true);

@@ -1,4 +1,7 @@
 import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { useQueryClient } from "@tanstack/vue-query";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -284,7 +287,33 @@ function useVibe64SessionData({
     sessionDataDisposed = true;
     currentSessionPublisher.stop();
   });
-  const sessions = computed(() => visibleVibe64Sessions(sessionList.items || []));
+  const archiveAttempts = ref({});
+  const sessions = computed(() => {
+    const items = new Map((sessionList.items || []).map((session) => [session.sessionId, session]));
+    for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
+      if (attempt.succeeded) {
+        items.delete(id);
+      } else {
+        items.set(id, { ...(items.get(id) || attempt.session), archiving: true });
+      }
+    }
+    return visibleVibe64Sessions([...items.values()]).map((session) => {
+      let operation = null;
+      try {
+        operation = JSON.parse(session.metadata?.session_archive_operation || "null");
+      } catch {
+        operation = { status: "failed", error: "Session archive state could not be read." };
+      }
+      return {
+        ...session,
+        archiveError: operation?.status === "failed" ? operation.error : "",
+        archiving: Boolean(session.archiving || operation?.status === "running" || (
+          operation?.status !== "failed" && session.metadata?.session_closing_reason === "archived"
+        ))
+      };
+    });
+  });
+  const availableSessions = computed(() => sessions.value.filter((session) => !session.archiving));
   const selectedListSession = computed(() => {
     return sessions.value.find((session) => session.sessionId === selectedSessionId.value) || null;
   });
@@ -420,6 +449,9 @@ function useVibe64SessionData({
 
   function selectSessionId(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
+    if (sessions.value.some((session) => session.sessionId === normalizedSessionId && session.archiving)) {
+      return;
+    }
     vibe64SessionDebugLog("client.sessionData.selectSession", {
       fromSessionId: String(selectedSessionId.value || ""),
       toSessionId: normalizedSessionId
@@ -434,6 +466,88 @@ function useVibe64SessionData({
     emptySessionListObservedForProject = String(projectSlug.value || "").trim();
     sessionSelection.clear();
   }
+
+  function selectPreviousSession(sessionId) {
+    const index = sessions.value.findIndex((session) => session.sessionId === sessionId);
+    const previous = sessions.value.slice(0, Math.max(0, index)).filter((session) => !session.archiving).at(-1);
+    selectSessionId(previous?.sessionId || availableSessions.value.at(-1)?.sessionId || "");
+  }
+
+  const archive = proxyRefs(useVibe64SessionDialogs({
+    beginArchive(sessionId) {
+      archiveAttempts.value[sessionId] = {
+        session: sessions.value.find((session) => session.sessionId === sessionId)
+      };
+      if (selectedSessionId.value === sessionId) {
+        selectPreviousSession(sessionId);
+      }
+      return projectSlug.value;
+    },
+    finishArchive(sessionId, succeeded, archiveProject) {
+      if (projectSlug.value !== archiveProject) return;
+      if (succeeded) {
+        archiveAttempts.value[sessionId] = { succeeded: true };
+      } else {
+        delete archiveAttempts.value[sessionId];
+      }
+    },
+    isSelectedSessionArchived,
+    refreshSessionData,
+    selectedSessionId,
+    selectedSessionTitle,
+    sessionsApiPath
+  }).archive);
+
+  const archiveFeedback = useUiFeedback({ source: "vibe64.sessions.archive.remote" });
+  const shownArchiveFailures = new Set();
+  watch(projectSlug, () => {
+    archiveAttempts.value = {};
+    shownArchiveFailures.clear();
+  });
+  useRealtimeEvent({
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value,
+    onEvent: ({ payload = {} } = {}) => {
+      const id = String(payload.sessionId || "");
+      if (!id) return;
+      if (payload.reason === "session-archiving") {
+        const session = sessions.value.find((item) => item.sessionId === id);
+        if (session) archiveAttempts.value[id] = { session };
+        if (selectedSessionId.value === id) selectPreviousSession(id);
+      } else if (payload.reason === "session-archived") {
+        archiveAttempts.value[id] = { succeeded: true };
+      } else if (payload.reason === "session-archive-failed") {
+        delete archiveAttempts.value[id];
+      }
+    }
+  });
+  watch(() => sessionList.items, (items) => {
+    for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
+      if (attempt.succeeded || archive.archivingSessionId === id) continue;
+      const session = items.find((item) => item.sessionId === id);
+      let operation = null;
+      try {
+        operation = JSON.parse(session?.metadata?.session_archive_operation || "null");
+      } catch {
+        operation = { status: "failed" };
+      }
+      if (!session || operation?.status === "failed" || (
+        operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived"
+      )) {
+        delete archiveAttempts.value[id];
+      }
+    }
+  });
+  watch(sessions, (items) => {
+    for (const session of items) {
+      const key = `${session.sessionId}:${session.metadata?.session_archive_operation}`;
+      if (!session.archiveError || shownArchiveFailures.has(key)) continue;
+      shownArchiveFailures.add(key);
+      if (archive.archivingSessionId !== session.sessionId) {
+        archiveFeedback.error(new Error(session.archiveError));
+      }
+    }
+  }, { immediate: true });
 
   let createSessionInFlight = null;
 
@@ -518,7 +632,7 @@ function useVibe64SessionData({
   }
 
   const selectionReconciliationState = computed(() => {
-    const nextSessions = sessions.value;
+    const nextSessions = availableSessions.value;
     return {
       createSessionRunning: createSessionRunning.value,
       currentSessionApiPath: currentSessionApiPath.value,
@@ -550,6 +664,10 @@ function useVibe64SessionData({
 
   watch(selectionReconciliationState, (state) => {
     const nextSessions = state.nextSessions;
+    if (sessions.value.some((session) => session.sessionId === state.selectedSessionId && session.archiving)) {
+      selectPreviousSession(state.selectedSessionId);
+      return;
+    }
     vibe64SessionDebugLog("client.sessionData.sessions.changed", {
       selectedSessionId: String(selectedSessionId.value || ""),
       sessionCount: nextSessions.length
@@ -649,6 +767,7 @@ function useVibe64SessionData({
   });
 
   return {
+    archive,
     canCreateSession,
     clearSelectedSession,
     createSession,

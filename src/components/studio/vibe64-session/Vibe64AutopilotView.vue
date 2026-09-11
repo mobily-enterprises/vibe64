@@ -579,7 +579,8 @@
             Back to dashboard
           </v-btn>
         </header>
-        <Vibe64SessionSourceEditor
+        <Vibe64SessionFiles
+          :repo-available="Boolean(sessionSourceRoot)"
           v-if="rightPaneTabMounted('editor')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           :agent-active="agentActive"
@@ -751,7 +752,7 @@ import Vibe64PromptHints from "@/components/studio/vibe64-session/Vibe64PromptHi
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
-import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
+import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";

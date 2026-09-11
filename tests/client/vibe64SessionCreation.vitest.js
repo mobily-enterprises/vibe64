@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const creationHarness = vi.hoisted(() => ({
   createRun: null,
+  archiveRun: null,
+  realtime: null,
+  feedback: null,
   endpointResource: null,
   projectSlug: null,
   queryData: null,
@@ -15,6 +18,13 @@ const creationHarness = vi.hoisted(() => ({
   updateRun: null
 }));
 
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent: (options) => { creationHarness.realtime = options; }
+}));
+vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
+  useUiFeedback: () => ({ error: (...args) => creationHarness.feedback(...args) })
+}));
+
 vi.mock("@tanstack/vue-query", () => ({
   useQueryClient: () => ({
     getQueryData: () => creationHarness.queryData.value,
@@ -24,6 +34,13 @@ vi.mock("@tanstack/vue-query", () => ({
 
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand(options = {}) {
+    if (options.placementSource === "vibe64.sessions.archive") {
+      return { isRunning: false, run: async (context) => {
+        const result = await creationHarness.archiveRun(context);
+        await options.onRunSuccess?.(result, { context });
+        return result;
+      } };
+    }
     const run = options.apiSuffix === "/vibe64/sessions"
       ? creationHarness.createRun
       : creationHarness.updateRun;
@@ -95,6 +112,8 @@ beforeEach(() => {
   creationHarness.projectSlug = ref("project-a");
   creationHarness.selectedId = ref("");
   creationHarness.createRun = vi.fn();
+  creationHarness.archiveRun = vi.fn(async () => ({ ok: true }));
+  creationHarness.feedback = vi.fn();
   creationHarness.updateRun = vi.fn(async () => ({ ok: true }));
   creationHarness.refetch = vi.fn(async () => ({ data: { sessions: [] } }));
   creationHarness.queryData = ref({
@@ -603,5 +622,82 @@ describe("Vibe64 session creation", () => {
 
     expect(creationHarness.select).not.toHaveBeenCalled();
     expect(creationHarness.refetch).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("background session archive selection", () => {
+  function twoSessions() {
+    creationHarness.queryData.value.sessions = [
+      { sessionId: "session-a", status: "active" },
+      { sessionId: "session-b", status: "active" }
+    ];
+    creationHarness.selectedId.value = "session-b";
+  }
+
+  it("selects the previous session immediately and keeps its selection after success", async () => {
+    twoSessions();
+    const pending = deferred();
+    creationHarness.archiveRun.mockReturnValue(pending.promise);
+    const { scope, sessionData } = mountSessionData();
+    sessionData.archive.request();
+    const result = sessionData.archive.confirm();
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    expect(sessionData.sessions.value.find(s => s.sessionId === "session-b").archiving).toBe(true);
+    sessionData.selectSessionId("session-b");
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    pending.resolve({ ok: true });
+    await result;
+    await nextTick();
+    expect(sessionData.sessions.value.map(s => s.sessionId)).toEqual(["session-a"]);
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    scope.stop();
+  });
+
+  it("restores the gray tab after failure without stealing the current selection", async () => {
+    twoSessions();
+    creationHarness.archiveRun.mockRejectedValue(new Error("Cleanup failed"));
+    const { scope, sessionData } = mountSessionData();
+    sessionData.archive.request();
+    expect(await sessionData.archive.confirm()).toBe(false);
+    await nextTick();
+    expect(sessionData.sessions.value.every(s => !s.archiving)).toBe(true);
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    scope.stop();
+  });
+
+  it("reacts to another tab's start and completion announcements", async () => {
+    twoSessions();
+    const { scope, sessionData } = mountSessionData();
+    const receive = (reason) => creationHarness.realtime.onEvent({ payload: {
+      projectSlug: "project-a", sessionId: "session-b", reason
+    } });
+    expect(creationHarness.realtime.matches({ payload: { projectSlug: "other" } })).toBe(false);
+    receive("session-archiving");
+    await nextTick();
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    expect(sessionData.sessions.value.at(-1).archiving).toBe(true);
+    receive("session-archived");
+    await nextTick();
+    expect(sessionData.sessions.value.map(s => s.sessionId)).toEqual(["session-a"]);
+    scope.stop();
+  });
+
+  it("hydrates a running archive after reload and warns when restart recovery fails", async () => {
+    twoSessions();
+    creationHarness.queryData.value.sessions[1].metadata = {
+      session_closing_reason: "archived",
+      session_archive_operation: JSON.stringify({ status: "running", phase: "source" })
+    };
+    const { scope, sessionData } = mountSessionData();
+    await nextTick();
+    expect(sessionData.selectedSessionId.value).toBe("session-a");
+    creationHarness.queryData.value.sessions[1].metadata.session_archive_operation = JSON.stringify({
+      status: "failed", phase: "source", error: "Recovery failed"
+    });
+    await nextTick();
+    expect(sessionData.sessions.value.at(-1).archiving).toBe(false);
+    expect(creationHarness.feedback).toHaveBeenCalledOnce();
+    scope.stop();
   });
 });
