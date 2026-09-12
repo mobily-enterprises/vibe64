@@ -566,7 +566,7 @@
             variant="tonal"
             @click="backToSystemFromEditor"
           >
-            Back to Cities
+            Back to Subsystems
           </v-btn>
           <v-btn
             v-else
@@ -608,12 +608,13 @@
             size="x-small"
             type="button"
             variant="tonal"
-            @click="backToDashboard"
+            @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()"
           >
-            Back to dashboard
+            {{ systemBackAvailable ? "Back to Subsystems" : "Back to dashboard" }}
           </v-btn>
         </header>
         <Vibe64DatabaseWorkspace
+          :open-request="databaseOpenRequest"
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantDirectAllowed"
@@ -642,12 +643,16 @@
             Back to dashboard
           </v-btn>
         </header>
-        <Vibe64SystemWorldView
+        <Vibe64SubsystemsView
+          :assistant-available="assistantDirectAllowed"
           v-if="rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
+          :project-slug="projectSlug"
+          @open-table="openSubsystemTable"
+          @describe-subsystems="describeSubsystems"
           :session-id="sessionId"
           @open-source-file-immersive="openSourceEditorFile"
           @open-source-file="openSourceEditorFile"
@@ -799,8 +804,8 @@ const sessionActionsLabel = computed(() => (
 const sourceOperationsSuspended = computed(() => (
   props.sessionRenewal?.sourceOperationsSuspended === true
 ));
-const Vibe64SystemWorldView = defineAsyncComponent(() => (
-  import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64SystemWorldView())
+const Vibe64SubsystemsView = defineAsyncComponent(() => (
+  import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64SubsystemsView())
 ));
 const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
   import("@local/vibe64-database-tools/client").then((module) => module.loadVibe64DatabaseWorkspace())
@@ -967,6 +972,9 @@ const {
   numberedQuestionSelectItems,
   numberedQuestions,
   openSourceEditorFile,
+  openSubsystemTable,
+  describeSubsystems,
+  databaseOpenRequest,
   previewAttachmentState,
   projectSlug,
   questionAnswers,

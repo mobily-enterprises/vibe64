@@ -1714,6 +1714,7 @@ function useVibe64AutopilotView(props, emit, {
   const lastDashboardRoutePath = ref("");
   const sourceEditorOpenRequest = ref(null);
   const systemRestoreRequest = ref(null);
+  const databaseOpenRequest = ref(null);
   const systemReturnContext = ref(null);
   let sourceEditorOpenSequence = 0;
   let systemRestoreSequence = 0;
@@ -1876,6 +1877,17 @@ function useVibe64AutopilotView(props, emit, {
     return selectSessionTool("editor");
   }
 
+  function openSubsystemTable(target = {}) {
+    if (!target.qualifiedName) return false;
+    systemReturnContext.value = { ...target.systemContext, sessionId: sessionId.value };
+    databaseOpenRequest.value = { qualifiedName: target.qualifiedName, sequence: Date.now() };
+    return selectSessionTool("database");
+  }
+
+  function describeSubsystems() {
+    prefillComposer("Please create or update genesis/subsystems.md from the application source, existing Program, and schema. Explain the meaningful subsystem responsibilities and declare their Program operations and owned/used tables.");
+  }
+
   function backToSystemFromEditor() {
     if (!systemBackAvailable.value) {
       return false;
@@ -1976,6 +1988,7 @@ function useVibe64AutopilotView(props, emit, {
     checkedUpdateRepairRuns.clear();
     systemReturnContext.value = null;
     systemRestoreRequest.value = null;
+    databaseOpenRequest.value = null;
   });
 
   watch(() => workspaceSetup.value?.updatedAt, () => {
@@ -2072,6 +2085,9 @@ function useVibe64AutopilotView(props, emit, {
     numberedQuestionSelectItems,
     numberedQuestions,
     openSourceEditorFile,
+    openSubsystemTable,
+    describeSubsystems,
+    databaseOpenRequest,
     previewAttachmentState,
     projectSlug,
     questionAnswers,

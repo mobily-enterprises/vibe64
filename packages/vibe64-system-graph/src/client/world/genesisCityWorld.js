@@ -47,6 +47,10 @@ function genesisCityWorld(city = null, kind = GENESIS_MACHINE_CITY_KIND, {
       };
     }
   } else {
+    if (city.buildings.some((building) => building.districtId === null)) {
+      world.districts = [...city.districts, { id: "presentation:unassigned", path: "", title: "Unassigned operations", parentId: null }];
+      world.buildings = city.buildings.map((building) => building.districtId === null ? { ...building, districtId: "presentation:unassigned" } : building);
+    }
     world.links = city.links;
   }
   return world;

@@ -374,7 +374,7 @@ function finalSchema(connection = {}, version = "", tables = []) {
 
 async function inspectPostgresSchema(knex, connection = {}) {
   const [versionRows, tableRows, columnRows, constraintRows, indexRows] = await Promise.all([
-    rawRows(knex, "SELECT current_database() AS database_name, version() AS version"),
+    rawRows(knex, "SELECT current_database() AS database_name, current_schema() AS default_schema, version() AS version"),
     rawRows(knex, POSTGRES_TABLES_SQL),
     rawRows(knex, POSTGRES_COLUMNS_SQL),
     rawRows(knex, POSTGRES_CONSTRAINTS_SQL),
@@ -463,7 +463,7 @@ async function inspectPostgresSchema(knex, connection = {}) {
     table.keys = editableTableKeys(table);
   }
 
-  return finalSchema(connection, versionRows[0]?.version, tables);
+  return { ...finalSchema(connection, versionRows[0]?.version, tables), defaultSchema: text(versionRows[0]?.default_schema) };
 }
 
 function mysqlConstraintType(value = "") {

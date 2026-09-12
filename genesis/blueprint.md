@@ -63,6 +63,14 @@ Save and Update wait for the assistant connection to be ready. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.
+People can explore the application through its authored subsystems: each explains
+a responsibility and brings together its Program operations and owned or shared
+data tables. A searchable overview and an optional three-dimensional City share
+the same details. Operations link to explanations and source; tables link to the
+relationship diagram, with a way back to the selected subsystem. Missing maps
+invite the person to describe them with the agent, and unresolved table references
+remain visible. The database overview continues to explain the data itself.
+
 People can explore a project's database through a readable relationship diagram,
 starting with its keys and expanding detail when needed. Large diagrams load
 without blocking typing or navigation while their connections are calculated.

@@ -82,6 +82,7 @@ function actorId(vibe64User = null) {
 
 function safeConnectionDescriptor(connection = {}, context = {}) {
   return {
+    resourceId: (context.resources || []).find(({ resource }) => resource.kind === connection.engine)?.resource.id || "",
     client: connection.client,
     database: connection.database,
     developmentDatabaseScope: context.developmentDatabaseScope || "",

@@ -153,6 +153,16 @@ const firstState = {
 const secondState = { ...firstState, schema: { ...firstState.schema, tables: [secondTable] } };
 
 describe("Database Workspace automatic table admission", () => {
+  it("opens a subsystem table in the ERD without admitting a record query", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
+    try {
+      fixture.props.openRequest = { qualifiedName: "public.items", sequence: 1 };
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("erd");
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+  });
+
   it("opens Overview without querying records and only admits a query when Data is selected", async () => {
     const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
     try {

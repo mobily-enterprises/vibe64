@@ -127,6 +127,12 @@ its toolbar while a concept is expanded, and puts occasional overview actions
 and connection visibility in its own options menu. Concept editing/promotion
 is available through the scoped ERD's options slot, using the existing editor.
 
+Opening a resolved table from Subsystems switches to the ERD, reveals and focuses
+that table after layout is ready, and preserves a return to the selected subsystem.
+This navigation does not execute a table-record query. PostgreSQL schema inspection
+also records its current default schema for exact subsystem reference resolution;
+older snapshots remain unresolved for default-schema references until refreshed.
+
 ## Implementation map
 
 Overview is the default Database view, followed by ERD and Data. Opening Overview or ERD does not automatically query table records; Data admits the first table query when selected.

@@ -53,6 +53,7 @@ function presentationSurfaceColor(surface = {}) {
 }
 
 function buildingColor(building = {}, cityKind = "machine") {
+  if (building.kind === "table") return 0x40bfae;
   const identity = cityKind === "program"
     ? building.districtId
     : building.language || building.districtId;

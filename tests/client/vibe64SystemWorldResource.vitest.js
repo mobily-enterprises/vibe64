@@ -70,7 +70,8 @@ describe("Genesis City client resources", () => {
       }),
       endpointResource({ city: { schema: "genesis.machine-city.v1" } }),
       endpointResource(null),
-      endpointResource(null)
+      endpointResource(null),
+      endpointResource({ status: "missing", subsystems: [] })
     ];
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockImplementation((options) => {
@@ -81,7 +82,7 @@ describe("Genesis City client resources", () => {
 
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
-    { component: "Vibe64SystemWorldView", pane: "system", useTool: useVibe64SystemGraph, resources: 4 }
+    { component: "Vibe64SubsystemsView", pane: "system", useTool: useVibe64SystemGraph, resources: 5 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -142,12 +143,13 @@ describe("Genesis City client resources", () => {
       });
     });
 
-    expect(endpointMocks.calls).toHaveLength(4);
+    expect(endpointMocks.calls).toHaveLength(5);
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",
       "/api/vibe64/system-graph/sessions/session%2Fa/cities/machine",
       "",
-      "/api/vibe64/system-graph/sessions/session%2Fa/refresh"
+      "/api/vibe64/system-graph/sessions/session%2Fa/refresh",
+      "/api/vibe64/system-graph/sessions/session%2Fa/subsystems"
     ]);
     expect(endpointMocks.calls[1].enabled.value).toBe(true);
     expect(endpointMocks.calls[2].enabled.value).toBe(false);

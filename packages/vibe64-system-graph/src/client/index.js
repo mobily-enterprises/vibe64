@@ -10,3 +10,7 @@ async function loadVibe64SystemWorldView() {
 export {
   loadVibe64SystemWorldView
 };
+
+export async function loadVibe64SubsystemsView() {
+  return (await import("./components/Vibe64SubsystemsView.vue")).default;
+}

@@ -70,6 +70,14 @@ function useVibe64SystemGraph({
     writeMethod: "POST"
   });
 
+  const subsystemResource = useEndpointResource({
+    enabled,
+    fallbackLoadError: "Subsystems could not be loaded.",
+    path: computed(() => enabled.value ? `${sessionPath.value}/subsystems` : ""),
+    queryKey: computed(() => systemQueryKey(normalizedSessionId.value, "subsystems")),
+    requestRecoveryLabel: "Subsystems"
+  });
+
   const machineCity = computed(() => machineResource.data.value?.city || null);
   const programCity = computed(() => programResource.data.value?.city || null);
   const loading = computed(() => Boolean(
@@ -87,7 +95,7 @@ function useVibe64SystemGraph({
 
   async function reload() {
     if (!enabled.value) return;
-    await statusResource.reload();
+    await Promise.all([statusResource.reload(), subsystemResource.reload()]);
     const cityLoads = [];
     if (machineEnabled.value) {
       cityLoads.push(machineResource.reload());
@@ -112,6 +120,9 @@ function useVibe64SystemGraph({
     refresh,
     refreshing: refreshResource.isSaving,
     reload,
+    subsystemMap: computed(() => subsystemResource.data.value || null),
+    subsystemError: subsystemResource.loadError,
+    subsystemLoading: subsystemResource.isLoading,
     systemStatus
   };
 }

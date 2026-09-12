@@ -56,10 +56,10 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
   {
     icon: mdiGraphOutline,
     id: "system",
-    label: "Cities",
+    label: "Subsystems",
     order: 250,
     routeSegment: "system",
-    title: "Explore the Machine and Program Cities"
+    title: "Explore subsystem responsibilities, operations, data, and Cities"
   },
   {
     icon: mdiRobotOutline,

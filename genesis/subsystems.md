@@ -1,0 +1,170 @@
+# Subsystems
+
+## `projects` Project definition
+
+Owns project discovery and the portable collaboration, engineering and deployment settings.
+
+### Program
+
+- `genesis/program/projects/application-deployment.md`
+- `genesis/program/projects/catalog.md`
+- `genesis/program/projects/collaboration-approach.md`
+- `genesis/program/projects/engineering-approach.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `sessions` Session workspaces
+
+Owns isolated working sessions, their lifecycle and recoverable workspace history.
+
+### Program
+
+- `genesis/program/sessions/workspaces.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `conversation` Agent conversation
+
+Owns direct conversations and temporary assistance with connected coding agents.
+
+### Program
+
+- `genesis/program/conversation/direct-chat.md`
+- `genesis/program/conversation/temporary-assistance.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `accounts` Agent connections
+
+Owns configured agent accounts, connection selection and connection health.
+
+### Program
+
+- `genesis/program/accounts/connections-and-health.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `execution` Managed execution
+
+Owns workspace preparation, execution resource estimates and workflow accounting.
+
+### Program
+
+- `genesis/program/execution/resource-estimates.md`
+- `genesis/program/execution/workflow-accounting.md`
+- `genesis/program/execution/workspace-setup.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `preview` Application preview
+
+Owns running project applications and their preview identities.
+
+### Program
+
+- `genesis/program/preview/application-identities.md`
+- `genesis/program/preview/managed-application.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `environment` Project environment
+
+Owns project values supplied to managed application work.
+
+### Program
+
+- `genesis/program/environment/project-values.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `source` Source work
+
+Owns editing, reviewing and saving project source changes.
+
+### Program
+
+- `genesis/program/source/edit-and-review.md`
+- `genesis/program/source/save-work.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `database` Database exploration
+
+Owns inspection, diagram exploration and query execution for a selected project database.
+
+### Program
+
+- `genesis/program/database/diagram-exploration.md`
+- `genesis/program/database/query-execution.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+## `understanding` Project understanding
+
+Owns presenting Genesis explanations, authored subsystems and source Cities.
+
+### Program
+
+- `genesis/program/understanding/genesis-context.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.

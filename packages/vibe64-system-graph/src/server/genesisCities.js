@@ -202,11 +202,11 @@ function validateProgramCity(city) {
       "description",
       "publicContract",
       "implementationMap",
-      "path",
-      "subsystem",
-      "districtId"
+      "path"
     ].forEach((field) => requireString(building[field], kind, `${label}.${field}`));
-    requireCondition(districtIds.has(building.districtId), kind, `${label}.districtId does not identify a district.`);
+    requireOptionalString(building.subsystem, kind, `${label}.subsystem`);
+    requireOptionalString(building.districtId, kind, `${label}.districtId`);
+    requireCondition(building.districtId === null || districtIds.has(building.districtId), kind, `${label}.districtId does not identify a district.`);
     requireStringArray(building.sources, kind, `${label}.sources`);
     requireStringArray(building.sourceFileIds, kind, `${label}.sourceFileIds`);
   });

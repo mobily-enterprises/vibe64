@@ -158,6 +158,7 @@ import { createErdRelationshipRoutes } from "../erdRelationships.js";
 import { ERD_NODE_WIDTH, erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdNodeHeight, erdSearch, placeErdNodes } from "../erdModel.js";
 
 const props = defineProps({
+  focusRequest: { type: Object, default: null },
   draggable: { type: Boolean, default: true },
   centralTable: { type: String, default: "" },
   layout: { default: () => ({ nodes: [] }), type: Object },
@@ -519,6 +520,14 @@ async function changeGroupFilter(id) {
   if (!await fitDiagram()) return;
   persistPositions();
 }
+let appliedFocusRequest = null;
+watch([() => props.focusRequest, () => nodes.value.length, layoutPending], async ([request, count, pending]) => {
+  if (!request?.qualifiedName || request === appliedFocusRequest || !count || pending) return;
+  if (!nodes.value.some((node) => node.id === request.qualifiedName)) return;
+  appliedFocusRequest = request;
+  await locate({ table: request.qualifiedName, column: "" });
+}, { flush: "post" });
+
 async function locate(item) {
   if (!item || layoutPending.value || !nodes.value.length) return;
   checkpoint();

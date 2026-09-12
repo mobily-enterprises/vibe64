@@ -14,6 +14,9 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue`
+- `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
+- `packages/vibe64-system-graph/src/client/subsystemsModel.js`
+- `src/composables/useVibe64AutopilotView.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
@@ -90,3 +93,26 @@ automatic follow-ups that produce no result remain hidden, but an explicitly
 requested final user-facing summary is preserved even though it changes no
 files. Vibe64 displays only Genesis documents and does not infer a parallel
 architecture.
+
+The Subsystems destination reads the selected session's `genesis/subsystems.md`
+through Genesis's version-zero inspection API. The default searchable overview
+shows declared responsibilities, Program membership, owned tables and data used
+from another subsystem, with links to the owning subsystem. It does not infer
+ownership from directories or create operation-to-table dependency edges.
+Program contracts and source links use the generated Program City when available;
+the authored Program files remain directly accessible before generation.
+
+The optional City presents operations as tall buildings and owned tables as low
+teal buildings in their declared subsystem districts. It shares the responsibility
+panel with Overview and retains access to the Machine City. Projects without a
+map can still explore existing Cities; their operations are explicitly unassigned.
+The empty overview can prepare an assistant request to author a map without
+submitting it. Invalid declarations show the inspection error with Retry.
+
+Database inspection is admitted when declared data exists. Table links require
+an exact Stack resource, schema and table match; `default` resolves only against
+a known resource default. Unresolved or missing tables remain visible without a
+working link. Schema tables without a resolved declared owner are listed separately.
+A failed database inspection does not prevent reading the map. Opening a table
+selects the existing ERD without querying records. Source and ERD navigation carry
+the selected subsystem and presentation so Back returns to that context.

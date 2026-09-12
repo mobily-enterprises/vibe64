@@ -152,7 +152,7 @@
         />
       </div>
 
-      <div v-else-if="worldError || error || cityAvailability.state === 'invalid'" class="system-world__state-card system-world__state-card--error">
+      <div v-else-if="worldError || (!programOverride && error) || cityAvailability.state === 'invalid'" class="system-world__state-card system-world__state-card--error">
         <v-icon :icon="mdiAlertOutline" size="32" />
         <strong>{{ cityTitle }} could not render.</strong>
         <span>{{ worldError || error || cityAvailability.error?.message }}</span>
@@ -292,7 +292,7 @@
         </template>
         <template v-else>
           <header>
-            <span>Operations</span>
+            <span>{{ programOverride ? 'Operations & data' : 'Operations' }}</span>
             <strong>{{ buildings.length }}</strong>
           </header>
           <button
@@ -302,7 +302,7 @@
             type="button"
             @click="inspectBuilding(building)"
           >
-            <v-icon :icon="mdiLayersTripleOutline" size="13" />
+            <v-icon :icon="building.kind === 'table' ? mdiDatabaseOutline : mdiLayersTripleOutline" size="13" />
             <span>
               <strong>{{ building.title }}</strong>
               <small>{{ building.subsystem }}</small>
@@ -405,7 +405,7 @@
         </div>
       </aside>
 
-      <aside v-else-if="selectedBuilding" class="system-world__inspector">
+      <aside v-else-if="selectedBuilding && !(sharedInspector && cityKind === 'program')" class="system-world__inspector">
         <span class="system-world__eyebrow">{{ cityKind === 'machine' ? 'Machine file' : 'Program operation' }}</span>
         <h2>{{ selectedBuilding.title }}</h2>
         <p class="system-world__path">{{ selectedBuilding.path }}</p>
@@ -488,7 +488,7 @@
         </div>
       </aside>
 
-      <aside v-else-if="selectedDistrict" class="system-world__inspector">
+      <aside v-else-if="selectedDistrict && !(sharedInspector && cityKind === 'program')" class="system-world__inspector">
         <span class="system-world__eyebrow">{{ cityKind === 'machine' ? 'Directory' : 'Subsystem' }}</span>
         <h2>{{ selectedDistrict.title }}</h2>
         <p class="system-world__path">{{ selectedDistrict.path || (cityKind === 'machine' ? 'Project root' : selectedDistrict.id) }}</p>
@@ -517,7 +517,7 @@
       </div>
 
       <div v-if="currentCity" class="system-world__legend">
-        <span>{{ cityKind === 'machine' ? 'Building height and footprint follow indexed line count · cyan participation and gold implementation tethers come from Genesis implemented-by links' : 'Each building is one public Program operation' }}</span>
+        <span>{{ cityKind === 'machine' ? 'Building height and footprint follow indexed line count · cyan participation and gold implementation tethers come from Genesis implemented-by links' : 'Tall buildings: operations · Low teal buildings: owned tables' }}</span>
         <span>{{ cityKind === 'machine' ? 'Directory' : 'Subsystem' }} terraces follow native Genesis districts</span>
       </div>
     </div>
@@ -585,6 +585,7 @@ import {
   mdiInformationOutline,
   mdiKeyboardOutline,
   mdiLayersTripleOutline,
+  mdiDatabaseOutline,
   mdiMapMarkerPath,
   mdiMapOutline,
   mdiMouse,
@@ -620,6 +621,9 @@ const rendererRevision = "062";
 const CITY_CONTROLS_INTRODUCTION_STORAGE_KEY = "vibe64:city-controls-introduction:v1";
 
 const props = defineProps({
+  programOverride: { type: Object, default: null },
+  initialCity: { type: String, default: "machine" },
+  sharedInspector: { type: Boolean, default: false },
   active: {
     type: Boolean,
     default: false
@@ -639,12 +643,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
+  "select-subsystem",
+  "open-table",
   "open-source-file-immersive",
   "open-source-file"
 ]);
 
 const canvasElement = ref(null);
-const cityKind = ref(GENESIS_MACHINE_CITY_KIND);
+const cityKind = ref(genesisCityKind(props.initialCity));
 const controlsIntroductionOpen = ref(props.active && !cityControlsIntroductionSeen());
 const chosenPresentationRegionId = ref("");
 const hoveredImplementationBundle = ref(null);
@@ -683,7 +689,7 @@ const {
 });
 
 const currentCity = computed(() => (
-  cityKind.value === GENESIS_PROGRAM_CITY_KIND ? programCity.value : machineCity.value
+  cityKind.value === GENESIS_PROGRAM_CITY_KIND ? (props.programOverride || programCity.value) : machineCity.value
 ));
 const worldOverview = computed(() => genesisCityWorld(currentCity.value, cityKind.value, {
   machineCity: machineCity.value,
@@ -757,7 +763,9 @@ const selectedImplementationLinks = computed(() => (
     : []
 ));
 const cityAvailability = computed(() => (
-  systemStatus.value?.cities?.[cityKind.value] || { state: "missing" }
+  cityKind.value === GENESIS_PROGRAM_CITY_KIND && props.programOverride
+    ? { state: "valid" }
+    : systemStatus.value?.cities?.[cityKind.value] || { state: "missing" }
 ));
 const cityTitle = computed(() => (
   cityKind.value === GENESIS_MACHINE_CITY_KIND ? "Machine City" : "Program City"
@@ -769,7 +777,8 @@ const statusLabel = computed(() => {
   if (cityKind.value === GENESIS_MACHINE_CITY_KIND) {
     return `${formatCount(currentCity.value.buildings.length, "file")} · ${formatCount(currentCity.value.functions.length, "function")}`;
   }
-  return `${formatCount(currentCity.value.districts.length, "subsystem")} · ${formatCount(currentCity.value.buildings.length, "operation")}`;
+  const tables = currentCity.value.buildings.filter((building) => building.kind === "table").length;
+  return `${formatCount(currentCity.value.districts.length, "subsystem")} · ${formatCount(currentCity.value.buildings.length - tables, "operation")}${tables ? ` · ${formatCount(tables, "table")}` : ""}`;
 });
 const emptyCityMessage = computed(() => (
   cityKind.value === GENESIS_MACHINE_CITY_KIND
@@ -973,6 +982,12 @@ function openSourceFile(path = "", location = {}) {
 }
 
 function handleImmersiveFileOpen(selection = {}) {
+  const building = buildings.value.find((entry) => entry.id === selection.buildingId);
+  if (building?.kind === "table") {
+    world?.endBuildingPortal({ immediate: true });
+    emit("open-table", building.tableReference);
+    return;
+  }
   const payload = openPayload(selection.path, { immersive: true });
   if (payload) {
     emit("open-source-file-immersive", {
@@ -1068,6 +1083,7 @@ function inspectBuilding(building) {
     return;
   }
   recordWorldNavigation();
+  if (cityKind.value === "program") emit("select-subsystem", building.subsystem);
   selectedBuildingId.value = building.id;
   chosenPresentationRegionId.value = building.presentationRegionId || chosenPresentationRegionId.value;
   selectedDistrict.value = null;
@@ -1081,6 +1097,7 @@ function inspectDistrict(district) {
     return;
   }
   recordWorldNavigation();
+  if (cityKind.value === "program") emit("select-subsystem", district.path);
   selectedBuildingId.value = "";
   selectedDistrict.value = world?.selectDistrict(district.id) || district;
   chosenPresentationRegionId.value = district.presentationRegionId || chosenPresentationRegionId.value;
@@ -1102,6 +1119,7 @@ function inspectSemanticSubsystem(subsystem) {
   selectedBuildingId.value = "";
   selectedDistrict.value = null;
   selectedSemanticOperationId.value = "";
+  emit("select-subsystem", subsystem.path);
   selectedSemanticSubsystemId.value = subsystem.id;
   world?.selectSubsystem(subsystem.id);
 }

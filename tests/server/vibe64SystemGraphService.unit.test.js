@@ -279,3 +279,14 @@ test("refresh delegates to Genesis exactly once and validates its native result"
     ]);
   });
 });
+
+test("subsystems read the authored Genesis map for the selected source without refreshing Cities", async () => {
+  await withTempRoot(async (root) => {
+    const map = { contract: "genesis.subsystems.v0", status: "missing", subsystems: [] };
+    const service = createService({ projectService: projectServiceFor(root),
+      subsystemReader: async ({ projectRoot }) => { assert.equal(projectRoot, root); return map; },
+      refresher: async () => { throw new Error("Reading subsystems must not write indexes"); }
+    });
+    assert.deepEqual(await service.readSubsystems({ sessionId: "session-1" }), { ok: true, ...map });
+  });
+});

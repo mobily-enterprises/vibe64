@@ -152,6 +152,7 @@
             :key="sessionId"
             v-else-if="activeView === 'erd'"
             :layout="erdLayout"
+            :focus-request="openRequest"
             :schema="schema"
             @save-layout="saveDiagramLayout"
             @select-table="selectTableFromErd"
@@ -577,6 +578,7 @@ import { DATA_OVERVIEW_ABSTRACTIONS } from "../../shared/dataOverview.js";
 import DatabaseSqlEditor from "./DatabaseSqlEditor.vue";
 
 const props = defineProps({
+  openRequest: { type: Object, default: null },
   active: {
     default: true,
     type: Boolean
@@ -658,6 +660,9 @@ let disposed = false;
 const navigatorTab = ref("tables");
 const tableSearch = ref("");
 const selectedTableName = ref("");
+watch([() => props.openRequest, () => props.active], ([request, active]) => {
+  if (request?.qualifiedName && active) activeView.value = "erd";
+}, { immediate: true });
 const sqlText = ref("");
 const queryResult = ref(null);
 const activeQueryId = ref("");

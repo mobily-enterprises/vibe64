@@ -21,6 +21,10 @@ function registerRoutes(
   });
   const sessionRoute = "/system-graph/sessions/:sessionId";
 
+  routes.serviceRoute("GET", `${sessionRoute}/subsystems`, {
+    summary: "Read authored subsystem responsibilities and operation/data associations."
+  }, (request) => systemGraph.readSubsystems({ sessionId: request.params.sessionId }));
+
   routes.serviceRoute("GET", `${sessionRoute}/status`, {
     summary: "Read Genesis Machine and Program City availability for an active session."
   }, (request) => {

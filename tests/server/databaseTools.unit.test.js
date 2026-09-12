@@ -386,7 +386,7 @@ test("database values restore binary payloads and serialize JSON for Knex bindin
 
 test("PostgreSQL inspection normalizes every visible object, relationship, index, and comment", async () => {
   const rowsFor = (sql) => {
-    if (sql.startsWith("SELECT current_database()")) return [{ version: "PostgreSQL test" }];
+    if (sql.startsWith("SELECT current_database()")) return [{ version: "PostgreSQL test", default_schema: "public" }];
     if (sql.includes("FROM pg_catalog.pg_class c") && sql.includes("obj_description")) return [{
       comment: "Book records",
       is_updatable: true,
@@ -500,6 +500,7 @@ test("PostgreSQL inspection normalizes every visible object, relationship, index
     knex
   });
 
+  assert.equal(schema.defaultSchema, "public");
   assert.deepEqual(schema.tables.map((table) => table.qualifiedName), [
     "library.books",
     "reporting.book_totals"

@@ -1,4 +1,5 @@
 import {
+  inspectGenesisSubsystems,
   refreshGenesisCities
 } from "@local/vibe64-genesis/server";
 import {
@@ -83,6 +84,7 @@ function settledCityStatus(result, kind) {
 
 function createService({
   cityReader = readGenesisCity,
+  subsystemReader = inspectGenesisSubsystems,
   projectService,
   refresher = refreshGenesisCities
 } = {}) {
@@ -128,6 +130,14 @@ function createService({
   }
 
   return Object.freeze({
+    async readSubsystems(input = {}) {
+      return systemResult(async () => {
+        const context = await systemContext(input.sessionId);
+        const map = await subsystemReader({ projectRoot: context.sourceRoot });
+        return { ok: true, ...map };
+      });
+    },
+
     async readStatus(input = {}) {
       return systemResult(async () => {
         const context = await systemContext(input.sessionId);

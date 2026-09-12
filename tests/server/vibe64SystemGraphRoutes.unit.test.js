@@ -18,6 +18,7 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const calls = [];
       const service = Object.fromEntries([
+        "readSubsystems",
         "readStatus",
         "readMachineCity",
         "readProgramCity",
@@ -42,6 +43,7 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
       });
 
       const routes = [
+        ["GET", "/subsystems", "readSubsystems"],
         ["GET", "/status", "readStatus"],
         ["GET", "/cities/machine", "readMachineCity"],
         ["GET", "/cities/program", "readProgramCity"],
@@ -64,7 +66,7 @@ test("System graph exposes only native Genesis City status, reads, and synchrono
         input: { sessionId: "session-1" },
         method
       })));
-      assert.equal(app.registeredRoutes.length, 4);
+      assert.equal(app.registeredRoutes.length, 5);
     });
   });
 });

@@ -86,7 +86,7 @@ function machineBuildingHeight(lines = 0) {
 }
 
 function buildingHeight(building = {}, cityKind = "machine") {
-  return cityKind === "program" ? 38 : machineBuildingHeight(building.lines);
+  return cityKind === "program" ? (building.kind === "table" ? 20 : 38) : machineBuildingHeight(building.lines);
 }
 
 function buildingWeight(building = {}, cityKind = "machine") {

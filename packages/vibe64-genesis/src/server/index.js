@@ -52,6 +52,7 @@ const {
   inspectProject,
   inspectSkills,
   inspectStackSection,
+  inspectSubsystems,
   projectSessionContext,
   listTemplates,
   setCollaboration,
@@ -168,6 +169,10 @@ function inspectGenesisSkills(options = {}) {
 
 function syncGenesisSkills(options = {}) {
   return runGenesisOperation(syncSkills, options);
+}
+
+function inspectGenesisSubsystems(options = {}) {
+  return runGenesisOperation(inspectSubsystems, options);
 }
 
 function refreshGenesisCities(options = {}) {
@@ -441,6 +446,7 @@ export {
   parseVibe64DeploymentLines,
   parseVibe64WorkspaceSetupLines,
   refreshGenesisCities,
+  inspectGenesisSubsystems,
   renderGenesisPrompt,
   setGenesisCollaboration,
   setGenesisEngineeringProfile,
