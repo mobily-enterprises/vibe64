@@ -67,6 +67,15 @@ including follow-up guidance while a turn is active.
 
 ## Public contract
 
+Codex and OpenCode pass readable, single-quoted command text to the existing
+session command wrapper. Shell quoting preserves literal quotes, substitutions,
+multiline text, and whitespace until managed execution. The wrapper encodes the
+text for the unchanged socket transport and retains session identity validation,
+output, exit status, and session-owned cleanup. Codex displays the wrapper
+`VIBE64_WRAPPER` environment variable without embedding a reconnect warning in every command;
+control failures remain runtime errors. OpenCode unwraps its canonical quoted
+invocations before rewrapping tools or presenting model history.
+
 The shared session command environment exposes `VIBE64_DROP_ZONE`, resolved from
 the session store. Main and task conversations may use that directory to exchange
 files with the person outside Git; runtime-state protections still apply elsewhere.

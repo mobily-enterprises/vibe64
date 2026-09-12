@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFile, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
-  createAgentSessionCommandService
+  createAgentSessionCommandService,
+  prepareAgentSessionCommand
 } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import {
   genesisCommandShimDirectory
@@ -19,6 +22,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
   const sourceRoot = path.join(temporaryRoot, "sessions", "active", sessionId, "source");
   const wrapperHostDir = path.join(temporaryRoot, "wrappers");
   const runCalls = [];
+  let commandExitCode = 0;
   const stopOwnedCalls = [];
   const descriptor = {
     metadata: {
@@ -54,7 +58,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
     async runCommand(request) {
       runCalls.push(request);
       await writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "started chrome\n");
-      await writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, "0\n");
+      await writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, `${commandExitCode}\n`);
       return {
         execution: { id: "execution-1" },
         ok: true
@@ -111,6 +115,43 @@ test("agent shell commands run as session-owned managed executions and drain on 
       Buffer.from(request.baseEnv.VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64, "base64").toString("utf8"),
       command
     );
+
+    await mkdir(sourceRoot, { recursive: true });
+    const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId, wrapperHostDir });
+    const hookPath = new URL("../../packages/vibe64-runtime/src/server/codexSessionCommandHook.js", import.meta.url);
+    for (const original of [
+      command,
+      "  printf '%s\\n' \"$HOME\" '`id`' '$(id)' | cat; # café\n\n",
+      "cat <<'EOF'\nquotes: ' \" $ ` \\\nEOF\n",
+      "printf '%s' \"a'b\" && false || true > result.txt 2>&1 &"
+    ]) {
+      const hook = spawnSync(process.execPath, [hookPath.pathname], {
+        encoding: "utf8",
+        input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: original } })
+      });
+      assert.equal(hook.status, 0, hook.stderr);
+      const rewritten = JSON.parse(hook.stdout).hookSpecificOutput.updatedInput.command;
+      const output = await promisify(execFile)("bash", ["-c", rewritten], {
+        cwd: sourceRoot,
+        env: { ...process.env, ...prepared.env }
+      });
+      assert.equal(output.stdout, "started chrome\n");
+      assert.equal(output.stderr, "");
+      assert.equal(Buffer.from(runCalls.at(-1).baseEnv.VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64, "base64").toString("utf8"), original);
+    }
+    commandExitCode = 7;
+    await assert.rejects(promisify(execFile)(prepared.hostWrapperPath, ["exit 7"], {
+      cwd: sourceRoot,
+      env: { ...process.env, ...prepared.env }
+    }), (error) => error.code === 7 && error.stderr === "started chrome\n" && error.stdout === "");
+    const callCount = runCalls.length;
+    await assert.rejects(promisify(execFile)(prepared.hostWrapperPath, ["printf denied"], {
+      env: { ...process.env, ...prepared.env, VIBE64_AGENT_SESSION_COMMAND_TOKEN: "" }
+    }), (error) => error.code === 1 && /Reconnect the assistant/.test(error.stderr));
+    await assert.rejects(promisify(execFile)(prepared.hostWrapperPath, ["printf denied"], {
+      env: { ...process.env, ...prepared.env, VIBE64_AGENT_SESSION_COMMAND_TOKEN: "invalid" }
+    }), (error) => error.code === 1 && /identity is invalid/.test(error.stderr));
+    assert.equal(runCalls.length, callCount);
 
     const closed = await service.closeAllForSession(sessionId);
     assert.equal(closed.ok, true);

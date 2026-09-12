@@ -223,6 +223,8 @@ reload, and navigation controls. Starting an application still requires valid
 launch settings.
 Commands and background processes started for a session remain owned by that
 session and stop with it, even while the assistant service itself is shared.
+Assistant terminal commands retain readable shell text through the session
+wrapper instead of displaying an encoded payload and an inline reconnect warning.
 
 Temporary repair chats keep progress collapsible inside the conversation and
 show one plain working status above the composer. Switching sessions preserves

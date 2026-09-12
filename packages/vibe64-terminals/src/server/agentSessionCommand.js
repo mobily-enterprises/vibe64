@@ -59,7 +59,7 @@ const VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV = "VIBE64_AGENT_SESSION_COMMAN
 const VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_SESSION_COMMAND_SESSION_ID";
 const VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV = "VIBE64_AGENT_SESSION_COMMAND_SOCKET";
 const VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV = "VIBE64_AGENT_SESSION_COMMAND_TOKEN";
-const VIBE64_AGENT_SESSION_COMMAND_WRAPPER_ENV = "VIBE64_AGENT_SESSION_COMMAND_WRAPPER";
+const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
@@ -69,7 +69,7 @@ const AGENT_SESSION_CONTROL_ENV_NAMES = new Set([
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_WRAPPER_ENV,
+  VIBE64_WRAPPER_ENV,
   "VIBE64_EXECUTION_ID"
 ]);
 const AGENT_SESSION_DESKTOP_BUS_ENV_NAMES = new Set([
@@ -126,7 +126,7 @@ const sessionId = String(process.env.${VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_E
 const token = String(process.env.${VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV} || "").trim();
 const generationId = String(process.env.${VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV} || "").trim();
 const version = String(process.env.${VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV} || "").trim();
-const commandBase64 = String(process.argv[2] || "").trim();
+const command = String(process.argv[2] || "");
 
 function fail(message, code = 1) {
   process.stderr.write(String(message || "Vibe64 session command failed.") + "\\n");
@@ -164,10 +164,10 @@ function requestSocket(body) {
 if (path.basename(process.argv[1] || "") !== expectedName) fail("Unsupported Vibe64 session command wrapper.");
 if (!socketPath || !sessionId || !token || !generationId) fail("vibe64_agent_control_unavailable: Session command control is unavailable. Reconnect the assistant.");
 if (version !== expectedVersion) fail("vibe64_agent_control_unavailable: Session command control is outdated. Reconnect the assistant.");
-if (!commandBase64 || process.argv.length !== 3) fail("Vibe64 session command input is invalid.", 2);
+if (!command || process.argv.length !== 3) fail("Vibe64 session command input is invalid.", 2);
 
 const responseText = await requestSocket({
-  commandBase64,
+  commandBase64: Buffer.from(command, "utf8").toString("base64url"),
   cwd: process.cwd(),
   env: process.env,
   generationId,
@@ -784,7 +784,7 @@ async function prepareAgentSessionCommand({
       [VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
       [VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
       [VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV]: server.token,
-      [VIBE64_AGENT_SESSION_COMMAND_WRAPPER_ENV]: wrapperHostPath(normalizedWrapperHostDir)
+      [VIBE64_WRAPPER_ENV]: wrapperHostPath(normalizedWrapperHostDir)
     },
     hostSocketPath: commandSocketHostPath(normalizedWrapperHostDir),
     hostWrapperPath: wrapperHostPath(normalizedWrapperHostDir),
@@ -799,7 +799,7 @@ export {
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
-  VIBE64_AGENT_SESSION_COMMAND_WRAPPER_ENV,
+  VIBE64_WRAPPER_ENV,
   createAgentSessionCommandService,
   prepareAgentSessionCommand
 };

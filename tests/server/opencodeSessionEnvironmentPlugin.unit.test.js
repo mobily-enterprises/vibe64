@@ -9,11 +9,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js";
 
 function wrappedCommand(wrapperPath, command) {
-  return `'${wrapperPath}' '${Buffer.from(command, "utf8").toString("base64url")}'`;
-}
-
-function paddedWrappedCommand(wrapperPath, command) {
-  return `'${wrapperPath}' '${Buffer.from(command, "utf8").toString("base64")}'`;
+  return [wrapperPath, command].map((value) => `'${value.replaceAll("'", `'"'"'`)}'`).join(" ");
 }
 
 test("OpenCode raises output only for models with an advertised output limit", async () => {
@@ -96,7 +92,7 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
     await writeFile(registryPath, JSON.stringify({
       sessions: [{
         env: {
-          VIBE64_AGENT_SESSION_COMMAND_WRAPPER: wrapperPath
+          VIBE64_WRAPPER: wrapperPath
         },
         upstreamSessionId: "upstream-session-1",
         workdir: "/managed/sessions/session-1/source"
@@ -136,17 +132,17 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
     }, copiedNestedWrapper);
     assert.equal(copiedNestedWrapper.args.command, wrapped);
 
-    const paddedWrapper = paddedWrappedCommand(wrapperPath, "ps -p 4242 -o pid,cmd");
-    const copiedPaddedWrapper = {
-      args: { command: paddedWrapper }
+    const quotedWrapper = wrappedCommand(wrapperPath, "printf '%s\\n' \"$HOME\" | cat\n# café");
+    const copiedQuotedWrapper = {
+      args: { command: quotedWrapper }
     };
     await plugin["tool.execute.before"]({
       sessionID: "upstream-session-1",
       tool: "bash"
-    }, copiedPaddedWrapper);
+    }, copiedQuotedWrapper);
     assert.equal(
-      copiedPaddedWrapper.args.command,
-      wrappedCommand(wrapperPath, "ps -p 4242 -o pid,cmd")
+      copiedQuotedWrapper.args.command,
+      wrappedCommand(wrapperPath, "printf '%s\\n' \"$HOME\" | cat\n# café")
     );
 
     const storedPart = {
@@ -164,7 +160,7 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
           storedPart,
           {
             state: {
-              input: { command: paddedWrapper },
+              input: { command: quotedWrapper },
               status: "completed"
             },
             tool: "bash",
@@ -186,7 +182,7 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
     };
     await plugin["experimental.chat.messages.transform"]({}, history);
     assert.equal(history.messages[0].parts[0].state.input.command, command);
-    assert.equal(history.messages[0].parts[1].state.input.command, "ps -p 4242 -o pid,cmd");
+    assert.equal(history.messages[0].parts[1].state.input.command, "printf '%s\\n' \"$HOME\" | cat\n# café");
     assert.equal(history.messages[0].parts[2].state.input.command, "printf ordinary");
     assert.equal(history.messages[1].parts[0].state.input.command, nestedWrapper);
     assert.equal(storedPart.state.input.command, nestedWrapper);

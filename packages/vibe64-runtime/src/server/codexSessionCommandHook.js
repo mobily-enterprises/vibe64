@@ -1,7 +1,7 @@
 import process from "node:process";
 
 const INPUT_MAX_BYTES = 2 * 1024 * 1024;
-const WRAPPER_ENV_NAME = "VIBE64_AGENT_SESSION_COMMAND_WRAPPER";
+const WRAPPER_ENV_NAME = "VIBE64_WRAPPER";
 
 async function readInput() {
   const chunks = [];
@@ -20,13 +20,13 @@ async function readInput() {
 }
 
 function hookOutput(command = "") {
-  const encoded = Buffer.from(command, "utf8").toString("base64url");
+  const quoted = `'${command.replaceAll("'", `'"'"'`)}'`;
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "allow",
       updatedInput: {
-        command: `"\${${WRAPPER_ENV_NAME}:?Vibe64 session command control is unavailable. Reconnect the assistant.}" '${encoded}'`
+        command: `"$${WRAPPER_ENV_NAME}" ${quoted}`
       }
     }
   };

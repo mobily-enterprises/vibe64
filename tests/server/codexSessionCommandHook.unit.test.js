@@ -27,9 +27,9 @@ test("Codex rewrites every Bash tool command through the session-owned command w
 
   assert.equal(output.hookSpecificOutput.permissionDecision, "allow");
   const rewritten = output.hookSpecificOutput.updatedInput.command;
-  assert.match(rewritten, /VIBE64_AGENT_SESSION_COMMAND_WRAPPER/u);
-  const encoded = rewritten.match(/'([A-Za-z0-9_-]+)'$/u)?.[1] || "";
-  assert.equal(Buffer.from(encoded, "base64url").toString("utf8"), command);
+  assert.match(rewritten, /VIBE64_WRAPPER/u);
+  assert.equal(rewritten, `"$VIBE64_WRAPPER" '${command}'`);
+  assert.doesNotMatch(rewritten, /Reconnect the assistant/u);
 });
 
 test("Codex denies a Bash tool call without command text", () => {

@@ -49,7 +49,7 @@ function unavailableCommand() {
 
 function unwrapSessionCommand(command = "", selected = null) {
   const original = String(command);
-  const wrapperPath = text(selected?.env?.VIBE64_AGENT_SESSION_COMMAND_WRAPPER);
+  const wrapperPath = text(selected?.env?.VIBE64_WRAPPER);
   if (!wrapperPath) {
     return original;
   }
@@ -57,16 +57,8 @@ function unwrapSessionCommand(command = "", selected = null) {
   if (!original.startsWith(prefix) || !original.endsWith("'")) {
     return original;
   }
-  const encoded = original.slice(prefix.length, -1);
-  if (!/^[A-Za-z0-9+/_-]*={0,2}$/u.test(encoded)) {
-    return original;
-  }
-  const normalized = encoded
-    .replace(/=+$/u, "")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_");
-  const decoded = Buffer.from(normalized, "base64url").toString("utf8");
-  return Buffer.from(decoded, "utf8").toString("base64url") === normalized
+  const decoded = original.slice(prefix.length, -1).replaceAll(`'"'"'`, "'");
+  return `${shellQuote(wrapperPath)} ${shellQuote(decoded)}` === original
     ? decoded
     : original;
 }
@@ -82,14 +74,14 @@ function ordinarySessionCommand(command = "", selected = null) {
 }
 
 function sessionCommand(command = "", selected = null) {
-  const wrapperPath = text(selected?.env?.VIBE64_AGENT_SESSION_COMMAND_WRAPPER);
+  const wrapperPath = text(selected?.env?.VIBE64_WRAPPER);
   if (!wrapperPath) {
     return unavailableCommand();
   }
   const ordinary = ordinarySessionCommand(command, selected);
   return [
     shellQuote(wrapperPath),
-    shellQuote(Buffer.from(ordinary, "utf8").toString("base64url"))
+    shellQuote(ordinary)
   ].join(" ");
 }
 
