@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, nextTick, reactive, ref } from "vue";
+import { effectScope, nextTick, ref } from "vue";
 
 const mocks = vi.hoisted(() => ({ beforeUnmount: [] }));
 
@@ -116,26 +116,8 @@ describe("useVibe64SourceEditorFileSync", () => {
     expect(FakeEventSource.instances).toHaveLength(1);
   });
 
-  it("closes and reopens observation through the actual Autopilot and file-area bindings", async () => {
-    const autopilot = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
-      import.meta.url
-    ), "utf8");
-    const files = readFileSync(new URL(
-      "../../src/components/studio/vibe64-session/Vibe64SessionFiles.vue",
-      import.meta.url
-    ), "utf8");
-    const filesTag = autopilot.match(/<Vibe64SessionFiles\b[\s\S]*?\/>/u)?.[0];
-    const filesBinding = filesTag?.match(/:active="([^"]+)"/u)?.[1];
-    const editorTag = files.match(/<Vibe64SessionSourceEditor\b[\s\S]*?\/>/u)?.[0];
-    const editorBinding = editorTag?.match(/:active="([^"]+)"/u)?.[1];
-    expect(filesBinding).toBeDefined();
-    expect(editorBinding).toBeDefined();
-    const filesActive = new Function("props", "rightPaneTab", `return (${filesBinding});`);
-    const editorActive = new Function("active", "area", `return (${editorBinding});`);
-    const props = reactive({ active: true, projectPane: "dashboard" });
-    const rightPaneTab = ref("editor");
-    const area = ref("repo");
+  it("closes, reopens and ignores obsolete events until disposal", async () => {
+    const active = ref(true);
     const path = ref("src/app.js");
     const onChange = vi.fn();
     const onError = vi.fn();
@@ -147,7 +129,7 @@ describe("useVibe64SourceEditorFileSync", () => {
 
     try {
       observationScope.run(() => useVibe64SourceEditorFileSync({
-        active: () => editorActive(filesActive(props, rightPaneTab.value), area.value),
+        active: () => active.value,
         onChange,
         onError,
         onReady,
@@ -158,25 +140,24 @@ describe("useVibe64SourceEditorFileSync", () => {
       expect(FakeEventSource.instances).toHaveLength(1);
       const first = FakeEventSource.instances[0];
       const closeFirst = vi.spyOn(first, "close");
-      expect(first.closed).toBe(false);
       first.emit("vibe64.source-editor.sync.ready", { path: path.value });
       first.emit("vibe64.source-editor.file.changed", { path: path.value });
       expect(onReady).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledTimes(1);
 
-      props.active = false;
+      active.value = false;
       await nextTick();
       expect(closeFirst).toHaveBeenCalledTimes(1);
       expect(first.closed).toBe(true);
       expect(FakeEventSource.instances).toHaveLength(1);
       first.emit("vibe64.source-editor.sync.ready", { path: path.value });
       first.emit("vibe64.source-editor.file.changed", { path: path.value });
-      first.onerror?.();
+      first.onerror();
       expect(onReady).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(onError).not.toHaveBeenCalled();
 
-      props.active = true;
+      active.value = true;
       await nextTick();
       expect(FakeEventSource.instances).toHaveLength(2);
       const reopened = FakeEventSource.instances[1];
@@ -191,34 +172,43 @@ describe("useVibe64SourceEditorFileSync", () => {
       expect(onReady).toHaveBeenCalledTimes(2);
       expect(onChange).toHaveBeenCalledTimes(2);
 
-      area.value = "drop-zone";
-      await nextTick();
-      expect(closeReopened).toHaveBeenCalledTimes(1);
-      expect(reopened.closed).toBe(true);
-      expect(FakeEventSource.instances).toHaveLength(2);
-      area.value = "repo";
-      await nextTick();
-      expect(FakeEventSource.instances).toHaveLength(3);
-      const returnedToRepo = FakeEventSource.instances[2];
-      const closeReturnedToRepo = vi.spyOn(returnedToRepo, "close");
-      expect(returnedToRepo.url).toBe(first.url);
-      expect(returnedToRepo.closed).toBe(false);
-
       expect(mocks.beforeUnmount).toHaveLength(1);
       mocks.beforeUnmount[0]();
       observationScope.stop();
-      expect(closeReturnedToRepo).toHaveBeenCalledTimes(1);
-      expect(returnedToRepo.closed).toBe(true);
       expect(closeReopened).toHaveBeenCalledTimes(1);
       expect(reopened.closed).toBe(true);
       expect(closeFirst).toHaveBeenCalledTimes(1);
-      props.active = false;
+      reopened.emit("vibe64.source-editor.sync.ready", { path: path.value });
+      reopened.emit("vibe64.source-editor.file.changed", { path: path.value });
+      reopened.onerror();
+      expect(onReady).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onError).not.toHaveBeenCalled();
+      active.value = false;
       await nextTick();
-      props.active = true;
+      active.value = true;
       await nextTick();
-      expect(FakeEventSource.instances).toHaveLength(3);
+      expect(FakeEventSource.instances).toHaveLength(2);
     } finally {
       observationScope.stop();
     }
+  });
+
+  it("keeps the parent and Files active bindings as source contracts", () => {
+    const autopilot = readFileSync(new URL(
+      "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+      import.meta.url
+    ), "utf8");
+    const files = readFileSync(new URL(
+      "../../src/components/studio/vibe64-session/Vibe64SessionFiles.vue",
+      import.meta.url
+    ), "utf8");
+    // Check the declared bindings; this does not mount or exercise the parent components.
+    expect(autopilot).toMatch(
+      /<Vibe64SessionFiles\b[^>]*:active="props\.active && props\.projectPane === 'dashboard' && rightPaneTab === 'editor'"/u
+    );
+    expect(files).toMatch(
+      /<Vibe64SessionSourceEditor\b[^>]*:active="active && area === 'repo'"/u
+    );
   });
 });
