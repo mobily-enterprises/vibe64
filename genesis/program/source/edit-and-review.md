@@ -1357,3 +1357,17 @@ Pipedrive supports ordinary CRM record reads and basic create/update operations.
 Replicate setup explains model API inputs, explicit paid prediction submission, polling/cancellation and output retention. The project owns the token in Env, job ownership and media presentation; the editor does not execute models or provide a media studio.
 
 Resend setup explains Full-access key storage in project Env, DNS-verified senders, opted-in contact segments, HTML unsubscribe links and draft review before explicit broadcast sending. The generated app owns contacts, templates, recipient authorization and delivery UI; public Vibe64 provides configuration, not a shared mail service. Transactional recovery composition retains its application-owned idempotency key.
+
+The Integrations catalog groups available services by editor-owned categories,
+with counts and collapsible groups. Search matches service names, descriptions
+and category titles, exposes matching groups and omits empty ones. Clearing search
+restores the person's expanded groups. Configured entries remain separate and
+searchable in Development and Production. Vendor icons are bundled locally and
+shared by available services, configured entries and the selected detail. Their
+sources are recorded alongside the assets; no third-party logo request is made
+while browsing. The generic AI integration represents several vendors and uses
+an AI symbol. Unknown future providers remain available under Other services.
+
+Presentation sources: `src/lib/integrationCatalogue.js`,
+`src/components/studio/IntegrationServiceLogo.vue`, and
+`src/components/studio/IntegrationsPanel.vue`.

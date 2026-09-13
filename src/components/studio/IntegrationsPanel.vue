@@ -19,6 +19,8 @@ import paymentSchema from "@jskit-ai/payments-core/configuration.schema.json";
 import paymentConformance from "@jskit-ai/payments-core/conformance.json";
 import paymentContract from "@jskit-ai/payments-core/docs/contract.md?raw";
 import paymentConformanceGuide from "@jskit-ai/payments-core/docs/conformance.md?raw";
+import IntegrationServiceLogo from "./IntegrationServiceLogo.vue";
+import { groupIntegrationProviders } from "@/lib/integrationCatalogue.js";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, required: true } });
@@ -72,11 +74,13 @@ watch(requestedIntegration, (id) => {
 const discardOpen = ref(false);
 const removeOpen = ref(false);
 const disconnectOpen = ref(false);
-const providers = [googleCalendarDefinition, ...connectorDefinitions]
-  .sort((left, right) => left.name.localeCompare(right.name));
-const filteredProviders = computed(() => providers.filter((provider) =>
-  `${provider.name} ${provider.description}`.toLowerCase().includes(String(search.value || "").toLowerCase())
-));
+const providers = [googleCalendarDefinition, ...connectorDefinitions];
+const providerGroups = computed(() => groupIntegrationProviders(providers, search.value));
+const expandedCategories = ref([]);
+const visibleCategories = computed({
+  get: () => String(search.value || "").trim() ? providerGroups.value.map((group) => group.id) : expandedCategories.value,
+  set: (value) => { if (!String(search.value || "").trim()) expandedCategories.value = value; }
+});
 const entries = computed(() => Object.entries(configuration.value?.integrations || {}));
 const filteredEntries = computed(() => entries.value.filter(([id, entry]) =>
   `${id} ${entry.displayName || ""} ${entry.provider}`.toLowerCase().includes(String(search.value || "").toLowerCase())
@@ -278,21 +282,34 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <v-list-item
               v-for="[id, entry] in filteredEntries" :key="id" :active="selectedId === id" min-height="48"
               :title="entry.displayName || entry.provider" :subtitle="id" @click="selectedId = id"
-            />
+            >
+              <template #prepend><IntegrationServiceLogo :provider="entry.provider" /></template>
+            </v-list-item>
           </v-list>
           <p v-else role="status" class="text-body-medium">{{ entries.length ? 'No configured integrations match your search.' : 'No integrations configured yet.' }}</p>
           <h2 v-if="!production" class="text-title-medium mt-6 mb-2">Available services</h2>
-          <v-list v-if="!production && filteredProviders.length" aria-label="Available services" bg-color="transparent">
-            <v-list-item v-for="entry in filteredProviders" :key="entry.id" :title="entry.name" :subtitle="entry.description">
-              <template #append><v-btn :aria-label="`Add ${entry.name}`" height="48" variant="text" :disabled="disabled" @click="add(entry)">Add</v-btn></template>
-            </v-list-item>
-          </v-list>
+          <v-expansion-panels v-if="!production && providerGroups.length" v-model="visibleCategories" multiple variant="accordion" aria-label="Available services">
+            <v-expansion-panel v-for="group in providerGroups" :key="group.id" :value="group.id">
+              <v-expansion-panel-title min-height="56">
+                <span class="text-title-small">{{ group.title }}</span>
+                <v-chip class="ml-3" size="small" variant="tonal">{{ group.providers.length }}</v-chip>
+              </v-expansion-panel-title>
+              <v-expansion-panel-text>
+                <v-list :aria-label="group.title" bg-color="transparent">
+                  <v-list-item v-for="entry in group.providers" :key="entry.id" :title="entry.name" :subtitle="entry.description">
+                    <template #prepend><IntegrationServiceLogo :provider="entry.id" /></template>
+                    <template #append><v-btn :aria-label="`Add ${entry.name}`" height="48" variant="text" :disabled="disabled" @click="add(entry)">Add</v-btn></template>
+                  </v-list-item>
+                </v-list>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
           <p v-else-if="!production" role="status" class="text-body-medium">No services match your search.</p>
         </aside>
         <main class="integrations-panel__detail">
           <template v-if="selected">
             <header class="integrations-panel__header mb-4">
-              <div><h2>{{ selected.displayName || selected.provider }}</h2><p>Application configuration</p></div>
+              <div class="d-flex align-center"><IntegrationServiceLogo :provider="selected.provider" /><div><h2>{{ selected.displayName || selected.provider }}</h2><p>Application configuration</p></div></div>
               <v-btn v-if="!production" height="48" variant="text" color="error" :disabled="disabled" @click="removeOpen = true">Remove</v-btn>
             </header>
             <section aria-label="Application connection" class="mb-6">

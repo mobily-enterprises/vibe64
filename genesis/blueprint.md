@@ -132,7 +132,10 @@ when its setup commands stay the same. People can also explicitly rerun a
 previously successful preparation to repair missing installed dependencies.
 
 People can configure application integrations in the session's Integrations
-page. The form reads and writes the same portable configuration a person or AI
+page. Available services are grouped into collapsible categories with counts.
+Search narrows the services within each category and hides empty groups. Small
+vendor icons identify services in the catalog, saved configurations and detail.
+The form reads and writes the same portable configuration a person or AI
 can edit from the command line. Secrets stay in Env. n8n setup can discover the instance’s public OAuth settings
 on request, then guide client registration and consent using the application’s
 own callback and credentials. Discovery updates the draft without connecting
