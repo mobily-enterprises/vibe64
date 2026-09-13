@@ -25,6 +25,10 @@ asks the session's selected assistant to give that exact checkpoint a concise
 commit subject, and publishes one ordinary commit to the exact configured
 GitHub, managed-Git, or local-source authority. It refuses ambiguous authority,
 changed session history, dirty local authority, or a moving canonical branch.
+Assistant naming is optional: provider, account, invalid-title, or cleanup failures
+produce a visible fallback notice and a deterministic checkpoint-based subject.
+Failed temporary-thread ownership remains intact for safe cleanup; it does not
+prevent repository persistence. Git authority and checkpoint checks still apply.
 Worktree edits made after capture are left as unsaved work on top of the named
 checkpoint. The non-force publication itself rejects a stale concurrent
 publisher; Save does not inspect sibling worktrees first. Progress and bounded

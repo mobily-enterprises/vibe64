@@ -1480,6 +1480,19 @@ async function stopCodexAppServerRuntime(options = {}) {
         stopped: false
       };
     }
+    const expectedAccount = normalizeAgentText(options.expectedAccountIdentitySignature);
+    if (expectedAccount) {
+      // A replacement runtime is installed only after the previous process has
+      // drained under this same lock. Never stop that replacement for stale
+      // ephemeral-thread cleanup.
+      if (!codexAppServerProcessMetadataIsIdentifiable(existing, runtimeDir) ||
+          !/^sha256:[a-f0-9]{64}$/u.test(existing.accountIdentitySignature)) {
+        return { processExitVerified: false, runtimeDirRemoved: false, stopped: false };
+      }
+      if (existing.accountIdentitySignature !== expectedAccount) {
+        return { ownershipSuperseded: true, processExitVerified: false, runtimeDirRemoved: false, stopped: false };
+      }
+    }
     processStop = await stopCodexAppServerProcess(runtimeDir, options);
     if (processStop.processExitVerified === true && preserveProcessExitProof) {
       const metadata = await readCodexAppServerMetadata(runtimeDir);
@@ -3994,12 +4007,14 @@ class CodexAppServerAgentProvider {
   }
 
   async stopRuntime({
+    expectedAccountIdentitySignature = "",
     preserveProcessExitProof = false
   } = {}) {
     this.close();
     const runtime = this.runtime || {};
     const result = await stopCodexAppServerRuntime({
       ...this.options,
+      expectedAccountIdentitySignature,
       preserveProcessExitProof,
       runtimeDir: runtime.runtimeDir || this.options.runtimeDir
     });

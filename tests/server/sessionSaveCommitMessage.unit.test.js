@@ -176,7 +176,7 @@ test("an account switch blocks commit-title generation and preserves failed clea
   assert.equal(cleanupCalls, 1);
 });
 
-test("invalid, failed, and uncleared assistant results stop Save", async () => {
+test("invalid, failed, and uncleared assistant results reject AI naming", async () => {
   assert.throws(
     () => normalizeSessionSaveCommitMessage("Save Vibe64 work"),
     (error) => error.code === "vibe64_session_save_message_generic"
@@ -256,7 +256,7 @@ test("commit-message cleanup requires an explicit successful deletion result", a
     }
   }), (error) => (
     error.code === "vibe64_session_save_message_cleanup_failed" &&
-    /Retry Save/u.test(error.message)
+    /Cleanup will be retried/u.test(error.message)
   ));
 });
 

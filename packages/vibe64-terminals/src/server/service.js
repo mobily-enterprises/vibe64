@@ -1711,22 +1711,45 @@ function createService({
           session,
           vibe64User: input.vibe64User || null
         };
-        const providerDescription = await sessionAgent.describeProvider(agentContext);
-        const commitTitle = await generateSessionSaveCommitMessage({
-          agentContext,
-          changes: saveMessageInput.changes,
-          deleteThread: (threadInput, options) => sessionAgent.deleteDetachedChatThread(
-            normalizedSessionId,
-            threadInput,
-            options
-          ),
-          runAgentTurn: (turnInput, options) => sessionAgent.streamDetachedChatTurn(
-            normalizedSessionId,
-            turnInput,
-            options
-          ),
-          expectedAccountIdentitySignature: providerDescription.accountIdentitySignature
-        });
+        let commitTitle;
+        try {
+          const providerDescription = await sessionAgent.describeProvider(agentContext);
+          commitTitle = await generateSessionSaveCommitMessage({
+            agentContext,
+            changes: saveMessageInput.changes,
+            deleteThread: (threadInput, options) => sessionAgent.deleteDetachedChatThread(
+              normalizedSessionId,
+              threadInput,
+              options
+            ),
+            runAgentTurn: (turnInput, options) => sessionAgent.streamDetachedChatTurn(
+              normalizedSessionId,
+              turnInput,
+              options
+            ),
+            expectedAccountIdentitySignature: providerDescription.accountIdentitySignature
+          });
+        } catch (error) {
+          // Naming is optional. Leave failed thread ownership intact and let the
+          // repository owner enforce the normal checkpoint and publish checks.
+          commitTitle = {
+            executionProfile: null,
+            subject: `Save work ${saveMessageInput.checkpoint.checkpointTree.slice(0, 12)}`
+          };
+          logOperationalEvent(logger, "warn", {
+            code: error.code || "vibe64_session_save_message_failed",
+            component: "vibe64.session_save",
+            event: "vibe64.session_save.message_fallback",
+            operationId: input.operationId,
+            sessionId: normalizedSessionId
+          }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
+          await input.onProgress?.({
+            code: error.code || "vibe64_session_save_message_failed",
+            kind: "message",
+            message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
+            stage: "message-fallback"
+          });
+        }
         await input.onProgress?.({
           executionProfile: commitTitle.executionProfile,
           kind: "message",

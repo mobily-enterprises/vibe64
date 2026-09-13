@@ -175,7 +175,15 @@ and provider context remain current. If the runtime has disappeared, Vibe64
 atomically retires the stale ownership. If the provider context changed under
 the same account, it first verifies retirement of the earlier runtime and then
 retires the ownership, allowing a fresh bounded helper instead of reporting a
-false account conflict. A real account change remains blocked.
+false account conflict. A real account change cannot adopt or delete the earlier
+account's threads. Cleanup-required records can be retired through the local
+runtime owner: it verifies shutdown of that account's process, or verifies that
+a replacement was already installed after shutdown. It never stops a replacement
+for stale cleanup. The existing background-task history records retirement and
+cleanup failures; unverified records remain for retry on the next reconciliation.
+Each reconciliation reports one result per session: any remaining failure keeps
+the cleanup status failed, even when other records were successfully retired.
+Prompt-hint cancellation awaits interruption before attempting thread deletion.
 
 Database Copilot begins with only bounded database identity and object counts.
 Its temporary helper can search the refreshed schema, list object names and

@@ -636,7 +636,14 @@ function createSessionPromptHintsService({
       executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
       threadId: job.threadId,
       turnId: job.turnId
-    }, agentOptions(job.context, job.vibe64User))).catch((error) => {
+    }, agentOptions(job.context, job.vibe64User))).then((result) => {
+      if (result?.ok !== true) {
+        const error = new Error(result?.error || "Prompt hint interruption was not confirmed.");
+        error.code = result?.code || "vibe64_prompt_hints_interrupt_unconfirmed";
+        throw error;
+      }
+      return result;
+    }).catch((error) => {
       reportDiagnostic("vibe64_prompt_hints_interrupt_failed", error, {
         sessionId: job.sessionId
       });
@@ -691,6 +698,7 @@ function createSessionPromptHintsService({
     } finally {
       if (job.threadId) {
         try {
+          await job.interruptPromise;
           const cleanup = await deleteAgentThread(job.sessionId, {
             executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
             threadId: job.threadId

@@ -1528,6 +1528,13 @@ async function withConversationController(operation, {
           return session;
         },
         projectContextRoot,
+        store: {
+          async writeBackgroundTaskEvent(sessionId, taskId, entry) {
+            captures.cleanupEvents ||= [];
+            captures.cleanupEvents.push({ sessionId, taskId, ...entry });
+            return entry.patch;
+          }
+        },
         stateRoot: projectRuntimeRoot
       };
     },
@@ -7256,7 +7263,7 @@ test("renewal freeze cannot cross persisted economy runtime identity recovery", 
   });
 });
 
-test("failed session cleanup retains economy ownership and succeeds on explicit retry", async () => {
+test("failed session cleanup retains economy ownership and retries during later helper admission", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
     const executionProfile = sourceExplanationEconomyProfile();
     const outputSchema = sourceExplanationOutputSchema();
@@ -7293,7 +7300,7 @@ test("failed session cleanup retains economy ownership and succeeds on explicit 
     assert.equal(followUp.ok, false);
     assert.equal(followUp.code, "vibe64_codex_economy_thread_unavailable");
     assert.equal(captures.turns.length, 1);
-    assert.deepEqual(captures.deletes, ["conversation-1"]);
+    assert.deepEqual(captures.deletes, ["conversation-1", "conversation-1"]);
 
     await controller.closeAllForSession("session-1");
     assert.deepEqual(captures.deletes, ["conversation-1", "conversation-1"]);
@@ -8474,3 +8481,151 @@ test("economy work rejects an account switch before exposing the result", async 
     assert.deepEqual(captures.deletes, ["conversation-1"]);
   });
 });
+
+for (const [outcome, stopResult, succeeds] of [
+  ["stopped", { processExitVerified: true }, true],
+  ["replaced", { ownershipSuperseded: true }, true],
+  ["unverified", { stopped: false, processExitVerified: false }, false]
+]) {
+  test(`account-switch cleanup retires only a verified old runtime: ${outcome}`, async () => {
+    await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
+      simulateControllerCrash, subscribers }) => {
+      const executionProfile = sourceExplanationEconomyProfile();
+      const pending = controller.runDetachedChatTurn("session-1", {
+        executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Temporary work."
+      });
+      await waitForCapturedTurns(captures, 1);
+      completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Done." }) });
+      const first = await pending;
+      captures.failDeletes = 1;
+      const failed = await controller.deleteDetachedChatThread("session-1", {
+        executionProfile, threadId: first.threadId
+      });
+      assert.equal(failed.ok, false);
+      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+      assert.equal((await ledger.readAll()).records[0].lifecycle, "cleanup_required");
+      const runtime = projectService.createRuntime();
+      const auditStore = createVibe64SessionStore({
+        projectContextRoot: runtime.projectContextRoot,
+        projectRuntimeRoot,
+        projectSessionSourceRoot: path.resolve((await runtime.getSession()).metadata.source_path, "../../..")
+      });
+      await auditStore.createSession({
+        sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
+      });
+      projectService.createRuntime = () => ({ ...runtime, store: auditStore });
+      simulateControllerCrash();
+      const switched = restartedCaptures(captures, {
+        runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
+        stopRuntimeResult: stopResult
+      });
+      const restarted = createRestartedController({ captures: switched, projectService });
+      const result = await restarted.deleteDetachedChatThread("session-1", {
+        executionProfile, threadId: first.threadId
+      });
+      assert.equal(result.ok, succeeds, JSON.stringify(result));
+      assert.equal(switched.deletes.length, 0, "Never delete a thread through the other account");
+      assert.deepEqual(switched.stopRuntimeOptions[0], {
+        expectedAccountIdentitySignature: TEST_ACCOUNT_IDENTITY_SIGNATURE
+      });
+      assert.equal((await ledger.readAll()).records.length, succeeds ? 0 : 1);
+      const audit = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      assert.equal(audit.status, succeeds ? "ready" : "failed");
+      assert.ok(audit.events.some((event) => succeeds
+        ? event.retiredThreadIds.includes(first.threadId)
+        : event.failed.some((failure) => failure.threadId === first.threadId)));
+      if (!succeeds) {
+        switched.stopRuntimeResult = { ownershipSuperseded: true };
+        await restarted.executionProfileModelCatalog("session-1");
+        assert.equal((await ledger.readAll()).records.length, 0, "Next helper admission retries cleanup");
+        assert.equal(switched.deletes.length, 0);
+      }
+    });
+  });
+}
+
+test("helper admission retries same-account cleanup without a controller restart", async () => {
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const executionProfile = sourceExplanationEconomyProfile();
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Done." }) });
+    const first = await pending;
+    captures.failDeletes = 1;
+    assert.equal((await controller.deleteDetachedChatThread("session-1", {
+      executionProfile, threadId: first.threadId
+    })).ok, false);
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    assert.equal((await ledger.readAll()).records.length, 1);
+    await controller.executionProfileModelCatalog("session-1");
+    assert.equal((await ledger.readAll()).records.length, 0);
+    assert.deepEqual(captures.deletes, [first.threadId, first.threadId]);
+  });
+});
+
+for (const failureIndex of [0, 1]) {
+  test(`mixed account-switch cleanup keeps failure visible at position ${failureIndex}`, async () => {
+    await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
+      simulateControllerCrash, subscribers }) => {
+      captures.uniqueThreadIds = true;
+      for (let index = 1; index <= 2; index += 1) {
+        const pending = controller.runDetachedChatTurn("session-1", {
+          executionProfile: sourceExplanationEconomyProfile(),
+          outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
+        });
+        await waitForCapturedTurns(captures, index);
+        completeDetachedTurn(subscribers, {
+          threadId: `conversation-${index}`, turnId: `turn-${index}`,
+          text: JSON.stringify({ answer: "Done." })
+        });
+        assert.equal((await pending).ok, true);
+      }
+      simulateControllerCrash();
+      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+      const { records } = await ledger.readAll();
+      assert.equal(records.length, 2);
+      for (const record of records) {
+        await ledger.write({
+          ...record, lifecycle: "cleanup_required", revision: record.revision + 1,
+          updatedAt: new Date(Date.parse(record.updatedAt) + 1).toISOString()
+        }, { expected: record });
+      }
+      const runtime = projectService.createRuntime();
+      const auditStore = createVibe64SessionStore({
+        projectContextRoot: runtime.projectContextRoot, projectRuntimeRoot,
+        projectSessionSourceRoot: path.resolve((await runtime.getSession()).metadata.source_path, "../../..")
+      });
+      await auditStore.createSession({
+        sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
+      });
+      projectService.createRuntime = () => ({ ...runtime, store: auditStore });
+      let stopIndex = 0;
+      const switched = restartedCaptures(captures, {
+        runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
+        stopRuntimeHandler: () => stopIndex++ === failureIndex
+          ? { processExitVerified: false } : { ownershipSuperseded: true }
+      });
+      const restarted = createRestartedController({ captures: switched, projectService });
+      await assert.rejects(restarted.executionProfileModelCatalog("session-1"), {
+        code: "vibe64_codex_economy_ownership_blocked"
+      });
+      const failedId = records[failureIndex].threadId;
+      const retiredId = records[1 - failureIndex].threadId;
+      assert.deepEqual((await ledger.readAll()).records.map((record) => record.threadId), [failedId]);
+      const audit = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      assert.equal(audit.status, "failed");
+      assert.deepEqual(audit.details.failed.map((failure) => failure.threadId), [failedId]);
+      assert.deepEqual(audit.events.at(-1).retiredThreadIds, [retiredId]);
+      switched.stopRuntimeHandler = () => ({ ownershipSuperseded: true });
+      await restarted.executionProfileModelCatalog("session-1");
+      assert.equal((await ledger.readAll()).records.length, 0);
+      const recovered = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      assert.equal(recovered.status, "ready");
+      assert.deepEqual(recovered.details.failed, []);
+      assert.ok(recovered.events.some((event) => event.status === "failed"));
+      assert.equal(switched.deletes.length, 0, "Never delete threads through the replacement account");
+    });
+  });
+}

@@ -59,7 +59,9 @@ requiring a page reload or interrupting the assistant's work.
 Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
-Save and Update wait for the assistant connection to be ready. A request that
+Save and Update wait for active assistant preparation to finish. Save can proceed
+without assistant naming, using a checkpoint-based version name and a visible
+notice when naming is unavailable. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.

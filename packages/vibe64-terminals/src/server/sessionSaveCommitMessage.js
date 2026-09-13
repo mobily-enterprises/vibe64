@@ -155,7 +155,7 @@ async function cleanupSessionSaveCommitMessageThread({
       [
         "The temporary naming conversation could not be removed.",
         detail,
-        "Retry Save to finish cleanup before publishing work."
+        "Cleanup will be retried on the next helper operation; Save can use a checkpoint-based name."
       ].filter(Boolean).join(" "),
       text(cleanup?.code) || "vibe64_session_save_message_cleanup_failed"
     );

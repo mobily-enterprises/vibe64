@@ -8990,10 +8990,10 @@ function createCodexTerminalController({
     );
     error.code = "vibe64_codex_economy_ownership_blocked";
     error.statusCode = 409;
-    error.retryable = true;
+    error.retryable = details.retryable !== false;
     error.details = {
       ...details,
-      retryable: true
+      retryable: error.retryable
     };
     return error;
   }
@@ -9066,33 +9066,31 @@ function createCodexTerminalController({
       await pendingMutation.catch(() => null);
     }
     const existing = codexAppServerEconomyThreads.get(key);
-    if (existing) {
-      if (
-        existing.ownershipId !== record.ownershipId ||
-        existing.revision < record.revision
-      ) {
-        throw codexAppServerEconomyOwnershipError(
-          "Persisted Codex economy ownership changed while the controller was running.",
-          {
-            sessionId: record.sessionId,
-            threadId: record.threadId
-          }
-        );
-      }
-      if (
-        session.status !== VIBE64_SESSION_STATUS.ARCHIVED &&
-        !sessionIsClosing(session)
-      ) {
+    if (existing && (
+      existing.ownershipId !== record.ownershipId ||
+      existing.revision < record.revision
+    )) {
+      throw codexAppServerEconomyOwnershipError(
+        "Persisted Codex economy ownership changed while the controller was running.",
+        { sessionId: record.sessionId, threadId: record.threadId }
+      );
+    }
+    const cleanupRequired = record.lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED;
+    if (existing && !cleanupRequired) {
+      if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED && !sessionIsClosing(session)) {
         return { record: existing, retiredThreadId: "" };
       }
       await retireCodexAppServerEconomyThread(existing);
       return { record: null, retiredThreadId: existing.threadId };
     }
     if (!await directoryExists(record.identity.runtime.runtimeDir)) {
-      await ledger.remove(record);
+      if (existing) {
+        await retireCodexAppServerEconomyThread(existing);
+      } else {
+        await ledger.remove(record);
+      }
       return { record: null, retiredThreadId: record.threadId };
     }
-    const executionRoot = terminalSessionSourceRoot(session);
     const toolHome = await codexToolHomeResult();
     if (toolHome.ok === false) {
       throw codexAppServerEconomyOwnershipError(toolHome.error, {
@@ -9102,56 +9100,54 @@ function createCodexTerminalController({
     }
     const providerOptions = await codexAppServerEconomyRuntimeOptionsForSession(session, {
       runtime,
-      executionRoot,
+      executionRoot: terminalSessionSourceRoot(session),
       toolHomeSource: toolHome.toolHomeSource,
       workdir: record.workdir
     });
     const providerKey = codexAppServerProviderKey(record.sessionId, providerOptions);
-    if (codexAppServerProviderKeyFingerprint(providerKey) !== record.identity.providerKeyFingerprint) {
+    const contextChanged = !existing &&
+      codexAppServerProviderKeyFingerprint(providerKey) !== record.identity.providerKeyFingerprint;
+    if (cleanupRequired || contextChanged) {
       const staleProvider = codexAppServerProviderFactory({
         ...providerOptions,
         runtimeDir: record.identity.runtime.runtimeDir
       });
       try {
-        if (typeof staleProvider.currentRuntimeInfo !== "function") {
-          throw codexAppServerEconomyOwnershipError(
-            "The Codex provider cannot verify the account for stale economy ownership.",
-            {
-              sessionId: record.sessionId,
-              threadId: record.threadId
-            }
-          );
-        }
         const currentRuntime = await staleProvider.currentRuntimeInfo();
-        if (
-          record.identity.runtime.accountIdentitySignature !==
-          normalizeText(currentRuntime.accountIdentitySignature)
-        ) {
+        const accountChanged = record.identity.runtime.accountIdentitySignature !==
+          normalizeText(currentRuntime.accountIdentitySignature);
+        if (accountChanged && !cleanupRequired) {
           throw codexAppServerEconomyOwnershipError(
-            "The current Codex account does not match persisted economy ownership.",
-            {
-              sessionId: record.sessionId,
-              threadId: record.threadId
-            }
+            "Reconnect the original Codex account to resume or delete this helper thread.",
+            { retryable: false, sessionId: record.sessionId, threadId: record.threadId }
           );
         }
-        const stopped = typeof staleProvider.stopRuntime === "function"
-          ? await staleProvider.stopRuntime()
-          : null;
-        if (!codexAppServerRuntimeStopWasVerified(stopped)) {
-          throw codexAppServerEconomyOwnershipError(
-            "The earlier Codex economy runtime could not be retired after its provider context changed.",
-            {
-              sessionId: record.sessionId,
-              threadId: record.threadId
-            }
-          );
+        if (accountChanged || contextChanged) {
+          // Only the local runtime owner can retire another account's ephemeral
+          // work. Never issue a thread deletion authenticated as the new account.
+          const stopped = await staleProvider.stopRuntime(accountChanged ? {
+            expectedAccountIdentitySignature: record.identity.runtime.accountIdentitySignature
+          } : {});
+          const retired = accountChanged
+            ? stopped?.ownershipSuperseded === true || stopped?.processExitVerified === true
+            : codexAppServerRuntimeStopWasVerified(stopped);
+          if (!retired) {
+            throw codexAppServerEconomyOwnershipError(
+              "The earlier Codex runtime could not be verified as retired; its cleanup record has been preserved.",
+              { sessionId: record.sessionId, threadId: record.threadId }
+            );
+          }
+          await ledger.remove(record);
+          codexAppServerEconomyThreads.delete(key);
+          return { record: null, retiredThreadId: record.threadId };
         }
-        await ledger.remove(record);
-        return { record: null, retiredThreadId: record.threadId };
       } finally {
         staleProvider.close?.();
       }
+    }
+    if (existing) {
+      await retireCodexAppServerEconomyThread(existing);
+      return { record: null, retiredThreadId: existing.threadId };
     }
     let provider = codexAppServerProviders.get(providerKey);
     if (!provider) {
@@ -9182,6 +9178,7 @@ function createCodexTerminalController({
       throw codexAppServerEconomyOwnershipError(
         "The current Codex runtime/auth identity does not match persisted economy ownership.",
         {
+          retryable: record.identity.runtime.accountIdentitySignature === normalizeText(expectedRuntime.accountIdentitySignature),
           sessionId: record.sessionId,
           threadId: record.threadId
         }
@@ -9281,6 +9278,7 @@ function createCodexTerminalController({
         return !normalizedSessionId || record.sessionId === normalizedSessionId;
       });
       const retiredThreadIds = [];
+      const retiredBySession = new Map();
       for (const record of records) {
         try {
           const currentSession = normalizeText(session?.sessionId || session?.id) === record.sessionId
@@ -9293,10 +9291,46 @@ function createCodexTerminalController({
           });
           if (normalizeText(restored?.retiredThreadId)) {
             retiredThreadIds.push(normalizeText(restored.retiredThreadId));
+            const retired = retiredBySession.get(record.sessionId) || [];
+            retired.push(normalizeText(restored.retiredThreadId));
+            retiredBySession.set(record.sessionId, retired);
           }
         } catch (error) {
           failed.push(codexAppServerEconomyFailure(record, error));
         }
+      }
+      const sessionIds = new Set(records.map((record) => record.sessionId));
+      if (normalizedSessionId) {
+        sessionIds.add(normalizedSessionId);
+      }
+      for (const id of sessionIds) {
+        const failures = failed.filter((failure) => !failure.sessionId || failure.sessionId === id);
+        const retired = retiredBySession.get(id) || [];
+        if (!failures.length && !retired.length) {
+          continue;
+        }
+        const status = failures.length ? "failed" : "ready";
+        const message = failures.length
+          ? `${failures.length} helper cleanup record(s) still need attention: ${failures[0].error}`
+          : `Cleaned up ${retired.length} stale helper ownership record(s).`;
+        await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-economy-cleanup", {
+          event: {
+            kind: "cleanup-reconciled",
+            message,
+            status,
+            failed: failures,
+            retiredThreadIds: retired
+          },
+          patch: {
+            label: "Low-cost assistant cleanup",
+            message,
+            error: failures[0]?.error || "",
+            code: failures[0]?.code || "",
+            details: { failed: failures },
+            status,
+            retryable: failures.some((failure) => failure.retryable !== false)
+          }
+        });
       }
       return {
         failed,
@@ -9324,6 +9358,7 @@ function createCodexTerminalController({
       "Vibe64 could not reconcile persisted low-cost assistant thread ownership.",
       {
         failed: result.failed,
+        retryable: result.failed?.some((failure) => failure.retryable !== false) !== false,
         projectRuntimeRoot: normalizeText(result.projectRuntimeRoot)
       }
     );
