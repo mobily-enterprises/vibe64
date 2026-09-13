@@ -53,6 +53,14 @@ overwrite an existing item. Larger files placed there by the assistant remain
 downloadable. Drag-and-drop upload is confined to Drop Zone. Unsaved text stays
 in its area when switching tabs; uploads cannot discard it.
 
+At compact and medium display widths, repository navigation starts hidden and
+can be opened from the file toolbar. Browsing and editing take turns occupying
+the workspace; opening a file hides navigation and search again. The editor
+stays mounted so toggling navigation preserves its draft and position. Secondary
+file actions live in a menu while Save and the filename remain visible. Drop Zone
+and Session previews combine navigation and file actions into one compact row.
+Expanded displays retain the existing source browser and toolbar.
+
 Session exposes the complete regular-file runtime tree, including hidden files,
 read-only to the workspace owner. Local loopback editor access acts as ownership.
 Session History exposes the archived runtime tree under the same owner check;

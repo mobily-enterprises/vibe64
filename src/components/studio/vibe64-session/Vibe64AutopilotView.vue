@@ -607,7 +607,7 @@
           :open-request="sourceEditorOpenRequest"
           :project-slug="projectSlug"
           :session-id="sessionId"
-          :sessions-api-path="props.sessionsApiPath"
+          :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
           @ask-codex-about-file="askCodexAboutSourceEditorFile"
         />
       </section>

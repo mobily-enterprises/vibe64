@@ -6716,3 +6716,69 @@ for (const width of [390, 820, 1440]) {
     });
   }
 }
+
+
+for (const width of [390, 768, 1280]) {
+  test(`@mobile-files file content keeps the workspace at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await mockLaunchTerminalSocket(page);
+    await mockLaunchSession(page, {
+      sourceEditorFiles: {
+        "app.js": "export const ready = true;\n".repeat(60),
+        "another-file-with-a-long-name.js": "export const another = true;\n"
+      }
+    });
+    await page.route("**/sessions/*/files", (route) => fulfillJson(route, {
+      ok: true, areas: ["repo", "drop-zone", "session"]
+    }));
+    await page.route(/\/files\/(?:session|drop-zone)\/(?:tree|file)\?/u, (route) => {
+      const isTree = new URL(route.request().url()).pathname.endsWith("/tree");
+      return fulfillJson(route, isTree
+        ? { ok: true, tree: { children: [{ type: "file", path: "notes.txt", name: "notes.txt", size: 20 }] } }
+        : { ok: true, file: { path: "notes.txt", text: "Preview the whole file.\n", hash: "test-hash" } });
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/files`);
+    const editor = page.getByLabel("Session source editor", { exact: true });
+    const browser = editor.locator(".vibe64-source-editor__sidebar");
+    const content = editor.locator(".vibe64-source-editor__codemirror");
+    if (width < 960) {
+      await expect(browser).toBeHidden();
+      await expect(editor.getByLabel("Open file", { exact: true })).toBeHidden();
+      await editor.getByRole("button", { name: "Show files", exact: true }).click();
+    }
+    await expect(browser).toBeVisible();
+    await browser.locator(".vibe64-source-tree__button", { hasText: "app.js" }).click();
+    await expect(content).toContainText("export const ready = true;");
+    if (width < 960) {
+      await expect(browser).toBeHidden();
+      const bounds = await editor.boundingBox();
+      const fileBounds = await content.boundingBox();
+      expect(fileBounds.height).toBeGreaterThan(bounds.height - 65);
+      expect(fileBounds.width).toBeGreaterThan(bounds.width - 8);
+      await editor.getByRole("button", { name: "File actions", exact: true }).click();
+      await expect(page.getByText("Download file", { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await editor.getByRole("button", { name: "Show files", exact: true }).click();
+      await browser.locator(".vibe64-source-tree__button", { hasText: "another-file-with-a-long-name.js" }).click();
+      await expect(content).toContainText("export const another = true;");
+      await expect(browser).toBeHidden();
+    } else {
+      await expect(browser).toBeVisible();
+    }
+    await page.screenshot({ path: testInfo.outputPath(`files-${width}.png`) });
+    for (const name of ["Session", "Drop Zone"]) {
+      await page.getByRole("tab", { name, exact: true }).click();
+      const area = page.getByRole("region", { name: name === "Session" ? "Session files, read only" : "Drop Zone files", exact: true });
+      await area.getByText("notes.txt", { exact: true }).click();
+      await expect(area.getByRole("button", { name: "Back to folder", exact: true })).toBeVisible();
+      await expect(area.getByRole("button", { name: "Download file", exact: true })).toBeVisible();
+      if (width < 960) {
+        await expect(area.getByText(/Session runtime files|Temporary file exchange/u)).toHaveCount(0);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`files-${name.replace(" ", "-")}-${width}.png`) });
+    }
+    await page.getByRole("tab", { name: "Repo", exact: true }).click();
+    await expect(content).toContainText(width < 960 ? "export const another = true;" : "export const ready = true;");
+    if (width < 960) await expect(browser).toBeHidden();
+  });
+}

@@ -39,6 +39,10 @@ Opening a binary or oversized file from chat or Files keeps its filename visible
 and offers Download without placing it in the text editor.
 The file browser keeps starred filenames on one line and starts larger lists
 collapsed.
+On phones and tablets, Files prioritizes the open file. Repository browsing and
+search stay hidden until requested, and choosing a file returns to its contents.
+A compact toolbar keeps the filename and Save visible, with other actions in a
+menu. Drop Zone and Session previews also use a compact file toolbar.
 Chat responds to confirmed message acceptance and interruption immediately;
 background bookkeeping must not keep Send, Stop, or the saved-commit cleanup
 prompt busy after that confirmation.

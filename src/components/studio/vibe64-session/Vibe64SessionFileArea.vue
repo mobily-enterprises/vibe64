@@ -1,6 +1,7 @@
 <template>
   <section
     class="session-file-area"
+    :class="{ 'session-file-area--mobile': mobile }"
     :aria-label="area === 'session' ? 'Session files, read only' : 'Drop Zone files'"
     @dragenter.prevent="dragEnter"
     @dragover.prevent="dragOver"
@@ -11,7 +12,7 @@
       <v-icon :icon="mdiUpload" size="40" />
       <span>Drop files here to upload</span>
     </div>
-    <div class="d-flex align-center ga-2 flex-wrap px-3 pt-2">
+    <div v-if="!mobile || !file" class="d-flex align-center ga-2 flex-wrap px-3 pt-2">
       <span class="text-body-small flex-grow-1">
         {{ area === 'session' ? 'Session runtime files · Read only' : 'Temporary file exchange · Deleted when this session is archived' }}
       </span>
@@ -19,7 +20,7 @@
       <v-btn v-if="location" :prepend-icon="mdiContentCopy" size="small" variant="text" @click="copyLocation">Copy AI path</v-btn>
       <v-btn :icon="mdiRefresh" aria-label="Refresh files" title="Refresh files" variant="text" :disabled="loading || busy" @click="refresh" />
     </div>
-    <div class="d-flex align-center ga-2 flex-wrap px-3">
+    <div v-if="!mobile || !file" class="d-flex align-center ga-2 flex-wrap px-3">
       <v-btn v-if="file" :prepend-icon="mdiArrowLeft" variant="text" :disabled="dirty || busy" @click="file = null">Back to folder</v-btn>
       <v-breadcrumbs v-else :items="breadcrumbs" density="compact" class="pa-0 flex-grow-1">
         <template #item="{ item }">
@@ -38,14 +39,25 @@
       <v-btn class="mt-3" variant="tonal" @click="refresh">Retry</v-btn>
     </div>
     <template v-else-if="file">
-      <div class="d-flex align-center ga-2 flex-wrap px-3 py-2">
+      <div class="d-flex align-center" :class="mobile ? 'ga-0 px-1' : 'ga-2 flex-wrap px-3 py-2'">
+        <v-btn v-if="mobile" :icon="mdiArrowLeft" aria-label="Back to folder" variant="text" :disabled="dirty || busy" @click="file = null" />
         <span class="text-body-medium session-file-area__filename">{{ file.path }}</span>
         <v-spacer />
         <template v-if="dirty">
           <v-btn variant="text" :disabled="busy" @click="draft = file.text">Discard edits</v-btn>
           <v-btn color="primary" variant="tonal" :disabled="busy" @click="save">{{ busy ? 'Saving…' : 'Save' }}</v-btn>
         </template>
-        <v-btn :prepend-icon="mdiDownload" variant="text" :disabled="dirty || busy" @click="download(file.path)">Download</v-btn>
+        <v-btn :icon="mobile ? mdiDownload : undefined" :prepend-icon="mobile ? undefined : mdiDownload" aria-label="Download file" variant="text" :disabled="dirty || busy" @click="download(file.path)">Download</v-btn>
+        <v-menu v-if="mobile">
+          <template #activator="{ props: menuProps }">
+            <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="File actions" variant="text" />
+          </template>
+          <v-list density="compact">
+            <v-list-item v-if="location" title="Copy AI path" :prepend-icon="mdiContentCopy" @click="copyLocation" />
+            <v-list-item title="Refresh files" :prepend-icon="mdiRefresh" :disabled="loading || busy" @click="refresh" />
+            <v-list-item v-if="archived && area === 'session'" title="Download archive" :prepend-icon="mdiDownload" :disabled="busy" @click="download(`${sessionId}.tar.gz`, 'archive')" />
+          </v-list>
+        </v-menu>
       </div>
       <v-textarea v-if="writable && typeof file.text === 'string'" v-model="draft" aria-label="File contents" class="mx-3 session-file-area__text" :disabled="busy" variant="outlined" rows="18" hide-details />
       <pre v-else-if="typeof file.text === 'string'" class="session-file-area__preview" tabindex="0">{{ file.text }}</pre>
@@ -89,6 +101,7 @@
 
 <script setup>
 import { computed, onScopeDispose, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import { mdiArrowLeft, mdiContentCopy, mdiDeleteOutline, mdiDotsVertical, mdiDownload, mdiFileOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiPencilOutline, mdiRefresh, mdiUpload } from "@mdi/js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -105,6 +118,7 @@ const props = defineProps({
   active: { type: Boolean, default: true },
   agentActive: { type: Boolean, default: false }
 });
+const { smAndDown: mobile } = useDisplay();
 const writable = computed(() => props.area === "drop-zone");
 const base = computed(() => `${props.sessionsApiPath}/${encodeURIComponent(props.sessionId)}/files/${encodeURIComponent(props.area)}`);
 const directory = ref("");
@@ -333,4 +347,6 @@ onScopeDispose(() => {
 .session-file-area__filename { overflow-wrap: anywhere; }
 .session-file-area__preview { flex: 1; min-height: 0; overflow: auto; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .session-file-area__text { font-family: monospace; }
+.session-file-area--mobile .session-file-area__filename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-file-area--mobile .session-file-area__preview { margin: 0; padding: 8px; }
 </style>

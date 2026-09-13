@@ -2,14 +2,27 @@
   <section
     ref="sourceEditorElement"
     class="vibe64-source-editor"
-    :class="{ 'vibe64-source-editor--code-focus': codeFocusMode }"
+    :class="{
+      'vibe64-source-editor--code-focus': codeFocusMode,
+      'vibe64-source-editor--mobile': mobile,
+      'vibe64-source-editor--mobile-file-open': mobile && fileListCollapsed
+    }"
     aria-label="Session source editor"
   >
     <header
       class="vibe64-source-editor__header"
     >
+      <v-btn
+        v-if="mobile && !codeFocusMode"
+        :aria-expanded="!fileListCollapsed"
+        :aria-label="fileListCollapsed ? 'Show files' : 'Hide files'"
+        :icon="fileListCollapsed ? mdiFolderOutline : mdiClose"
+        variant="text"
+        @click="fileListCollapsed ? expandFileList() : collapseFileList()"
+      />
       <div class="vibe64-source-editor__title">
         <v-icon
+          v-if="!mobile"
           :icon="mdiFileCodeOutline"
           size="19"
         />
@@ -17,7 +30,65 @@
           {{ selectedFileName }}
         </h2>
       </div>
-      <div class="vibe64-source-editor__actions">
+      <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
+        <v-btn
+          :disabled="!editor.dirty.value || editor.saving.value"
+          :aria-label="editor.saving.value ? 'Saving file' : 'Save now'"
+          :icon="mdiContentSaveOutline"
+          variant="tonal"
+          @click="editor.saveNow"
+        />
+        <v-menu>
+          <template #activator="{ props: menuProps }">
+            <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="File actions" variant="text" />
+          </template>
+          <v-list density="compact">
+            <v-list-item
+              v-if="editor.statusLabel.value"
+              :title="editor.statusLabel.value"
+              :class="{ 'text-error': editor.saveError.value }"
+            />
+            <v-list-item
+              v-if="fileBookmarks"
+              :title="selectedStarred ? 'Unstar file' : 'Star file'"
+              :prepend-icon="selectedStarred ? mdiStar : mdiStarOutline"
+              :disabled="!displayedPath || fileBookmarks.pendingPaths.value.includes(displayedPath)"
+              @click="fileBookmarks.toggle(displayedPath)"
+            />
+            <v-list-item
+              title="Download file"
+              :prepend-icon="mdiDownload"
+              :disabled="!displayedPath || editor.loadingFile.value || Boolean(downloadingPath)"
+              @click="requestDownload(displayedPath)"
+            />
+            <v-list-item
+              title="Undo"
+              :prepend-icon="mdiUndoVariant"
+              :disabled="!editor.selectedPath.value"
+              @click="runEditorCommand('undo')"
+            />
+            <v-list-item
+              title="Redo"
+              :prepend-icon="mdiRedoVariant"
+              :disabled="!editor.selectedPath.value"
+              @click="runEditorCommand('redo')"
+            />
+            <v-list-item
+              title="Explain file or selection"
+              :prepend-icon="mdiRobotOutline"
+              :disabled="!assistantAvailable || !editor.selectedPath.value || editor.explanationBusy.value || editor.explanationClosing.value"
+              @click="explainCurrentSelection"
+            />
+            <v-list-item
+              title="Refresh files"
+              :prepend-icon="mdiRefresh"
+              :disabled="editor.loadingTree.value"
+              @click="editor.refresh"
+            />
+          </v-list>
+        </v-menu>
+      </div>
+      <div v-else class="vibe64-source-editor__actions">
         <v-btn
           v-if="fileBookmarks"
           :aria-label="selectedStarred ? 'Unstar file' : 'Star file'"
@@ -104,7 +175,7 @@
     </header>
 
     <div
-      v-if="!codeFocusMode"
+      v-if="!codeFocusMode && (!mobile || !fileListCollapsed)"
       class="vibe64-source-editor__tools"
     >
       <div class="vibe64-source-editor__tool">
@@ -189,6 +260,7 @@
     >
       <aside
         v-if="!codeFocusMode"
+        v-show="!mobile || !fileListCollapsed"
         class="vibe64-source-editor__sidebar"
         :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed }"
       >
@@ -337,7 +409,7 @@
         </template>
       </aside>
 
-      <main class="vibe64-source-editor__main">
+      <main v-show="!mobile || fileListCollapsed || codeFocusMode" class="vibe64-source-editor__main">
         <div
           v-if="editor.loadError.value && editor.tree.value"
           class="vibe64-source-editor__banner"
@@ -504,6 +576,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   crosshairCursor,
@@ -546,6 +619,9 @@ import {
   mdiChevronLeft,
   mdiChevronRight,
   mdiCollapseAllOutline,
+  mdiClose,
+  mdiDotsVertical,
+  mdiFolderOutline,
   mdiContentSaveOutline,
   mdiDownload,
   mdiFileCodeOutline,
@@ -788,7 +864,9 @@ const sourcePathClickExtension = EditorView.domEventHandlers({
 });
 const expandedDirectoryPaths = ref([]);
 const explanationCollapsed = ref(false);
-const fileListCollapsed = ref(false);
+const { smAndDown: mobile } = useDisplay();
+const fileListCollapsed = ref(mobile.value);
+
 const newFileDialogOpen = ref(false);
 const sourceEditorElement = ref(null);
 const newFileDirectory = ref("");
@@ -1384,6 +1462,16 @@ function closeAllDirectories() {
   expandedDirectoryPaths.value = [];
 }
 
+watch(mobile, (compact) => {
+  fileListCollapsed.value = compact;
+});
+
+watch(editor.loadingPath, (filePath) => {
+  if (mobile.value && filePath) {
+    collapseFileList();
+  }
+});
+
 watch(() => props.openRequest, (request = null) => {
   if (request?.path) {
     editor.openRequest(request);
@@ -1957,6 +2045,40 @@ onBeforeUnmount(() => {
   .vibe64-source-editor__workspace--explanation-collapsed {
     grid-template-rows: minmax(0, 1fr) 2.65rem;
   }
+}
+
+.vibe64-source-editor--mobile .vibe64-source-editor__header {
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 0 0.25rem;
+}
+
+.vibe64-source-editor--mobile .vibe64-source-editor__title {
+  flex: 1;
+  overflow: hidden;
+}
+
+.vibe64-source-editor--mobile .vibe64-source-editor__title h2 {
+  max-width: 100%;
+  font-weight: 500;
+}
+
+.vibe64-source-editor__mobile-actions {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.vibe64-source-editor--mobile-file-open {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.vibe64-source-editor--mobile .vibe64-source-editor__tools {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vibe64-source-editor--mobile .vibe64-source-editor__body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .vibe64-source-editor--code-focus {
