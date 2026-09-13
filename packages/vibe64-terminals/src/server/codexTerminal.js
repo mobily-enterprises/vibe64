@@ -9015,9 +9015,10 @@ function createCodexTerminalController({
   }
 
   function codexAppServerRuntimeIdentityMatches(expected = {}, actual = {}, {
+    requireAccount = true,
     requireEndpoint = true
   } = {}) {
-    return expected.accountIdentitySignature === normalizeText(actual.accountIdentitySignature) &&
+    return (!requireAccount || expected.accountIdentitySignature === normalizeText(actual.accountIdentitySignature)) &&
       (!requireEndpoint || expected.endpoint === normalizeText(actual.endpoint)) &&
       expected.executionMode === normalizeText(actual.executionMode) &&
       expected.executionContextHash === normalizeText(actual.executionContextHash) &&
@@ -9123,7 +9124,7 @@ function createCodexTerminalController({
     const providerKey = codexAppServerProviderKey(record.sessionId, providerOptions);
     const contextChanged = !existing &&
       codexAppServerProviderKeyFingerprint(providerKey) !== record.identity.providerKeyFingerprint;
-    if (cleanupRequired || contextChanged) {
+    if (contextChanged) {
       const staleProvider = codexAppServerProviderFactory({
         ...providerOptions,
         runtimeDir: record.identity.runtime.runtimeDir
@@ -9139,8 +9140,7 @@ function createCodexTerminalController({
           );
         }
         if (accountChanged || contextChanged) {
-          // Only the local runtime owner can retire another account's ephemeral
-          // work. Never issue a thread deletion authenticated as the new account.
+          // Context drift cannot reuse the previous provider configuration.
           const stopped = await staleProvider.stopRuntime(accountChanged ? {
             expectedAccountIdentitySignature: record.identity.runtime.accountIdentitySignature
           } : {});
@@ -9189,6 +9189,8 @@ function createCodexTerminalController({
       providerKey,
       runtime: expectedRuntime
     }, {
+      // Cleanup deletes locally owned history; it never resumes account-bound work.
+      requireAccount: !cleanupRequired,
       requireEndpoint: false
     })) {
       throw codexAppServerEconomyOwnershipError(
@@ -9213,8 +9215,9 @@ function createCodexTerminalController({
       runtime: currentRuntime,
       server: currentServer
     }, {
+      requireAccount: !cleanupRequired,
       requireEndpoint: true,
-      requireServer: true
+      requireServer: !cleanupRequired
     })) {
       throw codexAppServerEconomyOwnershipError(
         "The connected Codex server identity does not match persisted economy ownership.",
@@ -9754,9 +9757,21 @@ function createCodexTerminalController({
       );
     }
     const economyTurn = isRecord(input.executionProfile);
-    const economyRestore = assertCodexAppServerEconomyThreadsRestored(
-      await restoreCodexAppServerEconomyThreads({ runtime, session })
-    );
+    const economyRestore = economyTurn
+      ? assertCodexAppServerEconomyThreadsRestored(
+          await restoreCodexAppServerEconomyThreads({ runtime, session })
+        )
+      : null;
+    if (!economyTurn) {
+      const threadId = normalizeText(input.threadId || input.codexSessionId || input.conversationId);
+      if (threadId) {
+        const ledger = codexAppServerEconomyThreadLedger(runtime.stateRoot);
+        const { records } = await ledger.readAll();
+        if (records.some((record) => record.threadId === threadId)) {
+          throw codexAppServerEconomyThreadUnavailableError(threadId);
+        }
+      }
+    }
     const restoredAdmissionError = codexAppServerAdmissionError(sessionId);
     if (restoredAdmissionError) {
       throw restoredAdmissionError;
