@@ -17,6 +17,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
 - `packages/vibe64-system-graph/src/client/subsystemsModel.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/lib/studioLongTextBlocks.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
@@ -98,19 +99,33 @@ files. Vibe64 displays only Genesis documents and does not infer a parallel
 architecture.
 
 The Subsystems destination reads the selected session's `genesis/subsystems.md`
-through Genesis's version-zero inspection API. The default searchable overview
-shows declared responsibilities, Program membership, owned tables and data used
-from another subsystem, with links to the owning subsystem. It does not infer
+through Genesis's version-zero inspection API. The default overview uses a compact searchable list and one detail pane. The list
+shows names and counts; the selected responsibility, expandable Program operations,
+and owned/used data live in the detail pane. Operations and Data have separate tabs.
+Descriptions render paragraphs, wrapped list items, code and links with the
+existing safe Markdown renderer; long descriptions
+expand on request. Narrow panes show either the list or the detail with a Back
+action. Links on used tables navigate to their owning subsystem. It does not infer
 ownership from directories or create operation-to-table dependency edges.
 Program contracts and source links use the generated Program City when available;
 the authored Program files remain directly accessible before generation.
 
 The optional City presents operations as tall buildings and owned tables as low
-teal buildings in their declared subsystem districts. It shares the responsibility
-panel with Overview and retains access to the Machine City. Projects without a
+teal buildings in their declared subsystem districts. It opens at full width without a selected responsibility panel. Selecting a
+subsystem or operation opens the same detail content in a closable inspector;
+Escape dismisses it. Switching presentations closes the inspector. Machine City
+remains accessible. Projects without a
 map can still explore existing Cities; their operations are explicitly unassigned.
-The empty overview can prepare an assistant request to author a map without
-submitting it. Invalid declarations show the inspection error with Retry.
+The empty overview starts a temporary workspace-writing task to generate the
+map using the session's selected model and normal tools. It reuses the existing
+temporary task lifecycle and deduplication, leaves the main composer untouched,
+and keeps source edits for ordinary review and Save. Completion notifications
+carry the task's existing deduplication key so only the matching session reloads
+its subsystem data. A hidden retained subsystem view reloads when next active.
+Invalid declarations show the inspection error with Retry, Open declaration, and
+Repair map with AI through the same temporary task. Generation and repair require
+the installed Genesis Program skill's exact grammar and a successful
+`inspect subsystems --json` result.
 
 Database inspection is admitted when declared data exists. Table links require
 an exact Stack resource, schema and table match; `default` resolves only against

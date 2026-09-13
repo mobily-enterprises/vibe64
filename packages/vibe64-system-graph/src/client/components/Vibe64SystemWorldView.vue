@@ -1072,6 +1072,7 @@ function selectCity(kind, { recordHistory = true } = {}) {
     recordWorldNavigation();
   }
   cityKind.value = nextKind;
+  emit("select-subsystem", "");
   selectedBuildingId.value = "";
   selectedDistrict.value = null;
   selectedSemanticOperationId.value = "";

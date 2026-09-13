@@ -659,19 +659,28 @@
           </v-btn>
         </header>
         <Vibe64SubsystemsView
-          :assistant-available="assistantDirectAllowed"
+          :assistant-available="assistantDirectAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
+          :reload-version="systemReloadVersion"
           :project-slug="projectSlug"
           @open-table="openSubsystemTable"
           @describe-subsystems="describeSubsystems"
           :session-id="sessionId"
           @open-source-file-immersive="openSourceEditorFile"
           @open-source-file="openSourceEditorFile"
-        />
+        >
+          <template #text="{ text, sourcePath, openSource }">
+            <LongTextPreviewBlocks
+              style="gap: 1em"
+              :blocks="parseLongTextReviewBlocks(text)"
+              @link-click="openSubsystemTextLink($event, sourcePath, openSource)"
+            />
+          </template>
+        </Vibe64SubsystemsView>
       </section>
 
       <div
@@ -779,6 +788,9 @@ import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe6
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
+import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
+import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
+import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import {
   useVibe64AutopilotView,
@@ -803,6 +815,18 @@ const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
 const resourceRetryBusy = ref(false);
+function openSubsystemTextLink({ event, href }, sourcePath, openSource) {
+  // Markdown links are relative to their declaration, not the dashboard URL.
+  const relative = href && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(href);
+  const target = sourceEditorLinkTarget({
+    href: relative
+      ? new URL(href, `https://source.invalid/${sourcePath}`).pathname.slice(1)
+      : href
+  });
+  if (!target) return;
+  event?.preventDefault();
+  openSource(target);
+}
 const sessionRenewalActionPresentation = computed(() => (
   props.sessionRenewal?.actionPresentation ||
   props.sessionRenewal?.advisoryPresentation || {
@@ -1046,6 +1070,7 @@ const {
   submitComposerMessage,
   systemBackAvailable,
   systemRestoreRequest,
+  systemReloadVersion,
   thinkingLabel,
   thinkingVisible,
   updateComposerAttachments,

@@ -173,7 +173,10 @@ function parseLongTextReviewBlocks(value, options = {}) {
       continue;
     }
 
-    flushList();
+    if (listBlock) {
+      listBlock.items.at(-1).text += ` ${trimmed}`;
+      continue;
+    }
     paragraphLines.push(trimmed);
   }
 

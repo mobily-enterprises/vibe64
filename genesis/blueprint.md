@@ -71,13 +71,20 @@ notice when naming is unavailable. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.
-People can explore the application through its authored subsystems: each explains
+People can explore the application through a compact searchable subsystem list
+and a focused detail pane. City opens unobstructed and shows a closable inspector
+only after selection. Each authored subsystem explains
 a responsibility and brings together its Program operations and owned or shared
 data tables. A searchable overview and an optional three-dimensional City share
 the same details. Operations link to explanations and source; tables link to the
-relationship diagram, with a way back to the selected subsystem. Missing maps
-invite the person to describe them with the agent, and unresolved table references
-remain visible. The database overview continues to explain the data itself.
+relationship diagram, with a way back to the selected subsystem. Missing or invalid maps
+offer a temporary AI task to generate or repair the subsystem map with the session's
+selected model and normal workspace tools. The main draft remains untouched;
+map edits stay in the session for review and Save. The subsystem view refreshes
+when the task finishes. The task checks the declared format before reporting success.
+An unreadable map can
+also be opened directly for correction. Unresolved table references remain visible. The database
+overview continues to explain the data itself.
 
 People can explore a project's database through a readable relationship diagram,
 starting with its keys and expanding detail when needed. Large diagrams load

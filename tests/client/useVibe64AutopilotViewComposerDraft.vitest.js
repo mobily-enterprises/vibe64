@@ -139,6 +139,38 @@ describe("useVibe64AutopilotView direct chat", () => {
     accountMocks.useVibe64Accounts.mockReset().mockReturnValue({ status: ref(null) });
   });
 
+  it("starts subsystem map work in a temporary task and preserves the main draft", async () => {
+    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "subsystem-task" }));
+    const { view, props } = await createViewWithProps({}, { requestTemporaryAi });
+    view.composerDraft.value = "Keep this main-chat draft.";
+    expect(await view.describeSubsystems()).toBe(true);
+    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Subsystem map",
+      policy: "workspace_write",
+      dedupeKey: "subsystem-map:session-1"
+    }));
+    expect(requestTemporaryAi.mock.calls[0][0].message).toContain("genesis/subsystems.md");
+    expect(requestTemporaryAi.mock.calls[0][0]).not.toHaveProperty("agentSettings");
+    expect(requestTemporaryAi.mock.calls[0][0]).not.toHaveProperty("executionProfile");
+    expect(view.composerDraft.value).toBe("Keep this main-chat draft.");
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(await view.handleTemporaryAiTaskFinished({
+      id: "subsystem-task", sessionId: "session-1", dedupeKey: "subsystem-map:session-1", status: "completed"
+    })).toBe("subsystem-map");
+    expect(view.systemReloadVersion.value).toBe(1);
+    await view.handleTemporaryAiTaskFinished({
+      id: "other-task", sessionId: "session-2", dedupeKey: "subsystem-map:session-2", status: "completed"
+    });
+    expect(view.systemReloadVersion.value).toBe(1);
+  });
+
+  it("does not start subsystem map work without assistant access", async () => {
+    const requestTemporaryAi = vi.fn();
+    const view = await createView({}, { requestTemporaryAi, assistantCanUseAi: ref(false) });
+    expect(await view.describeSubsystems()).toBe(false);
+    expect(requestTemporaryAi).not.toHaveBeenCalled();
+  });
+
   it("uses the new-build welcome for a blank, workspace-unconfigured project", async () => {
     const view = await createView();
 

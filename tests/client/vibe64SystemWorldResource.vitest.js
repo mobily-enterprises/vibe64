@@ -80,6 +80,25 @@ describe("Genesis City client resources", () => {
     });
   });
 
+  it("defers a subsystem map reload until the retained view becomes active", async () => {
+    const active = ref(false);
+    const reloadVersion = ref(0);
+    const scope = effectScope();
+    scope.run(() => useVibe64SystemGraph({ active, reloadVersion, sessionId: "session-1" }));
+    reloadVersion.value += 1;
+    await nextTick();
+    expect(endpointMocks.resources[4].reload).not.toHaveBeenCalled();
+    active.value = true;
+    await nextTick();
+    expect(endpointMocks.resources[4].reload).toHaveBeenCalledOnce();
+    active.value = false;
+    await nextTick();
+    active.value = true;
+    await nextTick();
+    expect(endpointMocks.resources[4].reload).toHaveBeenCalledOnce();
+    scope.stop();
+  });
+
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
     { component: "Vibe64SubsystemsView", pane: "system", useTool: useVibe64SystemGraph, resources: 5 }
@@ -87,7 +106,7 @@ describe("Genesis City client resources", () => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
     ), "utf8");
-    const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?/>`, "u"))?.[0];
+    const tag = autopilot.match(new RegExp(`<${component}\\b[\\s\\S]*?>`, "u"))?.[0];
     const binding = tag?.match(/:active="([^"]+)"/u)?.[1];
     expect(binding).toBeDefined();
     const childActive = new Function("props", "rightPaneTab", `return (${binding});`);

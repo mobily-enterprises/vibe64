@@ -745,6 +745,11 @@ function useVibe64AutopilotView(props, emit, {
   async function handleTemporaryAiTaskFinished(task = {}, reportRecovery = () => {}, { force = false } = {}) {
     const taskId = normalizedAgentTurnText(task?.id);
     const status = normalizedAgentTurnText(task?.status);
+    if (task.sessionId === sessionId.value && task.dedupeKey === subsystemMapTaskKey.value &&
+        ["completed", "failed"].includes(status)) {
+      systemReloadVersion.value += 1;
+      return "subsystem-map";
+    }
     if (task.recoveryOperation === "update") {
       const runId = normalizedAgentTurnText(task.runId);
       if (
@@ -1714,6 +1719,8 @@ function useVibe64AutopilotView(props, emit, {
   const lastDashboardRoutePath = ref("");
   const sourceEditorOpenRequest = ref(null);
   const systemRestoreRequest = ref(null);
+  const systemReloadVersion = ref(0);
+  const subsystemMapTaskKey = computed(() => `subsystem-map:${sessionId.value}`);
   const databaseOpenRequest = ref(null);
   const systemReturnContext = ref(null);
   let sourceEditorOpenSequence = 0;
@@ -1919,8 +1926,27 @@ function useVibe64AutopilotView(props, emit, {
     return selectSessionTool("database");
   }
 
-  function describeSubsystems() {
-    prefillComposer("Please create or update genesis/subsystems.md from the application source, existing Program, and schema. Explain the meaningful subsystem responsibilities and declare their Program operations and owned/used tables.");
+  async function describeSubsystems() {
+    if (typeof requestTemporaryAi !== "function" || !assistantDirectAllowed.value ||
+        !props.active || !sessionId.value || props.sessionSelectionArchived || repositoryOperationActive.value) {
+      return false;
+    }
+    const result = await requestTemporaryAi({
+      title: "Subsystem map",
+      dedupeKey: subsystemMapTaskKey.value,
+      displayMessage: "Generate the subsystem map from this application.",
+      message: [
+        "Create or repair genesis/subsystems.md from the application source, existing Program, and schema. Inspect the repository with your normal tools and preserve useful existing descriptions and unrelated edits.",
+        "Read .agents/skills/genesis-program/SKILL.md and use its exact subsystem grammar. Resolve the project's Genesis command through its installed skill instructions.",
+        "Explain meaningful subsystem responsibilities and declare their Program operations and owned/used tables. Run Genesis inspect subsystems --json on the resulting file and resolve every validation error before claiming success. Creating the file alone is not completion.",
+        "Leave the map as ordinary session changes for review; do not commit, push, or deploy."
+      ].join("\n\n"),
+      policy: "workspace_write",
+      completionMessage: "Subsystem map task finished. Review the map and session changes before saving.",
+      failureMessage: "The subsystem map task stopped before completion. Review its progress and any partial edits.",
+      nextStepMessage: "The subsystem view refreshes when this task finishes. File changes remain in the session for review and Save."
+    });
+    return result !== false && result?.ok !== false;
   }
 
   function backToSystemFromEditor() {
@@ -2184,6 +2210,7 @@ function useVibe64AutopilotView(props, emit, {
     submitComposerMessage,
     systemBackAvailable,
     systemRestoreRequest,
+    systemReloadVersion,
     thinkingLabel,
     thinkingVisible,
     updateAgentSetting,

@@ -903,6 +903,7 @@ describe("useVibe64TemporaryAi", () => {
     );
     const { task, temporary } = await temporaryAiWithFinishedObserver(onTaskFinished, {
       completionMessage: "Repair complete. Retry Update.",
+      dedupeKey: "subsystem-map:session-1",
       failureMessage: "Repair stopped. Review the error."
     });
 
@@ -912,6 +913,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(onTaskFinished).toHaveBeenCalledTimes(1);
     expect(onTaskFinished).toHaveBeenCalledWith(expect.objectContaining({
       completionMessage: "Repair complete. Retry Update.",
+      dedupeKey: "subsystem-map:session-1",
       error: "",
       failureMessage: "Repair stopped. Review the error.",
       id: task.id,
