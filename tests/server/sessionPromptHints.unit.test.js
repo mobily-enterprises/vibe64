@@ -182,6 +182,7 @@ function createFixture({
   conversation = conversationPage(),
   deleteResult = { ok: true, status: "deleted" },
   describeProvider = null,
+  interruptResult = { ok: true, status: "interrupted" },
   now = () => Date.now(),
   promptHints = projectPromptHints(),
   requireAssistantAccess = null,
@@ -265,10 +266,7 @@ function createFixture({
         projectScope: currentProjectScopeKey(),
         sessionId
       });
-      return {
-        ok: true,
-        status: "interrupted"
-      };
+      return typeof interruptResult === "function" ? interruptResult() : interruptResult;
     },
     now,
     async requireAssistantAccess(sessionId, options) {
@@ -1834,5 +1832,31 @@ test("internal session cancellation settles optional hint generation", async () 
 
   const result = await generation;
   assert.equal(result.status, "cancelled");
+  assert.equal(fixture.calls.delete.length, 1);
+});
+
+test("prompt hint cleanup waits for pending interruption before deleting the thread", async () => {
+  const started = deferred();
+  const finishTurn = deferred();
+  const finishInterrupt = deferred();
+  const fixture = createFixture({
+    interruptResult: () => finishInterrupt.promise,
+    async runAgentTurn({ options }) {
+      options.onEvent({ threadId: "thread-wait", turnId: "turn-wait", type: "turn" });
+      started.resolve();
+      await finishTurn.promise;
+      return readyAgentResult({ threadId: "thread-wait", turnId: "turn-wait" });
+    }
+  });
+  const input = generateInput("hint:ordered-cleanup");
+  const generation = fixture.service.generateSessionPromptHints("session-1", input);
+  await started.promise;
+  const cancellation = fixture.service.cancelSessionPromptHints("session-1", input);
+  finishTurn.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.calls.interrupt.length, 1);
+  assert.equal(fixture.calls.delete.length, 0);
+  finishInterrupt.resolve({ ok: true });
+  await Promise.all([generation, cancellation]);
   assert.equal(fixture.calls.delete.length, 1);
 });

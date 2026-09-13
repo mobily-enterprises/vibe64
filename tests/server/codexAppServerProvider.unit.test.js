@@ -4130,3 +4130,54 @@ test("Codex plan allowance ignores a read completed after an account switch", as
     assert.equal(provider.planUsage, null);
   } finally { provider.close(); }
 });
+
+test("stale-account runtime cleanup preserves a verified replacement without signaling it", async () => {
+  await withTemporaryDirectory(async (root) => {
+    const runtimeDir = path.join(root, "codex-app-server");
+    await mkdir(runtimeDir);
+    const metadata = {
+      ...metadataForRuntime(runtimeDir),
+      accountIdentitySignature: `sha256:${"b".repeat(64)}`
+    };
+    await writeMetadata(runtimeDir, metadata);
+    const before = await readFile(path.join(runtimeDir, "runtime.json"), "utf8");
+    let stops = 0;
+    const result = await stopCodexAppServerRuntime({
+      runtimeDir,
+      expectedAccountIdentitySignature: `sha256:${"a".repeat(64)}`,
+      async stopExecution() { stops += 1; throw new Error("Must not stop the replacement"); }
+    });
+    assert.equal(result.ownershipSuperseded, true);
+    assert.equal(stops, 0);
+    assert.equal(result.runtimeDirRemoved, false);
+    assert.equal(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"), before);
+  });
+});
+
+for (const [state, signature, expectedRemoval] of [
+  ["owned stopped runtime", `sha256:${"a".repeat(64)}`, true],
+  ["unverified runtime account", "", false]
+]) {
+  test(`stale-account runtime cleanup handles ${state}`, async () => {
+    await withTemporaryDirectory(async (root) => {
+      const runtimeDir = path.join(root, "codex-app-server");
+      await mkdir(runtimeDir);
+      await writeMetadata(runtimeDir, {
+        ...metadataForRuntime(runtimeDir),
+        accountIdentitySignature: signature,
+        processState: "stopped",
+        processExitVerifiedAt: "2026-09-13T00:00:00.000Z"
+      });
+      const result = await stopCodexAppServerRuntime({
+        runtimeDir,
+        expectedAccountIdentitySignature: `sha256:${"a".repeat(64)}`,
+        async stopExecution() { assert.fail("Stopped runtime needs no signal"); }
+      });
+      assert.equal(result.runtimeDirRemoved, expectedRemoval);
+      assert.equal(result.processExitVerified, expectedRemoval);
+      if (!expectedRemoval) {
+        assert.ok(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+      }
+    });
+  });
+}
