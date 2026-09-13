@@ -1280,7 +1280,6 @@ test("codex app-server process and every descendant start with the managed works
           ...process.env,
           VIBE64_TEST_UMASK_PATH: probePath
         },
-        readyTimeoutMs: 2000,
         runtimeDir,
         WebSocketImpl: ResponsiveFakeWebSocket,
         workdir
