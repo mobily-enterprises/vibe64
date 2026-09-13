@@ -26,6 +26,9 @@ jobs:
       - id: install-dependencies
         name: Install dependencies
         run: npm ci
+      - id: install-browser
+        name: Install test browser
+        run: npx --no-install playwright install --with-deps chromium
       - id: verify
         name: Run verification
         run: npm run verify
