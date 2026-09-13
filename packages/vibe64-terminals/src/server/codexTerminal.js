@@ -6900,19 +6900,21 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     const notificationTurnId = codexAppServerNotificationTurnId(notification);
     const goalStatus = normalizeText(notification.params?.goal?.status);
+    const goalCleared = notification.method === "thread/goal/cleared";
     const runtime = await createRuntimeForSession();
     let run = await readCodexAppServerAgentRunForSession(
       runtime.store,
       normalizedSessionId
     );
     const currentThreadId = normalizeText(run?.providerThreadId);
+    if (currentThreadId && currentThreadId !== normalizedThreadId) {
+      return { ok: true, processed: false, reason: "goal_thread_changed" };
+    }
     if (
-      run &&
-      CODEX_APP_SERVER_GOAL_STATUSES.has(goalStatus) &&
-      (!currentThreadId || currentThreadId === normalizedThreadId) &&
+      (goalCleared || CODEX_APP_SERVER_GOAL_STATUSES.has(goalStatus)) &&
       (
-        normalizeText(run.providerGoalStatus) !== goalStatus ||
-        normalizeText(run.providerGoalThreadId) !== normalizedThreadId
+        normalizeText(run?.providerGoalStatus) !== goalStatus ||
+        normalizeText(run?.providerGoalThreadId) !== normalizedThreadId
       )
     ) {
       const updatedAt = new Date().toISOString();
@@ -6924,6 +6926,12 @@ function createCodexTerminalController({
           providerThreadId: normalizedThreadId
         },
         patch: {
+          ...(!run ? {
+            provider: CODEX_AGENT_PROVIDER,
+            providerInterface: "codex_app_server",
+            providerThreadId: normalizedThreadId,
+            state: VIBE64_AGENT_RUN_STATE.COMPLETED
+          } : {}),
           providerGoalStatus: goalStatus,
           providerGoalThreadId: normalizedThreadId,
           providerGoalUpdatedAt: updatedAt
@@ -6950,7 +6958,7 @@ function createCodexTerminalController({
       };
     }
     if (
-      CODEX_APP_SERVER_GOAL_STATUSES.has(goalStatus) &&
+      (goalCleared || CODEX_APP_SERVER_GOAL_STATUSES.has(goalStatus)) &&
       goalStatus !== "active" &&
       turn.state === "finalizing" &&
       turn.threadId === normalizedThreadId &&
@@ -7045,8 +7053,10 @@ function createCodexTerminalController({
         });
       }
       if (method === "thread/goal/cleared") {
-        runCodexAppServerNotificationTask(notificationContext, () =>
-          publishSessionChanged(normalizedSessionId, { reason: "codex-goal" }));
+        runCodexAppServerNotificationTask(notificationContext, async () => {
+          await reconcileCodexAppServerGoalUpdated(normalizedSessionId, provider, normalizedThreadId, notification);
+          await publishSessionChanged(normalizedSessionId, { reason: "codex-goal" });
+        });
         return;
       }
       if (method === "thread/goal/updated") {
@@ -9791,7 +9801,8 @@ function createCodexTerminalController({
         ? {}
         : await currentConversationActorMetadata(input.vibe64User || null),
       economyRestore,
-      provider
+      provider,
+      providerOptions: activeProvider?.providerOptions || providerOptions
     };
   }
 
@@ -12631,7 +12642,8 @@ function createCodexTerminalController({
     currentSession = await runtime.getSession(sessionId);
     turn = codexAppServerTurnState(currentSession);
     const turnId = normalizeText(turn.turnId);
-    if (!turn.active) {
+    const goalAwaitingTurn = !turn.active && turn.goalStatus === "active" && turn.goalThreadId === threadId;
+    if (!turn.active && !goalAwaitingTurn) {
       vibe64SessionDebugLog("server.codexTerminal.appServerMessage.newTurn", {
         messageId,
         reason: "provider_idle",
@@ -12645,7 +12657,7 @@ function createCodexTerminalController({
         turnId
       });
     }
-    if (!turnId || turn.state === "finalizing") {
+    if (goalAwaitingTurn || !turnId || turn.state === "finalizing") {
       return withCodexState({
         code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
         delivered: false,
@@ -13185,10 +13197,12 @@ function createCodexTerminalController({
         if (input.action === "resume" && !["paused", "blocked", "usageLimited"].includes(goal.status)) {
           return { ok: false, error: "This goal cannot be resumed from its current status. Refresh its details." };
         }
-        subscribeCodexAppServerEvents(sessionId, context.provider, threadId);
+        subscribeCodexAppServerEvents(sessionId, context.provider, threadId, context.providerOptions);
         const result = await context.provider.setGoalStatus(threadId, input.action === "pause" ? "paused" : "active");
+        await reconcileCodexAppServerGoalUpdated(sessionId, context.provider, threadId, {
+          params: { goal: result.goal }
+        });
         if (input.action === "pause") {
-          await reconcileCodexAppServerThreadStatus(sessionId, context.provider, threadId, { observeLatestTurn: true });
           const stopped = await interruptCodexAppServerTurnWithinAdmission(sessionId, { threadId });
           if (stopped.ok === false) {
             return { ...stopped, goal: result.goal };

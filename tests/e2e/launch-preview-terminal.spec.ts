@@ -5347,6 +5347,10 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, sourceEditor.readFile(url.searchParams.get("path") || ""));
       return;
     }
+    if (sourceEditor && method === "POST" && url.pathname.endsWith("/source-editor/file")) {
+      await fulfillJson(route, sourceEditor.saveFile({ path: request.postDataJSON().path, text: "" }));
+      return;
+    }
     if (sourceEditor && method === "PUT" && url.pathname.endsWith("/source-editor/file")) {
       await fulfillJson(route, sourceEditor.saveFile(request.postDataJSON()));
       return;
@@ -6771,7 +6775,10 @@ for (const width of [390, 768, 1280]) {
       const area = page.getByRole("region", { name: name === "Session" ? "Session files, read only" : "Drop Zone files", exact: true });
       await area.getByText("notes.txt", { exact: true }).click();
       await expect(area.getByRole("button", { name: "Back to folder", exact: true })).toBeVisible();
-      await expect(area.getByRole("button", { name: "Download file", exact: true })).toBeVisible();
+      const download = area.getByRole("button", { name: "Download file", exact: true });
+      await expect(download).toBeVisible();
+      await expect(download.locator("svg")).toBeVisible();
+      await expect(download).toHaveText(width < 960 ? "" : "Download");
       if (width < 960) {
         await expect(area.getByText(/Session runtime files|Temporary file exchange/u)).toHaveCount(0);
       }
@@ -6779,6 +6786,26 @@ for (const width of [390, 768, 1280]) {
     }
     await page.getByRole("tab", { name: "Repo", exact: true }).click();
     await expect(content).toContainText(width < 960 ? "export const another = true;" : "export const ready = true;");
-    if (width < 960) await expect(browser).toBeHidden();
+    if (width < 960) {
+      await expect(browser).toBeHidden();
+      await editor.getByRole("button", { name: "Show files", exact: true }).click();
+    }
+    await browser.getByRole("button", { name: "New file at source root", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox", { name: "Path", exact: true }).fill("new-file.js");
+    const [createRequest] = await Promise.all([
+      page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith("/source-editor/file")),
+      dialog.getByRole("button", { name: "Create", exact: true }).click()
+    ]);
+    expect(createRequest.postDataJSON()).toMatchObject({ path: "new-file.js" });
+    await expect(dialog).toBeHidden();
+    await expect(editor.getByRole("heading", { name: "new-file.js", exact: true })).toBeVisible();
+    await expect(content).toBeVisible();
+    await expect(content.locator(".cm-content")).toHaveText("");
+    if (width < 960) {
+      await expect(browser).toBeHidden();
+    } else {
+      await expect(browser).toBeVisible();
+    }
   });
 }

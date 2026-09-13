@@ -4696,6 +4696,21 @@ test("eligibility rejects active work, dirty source, and stale canonical source"
       { code: "vibe64_session_renewal_agent_active" }
     );
   });
+  await t.test("goal resumed before its next native turn", async () => {
+    const run = {
+      state: "completed",
+      providerThreadId: "current-thread",
+      providerGoalThreadId: "current-thread",
+      providerGoalStatus: "active"
+    };
+    await assert.rejects(inspect({ session: { agentRuns: [run] } }), {
+      code: "vibe64_session_renewal_agent_active"
+    });
+    for (const providerGoalStatus of ["paused", "blocked", "complete", ""]) {
+      await inspect({ session: { agentRuns: [{ ...run, providerGoalStatus }] } });
+    }
+    await inspect({ session: { agentRuns: [{ ...run, providerGoalThreadId: "old-thread" }] } });
+  });
   await t.test("active Save", async () => {
     await assert.rejects(
       inspect({ task: { status: "running" } }),

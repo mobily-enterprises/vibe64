@@ -241,6 +241,11 @@ function timestampIso(ms = 0) {
 }
 
 function agentRunIsActive(run = {}) {
+  // Codex acknowledges Resume before its scheduler starts the next turn.
+  if (run?.providerGoalStatus === "active" && run.providerGoalThreadId &&
+      run.providerGoalThreadId === run.providerThreadId) {
+    return true;
+  }
   if (run?.active === true) {
     return true;
   }
@@ -2409,6 +2414,11 @@ function createService({
     },
 
     async updateAgentGoal(sessionId, input = {}) {
+      if (input.action === "resume") {
+        return runMainAgentWrite(sessionId, input, (context) => (
+          sessionAgent.updateGoal(sessionId, input, context)
+        ), { operation: "resume-agent-goal" });
+      }
       return sessionAgent.updateGoal(sessionId, input, await assistantSessionOptions(sessionId, input));
     },
 

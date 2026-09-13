@@ -1755,6 +1755,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
     ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerActiveReconcileMs: 60_000,
     codexAppServerDaemonWellbeingMs: 60_000,
+    publishSessionChanged: async (sessionId, event) => captures.onSessionChanged?.(sessionId, event),
     codexToolHomeRequired: false,
     codexToolHomeSource,
     codexAppServerProviderFactory(providerOptions) {
@@ -8636,6 +8637,7 @@ test("goal UI controls reject stale goals and pause before interrupting the curr
     assert.equal(started.ok, true);
     const provider = captures.provider;
     const goal = { threadId: provider.threadId, status: "active", objective: "Finish fixture", createdAt: 10, tokensUsed: 99 };
+    const subscriptionCount = captures.subscribers.size;
     const calls = [];
     provider.isEconomyProvider = () => false;
     provider.readGoal = async () => ({ goal: { ...goal } });
@@ -8658,10 +8660,191 @@ test("goal UI controls reject stale goals and pause before interrupting the curr
     assert.equal(resumed.ok, true, JSON.stringify(resumed));
     assert.equal(resumed.goal.tokensUsed, 99);
     assert.equal(calls.at(-1), "active");
+    assert.equal(captures.subscribers.size, subscriptionCount, "Goal controls added another listener for the same provider");
     for (const status of ["complete", "budgetLimited"]) {
       goal.status = status;
       assert.equal((await controller.updateGoal(sessionId, { ...input, action: "resume" })).ok, false);
       assert.equal((await controller.updateGoal(sessionId, input)).ok, false);
     }
+  });
+});
+
+test("goal Resume respects Save admission and protects the gap before a native turn starts", async () => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+    const provider = captures.provider;
+    const goal = { threadId: provider.threadId, status: "paused", objective: "Finish fixture", createdAt: 10 };
+    const writes = [];
+    provider.readGoal = async () => ({ goal: { ...goal } });
+    provider.setGoalStatus = async (_threadId, status) => {
+      writes.push(status);
+      goal.status = status;
+      return { goal: { ...goal } };
+    };
+    const input = { action: "resume", threadId: goal.threadId, objective: goal.objective, createdAt: goal.createdAt };
+    const saveEntered = Promise.withResolvers();
+    const releaseSave = Promise.withResolvers();
+    const stopBeforeGit = new Error("Stop this fixture before Git publication.");
+    const saving = assert.rejects(terminalService.saveSessionWork(sessionId, {
+      async onRepositoryWriteAcquired() {
+        saveEntered.resolve();
+        await releaseSave.promise;
+        throw stopBeforeGit;
+      }
+    }), (error) => error === stopBeforeGit);
+    await saveEntered.promise;
+    try {
+      const blocked = await terminalService.updateAgentGoal(sessionId, input);
+      assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
+      assert.deepEqual(writes, []);
+    } finally {
+      releaseSave.resolve();
+      await saving;
+    }
+
+    const resumed = await terminalService.updateAgentGoal(sessionId, input);
+    assert.equal(resumed.ok, true, JSON.stringify(resumed));
+    assert.deepEqual(writes, ["active"]);
+    assert.equal(provider.status, "idle", "The native scheduler has not started its turn yet");
+    const pending = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
+    assert.equal(pending.providerGoalStatus, "active");
+    assert.equal(pending.active, false, "Do not invent a running provider turn");
+    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    const earlyMessage = await terminalService.sendAgentMessage(sessionId, {
+      message: "Keep the migration small.", messageId: "goal-message-before-native-turn"
+    });
+    assert.equal(earlyMessage.operationOutcome, "active_turn_not_ready");
+    assert.equal(earlyMessage.retryable, true);
+    assert.equal(captures.turns.length, 0, "A message replaced the pending native goal turn");
+    assert.equal((await runtime.getSession(sessionId)).agentRuns[0].providerGoalStatus, "active");
+
+    provider.status = "inProgress";
+    provider.turnId = "native-goal-turn";
+    for (const subscriber of captures.subscribers) {
+      subscriber(turnStarted({ threadId: provider.threadId, turnId: provider.turnId }));
+    }
+    await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
+      session.agentRuns.some((run) => run.active && run.providerTurnId === provider.turnId)
+    ), "the resumed goal's native turn to enter normal lifecycle tracking");
+    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    const steering = await terminalService.sendAgentMessage(sessionId, {
+      message: "Keep the migration small.", messageId: "goal-message-with-native-turn"
+    });
+    assert.equal(steering.ok, true, JSON.stringify(steering));
+    assert.equal(captures.steers.length, 1);
+    assert.equal(captures.steers[0].turnId, provider.turnId);
+
+    provider.interruptTurn = async () => { provider.status = "interrupted"; return {}; };
+    const paused = await runtime.store.runSessionExclusive(sessionId, "agent-write-mode", () => (
+      terminalService.updateAgentGoal(sessionId, { ...input, action: "pause" })
+    ));
+    assert.equal(paused.acquired, true);
+    assert.equal(paused.value.ok, true, JSON.stringify(paused.value));
+    const stopped = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
+    assert.equal(stopped.providerGoalStatus, "paused");
+    assert.equal(stopped.active, false);
+    await assert.rejects(terminalService.saveSessionWork(sessionId, {
+      onRepositoryWriteAcquired() { throw stopBeforeGit; }
+    }), (error) => error === stopBeforeGit);
+    const messageWhilePaused = await terminalService.sendAgentMessage(sessionId, {
+      message: "Review the checkpoint.", messageId: "goal-message-while-paused"
+    });
+    assert.equal(messageWhilePaused.ok, true, JSON.stringify(messageWhilePaused));
+    assert.equal(captures.turns.length, 1, "A paused goal prevented an ordinary new message");
+  }, { throughTerminalService: true });
+});
+
+test("clearing the current goal releases pending Resume ownership while stale thread events do not", async () => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+    const provider = captures.provider;
+    const goal = { threadId: provider.threadId, status: "paused", objective: "Finish fixture", createdAt: 10 };
+    provider.readGoal = async () => ({ goal: { ...goal } });
+    provider.setGoalStatus = async (_threadId, status) => {
+      goal.status = status;
+      return { goal: { ...goal } };
+    };
+    const resumed = await terminalService.updateAgentGoal(sessionId, {
+      action: "resume", threadId: goal.threadId, objective: goal.objective, createdAt: goal.createdAt
+    });
+    assert.equal(resumed.ok, true, JSON.stringify(resumed));
+    for (const subscriber of captures.subscribers) {
+      subscriber({ method: "thread/goal/cleared", params: { threadId: "another-thread" } });
+    }
+    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    for (const subscriber of captures.subscribers) {
+      subscriber({ method: "thread/goal/cleared", params: { threadId: goal.threadId } });
+    }
+    await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
+      session.agentRuns.some((run) => run.providerGoalThreadId === goal.threadId && run.providerGoalStatus === "")
+    ), "the cleared goal to release pending native work");
+    const stopBeforeGit = new Error("Stop this fixture before Git publication.");
+    await assert.rejects(terminalService.saveSessionWork(sessionId, {
+      onRepositoryWriteAcquired() { throw stopBeforeGit; }
+    }), (error) => error === stopBeforeGit);
+  }, { throughTerminalService: true });
+});
+
+test("clearing a goal settles its finalizing chat turn without another provider status read", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    captures.finalText = "The work is ready.";
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Finish this goal.", messageId: "goal-cleared-final"
+    })).ok, true);
+    const provider = captures.provider;
+    const threadId = provider.threadId;
+    const turnId = provider.turnId;
+    emitCodexNotification(captures.subscribers, threadGoalUpdated({ threadId, turnId }));
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerGoalStatus === "active", "the goal to become active");
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "goal-cleared-answer", phase: "final_answer", text: "The work is ready.", threadId, turnId
+    }));
+    provider.status = "completed";
+    emitCodexNotification(captures.subscribers, turnCompleted({ threadId, turnId }));
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.state === VIBE64_AGENT_RUN_STATE.FINALIZING, "the goal-owned final result");
+    const readThreadStatus = provider.readThreadStatus;
+    provider.readThreadStatus = async () => { throw new Error("Goal clearing already proves that continuation stopped."); };
+    try {
+      emitCodexNotification(captures.subscribers, { method: "thread/goal/cleared", params: { threadId } });
+      await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+        (run) => run?.state === VIBE64_AGENT_RUN_STATE.COMPLETED && run.providerGoalStatus === "",
+        "the cleared goal's final result to settle");
+      const conversation = await store.readConversationLog(sessionId);
+      assert.deepEqual(conversation.flatMap((turn) => turn.assistant ? [turn.assistant.text] : []), ["The work is ready."]);
+    } finally {
+      provider.readThreadStatus = readThreadStatus;
+    }
+  });
+});
+
+test("a goal event from an old subscribed thread cannot reconcile the replacement thread", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    const provider = captures.provider;
+    await store.writeAgentRunEvent(sessionId, "codex_app_server", {
+      patch: {
+        state: VIBE64_AGENT_RUN_STATE.COMPLETED,
+        providerThreadId: "replacement-thread",
+        providerGoalThreadId: "replacement-thread",
+        providerGoalStatus: "active"
+      }
+    });
+    let statusReads = 0;
+    provider.readThreadStatus = async () => { statusReads += 1; return { status: "idle" }; };
+    const handled = Promise.withResolvers();
+    captures.onSessionChanged = (_sessionId, event) => {
+      if (event.reason === "codex-goal") handled.resolve();
+    };
+    emitCodexNotification(captures.subscribers, {
+      method: "thread/goal/cleared", params: { threadId: provider.threadId }
+    });
+    await handled.promise;
+    assert.equal(statusReads, 0, "A stale goal event read its old provider thread");
+    const run = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(run.providerThreadId, "replacement-thread");
+    assert.equal(run.providerGoalThreadId, "replacement-thread");
+    assert.equal(run.providerGoalStatus, "active");
   });
 });

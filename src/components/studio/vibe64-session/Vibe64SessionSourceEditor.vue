@@ -1026,6 +1026,9 @@ async function submitNewFile() {
   addExpandedDirectoryPaths(parentDirectoryPathsFor(filePath));
   newFileDialogOpen.value = false;
   newFileError.value = "";
+  if (mobile.value) {
+    collapseFileList();
+  }
 }
 
 async function copySourcePath(path = "") {

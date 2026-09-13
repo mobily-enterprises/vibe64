@@ -194,7 +194,10 @@ function manualDraftTemplate(terminals, basis = null) {
 
 function sessionHasActiveAgentRun(session = {}) {
   return (Array.isArray(session.agentRuns) ? session.agentRuns : [])
-    .some((run) => vibe64AgentRunStateIsActive(run?.state));
+    .some((run) => vibe64AgentRunStateIsActive(run?.state) || (
+      run?.providerGoalStatus === "active" && run.providerGoalThreadId &&
+      run.providerGoalThreadId === run.providerThreadId
+    ));
 }
 
 function renewalAssistantSelectionMetadata(state = {}) {

@@ -47,7 +47,7 @@
           <v-btn variant="text" :disabled="busy" @click="draft = file.text">Discard edits</v-btn>
           <v-btn color="primary" variant="tonal" :disabled="busy" @click="save">{{ busy ? 'Saving…' : 'Save' }}</v-btn>
         </template>
-        <v-btn :icon="mobile ? mdiDownload : undefined" :prepend-icon="mobile ? undefined : mdiDownload" aria-label="Download file" variant="text" :disabled="dirty || busy" @click="download(file.path)">Download</v-btn>
+        <v-btn :icon="mobile ? mdiDownload : undefined" :prepend-icon="mobile ? undefined : mdiDownload" :text="mobile ? undefined : 'Download'" aria-label="Download file" variant="text" :disabled="dirty || busy" @click="download(file.path)" />
         <v-menu v-if="mobile">
           <template #activator="{ props: menuProps }">
             <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="File actions" variant="text" />
