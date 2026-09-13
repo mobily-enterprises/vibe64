@@ -258,7 +258,8 @@ test("integration setup accepts selections only; executable, Env and session rem
     assert.deepEqual(calls, [{ sessionId: "session-1", integrationId: "calendar", environment: "development",
       operation: "connect", attemptId: undefined, vibe64User: { username: "trusted-owner" },
       setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
-      verificationInput: { account: "fixture" } }]);
+      verificationInput: { account: "fixture" }, ads: undefined, paymentEnvironment: undefined,
+      reviewId: undefined, providerId: undefined, subjectId: undefined, collection: undefined, after: undefined }]);
     assert.deepEqual(reply.payload, { ok: true, status: "disconnected" });
   }));
 });

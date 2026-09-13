@@ -45,3 +45,7 @@
 ## Workspace setup
 
 - Prepare `Install dependencies` with `nodejs` when `package.json` exists: `npm` `install`
+
+## Resource estimates
+
+- Nothing.

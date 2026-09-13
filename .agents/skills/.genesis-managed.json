@@ -6,11 +6,11 @@
       "source": "genesis:skills/genesis-deslop"
     },
     "genesis-program": {
-      "hash": "sha256:ae378bd1b2c378d6f09cf46c263fcc8106f0ea955610ac20a28e53ee5725e4d1",
+      "hash": "sha256:ceb357303c9c1a108e4eec411460699a9356f6b001f97b7928c309c1561e1d6e",
       "source": "genesis:skills/genesis-program"
     },
     "genesis-project": {
-      "hash": "sha256:e7f2659e30e8d6bcce10badd24c49a0ecdc6e259ad118d7fd36fabc4739c3881",
+      "hash": "sha256:afcc061453393f15370553237d7f0ea998fa97b9010a0c127d350fd2e7f6c3a9",
       "source": "genesis:skills/genesis-project"
     }
   }

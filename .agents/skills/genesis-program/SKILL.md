@@ -21,7 +21,8 @@ private design choice, or ambiguity into product intent.
 
 ## Program
 
-Organize Program beneath conceptual subsystem directories:
+Organize Program in readable directories; membership is declared only in
+`genesis/subsystems.md`, independently of directory names:
 
 ```text
 genesis/program/billing/invoices.md
@@ -64,3 +65,58 @@ The caller determines whether this is initial description, complete Program
 refresh, focused post-change reconciliation, Blueprint-only work, or read-only
 review. Respect the caller's edit boundary. Report ambiguity rather than
 inventing intent.
+
+## Subsystems
+
+Maintain `genesis/subsystems.md` alongside Program in description and refresh
+work. Blueprint-only work does not change the map; review remains read-only.
+The map is the authored association authority, but responsibilities and table
+references remain fallible explanations of application source and schema.
+
+Use this exact version-zero grammar:
+
+```markdown
+# Subsystems
+
+## `forms` Forms
+
+Owns reusable form rendering, validation, and submission capture.
+
+### Program
+- `genesis/program/forms/render.md`
+
+### Data owned
+- Table `database` `default` `form_definitions`
+
+### Data used
+- Nothing.
+```
+
+Use one stable lowercase hyphenated id and a human title per subsystem. Each
+entry needs responsibility prose and exactly the three sections shown. Empty
+sections say `- Nothing.`; a new empty map contains only `# Subsystems` and
+`- Nothing.`. Every Program module belongs to exactly one subsystem. No folder
+inference, globs, duplicated operations, or duplicated table owners.
+
+A table identity is three separate exact backticked values: the declared Stack
+resource id, schema, and table. `default` means the resource's default schema;
+use an explicit schema where applicable. Never record a host database name,
+credential, SQL expression, or environment value. Data used references a table
+owned by another declared subsystem. A subsystem may own data without Program
+operations, or operations without data. Read the real schema/migrations before
+assigning ownership; report uncertainty instead of inventing associations.
+
+Maintain `genesis/subsystems.md` in the same implementation turn when a change
+adds, removes, or changes a subsystem responsibility, Program membership, or
+data ownership/use. Read the map before changing related code. Reuse existing
+subsystems unless a distinct responsibility is evidenced. Declare each Program
+module exactly once; folders do not determine membership. Keep table references
+grounded in schema/migrations; Genesis does not inspect databases. Private
+helper changes need no map edit when these associations remain unchanged.
+
+If `genesis/subsystems.md` is missing, or is empty in an existing explained
+application, create it from the actual source, schema, and existing Program
+before implementation. This is ordinary explanatory adoption, not a blocker or
+a reason to ask permission again. Preserve the existing Program and source;
+inspect the relevant responsibilities and complete the smallest truthful map.
+Initialization can create the empty file, but only the agent authors its meaning.

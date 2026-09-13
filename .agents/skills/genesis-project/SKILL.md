@@ -152,3 +152,20 @@ required inputs and resources, declared project operations, and focused evidence
 with what actually exists. Report files changed, checks actually run,
 anything not proven, and anything still requiring attention. Never claim that
 an unrun check passed or that passing checks prove the whole product.
+
+## Subsystem maintenance
+
+Maintain `genesis/subsystems.md` in the same implementation turn when a change
+adds, removes, or changes a subsystem responsibility, Program membership, or
+data ownership/use. Read the map before changing related code. Reuse existing
+subsystems unless a distinct responsibility is evidenced. Declare each Program
+module exactly once; folders do not determine membership. Keep table references
+grounded in schema/migrations; Genesis does not inspect databases. Private
+helper changes need no map edit when these associations remain unchanged.
+
+If `genesis/subsystems.md` is missing, or is empty in an existing explained
+application, create it from the actual source, schema, and existing Program
+before implementation. This is ordinary explanatory adoption, not a blocker or
+a reason to ask permission again. Preserve the existing Program and source;
+inspect the relevant responsibilities and complete the smallest truthful map.
+Initialization can create the empty file, but only the agent authors its meaning.
