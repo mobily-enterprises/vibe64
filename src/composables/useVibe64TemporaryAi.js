@@ -107,6 +107,7 @@ function useVibe64TemporaryAi({
     try {
       onTaskFinished(Object.freeze({
         completionMessage: temporaryAiText(task.completionMessage),
+        dedupeKey: temporaryAiText(task.dedupeKey),
         error: temporaryAiText(task.error),
         failureMessage: temporaryAiText(task.failureMessage),
         id: task.id,

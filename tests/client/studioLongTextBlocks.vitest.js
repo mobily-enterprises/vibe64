@@ -6,6 +6,24 @@ import {
 } from "../../src/lib/studioLongTextBlocks.js";
 
 describe("Studio long text review blocks", () => {
+  it("preserves paragraphs and wrapped bullet text from authored Markdown", () => {
+    expect(parseLongTextReviewBlocks([
+      "First paragraph.", "", "Second paragraph with **emphasis**.", "",
+      "- Keep this responsibility", "  with its continued line.",
+      "- Keep [the explanation](program/forms.md)", "with a lazy continuation.", "",
+      "A separate paragraph.", "", "1. First step", "   continued here.", "2. Second step"
+    ].join("\n"))).toEqual([
+      { type: "paragraph", text: "First paragraph." },
+      { type: "paragraph", text: "Second paragraph with **emphasis**." },
+      { type: "ul", items: [
+        { text: "Keep this responsibility with its continued line." },
+        { text: "Keep [the explanation](program/forms.md) with a lazy continuation." }
+      ] },
+      { type: "paragraph", text: "A separate paragraph." },
+      { type: "ol", items: [{ text: "First step continued here." }, { text: "Second step" }] }
+    ]);
+  });
+
   it("parses headings, paragraphs, lists, and code blocks", () => {
     expect(parseLongTextReviewBlocks([
       "# Title",

@@ -1,6 +1,7 @@
 import {
   computed,
-  unref
+  unref,
+  watch
 } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
@@ -26,6 +27,7 @@ function cityAvailable(status = {}, kind = "") {
 
 function useVibe64SystemGraph({
   active = true,
+  reloadVersion = 0,
   sessionId = ""
 } = {}) {
   const paths = usePaths();
@@ -105,6 +107,14 @@ function useVibe64SystemGraph({
     }
     await Promise.all(cityLoads);
   }
+
+  let lastReloadVersion = 0;
+  watch([enabled, () => unref(reloadVersion)], ([isEnabled, version]) => {
+    if (isEnabled && version !== lastReloadVersion) {
+      lastReloadVersion = version;
+      void reload();
+    }
+  }, { immediate: true });
 
   async function refresh() {
     const result = await refreshResource.save({}, { method: "POST" });
