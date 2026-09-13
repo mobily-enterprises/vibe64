@@ -3032,8 +3032,26 @@ async function listBoundedCodexAppServerThreadIds({
   );
 }
 
+function codexPlanUsage(limits = {}) {
+  if (limits?.limitId && limits.limitId !== "codex") return { status: "unavailable", windows: [], checkedAt: Date.now() };
+  const windows = ["primary", "secondary"].flatMap((id) => {
+    const value = limits?.[id];
+    if (typeof value?.usedPercent !== "number" || !Number.isFinite(value.usedPercent) || value.usedPercent < 0) return [];
+    return [{
+      id,
+      remainingPercent: Math.max(0, 100 - Math.min(100, value.usedPercent)),
+      windowDurationMins: Number.isInteger(value.windowDurationMins) && value.windowDurationMins > 0 ? value.windowDurationMins : null,
+      resetsAt: Number.isSafeInteger(value.resetsAt) && value.resetsAt > 0 ? value.resetsAt : null
+    }];
+  });
+  return { status: windows.length ? "available" : "unavailable", windows, checkedAt: Date.now() };
+}
+
 class CodexAppServerAgentProvider {
   constructor(options = {}) {
+    this.planUsage = null;
+    this.planUsagePending = null;
+    this.planUsageAuthGeneration = 0;
     this.availabilityPromise = null;
     this.options = options;
     this.client = null;
@@ -3410,6 +3428,19 @@ class CodexAppServerAgentProvider {
       throw error;
     }
     this.client = client;
+    this.planUsage = null;
+    this.planUsagePending = null;
+    client.subscribe((notification = {}) => {
+      if (this.client !== client) return;
+      if (notification.method === "account/updated") {
+        this.planUsage = null;
+        this.planUsageAuthGeneration += 1;
+      }
+      if (notification.method === "account/rateLimits/updated") {
+        const limits = notification.params?.rateLimits;
+        if (!limits?.limitId || limits.limitId === "codex") this.planUsage = codexPlanUsage(limits);
+      }
+    });
     this.initializeResult = normalizeCodexAppServerInfo(initializeResult);
     this.connectionGeneration += 1;
     return {
@@ -3520,6 +3551,36 @@ class CodexAppServerAgentProvider {
         this.availabilityPromise = null;
       }
     }
+  }
+
+  async readPlanUsage() {
+    const client = this.client;
+    if (!client?.isOpen?.()) return { status: "unavailable", windows: [] };
+    if (this.planUsage && Date.now() - this.planUsage.checkedAt < 60_000) return this.planUsage;
+    if (this.planUsagePending) return this.planUsagePending;
+    const previous = this.planUsage;
+    const authGeneration = this.planUsageAuthGeneration;
+    const signal = AbortSignal.timeout(10_000);
+    const operation = (async () => {
+      try {
+        const account = await client.request("account/read", { refreshToken: false }, { signal });
+        if (this.client !== client || this.planUsageAuthGeneration !== authGeneration) return { status: "unavailable", windows: [] };
+        if (account?.account?.type !== "chatgpt") {
+          this.planUsage = { status: "unsupported", windows: [], checkedAt: Date.now() };
+        } else {
+          const result = await client.request("account/rateLimits/read", {}, { signal });
+          if (this.client !== client || this.planUsageAuthGeneration !== authGeneration) return { status: "unavailable", windows: [] };
+          // A live event received during the read is newer than this request.
+          if (this.planUsage === previous) this.planUsage = codexPlanUsage(result.rateLimitsByLimitId?.codex || result.rateLimits);
+        }
+        return this.planUsage;
+      } catch {
+        return { status: "unavailable", windows: [] };
+      }
+    })();
+    this.planUsagePending = operation;
+    try { return await operation; }
+    finally { if (this.planUsagePending === operation) this.planUsagePending = null; }
   }
 
   subscribe(callback) {
@@ -3923,6 +3984,8 @@ class CodexAppServerAgentProvider {
   }
 
   close() {
+    this.planUsage = null;
+    this.planUsagePending = null;
     this.client?.close();
     this.client = null;
     this.initializeResult = null;

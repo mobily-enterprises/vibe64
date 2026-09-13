@@ -6998,6 +6998,11 @@ function createCodexTerminalController({
     }
     const unsubscribeNotifications = provider.subscribe((notification = {}) => {
       const method = normalizeText(notification.method);
+      if (method === "account/rateLimits/updated" || method === "account/updated") {
+        runCodexAppServerNotificationTask({ method, projectContext, sessionId: normalizedSessionId, sessionKey }, () =>
+          publishSessionChanged(normalizedSessionId, { reason: "codex-plan-usage" }));
+        return;
+      }
       const notificationThreadId = codexAppServerNotificationThreadId(notification);
       if (notificationThreadId !== normalizedThreadId) {
         return;
@@ -13092,6 +13097,17 @@ function createCodexTerminalController({
           return { ok: true, admission: "unknown", messageId, threadId };
         }
       });
+    },
+
+    async readPlanUsage(sessionId) {
+      const sessionKey = codexTerminalNamespace(sessionId);
+      for (const [key, provider] of codexAppServerProviders) {
+        if (codexAppServerProviderSessionKeys.get(key) === sessionKey &&
+            !provider.isEconomyProvider() && provider.isAvailable()) {
+          return provider.readPlanUsage();
+        }
+      }
+      return { status: "unavailable", windows: [] };
     },
 
     modelCatalog(options = {}) {

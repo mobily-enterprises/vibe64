@@ -649,6 +649,14 @@ function createSessionAgentManager({
   }
 
   return Object.freeze({
+    async readPlanUsage(sessionId, options = {}) {
+      const provider = bindSession(sessionId, options);
+      const access = await accessFor(provider, sessionId, options);
+      if (provider.id !== "codex" || !access.canUse || !access.ownerOnly) {
+        return { status: "unsupported", windows: [] };
+      }
+      return provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session });
+    },
     async assistantAccess(sessionId = "", options = {}) {
       const provider = bindSession(sessionId, options);
       return accessFor(provider, sessionId, options);

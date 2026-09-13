@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   Vibe64SessionEnvironment
@@ -11,6 +13,21 @@ import {
 function wrappedCommand(wrapperPath, command) {
   return [wrapperPath, command].map((value) => `'${value.replaceAll("'", `'"'"'`)}'`).join(" ");
 }
+
+test("the OpenCode plugin loads without Genesis compiler or native parser modules", async () => {
+  const pluginUrl = new URL("../../packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", import.meta.url).href;
+  await promisify(execFile)(process.execPath, ["--input-type=module", "-e", `
+    import { registerHooks } from "node:module";
+    registerHooks({ resolve(specifier, context, next) {
+      if (specifier.startsWith("genesis-compiler") || specifier.startsWith("@ast-grep/")) {
+        throw new Error("Native compiler dependency loaded by the OpenCode plugin: " + specifier);
+      }
+      return next(specifier, context);
+    } });
+    const { Vibe64SessionEnvironment } = await import(${JSON.stringify(pluginUrl)});
+    await Vibe64SessionEnvironment();
+  `]);
+});
 
 test("OpenCode raises output only for models with an advertised output limit", async () => {
   const plugin = await Vibe64SessionEnvironment();

@@ -37,6 +37,7 @@ import {
   createService as createTerminalService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
+  addGenesisStack,
   genesisPackageBinDirectory,
   initializeGenesisProject,
   inspectGenesisSkills
@@ -313,6 +314,30 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.preparation_required"), true);
   assert.equal(await readFile(skillPath, "utf8"), original);
   await assert.rejects(access(path.join(projectRoot, "node_modules/genesis-compiler")), { code: "ENOENT" });
+});
+
+test("incomplete project contracts defer skill refresh without blocking repair chat", async (t) => {
+  const warnings = [];
+  const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    logger: { warn(event) { warnings.push(event); } }
+  });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  await addGenesisStack({ projectRoot, pieces: ["jskit"] });
+  const stackPath = path.join(projectRoot, "genesis/stack.md");
+  const stack = (await readFile(stackPath, "utf8"))
+    .replace(/\n## Resource estimates\n[\s\S]*?(?=\n## |$)/u, "");
+  await writeFile(stackPath, stack);
+  session.workspaceSetup = { status: "succeeded", recipeHash: "existing-setup" };
+  projectService.runProjectSourceExclusive = async () => assert.fail("Incomplete contracts must not change source.");
+  await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "STACK_PROJECT_CONTRACTS_INCOMPLETE" });
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Help repair project setup." }, { engineId: "opencode" }),
+  { code: "vibe64_opencode_selection_required" });
+  assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: "existing-setup" });
+  assert.equal(await readFile(stackPath, "utf8"), stack);
+  assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred"), true);
 });
 
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {

@@ -313,6 +313,13 @@ function registerRoutes(
     );
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/agent-plan-usage", {
+    summary: "Read the selected assistant account's remaining plan allowance."
+  }, (request) => terminalService().readAgentPlanUsage(
+    request.params.sessionId,
+    withVibe64User(request, {})
+  ));
+
   routes.serviceRoute("POST", "/sessions/:sessionId/agent-session", {
     summary: "Prepare the Vibe64 assistant session."
   }, (request) => {

@@ -40,7 +40,10 @@ If Genesis reports a selected skill package unavailable, Vibe64 records a
 visible preparation-required diagnostic and lets provider delivery proceed.
 It preserves the installed project skills, leaves the declared package version
 authoritative, and neither substitutes the host package nor installs dependencies
-as part of sending a message. Other inspection errors still propagate.
+as part of sending a message. Incomplete project-owned Stack contracts defer
+automatic skill refresh without invalidating successful setup or changing source,
+so the conversation can repair them. Setup and launch retain their contract
+validation. Other inspection errors still propagate.
 An active main or temporary turn skips this preparation. Routine connection
 verification and read-only temporary conversations remain read-only. Project
 format migration remains a separate operation, and skill maintenance does not

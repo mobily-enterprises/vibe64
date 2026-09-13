@@ -5,6 +5,8 @@ including follow-up guidance while a turn is active.
 
 ## Sources
 
+- `src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue`
+
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
@@ -39,6 +41,7 @@ including follow-up guidance while a turn is active.
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/opencodeServerClient.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
+- `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/service.js`
@@ -69,6 +72,22 @@ including follow-up guidance while a turn is active.
 - `vite.config.mjs`
 
 ## Public contract
+
+Codex plan allowance uses `account/rateLimits/read` and
+`account/rateLimits/updated` on the existing interactive provider connection.
+Only normalized percentages, window durations and reset timestamps reach the
+account-access-checked session read endpoint. Account changes and connection
+replacement invalidate the in-memory reading; late reads cannot restore a
+previous account's values. API connections and unauthorized collaborators
+receive no allowance. Realtime session events carry invalidation only. The
+active Codex chat indicator reads on mount and live invalidations, with a
+one-minute visible-page refresh and bounded provider reads. It never starts
+an assistant to obtain usage, stores no allowance in project history, and
+shows only the percentage remaining for the seven-day window. Missing or
+expired weekly readings hide the number until Codex confirms current values.
+Hover/tap details include known weekly reset times and the five-hour allowance
+and reset time when supplied, without adding them to the visible percentage.
+
 
 Codex and OpenCode pass readable, single-quoted command text to the existing
 session command wrapper. Shell quoting preserves literal quotes, substitutions,
@@ -326,6 +345,17 @@ developer instructions inside an already-live thread.
 The provider may serialize its system or developer instructions again for a
 later stateless model request, but Vibe64 does not rerender them into the
 person's message or copy them into the turn-context lane.
+
+The Vibe64 Genesis hook executable grants Git trust only to the registered
+OpenCode provider session's exact working directory when invoked from that
+directory. Unregistered sessions and other worktrees keep Genesis's ordinary
+ownership checks. This uses the same scoped compiler trust operation as
+Vibe64's in-process inspections, without global Git configuration or ownership
+changes.
+The OpenCode runtime plugin imports only the prompt formatter from the Genesis
+boundary, so formatting host context does not load the compiler's native source
+parsers into OpenCode's Bun process. Genesis hooks still run through the separate
+Node executable.
 
 Non-project, tool-free conversations have no Genesis project plugin. OpenCode's
 host plugin therefore installs their validated, host-supplied context directly

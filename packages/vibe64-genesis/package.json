@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server": "./src/server/index.js"
+    "./server": "./src/server/index.js",
+    "./server/promptContext": "./src/server/promptContext.js"
   },
   "jskit": {
     "kind": "runtime",

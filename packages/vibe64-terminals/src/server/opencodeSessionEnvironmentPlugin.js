@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { vibe64Driver } from "@local/vibe64-genesis/server";
+import { vibe64Driver } from "@local/vibe64-genesis/server/promptContext";
 
 const OPENCODE_UNDECLARED_OUTPUT_TOKEN_MAX = 32_000;
 

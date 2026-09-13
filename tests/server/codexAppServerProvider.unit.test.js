@@ -4077,3 +4077,57 @@ test("codex JSON-RPC client connects to Unix socket endpoints without WebSocket 
 
   client.close();
 });
+
+test("Codex plan allowance reads once, accepts live updates and clears on auth changes", async () => {
+  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
+  await provider.openConnection();
+  try {
+    const socket = FakeWebSocket.instances.at(-1);
+    const calls = [];
+    provider.client.request = async (method) => {
+      calls.push(method);
+      if (method === "account/read") return { account: { type: "chatgpt" } };
+      return { rateLimits: { primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 2000000000 }, secondary: { usedPercent: 80, windowDurationMins: 10080 } } };
+    };
+    const results = await Promise.all([provider.readPlanUsage(), provider.readPlanUsage()]);
+    assert.equal(results[0].status, "available");
+    assert.deepEqual(results[0].windows.map((window) => window.remainingPercent), [75, 20]);
+    assert.deepEqual(calls, ["account/read", "account/rateLimits/read"]);
+    const notify = (method, params) => socket.emit("message", { data: JSON.stringify({ method, params }) });
+    notify("account/rateLimits/updated", { rateLimits: { limitId: "codex", primary: { usedPercent: 100, windowDurationMins: 300 } } });
+    assert.equal((await provider.readPlanUsage()).windows[0].remainingPercent, 0);
+    notify("account/rateLimits/updated", { rateLimits: { limitId: "other", primary: { usedPercent: 5 } } });
+    assert.equal((await provider.readPlanUsage()).windows[0].remainingPercent, 0);
+    notify("account/rateLimits/updated", { rateLimits: { limitId: "codex", primary: { usedPercent: null } } });
+    assert.equal((await provider.readPlanUsage()).status, "unavailable");
+    notify("account/updated", { authMode: "apikey" });
+    provider.client.request = async (method) => {
+      assert.equal(method, "account/read");
+      return { account: { type: "apiKey" } };
+    };
+    assert.equal((await provider.readPlanUsage()).status, "unsupported");
+    notify("account/updated", { authMode: "chatgpt" });
+    provider.client.request = async () => { throw new Error("private upstream detail"); };
+    assert.deepEqual(await provider.readPlanUsage(), { status: "unavailable", windows: [] });
+  } finally { provider.close(); }
+  assert.deepEqual(await provider.readPlanUsage(), { status: "unavailable", windows: [] });
+});
+
+test("Codex plan allowance ignores a read completed after an account switch", async () => {
+  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
+  await provider.openConnection();
+  try {
+    let finish;
+    provider.client.request = async (method) => method === "account/read"
+      ? { account: { type: "chatgpt" } }
+      : new Promise((resolve) => { finish = resolve; });
+    const read = provider.readPlanUsage();
+    await Promise.resolve();
+    FakeWebSocket.instances.at(-1).emit("message", { data: JSON.stringify({ method: "account/updated", params: { authMode: "chatgpt" } }) });
+    finish({ rateLimits: { secondary: { usedPercent: 90, windowDurationMins: 10080 } } });
+    assert.deepEqual(await read, { status: "unavailable", windows: [] });
+    assert.equal(provider.planUsage, null);
+  } finally { provider.close(); }
+});

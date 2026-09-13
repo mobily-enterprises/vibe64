@@ -592,6 +592,15 @@ function createService({
     try {
       inspection = await inspectGenesisSkills({ projectRoot });
     } catch (error) {
+      if (error?.code === "STACK_PROJECT_CONTRACTS_INCOMPLETE") {
+        logOperationalEvent(logger, "warn", {
+          code: error.code,
+          component: "vibe64.agent_skills",
+          event: "vibe64.agent_skills.refresh_deferred",
+          sessionId
+        }, "Project contracts need repair; skill refresh deferred so chat remains available.");
+        return;
+      }
       if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;
       await invalidateWorkspaceSetup(context,
         `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`);
@@ -2370,6 +2379,10 @@ function createService({
         }, "Vibe64 assistant message delivery failed.");
         throw error;
       }
+    },
+
+    async readAgentPlanUsage(sessionId, options = {}) {
+      return sessionAgent.readPlanUsage(sessionId, await assistantSessionOptions(sessionId, options));
     },
 
     async ensureAgentSession(sessionId, options = {}) {

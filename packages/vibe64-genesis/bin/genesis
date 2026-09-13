@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFile, realpath } from "node:fs/promises";
+import { withTrustedGitRepository } from "genesis-compiler";
 import { runCli } from "genesis-compiler/cli";
 
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
@@ -18,4 +20,22 @@ function withVibe64StackPackages(argv = []) {
   return [command, ...packages, ...args];
 }
 
-process.exitCode = await runCli(withVibe64StackPackages(process.argv.slice(2)));
+const argv = withVibe64StackPackages(process.argv.slice(2));
+const registryPath = process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY;
+let trustedWorktree = "";
+if (argv[0] === "hook" && registryPath) {
+  const input = JSON.parse(process.env.GENESIS_HOST_CONTEXT_INPUT || "{}");
+  const registry = JSON.parse(await readFile(registryPath, "utf8"));
+  const session = registry.sessions?.find((entry) => (
+    input.sessionId && entry.upstreamSessionId === input.sessionId
+  ));
+  if (session?.workdir) {
+    const worktree = await realpath(session.workdir);
+    if (worktree === await realpath(process.cwd())) {
+      trustedWorktree = worktree;
+    }
+  }
+}
+process.exitCode = trustedWorktree
+  ? await withTrustedGitRepository(trustedWorktree, () => runCli(argv))
+  : await runCli(argv);

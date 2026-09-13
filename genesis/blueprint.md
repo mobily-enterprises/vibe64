@@ -114,6 +114,8 @@ asks before selecting any technology.
 Before starting foreground assistant work in an idle session, Vibe64 refreshes
 outdated unmodified Genesis skills through Genesis's own synchronization.
 Customized skills are preserved and changes remain visible in the source diff.
+Incomplete project setup declarations defer this automatic refresh so people can
+continue chatting with the assistant to repair them.
 Background connection checks and active-turn steering do not perform this write.
 Already-loaded guidance becomes current through the assistant's normal context
 refresh lifecycle.
@@ -470,3 +472,9 @@ editor saves a portable campaign plan and invokes its declared command. Google
 bills the selected account directly. Tracking/billing readiness is confirmed by
 the operator; account provisioning and other campaign types remain outside this
 first Search path.
+
+When Codex uses a ChatGPT plan, authorized account users can see the remaining
+weekly allowance as a single percentage beside the chat controls, with its
+label, known reset times, and the five-hour allowance in the hover/tap details. Allowance is account-wide, distinct
+from conversation context usage. API-key connections and other assistants do
+not show a plan meter; unavailable readings never imply unused allowance.

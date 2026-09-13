@@ -110,6 +110,49 @@ test("the Genesis boundary reads a shared session checkout without granting unre
   });
 });
 
+test("the Genesis hook shim trusts only the registered provider session worktree", {
+  skip: process.platform === "win32"
+}, async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectRoot = path.join(root, "session");
+    const otherRoot = path.join(root, "other");
+    for (const directory of [projectRoot, otherRoot]) {
+      await mkdir(directory);
+      await initializeGit(directory);
+      await initializeGenesisProject({ projectRoot: directory });
+    }
+    const { stdout } = await execFileAsync("which", ["git"]);
+    const bin = path.join(root, "bin");
+    await mkdir(bin);
+    const wrapper = path.join(bin, "git");
+    await writeFile(wrapper, `#!/bin/sh\nexport GIT_TEST_ASSUME_DIFFERENT_OWNER=1\nexec '${stdout.trim().replaceAll("'", "'\\''")}' "$@"\n`);
+    await chmod(wrapper, 0o755);
+    const registryPath = path.join(root, "registry.json");
+    await writeFile(registryPath, JSON.stringify({
+      sessions: [{ upstreamSessionId: "provider-session", workdir: projectRoot }]
+    }));
+    const shim = path.join(genesisCommandShimDirectory(), "genesis");
+    const env = {
+      ...process.env,
+      GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({ sessionId: "provider-session" }),
+      PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+      VIBE64_OPENCODE_SESSION_ENV_REGISTRY: registryPath
+    };
+    const run = (target = projectRoot, options = {}) => execFileAsync(process.execPath, [
+      shim, "hook", "turn", "--project-root", target
+    ], { cwd: projectRoot, env, ...options });
+    await run();
+    await assert.rejects(run(otherRoot), /GIT_REPOSITORY_UNTRUSTED/u);
+    await assert.rejects(run(projectRoot, {
+      env: { ...env, GENESIS_HOST_CONTEXT_INPUT: '{"sessionId":"unknown"}' }
+    }), /GIT_REPOSITORY_UNTRUSTED/u);
+    await assert.rejects(run(projectRoot, { cwd: otherRoot }), /GIT_REPOSITORY_UNTRUSTED/u);
+    await assert.rejects(run(projectRoot, {
+      env: { ...env, VIBE64_OPENCODE_SESSION_ENV_REGISTRY: "" }
+    }), /GIT_REPOSITORY_UNTRUSTED/u);
+  });
+});
+
 test("the Genesis integration maps Vibe actions to explicit Genesis tasks and requests", () => {
   assert.equal(genesisPromptTask({ genesisTask: "program" }), "program");
   assert.equal(genesisPromptTask({ genesisTask: "adopt" }), "adopt");

@@ -1333,3 +1333,25 @@ test("session agent manager treats input to an authorized terminal as bound tran
   assert.equal(terminalWrites[0].input.data, "\u0003");
   assert.equal(result.providerId, "opencode");
 });
+
+test("plan allowance is private to authorized Codex plan users", async () => {
+  for (const engineId of ["codex", "opencode"]) {
+    for (const ownerOnly of [true, false]) {
+      for (const role of ["owner", "user"]) {
+        let reads = 0;
+        const manager = createSessionAgentManager({
+          readAssistantAccess: async () => ({ ownerOnly }),
+          providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
+            async readPlanUsage() { reads += 1; return { status: "available", windows: [] }; }
+          }]
+        });
+        const result = await manager.readPlanUsage("session-1", {
+          agentSettings: { providerId: engineId }, vibe64User: { role }
+        });
+        const allowed = engineId === "codex" && ownerOnly && role === "owner";
+        assert.equal(reads, allowed ? 1 : 0);
+        assert.equal(result.status, allowed ? "available" : "unsupported");
+      }
+    }
+  }
+});
