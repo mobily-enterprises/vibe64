@@ -8629,3 +8629,39 @@ for (const failureIndex of [0, 1]) {
     });
   });
 }
+
+test("goal UI controls reject stale goals and pause before interrupting the current turn", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+    const started = await controller.sendMessage(sessionId, { message: "Exercise goal controls", messageId: "goal-control-test" });
+    assert.equal(started.ok, true);
+    const provider = captures.provider;
+    const goal = { threadId: provider.threadId, status: "active", objective: "Finish fixture", createdAt: 10, tokensUsed: 99 };
+    const calls = [];
+    provider.isEconomyProvider = () => false;
+    provider.readGoal = async () => ({ goal: { ...goal } });
+    provider.setGoalStatus = async (threadId, status) => {
+      calls.push(status);
+      assert.equal(threadId, goal.threadId);
+      goal.status = status;
+      return { goal: { ...goal } };
+    };
+    provider.interruptTurn = async () => { calls.push("interrupt"); provider.status = "interrupted"; return {}; };
+    assert.equal((await controller.readGoal(sessionId)).goal.tokensUsed, 99);
+    const input = { action: "pause", threadId: goal.threadId, objective: goal.objective, createdAt: goal.createdAt };
+    assert.equal((await controller.updateGoal(sessionId, { ...input, threadId: "another-thread" })).ok, false);
+    assert.equal((await controller.updateGoal(sessionId, { ...input, objective: "older goal" })).ok, false);
+    assert.deepEqual(calls, []);
+    const paused = await controller.updateGoal(sessionId, input);
+    assert.equal(paused.ok, true, JSON.stringify(paused));
+    assert.deepEqual(calls, ["paused", "interrupt"]);
+    const resumed = await controller.updateGoal(sessionId, { ...input, action: "resume" });
+    assert.equal(resumed.ok, true, JSON.stringify(resumed));
+    assert.equal(resumed.goal.tokensUsed, 99);
+    assert.equal(calls.at(-1), "active");
+    for (const status of ["complete", "budgetLimited"]) {
+      goal.status = status;
+      assert.equal((await controller.updateGoal(sessionId, { ...input, action: "resume" })).ok, false);
+      assert.equal((await controller.updateGoal(sessionId, input)).ok, false);
+    }
+  });
+});

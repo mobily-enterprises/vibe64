@@ -1355,3 +1355,26 @@ test("plan allowance is private to authorized Codex plan users", async () => {
     }
   }
 });
+
+test("goal status and controls require the selected Codex account's assistant access", async () => {
+  for (const engineId of ["codex", "opencode"]) {
+    for (const role of ["owner", "user"]) {
+      let reads = 0;
+      let writes = 0;
+      const manager = createSessionAgentManager({
+        readAssistantAccess: async () => ({ ownerOnly: true }),
+        providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
+          readGoal: async () => { reads += 1; return { status: "available", goal: null }; },
+          updateGoal: async () => { writes += 1; return { ok: true }; }
+        }]
+      });
+      const options = { agentSettings: { providerId: engineId }, vibe64User: { role } };
+      const allowed = engineId === "codex" && role === "owner";
+      await manager.readGoal("session-1", options);
+      if (allowed) await manager.updateGoal("session-1", { action: "pause" }, options);
+      else await assert.rejects(manager.updateGoal("session-1", { action: "pause" }, options));
+      assert.equal(reads, allowed ? 1 : 0);
+      assert.equal(writes, allowed ? 1 : 0);
+    }
+  }
+});

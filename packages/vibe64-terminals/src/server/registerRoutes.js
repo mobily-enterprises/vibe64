@@ -313,6 +313,18 @@ function registerRoutes(
     );
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/agent-goal", {
+    summary: "Read the selected Codex conversation goal."
+  }, (request) => terminalService().readAgentGoal(
+    request.params.sessionId, withVibe64User(request, {})
+  ));
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-goal", {
+    summary: "Pause or resume the selected Codex conversation goal."
+  }, (request) => terminalService().updateAgentGoal(
+    request.params.sessionId, withVibe64User(request, routes.requestBody(request))
+  ));
+
   routes.serviceRoute("GET", "/sessions/:sessionId/agent-plan-usage", {
     summary: "Read the selected assistant account's remaining plan allowance."
   }, (request) => terminalService().readAgentPlanUsage(

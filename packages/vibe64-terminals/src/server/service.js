@@ -2404,6 +2404,14 @@ function createService({
       }
     },
 
+    async readAgentGoal(sessionId, options = {}) {
+      return sessionAgent.readGoal(sessionId, await assistantSessionOptions(sessionId, options));
+    },
+
+    async updateAgentGoal(sessionId, input = {}) {
+      return sessionAgent.updateGoal(sessionId, input, await assistantSessionOptions(sessionId, input));
+    },
+
     async readAgentPlanUsage(sessionId, options = {}) {
       return sessionAgent.readPlanUsage(sessionId, await assistantSessionOptions(sessionId, options));
     },

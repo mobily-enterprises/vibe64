@@ -613,6 +613,12 @@ function createCodexSessionAgentProvider({
     async invalidateRuntimes(_context, input = {}) {
       return controller.invalidateAppServerRuntimes(input);
     },
+    readGoal(context) {
+      return controller.readGoal(context.sessionId, { runtime: context.runtime, session: context.session });
+    },
+    updateGoal(context, input) {
+      return controller.updateGoal(context.sessionId, input, { runtime: context.runtime, session: context.session });
+    },
     readPlanUsage(context) {
       return controller.readPlanUsage(context.sessionId, { runtime: context.runtime, session: context.session });
     },

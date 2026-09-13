@@ -7044,8 +7044,14 @@ function createCodexTerminalController({
           );
         });
       }
+      if (method === "thread/goal/cleared") {
+        runCodexAppServerNotificationTask(notificationContext, () =>
+          publishSessionChanged(normalizedSessionId, { reason: "codex-goal" }));
+        return;
+      }
       if (method === "thread/goal/updated") {
-        runCodexAppServerNotificationTask(notificationContext, () => {
+        runCodexAppServerNotificationTask(notificationContext, async () => {
+          await publishSessionChanged(normalizedSessionId, { reason: "codex-goal" });
           return reconcileCodexAppServerGoalUpdated(
             normalizedSessionId,
             provider,
@@ -13132,6 +13138,67 @@ function createCodexTerminalController({
           return { ok: true, admission: "unknown", messageId, threadId };
         }
       });
+    },
+
+    async readGoal(sessionId, options = {}) {
+      const context = await codexAppServerSessionContext(sessionId, options);
+      if (context.ok === false) {
+        return { status: "unavailable", goal: null };
+      }
+      const threadId = codexAppServerTurnState(context.session).threadId ||
+        codexThreadIdForWorkdir(context.session, context.workdir);
+      if (!threadId) {
+        return { status: "available", goal: null };
+      }
+      const sessionKey = codexTerminalNamespace(sessionId);
+      for (const [key, provider] of codexAppServerProviders) {
+        if (codexAppServerProviderSessionKeys.get(key) === sessionKey &&
+            !provider.isEconomyProvider() && provider.isAvailable()) {
+          const result = await provider.readGoal(threadId);
+          return { status: "available", goal: result.goal || null };
+        }
+      }
+      return { status: "unavailable", goal: null };
+    },
+
+    async updateGoal(sessionId, input = {}, options = {}) {
+      if (!["pause", "resume"].includes(input.action)) {
+        return { ok: false, error: "Choose pause or resume." };
+      }
+      const admission = beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId));
+      if (admission.ok === false) return admission;
+      try {
+        const context = await codexAppServerConversationContext(sessionId, {}, options);
+        if (context.ok === false) return context;
+        const threadId = codexAppServerTurnState(context.session).threadId ||
+          codexThreadIdForWorkdir(context.session, context.workdir);
+        if (!threadId || threadId !== input.threadId) {
+          return { ok: false, error: "The Codex conversation changed. Refresh the goal before trying again." };
+        }
+        const { goal } = await context.provider.readGoal(threadId);
+        if (!goal || goal.status === "complete" || goal.createdAt !== input.createdAt || goal.objective !== input.objective) {
+          return { ok: false, error: "The Codex goal changed. Refresh it before trying again." };
+        }
+        if (input.action === "pause" && !["active", "paused"].includes(goal.status)) {
+          return { ok: false, error: "This goal is already stopped. Refresh its details." };
+        }
+        if (input.action === "resume" && !["paused", "blocked", "usageLimited"].includes(goal.status)) {
+          return { ok: false, error: "This goal cannot be resumed from its current status. Refresh its details." };
+        }
+        subscribeCodexAppServerEvents(sessionId, context.provider, threadId);
+        const result = await context.provider.setGoalStatus(threadId, input.action === "pause" ? "paused" : "active");
+        if (input.action === "pause") {
+          await reconcileCodexAppServerThreadStatus(sessionId, context.provider, threadId, { observeLatestTurn: true });
+          const stopped = await interruptCodexAppServerTurnWithinAdmission(sessionId, { threadId });
+          if (stopped.ok === false) {
+            return { ...stopped, goal: result.goal };
+          }
+        }
+        await publishSessionChanged(sessionId, { reason: "codex-goal" });
+        return { ok: true, status: "available", goal: result.goal || null };
+      } finally {
+        admission.release();
+      }
     },
 
     async readPlanUsage(sessionId) {

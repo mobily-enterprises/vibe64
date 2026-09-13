@@ -480,3 +480,9 @@ weekly allowance as a single percentage beside the chat controls, with its
 label, known reset times, and the five-hour allowance in the hover/tap details. Allowance is account-wide, distinct
 from conversation context usage. API-key connections and other assistants do
 not show a plan meter; unavailable readings never imply unused allowance.
+
+The Codex chat indicator also shows the current conversation goal status.
+People can open its objective and pause or resume an unfinished goal without
+losing its objective or usage history. Pause also interrupts the current turn.
+Goal controls are separate from plan allowance and are available to authorized
+Codex users even when no weekly allowance is reported.

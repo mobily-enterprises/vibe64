@@ -657,6 +657,22 @@ function createSessionAgentManager({
       }
       return provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session });
     },
+    async readGoal(sessionId, options = {}) {
+      const provider = bindSession(sessionId, options);
+      const access = await accessFor(provider, sessionId, options);
+      if (provider.id !== "codex" || !access.canUse) {
+        return { status: "unsupported", goal: null };
+      }
+      return provider.readGoal({ sessionId, runtime: options.runtime, session: options.session });
+    },
+    async updateGoal(sessionId, input = {}, options = {}) {
+      const provider = bindSession(sessionId, options);
+      await requireAccessFor(provider, sessionId, options);
+      if (provider.id !== "codex") {
+        throw new TypeError("Goal controls require Codex.");
+      }
+      return provider.updateGoal({ sessionId, runtime: options.runtime, session: options.session }, input);
+    },
     async assistantAccess(sessionId = "", options = {}) {
       const provider = bindSession(sessionId, options);
       return accessFor(provider, sessionId, options);

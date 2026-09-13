@@ -73,6 +73,17 @@ including follow-up guidance while a turn is active.
 
 ## Public contract
 
+The Codex indicator reads the current main conversation goal from `thread/goal/get`
+on its existing provider. Goal controls require assistant access and accept only
+pause/resume on that session's current thread and unchanged objective/creation
+identity. Status-only `thread/goal/set` preserves Codex-owned objective, budget
+and usage history. Pause sets paused before interrupting the current turn;
+resume uses Codex's native goal scheduler. Completed goals and exhausted token
+budgets are not restarted by this control. Goal notifications invalidate the
+protected read endpoint without broadcasting the objective. The same square
+retains weekly allowance and exposes goal controls independently of plan data.
+
+
 Codex plan allowance uses `account/rateLimits/read` and
 `account/rateLimits/updated` on the existing interactive provider connection.
 Only normalized percentages, window durations and reset timestamps reach the

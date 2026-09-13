@@ -2,13 +2,34 @@ import { createSSRApp, h, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null, options: null, realtime: null }));
+const mocks = vi.hoisted(() => ({
+  resource: null,
+  options: null,
+  realtime: null,
+  goal: null,
+  goalResource: null,
+  buttons: [],
+  request: vi.fn()
+}));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
-  useEndpointResource: (options) => { mocks.options = options; return mocks.resource; }
+  useEndpointResource(options) {
+    if (options.path.value.endsWith("/agent-goal")) {
+      mocks.goalResource = { data: ref(mocks.goal), loadError: ref(""), reload: vi.fn() };
+      return mocks.goalResource;
+    }
+    mocks.options = options;
+    return mocks.resource;
+  }
 }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
-  useRealtimeEvent: (options) => { mocks.realtime = options; }
+  useRealtimeEvent(options) {
+    const payload = { projectSlug: "fixture", sessionId: "one", reason: "codex-plan-usage" };
+    if (options.matches({ payload })) {
+      mocks.realtime = options;
+    }
+  }
 }));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: mocks.request }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
 vi.mock("vuetify/components/VMenu", async () => {
   const { h } = await import("vue");
@@ -16,7 +37,11 @@ vi.mock("vuetify/components/VMenu", async () => {
 });
 vi.mock("vuetify/components/VBtn", async () => {
   const { h } = await import("vue");
-  return { VBtn: { setup: (_, { slots }) => () => h("button", slots.default?.()) } };
+  return { VBtn: { setup: (_, { slots, attrs }) => () => {
+    const children = slots.default?.();
+    mocks.buttons.push({ text: children?.map((node) => node.children).join(""), click: attrs.onClick });
+    return h("button", children);
+  } } };
 });
 vi.mock("vuetify/components/VCard", async () => {
   const { h } = await import("vue");
@@ -42,7 +67,7 @@ it("shows only the weekly percentage with explanatory details", async () => {
   expect(html).toContain("Shared across sessions");
   expect(html).toContain("5h resets");
   expect(html).not.toContain("Weekly resets");
-  expect(html).toMatch(/>\s*0%\s*<\/button>/);
+  expect(html.replace(/<!--.*?-->/g, "")).toMatch(/>\s*0%\s*<\/button>/);
   expect(mocks.options.enabled.value).toBe(true);
   expect(mocks.realtime.matches({ payload: { projectSlug: "fixture", sessionId: "one", reason: "codex-plan-usage" } })).toBe(true);
   expect(mocks.realtime.matches({ payload: { projectSlug: "fixture", sessionId: "two", reason: "codex-plan-usage" } })).toBe(false);
@@ -77,4 +102,42 @@ it("includes known weekly reset times and omits missing five-hour data", async (
   ] });
   expect(html).toContain("Weekly resets");
   expect(html).not.toContain("5h allowance");
+});
+
+it("shows a goal and its controls even without plan allowance", async () => {
+  for (const [status, label] of [["active", "Pause goal"], ["paused", "Resume goal"], ["blocked", "Resume goal"]]) {
+    mocks.goal = { status: "available", goal: { threadId: "thread-one", status, objective: "Finish the migration", createdAt: 10 } };
+    const html = await render({ status: "unsupported", windows: [] });
+    expect(html).toContain("Finish the migration");
+    expect(html).toContain(label);
+    expect(html).not.toContain("Codex plan allowance");
+  }
+  mocks.goal = { status: "available", goal: { status: "complete", objective: "Finished" } };
+  const complete = await render(null);
+  expect(complete).not.toContain("Resume goal");
+  expect(complete).not.toContain("Pause goal");
+  mocks.goal = null;
+});
+
+it("sends an explicit status action for the displayed goal and reloads after failure", async () => {
+  mocks.buttons = [];
+  mocks.goal = { status: "available", goal: { threadId: "thread-one", status: "paused", objective: "Finish migration", createdAt: 10 } };
+  mocks.request.mockResolvedValueOnce({ ok: false, error: "Goal changed" });
+  await render(null);
+  await mocks.buttons.find((button) => button.text === "Resume goal").click();
+  expect(mocks.request).toHaveBeenCalledWith("/api/projects/fixture/sessions/one/agent-goal", {
+    method: "POST", body: { action: "resume", threadId: "thread-one", objective: "Finish migration", createdAt: 10 }
+  });
+  expect(mocks.goalResource.reload).toHaveBeenCalledOnce();
+  mocks.goal = null;
+});
+
+it("offers Pause and the compact running dot only for an active goal", async () => {
+  for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimited", "complete"]) {
+    mocks.goal = { status: "available", goal: { status, objective: "Finish migration" } };
+    const html = await render({ status: "available", windows: [{ remainingPercent: 1, windowDurationMins: 10080 }] });
+    expect(html.includes("Pause goal")).toBe(status === "active");
+    expect(html.includes('class="codex-plan-usage__running"')).toBe(status === "active");
+  }
+  mocks.goal = null;
 });

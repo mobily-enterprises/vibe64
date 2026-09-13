@@ -4181,3 +4181,22 @@ for (const [state, signature, expectedRemoval] of [
     });
   });
 }
+
+test("Codex goal controls preserve objective and budget while changing status", async () => {
+  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  provider.ensureRuntime = async () => ({ endpoint: "ws://127.0.0.1:12345" });
+  await provider.openConnection();
+  try {
+    const calls = [];
+    provider.client.request = async (method, params) => { calls.push({ method, params }); return { goal: { status: params.status || "active" } }; };
+    await provider.readGoal("thread-one");
+    await provider.setGoalStatus("thread-one", "paused");
+    await provider.setGoalStatus("thread-one", "active");
+    await assert.rejects(provider.setGoalStatus("thread-one", "complete"), /Invalid Codex goal status/);
+    assert.deepEqual(calls, [
+      { method: "thread/goal/get", params: { threadId: "thread-one" } },
+      { method: "thread/goal/set", params: { threadId: "thread-one", status: "paused" } },
+      { method: "thread/goal/set", params: { threadId: "thread-one", status: "active" } }
+    ]);
+  } finally { await provider.close(); }
+});

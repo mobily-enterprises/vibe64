@@ -3663,6 +3663,25 @@ class CodexAppServerAgentProvider {
     };
   }
 
+  async readGoal(threadId = "") {
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/goal/get", { threadId: normalizeAgentText(threadId) }),
+      "codex-app-server-goal-read"
+    );
+  }
+
+  async setGoalStatus(threadId = "", status = "") {
+    if (!["active", "paused"].includes(status)) {
+      throw new TypeError("Invalid Codex goal status.");
+    }
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/goal/set", { threadId: normalizeAgentText(threadId), status }),
+      "codex-app-server-goal-status"
+    );
+  }
+
   async readThread(threadId = "") {
     const client = await this.activeClient();
     const response = await this.runRequest(
