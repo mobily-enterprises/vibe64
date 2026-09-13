@@ -95,7 +95,7 @@ describe("useVibe64AutopilotView route hydration", () => {
   it.each([
     { label: "Files", tool: "editor", segment: "files", component: "Vibe64SessionFiles" },
     { label: "Database", tool: "database", segment: "database", component: "Vibe64DatabaseWorkspace" },
-    { label: "Cities", tool: "system", segment: "system", component: "Vibe64SystemWorldView" }
+    { label: "Subsystems", tool: "system", segment: "system", component: "Vibe64SubsystemsView" }
   ])("retains $label inactive across Preview and retires it on an explicit tool switch", async ({ tool, segment, component }) => {
     route.path = `/app/project/chat-test/dashboard/${segment}`;
     const props = viewProps();

@@ -224,6 +224,7 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+    ACTION_RESUME_INTEGRATION_SETUP,
     ACTION_SKIP_INTEGRATION_SETUP,
     ACTION_INSPECT_REPOSITORY_HISTORY,
     ACTION_INSPECT_REPOSITORY_VERSION_FILES,

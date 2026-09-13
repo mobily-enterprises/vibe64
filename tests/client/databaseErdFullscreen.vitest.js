@@ -23,7 +23,9 @@ describe("Database ERD fullscreen controls", () => {
     expect(() => compile(template, { mode: "module" })).not.toThrow();
     expect(template).not.toContain("Entity relationship diagram");
     expect(template).not.toContain("Arrows run 1 → N");
-    expect(template).toContain('class="database-erd__toolbar-actions"');
+    expect(template).toContain('aria-label="ERD controls" class="database-erd__toolbar"');
+    expect(template).toContain('aria-label="Fit"');
+    expect(template).toContain('aria-label="Diagram options"');
     expect(template.indexOf("Fit")).toBeLessThan(template.indexOf("Reset positions"));
   });
 

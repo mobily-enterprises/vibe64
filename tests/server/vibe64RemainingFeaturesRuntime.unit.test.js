@@ -93,11 +93,14 @@ test("remaining Vibe64 features use named capabilities and register direct route
     "vibe64.current-app.read",
     "vibe64.studio-health.read"
   ]);
-  assert.equal(routes.length, 24);
+  assert.equal(routes.length, 40);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],
     ["GET", "/source-editor/stars"],
-    ["POST", "/source-editor/stars"]
+    ["POST", "/source-editor/stars"],
+    ["GET", "/sessions/:sessionId/files/:area/archive"],
+    ["POST", "/sessions/:sessionId/integrations/:integrationId/setup"],
+    ["GET", "/system-graph/sessions/:sessionId/subsystems"]
   ]) {
     assert.equal(
       routes.filter((route) => route.method === method && route.path.endsWith(suffix)).length,

@@ -87,6 +87,14 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
   const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   const apiPayloads = new Map<string, unknown>([
     [
+      "/api/vibe64/assistants/capabilities",
+      {
+        engines: [],
+        ok: true,
+        unavailable: true
+      }
+    ],
+    [
       "/api/vibe64/accounts",
       {
         accounts: [],

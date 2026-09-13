@@ -4,6 +4,7 @@ import { compile } from "@vue/compiler-dom";
 import { parse } from "@vue/compiler-sfc";
 import { describe, expect, it, vi } from "vitest";
 import * as Vue from "vue";
+import { createVibe64SessionTooltipState } from "../../src/lib/vibe64SessionTooltip.js";
 import {
   computed,
   createRenderer,
@@ -176,6 +177,7 @@ const SessionPanel = componentFromSfcTemplate(
         sessionData: reactive({
           sessionsApiPath: "/api/vibe64/sessions"
         }),
+        sessionTooltip: createVibe64SessionTooltipState(),
         setRuntimeBusy: vi.fn(),
         setRuntimePageError: vi.fn(),
         setRuntimeToolbarControls: vi.fn(),

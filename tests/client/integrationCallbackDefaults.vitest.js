@@ -13,9 +13,14 @@ vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: {} }));
 vi.mock("vuetify/components/VTextField", () => ({ VTextField: {} }));
 vi.mock("vuetify/components/VTextarea", () => ({ VTextarea: {} }));
 vi.mock("vue", async (load) => ({ ...await load(), onMounted() {}, onUnmounted() {}, useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-router", () => ({ useRoute: () => ({ query: { integrationSession: "session-1", integration: "calendar" } }) }));
+vi.mock("vue-router", () => ({
+  useRoute: () => ({ query: { integrationSession: "session-1", integration: "calendar" } }),
+  useRouter: () => ({ push: vi.fn() })
+}));
 vi.mock("@jskit-ai/connectors-web/client", () => ({ IntegrationConfigurationFields: {} }));
 vi.mock("@/components/common/Vibe64AsyncModuleState.vue", () => ({ default: {} }));
+vi.mock("@/components/studio/GoogleAdsSearchPanel.vue", () => ({ default: {} }));
+vi.mock("@/components/studio/PaymentConfigurationPanel.vue", () => ({ default: {} }));
 vi.mock("@/lib/browserLocalStorage.js", () => ({ readLocalStorageJson: (_key, fallback) => fallback, writeLocalStorageJson() {} }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("dogandgroom") }));
 vi.mock("@/composables/useVibe64Integrations.js", () => ({ useVibe64Integrations: () => ({

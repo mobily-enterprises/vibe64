@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   mdiAccountKeyOutline,
   mdiCogOutline,
+  mdiConnection,
   mdiFileCogOutline,
   mdiHeartPulse,
   mdiHistory
@@ -27,11 +28,12 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(5);
+    expect(labels).toHaveLength(6);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
       "Health",
+      "Integrations",
       "Project settings",
       "Session History"
     ]));
@@ -44,6 +46,7 @@ describe("Vibe64 dashboard placements", () => {
       ["App access", mdiAccountKeyOutline],
       ["Env", mdiFileCogOutline],
       ["Health", mdiHeartPulse],
+      ["Integrations", mdiConnection],
       ["Project settings", mdiCogOutline],
       ["Session History", mdiHistory]
     ]));

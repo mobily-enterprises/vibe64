@@ -235,7 +235,7 @@ test("payment history binds a bounded display page to the requested subject and 
   for (const change of [ { subjectId: "tenant-b" }, { paymentEnvironment: "live" }, { collection: "subscriptions" },
     { accessToken: "secret" }, { nextCursor: "bad cursor" }, { items: Array(21).fill(result.items[0]) },
     { items: [{ ...result.items[0], metadata: { private: true } }] },
-    { items: [{ ...result.items[0], totalMinor: 9007199254740993 }] } ]) {
+    { items: [{ ...result.items[0], totalMinor: Number.MAX_SAFE_INTEGER + 1 }] } ]) {
     assert.throws(() => parseIntegrationSetupResponse(JSON.stringify({ ...result, ...change }), selected));
   }
   for (const change of [{ subjectId: "" }, { collection: "customers" }, { after: "bad cursor" }, { operation: "payments-preview" }]) {
