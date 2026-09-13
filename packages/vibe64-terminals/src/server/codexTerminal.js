@@ -3173,10 +3173,21 @@ function createCodexTerminalController({
       }
       return result;
     });
-    const [retired, stopped] = await Promise.allSettled([
+    let [retired, stopped] = await Promise.allSettled([
       retirement,
       runtimeStop
     ]);
+    if (
+      retired.status === "rejected" &&
+      stopped.status === "fulfilled" &&
+      stopped.value?.runtimeDirRemoved === true
+    ) {
+      // Stopping the isolated runtime can win the race with thread/delete.
+      // Reconcile its now-absent storage without reconnecting to the old account.
+      [retired] = await Promise.allSettled([
+        retireCodexAppServerEconomyThreads({ provider }).then(assertCodexAppServerEconomyThreadsRetired)
+      ]);
+    }
     if (
       stopped.status === "fulfilled" &&
       codexAppServerRuntimeStopWasVerified(stopped.value)
@@ -8835,6 +8846,16 @@ function createCodexTerminalController({
         } catch (error) {
           throw codexAppServerEconomyThreadCleanupError(cleanupRecord, error);
         }
+      }
+      if (!await directoryExists(cleanupRecord.identity.runtime.runtimeDir)) {
+        await removeCodexAppServerEconomyThreadUnlocked(cleanupRecord);
+        return {
+          deleted: false,
+          ok: true,
+          status: "runtimeAbsent",
+          threadId: cleanupRecord.threadId,
+          turnId: cleanupRecord.turnId
+        };
       }
       const provider = cleanupRecord.provider;
       let interruptError = null;

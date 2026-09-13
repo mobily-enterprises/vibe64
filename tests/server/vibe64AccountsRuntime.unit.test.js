@@ -1687,3 +1687,34 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
     );
   });
 });
+
+
+test("Codex status retries unfinished auth turnover without another login", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    let invalidations = 0;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        daemonHome: path.join(root, "daemon"),
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      invalidateAgentRuntimes: async () => ({
+        ok: ++invalidations > 1,
+        providerCount: 1,
+        stopped: invalidations > 1 ? 1 : 0
+      }),
+      runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
+    });
+    const pending = await service.getCodexStatus();
+    assert.equal(pending.ok, false);
+    assert.equal(pending.code, "vibe64_codex_auth_runtime_invalidation_failed");
+    assert.equal((await readCodexAuthStatus(systemRoot)).status, "reconnecting");
+    const recovered = await service.getCodexStatus();
+    assert.equal(recovered.account.connected, true);
+    assert.equal(await readCodexAuthStatus(systemRoot), null);
+    assert.equal(invalidations, 2);
+    await service.getCodexStatus();
+    assert.equal(invalidations, 2);
+  });
+});

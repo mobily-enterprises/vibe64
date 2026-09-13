@@ -5535,6 +5535,140 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
   });
 });
 
+test("auth turnover retires economy ownership when runtime removal wins the deletion race", async () => {
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Create a temporary thread before reconnecting."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    const first = await pending;
+    assert.equal(first.ok, true, JSON.stringify(first));
+    captures.failDeletes = 100;
+    captures.stopRuntimeHandler = async () => {
+      await rm(captures.runtimeInfo.runtimeDir, { recursive: true, force: true });
+      return { processExitVerified: true, runtimeDirRemoved: true, stopped: true };
+    };
+
+    const invalidated = await controller.invalidateAppServerRuntimes({
+      includeOwned: true,
+      reason: "auth-session-exited"
+    });
+    assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    assert.deepEqual((await ledger.readAll()).records, []);
+    const stale = await controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Never resume the retired thread.",
+      threadId: first.threadId
+    });
+    assert.equal(stale.code, "vibe64_codex_economy_thread_unavailable");
+    captures.failDeletes = 0;
+    const next = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Continue after reconnecting without restarting Vibe64."
+    });
+    await waitForCapturedTurns(captures, 2);
+    completeDetachedTurn(subscribers, {
+      text: JSON.stringify({ answer: "Recovered." }), turnId: "turn-2"
+    });
+    assert.equal((await next).ok, true);
+  });
+});
+
+test("auth turnover retries stale in-memory economy ownership after an earlier runtime removal", async () => {
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Create ownership retained by an earlier failed cleanup."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    assert.equal((await pending).ok, true);
+    await rm(captures.runtimeInfo.runtimeDir, { recursive: true, force: true });
+    captures.failDeletes = 100;
+    const invalidated = await controller.invalidateAppServerRuntimes({
+      includeOwned: true, reason: "auth-session-status"
+    });
+    assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
+    assert.deepEqual(captures.deletes, []);
+    assert.deepEqual((await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
+  });
+});
+
+test("auth turnover preserves economy ownership when thread deletion and runtime removal are unproven", async () => {
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Retain cleanup evidence until removal is proven."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    assert.equal((await pending).ok, true);
+    captures.failDeletes = 100;
+    captures.stopRuntimeResult = { processExitVerified: true, stopped: true, runtimeDirRemoved: false };
+    const invalidated = await controller.invalidateAppServerRuntimes({
+      includeOwned: true, reason: "auth-session-exited"
+    });
+    assert.equal(invalidated.ok, false);
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    assert.equal((await ledger.readAll()).records.length, 1);
+    captures.failDeletes = 0;
+    const retry = await controller.invalidateAppServerRuntimes({
+      includeOwned: true, reason: "auth-session-status"
+    });
+    assert.equal(retry.ok, true, JSON.stringify(retry));
+    assert.deepEqual((await ledger.readAll()).records, []);
+  });
+});
+
+test("auth turnover retries ledger removal after the owned runtime has already stopped", async () => {
+  let failRemoval = true;
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Preserve the ownership record when its removal fails."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    assert.equal((await pending).ok, true);
+    captures.failDeletes = 100;
+    captures.stopRuntimeHandler = async () => {
+      await rm(captures.runtimeInfo.runtimeDir, { recursive: true, force: true });
+      return { processExitVerified: true, runtimeDirRemoved: true, stopped: true };
+    };
+    const input = { includeOwned: true, reason: "auth-session-status" };
+    const failed = await controller.invalidateAppServerRuntimes(input);
+    assert.equal(failed.ok, false);
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    assert.equal((await ledger.readAll()).records.length, 1);
+    failRemoval = false;
+    const recovered = await controller.invalidateAppServerRuntimes(input);
+    assert.equal(recovered.ok, true, JSON.stringify(recovered));
+    assert.deepEqual((await ledger.readAll()).records, []);
+  }, {
+    codexEconomyThreadLedgerFactory(options) {
+      const ledger = createCodexEconomyThreadLedger(options);
+      return {
+        ...ledger,
+        async remove(record) {
+          if (failRemoval) {
+            throw new Error("Ownership storage temporarily unavailable.");
+          }
+          return ledger.remove(record);
+        }
+      };
+    }
+  });
+});
+
 test("account-wide Codex auth invalidation requires verified runtime exit", async () => {
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => {
     const prepared = await runWithProjectRequestContext({

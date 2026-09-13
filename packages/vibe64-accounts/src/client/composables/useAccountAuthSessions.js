@@ -335,6 +335,7 @@ function useAccountAuthSessions(
       const accountId = authSessionAccountId(nextSession) || authSessionAccountId(previousSession);
       forgetSession(nextSession);
       await refreshStatus();
+      localError.value = "";
       authDebug("client.auth.session.connected", {
         accountId,
         authSessionId: String(nextSession.id || previousSession?.id || ""),

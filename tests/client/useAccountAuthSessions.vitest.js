@@ -245,6 +245,9 @@ describe("useAccountAuthSessions", () => {
     });
 
     await authSessions.startDeviceAuth("codex");
+    accounts.readAuthSession.mockRejectedValueOnce(new Error("Runtime cleanup is pending."));
+    await expect(authSessions.pollAuthSessions()).rejects.toThrow("Runtime cleanup is pending.");
+    expect(authSessions.localError.value).toBe("Runtime cleanup is pending.");
     await flushAsyncWork();
     const realtimeHandler = lastSocketHandler();
 
@@ -268,8 +271,9 @@ describe("useAccountAuthSessions", () => {
     });
     await flushAsyncWork();
 
-    expect(accounts.readAuthSession).toHaveBeenCalledTimes(1);
+    expect(accounts.readAuthSession).toHaveBeenCalledTimes(2);
     expect(accounts.readAuthSession).toHaveBeenCalledWith("auth-session-1");
+    expect(authSessions.localError.value).toBe("");
     expect(accounts.refresh).toHaveBeenCalledTimes(1);
     expect(authSessions.activeSessionFor("codex")).toBe(null);
   });

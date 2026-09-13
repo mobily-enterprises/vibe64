@@ -46,6 +46,12 @@ detached owned Codex runtimes before accepting the new account state. It reports
 success only after process exit is verified; a runtime that cannot be proven
 stopped leaves the account transition visibly unsuccessful rather than allowing
 an old credential-bearing process to survive silently.
+If isolated temporary runtime removal finishes before thread deletion, cleanup
+reconciles the removed runtime's ownership records without reconnecting to its
+old account. The same reconciliation works on a later status retry in the
+running server. Unremoved runtime storage or an unreadable ownership ledger
+keeps cleanup unsuccessful and retryable. A successful sign-in status refresh
+clears the earlier login error in the browser.
 
 The assistant-capability service can read the complete provider registry from
 the pinned OpenCode runtime without a project or configured provider
