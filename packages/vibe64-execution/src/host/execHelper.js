@@ -10,6 +10,7 @@ import {
   openSync,
   readFileSync,
   readSync,
+  realpathSync,
   renameSync,
   rmSync,
   unlinkSync,
@@ -246,6 +247,23 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
   }
   const args = Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
   const env = helperChildEnv(payload.env || {}, targetUser, owner.username, commandOperation);
+  let releaseEnvironmentFile = "";
+  if (payload.releaseEnvironmentFile) {
+    if (mode !== "capture" || targetUser.username !== owner.username) {
+      throw new Error("Release environment requires finite owner execution.");
+    }
+    releaseEnvironmentFile = assertSafeDeploymentServicePath(payload.releaseEnvironmentFile, owner, "environmentFile");
+    const file = lstatSync(releaseEnvironmentFile);
+    const workspaceRoot = path.join(path.dirname(path.dirname(releaseEnvironmentFile)), "workspace");
+    if (path.basename(releaseEnvironmentFile) !== "environment" ||
+        path.basename(path.dirname(releaseEnvironmentFile)) !== "service" ||
+        !file.isFile() || file.uid !== owner.uid || (file.mode & 0o077) !== 0 ||
+        realpathSync(releaseEnvironmentFile) !== releaseEnvironmentFile ||
+        realpathSync(cwd) !== cwd ||
+        (cwd !== workspaceRoot && relativePathParts(workspaceRoot, cwd).length === 0)) {
+      throw new Error("Release environment must belong to the selected private release.");
+    }
+  }
   const memoryMaxBytes = managedExecutionInteger(
     payload.memoryMaxBytes,
     MANAGED_EXECUTION_MEMORY_MIN_BYTES,
@@ -306,6 +324,7 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     env,
     inputBase64: String(payload.inputBase64 || ""),
     inputPresent: payload.inputPresent === true,
+    ...(releaseEnvironmentFile ? { releaseEnvironment: true } : {}),
     executionId,
     schema: "vibe64.managed-execution.command",
     schemaVersion: 1
@@ -328,6 +347,7 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     "--property=SupplementaryGroups=nix-users",
     "--property=UMask=0007",
     `--property=WorkingDirectory=${cwd}`,
+    ...(releaseEnvironmentFile ? [`--property=EnvironmentFile=${releaseEnvironmentFile}`] : []),
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
     "--property=OOMPolicy=stop",
@@ -409,9 +429,10 @@ async function runManagedExecutionPayload(payloadPath = "") {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
       detached: Boolean(controllerLease),
-      env: payload.env && typeof payload.env === "object" && !Array.isArray(payload.env)
-        ? payload.env
-        : {},
+      env: payload.releaseEnvironment === true
+        ? helperChildEnv({ ...process.env, ...payload.env },
+          { username: payload.env.USER, home: payload.env.HOME }, payload.env.USER)
+        : payload.env && typeof payload.env === "object" && !Array.isArray(payload.env) ? payload.env : {},
       stdio: payload.inputPresent === true
         ? ["pipe", "inherit", "inherit"]
         : "inherit"

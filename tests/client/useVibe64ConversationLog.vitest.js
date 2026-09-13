@@ -1,6 +1,7 @@
 import { effectScope, nextTick, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const httpRequest = vi.hoisted(() => vi.fn());
 const endpointMocks = vi.hoisted(() => ({
   resource: null,
   useEndpointResource: vi.fn()
@@ -23,7 +24,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
 
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
   getHttpWebClient() {
-    return { request: vi.fn() };
+    return { request: httpRequest };
   }
 }));
 
@@ -72,7 +73,237 @@ import {
 } from "../../src/composables/useVibe64ConversationLog.js";
 
 describe("useVibe64ConversationLog", () => {
+  it("recognizes Analytics configuration from chat without executing setup or completing the request", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure Analytics" },
+      integrationSetup: { integrationId: "analytics", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    httpRequest.mockResolvedValue({ configuration: { integrations: { analytics: {
+      provider: "google-analytics", accountMode: "shared", authentication: { method: "none" }, settings: { measurementId: "G-ABC123" }
+    } } } });
+    expect(await model.checkIntegrationRequest(request)).toBe(true);
+    expect(await model.connectIntegrationRequest(request)).toBe(true);
+    expect(httpRequest.mock.calls).toEqual([
+      ["/api/vibe64/sessions/session-1/integrations"],
+      ["/api/vibe64/sessions/session-1/integrations"]
+    ]);
+    expect(model.integrationConnections.value[requestId]).toEqual({ status: "configuration-only" });
+    expect(endpointMocks.resource.data.value.conversationLog[0].integrationSetup.outcome).toBe("pending");
+    scope.stop();
+  });
+  it("connects from chat and cancels the exact pending attempt while preserving an older grant", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    const config = { configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" };
+    httpRequest.mockResolvedValueOnce(config).mockResolvedValueOnce({ status: "pending", attemptId: "attempt-1", authorizationUrl: "https://provider.example/consent" });
+    expect(await model.connectIntegrationRequest(request)).toBe(true);
+    expect(httpRequest).toHaveBeenNthCalledWith(2, "/api/vibe64/sessions/session-1/integrations/mail/setup", {
+      method: "POST", body: { operation: "connect", setupRequest: { turnId: "000001", requestId, configurationHash: "hash" } }
+    });
+    expect(model.integrationConnections.value[requestId].attemptId).toBe("attempt-1");
+    httpRequest.mockResolvedValueOnce(config).mockResolvedValueOnce({ status: "cancelled" }).mockResolvedValueOnce({ status: "connected", accountLabel: "Old mailbox" });
+    expect(await model.cancelIntegrationRequest(request)).toBe(true);
+    expect(httpRequest).toHaveBeenNthCalledWith(4, "/api/vibe64/sessions/session-1/integrations/mail/setup", {
+      method: "POST", body: { operation: "cancel", attemptId: "attempt-1" }
+    });
+    expect(model.integrationConnections.value[requestId].accountLabel).toBe("Old mailbox");
+    expect(httpRequest.mock.calls.some(([url]) => url.endsWith("/resume"))).toBe(false);
+    scope.stop();
+  });
+
+  it("recovers consent from application status without starting authorization", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
+      .mockResolvedValueOnce({ status: "pending", attemptId: "existing-attempt", authorizationUrl: "https://provider.example/consent" });
+    expect(await model.checkIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId })).toBe(true);
+    expect(httpRequest).toHaveBeenLastCalledWith("/api/vibe64/sessions/session-1/integrations/mail/setup", {
+      method: "POST", body: { operation: "status", setupRequest: { turnId: "000001", requestId, configurationHash: "hash" } }
+    });
+    expect(model.integrationConnections.value[requestId].attemptId).toBe("existing-attempt");
+    scope.stop();
+  });
+
+  it("retains a completed connection when chat continuation is unconfirmed", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
+      .mockResolvedValueOnce({ status: "connected", integrationSetup: { outcome: "completed", continuation: { status: "pending" } } })
+      .mockResolvedValueOnce({ ok: false, error: "Delivery unconfirmed" });
+    expect(await model.connectIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId })).toBe(false);
+    expect(model.integrationConnections.value[requestId].status).toBe("connected");
+    expect(model.integrationActionError.value.message).toBe("Delivery unconfirmed");
+    expect(endpointMocks.resource.reload).toHaveBeenCalledOnce();
+    expect(httpRequest).toHaveBeenLastCalledWith("/api/vibe64/sessions/session-1/integration-setup/resume", {
+      method: "POST", body: { turnId: "000001", requestId }
+    });
+    scope.stop();
+  });
+
+  it("does not connect after a configuration reply arrives for a session left behind", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    let finish;
+    httpRequest.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = model.connectIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId });
+    session.value = { sessionId: "session-2" };
+    await nextTick();
+    finish({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" });
+    expect(await pending).toBe(false);
+    expect(httpRequest).toHaveBeenCalledOnce();
+    expect(model.integrationConnections.value).toEqual({});
+    expect(model.integrationActionError.value).toBeNull();
+    scope.stop();
+  });
+
+  it("does not resume another session when a completed connection arrives late", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    let finish;
+    httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = model.connectIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId });
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    session.value = { sessionId: "session-2" };
+    await nextTick();
+    finish({ status: "connected", integrationSetup: { outcome: "completed", continuation: { status: "pending" } } });
+    expect(await pending).toBe(false);
+    expect(httpRequest).toHaveBeenCalledTimes(2);
+    expect(model.integrationConnections.value).toEqual({});
+    expect(model.integrationActionError.value).toBeNull();
+    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    scope.stop();
+  });
+
+  it("recovers a lost completion response from saved chat without reconnecting", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    const turn = { turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } };
+    endpointMocks.resource.data.value.conversationLog = [turn];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
+      .mockRejectedValueOnce(new Error("Connection response lost"));
+    endpointMocks.resource.reload.mockImplementationOnce(async () => {
+      endpointMocks.resource.data.value = { conversationLog: [{ ...turn,
+        integrationSetup: { ...turn.integrationSetup, outcome: "completed", continuation: { status: "pending" } }
+      }] };
+    });
+    expect(await model.connectIntegrationRequest(request)).toBe(false);
+    expect(model.turns.value[0].integrationSetup.outcome).toBe("completed");
+    expect(await model.connectIntegrationRequest(request)).toBe(false);
+    expect(httpRequest).toHaveBeenCalledTimes(2);
+    httpRequest.mockResolvedValueOnce({ ok: true });
+    expect(await model.resumeIntegrationRequest(request)).toBe(true);
+    expect(httpRequest).toHaveBeenCalledTimes(3);
+    expect(httpRequest).toHaveBeenLastCalledWith("/api/vibe64/sessions/session-1/integration-setup/resume", {
+      method: "POST", body: { turnId: "000001", requestId }
+    });
+    scope.stop();
+  });
+
+  it("checks continuation directly from saved chat without requiring integration configuration", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "removed-slot", requestId, outcome: "completed", continuation: { status: "sending" } } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    expect(await model.resumeIntegrationRequest({ ...request, sessionId: "other" })).toBe(false);
+    expect(await model.resumeIntegrationRequest({ ...request, requestId: "b".repeat(64) })).toBe(false);
+    httpRequest.mockResolvedValueOnce({ ok: false, error: "Delivery remains unconfirmed." });
+    expect(await model.resumeIntegrationRequest(request)).toBe(false);
+    expect(httpRequest).toHaveBeenCalledExactlyOnceWith("/api/vibe64/sessions/session-1/integration-setup/resume", {
+      method: "POST", body: { turnId: "000001", requestId }
+    });
+    expect(model.integrationActionError.value.message).toBe("Delivery remains unconfirmed.");
+    expect(endpointMocks.resource.reload).toHaveBeenCalledOnce();
+    httpRequest.mockResolvedValueOnce({ ok: true });
+    expect(await model.resumeIntegrationRequest(request)).toBe(true);
+    expect(model.integrationActionPending.value).toBeNull();
+    expect(model.integrationActionError.value).toBeNull();
+    scope.stop();
+  });
+
+  it("skips only a current saved request and reloads after confirmation", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    let finish;
+    httpRequest.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    expect(await model.skipIntegrationRequest({ ...request, sessionId: "other" })).toBe(false);
+    expect(await model.skipIntegrationRequest({ ...request, requestId: "b".repeat(64) })).toBe(false);
+    const pending = model.skipIntegrationRequest(request);
+    expect(await model.skipIntegrationRequest(request)).toBe(false);
+    expect(httpRequest).toHaveBeenCalledExactlyOnceWith("/api/vibe64/sessions/session-1/integration-setup/skip", {
+      method: "POST", body: { turnId: "000001", requestId }
+    });
+    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    finish({ ok: true });
+    expect(await pending).toBe(true);
+    expect(endpointMocks.resource.reload).toHaveBeenCalledOnce();
+    expect(model.integrationActionPending.value).toBeNull();
+    expect(model.integrationActionError.value).toBeNull();
+    scope.stop();
+  });
+
+  it("shows a refused skip and ignores a late error after switching sessions", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    httpRequest.mockResolvedValueOnce({ ok: false, error: "Assistant access denied." });
+    expect(await model.skipIntegrationRequest(request)).toBe(false);
+    expect(model.integrationActionError.value.message).toBe("Assistant access denied.");
+    expect(model.turns.value[0].integrationSetup.outcome).toBe("pending");
+    let fail;
+    httpRequest.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    const pending = model.skipIntegrationRequest(request);
+    session.value = { sessionId: "session-2" };
+    await nextTick();
+    fail(new Error("Old request failed"));
+    expect(await pending).toBe(false);
+    expect(model.integrationActionError.value).toBeNull();
+    expect(model.integrationActionPending.value).toBeNull();
+    scope.stop();
+  });
+
   beforeEach(() => {
+    httpRequest.mockReset();
     endpointMocks.resource = {
       data: ref({
         conversationLog: [],
@@ -565,6 +796,28 @@ describe("useVibe64ConversationLog", () => {
     await nextTick();
 
     expect(endpointMocks.resource.reload).toHaveBeenCalledTimes(1);
+    scope.stop();
+  });
+
+  it("reloads a completed integration request from the session notification without trusting event state", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const pendingTurn = { turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { outcome: "pending", requestId: "a".repeat(64), integrationId: "mail" } };
+    endpointMocks.resource.data.value.conversationLog = [pendingTurn];
+    const notification = { payload: { sessionId: "session-1", reason: "integration-setup-completed" } };
+    const listener = realtimeMocks.events.find((entry) => entry.matches(notification));
+    expect(listener).toBeDefined();
+    expect(listener.matches({ payload: { ...notification.payload, sessionId: "other" } })).toBe(false);
+    await listener.onEvent(notification);
+    expect(endpointMocks.resource.reload).toHaveBeenCalledTimes(1);
+    expect(model.turns.value[0].integrationSetup.outcome).toBe("pending");
+    endpointMocks.resource.data.value = { ...endpointMocks.resource.data.value, conversationLog: [
+      { ...pendingTurn, integrationSetup: { ...pendingTurn.integrationSetup, outcome: "completed" } }
+    ] };
+    await nextTick();
+    expect(model.turns.value[0].integrationSetup.outcome).toBe("completed");
     scope.stop();
   });
 

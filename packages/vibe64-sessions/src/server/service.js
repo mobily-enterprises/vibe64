@@ -217,6 +217,7 @@ function createService({
   publishSessionChanged = async () => null,
   renewalActorResolver = null,
   sessionPresence = null,
+  sourceEditor = null,
   terminals,
   workspaceSetupRunner = null
 } = {}) {
@@ -1585,6 +1586,40 @@ function createService({
             text(right.sessionId).localeCompare(text(left.sessionId))
           ))
         };
+      });
+    },
+
+    async resumeIntegrationContinuation(sessionId, input = {}) {
+      return sessionResult(async () => {
+        await setupRunner.wait(sessionId);
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const result = await terminals.resumeIntegrationContinuation(sessionId, {
+          turnId: input.turnId, requestId: input.requestId
+        }, {
+          runtime, vibe64User: trustedAssistantUser(input),
+          readIntegrationConfiguration: () => sourceEditor.readIntegrations({ sessionId })
+        });
+        await publishSessionChanged(sessionId, {
+          reason: "integration-setup-completed", session: null
+        });
+        return { ...result, sessionId, turnId: input.turnId };
+      });
+    },
+
+    async skipIntegrationSetupRequest(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        await terminals.requireAssistantAccess(sessionId, {
+          runtime, session, vibe64User: trustedAssistantUser(input)
+        });
+        const integrationSetup = await runtime.store.skipIntegrationSetupRequest(sessionId, {
+          turnId: input.turnId, requestId: input.requestId
+        });
+        await publishSessionChanged(sessionId, {
+          reason: "integration-setup-skipped", session: null
+        });
+        return { ok: true, sessionId, turnId: input.turnId, integrationSetup };
       });
     },
 

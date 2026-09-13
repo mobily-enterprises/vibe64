@@ -34,6 +34,9 @@ vi.mock("vuetify/components/VBtn", () => ({
 vi.mock("vuetify/components/VIcon", () => ({
   VIcon: passthroughComponent("span")
 }));
+vi.mock("vuetify/components/VCard", () => ({
+  VCard: passthroughComponent(), VCardText: passthroughComponent(), VCardActions: passthroughComponent()
+}));
 
 vi.mock("vuetify/components/VSkeletonLoader", () => ({
   VSkeletonLoader: passthroughComponent()
@@ -186,12 +189,17 @@ function agentTurn(id, text = `Assistant ${id}`) {
 }
 
 function mountConversation({
+  integrationRequestsEnabled = false,
   error = "",
   followLatestKey = 0,
   hasMoreBefore = false,
   turns = [agentTurn("turn-1")]
 } = {}) {
   const loadMoreRequests = [];
+  const integrationRequests = [];
+  const integrationSkips = [];
+  const integrationResumes = [];
+  const integrationChecks = [];
   const state = {
     error: ref(error),
     followLatestKey: ref(followLatestKey),
@@ -203,6 +211,12 @@ function mountConversation({
   const Root = defineComponent({
     setup() {
       return () => h(Vibe64ConversationLog, {
+        sessionId: state.scrollKey.value,
+        integrationRequestsEnabled,
+        onSkipIntegration: (request) => integrationSkips.push(request),
+        onCheckIntegration: (request) => integrationChecks.push(request),
+        onResumeIntegration: (request) => integrationResumes.push(request),
+        onOpenIntegration: (request) => integrationRequests.push(request),
         error: state.error.value,
         followLatestKey: state.followLatestKey.value,
         hasMoreBefore: state.hasMoreBefore.value,
@@ -218,10 +232,13 @@ function mountConversation({
   app.component("VAlert", passthroughComponent());
   app.component("VBtn", passthroughComponent("button"));
   app.component("VIcon", passthroughComponent("span"));
+  app.component("VCard", passthroughComponent());
+  app.component("VCardText", passthroughComponent());
+  app.component("VCardActions", passthroughComponent());
   app.component("VSkeletonLoader", passthroughComponent());
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount(container);
-  return { app, container, loadMoreRequests, state };
+  return { app, container, integrationChecks, integrationSkips, integrationResumes, integrationRequests, loadMoreRequests, state };
 }
 
 function conversationBody(container) {
@@ -304,6 +321,80 @@ describe("Vibe64 conversation scroll following", () => {
     vi.runAllTimers();
     await nextTick();
   }
+
+  it("shows Skip for a saved request and restores its skipped outcome", async () => {
+    const turn = { turnId: "000001", integrationSetup: { integrationId: "mail", requestId: "a".repeat(64), outcome: "pending" },
+      assistant: { role: "assistant", text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```' } };
+    const mounted = mountConversation({ integrationRequestsEnabled: true, turns: [turn] });
+    await flushScrollWork();
+    const skip = () => findNode(mounted.container, (node) => node.type === "button" && nodeText(node).trim() === "Skip");
+    expect(skip().props.disabled).toBe(false);
+    skip().props.onClick();
+    expect(mounted.integrationSkips).toEqual([{ sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64) }]);
+    mounted.state.turns.value = [{ ...turn, integrationSetup: { ...turn.integrationSetup, outcome: "skipped" } }];
+    await flushScrollWork();
+    expect(skip()).toBeNull();
+    expect(findNode(mounted.container, (node) => node.props?.role === "status" && nodeText(node) === "Skipped")).not.toBeNull();
+    mounted.state.turns.value = [{ ...turn, integrationSetup: { ...turn.integrationSetup, outcome: "completed" } }];
+    await flushScrollWork();
+    expect(skip()).toBeNull();
+    expect(findNode(mounted.container, (node) => node.props?.role === "status" && nodeText(node) === "Setup completed")).not.toBeNull();
+    for (const [status, message] of [
+      ["pending", "Assistant continuation is pending. Check continuation to resume."],
+      ["sending", "Assistant delivery is not yet confirmed. Check continuation to inspect delivery without sending it again."],
+      ["accepted", "Assistant continuation accepted."]
+    ]) {
+      mounted.state.turns.value = [{ ...turn, integrationSetup: {
+        ...turn.integrationSetup, outcome: "completed", continuation: { status }
+      } }];
+      await flushScrollWork();
+      expect(findNode(mounted.container, (node) => node.props?.role === "status" && nodeText(node).trim() === message)).not.toBeNull();
+      const label = status === "accepted" ? "Configure" : "Check continuation";
+      const button = findNode(mounted.container, (node) => node.type === "button" && nodeText(node).trim() === label);
+      expect(button.props.disabled).toBe(false);
+      if (status !== "accepted") {
+        button.props.onClick();
+        expect(mounted.integrationResumes.at(-1)).toEqual({ sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64) });
+      }
+    }
+    mounted.app.unmount();
+  });
+
+  it("restores an explicit integration card from history and binds navigation to its current session", async () => {
+    const turn = {
+      turnId: "setup-turn",
+      integrationSetup: { requestId: "a".repeat(64), outcome: "pending" },
+      assistant: { role: "assistant", text: 'Configure the mailbox.\n\n```vibe64-integration\n{"integrationId":"gmail-business"}\n```' }
+    };
+    const mounted = mountConversation({ integrationRequestsEnabled: true, turns: [turn] });
+    await flushScrollWork();
+    const configure = () => findNode(mounted.container, (node) => node.type === "button" && nodeText(node).trim() === "Configure");
+    expect(configure().props.disabled).toBe(false);
+    expect(mounted.integrationChecks).toEqual([{ sessionId: "session-1", turnId: "setup-turn", requestId: "a".repeat(64) }]);
+    configure().props.onClick();
+    expect(mounted.integrationRequests).toEqual([{ sessionId: "session-1", turnId: "setup-turn", requestId: "a".repeat(64), integrationId: "gmail-business" }]);
+    mounted.state.scrollKey.value = "session-2";
+    mounted.state.turns.value = [];
+    await flushScrollWork();
+    expect(configure()).toBeNull();
+    mounted.state.scrollKey.value = "session-1";
+    mounted.state.turns.value = [JSON.parse(JSON.stringify(turn))];
+    await flushScrollWork();
+    expect(configure().props.disabled).toBe(false);
+    expect(mounted.integrationChecks).toHaveLength(2);
+    mounted.state.turns.value = [{ ...turn, pending: true }];
+    await flushScrollWork();
+    expect(configure().props.disabled).toBe(true);
+    mounted.app.unmount();
+
+    const restored = mountConversation({ turns: [JSON.parse(JSON.stringify(turn))] });
+    await flushScrollWork();
+    const archivedButton = findNode(restored.container, (node) => node.type === "button" && nodeText(node).trim() === "Configure");
+    expect(archivedButton.props.disabled).toBe(true);
+    expect(restored.integrationRequests).toEqual([]);
+    expect(restored.integrationChecks).toEqual([]);
+    restored.app.unmount();
+  });
 
   it("renders sent attachments as distinct file details", async () => {
     const { app, container } = mountConversation({

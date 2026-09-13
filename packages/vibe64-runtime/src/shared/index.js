@@ -6,3 +6,4 @@ export * from "./assistantSelection.js";
 export * from "./conversationAttachments.js";
 export * from "./promptHints.js";
 export * from "./sessionPresence.js";
+export * from "./integrationSetupRequest.js";

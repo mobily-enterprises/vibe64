@@ -322,7 +322,7 @@ async function controllerHarness({
     };
   }
 
-  const controller = createOpenCodeTerminalController({
+  const controllerOptions = {
     env: {
       ...process.env,
       VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-providers")
@@ -434,9 +434,13 @@ async function controllerHarness({
       verifyConnectionCalls.push(input);
       return { ok: true };
     }
-  });
+  };
+  const createController = () => createOpenCodeTerminalController(controllerOptions);
+  const controller = createController();
 
   return {
+    createController,
+    controllerOptions,
     agentCatalogCalls: () => agentCatalogCalls,
     agentRunEvents,
     assistantMessages,

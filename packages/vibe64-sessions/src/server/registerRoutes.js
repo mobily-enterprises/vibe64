@@ -1,4 +1,6 @@
 import {
+  ACTION_SKIP_INTEGRATION_SETUP,
+  ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CHECK_SESSION_UPDATES,
@@ -37,6 +39,7 @@ import {
   ACTION_WITHDRAW_MESSAGE_SUGGESTION
 } from "./actions.js";
 import {
+  integrationSetupRequestInputValidator,
   agentMessageInputValidator,
   agentTurnInterruptInputValidator,
   assistantModelAccessUpdateInputValidator,
@@ -297,6 +300,26 @@ function registerRoutes(http, {
       sessionId: request.params.sessionId
     }),
     summary: "Update this session (rebase) without publishing or discarding its work."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/integration-setup/resume", {
+    actionId: ACTION_RESUME_INTEGRATION_SETUP,
+    body: integrationSetupRequestInputValidator,
+    buildInput: (request) => ({
+      ...routes.requestBody(request),
+      sessionId: request.params.sessionId
+    }),
+    summary: "Resume or inspect delivery for an exact completed integration setup request."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/integration-setup/skip", {
+    actionId: ACTION_SKIP_INTEGRATION_SETUP,
+    body: integrationSetupRequestInputValidator,
+    buildInput: (request) => ({
+      ...routes.requestBody(request),
+      sessionId: request.params.sessionId
+    }),
+    summary: "Skip an exact saved integration setup request."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {

@@ -1,4 +1,5 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
+import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 
 import {
   createSourceEditorFileChangedPublisher
@@ -23,6 +24,7 @@ const Vibe64SourceEditorProvider = defineFeature({
     const sourceEditor = createService({
       logger,
       projectService: project,
+      publishSessionChanged: createSessionChangedPublisher(events),
       terminalService: terminals
     });
     registerRoutes(http, {

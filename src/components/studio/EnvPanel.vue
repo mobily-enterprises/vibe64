@@ -91,6 +91,9 @@
         </div>
       </section>
 
+      <v-alert v-if="existingNewValue" type="info" variant="tonal">
+        {{ newValue.key }} already has a value. Saving replaces this value in development; other Env values stay unchanged.
+      </v-alert>
       <section class="env-panel__add">
         <v-text-field
           v-model="newValue.key"
@@ -123,7 +126,7 @@
           variant="flat"
           @click="saveNewValue"
         >
-          Add
+          {{ existingNewValue ? 'Replace value' : 'Add' }}
         </v-btn>
       </section>
 
@@ -186,6 +189,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -222,6 +226,16 @@ const PROJECT_ENVIRONMENT_LABEL = "development";
 
 const activeTab = ref(PROJECT_ENV_TAB);
 const newValue = ref(emptyNewValue());
+const route = useRoute();
+watch(() => [route.query.prefillKey, route.query.prefillValue, route.query.prefillSecret], ([key, value, secret]) => {
+  if (typeof key !== "string" || !/^[A-Z_][A-Z0-9_]*$/u.test(key) || key.length > 200) return;
+  if (secret === "true") {
+    // A secret is entered here, never supplied in a navigation URL.
+    newValue.value = { key, value: "", secret: true };
+  } else if (value === undefined || (typeof value === "string" && value.length <= 4096)) {
+    newValue.value = { key, value: value ?? "", secret: false };
+  }
+}, { immediate: true });
 const pendingRemoval = ref(null);
 
 const envResource = useEndpointResource({
@@ -325,6 +339,8 @@ const removeConfirmOpen = computed({
 const pendingRemovalKey = computed(() => String(pendingRemoval.value?.key || ""));
 const projectEnvTabActive = computed(() => activeTab.value === PROJECT_ENV_TAB);
 const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
+const existingNewValue = computed(() => records.value.some((record) =>
+  record.key === String(newValue.value.key || "").trim() && record.valuePresent === true));
 const missingRecords = computed(() => records.value.filter(recordMissing));
 const expectedMissingRecords = computed(() => missingRecords.value.filter(recordEditable));
 const environmentLabel = PROJECT_ENVIRONMENT_LABEL;

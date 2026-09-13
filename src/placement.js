@@ -2,6 +2,7 @@ import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
   mdiAccountKeyOutline,
   mdiCogOutline,
+  mdiConnection,
   mdiFileCogOutline,
   mdiHeartPulse,
   mdiHistory
@@ -158,6 +159,22 @@ addPlacement({
     },
   });
 }
+addPlacement({
+  id: "vibe64.integrations.link",
+  target: "page.section-nav",
+  owner: "app-dashboard",
+  kind: "link",
+  surfaces: ["app"],
+  order: 350,
+  props: {
+    label: "Integrations",
+    icon: mdiConnection,
+    surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/integrations",
+    unscopedSuffix: "/project/[slug]/dashboard/integrations",
+    to: ""
+  }
+});
 addPlacement({
   id: "vibe64.preview-identities.link",
   target: "page.section-nav",

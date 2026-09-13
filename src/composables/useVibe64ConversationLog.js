@@ -1,4 +1,5 @@
-import { computed, onScopeDispose, ref, watch } from "vue";
+import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
+import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import {
   useRealtimeEvent,
@@ -16,6 +17,7 @@ import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64ConversationLogPath,
+  vibe64SessionPath,
   vibe64ConversationLogQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -33,6 +35,8 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "integration-setup-skipped",
+  "integration-setup-completed",
   "assistant-response-bundle",
   "codex-app-server-agent-result",
   "codex-app-server-agent-result-invalid",
@@ -120,6 +124,7 @@ function normalizeConversationTurn(turn = {}, index = 0) {
     assistant,
     commentary,
     messages: [system, user, ...activity, assistant].filter(Boolean),
+    ...(isRecord(turn.integrationSetup) ? { integrationSetup: turn.integrationSetup } : {}),
     ...(system ? { system } : {}),
     thinking,
     turnId: String(turn.turnId || index + 1).trim(),
@@ -367,6 +372,8 @@ function useVibe64ConversationLog({
   const olderPages = ref([]);
   const loadingMore = ref(false);
   const loadMoreError = ref("");
+  const integrationActionPending = shallowRef(null);
+  const integrationActionError = ref(null);
   const enabled = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     sessionId.value
@@ -631,12 +638,116 @@ function useVibe64ConversationLog({
     }
   }
 
-  watch(sessionId, () => {
+  const integrationConnections = shallowRef({});
+
+  function connectIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "connect");
+  }
+
+  function checkIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "status");
+  }
+
+  function cancelIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "cancel");
+  }
+
+  function skipIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "skip");
+  }
+
+  function resumeIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "resume");
+  }
+
+  async function runIntegrationRequestAction(request, action) {
+    const turn = turns.value.find((entry) => entry.turnId === request.turnId);
+    if (!enabled.value || request.sessionId !== sessionId.value || integrationActionPending.value ||
+        turn?.integrationSetup?.outcome !== (action === "resume" ? "completed" : "pending") ||
+        turn.integrationSetup.requestId !== request.requestId) return false;
+    const selection = { sessionId: sessionId.value, turnId: request.turnId, requestId: request.requestId };
+    integrationActionPending.value = selection;
+    integrationActionError.value = null;
+    try {
+      if (["connect", "cancel", "status"].includes(action)) {
+        const path = vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integrations");
+        const config = await httpClient.request(path);
+        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        const integrationId = turn.integrationSetup.integrationId;
+        const integration = config?.configuration?.integrations?.[integrationId];
+        if (!integration) throw new Error("Choose Configure to set up this integration first.");
+        if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
+          integrationConnections.value = { ...integrationConnections.value,
+            [selection.requestId]: { status: "configuration-only" } };
+          return true;
+        }
+        if (integration.accountMode === "per-user") throw new Error("Each app user connects their account inside the application. Choose Configure for setup instructions.");
+        const endpoint = `${path}/${encodeURIComponent(integrationId)}/setup`;
+        const previous = integrationConnections.value[selection.requestId];
+        if (action === "cancel" && !previous?.attemptId) return false;
+        let connection = await httpClient.request(endpoint, { method: "POST", body: {
+          operation: action,
+          ...(action === "cancel" ? { attemptId: previous.attemptId } : {
+            setupRequest: { turnId: selection.turnId, requestId: selection.requestId, configurationHash: config.baseHash }
+          })
+        } });
+        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        if (action === "cancel") {
+          connection = await httpClient.request(endpoint, { method: "POST", body: { operation: "status" } });
+          if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        }
+        integrationConnections.value = { ...integrationConnections.value, [selection.requestId]: connection };
+        if (connection.integrationSetup?.outcome === "completed" && connection.integrationSetup.continuation?.status !== "accepted") {
+          const resumed = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integration-setup/resume"), {
+            method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
+          });
+          if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
+        }
+        if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) await reloadConversationLog();
+        return true;
+      }
+      const result = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, `/integration-setup/${action}`), {
+        method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
+      });
+      if (result?.ok !== true) throw new Error(result?.error || "Could not update integration setup.");
+      if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) {
+        await reloadConversationLog();
+      }
+      return true;
+    } catch (error) {
+      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
+        integrationActionError.value = { turnId: selection.turnId, message: String(error?.message || "Could not update integration setup.") };
+        if (action === "resume" || action === "connect" || action === "status") await reloadConversationLog();
+      }
+      return false;
+    } finally {
+      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
+        integrationActionPending.value = null;
+      }
+    }
+  }
+
+  onScopeDispose(() => {
+    integrationActionPending.value = null;
+  });
+
+  watch([sessionId, projectSlug], () => {
+    integrationActionPending.value = null;
+    integrationActionError.value = null;
+    integrationConnections.value = {};
     olderPages.value = [];
     loadMoreError.value = "";
   });
 
   return {
+    integrationConnections,
+    connectIntegrationRequest,
+    checkIntegrationRequest,
+    cancelIntegrationRequest,
+    integrationActionPending,
+    integrationActionError,
+    skipIntegrationRequest,
+    resumeIntegrationRequest,
     error: resource.loadError,
     hasMoreBefore,
     loadMore: loadMoreConversationLog,

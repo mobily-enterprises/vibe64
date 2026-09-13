@@ -1818,6 +1818,40 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
 
+  function connectIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
+    return props.conversationLog?.connectIntegrationRequest?.(request) || false;
+  }
+
+  function checkIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
+    return props.conversationLog?.checkIntegrationRequest?.(request) || false;
+  }
+
+  function cancelIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
+    return props.conversationLog?.cancelIntegrationRequest?.(request) || false;
+  }
+
+  function skipIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
+    return props.conversationLog?.skipIntegrationRequest?.(request) || false;
+  }
+
+  function resumeIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
+    return props.conversationLog?.resumeIntegrationRequest?.(request) || false;
+  }
+
+  function openIntegrationRequest(request) {
+    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return;
+    void router.push({
+      path: projectAppPath(projectSlug.value, "/dashboard/integrations"),
+      query: { integration: request.integrationId, integrationSession: sessionId.value, integrationTurn: request.turnId, integrationRequest: request.requestId }
+    });
+    emit("project-attention");
+  }
+
   function rightPaneTabMounted(tabId = "") {
     return rightPaneTab.value === String(tabId || "");
   }
@@ -1843,6 +1877,7 @@ function useVibe64AutopilotView(props, emit, {
     embeddedShell: true,
     projectContext: props.projectContext || {},
     refreshSessionWork: props.refreshSessionWork,
+    refreshConversation: () => props.conversationLog?.reload?.(),
     requestSaveWork,
     session: props.session || null,
     sessionId: sessionId.value,
@@ -1907,13 +1942,14 @@ function useVibe64AutopilotView(props, emit, {
     assistantDirectAllowed.value
   ));
 
-  function prefillComposer(text = "") {
+  function prefillComposer(text = "", { append = false } = {}) {
     const prompt = normalizedAgentTurnText(text);
     if (!prompt || !sourceEditorAskCodexAvailable.value) {
       return false;
     }
-    composerDraft.value = prompt;
-    emit("project-attention");
+    composerDraft.value = append && composerDraft.value.trim()
+      ? `${composerDraft.value}\n\n${prompt}` : prompt;
+    emit(append ? "chat-attention" : "project-attention");
     return true;
   }
 
@@ -2036,6 +2072,7 @@ function useVibe64AutopilotView(props, emit, {
     agentStopEnabled,
     agentStopVisible,
     answerChoices,
+    prefillComposer,
     askCodexAboutSourceEditorFile,
     askCodexToFixPreviewIdentity,
     askCodexToFixWorkspaceSetup,
@@ -2084,6 +2121,12 @@ function useVibe64AutopilotView(props, emit, {
     loadMoreChatTurns,
     numberedQuestionSelectItems,
     numberedQuestions,
+    openIntegrationRequest,
+    skipIntegrationRequest,
+    resumeIntegrationRequest,
+    connectIntegrationRequest,
+    checkIntegrationRequest,
+    cancelIntegrationRequest,
     openSourceEditorFile,
     openSubsystemTable,
     describeSubsystems,

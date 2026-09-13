@@ -561,7 +561,19 @@ const repositoryVersionFileDiffInputValidator = patchSchema({
   sessionId: { type: "string", noTrim: false, required: true }
 });
 
+const integrationSetupRequestFields = {
+  turnId: { type: "string", required: true, maxLength: 32, pattern: /^\d{6,}$/u },
+  requestId: { type: "string", required: true, minLength: 64, maxLength: 64, pattern: /^[a-f0-9]{64}$/u }
+};
+const integrationSetupRequestInputValidator = requiredInputSchema(integrationSetupRequestFields);
+const integrationSetupRequestActionInputValidator = requiredInputSchema({
+  ...integrationSetupRequestFields,
+  sessionId: { type: "string", required: true, maxLength: 200 }
+});
+
 export {
+  integrationSetupRequestInputValidator,
+  integrationSetupRequestActionInputValidator,
   assistantAccessActionInputValidator,
   SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   agentMessageActionInputValidator,

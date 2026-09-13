@@ -156,6 +156,68 @@ function registerRoutes(
     });
   }
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/integrations", {
+    summary: "Read the session's portable integration configuration."
+  }, (request) => sourceEditor.readIntegrations({ sessionId: request.params.sessionId }));
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/n8n/discovery", {
+    bodyLimit: 4096,
+    summary: "Discover public OAuth metadata for an n8n instance."
+  }, (request) => sourceEditor.discoverN8nIntegration({
+    sessionId: request.params.sessionId, serverUrl: routes.requestBody(request).serverUrl
+  }));
+
+  routes.serviceRoute("PUT", "/sessions/:sessionId/integrations", {
+    bodyLimit: 2 * 1024 * 1024,
+    summary: "Validate and save the session's portable integration configuration."
+  }, async (request) => {
+    const body = routes.requestBody(request);
+    const result = await sourceEditor.saveIntegrations({
+      sessionId: request.params.sessionId,
+      baseHash: body.baseHash,
+      configuration: body.configuration,
+      originId: body.originId,
+      projectSlug: request.params.slug
+    });
+    await publishFileChanged(result, { operation: body.baseHash === null ? "created" : "saved" });
+    return result;
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/:integrationId/oauth-client", {
+    bodyLimit: 2 * 1024 * 1024,
+    summary: "Register a supported OAuth client and save its project configuration and private Env."
+  }, async (request) => {
+    const body = routes.requestBody(request);
+    const result = await sourceEditor.registerOAuthIntegration(withVibe64User(request, {
+      sessionId: request.params.sessionId, integrationId: request.params.integrationId,
+      baseHash: body.baseHash, configuration: body.configuration, callbackUrl: body.callbackUrl,
+      originId: body.originId, projectSlug: request.params.slug
+    }));
+    await publishFileChanged(result, { operation: body.baseHash === null ? "created" : "saved" });
+    return result;
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/:integrationId/setup", {
+    bodyLimit: 32768,
+    summary: "Run the application's declared integration setup operation."
+  }, (request) => {
+    const body = routes.requestBody(request);
+    return sourceEditor.runIntegrationSetup(withVibe64User(request, {
+      sessionId: request.params.sessionId,
+      integrationId: request.params.integrationId,
+      environment: "development",
+      operation: body.operation,
+      attemptId: body.attemptId,
+      setupRequest: body.setupRequest,
+      verificationInput: body.verificationInput,
+      ads: body.ads,
+      paymentEnvironment: body.paymentEnvironment,
+      reviewId: body.reviewId,
+      providerId: body.providerId,
+      subjectId: body.subjectId, collection: body.collection, after: body.after
+    }));
+  });
+
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/tree", {
     summary: "Read the editable source tree for a Vibe64 session."
   }, (request) => {

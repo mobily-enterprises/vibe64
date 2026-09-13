@@ -1,4 +1,5 @@
 import {
+  integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
   agentTurnInterruptActionInputValidator,
   assistantAccessActionInputValidator,
@@ -30,6 +31,8 @@ import {
   sessionUpdateInputValidator
 } from "./inputSchemas.js";
 
+const ACTION_SKIP_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.skip";
+const ACTION_RESUME_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.resume";
 const ACTION_LIST_SESSIONS = "vibe64.sessions.list";
 const ACTION_LIST_ARCHIVED_SESSIONS = "vibe64.sessions.archived.list";
 const ACTION_LIST_ASSISTANT_CAPABILITIES = "vibe64.assistants.capabilities.list";
@@ -110,6 +113,28 @@ function createSessionActions({ sessions } = {}) {
   }
 
   return Object.freeze([
+    action({
+      id: ACTION_RESUME_INTEGRATION_SETUP,
+      kind: "command",
+      idempotency: "domain_native",
+      input: integrationSetupRequestActionInputValidator,
+      execute: (input, context) => sessions.resumeIntegrationContinuation(input.sessionId, {
+        turnId: input.turnId,
+        requestId: input.requestId,
+        vibe64User: authenticatedVibe64User(context)
+      })
+    }),
+    action({
+      id: ACTION_SKIP_INTEGRATION_SETUP,
+      kind: "command",
+      idempotency: "domain_native",
+      input: integrationSetupRequestActionInputValidator,
+      execute: (input, context) => sessions.skipIntegrationSetupRequest(input.sessionId, {
+        turnId: input.turnId,
+        requestId: input.requestId,
+        vibe64User: authenticatedVibe64User(context)
+      })
+    }),
     action({
       id: ACTION_INSPECT_REPOSITORY_HISTORY,
       kind: "query",
@@ -392,6 +417,8 @@ function createSessionActions({ sessions } = {}) {
 }
 
 export {
+  ACTION_SKIP_INTEGRATION_SETUP,
+  ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_LIST_ASSISTANT_CAPABILITIES,
   ACTION_CANCEL_SESSION_RENEWAL,

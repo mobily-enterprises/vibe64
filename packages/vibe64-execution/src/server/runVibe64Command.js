@@ -45,6 +45,10 @@ async function runLocalVibe64Command(request, {
   env,
   requiresHelper
 } = {}) {
+  if (request.releaseEnvironmentFile) {
+    return commandErrorResult("Release environment execution requires a managed host.",
+      "vibe64_release_environment_unavailable", { execution: request.execution });
+  }
   if (request.mode === "pty") {
     return runPtyCommand(request, {
       actor,
@@ -116,7 +120,7 @@ async function runVibe64Command(input = {}) {
     const env = executionEnv(resolveCommandEnv({
       actor,
       baseEnv,
-      request
+      request: request.releaseEnvironmentFile ? { ...request, project: {}, session: {} } : request
     }));
     assertActorHomeEnv(actor, env);
     const cwd = assertCwdAllowed(request.cwd, {
@@ -161,6 +165,10 @@ async function runVibe64Command(input = {}) {
         resolveEnv,
         runLocal: local
       });
+    }
+    if (request.releaseEnvironmentFile) {
+      return commandErrorResult("Release environment execution requires a managed host.",
+        "vibe64_release_environment_unavailable", { execution: request.execution });
     }
     if (
       vibe64ManagedExecutionRequired(baseEnv) ||

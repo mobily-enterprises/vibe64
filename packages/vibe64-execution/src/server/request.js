@@ -342,6 +342,12 @@ function normalizeVibe64CommandRequest(input = {}) {
   }
   const project = recordValue(request.project);
   const session = recordValue(request.session);
+  const releaseEnvironmentFile = request.releaseEnvironmentFile ?? "";
+  if (typeof releaseEnvironmentFile !== "string" || (releaseEnvironmentFile && (!releaseEnvironmentFile.startsWith("/") || /[\r\n\0]/u.test(releaseEnvironmentFile) ||
+      mode !== "capture" || request.actor !== "app" || request.envPolicy !== "deployment" ||
+      Object.keys(normalizedEnv.env).length || normalizedEnv.envFactory || Object.keys(baseEnv).length))) {
+    throw commandRequestError("Release environment files require a finite application deployment command without caller Env.", "vibe64_command_release_environment_invalid");
+  }
   return {
     actor: normalizeEnum(request.actor, VIBE64_COMMAND_ACTORS, "daemon", "actor"),
     allowedRoots: normalizeAbsolutePaths(request.allowedRoots),
@@ -354,6 +360,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     env: normalizedEnv.env,
     envFactory: normalizedEnv.envFactory,
     envPolicy: normalizeEnum(request.envPolicy, VIBE64_COMMAND_ENV_POLICIES, "session", "env_policy"),
+    releaseEnvironmentFile,
     execution: normalizeExecutionDescriptor(request.execution, {
       mode,
       project,
@@ -364,7 +371,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     gitAuthToken: normalizeText(request.gitAuthToken || request.gitCredentials?.token),
     gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories || request.safeDirectories),
     gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, request.githubTransport ? "github-https" : "none", "git_transport"),
-    inheritProcessEnv: request.inheritProcessEnv !== false,
+    inheritProcessEnv: !releaseEnvironmentFile && request.inheritProcessEnv !== false,
     input: request.stdin ?? request.input,
     logPath: normalizeAbsolutePath(request.logPath),
     maxBuffer: Number.isSafeInteger(Number(request.maxBuffer)) && Number(request.maxBuffer) > 0

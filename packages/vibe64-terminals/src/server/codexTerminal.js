@@ -13062,6 +13062,38 @@ function createCodexTerminalController({
       return readCodexAppServerConversation(sessionId, input, options);
     },
 
+    inspectMessageAdmission(sessionId, input = {}, options = {}) {
+      return vibe64Result(async () => {
+        const messageId = normalizeText(input.messageId);
+        const threadId = normalizeText(input.threadId);
+        if (!messageId || !threadId) {
+          return { ok: false, code: "vibe64_codex_admission_identity_required",
+            error: "Admission inspection requires the message ID and original assistant thread." };
+        }
+        const context = await codexAppServerSessionContext(sessionId, options);
+        if (context.ok === false) return context;
+        const currentThreadId = normalizeText(codexAppServerTurnState(context.session).threadId) ||
+          codexThreadIdForWorkdir(context.session, context.workdir);
+        if (threadId !== currentThreadId) {
+          return { ok: false, code: "vibe64_codex_thread_mismatch",
+            error: "Admission inspection requires the original assistant thread." };
+        }
+        const target = await codexAppServerConversationContext(sessionId, {}, {
+          runtime: context.runtime, session: context.session
+        });
+        if (target.ok === false) return target;
+        try {
+          const thread = await target.provider.readThread(threadId);
+          const accepted = codexAppServerRenewalThreadTurns(thread).some((turn) =>
+            codexAppServerRenewalTurnItems(turn).some((item) => item.type === "userMessage" &&
+              codexAppServerRenewalTurnClientIds({ items: [item] }).includes(messageId)));
+          return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId };
+        } catch {
+          return { ok: true, admission: "unknown", messageId, threadId };
+        }
+      });
+    },
+
     modelCatalog(options = {}) {
       return withCodexAppServerModelCatalogDeadline((signal) => (
         withCodexAppServerProviderLifecycle(async () => {

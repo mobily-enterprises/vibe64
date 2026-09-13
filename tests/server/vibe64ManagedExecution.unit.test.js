@@ -14,7 +14,8 @@ import {
   stopVibe64OwnedExecutions
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import {
-  normalizeExecutionDescriptor
+  normalizeExecutionDescriptor,
+  normalizeVibe64CommandRequest
 } from "../../packages/vibe64-execution/src/server/request.js";
 import {
   runVibe64Command
@@ -22,6 +23,136 @@ import {
 
 const execFileAsync = promisify(execFile);
 const EXEC_HELPER = path.resolve("packages/vibe64-execution/src/host/execHelper.js");
+
+test("release commands reject caller Env and non-application execution", () => {
+  const request = {
+    command: process.execPath,
+    actor: "app",
+    envPolicy: "deployment",
+    releaseEnvironmentFile: "/release/artifact/service/environment",
+    runtimes: []
+  };
+  for (const change of [
+    { actor: "daemon" },
+    { mode: "detached" },
+    { envPolicy: "session" },
+    { env: { API_KEY: "session-value" } },
+    { baseEnv: { API_KEY: "host-value" } },
+    { releaseEnvironmentFile: "relative/environment" },
+    { releaseEnvironmentFile: 123 }
+  ]) {
+    assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
+      { code: "vibe64_command_release_environment_invalid" });
+  }
+  assert.equal(normalizeVibe64CommandRequest(request).inheritProcessEnv, false);
+});
+
+test("release commands exclude editable Env and cannot fall back to local execution", async (t) => {
+  const request = {
+    command: process.execPath,
+    args: ["-e", "throw new Error('must not execute locally')"],
+    actor: "app",
+    envPolicy: "deployment",
+    releaseEnvironmentFile: "/release/artifact/service/environment",
+    runtimes: [],
+    project: { deploymentEnv: { RELEASE_TEST_KEY: "edited-value" } },
+    session: { databaseEnv: { RELEASE_TEST_KEY: "session-value" } }
+  };
+  const previous = process.env.RELEASE_TEST_KEY;
+  process.env.RELEASE_TEST_KEY = "editor-process-value";
+  t.after(() => {
+    if (previous === undefined) delete process.env.RELEASE_TEST_KEY;
+    else process.env.RELEASE_TEST_KEY = previous;
+  });
+  const unavailable = await runVibe64Command(request);
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.code, "vibe64_release_environment_unavailable");
+  let called = false;
+  const release = installVibe64ManagedExecutionProvider({
+    async stopExecution() { throw new Error("Unexpected stop"); },
+    async runCommand(normalized, context) {
+      called = true;
+      assert.equal(normalized.releaseEnvironmentFile, request.releaseEnvironmentFile);
+      assert.equal(context.env.RELEASE_TEST_KEY, undefined);
+      assert.ok(context.env.HOME);
+      assert.ok(context.env.PATH);
+      return context.runLocal();
+    }
+  });
+  t.after(release);
+  const fallback = await runVibe64Command(request);
+  assert.equal(called, true);
+  assert.equal(fallback.ok, false);
+  assert.equal(fallback.code, "vibe64_release_environment_unavailable");
+});
+
+test("managed release runner supplies inherited release values with host-owned identity", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-env-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const payloadPath = path.join(root, "command.json");
+  await writeFile(payloadPath, JSON.stringify({
+    command: process.execPath,
+    args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_TEST_KEY,home:process.env.HOME,user:process.env.USER,path:process.env.PATH}))"],
+    cwd: root,
+    env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
+    releaseEnvironment: true,
+    executionId: randomUUID(),
+    schema: "vibe64.managed-execution.command",
+    schemaVersion: 1
+  }));
+  const result = await execFileAsync(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
+    cwd: root,
+    env: { RELEASE_TEST_KEY: "release-fixture", HOME: "/wrong", USER: "wrong", PATH: "/wrong" },
+    timeout: 5000
+  });
+  assert.deepEqual(JSON.parse(result.stdout), {
+    key: "release-fixture", home: root, user: "fixture", path: "/host/runtime/bin"
+  });
+  await assert.rejects(readFile(payloadPath), { code: "ENOENT" });
+});
+
+test("managed release runner consumes input and records child failure without persisting Env", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-failure-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const payloadPath = path.join(root, "command.json");
+  const executionId = randomUUID();
+  const input = JSON.stringify({ operation: "status", integrationId: "mailbox" });
+  await writeFile(payloadPath, JSON.stringify({
+    command: process.execPath,
+    args: ["--input-type=module", "-e", `
+      let input = "";
+      for await (const chunk of process.stdin) input += chunk;
+      if (JSON.parse(input).integrationId !== "mailbox") process.exit(19);
+      if (process.env.RELEASE_TEST_KEY !== "private-fixture-value") process.exit(20);
+      process.stdout.write("controlled failure");
+      process.exitCode = 7;
+    `],
+    cwd: root,
+    env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
+    releaseEnvironment: true,
+    inputPresent: true,
+    inputBase64: Buffer.from(input).toString("base64"),
+    executionId,
+    schema: "vibe64.managed-execution.command",
+    schemaVersion: 1
+  }));
+  await assert.rejects(execFileAsync(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
+    cwd: root, env: { RELEASE_TEST_KEY: "private-fixture-value" }, timeout: 5000
+  }), (error) => {
+    assert.equal(error.code, 7);
+    assert.equal(error.stdout, "controlled failure");
+    assert.equal(error.stderr, "");
+    return true;
+  });
+  await assert.rejects(readFile(payloadPath), { code: "ENOENT" });
+  const resultText = await readFile(path.join(root, "result.json"), "utf8");
+  const result = JSON.parse(resultText);
+  assert.equal(result.executionId, executionId);
+  assert.equal(result.result, "exit-code");
+  assert.equal(result.execMainStatus, "7");
+  assert.equal(resultText.includes("private-fixture-value"), false);
+  assert.equal(resultText.includes("RELEASE_TEST_KEY"), false);
+});
 
 test("execution descriptors carry intent without accepting controller policy", () => {
   const descriptor = normalizeExecutionDescriptor({

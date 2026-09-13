@@ -1929,6 +1929,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
     await operation({
       captures,
       controller,
+      controllerOptions,
       projectService,
       runtime,
       sessionId: session.sessionId,
@@ -2450,6 +2451,85 @@ test("session renewal provider primitives reject every economy execution profile
     assert.equal(captures.threadStarts.length, 0);
     assert.equal(captures.turns.length, 0);
   });
+});
+
+test("Codex admission inspection uses exact native user identity without sending", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+    const prepared = await controller.ensureThread(sessionId);
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    const threadId = prepared.codexThreadId;
+    const messageId = "integration-continuation-admission";
+    captures.threadSnapshotTurns = [{ id: "accepted-turn", items: [{
+      type: "userMessage", clientId: messageId, id: "native-user"
+    }] }];
+    assert.deepEqual(await controller.inspectMessageAdmission(sessionId, { messageId, threadId }), {
+      ok: true, admission: "accepted", messageId, threadId
+    });
+    assert.equal((await controller.inspectMessageAdmission(sessionId, {
+      messageId: "another-message", threadId
+    })).admission, "unknown");
+    captures.threadSnapshotTurns[0].items[0].type = "agentMessage";
+    assert.equal((await controller.inspectMessageAdmission(sessionId, { messageId, threadId })).admission, "unknown");
+    const mismatch = await controller.inspectMessageAdmission(sessionId, { messageId, threadId: "another-thread" });
+    assert.equal(mismatch.ok, false);
+    assert.equal(mismatch.code, "vibe64_codex_thread_mismatch");
+    captures.provider.readThread = async () => { throw new Error("Provider history unavailable"); };
+    assert.equal((await controller.inspectMessageAdmission(sessionId, { messageId, threadId })).admission, "unknown");
+    assert.equal(captures.turns.length, 0);
+    assert.equal(captures.steers.length, 0);
+  });
+});
+
+test("Codex integration continuation recovers native acceptance with a fresh service after local persistence failure", async () => {
+  await withAgentMessageController(async ({ captures, controllerOptions, projectService, terminalService, sessionId, store }) => {
+    const prepared = await terminalService.ensureAgentSession(sessionId);
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    await store.writeConversationUserMessage(sessionId, { text: "Configure mail." });
+    const turn = await store.writeConversationAssistantMessage(sessionId, {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const input = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    const completion = await store.completeIntegrationSetupRequest(sessionId, {
+      ...input, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00.000Z"
+    });
+    const writeUser = store.writeConversationUserMessage;
+    store.writeConversationUserMessage = async () => {
+      captures.provider.readThread = async () => { throw new Error("History temporarily unavailable."); };
+      throw new Error("Local persistence failed.");
+    };
+    let restarted;
+    try {
+      const uncertain = await terminalService.resumeIntegrationContinuation(sessionId, input, {
+        readIntegrationConfiguration: async () => ({ ok: true, baseHash: "a".repeat(64),
+          configuration: { integrations: { mail: {} } } })
+      });
+      assert.equal(uncertain.code, "vibe64_integration_continuation_unconfirmed", JSON.stringify(uncertain));
+      assert.equal(uncertain.integrationSetup.continuation.status, "sending");
+      assert.equal(captures.turns.length, 1);
+      const acceptedTurn = captures.turns[0];
+      // A new provider object reads the native history preserved independently
+      // of the controller whose local persistence failed.
+      captures.threadSnapshotTurns = [{ id: acceptedTurn.turnId, items: [{
+        type: "userMessage", id: "native-user", clientId: acceptedTurn.settings.clientUserMessageId
+      }], status: "completed" }];
+      await terminalService.close();
+      store.writeConversationUserMessage = writeUser;
+      restarted = createTerminalService({ codexTerminalController: controllerOptions,
+        env: controllerOptions.env, projectService });
+      const result = await restarted.resumeIntegrationContinuation(sessionId, input);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.integrationSetup.continuation.status, "accepted");
+      assert.equal(result.integrationSetup.continuationMessageId, completion.continuationMessageId);
+      assert.equal(captures.turns.length, 1);
+      assert.equal(captures.turns[0].settings.clientUserMessageId, completion.continuationMessageId);
+      assert.equal((await restarted.resumeIntegrationContinuation(sessionId, input)).ok, true);
+      assert.equal(captures.turns.length, 1);
+      assert.equal(captures.steers.length, 0);
+    } finally {
+      store.writeConversationUserMessage = writeUser;
+      await restarted?.close();
+    }
+  }, { throughTerminalService: true });
 });
 
 test("duplicate agent messages with the same message id call the provider once", async () => {

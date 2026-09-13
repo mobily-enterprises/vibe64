@@ -33,6 +33,13 @@ import {
   vibe64ResourceEstimatesInspection
 } from "./resourceEstimates.js";
 
+import {
+  VIBE64_INTEGRATION_SETUP_CONTRACT,
+  VIBE64_INTEGRATION_SETUP_SECTION,
+  parseVibe64IntegrationSetupLines,
+  vibe64IntegrationSetupInspection
+} from "./integrationSetup.js";
+
 const require = createRequire(import.meta.url);
 
 const {
@@ -317,6 +324,11 @@ async function inspectVibe64Outputs(options = {}) {
   };
 }
 
+async function inspectVibe64IntegrationSetup(options = {}) {
+  const section = await inspectGenesisStackSection(VIBE64_INTEGRATION_SETUP_SECTION, options);
+  return vibe64IntegrationSetupInspection({ section });
+}
+
 async function inspectVibe64WorkspaceSetup(options = {}) {
   const [section, resourceSection, outputsSection] = await Promise.all([
     inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options),
@@ -403,6 +415,10 @@ async function renderGenesisPrompt({
 }
 
 export {
+  VIBE64_INTEGRATION_SETUP_CONTRACT,
+  VIBE64_INTEGRATION_SETUP_SECTION,
+  inspectVibe64IntegrationSetup,
+  parseVibe64IntegrationSetupLines,
   GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,

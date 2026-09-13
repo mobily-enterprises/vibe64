@@ -550,6 +550,65 @@ test("OpenCode returns a readable failed-message result after a cold start times
   );
 });
 
+test("OpenCode reports local persistence failure after upstream admission without resending", async (t) => {
+  let historyUnavailable = false;
+  let restarted = null;
+  const harness = await controllerHarness({ beforeMessages: async () => {
+    if (historyUnavailable) throw new Error("Injected provider history outage");
+  } });
+  t.after(async () => {
+    await restarted?.closeAllForProject();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  harness.runtime.store.writeConversationUserMessage = async () => {
+    throw new Error("Injected conversation persistence failure");
+  };
+
+  await assert.rejects(
+    harness.controller.sendMessage("session-1", {
+      message: "Continue after integration setup.",
+      messageId: "integration-continuation-1"
+    }, {
+      runtime: harness.runtime,
+      session: harness.session,
+      vibe64User: { username: "ada" }
+    }),
+    /Injected conversation persistence failure/u
+  );
+
+  // Provider acceptance precedes local persistence. A caller must not treat
+  // this error as proof that it is safe to repeat the prompt.
+  assert.equal(harness.promptCalls.length, 1);
+  assert.match(harness.promptCalls[0].input.id, /^msg_vibe64_/u);
+  assert.equal(harness.userMessages.length, 0);
+  await harness.controller.closeAllForProject();
+  restarted = harness.createController();
+  const threadId = harness.promptCalls[0].id;
+  const sessionCount = harness.createdSessions.length;
+  const accepted = await restarted.inspectMessageAdmission("session-1", {
+    messageId: "integration-continuation-1", threadId
+  });
+  assert.deepEqual(accepted, {
+    ok: true, admission: "accepted", messageId: "integration-continuation-1", threadId
+  });
+  const unknown = await restarted.inspectMessageAdmission("session-1", {
+    messageId: "another-continuation", threadId
+  });
+  assert.equal(unknown.admission, "unknown");
+  historyUnavailable = true;
+  const unavailable = await restarted.inspectMessageAdmission("session-1", {
+    messageId: "integration-continuation-1", threadId
+  });
+  assert.equal(unavailable.admission, "unknown");
+  await assert.rejects(restarted.inspectMessageAdmission("session-1", {
+    messageId: "integration-continuation-1", threadId: "another-thread"
+  }), /original assistant thread/u);
+  assert.equal(harness.promptCalls.length, 1);
+  assert.equal(harness.createdSessions.length, sessionCount);
+  assert.equal(harness.userMessages.length, 0);
+});
+
 test("OpenCode persists a user message and its display attachments only after upstream admission", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {

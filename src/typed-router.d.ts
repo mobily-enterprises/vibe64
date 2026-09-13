@@ -58,6 +58,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/health/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/history/[sessionId]'
+      | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/repository/'
       | '/app/project/[slug]/dashboard/session/'
       | '/app/project/[slug]/dashboard/settings/'
@@ -74,6 +75,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/health/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/history/[sessionId]'
+      | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/repository/'
       | '/app/project/[slug]/dashboard/session/'
       | '/app/project/[slug]/dashboard/settings/'
@@ -125,6 +127,13 @@ declare module 'vue-router/auto-routes' {
       '/app/project/:slug/dashboard/history/:sessionId',
       { slug: ParamValue<true>, sessionId: ParamValue<true> },
       { slug: ParamValue<false>, sessionId: ParamValue<false> },
+      | never
+    >,
+    '/app/project/[slug]/dashboard/integrations/': RouteRecordInfo<
+      '/app/project/[slug]/dashboard/integrations/',
+      '/app/project/:slug/dashboard/integrations',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
       | never
     >,
     '/app/project/[slug]/dashboard/repository/': RouteRecordInfo<
@@ -184,6 +193,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/health/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/history/[sessionId]'
+        | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/repository/'
         | '/app/project/[slug]/dashboard/session/'
         | '/app/project/[slug]/dashboard/settings/'
@@ -200,6 +210,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/health/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/history/[sessionId]'
+        | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/repository/'
         | '/app/project/[slug]/dashboard/session/'
         | '/app/project/[slug]/dashboard/settings/'
@@ -245,6 +256,12 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard/history/[sessionId].vue': {
       routes:
         | '/app/project/[slug]/dashboard/history/[sessionId]'
+      views:
+        | never
+    }
+    'src/pages/app/project/[slug]/dashboard/integrations/index.vue': {
+      routes:
+        | '/app/project/[slug]/dashboard/integrations/'
       views:
         | never
     }

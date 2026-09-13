@@ -595,11 +595,20 @@ test("completed renewal removes every predecessor process, command, attachment, 
   await withTemporaryRoot(async (targetRoot) => {
     const context = await renewalHarness(targetRoot);
     try {
+      await context.runtime.store.writeConversationUserMessage(PREDECESSOR_ID, { text: "Configure calendar." });
+      const integrationTurn = await context.runtime.store.writeConversationAssistantMessage(PREDECESSOR_ID, {
+        text: '```vibe64-integration\n{"integrationId":"calendar"}\n```'
+      });
+      const integrationRequest = { turnId: integrationTurn.turnId, requestId: integrationTurn.integrationSetup.requestId };
+      await context.runtime.store.completeIntegrationSetupRequest(PREDECESSOR_ID, {
+        ...integrationRequest, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00Z"
+      });
       await requestAndConfirmRenewal(context, "renewal:actual-resource-success");
       const completed = await eventually(
         () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
         (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED &&
-          state?.maintenance?.status === "completed"
+          state?.maintenance?.status === "completed",
+        600
       );
 
       await assertLiveProcessesClosed(context.resources);
@@ -622,6 +631,17 @@ test("completed renewal removes every predecessor process, command, attachment, 
       assert.equal(predecessor.status, "archived");
       assert.equal(successor.status, "active");
       assert.equal(successor.metadata.renewed_from, PREDECESSOR_ID);
+      const oldRequest = await context.runtime.store.readIntegrationSetupRequest(PREDECESSOR_ID, integrationRequest.turnId);
+      assert.equal(oldRequest.outcome, "completed");
+      assert.equal(oldRequest.continuation.status, "pending");
+      const successorLog = await context.runtime.store.readConversationLog(successor.sessionId);
+      assert.equal(successorLog.some((turn) => turn.integrationSetup), false,
+        "Renewal carries the handover, not actionable predecessor integration requests.");
+      await assert.rejects(context.runtime.store.claimIntegrationContinuation(successor.sessionId, {
+        ...integrationRequest, continuationMessageId: oldRequest.continuationMessageId,
+        engineId: "codex", threadId: "successor-thread"
+      }), { code: "vibe64_integration_setup_request_changed" });
+
     } finally {
       await closeHarness(context);
     }

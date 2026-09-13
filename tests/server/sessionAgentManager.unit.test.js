@@ -40,6 +40,33 @@ function providerCapabilities(engineId, transportId, {
   };
 }
 
+test("session agent manager gates admission inspection with assistant access", async () => {
+  for (const engineId of ["codex", "opencode"]) {
+    const calls = [];
+    const manager = createSessionAgentManager({
+      readAssistantAccess: async () => ({ ownerOnly: true }),
+      providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
+        async inspectMessageAdmission(context, input) {
+          calls.push({ context, input });
+          return { ok: true, admission: "unknown" };
+        }
+      }]
+    });
+    const input = { messageId: "continuation", threadId: "original-thread" };
+    const options = { agentSettings: { providerId: engineId }, vibe64User: { role: "user", username: "member" } };
+    await assert.rejects(manager.inspectMessageAdmission("session-1", input, options));
+    assert.equal(calls.length, 0);
+    const result = await manager.inspectMessageAdmission("session-1", input, {
+      ...options, vibe64User: { role: "owner", username: "owner" }
+    });
+    assert.equal(result.admission, "unknown");
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].input, input);
+    assert.equal(calls[0].context.vibe64User.role, "owner");
+    assert.equal(calls[0].context.sessionId, "session-1");
+  }
+});
+
 test("session agent manager sends a message through the selected provider", async () => {
   let received = null;
   const manager = createSessionAgentManager({
