@@ -1,12 +1,12 @@
 <template>
   <section class="studio-archived-sessions d-flex flex-column ga-3">
     <div
-      v-if="title || description || showRefresh"
+      v-if="title || $slots.title || description || showRefresh"
       class="studio-archived-sessions__header"
-      :class="{ 'studio-archived-sessions__header--actions-only': !title && !description }"
+      :class="{ 'studio-archived-sessions__header--actions-only': !title && !$slots.title && !description }"
     >
-      <div v-if="title || description" class="studio-archived-sessions__copy">
-        <h2 class="studio-archived-sessions__title">{{ title }}</h2>
+      <div v-if="title || $slots.title || description" class="studio-archived-sessions__copy">
+        <slot name="title"><h2 class="text-headline-small font-weight-bold ma-0">{{ title }}</h2></slot>
         <p v-if="description" class="text-body-2 text-medium-emphasis mb-0">{{ description }}</p>
       </div>
       <v-btn
@@ -158,14 +158,6 @@ defineExpose({
   min-width: 0;
 }
 
-.studio-archived-sessions__title {
-  font-size: clamp(1.2rem, 1.7vw, 1.55rem);
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.1;
-  margin: 0 0 0.1rem;
-}
-
 .studio-archived-sessions__refresh {
   min-height: 48px;
   min-width: 8.5rem;
@@ -283,7 +275,6 @@ defineExpose({
     max-width: 100%;
   }
 
-  .studio-archived-sessions__header,
   .studio-archived-sessions__card-heading {
     align-items: stretch;
     flex-direction: column;

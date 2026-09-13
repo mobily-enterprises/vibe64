@@ -2,7 +2,7 @@
   <section class="project-settings">
     <header class="project-settings__header">
       <div>
-        <h1>Project settings</h1>
+        <h1 class="text-headline-small font-weight-bold ma-0">Project settings</h1>
         <p>Project-wide Vibe64 behavior and source-owned engineering choices.</p>
       </div>
       <v-btn
@@ -731,11 +731,6 @@ function reloadPage() {
 .project-settings__scope,
 .project-settings__action p {
   margin: 0;
-}
-
-.project-settings__header h1 {
-  font-size: var(--generated-ui-screen-title-size, 1.35rem);
-  line-height: 1.1;
 }
 
 .project-settings__header p,

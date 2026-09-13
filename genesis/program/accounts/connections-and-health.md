@@ -28,6 +28,9 @@ keeps credentials in host-owned storage. Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
 managed browser runtime. Failures identify the concrete host capability that is
 missing without attempting project-specific repairs.
+The managed launcher relies on cgroup v2 CPU accounting and does not assign the
+deprecated `CPUAccounting` property. Launcher deprecation output must not precede
+version output and make installed runtimes appear unavailable.
 The browser check validates the pinned Chromium installation and launches its
 headless shell within the bounded health job, rather than starting desktop
 browser services. Execution failure reasons take precedence over incidental

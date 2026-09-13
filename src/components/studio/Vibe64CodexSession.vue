@@ -398,7 +398,7 @@ const terminalSubtitle = computed(() => {
   if (terminalConnectionStatus.value === "connecting") {
     return "Connecting Codex";
   }
-  return terminalStatus.value === "running" ? "" : "Codex agent session";
+  return "";
 });
 const {
   abandonAttachments: abandonTerminalAttachments,

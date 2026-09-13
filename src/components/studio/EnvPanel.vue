@@ -2,7 +2,7 @@
   <section class="env-panel">
     <header class="env-panel__header">
       <div class="env-panel__title">
-        <h1>Env</h1>
+        <h1 class="text-headline-small font-weight-bold ma-0">Env</h1>
         <v-chip
           v-if="envConfigSourceLabel"
           size="x-small"
@@ -463,15 +463,6 @@ function reloadPage() {
   gap: 0.75rem;
   justify-content: space-between;
   min-width: 0;
-}
-
-.env-panel__header h1 {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: var(--generated-ui-screen-title-size, 1.35rem);
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.1;
-  margin: 0;
 }
 
 .env-panel__title {

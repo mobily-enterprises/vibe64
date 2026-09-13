@@ -5,8 +5,7 @@
   >
     <header class="vibe64-repository-workspace__header">
       <div>
-        <h1>{{ pageTitle }}</h1>
-        <p>{{ pageDescription }}</p>
+        <h1 class="text-headline-small font-weight-bold ma-0">{{ pageTitle }}</h1>
       </div>
       <div class="vibe64-repository-workspace__actions">
         <v-btn
@@ -426,9 +425,6 @@ const versionFileCountLabel = computed(() => {
 });
 
 const pageTitle = computed(() => view.value === "history" ? "Repository" : "Current changes");
-const pageDescription = computed(() => view.value === "history"
-  ? "Review saved versions and bring this session up to date."
-  : "Review exactly what this session changes before saving it.");
 const repositoryStatus = computed(() => updates.payload || changes.payload || null);
 const repositoryOperationBusy = computed(() => Boolean(
   !sessionId.value ||
@@ -703,11 +699,6 @@ function closeVersion() {
 .vibe64-repository-workspace__header p {
   letter-spacing: 0;
   margin: 0;
-}
-
-.vibe64-repository-workspace__header h1 {
-  font-size: clamp(1.35rem, 2vw, 1.8rem);
-  font-weight: 720;
 }
 
 .vibe64-repository-workspace__header p,

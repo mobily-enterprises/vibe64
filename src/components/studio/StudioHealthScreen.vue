@@ -3,7 +3,7 @@
     <div class="studio-health__header">
       <div>
         <p class="studio-health__eyebrow">Vibe64</p>
-        <h2 class="studio-health__title">Studio Health</h2>
+        <h1 class="text-headline-small font-weight-bold ma-0">Studio Health</h1>
         <p class="studio-health__intro">
           Read-only checks for the editor, credentials, Genesis, and pinned runtimes.
         </p>
@@ -140,7 +140,6 @@ const summaryText = computed(() => {
 }
 
 .studio-health__eyebrow,
-.studio-health__title,
 .studio-health__intro,
 .studio-health__check-copy p,
 .studio-health__check-copy small {

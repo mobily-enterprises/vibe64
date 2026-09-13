@@ -252,7 +252,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
 <template>
   <section class="integrations-panel">
     <header class="integrations-panel__header">
-      <div><h1>Integrations</h1><p>Connect services to your application.</p></div>
+      <div><h1 class="text-headline-small font-weight-bold ma-0">Integrations</h1></div>
       <v-btn height="48" variant="text" :disabled="command.isRunning" @click="dirty ? discardOpen = true : resource.reload()">Refresh</v-btn>
     </header>
     <v-btn-toggle v-if="dashboardContext.productionIntegrationsApiPath" v-model="environment" mandatory aria-label="Integration environment">

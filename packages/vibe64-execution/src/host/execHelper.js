@@ -352,7 +352,6 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     "--property=ExitType=cgroup",
     "--property=OOMPolicy=stop",
     "--property=MemoryAccounting=yes",
-    "--property=CPUAccounting=yes",
     "--property=IOAccounting=yes",
     "--property=TasksAccounting=yes",
     `--property=MemoryMax=${memoryMaxBytes}`,
@@ -548,7 +547,6 @@ function configureManagedExecutionWorkSlice(owner = {}, {
     `MemoryMax=${memoryMaxBytes}`,
     `TasksMax=${tasksMax}`,
     "MemoryAccounting=yes",
-    "CPUAccounting=yes",
     "IOAccounting=yes",
     "TasksAccounting=yes"
   ]);
@@ -744,9 +742,9 @@ function managedWorkflowOperation(payload, owner) {
     runRootCommand("busctl", [
       "--system", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
       "org.freedesktop.systemd1.Manager", "StartTransientUnit", "ssa(sv)a(sa(sv))",
-      workflow.unitName, "fail", "6",
+      workflow.unitName, "fail", "5",
       "MemoryMax", "t", String(memoryMaxBytes), "TasksMax", "t", String(tasksMax),
-      "MemoryAccounting", "b", "true", "CPUAccounting", "b", "true",
+      "MemoryAccounting", "b", "true",
       "IOAccounting", "b", "true", "TasksAccounting", "b", "true", "0"
     ]);
     runRootCommand("systemctl", ["start", workflow.unitName]);
@@ -1980,7 +1978,6 @@ function serviceResourceUnitLines(owner = {}) {
   return [
     `Slice=vibe64-${workspace}-work.slice`,
     "MemoryAccounting=yes",
-    "CPUAccounting=yes",
     "IOAccounting=yes",
     "TasksAccounting=yes",
     "KillMode=control-group",

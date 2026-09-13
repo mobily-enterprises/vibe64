@@ -2,7 +2,7 @@
   <section class="preview-identity-settings">
     <header class="preview-identity-settings__header">
       <div>
-        <h1>Managed app access</h1>
+        <h1 class="text-headline-small font-weight-bold ma-0">Managed app access</h1>
         <p>
           Named existing application accounts for authenticated Preview and Playwright.
           The first identity is the default.
@@ -313,12 +313,6 @@ function reloadPage() {
 .preview-identity-settings__section-copy p,
 .preview-identity-settings__empty {
   margin: 0;
-}
-
-.preview-identity-settings__header h1 {
-  font-size: var(--generated-ui-screen-title-size, 1.35rem);
-  font-weight: 700;
-  line-height: 1.1;
 }
 
 .preview-identity-settings__header p,

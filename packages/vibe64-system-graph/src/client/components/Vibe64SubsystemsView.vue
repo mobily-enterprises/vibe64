@@ -6,10 +6,7 @@
     <header class="subsystems__toolbar">
       <div class="subsystems__identity">
         <v-icon :icon="mdiLayersTripleOutline" />
-        <div>
-          <strong>Subsystems</strong>
-          <span>How the application fits together</span>
-        </div>
+        <h1 class="text-headline-small font-weight-bold ma-0">Subsystems</h1>
       </div>
       <v-btn-toggle
         v-model="view"
@@ -406,17 +403,9 @@ watch(() => props.restoreRequest, request => {
 .subsystems__identity>.v-icon {
   color: rgb(var(--v-theme-primary));
 }
-.subsystems__identity div {
-  display: flex;
-  flex-direction: column;
-}
-.subsystems__identity strong {
-  font-size: 16px;
-}
-.subsystems__identity span {
-  font-size: 12px;
-  opacity: .6;
-}
+
+
+
 .subsystems__body {
   display: grid;
   grid-template-columns: minmax(230px,1fr) minmax(300px,420px);
@@ -648,8 +637,6 @@ watch(() => props.restoreRequest, request => {
     padding: 10px;
     gap: 5px;
   }
-  .subsystems__identity span {
-    display: none;
-  }
+
 }
 </style>

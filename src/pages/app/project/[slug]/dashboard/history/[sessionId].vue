@@ -1,7 +1,7 @@
 <template>
   <section class="vibe64-dashboard-page vibe64-dashboard-page--archive-detail">
     <header class="vibe64-dashboard-page__header">
-      <h1>Archived Session</h1>
+      <h1 class="text-headline-small font-weight-bold ma-0">Archived Session</h1>
     </header>
 
     <v-alert
@@ -93,15 +93,6 @@ const {
 
 .vibe64-dashboard-page__header {
   min-width: 0;
-}
-
-.vibe64-dashboard-page__header h1 {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: var(--generated-ui-screen-title-size, clamp(1.2rem, 1.7vw, 1.55rem));
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.05;
-  margin: 0 0 0.15rem;
 }
 
 .vibe64-dashboard-page__empty {

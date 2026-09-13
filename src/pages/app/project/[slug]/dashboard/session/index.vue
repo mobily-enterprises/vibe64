@@ -2,8 +2,7 @@
   <section class="vibe64-session-info-page">
     <header class="vibe64-session-info-page__header">
       <div>
-        <h1>Session info</h1>
-        <p>Paths and identifiers for continuing this work locally or with another agent.</p>
+        <h1 class="text-headline-small font-weight-bold ma-0">Session info</h1>
       </div>
       <v-btn
         v-if="copyContext"
@@ -123,13 +122,6 @@ onBeforeUnmount(() => {
 .vibe64-session-info-page__empty p {
   letter-spacing: 0;
   margin: 0;
-}
-
-.vibe64-session-info-page__header h1 {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: var(--generated-ui-screen-title-size, clamp(1.2rem, 1.7vw, 1.55rem));
-  font-weight: 700;
-  line-height: 1.05;
 }
 
 .vibe64-session-info-page__header p,

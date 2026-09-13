@@ -7,6 +7,8 @@ People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
 application, environment, and the system's explained structure in one place.
 Each session keeps valuable work recoverable and separate from unrelated work.
+Dashboard page titles share one Material typography style. Session history keeps
+its refresh action beside the heading, including on small screens.
 Archiving immediately makes a session inactive and selects the previous available
 session. Its gray tab remains while Preview, AI work, and other tools stop and
 its workspace is archived in the background. Success removes the tab; failure
