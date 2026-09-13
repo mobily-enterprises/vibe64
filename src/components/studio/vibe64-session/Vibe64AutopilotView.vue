@@ -243,6 +243,10 @@
       </div>
 
       <Vibe64ConversationLog
+        :integration-action-pending="props.conversationLog?.integrationActionPending"
+        :integration-connections="props.conversationLog?.integrationConnections"
+        :integration-action-error="props.conversationLog?.integrationActionError"
+        :integration-requests-enabled="props.active && !props.sessionSelectionArchived"
         :session-id="sessionId"
         :assistant-label="conversationAssistantLabel"
         class="studio-autopilot__conversation"
@@ -263,6 +267,12 @@
         @edit-turn="editOptimisticMessage"
         @load-more="loadMoreChatTurns"
         @open-source-file="openSourceEditorFile"
+        @open-integration="openIntegrationRequest"
+        @skip-integration="skipIntegrationRequest"
+        @resume-integration="resumeIntegrationRequest"
+        @connect-integration="connectIntegrationRequest"
+        @check-integration="checkIntegrationRequest"
+        @cancel-integration="cancelIntegrationRequest"
         @reload="reloadChatPane"
         @resend-turn="resendOptimisticMessage"
       />
@@ -885,6 +895,7 @@ const {
   agentStopEnabled,
   agentStopVisible,
   answerChoices,
+  prefillComposer,
   askCodexAboutSourceEditorFile,
   askCodexToFixPreviewIdentity,
   askCodexToFixWorkspaceSetup,
@@ -932,6 +943,12 @@ const {
   loadMoreChatTurns,
   numberedQuestionSelectItems,
   numberedQuestions,
+  openIntegrationRequest,
+  skipIntegrationRequest,
+  resumeIntegrationRequest,
+  connectIntegrationRequest,
+  checkIntegrationRequest,
+  cancelIntegrationRequest,
   openSourceEditorFile,
   previewAttachmentState,
   projectSlug,
@@ -1133,6 +1150,7 @@ const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
+  requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
   requestTemporaryAi: fixRepositoryError,
   sourceOperationsSuspended: sourceOperationsSuspended.value

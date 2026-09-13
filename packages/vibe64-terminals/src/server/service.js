@@ -2225,6 +2225,88 @@ function createService({
       return sessionPromptHints.cancelSessionPromptHints(sessionId, input);
     },
 
+    async resumeIntegrationContinuation(sessionId, input = {}, options = {}) {
+      return runMainAgentWrite(sessionId, options, async (context) => {
+        const access = await sessionAgent.requireAssistantAccess(sessionId, context);
+        const store = context.runtime.store;
+        const saved = await store.readIntegrationSetupRequest(sessionId, input.turnId);
+        if (!saved || saved.requestId !== input.requestId || saved.outcome !== "completed") {
+          return { ok: false, code: "vibe64_integration_setup_not_completed",
+            error: "This integration request has not been completed." };
+        }
+        if (saved.continuation.status === "accepted") {
+          return { ok: true, integrationSetup: saved };
+        }
+        const state = await sessionAgent.sessionState(sessionId, context);
+        if (state.ok === false) return state;
+        const delivery = {
+          turnId: input.turnId, requestId: saved.requestId,
+          continuationMessageId: saved.continuationMessageId,
+          engineId: access.engineId, threadId: state.thread?.id
+        };
+        // Prepare before claiming: a setup failure here has not contacted the
+        // provider and must not leave an uncertain delivery record.
+        if (saved.continuation.status === "pending") {
+          await prepareAgentSkillsInsideAgentWrite(sessionId, context);
+          if (typeof options.readIntegrationConfiguration !== "function") {
+            return { ok: false, code: "vibe64_integration_configuration_unavailable",
+              error: "Integration configuration cannot be checked before continuing.", integrationSetup: saved };
+          }
+          const current = await options.readIntegrationConfiguration();
+          if (current?.ok === false) return current;
+          if (current?.baseHash !== saved.configurationHash ||
+              !Object.hasOwn(current?.configuration?.integrations || {}, saved.integrationId)) {
+            return { ok: false, code: "vibe64_integration_configuration_changed",
+              error: "Integration configuration changed after verification. Return to chat and request setup for the updated configuration.",
+              integrationSetup: saved };
+          }
+        }
+        const claim = await store.claimIntegrationContinuation(sessionId, delivery);
+        let delivered = false;
+        if (claim.changed) {
+          try {
+            const result = await sessionAgent.sendMessage(sessionId, {
+              messageId: saved.continuationMessageId,
+              message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
+            }, context);
+            delivered = result.ok !== false && result.delivered === true;
+            if (!delivered) {
+              logOperationalEvent(logger, "warn", {
+                code: result.code, component: "vibe64.integration_continuation",
+                event: "vibe64.integration_continuation.delivery_unconfirmed",
+                sessionId, messageId: saved.continuationMessageId
+              }, "Integration continuation delivery was not confirmed.");
+            }
+          } catch (error) {
+            logOperationalEvent(logger, "warn", {
+              code: error?.code, component: "vibe64.integration_continuation",
+              event: "vibe64.integration_continuation.delivery_failed",
+              sessionId, messageId: saved.continuationMessageId
+            }, "Integration continuation delivery failed; checking provider admission.");
+            // The provider may have accepted before local persistence failed.
+            // Inspect its exact message identity instead of resending.
+          }
+        }
+        if (!delivered) {
+          try {
+            const admission = await sessionAgent.inspectMessageAdmission(sessionId, {
+              messageId: saved.continuationMessageId, threadId: delivery.threadId
+            }, context);
+            delivered = admission.ok !== false && admission.admission === "accepted";
+          } catch {
+            // An unavailable provider leaves the durable claim uncertain.
+          }
+        }
+        if (!delivered) {
+          return { ok: false, code: "vibe64_integration_continuation_unconfirmed",
+            error: "Assistant delivery could not be confirmed. Check again to inspect delivery; this will not send a duplicate message.",
+            integrationSetup: claim.integrationSetup };
+        }
+        const accepted = await store.acceptIntegrationContinuation(sessionId, delivery);
+        return { ok: true, integrationSetup: accepted.integrationSetup };
+      }, { operation: "resume-integration-continuation", waitMs: MAIN_CHAT_AGENT_WRITE_WAIT_MS });
+    },
+
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       const startedAt = Date.now();
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);

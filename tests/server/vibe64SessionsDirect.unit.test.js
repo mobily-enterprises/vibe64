@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTION_SKIP_INTEGRATION_SETUP,
+  ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CONFIRM_SESSION_RENEWAL,
@@ -221,6 +223,7 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+    ACTION_SKIP_INTEGRATION_SETUP,
     ACTION_INSPECT_REPOSITORY_HISTORY,
     ACTION_INSPECT_REPOSITORY_VERSION_FILES,
     ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
@@ -2949,4 +2952,76 @@ test("workspace preparation starts required or newly configured recipes and retr
   assert.equal(blocked.retryable, true);
   assert.equal(status, "failed");
   assert.equal(startCount, 4);
+});
+
+
+test("integration continuation action forwards only request identity and authenticated actor", async () => {
+  const runtime = {};
+  const calls = [];
+  const events = [];
+  const sessions = createService({
+    project: { async createRuntime() { return runtime; } },
+    terminals: { async resumeIntegrationContinuation(...args) {
+      calls.push(args);
+      return { ok: true, integrationSetup: { outcome: "completed", continuation: { status: "accepted" } } };
+    } },
+    publishSessionChanged: async (...args) => events.push(args)
+  });
+  const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_RESUME_INTEGRATION_SETUP);
+  const actor = { username: "member" };
+  const result = await action.execute({
+    sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64),
+    vibe64User: { username: "owner" }, message: "Untrusted text", threadId: "untrusted-thread"
+  }, { requestMeta: { request: { vibe64User: actor } } });
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(0, 2), ["session-1", { turnId: "000001", requestId: "a".repeat(64) }]);
+  assert.equal(calls[0][2].runtime, runtime);
+  assert.equal(calls[0][2].vibe64User, actor);
+  assert.equal(typeof calls[0][2].readIntegrationConfiguration, "function");
+  assert.deepEqual(events, [["session-1", { reason: "integration-setup-completed", session: null }]]);
+});
+
+test("integration setup skip authorizes the actor before changing saved conversation state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    await store.createSession({ runtimeKind: "genesis", sessionId: "skip-request" });
+    await store.writeConversationUserMessage("skip-request", { text: "Configure mail" });
+    const turn = await store.writeConversationAssistantMessage("skip-request", {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const events = [];
+    const actors = [];
+    const runtime = { store, async getSession(sessionId) { return { sessionId, status: "active" }; } };
+    const sessions = createService({
+      project: { async createRuntime() { return runtime; } },
+      terminals: { async requireAssistantAccess(sessionId, context) {
+        assert.equal(sessionId, "skip-request");
+        assert.equal(context.runtime, runtime);
+        actors.push(context.vibe64User?.username);
+        if (context.vibe64User?.username !== "owner") {
+          const error = new Error("Assistant access denied.");
+          error.code = "vibe64_assistant_owner_required";
+          error.statusCode = 403;
+          throw error;
+        }
+      } },
+      publishSessionChanged: async (...args) => events.push(args)
+    });
+    const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
+    const input = { sessionId: "skip-request", turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
+      vibe64User: { username: "owner" } };
+    const denied = await action.execute(input, { requestMeta: { request: { vibe64User: { username: "member" } } } });
+    assert.equal(denied.ok, false);
+    assert.equal(denied.code, "vibe64_assistant_owner_required");
+    assert.equal((await store.readConversationLog("skip-request"))[0].integrationSetup.outcome, "pending");
+    assert.equal(events.length, 0);
+    const accepted = await action.execute(input, { requestMeta: { request: { vibe64User: { username: "owner" } } } });
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.integrationSetup.outcome, "skipped");
+    assert.deepEqual(actors, ["member", "owner"]);
+    assert.equal(events[0][0], "skip-request");
+    assert.equal(events[0][1].reason, "integration-setup-skipped");
+    assert.equal((await store.readConversationLog("skip-request")).length, 1);
+  });
 });

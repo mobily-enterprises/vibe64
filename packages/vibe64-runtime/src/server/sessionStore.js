@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
 import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -2229,6 +2230,7 @@ function createVibe64SessionStore({
       readConversationTurnAttachments(sessionPaths, turnId),
       readConversationTurnMetadata(sessionPaths, turnId)
     ]);
+    const integrationSetup = await readIntegrationSetupDecision(sessionPaths, turnId, assistant);
     const user = storedUser && attachments.length
       ? { ...storedUser, attachments }
       : storedUser;
@@ -2237,11 +2239,147 @@ function createVibe64SessionStore({
       commentary,
       messages: [system, user, ...activity, assistant].filter(Boolean),
       ...(metadata ? { metadata } : {}),
+      ...(integrationSetup ? { integrationSetup } : {}),
       ...(system ? { system } : {}),
       thinking,
       turnId,
       user
     };
+  }
+
+  async function readIntegrationSetupDecision(sessionPaths, turnId, assistant) {
+    const request = parseIntegrationSetupRequest(assistant);
+    if (!request) return null;
+    const requestId = createHash("sha256").update(assistant.text).digest("hex");
+    const text = await readTextIfExists(path.join(
+      conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"
+    ));
+    let decision = { outcome: "pending" };
+    if (text) {
+      let saved;
+      try { saved = JSON.parse(text); } catch {
+        throw vibe64Error("Invalid integration setup decision.", "vibe64_invalid_integration_setup_decision");
+      }
+      const completed = saved?.outcome === "completed";
+      if (!isPlainObject(saved) || Object.keys(saved).length !== (completed ? 6 : 2) ||
+          typeof saved.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(saved.requestId) ||
+          (completed ? !validIntegrationSetupCompletion(saved) || !validIntegrationContinuation(saved.continuation) ||
+            typeof saved.continuationMessageId !== "string" ||
+            !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(saved.continuationMessageId) : saved.outcome !== "skipped")) {
+        throw vibe64Error("Invalid integration setup decision.", "vibe64_invalid_integration_setup_decision");
+      }
+      if (saved.requestId === requestId) decision = saved;
+    }
+    return { integrationId: request.integrationId, requestId, ...decision };
+  }
+
+  async function readIntegrationSetupRequest(sessionId, turnId) {
+    if (typeof turnId !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(turnId)) {
+      throw vibe64Error("Invalid integration setup request.", "vibe64_invalid_integration_setup_request");
+    }
+    return withReadableSessionPaths(sessionId, async (sessionPaths) =>
+      (await readConversationTurn(sessionPaths, turnId)).integrationSetup || null);
+  }
+
+  function validIntegrationSetupCompletion(value) {
+    return typeof value.configurationHash === "string" && /^[a-f0-9]{64}$/u.test(value.configurationHash) &&
+      typeof value.verifiedAt === "string" && Number.isFinite(Date.parse(value.verifiedAt));
+  }
+
+  function validIntegrationContinuation(value) {
+    if (!isPlainObject(value)) return false;
+    if (value.status === "pending") return Object.keys(value).length === 1;
+    return Object.keys(value).length === 3 && ["sending", "accepted"].includes(value.status) &&
+      ["codex", "opencode"].includes(value.engineId) &&
+      typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
+  }
+
+  // Only the authorized setup-command owner may supply this evidence after
+  // checking the application's result against the current configuration.
+  async function completeIntegrationSetupRequest(sessionId, selection = {}) {
+    if (!validIntegrationSetupCompletion(selection)) {
+      throw vibe64Error("Invalid integration setup completion.", "vibe64_invalid_integration_setup_completion");
+    }
+    return decideIntegrationSetupRequest(sessionId, selection, {
+      configurationHash: selection.configurationHash,
+      verifiedAt: selection.verifiedAt,
+      continuationMessageId: randomUUID(),
+      continuation: { status: "pending" },
+      outcome: "completed"
+    });
+  }
+
+  async function skipIntegrationSetupRequest(sessionId, selection = {}) {
+    return decideIntegrationSetupRequest(sessionId, selection, { outcome: "skipped" });
+  }
+
+  // Persist before contacting the provider. A previous claim must be inspected,
+  // even after a restart; lack of local history does not prove non-delivery.
+  async function claimIntegrationContinuation(sessionId, selection = {}) {
+    return updateIntegrationContinuation(sessionId, selection, "sending");
+  }
+
+  async function acceptIntegrationContinuation(sessionId, selection = {}) {
+    return updateIntegrationContinuation(sessionId, selection, "accepted");
+  }
+
+  async function updateIntegrationContinuation(sessionId, selection, status) {
+    const { turnId, requestId, continuationMessageId, engineId, threadId } = selection;
+    const continuation = { status, engineId, threadId };
+    if (typeof turnId !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(turnId) ||
+        !validIntegrationContinuation(continuation)) {
+      throw vibe64Error("Invalid integration continuation.", "vibe64_invalid_integration_continuation");
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const saved = (await readConversationTurn(sessionPaths, turnId)).integrationSetup;
+      if (!saved || saved.outcome !== "completed" || saved.requestId !== requestId ||
+          saved.continuationMessageId !== continuationMessageId) {
+        throw vibe64Error("This integration completion has changed or no longer exists.",
+          "vibe64_integration_setup_request_changed");
+      }
+      if (saved.continuation.status !== "pending" &&
+          (saved.continuation.engineId !== engineId || saved.continuation.threadId !== threadId)) {
+        throw vibe64Error("This continuation belongs to a different assistant thread.",
+          "vibe64_integration_continuation_thread_changed");
+      }
+      if (status === "accepted" && saved.continuation.status === "pending") {
+        throw vibe64Error("This integration continuation has not been claimed.",
+          "vibe64_integration_continuation_not_claimed");
+      }
+      if (saved.continuation.status === "accepted" ||
+          (status === "sending" && saved.continuation.status === "sending")) {
+        return { changed: false, integrationSetup: saved };
+      }
+      const updated = { ...saved, continuation };
+      const { integrationId, ...record } = updated;
+      await writeJsonFile(path.join(conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"), record);
+      return { changed: true, integrationSetup: { ...record, integrationId } };
+    });
+  }
+
+  async function decideIntegrationSetupRequest(sessionId, { turnId, requestId }, decision) {
+    if (typeof turnId !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(turnId) ||
+        typeof requestId !== "string" || !/^[a-f0-9]{64}$/u.test(requestId)) {
+      throw vibe64Error("Invalid integration setup request.", "vibe64_invalid_integration_setup_request");
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const turn = await readConversationTurn(sessionPaths, turnId);
+      if (!turn.integrationSetup || turn.integrationSetup.requestId !== requestId) {
+        throw vibe64Error("This integration setup request has changed or no longer exists.",
+          "vibe64_integration_setup_request_changed");
+      }
+      if (turn.integrationSetup.outcome === "completed" && decision.outcome === "completed" &&
+          turn.integrationSetup.configurationHash !== decision.configurationHash) {
+        throw vibe64Error("This request was completed against a different integration configuration.",
+          "vibe64_integration_setup_configuration_changed");
+      }
+      // The first saved decision wins, including across independent store instances.
+      if (turn.integrationSetup.outcome !== "pending") return turn.integrationSetup;
+      await writeJsonFile(path.join(conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"), {
+        requestId, ...decision
+      });
+      return { ...turn.integrationSetup, ...decision };
+    });
   }
 
   async function readConversationTurnAttachments(sessionPaths, turnId) {
@@ -4725,6 +4863,11 @@ function createVibe64SessionStore({
     readBackgroundTask,
     readBackgroundTasks,
     readConversationLog,
+    skipIntegrationSetupRequest,
+    completeIntegrationSetupRequest,
+    claimIntegrationContinuation,
+    acceptIntegrationContinuation,
+    readIntegrationSetupRequest,
     readConversationLogPage,
     readCurrentSession,
     readManifest,

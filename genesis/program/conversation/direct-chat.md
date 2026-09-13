@@ -22,6 +22,8 @@ including follow-up guidance while a turn is active.
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-runtime/src/server/codexSessionCommandHook.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
+- `packages/vibe64-execution/src/server/request.js`
+- `packages/vibe64-execution/src/server/runVibe64Command.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/result.js`
@@ -62,10 +64,93 @@ including follow-up guidance while a turn is active.
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/lib/vibe64ChatMessage.js`
+- `packages/vibe64-runtime/src/shared/integrationSetupRequest.js`
 - `src/lib/vibe64WelcomeName.js`
 - `vite.config.mjs`
 
 ## Public contract
+
+Main assistant context describes one explicit final `vibe64-integration` code
+block containing only the saved integration slot ID. The conversation renderer
+recognizes a complete final assistant block, preserves ordinary prose and
+leaves malformed, quoted and non-assistant content as text. Its Configure card
+uses the existing project route with the current session and originating turn.
+The Integrations page selects that development slot and explains a missing slot.
+The ordinary saved assistant message owns request restoration. The runtime
+shared parser is used by both the renderer and session store. For explicit
+requests the store returns a request fingerprint and a saved decision.
+Its skip operation serializes a decision beside the original conversation turn,
+rejects changed requests and preserves the result through reopening and archive.
+It does not alter provider grants or deliver another assistant message. The
+session Skip action takes the actor from authenticated request context and
+requires normal assistant access before mutating the store. The card exposes
+Skip only for a saved pending request, displays the saved outcome and reports
+a refused save. Realtime notification and the HTTP completion reload history;
+a response from a departed session cannot replace the current card error.
+The store also supports an internal completed decision containing a configuration
+hash, verification time and one stable continuation message ID. Concurrent
+completion retries return the saved identity; a different configuration is
+rejected. Completion cannot overwrite Skip, and Skip cannot erase completion.
+Recording it does not send an assistant message. The setup-command service can now supply completion after checking assistant
+access, the exact saved request and configuration, and an application-reported
+connected result with a verification time. Configure carries the request fingerprint through the project route. Integrations
+attaches it only for the matching development session and slot, together with the
+loaded configuration hash. Confirmed decisions reload the server conversation;
+the card renders Setup completed independently of live account status. Completion publishes the existing session-changed event with a refresh reason;
+other selected-session conversation models reread durable history rather than
+trusting event-provided decision data. Status restoration does not publish another
+completion event. After completion, the Integrations screen calls the session-owned
+resume action and reloads conversation state, including when delivery is uncertain.
+The OpenCode controller can inspect admission of an exact message on its original
+native thread. A matching user message proves acceptance; absent or unavailable
+bounded history leaves admission unknown. Inspection creates no native session,
+sends no prompt and returns no conversation content. Integration continuation uses this admission check after uncertain delivery. A controlled test closes the sending
+controller after a failed local write and inspects the accepted message with a
+fresh controller using the same provider history. Full browser and process-restart recovery remain unverified. Codex can likewise inspect the current bound native
+thread for an exact user-message client ID, keeping missing or unreadable history
+unknown. The session manager exposes admission inspection through both provider
+adapters and requires normal assistant access before dispatch.
+The completed decision also owns continuation delivery state. A serialized claim
+records the original engine and native thread before delivery. Only the first
+claim can send; reopening a sending record requires admission inspection. An
+accepted record cannot be claimed again or rebound to another thread. These
+store operations do not themselves contact the assistant. The terminal service
+claims and delivers under the existing main assistant write lock. Before the first
+claim, the sessions feature supplies the source editor's configuration reader;
+the terminal service requires the completed configuration hash and slot to still
+match. Source edits use that same write lock. A missing reader or changed
+configuration leaves the continuation pending without a prompt. Recovery of an
+existing claim does not depend on current configuration. It sends a fixed
+continuation containing only the slot ID, checks provider history after uncertain
+delivery, and never resends a claimed message. The session action takes its actor
+from authenticated context and exposes only request identity as input. A controlled
+OpenCode service test proves later admission recovery after local persistence fails
+and provider history is temporarily unavailable. Two competing service calls
+use the real session-store write lock and retain one continuation identity and
+one provider prompt. The feature setup test verifies that sessions receives the
+source editor's reader through its declared capability. The Integrations screen preserves
+the connected account when continuation delivery cannot be confirmed and exposes
+the error through its existing connection feedback. A controlled Codex service case closes the original service after a failed
+local user-message save and unavailable history. A fresh service confirms native
+acceptance from the saved claim and provider history without another prompt or
+steer. This uses simulated provider history, not an operating-system crash. The restored
+chat card displays pending, unconfirmed, or accepted continuation separately
+from Setup completed. Check continuation calls the session resume action directly from the saved
+chat request. It does not run an application setup command or require the slot
+to still exist. Configure remains a separate navigation action. Skip and
+continuation use the conversation model's shared pending/error state; late
+responses cannot replace another selected session's feedback. Full browser and process-restart recovery acceptance remain
+outstanding.
+
+The command boundary can carry a private release environment-file reference for
+a finite application deployment command. It excludes editable project/session
+Env and the editor process environment, and rejects local execution when no
+managed host can consume the reference. The host helper requires the private,
+owner-held `artifact/service/environment` file and a working directory inside
+its sibling `workspace`. The transient unit loads that file; its command runner
+keeps the host-selected identity and runtime paths. This is an execution
+capability, not a production Integrations screen or an active-release selector.
+The caller must still select and coordinate the active release.
 
 The managed Git/gh command boundary preserves stdout and stderr bytes, including
 NUL-delimited filenames, binary data, and leading or trailing whitespace. Capture
@@ -512,3 +597,37 @@ an unrelated failure cannot gain an account link merely because of its wording.
   re-minifying xterm 6.0.0 breaks terminal query parsing under
   xtermjs/xterm.js#5800. Remove the workaround after Vibe64 upgrades to a fixed
   xterm release.
+
+Inline integration requests also expose Connect. The conversation client reads
+the saved project configuration, invokes the existing app-owned setup command
+with the exact request and configuration hash, and offers the returned consent
+link plus Check connection and Cancel. Cancel names the current attempt and
+then reads status so an older grant remains visible. Per-user accounts direct
+the operator to the application's account flow. Server-confirmed completion
+uses the existing continuation action. When the card becomes visible after navigation or reload, it requests app
+status once for each pending request, sequentially. This restores the current
+consent link without creating another attempt or persisting it in browser
+storage. Archived/hidden cards do not initiate recovery. Check connection uses
+status too; only Connect may start a new attempt.
+
+If continuation delivery is unconfirmed, the card retains the completed
+connection, reports the continuation error and reloads the durable request.
+A configuration read returning after session navigation cannot start Connect
+for the session the user left. Focused conversation-client fixtures cover both
+boundaries without running provider calls or browsers.
+
+A controlled expanded-browser journey verifies inline Connect, consent recovery
+after reload, cancellation, reconnect and one accepted continuation against the
+built UI. Provider consent itself is simulated; this is editor interaction
+evidence, not live OAuth or native assistant admission proof.
+
+The Genesis session prompt describes the same Configure/Connect/Skip contract:
+the final block must name a saved slot, cannot carry secrets or consent URLs,
+and does not itself authorize connection. The assistant waits for the separate
+server-confirmed setup continuation before treating the account as connected.
+
+Integration continuation enters the ordinary session agent-write boundary before
+reading the setup request or consulting a provider. A focused real-store fixture
+checks archived and renewal-quiesced sessions: both reject admission and retain
+the pending continuation unchanged. No separate integration lifecycle bypass
+is available for an old session.

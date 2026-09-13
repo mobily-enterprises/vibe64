@@ -75,10 +75,75 @@ previously successful preparation to repair missing installed dependencies.
 
 People can configure application integrations in the session's Integrations
 page. The form reads and writes the same portable configuration a person or AI
-can edit from the command line. Secrets stay in Env. Conflicting source edits
-preserve the form draft and require a reload before saving. Saving configuration
-does not claim that an account has connected; the application verifies account
-access through its own connection flow.
+can edit from the command line. Secrets stay in Env. n8n setup can discover the instance’s public OAuth settings
+on request, then guide client registration and consent using the application’s
+own callback and credentials. Discovery updates the draft without connecting
+an account. An explicit n8n registration action can save the new client and
+private credentials, then start the application’s consent flow. An uncertain
+result asks people to inspect n8n and Env before trying registration again.
+Conflicting source edits
+preserve the form draft and require a reload before saving.
+An explicit assistant setup request appears as a Configure card in the saved
+conversation. Opening it selects that session's development integration; a
+removed slot is explained instead of opening an unrelated account. The card
+survives returning to the conversation and reload. Opening it does not grant
+consent, connect an account or automatically resume the assistant. People with
+assistant access can skip a saved request; its Skipped state survives reload.
+Skipping leaves the application account connected and does not automatically
+resume the assistant. When the application's setup command confirms the requested
+connection, the saved card shows Setup completed. That records the setup decision;
+later reconnecting or disconnecting the account does not rewrite the old request.
+Completion does not yet automatically resume the assistant.
+If configuration changes while an application connection command runs, its result
+is rejected and people are asked to reload and check the account before retrying.
+The command is not automatically repeated.
+Saving configuration does not claim that an account has connected; the application verifies account
+access through its own connection flow. For a shared development account,
+people can check that flow, connect, resume pending provider consent, cancel an
+attempt, or confirm disconnection from Integrations. Missing application setup
+is identified explicitly. Individual users still connect inside the application.
+Returning from pending provider consent checks the application's connection
+status automatically. A failed check leaves the attempt available to retry.
+Connected accounts offer Reconnect for OAuth or Verify again for credentials.
+Cancelling replacement consent keeps the previous OAuth grant. Credential checks
+use the current Env value; a failed check remains visible without erasing the
+last successful verification record.
+When the application supplies a verified account label, the connection screen
+shows which account is connected. The label is informational and disappears
+after disconnection.
+Disconnect removes the application's saved connection and pending consent.
+Its confirmation explains that provider permissions, configuration and Env
+credentials remain, and that provider-side revocation may affect other apps.
+Changing the selected account or session dismisses outstanding confirmations.
+When a host supplies production integration management, people can switch
+between Development and Production. Production shows the published configuration
+read-only and labels its release; changes are made in Development and published.
+Development drafts survive the switch. The workspace owner can manage production
+connections, and a changed release dismisses outstanding confirmations. The
+selected environment and connection are restored when returning to the page.
+A removed integration cannot trigger connection commands from a stale selection.
+When a service needs a document identifier to verify access, people enter it
+before connecting. That value survives navigation within the tab and is used
+for the connection check without becoming source configuration or an Env value.
+OAuth setup can suggest a callback from the host-supplied application address.
+People can edit it and open Env with the key and value prefilled, then explicitly
+save it. The callback can be copied, and Env explicitly labels replacement when
+the key already has a value. The application must implement that route and the provider must register
+it; showing a suggestion does not replace existing Env values.
+Source-scanning integrations also keep their service credentials and policy
+choices in that file. Saving a scanner configuration does not start a scan or
+grant access to other projects in the workspace.
+Application AI configuration starts with Big Pickle's free public access and
+offers searchable models from a bundled, dated catalogue. People can instead
+choose an administrator's Env key or individual accounts owned by their app's
+users. Changing providers clears the previous key reference. The application's
+chosen framework owns inference and personal account screens; this setup is
+separate from the editor's coding-assistant accounts.
+For integrations with assistant controls, people can disable assistant access,
+set a default permission, or choose which actions require a decision. These
+choices are saved with the same portable configuration and remain separate from
+provider account permissions. The application owns enforcing them when the
+assistant uses a connection.
 
 People can choose the name Vibe64 uses in welcomes and collaboration cues.
 Project owners can set a shared tone, answer length, assumed experience,
@@ -233,3 +298,101 @@ to the current task, including unsaved work, or explicitly select commits.
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
 the AI ask before a real requirement forces materially greater complexity.
+
+
+Integration setup takes people directly to the matching development Env key for
+credential entry, with secret values masked and an explicit save.
+
+Returning to Integrations restores the selected service and search for that
+project session and checks the application's connection state again.
+
+Unsaved integration configuration stays available when people switch sessions or
+visit another project page in the same tab. Returning checks for outside edits;
+closing or reloading warns before losing an unsaved draft.
+
+
+Stripe and Paddle configuration includes recurring payment plans, feature names,
+renewal credits and separate sandbox/live account and Env references. The editor
+explains payment events and checkout setup and suggests application URLs from
+the host-supplied address. Saving this declaration does not create provider
+products, charge customers or certify that the application implements payments.
+
+Paddle payment setup distinguishes its public checkout token from backend
+secrets and opens the matching Env entry for each. A public-token entry starts
+with its key filled and an empty, unmasked value for the user to supply.
+
+Workspace owners can explicitly preview a development project's payment
+catalogue for its configured sandbox or live merchant. The application command
+returns proposed changes, provider drift and unfinished requests. Publication
+requires reviewing the target account and environment in a confirmation;
+configuration edits invalidate the review. Missing application implementation
+is explained. Provider records and publication state remain with the app.
+
+For configured Stripe/Paddle payments, the public editor can prepare a reviewable
+chat draft covering app billing, signed webhooks, credits and the payment
+catalogue command. The draft carries the public operation contract and native
+framework guidance, so generated projects need no access to the editor's source
+checkout. Preparing the draft does not send it or publish provider changes.
+It also includes the portable payment schema, semantics and expected test outcomes
+for the chosen framework, without requiring non-JavaScript apps to run JSKIT.
+
+Payment readiness is a separate read-only app report. The editor shows credential,
+merchant, charge/payout, catalogue, webhook, checkout, website and deployment
+checks individually. Unknown/manual checks remain visible; no single badge
+claims provider approval or launch readiness from a valid API key.
+
+An interrupted payment catalogue write can be recovered from the editor by
+reviewing the pending operation and confirming a matching provider object ID.
+The application verifies the current review and provider object before updating
+its own mapping. The editor never clears uncertainty solely on a claim that no
+provider object was created.
+
+Payment management also works against a host-selected published release, while
+its configuration stays read-only. The owner reviews its catalogue using that
+release's environment; a release change discards previous reviews and results.
+
+Payment management includes read-only billing history for an explicitly selected
+application billing account. Subscription and invoice/transaction pages retain
+provider status, distinguish unknown paid amounts, and offer bounded pagination.
+The application authorizes access and resolves its own provider customer mapping.
+
+Dashboard sections use a compact navigation selector on small screens while
+keeping the active form mounted across viewport changes. Resizing does not
+discard its unsaved values, validation feedback or loaded results.
+
+
+Amplitude setup can register a new confidential OAuth client at its selected US
+or EU authority. The workspace owner explicitly supplies the application callback
+and permissions. The existing registration action saves the client secret,
+callback and recovery ID in development Env before saving the public client ID
+in project configuration, then starts the application’s connection command.
+Existing Env values are preserved, and uncertain registration or local-save
+failures require inspection before retrying. This does not attach Amplitude
+tools to the editor’s coding assistant.
+
+Atlassian uses the same explicit project OAuth registration operation as Amplitude.
+Its button uses the fixed Rovo MCP v2 registration authority and selected product
+permissions, then saves only references/client ID in configuration and credentials
+in development Env. Owner, file-hash, unshared-registration and existing-Env checks
+apply before a provider request. Ambiguous results require operator review before
+retry. Manual registration remains available. No editor tool attachment is added.
+
+Confidence Flags and Confidence Exp reuse the project OAuth registration action.
+The owner registers against the fixed Confidence MCP authority; the client ID
+is saved in configuration and the secret/callback/recovery ID in development
+Env. Existing values and uncertain-registration safeguards remain enforced.
+Consent and callback execution belong to the application; this does not attach
+Confidence tools to the Vibe64 coding assistant.
+
+Sanity setup can register a project-owned OAuth client explicitly, save its
+credentials in development Env, and start the application's consent flow.
+Existing Env values remain protected. People may instead supply a Sanity API
+token. Saving either connection does not attach tools to the coding assistant.
+
+Google Ads shared-account owners can prepare an existing-account Search campaign
+in Integrations, create it paused and separately review launch, pause and reports.
+The application owns credentials, Google calls and advertiser authorization; the
+editor saves a portable campaign plan and invokes its declared command. Google
+bills the selected account directly. Tracking/billing readiness is confirmed by
+the operator; account provisioning and other campaign types remain outside this
+first Search path.

@@ -68,10 +68,6 @@ function syncMobileSectionLayout() {
   mobileSectionLayout.value = Boolean(mobileSectionMediaQuery?.matches);
 }
 
-function mobileSectionActive(link = {}) {
-  return routePathContainsSection(route.path || "", link?.to || "");
-}
-
 function selectMobileSection(value = "") {
   const targetPath = normalizeRoutePath(value || "");
   if (!targetPath || targetPath === activeMobileSectionValue.value) {
@@ -119,44 +115,21 @@ onBeforeUnmount(() => {
       border
       class="section-container-shell__panel"
     >
-      <v-expansion-panels
-        v-if="mobileSectionsActive"
-        :model-value="activeMobileSectionValue"
-        class="section-container-shell__mobile-sections"
-        variant="accordion"
-        @update:model-value="selectMobileSection"
-      >
-        <v-expansion-panel
-          v-for="link in mobileSectionLinks"
-          :key="link.id"
-          class="section-container-shell__mobile-section"
-          :disabled="link.disabled"
-          :value="link.to"
-        >
-          <v-expansion-panel-title class="section-container-shell__mobile-section-title">
-            <span class="section-container-shell__mobile-section-label">
-              <v-icon
-                v-if="link.icon"
-                :icon="link.icon"
-                size="22"
-              />
-              <span>{{ link.label }}</span>
-            </span>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <div
-              v-if="mobileSectionActive(link)"
-              class="section-container-shell__mobile-section-content"
-            >
-              <slot />
-            </div>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
-
-      <div v-else class="section-container-shell__body">
+      <div class="section-container-shell__body">
+        <v-select
+          v-if="mobileSectionsActive"
+          :model-value="activeMobileSectionValue"
+          :items="mobileSectionLinks"
+          item-title="label"
+          item-value="to"
+          :item-props="(item) => ({ disabled: item.disabled })"
+          label="Dashboard section"
+          variant="outlined"
+          hide-details
+          @update:model-value="selectMobileSection"
+        />
         <nav
-          v-if="hasTabs"
+          v-if="hasTabs && !mobileSectionsActive"
           class="section-container-shell__nav"
           aria-label="Dashboard sections"
         >
@@ -207,51 +180,6 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: 0;
   overflow: hidden;
-}
-
-.section-container-shell__mobile-sections {
-  display: block;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0.75rem;
-  scrollbar-gutter: stable;
-}
-
-.section-container-shell__mobile-section {
-  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
-  border-radius: var(--studio-control-radius, 7px) !important;
-  box-shadow: none !important;
-  overflow: hidden;
-}
-
-.section-container-shell__mobile-section + .section-container-shell__mobile-section {
-  margin-top: 0.55rem;
-}
-
-.section-container-shell__mobile-section-title {
-  min-height: 48px;
-}
-
-.section-container-shell__mobile-section-label {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.section-container-shell__mobile-section-label span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.section-container-shell__mobile-section-content {
-  min-width: 0;
-  padding-right: 0.15rem;
-}
-
-.section-container-shell__mobile-section-content :deep(.vibe64-dashboard-page) {
-  min-height: auto;
 }
 
 .section-container-shell__body {
@@ -309,6 +237,7 @@ onBeforeUnmount(() => {
 @media (max-width: 760px) {
   .section-container-shell__body {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .section-container-shell__content {

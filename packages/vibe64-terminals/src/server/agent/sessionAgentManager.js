@@ -35,6 +35,7 @@ const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "thinking"
 ]);
 const AI_METHODS = new Set([
+  "inspectMessageAdmission",
   "createConversation",
   "ensureSession",
   "generateSessionRenewalHandover",
@@ -798,6 +799,7 @@ function createSessionAgentManager({
     releaseRenewalSuccessorProcessExitProof,
     seedSessionRenewalHandover: sessionMethod("seedSessionRenewalHandover"),
     sendMessage: sessionMethod("sendMessage"),
+    inspectMessageAdmission: sessionMethod("inspectMessageAdmission"),
     sessionState(sessionId = "", options = {}) {
       return callSessionProvider("sessionState", sessionId, {}, options);
     },

@@ -14,6 +14,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { promisify } from "node:util";
+import { controllerHarness } from "../fixtures/opencodeController.js";
 
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -337,6 +338,101 @@ test("assistant inspection and active-turn steering leave outdated skills untouc
   await service.sendAgentMessage(session.sessionId, { message: "One more detail." }, { engineId: "opencode" }).catch(() => null);
   assert.equal(await readFile(skillPath, "utf8"), original);
   assert.equal(sourceWrites, 0);
+});
+
+test("integration continuation recovers provider acceptance after local write failure without resending", async (t) => {
+  let historyUnavailable = true;
+  const provider = await controllerHarness({
+    withCommandBoundary: true,
+    beforeMessages() { if (historyUnavailable) throw new Error("History unavailable."); }
+  });
+  t.after(async () => {
+    await provider.controller.closeAllForProject();
+    await rm(provider.root, { recursive: true, force: true });
+  });
+  const lock = { store: {} };
+  const { service, runtime, session } = await terminalServiceFixture(t, lock, {
+    opencodeTerminalController: provider.controllerOptions
+  });
+  session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
+  service.configureAssistantRuntime({
+    resolveConnection: provider.controllerOptions.resolveConnection,
+    listConnections: provider.controllerOptions.listConnections
+  });
+  runtime.renderPrompt = async (_sessionId, input) => ({ prompt: input.request });
+  await runtime.store.writeConversationUserMessage(session.sessionId, { text: "Configure mail." });
+  const turn = await runtime.store.writeConversationAssistantMessage(session.sessionId, {
+    text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+  });
+  const input = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+  const completion = await runtime.store.completeIntegrationSetupRequest(session.sessionId, {
+    ...input, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00.000Z"
+  });
+  const writeUser = runtime.store.writeConversationUserMessage;
+  runtime.store.writeConversationUserMessage = async () => { throw new Error("Local disk write failed."); };
+  const missing = await service.resumeIntegrationContinuation(session.sessionId, input);
+  assert.equal(missing.code, "vibe64_integration_configuration_unavailable");
+  for (const current of [
+    { baseHash: "b".repeat(64), configuration: { integrations: { mail: {} } } },
+    { baseHash: "a".repeat(64), configuration: { integrations: {} } }
+  ]) {
+    const changed = await service.resumeIntegrationContinuation(session.sessionId, input, {
+      readIntegrationConfiguration: async () => ({ ok: true, ...current })
+    });
+    assert.equal(changed.code, "vibe64_integration_configuration_changed");
+    assert.equal(changed.integrationSetup.continuation.status, "pending");
+    assert.equal(provider.promptCalls.length, 0);
+  }
+  const contenders = await Promise.all([0, 1].map(() => service.resumeIntegrationContinuation(session.sessionId, input, {
+    readIntegrationConfiguration: async () => ({ ok: true, baseHash: "a".repeat(64),
+      configuration: { integrations: { mail: {} } } })
+  })));
+  const uncertain = contenders[0];
+  assert.equal(contenders[1].code, "vibe64_integration_continuation_unconfirmed");
+  assert.equal(contenders[1].integrationSetup.continuationMessageId, completion.continuationMessageId);
+  assert.equal(uncertain.code, "vibe64_integration_continuation_unconfirmed");
+  assert.equal(uncertain.integrationSetup.continuation.status, "sending");
+  assert.equal(provider.promptCalls.length, 1);
+  runtime.store.writeConversationUserMessage = writeUser;
+  const stillUnknown = await service.resumeIntegrationContinuation(session.sessionId, input);
+  assert.equal(stillUnknown.code, "vibe64_integration_continuation_unconfirmed");
+  assert.equal(provider.promptCalls.length, 1);
+  historyUnavailable = false;
+  const recovered = await service.resumeIntegrationContinuation(session.sessionId, input);
+  assert.equal(recovered.ok, true);
+  assert.equal(recovered.integrationSetup.continuation.status, "accepted");
+  assert.equal(recovered.integrationSetup.continuationMessageId, completion.continuationMessageId);
+  assert.equal((await service.resumeIntegrationContinuation(session.sessionId, input)).ok, true);
+  assert.equal(provider.promptCalls.length, 1);
+});
+
+test("integration continuation cannot execute for an archived or renewal-quiesced session", async (t) => {
+  for (const state of ["archived", "renewal-quiesced"]) {
+    const { service, runtime, session } = await terminalServiceFixture(t, { store: {} });
+    await runtime.store.writeConversationUserMessage(session.sessionId, { text: "Configure mail." });
+    const turn = await runtime.store.writeConversationAssistantMessage(session.sessionId, {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const input = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    await runtime.store.completeIntegrationSetupRequest(session.sessionId, {
+      ...input, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00Z"
+    });
+    if (state === "archived") {
+      await runtime.store.writeStatus(session.sessionId, "archived");
+      await runtime.store.publishSessionArchive(session.sessionId);
+    } else {
+      await runtime.store.quiesceSessionForRenewal({ sourceSessionId: session.sessionId,
+        renewalId: "integration-renewal", quiescedAt: "2026-09-11T08:01:00Z" });
+    }
+    let requestReads = 0;
+    const readRequest = runtime.store.readIntegrationSetupRequest;
+    runtime.store.readIntegrationSetupRequest = async (...args) => { requestReads += 1; return readRequest(...args); };
+    await assert.rejects(service.resumeIntegrationContinuation(session.sessionId, input), {
+      code: state === "archived" ? "vibe64_session_archived" : "vibe64_session_renewal_quiesced"
+    });
+    assert.equal(requestReads, 0, "Session admission must reject before request or provider processing.");
+    assert.equal((await readRequest(session.sessionId, input.turnId)).continuation.status, "pending");
+  }
 });
 
 test("output attempts invalidate output state in other clients", async (t) => {

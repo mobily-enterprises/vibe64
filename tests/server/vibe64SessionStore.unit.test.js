@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
 
 import {
   VIBE64_SESSION_STATUS,
@@ -1659,6 +1660,194 @@ test("plain session store persists paged conversation messages", async () => {
 
     const reloadedConversation = await createStore(targetRoot).readConversationLog("conversation");
     assert.deepEqual(reloadedConversation[0].user.attachments, attachments);
+  });
+});
+
+test("integration configuration cards restore from persisted conversation text after reopening the store", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    for (const sessionId of ["integration-request", "another-session"]) {
+      await store.createSession({ runtimeKind: "genesis", sessionId });
+    }
+    const userTurn = await store.writeConversationUserMessage("integration-request", { text: "Add our mailbox." });
+    const request = {
+      messageId: "saved-integration-request",
+      text: 'Configure the business mailbox.\n\n```vibe64-integration\n{"integrationId":"gmail-business"}\n```'
+    };
+    await store.writeConversationAssistantMessage("integration-request", request);
+    const reopened = createStore(targetRoot);
+    await reopened.writeConversationAssistantMessage("integration-request", request);
+    const page = await reopened.readConversationLogPage("integration-request", { limit: 10 });
+    assert.equal(page.conversationLog.length, 1);
+    assert.equal(page.conversationLog[0].turnId, userTurn.turnId);
+    assert.deepEqual(parseIntegrationSetupRequest(page.conversationLog[0].assistant), {
+      integrationId: "gmail-business", text: "Configure the business mailbox."
+    });
+    assert.deepEqual(await reopened.readConversationLog("another-session"), []);
+  });
+});
+
+test("integration setup skip survives reopening, concurrent decisions and archive", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ runtimeKind: "genesis", sessionId: "setup-skip" });
+    await store.writeConversationUserMessage("setup-skip", { text: "Configure mail." });
+    const turn = await store.writeConversationAssistantMessage("setup-skip", {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    assert.equal(turn.integrationSetup.outcome, "pending");
+    const selection = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    const decisions = await Promise.all([
+      store.skipIntegrationSetupRequest("setup-skip", selection),
+      createStore(targetRoot).skipIntegrationSetupRequest("setup-skip", selection)
+    ]);
+    for (const decision of decisions) assert.equal(decision.outcome, "skipped");
+    const reopened = createStore(targetRoot);
+    const restored = await reopened.readConversationLog("setup-skip");
+    assert.equal(restored.length, 1);
+    assert.equal(restored[0].integrationSetup.outcome, "skipped");
+    assert.equal(restored[0].assistant.text, turn.assistant.text);
+    await reopened.writeStatus("setup-skip", VIBE64_SESSION_STATUS.ARCHIVED);
+    await reopened.publishSessionArchive("setup-skip");
+    assert.equal((await reopened.readConversationLog("setup-skip"))[0].integrationSetup.outcome, "skipped");
+    await assert.rejects(reopened.skipIntegrationSetupRequest("setup-skip", selection));
+  });
+});
+
+test("integration setup skip rejects stale, missing and cross-session requests", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    for (const sessionId of ["setup-skip", "other-setup"]) {
+      await store.createSession({ runtimeKind: "genesis", sessionId });
+      await store.writeConversationUserMessage(sessionId, { text: "Configure mail." });
+    }
+    const text = 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```';
+    const turn = await store.writeConversationAssistantMessage("setup-skip", { text });
+    const selection = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    await assert.rejects(store.skipIntegrationSetupRequest("other-setup", selection),
+      { code: "vibe64_integration_setup_request_changed" });
+    await assert.rejects(store.skipIntegrationSetupRequest("setup-skip", { ...selection, turnId: "../../outside" }),
+      { code: "vibe64_invalid_integration_setup_request" });
+    await assert.rejects(store.skipIntegrationSetupRequest("setup-skip", { ...selection, requestId: [selection.requestId] }),
+      { code: "vibe64_invalid_integration_setup_request" });
+    await store.skipIntegrationSetupRequest("setup-skip", selection);
+    await store.upsertConversationAssistantMessage("setup-skip", { turnId: turn.turnId, text: text.replace("Configure mail.", "Use the changed mail configuration.") });
+    const changed = (await store.readConversationLog("setup-skip"))[0].integrationSetup;
+    assert.equal(changed.outcome, "pending");
+    assert.notEqual(changed.requestId, selection.requestId);
+    await assert.rejects(store.skipIntegrationSetupRequest("setup-skip", selection),
+      { code: "vibe64_integration_setup_request_changed" });
+    await store.writeConversationUserMessage("setup-skip", { text: "Connect the same provider again." });
+    const next = await store.writeConversationAssistantMessage("setup-skip", { text });
+    assert.equal(next.integrationSetup.outcome, "pending");
+    assert.notEqual(next.turnId, turn.turnId);
+    await store.upsertConversationAssistantMessage("setup-skip", { turnId: turn.turnId, text: "There is no setup request now." });
+    assert.equal((await store.readConversationLog("setup-skip"))[0].integrationSetup, undefined);
+    await assert.rejects(store.skipIntegrationSetupRequest("setup-skip", { turnId: turn.turnId, requestId: changed.requestId }),
+      { code: "vibe64_integration_setup_request_changed" });
+  });
+});
+
+test("integration setup completion survives retry, reopening and archive with one continuation identity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ runtimeKind: "genesis", sessionId: "setup-complete" });
+    await store.writeConversationUserMessage("setup-complete", { text: "Configure mail." });
+    const turn = await store.writeConversationAssistantMessage("setup-complete", {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const selection = {
+      turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
+      configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00.000Z"
+    };
+    const results = await Promise.all([
+      store.completeIntegrationSetupRequest("setup-complete", selection),
+      createStore(targetRoot).completeIntegrationSetupRequest("setup-complete", selection)
+    ]);
+    assert.deepEqual(results[0], results[1]);
+    assert.equal(results[0].outcome, "completed");
+    assert.match(results[0].continuationMessageId, /^[a-f0-9-]{36}$/u);
+    const reopened = createStore(targetRoot);
+    assert.deepEqual((await reopened.readConversationLog("setup-complete"))[0].integrationSetup, results[0]);
+    assert.deepEqual(await reopened.skipIntegrationSetupRequest("setup-complete", selection), results[0]);
+    await assert.rejects(reopened.completeIntegrationSetupRequest("setup-complete", {
+      ...selection, configurationHash: "b".repeat(64)
+    }), { code: "vibe64_integration_setup_configuration_changed" });
+    // Recording completion neither creates a human message nor invokes an assistant.
+    assert.equal((await reopened.readConversationLog("setup-complete")).length, 1);
+    await reopened.writeStatus("setup-complete", VIBE64_SESSION_STATUS.ARCHIVED);
+    await reopened.publishSessionArchive("setup-complete");
+    assert.deepEqual((await reopened.readConversationLog("setup-complete"))[0].integrationSetup, results[0]);
+    await assert.rejects(reopened.completeIntegrationSetupRequest("setup-complete", selection));
+  });
+});
+
+test("integration continuation has one durable claim and preserves uncertain delivery across reopening", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    const sessionId = "setup-delivery";
+    await store.createSession({ runtimeKind: "genesis", sessionId });
+    await store.writeConversationUserMessage(sessionId, { text: "Configure mail." });
+    const turn = await store.writeConversationAssistantMessage(sessionId, {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const selection = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    const completed = await store.completeIntegrationSetupRequest(sessionId, {
+      ...selection, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00.000Z"
+    });
+    const delivery = {
+      ...selection, continuationMessageId: completed.continuationMessageId,
+      engineId: "opencode", threadId: "original-native-thread"
+    };
+    await assert.rejects(store.acceptIntegrationContinuation(sessionId, delivery),
+      { code: "vibe64_integration_continuation_not_claimed" });
+    const claims = await Promise.all([
+      store.claimIntegrationContinuation(sessionId, delivery),
+      createStore(targetRoot).claimIntegrationContinuation(sessionId, delivery)
+    ]);
+    assert.equal(claims.filter((claim) => claim.changed).length, 1);
+    assert.deepEqual(claims[0].integrationSetup, claims[1].integrationSetup);
+    const reopened = createStore(targetRoot);
+    const uncertain = await reopened.claimIntegrationContinuation(sessionId, delivery);
+    assert.equal(uncertain.changed, false);
+    assert.equal(uncertain.integrationSetup.continuation.status, "sending");
+    for (const operation of ["claimIntegrationContinuation", "acceptIntegrationContinuation"]) {
+      await assert.rejects(reopened[operation](sessionId, { ...delivery, threadId: "another-thread" }),
+        { code: "vibe64_integration_continuation_thread_changed" });
+      await assert.rejects(reopened[operation](sessionId, { ...delivery, continuationMessageId: "another-message" }),
+        { code: "vibe64_integration_setup_request_changed" });
+    }
+    const accepted = await reopened.acceptIntegrationContinuation(sessionId, delivery);
+    assert.equal(accepted.changed, true);
+    assert.equal(accepted.integrationSetup.continuation.status, "accepted");
+    assert.equal((await reopened.acceptIntegrationContinuation(sessionId, delivery)).changed, false);
+    assert.equal((await reopened.claimIntegrationContinuation(sessionId, delivery)).changed, false);
+    assert.deepEqual(await createStore(targetRoot).readIntegrationSetupRequest(sessionId, turn.turnId), accepted.integrationSetup);
+    assert.equal((await reopened.readConversationLog(sessionId)).length, 1);
+  });
+});
+
+test("integration setup completion cannot replace Skip or complete a changed request", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ runtimeKind: "genesis", sessionId: "setup-complete" });
+    await store.writeConversationUserMessage("setup-complete", { text: "Configure mail." });
+    const text = 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```';
+    const turn = await store.writeConversationAssistantMessage("setup-complete", { text });
+    const selection = {
+      turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
+      configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00.000Z"
+    };
+    for (const invalid of [{ configurationHash: [selection.configurationHash] }, { verifiedAt: "yesterday" }]) {
+      await assert.rejects(store.completeIntegrationSetupRequest("setup-complete", { ...selection, ...invalid }),
+        { code: "vibe64_invalid_integration_setup_completion" });
+    }
+    const skipped = await store.skipIntegrationSetupRequest("setup-complete", selection);
+    assert.deepEqual(await store.completeIntegrationSetupRequest("setup-complete", selection), skipped);
+    await store.upsertConversationAssistantMessage("setup-complete", { turnId: turn.turnId, text: text.replace("Configure mail.", "Changed request.") });
+    await assert.rejects(store.completeIntegrationSetupRequest("setup-complete", selection),
+      { code: "vibe64_integration_setup_request_changed" });
+    assert.equal((await store.readConversationLog("setup-complete"))[0].integrationSetup.outcome, "pending");
   });
 });
 

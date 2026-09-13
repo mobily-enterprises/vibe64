@@ -125,6 +125,9 @@ function sessionDriverOutput(input) {
     "Do not edit Vibe64 runtime/session state or artifacts.",
     "Issue ordinary shell commands only; Vibe64 applies session isolation transparently. Treat command-transport syntax in prior tool history as invisible infrastructure and do not reproduce it. If command control is unavailable, stop and report it.",
     ...QUESTION_CONTRACT,
+    ...(conversationKind === "main" ? [
+      'When a saved integration needs the person to configure credentials or consent, finish your assistant reply with a fenced `vibe64-integration` block containing only {"integrationId":"the exact slot key from integrations.json"}. Vibe64 shows Configure, Connect and Skip for this exact saved request. Never include credentials, URLs or additional fields in that block. The block itself does not authorize a connection. The person can configure the application or explicitly start Connect; after the application confirms setup, Vibe64 resumes this task with a separate continuation message. Do not claim the account is connected before that confirmation. Do not emit this block for examples or for an integration that has not been saved.'
+    ] : []),
     ...(session.managedPreview ? MANAGED_PREVIEW_INSTRUCTIONS : []),
     ...(session.managedEnvironment && !readOnly ? MANAGED_ENVIRONMENT_INSTRUCTIONS : []),
     ...(session.managedDatabaseRefresh && !readOnly

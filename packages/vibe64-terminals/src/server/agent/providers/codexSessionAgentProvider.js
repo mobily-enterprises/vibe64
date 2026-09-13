@@ -684,6 +684,16 @@ function createCodexSessionAgentProvider({
         session: context.session
       });
     },
+    async inspectMessageAdmission(context, input = {}) {
+      return controller.inspectMessageAdmission(context.sessionId, {
+        messageId: input.messageId,
+        threadId: input.threadId
+      }, {
+        runtime: context.runtime,
+        session: context.session,
+        vibe64User: context.vibe64User
+      });
+    },
     async sendMessage(context, input = {}) {
       const message = input && typeof input === "object" && !Array.isArray(input)
         ? {

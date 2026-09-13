@@ -1680,6 +1680,31 @@ function createOpenCodeTerminalController({
     return monitor;
   }
 
+  async function inspectMessageAdmission(sessionId = "", input = {}, options = {}) {
+    const messageId = text(input.messageId);
+    if (!messageId) {
+      throw openCodeError("vibe64_opencode_message_id_required", "Admission inspection requires a message ID.");
+    }
+    const context = await contextFor(sessionId, options);
+    const threadId = upstreamSessionId(context.runtime.stateRoot, context.sessionId);
+    if (text(input.threadId) !== threadId) {
+      throw openCodeError("vibe64_opencode_thread_mismatch", "Admission inspection requires the original assistant thread.");
+    }
+    const target = await ensureProcess(context, options);
+    try {
+      // Do not create a missing native session or submit another prompt. Absence
+      // from bounded history is uncertainty, not proof of non-admission.
+      const messages = await target.server.client.messages(threadId, { limit: 100, order: "desc" }, {
+        signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+      });
+      const accepted = openCodeMessageRows(messages).some((message) =>
+        message.type === "user" && text(message.id) === upstreamMessageId(messageId));
+      return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId };
+    } catch {
+      return { ok: true, admission: "unknown", messageId, threadId };
+    }
+  }
+
   async function sendMessage(sessionId = "", input = {}, options = {}) {
     const message = text(input.message);
     if (!message) {
@@ -2649,6 +2674,7 @@ function createOpenCodeTerminalController({
     runDetachedChatTurn,
     seedSessionRenewalHandover,
     sendMessage,
+    inspectMessageAdmission,
     async sessionState(sessionId, options = {}) {
       const context = await contextFor(sessionId, options);
       const target = processes.get(context.key);

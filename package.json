@@ -152,7 +152,8 @@
     "vue-router": "5.0.7",
     "vuetify": "^4.0.0",
     "ws": "^8.20.1",
-    "@jskit-ai/connectors-catalog": "0.1.0"
+    "@jskit-ai/connectors-catalog": "0.1.0",
+    "@jskit-ai/payments-core": "0.1.0"
   },
   "devDependencies": {
     "@jskit-ai/agent-docs": "0.1.155",

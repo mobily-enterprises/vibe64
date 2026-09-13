@@ -250,6 +250,72 @@
                 :blocks="entry.message.outroBlocks"
                 @link-click="handleLongTextLinkClick"
               />
+              <v-card v-if="entry.message.integrationRequest" class="mt-3" variant="outlined">
+                <v-card-text class="text-break">
+                  Configure integration: {{ entry.message.integrationRequest.integrationId }}
+                </v-card-text>
+                <v-card-actions>
+                  <v-btn
+                    :disabled="turn.pending || !integrationRequestsEnabled"
+                    min-height="48"
+                    @click="emit('open-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup?.requestId, integrationId: entry.message.integrationRequest.integrationId })"
+                  >
+                    Configure
+                  </v-btn>
+                  <v-btn
+                    v-if="turn.integrationSetup?.outcome === 'pending' && integrationConnections[turn.integrationSetup.requestId]?.status !== 'configuration-only'"
+                    :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
+                    :loading="integrationActionPending?.turnId === turn.turnId"
+                    min-height="48"
+                    @click="emit(integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'check-integration' : 'connect-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+                  >
+                    {{ integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'Check connection' : 'Connect' }}
+                  </v-btn>
+                  <v-btn
+                    v-if="turn.integrationSetup?.outcome === 'completed' && turn.integrationSetup.continuation?.status !== 'accepted'"
+                    :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
+                    :loading="integrationActionPending?.turnId === turn.turnId"
+                    min-height="48"
+                    @click="emit('resume-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+                  >
+                    Check continuation
+                  </v-btn>
+                  <v-btn
+                    v-if="turn.integrationSetup?.outcome === 'pending'"
+                    :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
+                    :loading="integrationActionPending?.turnId === turn.turnId"
+                    min-height="48"
+                    @click="emit('skip-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+                  >
+                    Skip
+                  </v-btn>
+                  <span v-if="turn.integrationSetup?.outcome === 'skipped'" role="status">Skipped</span>
+                  <span v-if="turn.integrationSetup?.outcome === 'completed'" role="status">Setup completed</span>
+                </v-card-actions>
+                <v-card-text v-if="turn.integrationSetup?.outcome === 'pending' && integrationConnections[turn.integrationSetup.requestId]" role="status">
+                  <template v-if="integrationConnections[turn.integrationSetup.requestId].status === 'pending'">
+                    <a :href="integrationConnections[turn.integrationSetup.requestId].authorizationUrl" target="_blank" rel="noopener noreferrer">Continue with provider</a>
+                    <v-btn
+                      :disabled="!integrationRequestsEnabled || Boolean(integrationActionPending)"
+                      min-height="48"
+                      @click="emit('cancel-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+                    >
+                      Cancel connection
+                    </v-btn>
+                  </template>
+                  <template v-else-if="integrationConnections[turn.integrationSetup.requestId].status === 'configuration-only'">This integration uses public settings and has no account to connect. Choose Configure to edit them and prepare the application's implementation request. Skip dismisses this connection request; it does not verify tracking.</template>
+                  <template v-else-if="integrationConnections[turn.integrationSetup.requestId].status === 'unconfigured'">Choose Configure to complete the application's setup.</template>
+                  <template v-else>{{ integrationConnections[turn.integrationSetup.requestId].status }}</template>
+                </v-card-text>
+                <v-card-text v-if="turn.integrationSetup?.outcome === 'completed'" role="status">
+                  <template v-if="turn.integrationSetup.continuation?.status === 'accepted'">Assistant continuation accepted.</template>
+                  <template v-else-if="turn.integrationSetup.continuation?.status === 'sending'">Assistant delivery is not yet confirmed. Check continuation to inspect delivery without sending it again.</template>
+                  <template v-else>Assistant continuation is pending. Check continuation to resume.</template>
+                </v-card-text>
+                <v-card-text v-if="integrationActionError?.turnId === turn.turnId" role="alert">
+                  {{ integrationActionError.message }}
+                </v-card-text>
+              </v-card>
             </div>
             <div
               v-if="entry.message.displayAt"
@@ -285,6 +351,7 @@ import Vibe64ConversationAttachments from "@/components/studio/vibe64-session/Vi
 import { parseNumberedQuestionPrompt } from "@/lib/vibe64NumberedQuestionSugar.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
+import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
 import {
   scrollElementNearBottom
 } from "@/lib/scrollFollowState.js";
@@ -293,6 +360,10 @@ import {
 } from "@/lib/vibe64ConversationThinkingText.js";
 
 const props = defineProps({
+  integrationConnections: { default: () => ({}), type: Object },
+  integrationActionPending: { default: null, type: Object },
+  integrationActionError: { default: null, type: Object },
+  integrationRequestsEnabled: { default: false, type: Boolean },
   sessionId: { default: "", type: String },
   assistantLabel: {
     default: "Codex",
@@ -357,7 +428,26 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["cancel-turn", "edit-turn", "load-more", "open-source-file", "reload", "resend-turn"]);
+const emit = defineEmits(["cancel-turn", "edit-turn", "load-more", "open-integration", "skip-integration", "resume-integration", "connect-integration", "check-integration", "cancel-integration", "open-source-file", "reload", "resend-turn"]);
+
+// Recover one visible request at a time through the app's read-only status operation.
+// Keep consent URLs out of browser persistence; the application owns pending attempts.
+let recoverySession = "";
+const recoveredRequests = new Set();
+watch(() => [props.sessionId, props.visible, props.integrationRequestsEnabled,
+  props.integrationActionPending, props.turns], () => {
+  const key = props.visible && props.integrationRequestsEnabled ? props.sessionId : "";
+  if (key !== recoverySession) {
+    recoverySession = key;
+    recoveredRequests.clear();
+  }
+  if (!key || props.integrationActionPending) return;
+  const turn = props.turns.find((entry) => !entry.pending && entry.integrationSetup?.outcome === "pending" &&
+    !recoveredRequests.has(`${entry.turnId}/${entry.integrationSetup.requestId}`));
+  if (!turn) return;
+  recoveredRequests.add(`${turn.turnId}/${turn.integrationSetup.requestId}`);
+  emit("check-integration", { sessionId: key, turnId: turn.turnId, requestId: turn.integrationSetup.requestId });
+}, { immediate: true });
 
 const USER_MESSAGE_COLLAPSE_MIN_CHARACTERS = 360;
 const USER_MESSAGE_PREVIEW_MAX_CHARACTERS = 280;
@@ -441,8 +531,10 @@ function displayMessage(message = null, {
   ) {
     return cached.value;
   }
+  const integrationRequest = parseIntegrationSetupRequest(message);
+  const messageText = integrationRequest ? integrationRequest.text : message.text;
   const questionInput = allowNumberedQuestions
-    ? parseNumberedQuestionPrompt(message.text)
+    ? parseNumberedQuestionPrompt(messageText)
     : {
         intro: "",
         outro: "",
@@ -452,7 +544,8 @@ function displayMessage(message = null, {
   const previewText = previewUserMessage ? userMessagePreviewText(message.text) : "";
   const value = {
     ...message,
-    blocks: parseLongTextReviewBlocks(hasQuestions ? questionInput.intro : message.text, {
+    integrationRequest,
+    blocks: parseLongTextReviewBlocks(hasQuestions ? questionInput.intro : messageText, {
       preserveParagraphLineBreaks
     }),
     outroBlocks: parseLongTextReviewBlocks(hasQuestions ? questionInput.outro : "", {
@@ -576,6 +669,7 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
   .map((turn, index) => {
     const turnId = String(turn.turnId || index + 1);
     return {
+      integrationSetup: turn.integrationSetup,
       agentTimeline: displayAgentTimeline(turn, turnId),
       optimistic: turn.optimistic && typeof turn.optimistic === "object" && !Array.isArray(turn.optimistic)
         ? turn.optimistic

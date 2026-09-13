@@ -30,6 +30,7 @@ test("project and sessions expose only named Feature capabilities", () => {
     events: "runtime.events",
     http: "runtime.http",
     project: "vibe64.project",
+    sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals",
     actionCatalogue: "runtime.actions"
   });
@@ -90,6 +91,7 @@ test("project and sessions register routes and captured actions during setup", a
 
   const sessionActions = [];
   const sessionRoutes = [];
+  const configurationReads = [];
   const sessionOutputs = await Vibe64SessionsProvider.setup({
     actionCatalogue: {
       register(contributor) {
@@ -106,8 +108,15 @@ test("project and sessions register routes and captured actions during setup", a
         }
       }
     },
-    project: {},
-    terminals: {}
+    project: { async createRuntime() { return {}; } },
+    sourceEditor: { async readIntegrations(input) {
+      configurationReads.push(input);
+      return { ok: true, baseHash: "verified-configuration" };
+    } },
+    terminals: { async resumeIntegrationContinuation(_sessionId, _input, options) {
+      assert.deepEqual(await options.readIntegrationConfiguration(), { ok: true, baseHash: "verified-configuration" });
+      return { ok: true };
+    } }
   }, {});
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
@@ -137,6 +146,8 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.create",
     "vibe64.sessions.current.update",
     "vibe64.sessions.inspect",
+    "vibe64.sessions.integration-setup.resume",
+    "vibe64.sessions.integration-setup.skip",
     "vibe64.sessions.list",
     "vibe64.sessions.message-suggestions.approve",
     "vibe64.sessions.message-suggestions.create",
@@ -159,6 +170,11 @@ test("project and sessions register routes and captured actions during setup", a
   ]);
   assert.equal(sessionRoutes.length, sessionActions[0].actions.length);
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
+  const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
+    turnId: "000001", requestId: "a".repeat(64)
+  });
+  assert.equal(resumed.ok, true, JSON.stringify(resumed));
+  assert.deepEqual(configurationReads, [{ sessionId: "session-1" }]);
 });
 
 test("sessions start standalone renewal recovery without blocking Feature boot", async () => {

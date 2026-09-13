@@ -227,3 +227,38 @@ test("source file creation publishes a created refresh after the durable write",
     });
   });
 });
+
+
+test("integration setup accepts selections only; executable, Env and session remain server-owned", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const calls = [];
+    const app = testRouteApp();
+    registerRoutes(app.http, {
+      projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+      sourceEditor: {
+        async readTree() { return { ok: true }; },
+        async runIntegrationSetup(input) { calls.push(input); return { ok: true, status: "disconnected" }; }
+      }
+    });
+    const route = findRegisteredRoute(app, {
+      method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/integrations/:integrationId/setup`
+    });
+    const reply = testReply();
+    await route.handler({
+      vibe64User: { username: "trusted-owner" },
+      params: routeProjectParams({ sessionId: "session-1", integrationId: "calendar" }),
+      input: { body: {
+        operation: "connect", verificationInput: { account: "fixture" },
+        vibe64User: { username: "forged-owner" },
+        setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
+        sessionId: "other", integrationId: "other", environment: "production",
+        command: "untrusted", env: { SECRET: "untrusted" }, sourceRoot: "/other"
+      } }
+    }, reply);
+    assert.deepEqual(calls, [{ sessionId: "session-1", integrationId: "calendar", environment: "development",
+      operation: "connect", attemptId: undefined, vibe64User: { username: "trusted-owner" },
+      setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
+      verificationInput: { account: "fixture" } }]);
+    assert.deepEqual(reply.payload, { ok: true, status: "disconnected" });
+  }));
+});
