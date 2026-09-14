@@ -378,11 +378,11 @@ instead of launching a duplicate. Rechecking first reads current preview state;
 it never force-restarts an app merely because its start response was lost.
 Test-specific refusals remain test-specific: inspecting or rechecking one must
 not turn it into an ordinary application start.
-When the host offers memory approval for a marginal browser test, the normal
+When the host holds a browser test because resources are unavailable, the normal
 Preview remains usable during a five-minute decision window. Chat says it is
-waiting for approval, not working. The owner can resume the same test or cancel
+waiting for resources. The owner can resume the same test or cancel
 it; expiry also ends the request without running tests. Reloading the page does
-not discard the wait, but losing the owning assistant does. Approval still
+not discard the wait, but losing the owning assistant does. Retry still
 checks current safety and never creates a duplicate test.
 
 Deslop is a deliberate cleanup that preserves behavior, not an automatic extra

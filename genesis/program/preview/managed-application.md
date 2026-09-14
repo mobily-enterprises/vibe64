@@ -59,13 +59,13 @@ decision ID, memory figures and allowed actions instead of a generic readiness
 failure. It does not independently calculate or override host policy.
 Progress output never suppresses the final failure message: approval, startup,
 execution and restoration errors remain visible on stderr after streamed output.
-For an overridable tight-memory refusal, the registered command owner retains
+For a resource refusal that offers a fresh recheck, the registered command owner retains
 one live request per session after successful normal-target restoration and
-release of the Preview lock. The host opens a five-minute approval window in
+release of the Preview lock. The host opens a five-minute retry window in
 that rejected workflow's existing record; no test reservation is held. The
 Public slot stores the original command callback only in memory. Output status
 projects its admission ID, waiting/resuming state and expiry through the
-existing session-change stream. Chat shows Waiting for memory approval and the
+existing session-change stream. Chat shows Waiting for resources and the
 host recovery control without covering the normal Preview.
 
 The host's owner-only action acknowledges a handoff to `resumeTestApproval`,

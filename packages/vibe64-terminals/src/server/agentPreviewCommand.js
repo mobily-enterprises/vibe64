@@ -610,8 +610,8 @@ function createAgentPreviewCommandService({
     });
     const result = await run();
     const admission = result?.details?.admission;
-    if (result?.code !== "vibe64_capacity_rejected" || admission?.outcome !== "tight" ||
-        !admission.actions?.includes("start-anyway")) return result;
+    if (result?.code !== "vibe64_capacity_rejected" || admission?.outcome !== "unavailable" ||
+        !admission.actions?.includes("recheck")) return result;
     options.signal?.throwIfAborted();
     const { descriptor } = await validate();
     const provider = resourceProvider();
@@ -642,12 +642,12 @@ function createAgentPreviewCommandService({
     if (options.signal?.aborted) abort();
     timer = setTimeout(() => pending.cancel("expired"), Math.max(0, Date.parse(wait.expiresAt) - Date.now()));
     try {
-      options.onOutput?.("Waiting for memory approval. Normal Preview has been restored. Start anyway or Cancel in Vibe64 within five minutes; tests have not run.\n");
+      options.onOutput?.("Waiting for resources. Normal Preview has been restored. Retry or Cancel in Vibe64 within five minutes; tests have not run.\n");
       await publishSessionChanged(sessionId);
       const authorizeStart = await decision;
       if (!authorizeStart) return responseError(
-        outcome === "expired" ? "Memory approval expired. Tests were not run."
-          : outcome === "cancelled" ? "Memory approval cancelled. Tests were not run."
+        outcome === "expired" ? "The resource wait expired. Tests were not run."
+          : outcome === "cancelled" ? "The resource wait was cancelled. Tests were not run."
             : "The original test command ended. Tests were not run.",
         `vibe64_test_approval_${outcome}`, { details: result.details }
       );
