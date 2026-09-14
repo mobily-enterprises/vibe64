@@ -1,76 +1,81 @@
 <template>
   <section ref="erdRoot" class="database-erd" :class="{ 'database-erd--fullscreen': fullscreen }" @keydown="onKeydown">
-    <header aria-label="ERD controls" class="database-erd__toolbar">
-      <v-autocomplete
-        v-model="searchChoice"
-        v-model:search="searchText"
-        class="database-erd__search"
-        clearable
-        density="compact"
-        hide-details
-        item-title="title"
-        :item-value="item => JSON.stringify([item.table, item.column])"
-        :items="searchMatches"
-        label="Find table or column"
-        :menu-props="{ attach: erdRoot }"
-        no-filter
-        :prepend-inner-icon="mdiMagnify"
-        return-object
-        variant="outlined"
-        @update:model-value="locate"
-      />
-      <v-btn :disabled="layoutPending || !nodes.length" :icon="mdiImageFilterCenterFocus" aria-label="Fit" title="Fit diagram" size="small" variant="text" @click="fitDiagram" />
-      <v-menu v-model="optionsOpen" :attach="erdRoot" :close-on-content-click="false">
-        <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" :icon="mdiTuneVariant" aria-label="Diagram options" title="Diagram options" size="small" variant="text" /></template>
-        <v-sheet class="database-erd__options" rounded="lg" elevation="2" aria-label="Diagram options">
-          <strong>Display</strong>
-          <v-btn-toggle :model-value="columnMode" mandatory density="compact" @update:model-value="changeColumnMode">
-            <v-btn value="keys" size="small">Keys only</v-btn>
-            <v-btn value="all" size="small">All columns</v-btn>
-          </v-btn-toggle>
-          <v-select
-            :model-value="activeGroup" density="compact" :items="groupItems" label="Show tables"
-            :menu-props="{ attach: erdRoot }" variant="outlined"
-            hint="Filter the diagram without changing table data or overview concepts." persistent-hint
-            @update:model-value="changeGroupFilter"
-          />
-          <v-divider />
-          <strong>Arrangement</strong>
-          <div class="database-erd__option-actions">
-            <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiRestore" size="small" title="Arrange relationships while preserving pinned tables" variant="text" @click="resetPositions">Reset positions</v-btn>
-            <v-btn :disabled="layoutPending || !undoStack.length" :icon="mdiUndo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
-            <v-btn :disabled="layoutPending || !redoStack.length" :icon="mdiRedo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
-          </div>
-          <v-divider />
-          <div class="database-erd__option-actions">
-            <v-menu :attach="erdRoot">
-              <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text">Saved views</v-btn></template>
-              <v-list density="compact">
-                <v-list-item title="Save view…" @click="optionsOpen = false; viewName = ''; viewDialog = true" />
-                <v-list-item v-for="view in views" :key="view.id" :title="view.name" @click="loadView(view)">
-                  <template #append><v-btn :icon="mdiClose" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
-                </v-list-item>
-              </v-list>
-            </v-menu>
-            <v-btn size="small" variant="text" @click="editGroup()">Edit table groups</v-btn>
-            <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? mdiFullscreenExit : mdiFullscreen" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
-          </div>
-          <slot name="options" :close="() => optionsOpen = false" />
-        </v-sheet>
-      </v-menu>
-    </header>
+    <Teleport :to="toolbarTarget || erdRoot" :disabled="!toolbarTarget || fullscreen">
+      <!-- A relocated toolbar cannot bubble keyboard events to the ERD root. -->
+      <header aria-label="ERD controls" class="database-erd__toolbar" @keydown="toolbarTarget && !fullscreen && onKeydown($event)">
+        <v-autocomplete
+          v-model="searchChoice"
+          v-model:search="searchText"
+          class="database-erd__search"
+          clearable
+          density="compact"
+          hide-details
+          item-title="title"
+          :item-value="item => JSON.stringify([item.table, item.column])"
+          :items="searchMatches"
+          label="Find table or column"
+          :menu-props="{ attach: erdRoot }"
+          no-filter
+          :prepend-inner-icon="mdiMagnify"
+          return-object
+          variant="outlined"
+          @update:model-value="locate"
+        />
+        <v-btn class="database-erd__icon-button" :disabled="layoutPending || !nodes.length" :icon="mdiImageFilterCenterFocus" aria-label="Fit" title="Fit diagram" size="small" variant="text" @click="fitDiagram" />
+        <v-menu v-model="optionsOpen" :attach="erdRoot" :close-on-content-click="false">
+          <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-erd__icon-button" :icon="mdiTuneVariant" aria-label="Diagram options" title="Diagram options" size="small" variant="text" /></template>
+          <v-sheet class="database-erd__options" rounded="lg" elevation="2" aria-label="Diagram options">
+            <strong>Display</strong>
+            <v-btn-toggle :model-value="columnMode" mandatory density="compact" @update:model-value="changeColumnMode">
+              <v-btn value="keys" size="small">Keys only</v-btn>
+              <v-btn value="all" size="small">All columns</v-btn>
+            </v-btn-toggle>
+            <v-select
+              :model-value="activeGroup" density="compact" :items="groupItems" label="Show tables"
+              :menu-props="{ attach: erdRoot }" variant="outlined"
+              hint="Filter the diagram without changing table data or overview concepts." persistent-hint
+              @update:model-value="changeGroupFilter"
+            />
+            <v-divider />
+            <strong>Arrangement</strong>
+            <div class="database-erd__option-actions">
+              <v-btn :disabled="layoutPending || !nodes.length" :prepend-icon="mdiRestore" size="small" title="Arrange relationships while preserving pinned tables" variant="text" @click="resetPositions">Reset positions</v-btn>
+              <v-btn :disabled="layoutPending || !undoStack.length" :icon="mdiUndo" aria-label="Undo diagram change" size="small" variant="text" @click="undo" />
+              <v-btn :disabled="layoutPending || !redoStack.length" :icon="mdiRedo" aria-label="Redo diagram change" size="small" variant="text" @click="redo" />
+            </div>
+            <v-divider />
+            <div class="database-erd__option-actions">
+              <v-menu :attach="erdRoot">
+                <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text">Saved views</v-btn></template>
+                <v-list density="compact">
+                  <v-list-item title="Save view…" @click="optionsOpen = false; viewName = ''; viewDialog = true" />
+                  <v-list-item v-for="view in views" :key="view.id" :title="view.name" @click="loadView(view)">
+                    <template #append><v-btn :icon="mdiClose" :aria-label="'Delete view ' + view.name" size="x-small" variant="text" @click.stop="removeView(view.id)" /></template>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+              <v-btn size="small" variant="text" @click="editGroup()">Edit table groups</v-btn>
+              <v-btn v-if="fullscreenAvailable" :prepend-icon="fullscreen ? mdiFullscreenExit : mdiFullscreen" size="small" variant="text" @click="toggleFullscreen">{{ fullscreen ? 'Exit full screen' : 'Full screen' }}</v-btn>
+            </div>
+            <slot name="options" :close="() => optionsOpen = false" />
+          </v-sheet>
+        </v-menu>
+      </header>
+    </Teleport>
     <div v-if="focusTable || activeGroup" class="database-erd__filters">
       <v-chip v-if="activeGroup" size="small" closable @click:close="changeGroupFilter('')">{{ groupItems.find(item => item.value === activeGroup)?.title }}</v-chip>
       <v-chip v-if="focusTable" size="small" closable @click:close="setFocus('')">Focus: {{ tableName(focusTable) }}</v-chip>
       <span>{{ visibleCount }} / {{ nodes.length }} tables</span>
     </div>
     <div class="database-erd__canvas">
-      <div v-if="layoutPending && !nodes.length" class="database-erd__loading" role="status" aria-live="polite">
+      <div v-if="!diagramReady && !layoutError" class="database-erd__loading" role="status" aria-live="polite">
         <v-skeleton-loader class="database-erd__loading-preview" type="heading, text@2" :width="180" color="transparent" boilerplate aria-hidden="true" />
         <span>Preparing diagram…</span>
       </div>
       <VueFlow
-        v-else
+        class="database-erd__flow"
+        :class="{ 'database-erd__flow--ready': diagramReady }"
+        :inert="!diagramReady ? true : undefined"
         v-model:edges="edges"
         v-model:nodes="nodes"
         :default-edge-options="defaultEdgeOptions"
@@ -97,7 +102,7 @@
         <template #edge-relationship="edgeProps"><DatabaseErdEdge v-bind="edgeProps" /></template>
         <MiniMap pannable zoomable />
       </VueFlow>
-      <div v-if="layoutPending && nodes.length" class="database-erd__notice" role="status">Arranging tables…</div>
+      <div v-if="layoutPending && diagramReady" class="database-erd__notice" role="status">Arranging tables…</div>
       <div v-else-if="layoutError" class="database-erd__notice" role="alert">{{ layoutError }} <v-btn size="x-small" variant="text" @click="rebuild()">Retry</v-btn></div>
       <div v-else-if="obstructedCount" class="database-erd__notice" role="status">Some connections could not be routed around tables. Move tables or focus on a smaller group, then reset positions.</div>
       <v-sheet v-if="selectedRelationship || selectedNode" class="database-erd__inspector" rounded="lg" elevation="2">
@@ -159,6 +164,7 @@ import { ERD_NODE_WIDTH, erdCardinality, erdColumns, erdLayoutGroups, erdNeighbo
 
 const props = defineProps({
   focusRequest: { type: Object, default: null },
+  toolbarTarget: { type: Object, default: null },
   draggable: { type: Boolean, default: true },
   centralTable: { type: String, default: "" },
   layout: { default: () => ({ nodes: [] }), type: Object },
@@ -174,6 +180,7 @@ const fullscreen = ref(false);
 const fullscreenAvailable = ref(false);
 const layoutError = ref("");
 const layoutPending = ref(false);
+const diagramReady = ref(false);
 const columnMode = ref(props.layout.columnMode || "keys");
 const focusTable = ref(props.layout.focusTable || "");
 const activeGroup = ref(props.layout.activeGroup || "");
@@ -397,7 +404,8 @@ async function rebuild({ force = false } = {}) {
     if (disposed || request !== rebuildId) return;
     nodes.value = placeErdNodes(sourceNodes, layout.nodes, saved, force);
     if (!await refreshGraph({ reset: true, layoutPaths: new Map(layout.paths.map((path) => [path.id, path.points])) })) return;
-    if (!await updateViewport(initialViewport)) return;
+    if (!await updateViewport(initialViewport, { animate: diagramReady.value })) return;
+    diagramReady.value = true;
     if (needsSave) persistPositions();
     if (layout.fallback) feedback.error(new Error("The recommended layout was unavailable; a basic arrangement was used."), "Layout needs attention.");
   } catch (error) {
@@ -547,13 +555,13 @@ async function locate(item) {
   persistPositions();
 }
 async function resetPositions() { checkpoint(); await rebuild({ force: true }); }
-async function updateViewport(viewport) {
+async function updateViewport(viewport, { animate = true } = {}) {
   const request = graphRefreshId;
   await nextTick();
   await new Promise((resolve) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve)));
   if (disposed || request !== graphRefreshId) return false;
-  if (viewport) await flow?.setViewport?.(viewport, { duration: 180 });
-  else await flow?.fitView?.({ nodes: nodes.value.filter((node) => !node.hidden).map((node) => node.id), duration: 220, padding: 0.18 });
+  if (viewport) await flow?.setViewport?.(viewport, { duration: animate ? 180 : 0 });
+  else await flow?.fitView?.({ nodes: nodes.value.filter((node) => !node.hidden).map((node) => node.id), duration: animate ? 220 : 0, padding: 0.18 });
   return !disposed && request === graphRefreshId;
 }
 function fitDiagram() { return updateViewport(); }
@@ -696,6 +704,8 @@ onBeforeUnmount(() => {
 .database-erd--fullscreen, .database-erd:fullscreen { width: 100%; height: 100%; }
 .database-erd__canvas { position: relative; flex: 1; min-height: 300px; overflow: hidden; background: rgb(var(--v-theme-surface)); }
 .database-erd__canvas :deep(.vue-flow) { height: 100%; }
+.database-erd__flow { opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+.database-erd__flow--ready { opacity: 1; pointer-events: auto; }
 .database-erd__canvas :deep(.vue-flow__edge-text) { fill: rgb(var(--v-theme-on-surface)); font-size: 10px; }
 .database-erd__canvas :deep(.vue-flow__edge-textbg) { fill: rgb(var(--v-theme-surface)); }
 .database-erd__canvas :deep(.vue-flow__edge) { transition: opacity 100ms ease; }
@@ -721,7 +731,7 @@ onBeforeUnmount(() => {
   .database-erd__inspector { top: auto; bottom: 8px; max-height: 45%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .database-erd__canvas :deep(.vue-flow__edge) { transition: none; }
+  .database-erd__canvas :deep(.vue-flow__edge), .database-erd__flow { transition: none; }
   .database-erd__loading { animation: none; }
 }
 </style>

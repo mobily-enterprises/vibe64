@@ -266,7 +266,6 @@ for (const width of [390, 1600]) {
       await expect(details.getByText("Arranging tables…", { exact: true })).toHaveCount(0);
       await expect(map).toHaveCSS("opacity", "0.12");
       await expect(details.locator(".database-erd__canvas")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-      await expect(page.getByRole("button", { name: "Close expanded actor", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       await expect(camera).toHaveAttribute("style", before!);
       await expect(details.locator('.vue-flow__node[data-id="public.addresses"]')).toHaveCount(0);
       const tables = details.getByRole("complementary", { name: "Actor tables and fields" });
@@ -275,14 +274,14 @@ for (const width of [390, 1600]) {
       await tables.locator(".database-workspace__table-detail").getByRole("button", { name: "notes text", exact: true }).click();
       await expect(details.locator('[data-id="public.checklists"]')).toContainText("notes");
       await page.screenshot({ path: testInfo.outputPath(`overview-expanded-${width}.png`) });
-      await details.getByRole("button", { name: "Close details", exact: true }).click();
+      await page.getByRole("button", { name: "Close details", exact: true }).click();
       await expect(details).toHaveCount(0);
       await expect(camera).toHaveAttribute("style", before!);
       await expect(map).toHaveCSS("opacity", "1");
       await expect(page.locator(".database-overview .vue-flow__node-actor")).toHaveCount(4);
       await page.getByRole("button", { name: "Explore Other tables", exact: true }).click();
       await expect(page.locator('.database-overview [data-id="public.audit_log"]')).toBeVisible();
-      await page.getByRole("button", { name: "Close expanded actor", exact: true }).click({ position: { x: 3, y: 3 } });
+      await page.keyboard.press("Escape");
       await expect(page.locator(".database-overview__detail")).toHaveCount(0);
       await page.screenshot({ path: testInfo.outputPath(`overview-collapsed-${width}.png`) });
       expect(errors).toEqual([]);
@@ -648,7 +647,7 @@ for (const view of ["Overview", "ERD"] as const) {
         throw error;
       }
       await expect(diagram.getByText("Arranging tables…", { exact: true })).toHaveCount(0, { timeout: 60_000 });
-      await diagram.getByRole("button", { name: "Fit", exact: true }).click();
+      await page.getByRole("button", { name: "Fit", exact: true }).click();
       await waitForDiagramViewport(page);
       const points = await diagram.locator(".vue-flow__edge-interaction").evaluateAll((paths: SVGPathElement[]) => {
         const points = [];
@@ -1033,9 +1032,11 @@ test("@data-overview defaults to Overview without SQL and keeps the AI-selected 
     let actors = await boxes();
     const centre = actors.find((node) => node.id === "actor:public.contacts")!;
     const others = actors.filter((node) => node !== centre);
-    const distances = others.map((node) => Math.hypot(node.x - centre.x, node.y - centre.y));
-    expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(2);
-    expect(Math.min(...distances)).toBeGreaterThan(centre.width);
+    for (const node of others) {
+      expect(Math.abs(node.x - centre.x) >= (node.width + centre.width) / 2 ||
+        Math.abs(node.y - centre.y) >= (node.height + centre.height) / 2).toBe(true);
+    }
+    const originalActors = actors;
     const bookings = actors.find((node) => node.id === "actor:public.bookings")!;
     const dogs = actors.find((node) => node.id === "actor:public.dogs")!;
     expect(bookings.width * bookings.height).toBeGreaterThan(dogs.width * dogs.height);
@@ -1043,9 +1044,7 @@ test("@data-overview defaults to Overview without SQL and keeps the AI-selected 
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect(page.getByText("Arranging actors…")).toHaveCount(0);
     actors = await boxes();
-    const expandedCentre = actors.find((node) => node.id === "actor:public.contacts")!;
-    const expandedDistances = actors.filter((node) => node !== expandedCentre).map((node) => Math.hypot(node.x - expandedCentre.x, node.y - expandedCentre.y));
-    expect(Math.max(...expandedDistances) - Math.min(...expandedDistances)).toBeLessThan(2);
+    expect(actors).toEqual(originalActors);
     expect(queries).toHaveLength(0);
     await page.getByRole("button", { name: "Close details", exact: true }).click();
     await page.getByRole("button", { name: "Data", exact: true }).click();
@@ -1067,6 +1066,7 @@ test("@data-overview scoped ERD centres the main table, shares selection, and pr
     const details = page.getByRole("region", { name: "ERD for Bookings" });
     await expect(details.locator(".vue-flow__node-table")).toHaveCount(4);
     await expect(details.getByText("Arranging tables…", { exact: true })).toHaveCount(0);
+    await expect(details.locator(".database-erd__flow")).toHaveCSS("opacity", "1");
     const positions = await details.locator(".vue-flow__node-table").evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect();
       return { id: element.getAttribute("data-id"), x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -1081,7 +1081,7 @@ test("@data-overview scoped ERD centres the main table, shares selection, and pr
     await dragTable(page, "bookings", 90, 50);
     await expect(mainCard).toHaveAttribute("style", positionBefore!);
     await expect(details.locator('.vue-flow__node-table.draggable')).toHaveCount(0);
-    await details.getByRole("button", { name: "Fit", exact: true }).click();
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
     await details.locator('[data-id="public.checklists"] strong').first().click({ timeout: 5000 });
     await expect(details.locator(".database-workspace__table-detail header")).toContainText("checklists");
     await diagramAction(page, "All columns");
@@ -1116,7 +1116,7 @@ for (const view of ["Overview", "ERD"] as const) {
       const cards = diagram.locator(".database-erd-node");
       await expect(cards).toHaveCount(view === "Overview" ? 4 : 8);
       await expect(diagram.getByText("Arranging tables…", { exact: true })).toHaveCount(0);
-      await diagram.getByRole("button", { name: "Fit", exact: true }).click();
+      await page.getByRole("button", { name: "Fit", exact: true }).click();
       await waitForDiagramViewport(page);
       const solidTables = () => cards.evaluateAll(elements => elements.filter(element => getComputedStyle(element).opacity === "1").map(element => element.querySelector("strong")!.textContent).sort());
       const allTables = (await cards.locator("strong").allTextContents()).sort();
@@ -1203,7 +1203,7 @@ test("@data-overview main connections reduce clutter while all connections and p
 });
 
 
-for (const width of [390, 1600]) {
+for (const width of [390, 768, 1600]) {
   test(`@data-overview compact controls leave the diagram prominent at ${width}px`, async ({ browser, baseURL }, testInfo) => {
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
@@ -1214,17 +1214,38 @@ for (const width of [390, 1600]) {
       await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
       const overviewToolbar = page.getByLabel("Data overview controls");
       await expect(overviewToolbar.getByRole("button")).toHaveCount(2);
+      const headerBefore = await overviewToolbar.boundingBox();
+      const map = page.locator(".database-overview__map");
+      const mapBefore = await map.boundingBox();
+      const camera = map.locator(".vue-flow__transformationpane");
+      const cameraBefore = await camera.getAttribute("style");
+      const titleBefore = await overviewToolbar.locator("strong").boundingBox();
       await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
-      await expect(overviewToolbar).toBeHidden();
+      await expect(overviewToolbar).toBeVisible();
+      await expect(overviewToolbar.locator("strong")).toHaveText("Bookings");
+      expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
+      expect((await overviewToolbar.locator("strong").boundingBox())!.y).toBe(titleBefore!.y);
+      expect(await map.boundingBox()).toEqual(mapBefore);
+      await expect(camera).toHaveAttribute("style", cameraBefore!);
       const details = page.getByRole("region", { name: "ERD for Bookings" });
-      const toolbar = details.getByLabel("ERD controls");
+      const toolbar = page.getByLabel("ERD controls");
+      await expect(overviewToolbar.getByLabel("ERD controls")).toBeVisible();
       await expect(toolbar.getByRole("button")).toHaveCount(2);
       expect((await toolbar.boundingBox())!.height).toBeLessThan(70);
+      await expect(details.getByLabel("ERD controls")).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      if (width === 390) {
+        for (const button of await overviewToolbar.getByRole("button").all()) {
+          const box = (await button.boundingBox())!;
+          expect(box.width).toBeGreaterThanOrEqual(48);
+          expect(box.height).toBeGreaterThanOrEqual(48);
+        }
+      }
       await expect(details.locator(".database-erd__filters")).toHaveCount(0);
       const detailBox = (await details.boundingBox())!;
       const canvasBox = (await details.locator(".database-erd__canvas").boundingBox())!;
       expect(canvasBox.height / detailBox.height).toBeGreaterThan(0.7);
-      await details.getByRole("button", { name: "Diagram options", exact: true }).click();
+      await toolbar.getByRole("button", { name: "Diagram options", exact: true }).click();
       const options = page.locator(".database-erd__options");
       await expect(options.getByRole("button", { name: "Reset positions", exact: true })).toBeVisible();
       await expect(options.getByRole("button", { name: "Saved views", exact: true })).toBeVisible();
@@ -1236,10 +1257,69 @@ for (const width of [390, 1600]) {
       await diagramAction(page, "All columns");
       await expect(details.locator('[data-id="public.checklists"]')).toContainText("notes");
       await page.screenshot({ path: testInfo.outputPath(`simplified-${width}.png`) });
+      if (width === 1600) {
+        await diagramAction(page, "Full screen");
+        await expect.poll(() => toolbar.evaluate(element => document.fullscreenElement?.contains(element))).toBe(true);
+        await expect(toolbar.getByRole("combobox", { name: "Find table or column", exact: true })).toBeVisible();
+        await diagramAction(page, "Exit full screen");
+        await expect(overviewToolbar.getByLabel("ERD controls")).toBeVisible();
+        expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
+      }
       await page.getByRole("button", { name: "Close details", exact: true }).click();
       await expect(overviewToolbar).toBeVisible();
+      expect(await overviewToolbar.boundingBox()).toEqual(headerBefore);
+      expect(await map.boundingBox()).toEqual(mapBefore);
+      await expect(camera).toHaveAttribute("style", cameraBefore!);
       expect(errors).toEqual([]);
     } finally { await context.close().catch(() => {}); await server.close(); }
+  });
+}
+
+for (const view of ["Overview", "ERD"] as const) {
+  test(`@erd-keyboard toolbar Undo and Redo work in ${view}, including fullscreen`, async ({ browser, baseURL }) => {
+    const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
+    const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    try {
+      const page = await context.newPage();
+      await openDiagram(page, server.url, { view, waitForReady: false });
+      if (view === "Overview") await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
+      const diagram = page.locator(".database-erd__flow");
+      await expect(diagram).toHaveCSS("opacity", "1");
+      const checklist = diagram.locator('[data-id="public.checklists"]');
+      const toolbar = page.getByLabel("ERD controls");
+      const fit = toolbar.getByRole("button", { name: "Fit", exact: true });
+      const options = toolbar.getByRole("button", { name: "Diagram options", exact: true });
+      const search = toolbar.getByRole("combobox", { name: "Find table or column", exact: true });
+      for (const fullscreen of [false, true]) {
+        if (fullscreen) {
+          await diagramAction(page, "Full screen");
+          await expect.poll(() => toolbar.evaluate(element => document.fullscreenElement?.contains(element))).toBe(true);
+        }
+        for (const modifier of ["Control", "Meta"]) {
+          await diagramAction(page, "All columns");
+          await expect(checklist).toContainText("notes");
+          await search.fill("booking");
+          await search.press(`${modifier}+z`);
+          await expect(checklist).toContainText("notes");
+          await search.fill("");
+          await fit.press(`${modifier}+z`);
+          await expect(checklist).not.toContainText("notes");
+          await expect(fit).toBeEnabled();
+          await options.press(`${modifier}+Shift+z`);
+          await expect(checklist).toContainText("notes");
+          await expect(fit).toBeEnabled();
+          await fit.press(`${modifier}+z`);
+          await expect(checklist).not.toContainText("notes");
+          await expect(fit).toBeEnabled();
+        }
+      }
+      await diagramAction(page, "Exit full screen");
+      if (view === "Overview") {
+        await expect(page.getByLabel("Data overview controls").getByLabel("ERD controls")).toBeVisible();
+        await fit.press("Escape");
+        await expect(page.getByRole("region", { name: "ERD for Bookings" })).toHaveCount(0);
+      }
+    } finally { await context.close(); await server.close(); }
   });
 }
 
@@ -1533,5 +1613,91 @@ test("@erd-camera zoom saves after settling and closing cancels a pending camera
     // Deliberately outwait the camera debounce to catch writes from a closed view.
     await page.waitForTimeout(850);
     expect(server.saves).toHaveLength(before + 1);
+  } finally { await context.close(); await server.close(); }
+});
+
+
+test("@overview-transition details fade in at their final positions while the overview stays still", async ({ browser, baseURL }, info) => {
+  const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  try {
+    const page = await context.newPage();
+    const worker = await controlRoutingWorker(page);
+    await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
+    const overview = page.locator(".database-overview__map");
+    const before = await overview.boundingBox();
+    const backgroundCamera = await overview.locator(".vue-flow__transformationpane").getAttribute("style");
+    await worker.hold();
+    await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
+    await expect.poll(worker.pending).toBe(1);
+    const diagram = page.locator(".database-overview__detail .database-erd__flow");
+    await expect(diagram).toHaveCSS("opacity", "0");
+    await expect(page.getByText("Preparing diagram…", { exact: true })).toBeVisible();
+    expect(await overview.boundingBox()).toEqual(before);
+    await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
+    await page.screenshot({ path: info.outputPath("preparing.png") });
+    const transition = diagram.evaluate(element => new Promise<string[]>(resolve => {
+      const frames: string[] = [];
+      const sample = () => {
+        const opacity = Number(getComputedStyle(element).opacity);
+        if (opacity > 0) frames.push(JSON.stringify({
+          camera: element.querySelector(".vue-flow__transformationpane")?.getAttribute("style"),
+          nodes: Array.from(element.querySelectorAll<HTMLElement>(".vue-flow__node"), node => node.style.transform)
+        }));
+        if (opacity === 1) resolve(frames);
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }));
+    await worker.release();
+    await expect(diagram).toHaveCSS("opacity", "1");
+    await expect(page.getByText("Preparing diagram…", { exact: true })).toHaveCount(0);
+    const frames = await transition;
+    expect(frames.length).toBeGreaterThan(1);
+    expect(new Set(frames).size).toBe(1);
+    expect(await overview.boundingBox()).toEqual(before);
+    await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
+    await page.screenshot({ path: info.outputPath("ready.png") });
+    await page.getByRole("button", { name: "Close details", exact: true }).click();
+    await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
+    await expect.poll(worker.pending).toBe(1);
+    await expect(diagram).toHaveCSS("opacity", "0");
+    await worker.release();
+    await expect(diagram).toHaveCSS("opacity", "1");
+    await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
+  } finally { await context.close(); await server.close(); }
+});
+
+
+test("@overview-spacing nine actor groups fit without overlapping or tiny headings", async ({ browser, baseURL }, info) => {
+  const schema = denseErdSchema();
+  const names = ["Bookings", "Staff & Availability", "Clients & Pets", "Catalogue & Resources", "Grooming Visits", "Daycare", "Communications", "Workspaces & Access", "Finance & Retail"];
+  const definition = {
+    version: 1,
+    actors: names.map((name, index) => {
+      const tables = schema.tables.slice(index * 15, (index + 1) * 15).map(table => table.qualifiedName);
+      return { name, table: tables[0], tables, description: `${name} and supporting information` };
+    }),
+    mainRelationships: Array.from({ length: 8 }, (_, index) => `fk_${(index + 1) * 15 - 1}`)
+  };
+  const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  try {
+    const page = await context.newPage();
+    await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
+    const map = page.locator(".database-overview__map");
+    const bounds = (await map.boundingBox())!;
+    const cards = await map.locator(".vue-flow__node-actor").all();
+    expect(cards).toHaveLength(9);
+    await expect(page.locator(".database-overview [role=alert]")).toHaveCount(0);
+    for (const card of cards) {
+      const box = (await card.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+      expect(box.y).toBeGreaterThanOrEqual(bounds.y);
+      expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+      expect(box.width).toBeGreaterThan(220);
+    }
+    await page.screenshot({ path: info.outputPath("nine-actors.png") });
   } finally { await context.close(); await server.close(); }
 });

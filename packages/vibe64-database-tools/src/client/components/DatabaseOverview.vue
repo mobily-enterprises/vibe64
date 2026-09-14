@@ -1,27 +1,36 @@
 <template>
   <section class="database-overview" @keydown.esc="closeActor">
-    <header v-show="!activeGroup" class="database-overview__toolbar" aria-label="Data overview controls">
-      <div class="database-overview__title"><strong>Data overview</strong><span>{{ graph.coverage.classified }} / {{ graph.coverage.total }} tables classified</span></div>
-      <v-btn v-if="!overview.present" :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">Create with AI</v-btn>
-      <v-btn :icon="mdiImageFilterCenterFocus" size="small" variant="text" aria-label="Fit" title="Fit overview" @click="fit" />
-      <v-menu v-model="overviewOptions" :close-on-content-click="false">
-        <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" :icon="mdiTuneVariant" size="small" variant="text" aria-label="Overview options" title="Overview options" /></template>
-        <v-sheet class="database-overview__options" rounded="lg" elevation="2" aria-label="Overview options">
-          <span>Not yet reviewed: {{ graph.coverage.unreviewed.length }}</span>
-          <v-switch v-if="overview.definition.mainRelationships" v-model="allRelationships" density="compact" hide-details label="All connections" />
-          <small v-else-if="overview.present">Showing all connections. Review with AI to select the main ones.</small>
-          <div class="database-overview__option-actions">
-            <v-btn size="small" variant="text" aria-label="Zoom in" @click="flow?.zoomIn()">Zoom in</v-btn>
-            <v-btn size="small" variant="text" aria-label="Zoom out" @click="flow?.zoomOut()">Zoom out</v-btn>
-          </div>
-          <v-btn :disabled="savingPosition || pending" size="small" variant="text" @click="savePositions({})">Reset actor positions</v-btn>
-          <v-divider />
-          <v-btn :disabled="savingPosition" size="small" variant="text" @click="openEditor">Edit actors</v-btn>
-          <v-btn :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">{{ overview.present ? 'Review with AI' : 'Create with AI' }}</v-btn>
-          <v-btn :disabled="savingPosition" size="small" variant="text" @click="emit('reload')">Reload overview</v-btn>
-          <small>Drag a concept to move it. Drag empty space to pan; scroll to zoom.</small>
-        </v-sheet>
-      </v-menu>
+    <header class="database-overview__toolbar" aria-label="Data overview controls">
+      <div class="database-overview__title">
+        <strong>{{ activeGroup ? activeGroup.name : 'Data overview' }}</strong>
+        <span v-if="activeGroup">{{ actorSchema.tables.length }} tables</span>
+        <span v-else>{{ graph.coverage.classified }} / {{ graph.coverage.total }} tables classified</span>
+      </div>
+      <div ref="diagramControls" class="database-overview__controls">
+        <template v-if="!activeGroup">
+          <v-btn v-if="!overview.present" :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">Create with AI</v-btn>
+          <v-btn class="database-overview__icon-button" :icon="mdiImageFilterCenterFocus" size="small" variant="text" aria-label="Fit" title="Fit overview" @click="fit" />
+          <v-menu v-model="overviewOptions" :close-on-content-click="false">
+            <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" class="database-overview__icon-button" :icon="mdiTuneVariant" size="small" variant="text" aria-label="Overview options" title="Overview options" /></template>
+            <v-sheet class="database-overview__options" rounded="lg" elevation="2" aria-label="Overview options">
+              <span>Not yet reviewed: {{ graph.coverage.unreviewed.length }}</span>
+              <v-switch v-if="overview.definition.mainRelationships" v-model="allRelationships" density="compact" hide-details label="All connections" />
+              <small v-else-if="overview.present">Showing all connections. Review with AI to select the main ones.</small>
+              <div class="database-overview__option-actions">
+                <v-btn size="small" variant="text" aria-label="Zoom in" @click="flow?.zoomIn()">Zoom in</v-btn>
+                <v-btn size="small" variant="text" aria-label="Zoom out" @click="flow?.zoomOut()">Zoom out</v-btn>
+              </div>
+              <v-btn :disabled="savingPosition || pending" size="small" variant="text" @click="savePositions({})">Reset actor positions</v-btn>
+              <v-divider />
+              <v-btn :disabled="savingPosition" size="small" variant="text" @click="openEditor">Edit actors</v-btn>
+              <v-btn :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">{{ overview.present ? 'Review with AI' : 'Create with AI' }}</v-btn>
+              <v-btn :disabled="savingPosition" size="small" variant="text" @click="emit('reload')">Reload overview</v-btn>
+              <small>Drag a concept to move it. Drag empty space to pan; scroll to zoom.</small>
+            </v-sheet>
+          </v-menu>
+        </template>
+      </div>
+      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back database-overview__icon-button" :icon="mdiClose" aria-label="Close details" title="Back to overview" size="small" variant="text" @click="closeActor" />
     </header>
     <p v-if="overview.error" class="database-overview__warning" role="alert">{{ overview.error }} Your tables remain available under Other tables. Repair {{ DATA_OVERVIEW_PATH }} or edit the actors.</p>
     <p v-else-if="!overview.present" class="database-overview__hint">Choose the main actors with AI or Edit actors. Supporting tables can belong together across several relationships.</p>
@@ -65,27 +74,31 @@
           <small>On delete: {{ relationship.deleteAction || 'unspecified' }} · On update: {{ relationship.updateAction || 'unspecified' }}</small>
         </section>
       </aside>
-      <template v-if="activeGroup">
-        <button class="database-overview__backdrop" aria-label="Close expanded actor" @click="closeActor" />
-        <section class="database-overview__detail" :aria-label="`ERD for ${activeGroup.name}`">
-          <header class="database-overview__detail-header">
-            <strong>{{ activeGroup.name }}</strong><small>{{ actorSchema.tables.length }} tables</small>
-            <v-btn ref="closeButton" :icon="mdiClose" aria-label="Close details" title="Back to overview" size="small" variant="text" @click="closeActor" />
-          </header>
-          <aside class="database-overview__tables" aria-label="Actor tables and fields">
-            <v-text-field v-model="tableSearch" label="Find tables" clearable density="compact" hide-details />
-            <DatabaseTableList interactive-columns :schema="actorSchema" :selected-table-name="selectedTableName" :search="tableSearch" @select-table="locateTable" @select-column="locateColumn" />
-          </aside>
-          <DatabaseErd :key="activeGroup.id" ref="actorErd" :schema="actorSchema" :central-table="activeGroup.table" :layout="actorLayouts[activeGroup.id]" :draggable="false" @save-layout="actorLayouts[activeGroup.id] = $event" @inspect-table="selectedTableName = $event" @select-table="emit('select-table', $event)">
-            <template #options="{ close }">
-              <v-divider />
-              <strong>Overview concept</strong>
-              <v-btn v-if="activeGroup.table" size="small" variant="text" @click="close(); editActor(activeGroup.table)">Edit or merge actor</v-btn>
-              <v-btn v-if="selectedPhysicalTable && !overview.definition.actors.some(actor => actor.table === selectedTableName)" size="small" variant="text" @click="close(); promoteTable(selectedPhysicalTable)">Make main actor</v-btn>
-            </template>
-          </DatabaseErd>
-        </section>
-      </template>
+      <section v-if="activeGroup" class="database-overview__detail" :aria-label="`ERD for ${activeGroup.name}`">
+        <aside class="database-overview__tables" aria-label="Actor tables and fields">
+          <v-text-field v-model="tableSearch" label="Find tables" clearable density="compact" hide-details />
+          <DatabaseTableList interactive-columns :schema="actorSchema" :selected-table-name="selectedTableName" :search="tableSearch" @select-table="locateTable" @select-column="locateColumn" />
+        </aside>
+        <DatabaseErd
+          :key="activeGroup.id"
+          ref="actorErd"
+          :toolbar-target="diagramControls"
+          :schema="actorSchema"
+          :central-table="activeGroup.table"
+          :layout="actorLayouts[activeGroup.id]"
+          :draggable="false"
+          @save-layout="actorLayouts[activeGroup.id] = $event"
+          @inspect-table="selectedTableName = $event"
+          @select-table="emit('select-table', $event)"
+        >
+          <template #options="{ close }">
+            <v-divider />
+            <strong>Overview concept</strong>
+            <v-btn v-if="activeGroup.table" size="small" variant="text" @click="close(); editActor(activeGroup.table)">Edit or merge actor</v-btn>
+            <v-btn v-if="selectedPhysicalTable && !overview.definition.actors.some(actor => actor.table === selectedTableName)" size="small" variant="text" @click="close(); promoteTable(selectedPhysicalTable)">Make main actor</v-btn>
+          </template>
+        </DatabaseErd>
+      </section>
     </div>
     <v-dialog v-model="generation" max-width="560">
       <v-card title="Generate data overview">
@@ -162,6 +175,7 @@ const actorSchema = computed(() => {
     relationships: (props.schema.relationships || []).filter((relationship) => members.has(relationship.sourceTable) || members.has(relationship.referencedTable)) };
 });
 const actorErd = ref(null);
+const diagramControls = ref(null);
 const actorLayouts = ref({});
 const closeButton = ref(null);
 const tableSearch = ref("");
@@ -402,9 +416,13 @@ async function save() {
 
 <style scoped>
 .database-overview { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; color: rgb(var(--v-theme-on-surface)); }
-.database-overview__toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), .15); }
-.database-overview__title { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; margin-right: auto; }
-.database-overview__title span { font-size: 12px; }
+.database-overview__toolbar { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 64px; padding: 8px 10px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), .15); }
+.database-overview__controls { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; min-height: 40px; }
+.database-overview__controls :deep(.database-erd__toolbar) { flex: 1; min-width: 0; padding: 0; border: 0; }
+.database-overview__back { grid-column: 3; grid-row: 1; }
+.database-overview__title { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.database-overview__title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-overview__title span { flex-shrink: 0; font-size: 12px; white-space: nowrap; }
 .database-overview__options { display: grid; gap: 12px; padding: 16px; width: min(320px, calc(100vw - 24px)); max-height: 80vh; overflow: auto; }
 .database-overview__option-actions { display: flex; gap: 4px; }
 .database-overview__hint, .database-overview__warning { padding: 8px 12px; font-size: 13px; overflow-wrap: anywhere; }
@@ -421,20 +439,23 @@ async function save() {
 .database-overview__inspector p { margin: 12px 0; font-size: 13px; }
 .database-overview__relationship { border-top: 1px solid rgba(var(--v-theme-on-surface), .15); padding-top: 10px; margin-top: 10px; }
 .database-overview__editor-actions { display: flex; gap: 8px; margin: 12px 0; }
-.database-overview__map { height: 100%; }
+.database-overview__map { position: absolute; inset: 0; transition: opacity 160ms ease; }
 .database-overview__map--faded { opacity: .12; pointer-events: none; }
-.database-overview__backdrop { position: absolute; inset: 0; width: 100%; height: 100%; cursor: default; border: 0; background: transparent; }
-.database-overview__detail { position: absolute; inset: 12px; display: grid; grid-template-columns: clamp(160px, 22%, 280px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); border: 1px solid rgba(var(--v-theme-primary), .35); border-radius: 12px; background: transparent; box-shadow: 0 12px 40px #0002; overflow: hidden; }
-.database-overview__detail-header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(var(--v-theme-on-surface), .15); }
-.database-overview__detail-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.database-overview__detail-header small { margin-right: auto; }
-.database-overview__tables { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 10px; border-right: 1px solid rgba(var(--v-theme-on-surface), .15); }
+.database-overview__detail { position: absolute; inset: 0; display: grid; grid-template-columns: clamp(160px, 22%, 280px) minmax(0, 1fr); overflow: hidden; }
+.database-overview__tables { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 10px; border-right: 1px solid rgba(var(--v-theme-on-surface), .15); background: rgb(var(--v-theme-surface)); }
 .database-overview__detail > .database-erd { min-width: 0; background: transparent; }
 .database-overview__detail :deep(.database-erd__canvas) { background: transparent; }
-.database-overview__detail-header, .database-overview__tables,
-.database-overview__detail :deep(.database-erd__toolbar), .database-overview__detail :deep(.database-erd__filters) { background: rgba(var(--v-theme-surface), .96); }
+.database-overview__detail :deep(.database-erd__filters) { background: rgb(var(--v-theme-surface)); }
 @media (max-width: 700px) {
-  .database-overview__detail { inset: 12px; grid-template-columns: 140px minmax(0, 1fr); }
+  .database-overview__toolbar { grid-template-columns: minmax(0, 1fr) 48px; gap: 4px 8px; }
+  .database-overview__title { grid-column: 1; grid-row: 1; min-height: 48px; flex-wrap: wrap; align-content: center; gap: 0 8px; }
+  .database-overview__controls { grid-column: 1 / -1; grid-row: 2; min-height: 48px; }
+  .database-overview__back { grid-column: 2; }
+  .database-overview__icon-button, .database-overview__controls :deep(.database-erd__icon-button) { width: 48px; height: 48px; }
+  .database-overview__detail { grid-template-columns: 140px minmax(0, 1fr); }
   .database-overview__tables { padding: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .database-overview__map { transition: none; }
 }
 </style>

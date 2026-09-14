@@ -7,7 +7,8 @@ import { erdColumns, erdNodeHeight, erdLayoutGroups, placeErdNodes } from "../..
 import {
   createErdLayoutGraph,
   fallbackErdLayout,
-  layoutErdGroups
+  layoutErdGroups,
+  layoutErdRings
 } from "../../packages/vibe64-database-tools/src/client/workers/erdLayout.js";
 
 const nodes = [
@@ -93,5 +94,34 @@ describe("Database ERD layout", () => {
         expect(overlaps).toBe(false);
       }
     }
+  });
+});
+
+
+describe("Overview ring spacing", () => {
+  it.each([1, 4, 9, 25, 40])("keeps %i varied cards separate in compact rings", (count) => {
+    const cards = Array.from({ length: count }, (_, index) => ({ id: `actor:${index}`, count: count - index, width: 300 + index % 3 * 60, height: 144 + index % 3 * 28 }));
+    const compact = layoutErdRings(cards);
+    expect(new Set(compact.map(node => node.id)).size).toBe(count);
+    for (let i = 0; i < compact.length; i++) {
+      for (const right of compact.slice(i + 1)) {
+        const left = compact[i];
+        expect(left.x + left.width + 48 <= right.x || right.x + right.width + 48 <= left.x ||
+          left.y + left.height + 48 <= right.y || right.y + right.height + 48 <= left.y).toBe(true);
+      }
+    }
+    if (count <= 9) {
+      const width = Math.max(...compact.map(node => node.x + node.width)) - Math.min(...compact.map(node => node.x));
+      const height = Math.max(...compact.map(node => node.y + node.height)) - Math.min(...compact.map(node => node.y));
+      expect(width).toBeLessThanOrEqual(1516);
+      expect(height).toBeLessThanOrEqual(856);
+    }
+  });
+
+  it("retains authored ring membership and includes unclassified cards", () => {
+    const cards = Array.from({ length: 9 }, (_, index) => ({ id: `actor:${index}`, count: 9 - index, width: 300, height: 144 }));
+    const placed = layoutErdRings(cards, [["actor:2"], ["actor:0", "actor:1", "actor:3", "actor:4", "actor:5", "actor:6", "actor:7"]]);
+    expect(placed.find(node => node.id === "actor:2")).toMatchObject({ x: -150, y: -72 });
+    expect(placed.map(node => node.id).sort()).toEqual(cards.map(node => node.id).sort());
   });
 });

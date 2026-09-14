@@ -1,5 +1,6 @@
 const HORIZONTAL_GAP = 72;
 const VERTICAL_GAP = 112;
+const RING_GAP = 128;
 
 export const ERD_LAYOUT_OPTIONS = Object.freeze({
   "elk.algorithm": "layered",
@@ -174,19 +175,32 @@ export function layoutErdRings(nodes, authoredRings) {
     }
   }
   const positioned = [];
-  let outerRadius = 0;
+  const columnWidth = Math.max(0, ...nodes.map((node) => node.width)) + RING_GAP;
+  const rowHeight = Math.max(0, ...nodes.map((node) => node.height)) + RING_GAP;
+  let radius = 0;
   for (const [ringIndex, ring] of rings.entries()) {
-    const diameter = Math.max(...ring.map((node) => Math.hypot(node.width, node.height)));
-    // Bounding circles leave routing space around cards of different sizes.
-    const radius = ringIndex === 0 && ring.length === 1 ? 0 : Math.max(
-      outerRadius + diameter / 2 + 220,
-      ring.length > 1 ? (diameter + 220) / (2 * Math.sin(Math.PI / ring.length)) : 0
-    );
-    for (const [index, node] of ring.entries()) {
-      const angle = -Math.PI / 2 + index * Math.PI * 2 / ring.length;
-      positioned.push({ ...node, x: Math.cos(angle) * radius - node.width / 2, y: Math.sin(angle) * radius - node.height / 2 });
+    if (ringIndex === 0 && ring.length === 1) {
+      const node = ring[0];
+      positioned.push({ ...node, x: -node.width / 2, y: -node.height / 2 });
+      continue;
     }
-    outerRadius = radius + diameter / 2;
+    radius = Math.max(radius + 1, Math.ceil(ring.length / 8));
+    // Each rectangular ring has eight cells per radius, with room for wide cards.
+    const cells = [];
+    for (let x = -radius; x < radius; x++) cells.push({ x, y: -radius });
+    for (let y = -radius; y < radius; y++) cells.push({ x: radius, y });
+    for (let x = radius; x > -radius; x--) cells.push({ x, y: radius });
+    for (let y = radius; y > -radius; y--) cells.push({ x: -radius, y });
+    // Start at the top centre and spread cards evenly around the perimeter.
+    for (const [index, node] of ring.entries()) {
+      const offset = Math.floor(index * cells.length / ring.length);
+      const cell = cells[(radius + offset) % cells.length];
+      positioned.push({
+        ...node,
+        x: cell.x * columnWidth - node.width / 2,
+        y: cell.y * rowHeight - node.height / 2
+      });
+    }
   }
   return positioned;
 }
