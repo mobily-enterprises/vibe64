@@ -536,7 +536,7 @@ defineExpose({
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.studio-autopilot-prompt-textarea__field:focus-within {
+.studio-autopilot-prompt-textarea__field:not(.studio-autopilot-prompt-textarea__field--disabled):focus-within {
   border-color: rgb(var(--v-theme-primary));
   box-shadow:
     0 0 0 2px rgba(var(--v-theme-primary), 0.28),
@@ -544,7 +544,9 @@ defineExpose({
 }
 
 .studio-autopilot-prompt-textarea__field--disabled {
-  opacity: 1;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  border-color: rgba(var(--v-theme-on-surface), 0.16);
+  box-shadow: none;
 }
 
 .studio-autopilot-prompt-textarea__label {
@@ -598,14 +600,14 @@ defineExpose({
 }
 
 .studio-autopilot-prompt-textarea__input:disabled {
-  color: rgba(var(--v-theme-on-surface), 0.95);
-  cursor: default;
+  color: rgba(var(--v-theme-on-surface), 0.38);
+  cursor: not-allowed;
   opacity: 1;
-  -webkit-text-fill-color: rgba(var(--v-theme-on-surface), 0.95);
+  -webkit-text-fill-color: currentColor;
 }
 
 .studio-autopilot-prompt-textarea__input:disabled::placeholder {
-  color: rgba(var(--v-theme-on-surface), 0.9);
+  color: inherit;
   opacity: 1;
 }
 

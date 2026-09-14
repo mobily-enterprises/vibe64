@@ -322,6 +322,7 @@ const UPDATE_REPAIR_MESSAGES = {
   completion: "File repairs prepared. Vibe64 must check Update before this repair is finished.",
   nextStep: "Vibe64 will check Update after the repair.",
   handoff: [
+    "Review every listed conflict against both the saved and session versions, preserving their intended changes. Leave an already-correct file unchanged. Confirm the content is resolved before reporting completion; valid syntax alone is insufficient.",
     "Your task is to prepare the file repair, not to run or complete the rebase yourself. Return kind=complete with a factual report as soon as the edits and focused checks are ready for Vibe64 to try Update. Vibe64 then runs Update automatically and returns remaining conflicts to this same conversation.",
     "Return kind=continue only when you need an actual user decision, and ask that specific question. Do not wait for the user to click Rebase or tell them to open another repair chat.",
     "Describe progress in terms of the user's features and remaining work. Keep HEAD/index/ref bookkeeping in the technical checks, not routine progress or the final reply. Passing application tests is not proof that Update succeeded."
@@ -787,7 +788,11 @@ function useVibe64AutopilotView(props, emit, {
       }
       checkedUpdateRepairRuns.set(taskId, runId);
       reportRecovery(taskId, { status: "checking", message: "Checking Update…" });
-      const result = await updateBeforeSave();
+      const result = await updateBeforeSave({
+        reviewedConflictId: status === "completed" && task.outcomeKind === "complete"
+          ? normalizedAgentTurnText(task.runConflictId)
+          : ""
+      });
       await nextTick();
       if (task.sessionId !== sessionId.value) {
         return false;
@@ -799,9 +804,11 @@ function useVibe64AutopilotView(props, emit, {
           ? "Session updated. Your changes were preserved. Nothing was published."
           : `Update still needs attention: ${saveWorkError.value || "The operation did not confirm success."}`,
         ...(!succeeded && saveWorkCanResolveWithTemporaryAi.value ? {
+          recoveryConflictId: saveWorkFailure.value?.details?.conflictRecovery?.reviewId || "",
           retryKey: JSON.stringify([
             saveWorkFailure.value?.code,
-            saveWorkFailure.value?.details?.conflictRecovery?.canonicalCommit || "",
+            saveWorkFailure.value?.details?.conflictRecovery?.reviewId ||
+              saveWorkFailure.value?.details?.conflictRecovery?.canonicalCommit || "",
             saveWorkFailure.value?.details?.conflictPaths || saveWorkError.value
           ]),
           retryMessage: [
@@ -900,6 +907,7 @@ function useVibe64AutopilotView(props, emit, {
         policy: "workspace_write",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: action === "Update" ? "update" : "",
+        recoveryConflictId: saveWorkFailure.value?.details?.conflictRecovery?.reviewId || "",
         title: `Resolve ${action}`
       });
       return result !== false && result?.ok !== false;
@@ -941,6 +949,9 @@ function useVibe64AutopilotView(props, emit, {
         policy: "workspace_write",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: isUpdate ? "update" : "",
+        recoveryConflictId: isUpdate
+          ? saveWorkFailure.value?.details?.conflictRecovery?.reviewId || ""
+          : "",
         title
       });
       return result !== false && result?.ok !== false;
@@ -1443,7 +1454,10 @@ function useVibe64AutopilotView(props, emit, {
   ));
   watch(() => ({
     code: String(saveWorkOperation.value?.code || ""),
-    details: saveWorkOperation.value?.details || null,
+    details: saveWorkOperation.value?.details || (saveWorkOperation.value?.conflictRecovery ? {
+      conflictPaths: saveWorkOperation.value.conflictPaths,
+      conflictRecovery: saveWorkOperation.value.conflictRecovery
+    } : null),
     error: String(saveWorkOperation.value?.error || ""),
     operationId: String(saveWorkOperation.value?.operationId || ""),
     status: String(saveWorkOperation.value?.status || "").trim().toLowerCase()
@@ -1476,7 +1490,7 @@ function useVibe64AutopilotView(props, emit, {
     !saveWorkCanResolveWithTemporaryAi.value
   ));
 
-  async function updateBeforeSave() {
+  async function updateBeforeSave(input = {}) {
     const requestSequence = ++repositoryRequestSequence;
     const updatingSessionId = sessionId.value;
     const updatingProjectSlug = projectSlug.value;
@@ -1492,7 +1506,7 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkError.value = "";
     saveWorkFailure.value = null;
     try {
-      const result = await props.updateSessionWork();
+      const result = await props.updateSessionWork(input);
       if (!requestIsCurrent()) {
         return false;
       }

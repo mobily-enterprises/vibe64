@@ -1381,6 +1381,7 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
     checkpointTree: "checkpoint",
     conflictPaths: ["shared.txt"],
     conflictTree: "conflict-tree",
+    reviewId: "review-id",
     oldHead: "head",
     oldIndexTree: "index"
   };
@@ -1456,6 +1457,7 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
           throw error;
         }
         assert.deepEqual(input.conflictRecovery, conflictRecovery);
+        assert.equal(input.reviewedConflictId, conflictRecovery.reviewId);
         return {
           canonicalCommit: "canonical",
           reconciled: true,
@@ -1470,7 +1472,9 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
   assert.equal(tasks.get("update-session").status, "failed");
   assert.deepEqual(tasks.get("update-session").conflictRecovery, conflictRecovery);
 
-  const retried = await service.updateSessionWork("session-1");
+  const retried = await service.updateSessionWork("session-1", {
+    reviewedConflictId: conflictRecovery.reviewId
+  });
   assert.equal(retried.ok, true);
   assert.equal(retried.operation.status, "ready");
   assert.equal(retried.operation.conflictRecovery, null);

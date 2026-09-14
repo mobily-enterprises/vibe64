@@ -888,6 +888,39 @@ describe("useVibe64TemporaryAi", () => {
     });
   });
 
+  it("binds each repair completion to the conflict that turn reviewed", async () => {
+    const finished = vi.fn();
+    const { task, temporary } = await temporaryAiWithFinishedObserver(finished, {
+      policy: "workspace_write", recoveryOperation: "update", recoveryConflictId: "conflict-1"
+    });
+    mocks.responses.push(
+      { ok: true, conversationId: "conversation-1" },
+      { ok: true, runId: "turn-1", status: "inProgress" },
+      { ok: true, status: "completed", outcome: { kind: "complete" } }
+    );
+    await temporary.send(task.id);
+    await flushPromises();
+    expect(finished).toHaveBeenLastCalledWith(expect.objectContaining({
+      outcomeKind: "complete", runConflictId: "conflict-1"
+    }));
+    temporary.reportRecoveryOutcome(task.id, {
+      status: "failed", message: "A newer saved version needs review.", recoveryConflictId: "conflict-2"
+    });
+    expect(temporary.activeTask.value).toMatchObject({
+      recoveryConflictId: "conflict-2", runConflictId: "conflict-1"
+    });
+    mocks.responses.push(
+      { ok: true, runId: "turn-2", status: "inProgress" },
+      { ok: true, status: "completed", outcome: { kind: "complete" } }
+    );
+    temporary.updateDraft(task.id, "Review the newer conflict.");
+    await temporary.send(task.id);
+    await flushPromises();
+    expect(finished).toHaveBeenLastCalledWith(expect.objectContaining({
+      outcomeKind: "complete", runConflictId: "conflict-2"
+    }));
+  });
+
   it("reports a completed task exactly once for global user feedback", async () => {
     const onTaskFinished = vi.fn();
     mocks.responses.push(

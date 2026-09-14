@@ -399,6 +399,10 @@ const sessionSaveInputValidator = patchSchema({
 const sessionUpdateInputValidator = patchSchema({
   ...optionalOrigin,
   ...optionalUser,
+  reviewedConflictId: {
+    type: "string",
+    required: false
+  },
   force: {
     type: "boolean",
     required: false

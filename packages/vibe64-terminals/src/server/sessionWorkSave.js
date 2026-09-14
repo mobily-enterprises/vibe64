@@ -1129,7 +1129,7 @@ function normalizedConflictRecovery(value = {}) {
   };
   return Object.values(recovery).some((entry) => Array.isArray(entry) ? entry.length === 0 : !entry)
     ? null
-    : recovery;
+    : { ...recovery, reviewId: text(value.reviewId) || crypto.randomUUID() };
 }
 
 function conflictMessage(conflictPaths = [], reason = "") {
@@ -1145,13 +1145,13 @@ function conflictMessage(conflictPaths = [], reason = "") {
   return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Open Temporary AI, resolve the listed ${count === 1 ? "file" : "files"}, then retry Update this session (rebase).`;
 }
 
-function conflictRecoveryError(recovery, reason = "") {
+function conflictRecoveryError(recovery, reason = "", baseline = recovery) {
   return saveError(
     conflictMessage(recovery.conflictPaths, reason),
     "vibe64_session_update_conflict",
     {
       conflictPaths: recovery.conflictPaths,
-      conflictRecovery: recovery
+      conflictRecovery: baseline
     }
   );
 }
@@ -1162,6 +1162,7 @@ async function resolvedConflictTree(runCommand, context, {
   currentRecovery,
   derivedArtifactPaths = [],
   previousRecovery,
+  reviewedConflictId,
   project
 }) {
   const previous = normalizedConflictRecovery(previousRecovery);
@@ -1176,23 +1177,26 @@ async function resolvedConflictTree(runCommand, context, {
     "oldIndexTree"
   ].every((key) => previous[key] === currentRecovery[key]) &&
     currentRecovery.conflictPaths.every((entry) => originalConflictPaths.has(entry));
-  if (!stable) {
+  if (!stable || (reviewedConflictId && reviewedConflictId !== previous.reviewId)) {
     throw conflictRecoveryError(currentRecovery);
   }
-  const derivedPaths = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
-  const changedAfterFailure = (await changedPathsBetween(
-    runCommand,
-    context,
-    previous.checkpointTree,
-    checkpointTree,
-    { commandOptions, project }
-  )).filter((entry) => !derivedPaths.has(entry));
-  const changedPaths = new Set(changedAfterFailure);
-  if (!currentRecovery.conflictPaths.every((entry) => changedPaths.has(entry))) {
-    throw conflictRecoveryError(currentRecovery, "unchanged");
-  }
-  if (changedAfterFailure.some((entry) => !originalConflictPaths.has(entry))) {
-    throw conflictRecoveryError(currentRecovery, "outside");
+  // A completed repair may deliberately retain an already-correct file.
+  if (!reviewedConflictId) {
+    const derivedPaths = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
+    const changedAfterFailure = (await changedPathsBetween(
+      runCommand,
+      context,
+      previous.checkpointTree,
+      checkpointTree,
+      { commandOptions, project }
+    )).filter((entry) => !derivedPaths.has(entry));
+    const changedPaths = new Set(changedAfterFailure);
+    if (!currentRecovery.conflictPaths.every((entry) => changedPaths.has(entry))) {
+      throw conflictRecoveryError(currentRecovery, "unchanged", previous);
+    }
+    if (changedAfterFailure.some((entry) => !originalConflictPaths.has(entry))) {
+      throw conflictRecoveryError(currentRecovery, "outside", previous);
+    }
   }
   return writeGitWorktreeTree({
     baseCommit: currentRecovery.conflictTree,
@@ -1754,6 +1758,7 @@ async function updateSessionWork({
   beforeSourceChange = async () => {},
   commandOptions = {},
   conflictRecovery = null,
+  reviewedConflictId = "",
   derivedArtifactPaths = [],
   identity = {},
   onProgress = async () => null,
@@ -1943,7 +1948,8 @@ async function updateSessionWork({
           conflictPaths: mergeResult.conflictPaths,
           conflictTree: mergeResult.conflictTree,
           oldHead,
-          oldIndexTree
+          oldIndexTree,
+          reviewId: crypto.randomUUID()
         }
       : null;
     const mergedSourceTree = currentRecovery
@@ -1953,6 +1959,7 @@ async function updateSessionWork({
           currentRecovery,
           derivedArtifactPaths,
           previousRecovery: conflictRecovery,
+          reviewedConflictId,
           project
       })
       : mergeResult.mergedTree;

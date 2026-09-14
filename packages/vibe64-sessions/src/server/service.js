@@ -1430,6 +1430,7 @@ function createService({
         try {
           const result = await terminals.updateSessionWork(sessionId, {
             conflictRecovery,
+            reviewedConflictId: text(input.reviewedConflictId),
             onRepositoryWriteAcquired: async () => {
               operationStarted = true;
               activeUpdateOperations.set(sessionId, operationId);

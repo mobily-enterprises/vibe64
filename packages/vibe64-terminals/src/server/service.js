@@ -1824,6 +1824,7 @@ function createService({
           beforeSourceChange: () => invalidateWorkspaceSetup(context),
           commandOptions: execution.commandOptions,
           conflictRecovery: input.conflictRecovery,
+          reviewedConflictId: input.reviewedConflictId,
           identity: execution.identity,
           onProgress: input.onProgress,
           operationId: input.operationId,

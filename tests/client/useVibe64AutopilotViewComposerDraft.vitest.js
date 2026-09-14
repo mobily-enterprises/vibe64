@@ -1050,12 +1050,14 @@ describe("useVibe64AutopilotView direct chat", () => {
     const report = vi.fn();
     const task = {
       id: "update-repair", runId: "repair-1", sessionId: "session-1",
-      recoveryOperation: "update", status: "completed", outcomeKind: "complete"
+      recoveryOperation: "update", status: "completed", outcomeKind: "complete",
+      runConflictId: "reviewed-conflict", recoveryConflictId: "newer-conflict"
     };
     const checking = view.handleTemporaryAiTaskFinished(task, report);
     expect(report).toHaveBeenLastCalledWith(task.id, { status: "checking", message: "Checking Update…" });
     await expect(view.handleTemporaryAiTaskFinished(task, report)).resolves.toBe(false);
     expect(updateSessionWork).toHaveBeenCalledTimes(1);
+    expect(updateSessionWork).toHaveBeenLastCalledWith({ reviewedConflictId: "reviewed-conflict" });
     pending.reject(new Error("Document still conflicts."));
     await expect(checking).resolves.toBe("repository-update");
     expect(report).toHaveBeenLastCalledWith(task.id, {
@@ -1088,9 +1090,10 @@ describe("useVibe64AutopilotView direct chat", () => {
     const report = vi.fn();
     const task = {
       id: "repair", runId: "turn", sessionId: "session-1", recoveryOperation: "update",
-      status: "completed", outcomeKind: "continue"
+      status: "completed", outcomeKind: "continue", runConflictId: "unresolved-conflict"
     };
     const checking = view.handleTemporaryAiTaskFinished(task, report, { force: true });
+    expect(updateSessionWork).toHaveBeenLastCalledWith({ reviewedConflictId: "" });
     await expect(view.handleTemporaryAiTaskFinished(task, report, { force: true })).resolves.toBe(false);
     expect(updateSessionWork).toHaveBeenCalledTimes(1);
     pending.resolve({ ok: true, status: "updated" });
@@ -1230,6 +1233,10 @@ describe("useVibe64AutopilotView direct chat", () => {
       workState: {
         [operationKey]: {
           code,
+          ...(code === "vibe64_session_update_conflict" ? {
+            conflictPaths: ["data-overview.json"],
+            conflictRecovery: { reviewId: "persisted-conflict" }
+          } : {}),
           error: diagnostic,
           operationId: `operation-${code}`,
           status: "failed"
@@ -1245,6 +1252,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       dedupeKey: `repository-recovery|session-1|${code}|${diagnostic}`,
       message: expect.stringContaining(diagnostic),
       policy: "workspace_write",
+      recoveryConflictId: code === "vibe64_session_update_conflict" ? "persisted-conflict" : "",
       title: `Resolve ${action}`
     }));
     const prompt = requestTemporaryAi.mock.calls[0][0].message;

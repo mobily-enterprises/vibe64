@@ -113,6 +113,7 @@ function useVibe64TemporaryAi({
         id: task.id,
         outcomeKind: temporaryAiText(task.outcomeKind),
         recoveryOperation: temporaryAiText(task.recoveryOperation),
+        runConflictId: temporaryAiText(task.runConflictId),
         runId: task.runId,
         sessionId: task.sessionId,
         status: temporaryAiText(task.status),
@@ -133,6 +134,7 @@ function useVibe64TemporaryAi({
     policy = "read",
     recoveryNotice = "",
     recoveryOperation = "",
+    recoveryConflictId = "",
     title = ""
   } = {}) {
     const number = nextTaskNumber;
@@ -160,10 +162,12 @@ function useVibe64TemporaryAi({
       recoveryOutcomeMessage: "",
       recoveryNotice: temporaryAiText(recoveryNotice),
       recoveryOperation: recoveryOperation === "update" ? "update" : "",
+      recoveryConflictId: temporaryAiText(recoveryConflictId),
       recoveryContext: "",
       recoveryRetryKeys: [],
       recoveryAutoPaused: false,
       runId: "",
+      runConflictId: "",
       sessionId: currentSessionId(),
       status: "ready",
       title: temporaryAiText(title) || `Temporary ${number}`
@@ -199,7 +203,12 @@ function useVibe64TemporaryAi({
         return { ok: true, reused: true, started: false, taskId: repair.id };
       }
       if (!repair.pendingMessageId) {
-        updateTask(repair.id, { draft: message, displayMessage: "Continue repairing this Update.", recoveryRetryKeys: [] });
+        updateTask(repair.id, {
+          draft: message,
+          displayMessage: "Continue repairing this Update.",
+          recoveryConflictId: temporaryAiText(input.recoveryConflictId),
+          recoveryRetryKeys: []
+        });
       }
       const started = await send(repair.id);
       return { ok: started, reused: true, started, taskId: repair.id };
@@ -290,7 +299,8 @@ function useVibe64TemporaryAi({
     message = "",
     status = "",
     retryMessage = "",
-    retryKey = ""
+    retryKey = "",
+    recoveryConflictId = ""
   } = {}) {
     const outcome = temporaryAiText(status);
     const task = tasks.value.find((task) => task.id === taskId);
@@ -301,7 +311,10 @@ function useVibe64TemporaryAi({
       recoveryOutcome: outcome,
       recoveryAutoPaused: false,
       recoveryOutcomeMessage: temporaryAiText(message),
-      ...(outcome !== "checking" ? { recoveryContext: outcome === "failed" ? retryMessage || message : message } : {})
+      ...(outcome !== "checking" ? {
+        recoveryContext: outcome === "failed" ? retryMessage || message : message,
+        recoveryConflictId: temporaryAiText(recoveryConflictId)
+      } : {})
     });
     if (outcome === "failed" && task.recoveryOperation === "update" && retryMessage && retryKey &&
         !readRefOrGetterValue(operationBusy) && !stoppingTaskIds.has(taskId) &&
@@ -429,6 +442,8 @@ function useVibe64TemporaryAi({
       error: "",
       pendingMessageId: messageId,
       outcomeKind: "",
+      // Keep this turn's review separate from diagnostics returned by a later Update.
+      runConflictId: task.recoveryConflictId,
       recoveryOutcome: task.recoveryOutcome === "failed" ? "failed" : "",
       recoveryOutcomeMessage: task.recoveryOutcome === "failed" ? task.recoveryOutcomeMessage : "",
       status: "starting"

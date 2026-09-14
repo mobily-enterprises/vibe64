@@ -937,6 +937,125 @@ test("Update leaves HEAD, index, and worktree untouched when newer work conflict
   }
 });
 
+test("Update remembers repairs across partially resolved retries", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-partial-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    await writeFile(path.join(fixture.seed, "second.txt"), "initial\n");
+    await git(fixture.seed, ["add", "."]);
+    await git(fixture.seed, ["commit", "-m", "second baseline"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    fixture.baseCommit = await git(fixture.seed, ["rev-parse", "HEAD"]);
+    const session = await sessionForRemote(root, fixture);
+    for (const filename of ["shared.txt", "second.txt"]) {
+      await writeFile(path.join(fixture.seed, filename), "remote\n");
+      await writeFile(path.join(session.sourcePath, filename), "local\n");
+    }
+    await git(fixture.seed, ["add", "."]);
+    await git(fixture.seed, ["commit", "-m", "saved changes"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+    let recovery;
+    await assert.rejects(updateSessionWork(input), (error) => {
+      recovery = error.details.conflictRecovery;
+      return error.code === "vibe64_session_update_conflict";
+    });
+    const baseline = recovery.checkpointTree;
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "remote\nlocal\n");
+    await assert.rejects(updateSessionWork({ ...input, conflictRecovery: recovery }), (error) => {
+      assert.match(error.message, /not changed/u);
+      recovery = error.details.conflictRecovery;
+      assert.equal(recovery.checkpointTree, baseline);
+      return true;
+    });
+    await writeFile(path.join(session.sourcePath, "second.txt"), "remote\nlocal\n");
+    assert.equal((await updateSessionWork({ ...input, conflictRecovery: recovery })).status, "updated");
+    for (const filename of ["shared.txt", "second.txt"]) {
+      assert.equal(await readFile(path.join(session.sourcePath, filename), "utf8"), "remote\nlocal\n");
+    }
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+for (const scenario of ["reviewed", "legacy-review", "newer-canonical", "newer-commit-same-files", "new-conflict"]) {
+  test(`Update accepts a reviewed document without artificial edits: ${scenario}`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-reviewed-"));
+    try {
+      const fixture = await createRemoteFixture(root);
+      await writeFile(path.join(fixture.seed, "data-overview.json"), '{"reference":"old","position":0}\n');
+      await git(fixture.seed, ["add", "."]);
+      await git(fixture.seed, ["commit", "-m", "overview baseline"]);
+      await git(fixture.seed, ["push", "origin", "main"]);
+      fixture.baseCommit = await git(fixture.seed, ["rev-parse", "HEAD"]);
+      const session = await sessionForRemote(root, fixture);
+      await writeFile(path.join(fixture.seed, "data-overview.json"), '{"reference":"portable","position":0}\n');
+      await writeFile(path.join(fixture.seed, "shared.txt"), "remote\n");
+      await git(fixture.seed, ["add", "."]);
+      await git(fixture.seed, ["commit", "-m", "portable references"]);
+      await git(fixture.seed, ["push", "origin", "main"]);
+      const prepared = '{"reference":"portable","position":42}\n';
+      await writeFile(path.join(session.sourcePath, "data-overview.json"), prepared);
+      const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+      let conflictRecovery;
+      await assert.rejects(updateSessionWork(input), (error) => {
+        conflictRecovery = error.details.conflictRecovery;
+        assert.deepEqual(error.details.conflictPaths, ["data-overview.json"]);
+        return error.code === "vibe64_session_update_conflict";
+      });
+      if (scenario === "legacy-review") delete conflictRecovery.reviewId;
+      await assert.rejects(updateSessionWork({ ...input, conflictRecovery }), (error) => {
+        assert.match(error.message, /not changed/u);
+        conflictRecovery = error.details.conflictRecovery;
+        return true;
+      });
+      const reviewedConflictId = conflictRecovery.reviewId;
+      assert.ok(reviewedConflictId);
+      await writeFile(path.join(session.sourcePath, "ongoing-work.txt"), "Keep newer work.\n");
+      if (scenario === "newer-canonical") {
+        await writeFile(path.join(fixture.seed, "later.txt"), "New saved work.\n");
+        await git(fixture.seed, ["add", "."]);
+        await git(fixture.seed, ["commit", "-m", "newer saved version"]);
+        await git(fixture.seed, ["push", "origin", "main"]);
+      }
+      if (scenario === "newer-commit-same-files") {
+        await git(fixture.seed, ["commit", "--allow-empty", "-m", "new saved version, same files"]);
+        await git(fixture.seed, ["push", "origin", "main"]);
+      }
+      if (scenario === "new-conflict") {
+        await writeFile(path.join(session.sourcePath, "shared.txt"), "local\n");
+      }
+      if (!["reviewed", "legacy-review"].includes(scenario)) {
+        const head = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+        const index = await git(session.sourcePath, ["write-tree"]);
+        const status = await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]);
+        await assert.rejects(updateSessionWork({ ...input, conflictRecovery, reviewedConflictId }), (error) => {
+          assert.equal(error.code, "vibe64_session_update_conflict");
+          conflictRecovery = error.details.conflictRecovery;
+          assert.notEqual(conflictRecovery.reviewId, reviewedConflictId);
+          return true;
+        });
+        await assert.rejects(updateSessionWork({ ...input, conflictRecovery, reviewedConflictId }), {
+          code: "vibe64_session_update_conflict"
+        });
+        assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), head);
+        assert.equal(await git(session.sourcePath, ["write-tree"]), index);
+        assert.equal(await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]), status);
+        assert.equal(await readFile(path.join(session.sourcePath, "data-overview.json"), "utf8"), prepared);
+        return;
+      }
+      const result = await updateSessionWork({ ...input, conflictRecovery, reviewedConflictId });
+      assert.equal(result.status, "updated");
+      assert.equal(await readFile(path.join(session.sourcePath, "data-overview.json"), "utf8"), prepared);
+      assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "remote\n");
+      assert.equal(await readFile(path.join(session.sourcePath, "ongoing-work.txt"), "utf8"), "Keep newer work.\n");
+      assert.equal(await git(fixture.seed, ["rev-parse", "HEAD"]), result.canonicalCommit);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+}
+
 for (const scenario of ["repaired", "unreviewed", "unrelated", "derived", "upstream"]) {
   test(`Update retains recovery when the conflict list shrinks: ${scenario}`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-shrinking-"));

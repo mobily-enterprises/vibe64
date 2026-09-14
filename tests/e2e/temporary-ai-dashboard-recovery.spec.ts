@@ -105,10 +105,12 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   test(`${entry} Update checks the existing repair and continues in the same chat at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     const updates: Array<ReturnType<typeof Promise.withResolvers<Record<string, unknown>>>> = [];
+    const updateInputs: Record<string, unknown>[] = [];
     const captured = await mockRepositoryRecovery(page, {
       code: "vibe64_session_update_conflict", diagnostic: "Two files need review.",
       outcome: (turn) => turn === 1 ? "continue" : "complete",
-      async applyUpdate() {
+      async applyUpdate(input) {
+        updateInputs.push(input);
         const pending = Promise.withResolvers<Record<string, unknown>>();
         updates.push(pending);
         return pending.promise;
@@ -128,6 +130,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         await checkUpdate.dblclick();
       }
       await expect.poll(() => updates.length).toBe(1);
+      expect(updateInputs[0].reviewedConflictId).toBe("");
       await expect(checkUpdate).toBeDisabled();
       await expect(workspace.getByRole("button", { name: "Close Resolve repository update", exact: true })).toBeDisabled();
       await expect(workspace.getByLabel("Message temporary AI")).toBeDisabled();
@@ -163,12 +166,15 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await page.screenshot({ path: testInfo.outputPath("checking-update-mobile.png") });
       updates[0].resolve({
         ok: false, code: "vibe64_session_update_conflict", error: "Remaining conflict: messages.vue",
-        details: { conflictPaths: ["messages.vue"], conflictRecovery: { canonicalCommit: "canonical-commit" } }
+        details: { conflictPaths: ["messages.vue"], conflictRecovery: {
+          canonicalCommit: "canonical-commit", reviewId: "reviewed-conflict"
+        } }
       });
       await expect.poll(() => captured.temporaryTurns.length).toBe(2);
       expect(captured.temporaryCreates).toHaveLength(1);
       expect(captured.temporaryTurns[1].message).toContain("Remaining conflict: messages.vue");
       await expect.poll(() => updates.length).toBe(2);
+      expect(updateInputs[1].reviewedConflictId).toBe("reviewed-conflict");
       updates[1].resolve({ ok: true, status: "updated" });
       await expect(workspace).toContainText("Session updated");
       await expect(checkUpdate).toHaveCount(0);
@@ -416,7 +422,7 @@ async function mockRepositoryRecovery(page: Page, {
   code: typeof RECOVERY_CODES[number];
   diagnostic: string;
   outcome?: (turn: number) => string;
-  applyUpdate?: () => Promise<Record<string, unknown>>;
+  applyUpdate?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }) {
   const mainChatMessages: Record<string, unknown>[] = [];
   const temporaryCreates: Record<string, unknown>[] = [];
@@ -461,7 +467,7 @@ async function mockRepositoryRecovery(page: Page, {
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/updates/apply")) {
-      const result = await applyUpdate();
+      const result = await applyUpdate(requestBodyWithoutOrigin(request));
       updated = result.ok === true;
       await fulfillJson(route, result);
       return;
