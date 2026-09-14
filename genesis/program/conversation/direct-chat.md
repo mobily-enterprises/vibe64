@@ -246,6 +246,11 @@ one cached request, including their connected-provider filter. Explicit refresh
 reloads that shared query once; a provider search or later page remains a
 separate request. Applying a selection still uses the provider's current
 catalogue validation.
+Codex chat model discovery reuses a successful catalogue for up to thirty
+seconds while the account, authentication generation, and runtime context stay
+the same. Account transitions discard it. A temporary probe must finish verified
+runtime cleanup before its catalogue can be reused; an existing shared assistant
+process stays running.
 
 Assistant verification observes an established provider connection without
 taking the session's agent-write lock or rebuilding its command environment.

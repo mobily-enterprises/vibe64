@@ -629,7 +629,8 @@ function createSessionPromptHintsService({
   }
 
   async function interruptJob(job) {
-    if (!job.cancelRequested || !job.threadId || !job.turnId || job.interruptPromise) {
+    if (!job.cancelRequested || job.turnFinished || !job.threadId || !job.turnId ||
+        job.retiredThreadId === job.threadId || job.interruptPromise) {
       return job.interruptPromise || null;
     }
     job.interruptPromise = Promise.resolve(interruptAgentTurn(job.sessionId, {
@@ -644,9 +645,7 @@ function createSessionPromptHintsService({
       }
       return result;
     }).catch((error) => {
-      reportDiagnostic("vibe64_prompt_hints_interrupt_failed", error, {
-        sessionId: job.sessionId
-      });
+      job.interruptError = error;
       return null;
     });
     return job.interruptPromise;
@@ -681,6 +680,10 @@ function createSessionPromptHintsService({
         prompt,
         promptLabel: "Vibe64 prompt hints"
       }, agentOptions(job.context, job.vibe64User, (event = {}) => {
+        if (event.type === "thread-retired") {
+          job.retiredThreadId = normalizeText(event.threadId);
+          return;
+        }
         if (normalizeText(event.threadId)) {
           job.threadId = normalizeText(event.threadId);
         }
@@ -696,17 +699,20 @@ function createSessionPromptHintsService({
     } catch (error) {
       runError = error;
     } finally {
+      job.turnFinished = true;
       if (job.threadId) {
         try {
           await job.interruptPromise;
-          const cleanup = await deleteAgentThread(job.sessionId, {
-            executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
-            threadId: job.threadId
-          }, agentOptions(job.context, job.vibe64User));
-          if (cleanup?.ok !== true) {
-            cleanupError = new Error(cleanup.error || "Prompt hint thread cleanup was not confirmed.");
-            cleanupError.code = normalizeText(cleanup.code);
-            cleanupError.details = isRecord(cleanup.details) ? cleanup.details : null;
+          if (job.retiredThreadId !== job.threadId) {
+            const cleanup = await deleteAgentThread(job.sessionId, {
+              executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
+              threadId: job.threadId
+            }, agentOptions(job.context, job.vibe64User));
+            if (cleanup?.ok !== true) {
+              cleanupError = new Error(cleanup?.error || "Prompt hint thread cleanup was not confirmed.");
+              cleanupError.code = normalizeText(cleanup?.code);
+              cleanupError.details = isRecord(cleanup?.details) ? cleanup.details : null;
+            }
           }
         } catch (error) {
           cleanupError = error;
@@ -716,6 +722,11 @@ function createSessionPromptHintsService({
       }
     }
 
+    if (job.interruptError && job.retiredThreadId !== job.threadId) {
+      reportDiagnostic("vibe64_prompt_hints_interrupt_failed", job.interruptError, {
+        sessionId: job.sessionId
+      });
+    }
     if (cleanupError) {
       reportDiagnostic("vibe64_prompt_hints_cleanup_failed", cleanupError, {
         ...(isRecord(cleanupError.details) ? cleanupError.details : {}),
@@ -812,14 +823,17 @@ function createSessionPromptHintsService({
         cancelRequested: false,
         context,
         identity,
+        interruptError: null,
         interruptPromise: null,
         key,
         ownerKey: request.ownerKey,
         projectScope: request.projectScope,
+        retiredThreadId: "",
         sessionId,
         snapshot,
         subscribers: new Set(),
         threadId: "",
+        turnFinished: false,
         turnId: "",
         vibe64User
       };

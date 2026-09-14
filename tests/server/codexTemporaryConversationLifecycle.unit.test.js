@@ -63,6 +63,7 @@ import {
   sessionRenewalHandoverHash
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
+import { createSessionPromptHintsService } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
 
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 const TEST_AUTH_STATE_SIGNATURE = `v1:${"b".repeat(24)}`;
@@ -344,12 +345,28 @@ test("chat model discovery stops its temporary service on success and failure", 
   await withConversationController(async ({ captures, controller }) => {
     assert.equal((await controller.modelCatalog()).data[0].model, "gpt-5.6-luna");
     assert.equal(captures.stopRuntimes, 1);
+    await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "logout" });
     captures.failModelLists = 1;
     await assert.rejects(controller.modelCatalog(), /model catalog temporarily unavailable/u);
     assert.equal(captures.stopRuntimes, 2);
     captures.stopRuntimeResult = { stopped: false };
     await assert.rejects(controller.modelCatalog(), /process exit could not be verified/u);
     captures.stopRuntimeResult = { stopped: true };
+  });
+});
+
+test("chat model catalog expires and never caches unverified runtime cleanup", async (t) => {
+  await withConversationController(async ({ captures, controller }) => {
+    const now = Date.now();
+    await controller.modelCatalog();
+    t.mock.method(Date, "now", () => now + 31_000);
+    captures.stopRuntimeResult = { stopped: false };
+    await assert.rejects(controller.modelCatalog(), /process exit could not be verified/u);
+    captures.stopRuntimeResult = { stopped: true };
+    await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "auth-session-status" });
+    const stopped = captures.stopRuntimes;
+    await controller.modelCatalog();
+    assert.equal(captures.stopRuntimes, stopped + 1);
   });
 });
 
@@ -361,6 +378,95 @@ test("chat model discovery leaves an already running shared process alive", asyn
     assert.equal(captures.closes, 1);
   });
 });
+
+test("repeated chat model discovery uses one short-lived runtime per auth generation", async () => {
+  await withConversationController(async ({ captures, controller }) => {
+    const catalogs = await Promise.all([controller.modelCatalog(), controller.modelCatalog()]);
+    assert.deepEqual(catalogs[0], catalogs[1]);
+    assert.equal(captures.stopRuntimes, 1);
+    await controller.modelCatalog();
+    assert.equal(captures.stopRuntimes, 1);
+
+    captures.runtimeInfo.authStateSignature = "v1:changed-login";
+    captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
+    await controller.modelCatalog();
+    assert.equal(captures.stopRuntimes, 2, "a new login must read its own live catalog");
+  });
+});
+
+for (const outcome of ["cancelled", "provider failure", "account switch", "cleanup retry", "cleanup failure"]) {
+  test(`prompt hints acknowledge automatic thread retirement after ${outcome}`, async () => {
+    await withConversationController(async ({ captures, controller, projectService, projectRuntimeRoot, session, subscribers }) => {
+      const profile = sourceExplanationEconomyProfile({ workloadId: "prompt_hint" });
+      const diagnostics = [];
+      const runtime = {
+        ...projectService.createRuntime(),
+        async getSession() {
+          return { ...session, sourceReady: true, status: "active" };
+        },
+        async readConversationLogPage() {
+          return {
+            conversationLog: [{ turnId: "1", user: { text: "Explain the pickup reminder." } }],
+            pagination: { newestTurnId: "1", totalTurnCount: 1 }
+          };
+        }
+      };
+      const hints = createSessionPromptHintsService({
+        deleteAgentThread: controller.deleteDetachedChatThread,
+        describeProvider: (options) => controller.describeProvider(session.sessionId, options),
+        diagnostic: (event) => diagnostics.push(event),
+        interruptAgentTurn: controller.interruptDetachedChatTurn,
+        projectService: { ...projectService, createRuntime: () => runtime },
+        readBlueprintText: async () => "A dog grooming booking application.",
+        requireAssistantAccess: async () => ({ ok: true }),
+        resolveExecutionProfile: async () => profile,
+        runAgentTurn: controller.streamDetachedChatTurn
+      });
+      const input = { operationId: "hint:handover", originId: "tab:1", vibe64User: { username: "test" } };
+      const pending = hints.generateSessionPromptHints(session.sessionId, input);
+      await waitForCapturedTurns(captures, 1);
+      await waitForEconomyLedgerLifecycle(projectRuntimeRoot, CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE);
+      if (outcome === "cleanup failure") captures.failDeletes = 100;
+      if (outcome === "cleanup retry") {
+        captures.failDeletes = 1;
+        const cleanup = await controller.deleteDetachedChatThread(session.sessionId, {
+          executionProfile: profile,
+          threadId: "conversation-1"
+        });
+        assert.equal(cleanup.ok, false);
+        await controller.describeProvider(session.sessionId);
+      }
+      if (outcome === "account switch") {
+        const invalidated = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "logout" });
+        assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
+        captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
+      }
+      if (outcome === "cancelled") {
+        await hints.cancelSessionPromptHints(session.sessionId, input);
+        await waitForSessionValue(() => captures.interrupts.length, (count) => count === 1, "helper interruption");
+      }
+      emitCodexNotification(subscribers, turnCompleted({ status: outcome === "provider failure" ? "failed" : "interrupted" }));
+      const result = await pending;
+      assert.equal(result.status, outcome === "cancelled" ? "cancelled" : "unavailable");
+      if (outcome === "cleanup failure") {
+        assert.ok(diagnostics.some(({ code }) => code === "vibe64_prompt_hints_cleanup_failed"));
+        const { records } = await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll();
+        assert.equal(records.length, 1);
+        assert.equal(records[0].lifecycle, CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED);
+        captures.failDeletes = 0;
+        assert.equal((await controller.deleteDetachedChatThread(session.sessionId, {
+          threadId: records[0].threadId, executionProfile: profile
+        })).ok, true);
+        return;
+      }
+      assert.deepEqual(diagnostics.filter(({ code }) => code !== "vibe64_prompt_hints_generation_failed"), []);
+      assert.deepEqual(captures.deletes, outcome === "cleanup retry"
+        ? ["conversation-1", "conversation-1"]
+        : ["conversation-1"]);
+      assert.deepEqual((await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
+    });
+  });
+}
 
 test("economy model discovery uses one live provider catalog per connection generation", async () => {
   await withConversationController(async ({ calls, controller }) => {

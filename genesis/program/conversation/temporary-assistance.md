@@ -184,6 +184,10 @@ cleanup failures; unverified records remain for retry on the next reconciliation
 Each reconciliation reports one result per session: any remaining failure keeps
 the cleanup status failed, even when other records were successfully retired.
 Prompt-hint cancellation awaits interruption before attempting thread deletion.
+The runtime owner notifies the waiting task only after verified retirement and
+durable ownership removal. The task uses that acknowledgement for its exact
+thread instead of interrupting or deleting it again. Failed retirement retains
+ownership and remains reportable and retryable through the same runtime owner.
 
 Database Copilot begins with only bounded database identity and object counts.
 Its temporary helper can search the refreshed schema, list object names and

@@ -1860,3 +1860,63 @@ test("prompt hint cleanup waits for pending interruption before deleting the thr
   await Promise.all([generation, cancellation]);
   assert.equal(fixture.calls.delete.length, 1);
 });
+
+test("cancelling a completed hint while deletion is pending does not interrupt its finished turn", async () => {
+  const deleting = deferred();
+  const finishDelete = deferred();
+  const fixture = createFixture({
+    deleteResult() {
+      deleting.resolve();
+      return finishDelete.promise;
+    }
+  });
+  const input = generateInput("hint:cancel-after-completion");
+  const pending = fixture.service.generateSessionPromptHints("session-1", input);
+  await deleting.promise;
+  await fixture.service.cancelSessionPromptHints("session-1", input);
+  finishDelete.resolve({ ok: true });
+  assert.equal((await pending).status, "cancelled");
+  assert.equal(fixture.calls.interrupt.length, 0);
+  assert.equal(fixture.calls.delete.length, 1);
+});
+
+test("verified retirement supersedes a delayed interruption error for that exact helper", async () => {
+  const started = deferred();
+  const finishTurn = deferred();
+  const finishInterrupt = deferred();
+  const fixture = createFixture({
+    interruptResult: () => finishInterrupt.promise,
+    async runAgentTurn({ options }) {
+      options.onEvent({ threadId: "thread-retiring", turnId: "turn-retiring", type: "turn" });
+      started.resolve();
+      await finishTurn.promise;
+      options.onEvent({ threadId: "thread-retiring", type: "thread-retired" });
+      return { ok: false, code: "vibe64_agent_turn_cancelled" };
+    }
+  });
+  const input = generateInput("hint:retirement-race");
+  const pending = fixture.service.generateSessionPromptHints("session-1", input);
+  await started.promise;
+  await fixture.service.cancelSessionPromptHints("session-1", input);
+  finishTurn.resolve();
+  finishInterrupt.resolve({ ok: false, error: "Thread no longer exists." });
+  assert.equal((await pending).status, "cancelled");
+  assert.equal(fixture.calls.delete.length, 0);
+  assert.deepEqual(fixture.calls.diagnostic, []);
+});
+
+test("another helper's retirement does not acknowledge this hint's failed cleanup", async () => {
+  const fixture = createFixture({
+    deleteResult: { ok: false, error: "Deletion unconfirmed." },
+    runAgentTurn({ options }) {
+      options.onEvent({ threadId: "thread-owned", turnId: "turn-owned", type: "turn" });
+      options.onEvent({ threadId: "thread-other", type: "thread-retired" });
+      return readyAgentResult({ threadId: "thread-owned", turnId: "turn-owned" });
+    }
+  });
+  const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:exact-retirement"));
+  assert.equal(result.status, "unavailable");
+  assert.equal(fixture.calls.delete.length, 1);
+  assert.equal(fixture.calls.delete[0].input.threadId, "thread-owned");
+  assert.ok(fixture.calls.diagnostic.some(({ code }) => code === "vibe64_prompt_hints_cleanup_failed"));
+});

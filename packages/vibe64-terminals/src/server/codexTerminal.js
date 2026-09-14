@@ -1369,6 +1369,7 @@ function createCodexTerminalController({
   const codexAppServerProviders = new Map();
   const codexAppServerProviderSessionKeys = new Map();
   const codexAppServerModelCatalogs = new WeakMap();
+  let codexAppServerChatModelCatalog = null;
   const codexAppServerEconomyThreads = new Map();
   const codexAppServerEconomyProjectOperations = new Map();
   const codexAppServerEconomyThreadCleanups = new Map();
@@ -3413,6 +3414,7 @@ function createCodexTerminalController({
     stopOwnedRuntimes = false,
     toolHomeSource = ""
   } = {}) {
+    codexAppServerChatModelCatalog = null;
     const normalizedToolHomeSource = normalizeText(toolHomeSource);
     const ownedRecordsByProvider = new Map(
       [...codexAppServerOwnedRuntimes.values()].map((record) => [record.provider, record])
@@ -8668,6 +8670,7 @@ function createCodexTerminalController({
   function attachCodexAppServerEconomyThread({
     durable = null,
     ledger = null,
+    onRetired = null,
     provider = null
   } = {}) {
     const key = codexAppServerEconomyThreadKey(durable);
@@ -8675,6 +8678,7 @@ function createCodexTerminalController({
       ...durable,
       durable,
       ledger,
+      onRetired,
       provider
     });
     codexAppServerEconomyThreads.set(key, record);
@@ -8684,6 +8688,7 @@ function createCodexTerminalController({
   async function rememberCodexAppServerEconomyThread({
     executionProfile = null,
     lifecycle = CODEX_ECONOMY_THREAD_LIFECYCLES.READY,
+    onRetired = null,
     projectContextRoot = "",
     projectRuntimeRoot = "",
     provider = null,
@@ -8719,7 +8724,7 @@ function createCodexTerminalController({
     });
     const ledger = codexAppServerEconomyThreadLedger(projectRuntimeRoot);
     await ledger.write(durable);
-    return attachCodexAppServerEconomyThread({ durable, ledger, provider });
+    return attachCodexAppServerEconomyThread({ durable, ledger, onRetired, provider });
   }
 
   async function withCodexAppServerEconomyThreadMutation(record = null, operation) {
@@ -8741,6 +8746,7 @@ function createCodexTerminalController({
 
   async function updateCodexAppServerEconomyThreadUnlocked(record = null, {
     lifecycle = record?.lifecycle,
+    onRetired = record?.onRetired,
     turnId = record?.turnId
   } = {}) {
     const key = codexAppServerEconomyThreadKey(record);
@@ -8758,6 +8764,7 @@ function createCodexTerminalController({
     return attachCodexAppServerEconomyThread({
       durable,
       ledger: record.ledger,
+      onRetired,
       provider: record.provider
     });
   }
@@ -8774,7 +8781,9 @@ function createCodexTerminalController({
       return false;
     }
     codexAppServerEconomyThreadCleanups.delete(key);
-    return codexAppServerEconomyThreads.delete(key);
+    codexAppServerEconomyThreads.delete(key);
+    record.onRetired?.({ threadId: record.threadId });
+    return true;
   }
 
   async function removeCodexAppServerEconomyThreadUnlocked(record = null) {
@@ -11450,6 +11459,7 @@ function createCodexTerminalController({
   async function startAndRememberCodexAppServerEconomyThread({
     context = {},
     executionProfile = null,
+    onRetired = null,
     projectRuntimeRoot = "",
     provider = null,
     sessionId = "",
@@ -11491,6 +11501,7 @@ function createCodexTerminalController({
         const record = await rememberCodexAppServerEconomyThread({
           executionProfile,
           lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN,
+          onRetired,
           projectContextRoot,
           projectRuntimeRoot,
           provider,
@@ -11577,6 +11588,7 @@ function createCodexTerminalController({
       const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
       const executionProfile = isRecord(input.executionProfile) ? input.executionProfile : null;
       const economyTurn = Boolean(executionProfile);
+      const onRetired = ({ threadId }) => emitDetachedEvent({ threadId, type: "thread-retired" });
       if (economyTurn) {
         await assertCodexAppServerEconomyAccountIdentity(
           provider,
@@ -11605,6 +11617,7 @@ function createCodexTerminalController({
               economyThreadRecord,
               {
                 lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN,
+                onRetired,
                 turnId: ""
               }
             );
@@ -11667,6 +11680,7 @@ function createCodexTerminalController({
           const started = await startAndRememberCodexAppServerEconomyThread({
             context,
             executionProfile,
+            onRetired,
             projectRuntimeRoot,
             provider,
             sessionId,
@@ -13245,6 +13259,7 @@ function createCodexTerminalController({
       return withCodexAppServerModelCatalogDeadline((signal) => (
         withCodexAppServerProviderLifecycle(async () => {
           assertCodexAppServerControllerOpen();
+          signal.throwIfAborted();
           const toolHome = await codexToolHomeResult();
           if (toolHome.ok === false) throw new Error(toolHome.error);
           const providerOptions = codexAppServerRuntimeOptions({
@@ -13253,29 +13268,44 @@ function createCodexTerminalController({
           const existing = codexAppServerOwnedRuntimes.get(
             codexAppServerOwnedRuntimeKey("", providerOptions)
           );
-          if (existing?.provider) {
-            return existing.provider.listModels({ includeHidden: false, limit: 100 }, { signal });
-          }
-          const provider = codexAppServerProviderFactory(providerOptions);
+          const provider = existing?.provider || codexAppServerProviderFactory(providerOptions);
           let runtime = null;
+          let catalog = null;
+          let identity = "";
           try {
-            runtime = await acquireCodexAppServerRuntime({
-              operation: () => provider.ensureRuntime(),
-              provider,
-              providerOptions
-            });
-            return await provider.listModels({ includeHidden: false, limit: 100 }, { signal });
+            identity = JSON.stringify(await provider.currentRuntimeInfo());
+            signal.throwIfAborted();
+            if (codexAppServerChatModelCatalog?.identity === identity &&
+                codexAppServerChatModelCatalog.expiresAt > Date.now()) {
+              return codexAppServerChatModelCatalog.value;
+            }
+            if (!existing?.provider) {
+              runtime = await acquireCodexAppServerRuntime({
+                operation: () => provider.ensureRuntime(),
+                provider,
+                providerOptions
+              });
+            }
+            catalog = await provider.listModels({ includeHidden: false, limit: 100 }, { signal });
           } finally {
-            try {
-              if ((runtime || provider.runtime)?.reused === false) {
-                await stopOwnedCodexAppServerRuntime({ provider });
-              } else {
-                forgetCodexAppServerOwnedRuntime(provider);
+            if (!existing?.provider) {
+              try {
+                if ((runtime || provider.runtime)?.reused === false) {
+                  await stopOwnedCodexAppServerRuntime({ provider });
+                } else {
+                  forgetCodexAppServerOwnedRuntime(provider);
+                }
+              } finally {
+                provider.close();
               }
-            } finally {
-              provider.close();
             }
           }
+          codexAppServerChatModelCatalog = {
+            expiresAt: Date.now() + CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS,
+            identity,
+            value: catalog
+          };
+          return catalog;
         })
       ), options);
     },
