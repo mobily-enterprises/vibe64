@@ -160,13 +160,13 @@ const indicatorLabel = computed(() => [
       </v-btn>
     </template>
     <v-card max-width="340" class="pa-3">
-      <template v-if="goalAvailable">
+      <section v-if="goalAvailable" class="mb-3">
         <strong>{{ goalStatusLabel }}</strong>
         <p class="codex-plan-usage__details text-body-small">{{ goal.objective }}</p>
         <v-btn v-if="goalRunning" size="small" :loading="changingGoal" :disabled="changingGoal" @click="changeGoal('pause')">Pause goal</v-btn>
         <v-btn v-else-if="['paused', 'blocked', 'usageLimited'].includes(goal.status)" size="small" :loading="changingGoal" :disabled="changingGoal" @click="changeGoal('resume')">Resume goal</v-btn>
         <p v-if="goal.status === 'budgetLimited'" class="text-body-small">The goal reached its token budget. Adjust the budget in Codex before resuming.</p>
-      </template>
+      </section>
       <p v-if="!goalAvailable" class="text-body-small">{{ goalUnavailableMessage }}</p>
       <p v-if="goalError" role="alert" class="text-error text-body-small">{{ goalError }}</p>
       <strong v-if="available">Codex plan allowance</strong>
