@@ -163,7 +163,6 @@ function useVibe64SessionPanel(props, emit) {
   });
   const emptyStateActivity = computed(() => sessionPanelEmptyStateActivity({
     createSessionRunning: sessionData.createSessionRunning.value,
-    runtimeHostSessionCount: runtimeHostSessionIds.value.length,
     selectedSession: selection.selectedSession,
     sessionListInitialLoading: sessionData.sessionList.isInitialLoading
   }));
@@ -564,11 +563,10 @@ function sessionPanelRuntimeHostDiagnostics({
 
 function sessionPanelEmptyStateActivity({
   createSessionRunning = false,
-  runtimeHostSessionCount = 0,
   selectedSession = null,
   sessionListInitialLoading = false
 } = {}) {
-  if (selectedSession || Number(runtimeHostSessionCount) > 0) {
+  if (selectedSession) {
     return "";
   }
   if (createSessionRunning) {

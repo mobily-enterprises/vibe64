@@ -48,6 +48,10 @@ Archive state and feedback belong to the project panel. With no selection, the
 empty layout stays usable even when hidden runtimes are retained. Failure
 restores the tab without stealing the current selection.
 
+Initial session loading stays visible until the session list resolves, including
+when the remembered session's runtime mounts first. A mounted runtime alone does
+not establish that session creation is unavailable.
+
 The server records `session_archive_operation` before cleanup and uses the
 closing marker to reject new work. Preview, active AI turns, and remaining tools
 stop before resources and source are removed. Durable stopping, resources, and

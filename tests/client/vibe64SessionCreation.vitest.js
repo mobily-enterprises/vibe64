@@ -73,6 +73,15 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => creationHarness.projectSlug
 }));
 
+vi.mock("vue-router", async (importOriginal) => ({
+  ...await importOriginal(),
+  useRoute: () => ({ query: {} })
+}));
+
+vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
+  useVibe64SessionRepositoryStatusRegistry: () => ({ observe: vi.fn() })
+}));
+
 vi.mock("@/composables/useVibe64SessionSelection.js", () => ({
   useVibe64SessionSelection: () => ({
     clear() {
@@ -87,6 +96,7 @@ vi.mock("@/composables/useVibe64SessionSelection.js", () => ({
 import {
   useVibe64SessionData
 } from "../../src/composables/useVibe64SessionData.js";
+import { useVibe64SessionPanel } from "../../src/composables/useVibe64SessionPanel.js";
 import {
   SESSION_RENEWAL_BACKGROUND_POLL_INTERVAL_MS,
   useVibe64SessionRenewal
@@ -163,6 +173,40 @@ beforeEach(() => {
 });
 
 describe("Vibe64 session creation", () => {
+  it("shows loading while a remembered session runtime mounts before the session list arrives", async () => {
+    creationHarness.selectedId.value = "remembered-session";
+    creationHarness.queryData.value = undefined;
+    creationHarness.endpointResource.isInitialLoading.value = true;
+    creationHarness.endpointResource.isLoading.value = true;
+    const scope = effectScope();
+    const panel = scope.run(() => useVibe64SessionPanel({ projectPane: "dashboard" }, vi.fn()));
+
+    try {
+      await nextTick();
+      expect(panel.runtimeHostSessionIds.value).toEqual(["remembered-session"]);
+      expect(panel.emptyLayoutVisible.value).toBe(true);
+      expect(panel.emptyStateInitialLoading.value).toBe(true);
+      expect(panel.emptyChatHintText.value).toBe("Loading sessions.");
+      expect(panel.emptyPreviewDetailText.value).toBe("");
+      expect(panel.toolbar.canCreateSession).toBe(false);
+      expect(panel.visiblePageError.value).toBe(false);
+
+      creationHarness.queryData.value = {
+        creation: { canCreate: true, showCreateAction: true },
+        sessions: [{ sessionId: "remembered-session", status: "active" }]
+      };
+      creationHarness.endpointResource.isInitialLoading.value = false;
+      creationHarness.endpointResource.isLoading.value = false;
+      await nextTick();
+
+      expect(panel.emptyStateInitialLoading.value).toBe(false);
+      expect(panel.emptyLayoutVisible.value).toBe(false);
+      expect(panel.selection.selectedSession.sessionId).toBe("remembered-session");
+    } finally {
+      scope.stop();
+    }
+  });
+
   it("does not auto-select a session created remotely after a settled empty list", async () => {
     const { scope } = mountSessionData();
     await nextTick();

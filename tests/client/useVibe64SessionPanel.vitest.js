@@ -24,10 +24,6 @@ describe("useVibe64SessionPanel", () => {
         sessionId: "session-a"
       }
     })).toBe("");
-    expect(sessionPanelEmptyStateActivity({
-      createSessionRunning: true,
-      runtimeHostSessionCount: 1
-    })).toBe("");
     expect(sessionPanelEmptyStateActivity()).toBe("");
   });
 
