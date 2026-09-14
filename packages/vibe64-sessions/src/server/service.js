@@ -1420,7 +1420,11 @@ function createService({
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
-        const previousTask = await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID);
+        const reviewedConflictId = text(input.reviewedConflictId);
+        // Ordinary Rebase starts over; only an explicit repair check resumes a conflict.
+        const previousTask = reviewedConflictId
+          ? await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)
+          : null;
         const conflictRecovery = previousTask?.status === "failed" &&
           previousTask?.conflictRecovery && typeof previousTask.conflictRecovery === "object"
           ? previousTask.conflictRecovery
@@ -1430,7 +1434,7 @@ function createService({
         try {
           const result = await terminals.updateSessionWork(sessionId, {
             conflictRecovery,
-            reviewedConflictId: text(input.reviewedConflictId),
+            reviewedConflictId,
             onRepositoryWriteAcquired: async () => {
               operationStarted = true;
               activeUpdateOperations.set(sessionId, operationId);

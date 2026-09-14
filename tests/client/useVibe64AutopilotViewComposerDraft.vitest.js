@@ -1913,6 +1913,35 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOperation.value).toStrictEqual(updateOperation);
   });
 
+  it("starts an ordinary Rebase without reusing a previous repair review", async () => {
+    const response = deferredResult();
+    const updateSessionWork = vi.fn(() => response.promise);
+    const { props, view } = await createViewWithProps({
+      updateSessionWork,
+      workState: {
+        unsaved: true,
+        updateAvailable: true,
+        updateOperation: {
+          code: "vibe64_session_update_conflict",
+          error: "Previous update failed.",
+          conflictRecovery: { reviewId: "old-review" },
+          operationId: "old-attempt",
+          status: "failed"
+        }
+      }
+    });
+    const updating = view.requestSaveWork();
+    await nextTick();
+    expect(updateSessionWork).toHaveBeenCalledExactlyOnceWith({});
+    expect(view.saveWorkError.value).toBe("");
+    expect(view.saveWorkFailure.value).toBeNull();
+    expect(view.saveWorkOperation.value).toBeNull();
+    props.workState.updateOperation = { operationId: "new-attempt", status: "ready" };
+    response.resolve({ ok: true, status: "updated" });
+    await expect(updating).resolves.toMatchObject({ ok: true });
+    expect(view.saveWorkError.value).toBe("");
+  });
+
   it("does not treat completed repository history as current activity", async () => {
     const saveOperation = {
       events: [{ at: "2026-08-23T01:00:00.000Z", message: "Saved older work" }],

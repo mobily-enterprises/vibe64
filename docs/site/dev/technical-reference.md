@@ -125,6 +125,24 @@ GitHub and Codex credentials live in the real OS home of the acting user or
 daemon owner. Vibe64 owns how those credentials are exposed to its Git and agent
 processes. Genesis never reads or stores credential values.
 
+## Updating session work
+
+**Update this session (rebase)** starts a fresh attempt from the current session
+files and the latest saved project version. Once the repository write lock is
+acquired, the new attempt replaces the previous attempt's status and diagnostics.
+Previous conflicts or an abandoned attempt do not determine the new result.
+An active repository write must finish before another can start.
+
+If the new merge still conflicts, Vibe64 reports the current conflicting files
+and leaves the session's files, branch and index unchanged. **Fix it with AI**
+reviews those conflicts; a completed repair automatically checks Update, and
+**Check Update** in the repair tab can repeat that check. An explicitly reviewed
+resolution can retain unchanged file contents. Review cannot resolve a newer
+upstream version or a newly conflicting file without another review.
+
+An ordinary Rebase click starts over instead of submitting the repair tab's
+review. Neither action publishes the session's work.
+
 ## Root resolution
 
 Directory policy is centralized in the Vibe64 root resolver. Feature packages

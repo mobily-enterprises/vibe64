@@ -910,15 +910,30 @@ test("Update leaves HEAD, index, and worktree untouched when newer work conflict
       session
     }), (error) => {
       assert.equal(error.code, "vibe64_session_update_conflict");
-      assert.match(error.message, /has not changed since the failed update/u);
+      assert.match(error.message, /1 file needs review/u);
+      assert.notEqual(error.details.conflictRecovery.reviewId, conflictRecovery.reviewId);
+      conflictRecovery = error.details.conflictRecovery;
       return true;
     });
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), beforeHead);
     assert.equal(await git(session.sourcePath, ["write-tree"]), beforeIndex);
 
     await writeFile(path.join(session.sourcePath, "shared.txt"), "remote\nlocal\n", "utf8");
+    await assert.rejects(updateSessionWork({
+      conflictRecovery,
+      operationId: "fresh-attempt-after-edits",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session
+    }), (error) => {
+      assert.equal(error.code, "vibe64_session_update_conflict");
+      assert.match(error.message, /1 file needs review/u);
+      conflictRecovery = error.details.conflictRecovery;
+      return true;
+    });
     const updated = await updateSessionWork({
       conflictRecovery,
+      reviewedConflictId: conflictRecovery.reviewId,
       operationId: "retry-reviewed-conflict",
       project: githubProject(root, fixture.remote),
       runCommand: commandRunner,
@@ -937,7 +952,42 @@ test("Update leaves HEAD, index, and worktree untouched when newer work conflict
   }
 });
 
-test("Update remembers repairs across partially resolved retries", async () => {
+test("Update fetches the latest saved version on a fresh attempt after a conflict", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-fresh-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    await writeFile(path.join(fixture.seed, "shared.txt"), "remote\n");
+    await git(fixture.seed, ["add", "."]);
+    await git(fixture.seed, ["commit", "-m", "conflicting saved version"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "local\n");
+    const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+    let conflictRecovery;
+    await assert.rejects(updateSessionWork(input), (error) => {
+      conflictRecovery = error.details.conflictRecovery;
+      return error.code === "vibe64_session_update_conflict";
+    });
+
+    await writeFile(path.join(session.sourcePath, "ongoing-work.txt"), "Keep my new work.\n");
+    await writeFile(path.join(fixture.seed, "shared.txt"), "local\n");
+    await writeFile(path.join(fixture.seed, "upstream.txt"), "New saved work.\n");
+    await git(fixture.seed, ["add", "."]);
+    await git(fixture.seed, ["commit", "-m", "resolved saved version"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    const updated = await updateSessionWork({ ...input, conflictRecovery });
+    assert.equal(updated.status, "updated");
+    assert.equal(updated.canonicalCommit, await git(fixture.seed, ["rev-parse", "HEAD"]));
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), updated.canonicalCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "local\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "ongoing-work.txt"), "utf8"), "Keep my new work.\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "upstream.txt"), "utf8"), "New saved work.\n");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("Update starts fresh after partial repairs and reports only the remaining conflicts", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-partial-"));
   try {
     const fixture = await createRemoteFixture(root);
@@ -961,18 +1011,23 @@ test("Update remembers repairs across partially resolved retries", async () => {
       return error.code === "vibe64_session_update_conflict";
     });
     const baseline = recovery.checkpointTree;
-    await writeFile(path.join(session.sourcePath, "shared.txt"), "remote\nlocal\n");
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "remote\n");
+    await writeFile(path.join(session.sourcePath, "ongoing-work.txt"), "New work\n");
     await assert.rejects(updateSessionWork({ ...input, conflictRecovery: recovery }), (error) => {
-      assert.match(error.message, /not changed/u);
+      assert.match(error.message, /1 file needs review/u);
+      assert.deepEqual(error.details.conflictPaths, ["second.txt"]);
+      assert.notEqual(error.details.conflictRecovery.reviewId, recovery.reviewId);
       recovery = error.details.conflictRecovery;
-      assert.equal(recovery.checkpointTree, baseline);
+      assert.notEqual(recovery.checkpointTree, baseline);
       return true;
     });
     await writeFile(path.join(session.sourcePath, "second.txt"), "remote\nlocal\n");
-    assert.equal((await updateSessionWork({ ...input, conflictRecovery: recovery })).status, "updated");
-    for (const filename of ["shared.txt", "second.txt"]) {
-      assert.equal(await readFile(path.join(session.sourcePath, filename), "utf8"), "remote\nlocal\n");
-    }
+    assert.equal((await updateSessionWork({
+      ...input, conflictRecovery: recovery, reviewedConflictId: recovery.reviewId
+    })).status, "updated");
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "remote\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "second.txt"), "utf8"), "remote\nlocal\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "ongoing-work.txt"), "utf8"), "New work\n");
   } finally {
     await rm(root, { force: true, recursive: true });
   }
@@ -1005,7 +1060,8 @@ for (const scenario of ["reviewed", "legacy-review", "newer-canonical", "newer-c
       });
       if (scenario === "legacy-review") delete conflictRecovery.reviewId;
       await assert.rejects(updateSessionWork({ ...input, conflictRecovery }), (error) => {
-        assert.match(error.message, /not changed/u);
+        assert.match(error.message, /1 file needs review/u);
+        assert.notEqual(error.details.conflictRecovery.reviewId, conflictRecovery.reviewId);
         conflictRecovery = error.details.conflictRecovery;
         return true;
       });
@@ -1105,13 +1161,15 @@ for (const scenario of ["repaired", "unreviewed", "unrelated", "derived", "upstr
       const headBefore = await git(session.sourcePath, ["rev-parse", "HEAD"]);
       const indexBefore = await git(session.sourcePath, ["write-tree"]);
       const statusBefore = await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]);
-      const updating = updateSessionWork({ ...input, conflictRecovery, operationId: "check-repair" });
-      if (["unreviewed", "unrelated", "upstream"].includes(scenario)) {
+      const updating = updateSessionWork({
+        ...input, conflictRecovery, operationId: "check-repair",
+        reviewedConflictId: scenario === "unreviewed" ? "" : conflictRecovery.reviewId
+      });
+      if (["unreviewed", "upstream"].includes(scenario)) {
         await assert.rejects(updating, (error) => {
           assert.equal(error.code, "vibe64_session_update_conflict");
           assert.deepEqual(error.details.conflictPaths, ["second.txt"]);
-          if (scenario === "unreviewed") assert.match(error.message, /has not changed since/u);
-          if (scenario === "unrelated") assert.match(error.message, /outside/u);
+          assert.match(error.message, /1 file needs review/u);
           return true;
         });
         assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), headBefore);
@@ -1123,6 +1181,9 @@ for (const scenario of ["repaired", "unreviewed", "unrelated", "derived", "upstr
         assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "remote\n");
         assert.equal(await readFile(path.join(session.sourcePath, "second.txt"), "utf8"), "remote\nlocal\n");
         assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), result.canonicalCommit);
+        if (scenario === "unrelated") {
+          assert.equal(await readFile(path.join(session.sourcePath, "unrelated.txt"), "utf8"), "New work\n");
+        }
         if (scenario === "derived") {
           assert.equal(await readFile(path.join(session.sourcePath, ".genesis/machine-city.json"), "utf8"), '{"regenerated":true}\n');
         }

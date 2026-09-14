@@ -1124,48 +1124,40 @@ function normalizedConflictRecovery(value = {}) {
     checkpointTree: text(value.checkpointTree),
     conflictPaths,
     conflictTree: text(value.conflictTree),
+    reviewId: text(value.reviewId),
     oldHead: text(value.oldHead),
     oldIndexTree: text(value.oldIndexTree)
   };
   return Object.values(recovery).some((entry) => Array.isArray(entry) ? entry.length === 0 : !entry)
     ? null
-    : { ...recovery, reviewId: text(value.reviewId) || crypto.randomUUID() };
+    : recovery;
 }
 
-function conflictMessage(conflictPaths = [], reason = "") {
+function conflictMessage(conflictPaths = []) {
   const count = conflictPaths.length;
   const files = conflictPaths.slice(0, 3).join(", ");
   const suffix = count > 3 ? ` and ${count - 3} more` : "";
-  if (reason === "unchanged") {
-    return `The ${count === 1 ? "conflicting file has" : "conflicting files have"} not changed since the failed update. Review ${count === 1 ? "it" : "them"} with Temporary AI, then retry Update this session (rebase).`;
-  }
-  if (reason === "outside") {
-    return "Files outside the original conflict changed after the failed update. Review the update again before retrying.";
-  }
-  return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Open Temporary AI, resolve the listed ${count === 1 ? "file" : "files"}, then retry Update this session (rebase).`;
+  return `${count} ${count === 1 ? "file needs" : "files need"} review before this session can update: ${files}${suffix}. Use Fix it with AI to resolve ${count === 1 ? "it" : "them"}, then Check Update in the repair tab.`;
 }
 
-function conflictRecoveryError(recovery, reason = "", baseline = recovery) {
+function conflictRecoveryError(recovery) {
   return saveError(
-    conflictMessage(recovery.conflictPaths, reason),
+    conflictMessage(recovery.conflictPaths),
     "vibe64_session_update_conflict",
     {
       conflictPaths: recovery.conflictPaths,
-      conflictRecovery: baseline
+      conflictRecovery: recovery
     }
   );
 }
 
 async function resolvedConflictTree(runCommand, context, {
-  checkpointTree,
-  commandOptions,
   currentRecovery,
-  derivedArtifactPaths = [],
   previousRecovery,
   reviewedConflictId,
   project
 }) {
-  const previous = normalizedConflictRecovery(previousRecovery);
+  const previous = reviewedConflictId ? normalizedConflictRecovery(previousRecovery) : null;
   if (!previous) {
     throw conflictRecoveryError(currentRecovery);
   }
@@ -1177,26 +1169,8 @@ async function resolvedConflictTree(runCommand, context, {
     "oldIndexTree"
   ].every((key) => previous[key] === currentRecovery[key]) &&
     currentRecovery.conflictPaths.every((entry) => originalConflictPaths.has(entry));
-  if (!stable || (reviewedConflictId && reviewedConflictId !== previous.reviewId)) {
+  if (!stable || reviewedConflictId !== previous.reviewId) {
     throw conflictRecoveryError(currentRecovery);
-  }
-  // A completed repair may deliberately retain an already-correct file.
-  if (!reviewedConflictId) {
-    const derivedPaths = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
-    const changedAfterFailure = (await changedPathsBetween(
-      runCommand,
-      context,
-      previous.checkpointTree,
-      checkpointTree,
-      { commandOptions, project }
-    )).filter((entry) => !derivedPaths.has(entry));
-    const changedPaths = new Set(changedAfterFailure);
-    if (!currentRecovery.conflictPaths.every((entry) => changedPaths.has(entry))) {
-      throw conflictRecoveryError(currentRecovery, "unchanged", previous);
-    }
-    if (changedAfterFailure.some((entry) => !originalConflictPaths.has(entry))) {
-      throw conflictRecoveryError(currentRecovery, "outside", previous);
-    }
   }
   return writeGitWorktreeTree({
     baseCommit: currentRecovery.conflictTree,
@@ -1954,10 +1928,7 @@ async function updateSessionWork({
       : null;
     const mergedSourceTree = currentRecovery
       ? await resolvedConflictTree(runCommand, context, {
-          checkpointTree: checkpoint.tree,
-          commandOptions,
           currentRecovery,
-          derivedArtifactPaths,
           previousRecovery: conflictRecovery,
           reviewedConflictId,
           project

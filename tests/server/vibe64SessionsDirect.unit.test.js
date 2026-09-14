@@ -1374,7 +1374,7 @@ test("work inspection repairs a failed update superseded by a later reconciled S
   assert.equal(result.updateOperation.resolvedBySaveCommit, "saved-commit");
 });
 
-test("a failed Update persists conflict recovery and supplies it to the reviewed retry", async () => {
+test("Update resumes explicit reviews but starts ordinary retries from fresh state", async () => {
   const conflictRecovery = {
     baseCommit: "base",
     canonicalCommit: "canonical",
@@ -1426,6 +1426,7 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
     }
   };
   let updates = 0;
+  let denyWrite = false;
   const service = createService({
     project: {
       async createRuntime() {
@@ -1444,6 +1445,11 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
         };
       },
       async updateSessionWork(_sessionId, input) {
+        if (denyWrite) {
+          const error = new Error("Another repository write is active.");
+          error.code = "vibe64_agent_write_mode_busy";
+          throw error;
+        }
         updates += 1;
         await input.onRepositoryWriteAcquired();
         if (updates === 1) {
@@ -1456,8 +1462,14 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
           };
           throw error;
         }
-        assert.deepEqual(input.conflictRecovery, conflictRecovery);
-        assert.equal(input.reviewedConflictId, conflictRecovery.reviewId);
+        assert.deepEqual(input.conflictRecovery, updates === 2 ? conflictRecovery : null);
+        assert.equal(input.reviewedConflictId, updates === 2 ? conflictRecovery.reviewId : "");
+        const running = tasks.get("update-session");
+        assert.equal(running.status, "running");
+        assert.equal(running.error, undefined);
+        assert.equal(running.conflictRecovery, undefined);
+        assert.equal(running.mergedCommit, undefined);
+        assert.deepEqual(running.events.map((event) => event.kind), ["update-started"]);
         return {
           canonicalCommit: "canonical",
           reconciled: true,
@@ -1491,6 +1503,30 @@ test("a failed Update persists conflict recovery and supplies it to the reviewed
     ["update-started", "updated"]
   );
   assert.ok(metadata.some(([name, value]) => name === "base_commit" && value === "canonical"));
+
+  for (const status of ["failed", "running"]) {
+    const previous = {
+      status,
+      operationId: "abandoned-attempt",
+      error: "The conflicting file has not changed since the failed update.",
+      conflictRecovery,
+      mergedCommit: "old-prepared-commit",
+      events: [{ kind: "old-failure" }]
+    };
+    tasks.set("update-session", previous);
+    denyWrite = true;
+    const denied = await service.updateSessionWork("session-1");
+    assert.equal(denied.code, "vibe64_agent_write_mode_busy");
+    assert.equal(tasks.get("update-session"), previous);
+
+    denyWrite = false;
+    const fresh = await service.updateSessionWork("session-1");
+    assert.equal(fresh.ok, true);
+    assert.notEqual(fresh.operation.operationId, previous.operationId);
+    assert.equal(fresh.operation.status, "ready");
+    assert.equal(fresh.operation.conflictRecovery, null);
+    assert.deepEqual(fresh.operation.events.map((event) => event.kind), ["update-started", "updated"]);
+  }
 });
 
 test("one exact update check is shared, cached, and invalidates every sibling session", async () => {
