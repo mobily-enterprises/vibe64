@@ -1669,7 +1669,7 @@ test("@overview-transition details fade in at their final positions while the ov
 });
 
 
-test("@overview-spacing nine actor groups fit without overlapping or tiny headings", async ({ browser, baseURL }, info) => {
+test("@overview-spacing saved positions stay intact until Reset fits nine actors in compact rings", async ({ browser, baseURL }, info) => {
   const schema = denseErdSchema();
   const names = ["Bookings", "Staff & Availability", "Clients & Pets", "Catalogue & Resources", "Grooming Visits", "Daycare", "Communications", "Workspaces & Access", "Finance & Retail"];
   const definition = {
@@ -1680,12 +1680,31 @@ test("@overview-spacing nine actor groups fit without overlapping or tiny headin
     }),
     mainRelationships: Array.from({ length: 8 }, (_, index) => `fk_${(index + 1) * 15 - 1}`)
   };
-  const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
+  const overview = {
+    ...definition,
+    rings: [[definition.actors[0].table], definition.actors.slice(1, 5).map(actor => actor.table), definition.actors.slice(5).map(actor => actor.table)],
+    positions: Object.fromEntries(definition.actors.map((actor, index) => [actor.table, { x: index % 3 * 1400, y: Math.floor(index / 3) * 1000 }]))
+  };
+  const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: overview });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   try {
     const page = await context.newPage();
     await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
     const map = page.locator(".database-overview__map");
+    const camera = map.locator(".vue-flow__transformationpane");
+    const originalCamera = await camera.getAttribute("style");
+    const savedCoordinates = Object.fromEntries(await map.locator(".vue-flow__node-actor").evaluateAll(nodes => nodes.map((node: HTMLElement) => [node.dataset.id!.slice(6), node.style.transform])));
+    for (const [table, { x, y }] of Object.entries(overview.positions)) {
+      expect(savedCoordinates[table]).toBe(`translate(${x}px, ${y}px)`);
+    }
+    expect(JSON.parse(await server.readOverviewFile()).positions).toEqual(overview.positions);
+    await overviewAction(page, "Reload overview");
+    await expect(page.getByText("Arranging actors…")).toHaveCount(0);
+    expect(Object.fromEntries(await map.locator(".vue-flow__node-actor").evaluateAll(nodes => nodes.map((node: HTMLElement) => [node.dataset.id!.slice(6), node.style.transform])))).toEqual(savedCoordinates);
+    await overviewAction(page, "Reset actor positions");
+    await expect.poll(async () => JSON.parse(await server.readOverviewFile()).positions).toEqual({});
+    await expect(page.getByText("Arranging actors…")).toHaveCount(0);
+    await expect(camera).not.toHaveAttribute("style", originalCamera!);
     const bounds = (await map.boundingBox())!;
     const cards = await map.locator(".vue-flow__node-actor").all();
     expect(cards).toHaveLength(9);
@@ -1696,8 +1715,36 @@ test("@overview-spacing nine actor groups fit without overlapping or tiny headin
       expect(box.y).toBeGreaterThanOrEqual(bounds.y);
       expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
       expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
-      expect(box.width).toBeGreaterThan(220);
+      expect(box.width).toBeGreaterThan(280);
     }
     await page.screenshot({ path: info.outputPath("nine-actors.png") });
+  } finally { await context.close(); await server.close(); }
+});
+
+test("@overview-escape Escape closes table details from the sidebar, cards and empty canvas", async ({ browser, baseURL }) => {
+  const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  try {
+    const page = await context.newPage();
+    await openDiagram(page, server.url, { view: "Overview", waitForReady: false });
+    const camera = page.locator(".database-overview__map .vue-flow__transformationpane");
+    const cameraBefore = await camera.getAttribute("style");
+    const explore = page.getByRole("button", { name: "Explore Bookings", exact: true });
+    const details = page.getByRole("region", { name: "ERD for Bookings" });
+    const targets = [
+      details.getByRole("button", { name: "invoice_groups table", exact: false }),
+      details.locator(".database-table-list__column").first(),
+      details.locator('[data-id="public.bookings"] header'),
+      details.locator(".vue-flow__pane")
+    ];
+    for (const target of targets) {
+      await explore.click();
+      await expect(details.locator(".database-erd__flow")).toHaveCSS("opacity", "1");
+      await target.click({ position: { x: 4, y: 4 } });
+      await page.keyboard.press("Escape");
+      await expect(details).toHaveCount(0);
+      await expect(camera).toHaveAttribute("style", cameraBefore!);
+      await expect(explore).toBeFocused();
+    }
   } finally { await context.close(); await server.close(); }
 });

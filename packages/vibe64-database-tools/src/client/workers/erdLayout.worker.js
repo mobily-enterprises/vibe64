@@ -21,7 +21,7 @@ self.addEventListener("message", async (event) => {
     }
     let result;
     if (request.kind === "overview") {
-      const positioned = layoutErdRings(nodes, request.overviewRings).map(node => ({
+      const positioned = layoutErdRings(nodes, request.overviewRings, 64).map(node => ({
         ...node, ...request.overviewPositions?.[node.id.startsWith("actor:") ? node.id.slice(6) : node.id]
       }));
       const positions = new Map(positioned.map((node) => [node.id, { x: node.x, y: node.y }]));

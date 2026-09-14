@@ -4,7 +4,7 @@ import { erdObstacles, routeErdConnection } from "./erdRouting.js";
 
 export function routeOverviewEdges(nodes, edges) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  const obstacles = erdObstacles(nodes, 48);
+  const obstacles = erdObstacles(nodes, 24);
   const occupied = [];
   return edges.map((edge, index) => {
     const source = byId.get(edge.source);
@@ -23,7 +23,7 @@ export function routeOverviewEdges(nodes, edges) {
     const end = horizontal
       ? { x: target.position.x + (forward ? 0 : target.dimensions.width), y: target.position.y + 32 }
       : { x: targetCenter.x, y: target.position.y + (forward ? 0 : target.dimensions.height) };
-    const route = routeErdConnection({ source: edge.source, target: edge.target, start, end, sourcePosition, targetPosition, stubLength: 56, laneX: (start.x + end.x) / 2 }, obstacles, occupied, index);
+    const route = routeErdConnection({ source: edge.source, target: edge.target, start, end, sourcePosition, targetPosition, stubLength: 32, laneX: (start.x + end.x) / 2 }, obstacles, occupied, index);
     route.points.slice(1).forEach((point, i) => occupied.push([route.points[i], point]));
     return { id: edge.id, sourceHandle: `out-${sourcePosition}`, targetHandle: `in-${targetPosition}`, ...route };
   });
@@ -43,7 +43,7 @@ export function dataOverviewGraph(schema, definition, { allRelationships = false
     // Scale area with membership; even the largest collapsed card is at most
     // twice the smallest. Keep text at the same readable font size.
     const scale = Math.sqrt(1 + (Math.max(1, members.length) - 1) / Math.max(1, largestGroup - 1));
-    const width = Math.floor(300 * scale);
+    const width = Math.floor(360 * scale);
     const height = Math.floor(144 * scale);
     nodes.push({
       id: group.id, type: "actor", position: { x: (index % 3) * 460, y: Math.floor(index / 3) * 240 },

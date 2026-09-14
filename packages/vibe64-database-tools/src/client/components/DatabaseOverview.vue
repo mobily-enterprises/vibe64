@@ -1,5 +1,5 @@
 <template>
-  <section class="database-overview" @keydown.esc="closeActor">
+  <section class="database-overview" tabindex="-1" @keydown.esc="closeActor">
     <header class="database-overview__toolbar" aria-label="Data overview controls">
       <div class="database-overview__title">
         <strong>{{ activeGroup ? activeGroup.name : 'Data overview' }}</strong>
@@ -20,7 +20,7 @@
                 <v-btn size="small" variant="text" aria-label="Zoom in" @click="flow?.zoomIn()">Zoom in</v-btn>
                 <v-btn size="small" variant="text" aria-label="Zoom out" @click="flow?.zoomOut()">Zoom out</v-btn>
               </div>
-              <v-btn :disabled="savingPosition || pending" size="small" variant="text" @click="savePositions({})">Reset actor positions</v-btn>
+              <v-btn :disabled="savingPosition || pending" size="small" variant="text" @click="resetActorPositions">Reset actor positions</v-btn>
               <v-divider />
               <v-btn :disabled="savingPosition" size="small" variant="text" @click="openEditor">Edit actors</v-btn>
               <v-btn :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">{{ overview.present ? 'Review with AI' : 'Create with AI' }}</v-btn>
@@ -214,6 +214,7 @@ let layoutGraph;
 let requestId = 0;
 let timer;
 let disposed = false;
+let fitAfterArrange = false;
 
 async function openActor(group) {
   if (dragging) return;
@@ -242,7 +243,7 @@ async function fit({ automatic = false } = {}) {
   await nextTick();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   if (!disposed && current === requestId && !activeGroup.value) await flow.value?.fitView({
-    padding: 0.15, maxZoom: 1, minZoom: automatic ? 0.5 : 0.01, duration: 0
+    padding: 0.06, maxZoom: 1, minZoom: automatic ? 0.5 : 0.01, duration: 0
   });
 }
 function arrange() {
@@ -283,6 +284,10 @@ async function finishActorDrag() {
   if (!positionBase) { arrange(); return; }
   const positions = Object.fromEntries(nodes.value.map(node => [node.data.group.table || "other-tables", { ...node.position }]));
   await savePositions(positions);
+}
+function resetActorPositions() {
+  fitAfterArrange = true;
+  void savePositions({});
 }
 async function savePositions(positions) {
   localPositions = positions;
@@ -329,8 +334,11 @@ onMounted(() => {
       return { ...edge, sourceHandle: route.sourceHandle, targetHandle: route.targetHandle, data: { ...edge.data, points: route.points } };
     });
     if (data.overviewRoutes.some((route) => route.obstructed)) layoutError.value = "Some connections could not avoid actors. Try showing only main connections.";
-    if (initial) await fit({ automatic: true });
-    if (!disposed && data.id === requestId) pending.value = false;
+    if (initial || fitAfterArrange) await fit({ automatic: initial });
+    if (!disposed && data.id === requestId) {
+      fitAfterArrange = false;
+      pending.value = false;
+    }
   };
   worker.onerror = () => { clearTimeout(timer); pending.value = false; layoutError.value = "The overview layout worker failed. Reload overview to retry."; };
   arrange();

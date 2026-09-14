@@ -168,7 +168,7 @@ Opening an actor leaves the map mounted at its exact viewport and positions,
 reduces its opacity, and layers a scoped `DatabaseErd` over it. This is the existing
 ERD component with the group's physical tables. Incident FK metadata preserves
 the normal key columns and icons; the existing router draws only relationships
-whose two endpoints are visible in that group. The existing worker uses shared radial placement to
+whose two endpoints are visible in that group. The existing worker uses shared rectangular rings to
 centre the main table and distribute its supporting tables around it. Nodes cannot
 be dragged in this scoped mode; the full ERD retains dragging. Search, fields,
 selection, highlighting, focus, zoom and other ERD interactions use the same owner.
@@ -176,8 +176,11 @@ The shared `DatabaseTableList` renders tables and fields in both the database
 navigator and the scoped layer; ERD selections update its selected table, and its
 table/field choices locate the corresponding ERD content. Scoped layout/view state
 is kept only in the mounted overview, separately per actor, and is never written
-over the shared full ERD layout. Close details, Escape, or clicking outside the
-layer restores the unchanged overview. Late worker completions cannot reopen it.
+over the shared full ERD layout. The overview and detail view share one stable
+heading and toolbar row. Physical tables fade in only after layout, routing and
+the initial camera fit finish. Close details or Escape restores the unchanged
+overview, including after clicking empty diagram space. Late worker completions
+cannot reopen it.
 
 Optional `mainRelationships` lists portable schema foreign-key references chosen for their
 business significance. The overview normally draws only these, bundled by directed
@@ -190,10 +193,11 @@ main-table cardinalities. Shared ownership, authorship and infrastructure refere
 normally stay out of the main view unless meaningful to the application.
 
 AI-authored `rings` choose business actors at the centre and supporting actors
-clockwise farther out. The worker uses shared radial placement, with 220 pixels
-between bounding circles. Collapsed card area reflects table count and is capped
-at twice the smallest card; fonts stay readable. Other tables join the outer ring.
-Connections use facing card sides and 48-pixel obstacle clearance. Without authored
+clockwise farther out. The worker fills spare cells in compact rectangular rings
+before expanding, with at least 64 pixels between cards. Collapsed cards start at
+360 pixels wide; their area reflects table count and is capped at twice the
+smallest card. Other tables fill remaining ring space. Connections use facing
+card sides and 24-pixel obstacle clearance. Without authored
 placement, larger groups start nearer the centre. Fit shows the entire map; opening
 and closing a scoped ERD never refits it. Overview uses the full workspace width,
 including intermediate sidebar breakpoints and chat/copilot layouts. Unchanged
@@ -210,9 +214,9 @@ acknowledged hash, so a concurrent source edit still conflicts. Save acknowledge
 and routing replies do not rewind a newer drag or the camera.
 Drop reroutes in the worker and saves optional `positions`, keyed
 by actor main table or `other-tables`, through the same hash-protected overview
-operation. Saved positions override radial placement, including after a reload or
-connection-visibility change. Reset actor positions clears these overrides without
-changing membership or AI rings. A stale save cannot overwrite another editor;
+operation. Saved positions override automatic placement, including after a reload or
+connection-visibility change. Reset actor positions clears these overrides and fits
+the compact arrangement, without changing membership or AI rings. A stale save cannot overwrite another editor;
 failed saves restore the current persisted arrangement and use command feedback.
 These positions belong to the overview source, never the full ERD layout. Actor
 edits prune overrides for removed actors; incremental AI review preserves them.

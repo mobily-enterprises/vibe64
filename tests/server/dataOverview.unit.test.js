@@ -95,10 +95,10 @@ test("logical rings place every actor exactly once and reject physical supportin
 });
 
 test("overview routes avoid intervening actors instead of hiding a direct relation behind a card", () => {
-  const nodes = ["contacts", "dogs", "bookings"].map((id, index) => ({ id, position: { x: index * 450, y: 0 }, dimensions: { width: 340, height: 152 } }));
+  const nodes = ["contacts", "dogs", "bookings"].map((id, index) => ({ id, position: { x: index * 404, y: 0 }, dimensions: { width: 340, height: 152 } }));
   const [route] = routeOverviewEdges(nodes, [{ id: "direct", source: "contacts", target: "bookings" }]);
   assert.equal(route.obstructed, false);
-  assert.equal(erdPathClear(route.points, erdObstacles(nodes, 48), "contacts", "bookings"), true);
+  assert.equal(erdPathClear(route.points, erdObstacles(nodes, 24), "contacts", "bookings"), true);
 });
 
 test("overview connections face their neighbour in every direction and keep a clear corridor around other cards", () => {
@@ -112,7 +112,7 @@ test("overview connections face their neighbour in every direction and keep a cl
     assert.equal(route.sourceHandle, `out-${sourceSide}`);
     assert.equal(route.targetHandle, `in-${targetSide}`);
     assert.equal(route.obstructed, false);
-    assert.equal(erdPathClear(route.points, erdObstacles(nodes, 48), "source", "target"), true);
+    assert.equal(erdPathClear(route.points, erdObstacles(nodes, 24), "source", "target"), true);
   }
 });
 

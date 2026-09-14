@@ -99,6 +99,24 @@ describe("Database ERD layout", () => {
 
 
 describe("Overview ring spacing", () => {
+  it.each([9, 10])("packs sparse rings of %i cards without empty outer rows", (count) => {
+    const cards = Array.from({ length: count }, (_, index) => ({ id: `actor:${index}`, count: count - index, width: 360, height: 144 }));
+    const rings = [["actor:0"], ["actor:1", "actor:2", "actor:3", "actor:4"], ["actor:5", "actor:6", "actor:7", "actor:8"]];
+    const placed = layoutErdRings(cards, rings, 64);
+    expect(placed).toHaveLength(count);
+    expect(placed[0]).toMatchObject({ id: "actor:0", x: -180, y: -72 });
+    const width = Math.max(...placed.map(node => node.x + node.width)) - Math.min(...placed.map(node => node.x));
+    const height = Math.max(...placed.map(node => node.y + node.height)) - Math.min(...placed.map(node => node.y));
+    expect(width).toBeLessThan(1240);
+    expect(height).toBeLessThan(count === 9 ? 600 : 800);
+    for (const [index, left] of placed.entries()) {
+      for (const right of placed.slice(index + 1)) {
+        expect(left.x + left.width + 64 <= right.x || right.x + right.width + 64 <= left.x ||
+          left.y + left.height + 64 <= right.y || right.y + right.height + 64 <= left.y).toBe(true);
+      }
+    }
+  });
+
   it.each([1, 4, 9, 25, 40])("keeps %i varied cards separate in compact rings", (count) => {
     const cards = Array.from({ length: count }, (_, index) => ({ id: `actor:${index}`, count: count - index, width: 300 + index % 3 * 60, height: 144 + index % 3 * 28 }));
     const compact = layoutErdRings(cards);
