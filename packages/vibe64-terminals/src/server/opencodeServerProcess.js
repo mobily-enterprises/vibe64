@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   closeSync,
   fstatSync,
@@ -460,6 +460,14 @@ async function createOpenCodeServerProcess({
         label: text(execution.label) || "OpenCode assistant",
         lifecycle: "service",
         operationId: text(execution.operationId) || "opencode-server",
+        resourceProfile: {
+          key: text(execution.operationId) === "opencode-catalog" ? "opencode-catalog-service" : "opencode-server",
+          environment: "development",
+          compatibilityKey: createHash("sha256").update(JSON.stringify({
+            command: text(command) || "opencode", version: OPENCODE_EXPECTED_VERSION,
+            platform: process.platform, architecture: process.arch, startup: OPENCODE_MANAGED_STARTUP_SCRIPT
+          })).digest("hex")
+        },
         ownerId: text(execution.ownerId) || stableHash(`${normalizedDbPath}\0${normalizedWorkdir}`),
         projectSlug: text(execution.projectSlug),
         sessionId: text(execution.sessionId)
@@ -739,6 +747,14 @@ async function verifyOpenCodeApiKey({
           label: "Verifying OpenCode API key",
           lifecycle: "finite",
           operationId: "opencode-catalog",
+          resourceProfile: {
+            key: "opencode-key-verification", environment: "development",
+            compatibilityKey: createHash("sha256").update(JSON.stringify({
+              command: text(command) || "opencode", version: OPENCODE_EXPECTED_VERSION,
+              platform: process.platform, architecture: process.arch,
+              providerId, model: selectedModelId, outputTokenMax: OPENCODE_VERIFY_OUTPUT_TOKEN_MAX
+            })).digest("hex")
+          },
           ownerId: "opencode-catalog"
         },
         inheritProcessEnv: false,

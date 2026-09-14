@@ -1031,6 +1031,7 @@ function managedRunnerCgroupMeasurements() {
   const memoryEvents = cgroupKeyValues(path.join(cgroupPath, "memory.events"));
   const io = cgroupIoTotals(path.join(cgroupPath, "io.stat"));
   return {
+    resourceCounters: managedWorkflowCounters(cgroupPath),
     cpuUsageNSec: String(Number(cpu.usage_usec || 0) * 1000),
     ioReadBytes: String(io.readBytes),
     ioWriteBytes: String(io.writeBytes),
@@ -1152,6 +1153,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
   const exitObservedAt = Number.isFinite(exitTime) && exitTime > 0 && exitTime <= Date.now()
     ? new Date(exitTime).toISOString() : "";
   return {
+    resourceCounters: recorded.resourceCounters || managedWorkflowCounters(cgroupPath),
     activeState: String(values.ActiveState || (recorded.executionId ? "inactive" : "unknown")),
     controlGroup,
     cpuUsageNSec: maximumCounter(values.CPUUsageNSec, recorded.cpuUsageNSec),

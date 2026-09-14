@@ -622,3 +622,17 @@ test("managed service runner stops its process tree when the owning controller d
     await rm(root, { force: true, recursive: true });
   }
 });
+
+test("repeatable activity descriptors carry only an explicit opaque history identity", () => {
+  const resourceProfile = { key: "codex-app-server", compatibilityKey: "a".repeat(64), environment: "development" };
+  const descriptor = normalizeExecutionDescriptor({ resourceProfile });
+  assert.deepEqual(descriptor.resourceProfile, resourceProfile);
+  assert.notEqual(descriptor.resourceProfile, resourceProfile);
+  assert.equal(Object.isFrozen(descriptor.resourceProfile), true);
+  for (const invalid of [{}, { ...resourceProfile, compatibilityKey: "short" }, { ...resourceProfile, key: "../foreign" },
+    { ...resourceProfile, environment: "unknown" }, { ...resourceProfile, memoryMaxBytes: 1 },
+    { ...resourceProfile, command: "private command" }]) {
+    assert.throws(() => normalizeExecutionDescriptor({ resourceProfile: invalid }), /profile identity/u);
+  }
+  assert.equal(normalizeExecutionDescriptor({ operationId: "random-operation" }).resourceProfile, undefined);
+});

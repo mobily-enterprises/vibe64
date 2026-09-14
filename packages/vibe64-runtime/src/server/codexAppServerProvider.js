@@ -2283,6 +2283,7 @@ async function startCodexAppServerProcess({
     [CODEX_APP_SERVER_PROCESS_COMMAND_HASH_ENV]: commandHash,
     [CODEX_APP_SERVER_PROCESS_RUNTIME_TOKEN_ENV]: runtimeToken
   };
+  const profileBinary = path.isAbsolute(codexCommand) ? await stat(codexCommand).catch(() => null) : null;
   const startResult = await commandRunner({
     actor: "app",
     allowedRoots: processCwd ? [processCwd] : [],
@@ -2307,6 +2308,16 @@ async function startCodexAppServerProcess({
       label: "Codex assistant",
       lifecycle: "service",
       operationId: "codex-app-server",
+      ...(profileBinary?.isFile() ? { resourceProfile: {
+        key: economy ? "codex-economy" : "codex-app-server",
+        environment: "development",
+        compatibilityKey: createHash("sha256").update(JSON.stringify({
+          command: codexCommand, economy, executionMode, runtimes: normalizedRuntimes,
+          binary: [profileBinary.dev, profileBinary.ino, profileBinary.size, profileBinary.mtimeMs, profileBinary.ctimeMs],
+          platform: process.platform, architecture: process.arch,
+          startup: economy ? CODEX_APP_SERVER_ECONOMY_STARTUP_SCRIPT : CODEX_APP_SERVER_MANAGED_STARTUP_SCRIPT
+        })).digest("hex")
+      } } : {}),
       ownerId: normalizeAgentText(runtimeInstanceId || session?.sessionId || session?.id) ||
         stableHash(runtimeDir)
     },

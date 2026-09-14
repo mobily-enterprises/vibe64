@@ -46,6 +46,17 @@ Attaching a managed execution requires an active owned workflow and child limits
 no larger than that parent. Ordinary commands without workflow identity retain
 their existing execution path.
 
+Repeatable caller-owned activities may also carry `resourceProfile` with a task
+key, environment and opaque compatibility digest. This is identity metadata,
+not an allocation request: it cannot contain commands, credentials, paths or
+memory policy. Codex and OpenCode service callers identify their installed
+runtime/configuration; an unresolved Codex executable omits the digest. Arbitrary
+shell commands do not acquire a guessed identity from their command text. The
+installed execution provider owns any historical measurement and start decision;
+workflow children must not train an independent copy of their parent's demand.
+Final execution receipts retain nullable kernel resource counters so an owning
+provider can distinguish missing quality evidence from genuine zero counters.
+
 The privileged `workflow-grow` action accepts the workflow identity, its expected
 current maximum and a requested byte budget, plus at most 128 distinct execution
 identities with their expected/requested maxima. The provider must reserve the
