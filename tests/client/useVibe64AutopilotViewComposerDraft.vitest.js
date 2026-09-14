@@ -417,6 +417,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     for (const status of ["disconnected", "reconciling", "unknown"]) {
       props.agentConnectionStatus = status;
       await nextTick();
+      expect(view.connectionRecoveryVisible.value).toBe(true);
       expect(view.composerDisabled.value).toBe(false);
       expect(view.composerCanSubmit.value).toBe(false);
       expect(view.composerSubmitLabel.value).toBe(status === "disconnected" ? "Reconnecting…" : "Checking…");
@@ -426,6 +427,25 @@ describe("useVibe64AutopilotView direct chat", () => {
     }
     props.agentConnectionStatus = "connected";
     await nextTick();
+    expect(view.connectionRecoveryVisible.value).toBe(false);
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
+  it("shows ordinary loading while keeping the draft editable until the assistant is ready", async () => {
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "initializing" });
+    view.composerDraft.value = "Keep typing while loading.";
+    expect(view.thinkingLabel.value).toBe("Loading assistant…");
+    expect(view.connectionRecoveryVisible.value).toBe(false);
+    expect(view.composerDisabled.value).toBe(false);
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(view.composerSubmitLabel.value).toBe("Loading…");
+    expect(view.composerSubmitAriaLabel.value).toBe("Waiting for the assistant to load");
+    await view.submitComposerMessage();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    props.agentConnectionStatus = "connected";
+    await nextTick();
+    expect(view.composerDraft.value).toBe("Keep typing while loading.");
     expect(view.composerCanSubmit.value).toBe(true);
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
   });
@@ -1913,7 +1933,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOutput.value).toBe("");
   });
 
-  it.each(["reconciling", "disconnected", "unknown"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
+  it.each(["initializing", "reconciling", "disconnected", "unknown"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
     const { props, view } = await createViewWithProps({
       agentConnectionStatus: connectionStatus,
       workState: { unsaved: true }

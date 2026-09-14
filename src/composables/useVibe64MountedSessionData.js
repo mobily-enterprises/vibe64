@@ -62,7 +62,7 @@ function useVibe64MountedSessionData({
   const projectSlug = useVibe64ProjectSlug();
   const detailRecord = ref(null);
   const agentTurnOverlay = ref(null);
-  const agentConnectionStatus = ref("disconnected");
+  const agentConnectionStatus = ref("initializing");
   const mountedActive = computed(() => readRefOrGetterValue(active) === true);
   const activeSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const activeSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
@@ -269,7 +269,9 @@ function useVibe64MountedSessionData({
     const cancelled = new Promise((_resolve, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
     });
-    agentConnectionStatus.value = "reconciling";
+    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling"].includes(agentConnectionStatus.value)
+      ? "reconciling"
+      : "initializing";
     const checking = (async () => {
       const refreshed = await refresh({ reason });
       if (!currentConnection() || controller.signal.aborted) {
@@ -367,7 +369,6 @@ function useVibe64MountedSessionData({
   realtimeSocket.on("connect_error", markRealtimeDisconnected);
   realtimeSocket.on("disconnect", markRealtimeDisconnected);
   if (realtimeSocket.connected) {
-    agentConnectionStatus.value = "reconciling";
     queueMicrotask(() => {
       void reconcileMountedAgentSession("initial-realtime-connect");
     });

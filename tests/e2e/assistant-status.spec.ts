@@ -131,18 +131,38 @@ test("repeated failures back off instead of flooding the server", async ({ page 
   }
 });
 
-test("a slow successful check stays pending without a false failure", async ({ page }) => {
-  const release = Promise.withResolvers<void>();
-  server.state.checks.push(async (response) => { await release.promise; json(response, { ok: true }); });
-  await openChat(page);
-  await composer(page).fill("Leave this here.");
-  await expect(page.getByText("Checking assistant status...", { exact: true }).first()).toBeVisible();
-  await page.waitForTimeout(1_500);
-  expect(server.state.checkCount).toBe(1);
-  await expect(warning(page)).toHaveCount(0);
-  release.resolve();
-  await expect(steer(page)).toBeEnabled();
-});
+for (const viewport of viewports) {
+  test(`normal session loading and reload show no recovery banner at ${viewport.width}px`, async ({ page }, info) => {
+    await page.setViewportSize(viewport);
+    const draft = "Keep this draft while the assistant loads.";
+    for (const [index, load] of ["initial", "reload"].entries()) {
+      const release = Promise.withResolvers<void>();
+      server.state.checks.push(async (response) => {
+        await release.promise;
+        json(response, { ok: true });
+      });
+      try {
+        if (load === "initial") await openChat(page);
+        else await page.reload();
+        await expect.poll(() => server.state.checkCount).toBe(index + 1);
+        await expect(page.getByText("Loading assistant…", { exact: true }).first()).toBeVisible();
+        await expect(page.locator("[data-vibe64-connection-recovery]")).toHaveCount(0);
+        await expect(warning(page)).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Waiting for the assistant to load" })).toBeDisabled();
+        await composer(page).fill(draft);
+        await expect(composer(page)).toHaveValue(draft);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath(`${load}.png`) });
+      } finally {
+        release.resolve();
+      }
+      await expect(steer(page)).toBeEnabled();
+      await expect(composer(page)).toHaveValue(draft);
+      expect(server.state.messages).toHaveLength(0);
+      expect(server.state.interrupts).toBe(0);
+    }
+  });
+}
 
 test("hung provider check times out and a late response cannot undo recovery", async ({ page }) => {
   test.setTimeout(75_000);

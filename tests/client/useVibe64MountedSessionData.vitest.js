@@ -365,7 +365,7 @@ describe("useVibe64MountedSessionData", () => {
       vi.unstubAllGlobals();
     });
 
-    function mountAssistant() {
+    function mountAssistant({ connect = true } = {}) {
       endpointMocks.resource.data.value = {
         agentSession: { turn: { active: true, id: "turn-a", state: "active" } },
         revision: 10,
@@ -377,10 +377,52 @@ describe("useVibe64MountedSessionData", () => {
         sessionId: ref("session-a"),
         sessionsApiPath: ref("/api/vibe64/sessions")
       }));
-      realtimeMocks.socket.connected = true;
-      realtimeMocks.handlers.get("connect")();
+      if (connect) {
+        realtimeMocks.socket.connected = true;
+        realtimeMocks.handlers.get("connect")();
+      }
       return controller;
     }
+
+    it.each([false, true])("initializes quietly with socket connected=%s until the first check succeeds", async (connected) => {
+      realtimeMocks.socket.connected = connected;
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      const controller = mountAssistant({ connect: false });
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
+      if (!connected) {
+        realtimeMocks.socket.connected = true;
+        realtimeMocks.handlers.get("connect")();
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      response.resolve({ ok: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
+    it("keeps recovery visible through a retry after an initial check fails", async () => {
+      httpMocks.request.mockRejectedValueOnce(new Error("Temporary failure"));
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("unknown");
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(controller.agentConnectionStatus.value).toBe("reconciling");
+      response.resolve({ ok: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
+    it("shows recovery when the initial socket connection fails", () => {
+      const controller = mountAssistant({ connect: false });
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
+      realtimeMocks.handlers.get("connect_error")(new Error("Connection refused"));
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      expect(httpMocks.request).not.toHaveBeenCalled();
+    });
 
     it("manual recovery reconnects the socket or rechecks the existing connection", async () => {
       const controller = mountAssistant();
@@ -488,6 +530,7 @@ describe("useVibe64MountedSessionData", () => {
       const response = Promise.withResolvers();
       httpMocks.request.mockReturnValueOnce(response.promise);
       const controller = mountAssistant();
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
       await vi.advanceTimersByTimeAsync(45_000);
       expect(controller.agentConnectionStatus.value).toBe("unknown");
       expect(httpMocks.request.mock.calls[0][1].signal.aborted).toBe(true);

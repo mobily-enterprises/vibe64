@@ -139,7 +139,7 @@
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
         <v-sheet
-          v-if="props.active && !props.sessionSelectionArchived && props.agentConnectionStatus !== 'connected'"
+          v-if="connectionRecoveryVisible"
           class="d-flex flex-wrap align-center justify-space-between ga-2 pa-3"
           color="surface-variant"
           rounded="lg"
@@ -1096,6 +1096,7 @@ const {
   systemReloadVersion,
   thinkingLabel,
   thinkingVisible,
+  connectionRecoveryVisible,
   updateComposerAttachments,
   updatePreviewAttachmentState,
   workspaceSetupAskDisabled,
