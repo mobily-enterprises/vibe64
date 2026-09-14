@@ -120,7 +120,11 @@ view and place important actors centrally with supporting actors spreading outwa
 grouping or process only previously unreviewed tables, preserving manual choices;
 tables deliberately left in Other tables are recorded as reviewed. The definition
 lives with project source so it is reviewable, versioned and maintained when the
-schema changes; displaying it does not require an AI call.
+schema changes; displaying it does not require an AI call. The same grouping,
+main connections and actor positions work across session databases with the same
+schema. MySQL database names are resolved from the selected session; PostgreSQL
+schema distinctions remain explicit. Actual missing tables or connections still
+need review.
 The first project message carries the relevant Genesis task prompt; later
 messages and active-turn steering stay concise instead of rebuilding it. The
 project's shorter durable operating guide is loaded when a conversation is

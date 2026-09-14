@@ -6,7 +6,7 @@ import test from "node:test";
 import { dataOverviewCoverage, validateDataOverview } from "../../packages/vibe64-database-tools/src/shared/dataOverview.js";
 import { dataOverviewGraph, routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
 import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/client/erdRouting.js";
-import { readDataOverview } from "../../packages/vibe64-database-tools/src/server/dataOverview.js";
+import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "../../packages/vibe64-database-tools/src/server/dataOverview.js";
 import { createService } from "../../packages/vibe64-database-tools/src/server/service.js";
 import { createService as createSourceEditor } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { bookingOverview, dataOverviewSchema } from "../fixtures/dataOverviewSchema.js";
@@ -140,12 +140,12 @@ test("130-table overview creates only actor nodes and keeps complete membership"
   assert.equal(schema.relationships.length, 479);
 });
 
-async function fixture(t) {
+async function fixture(t, sessionId = "test") {
   const root = await mkdtemp(path.join(tmpdir(), "data-overview-"));
   t.after(() => rm(root, { force: true, recursive: true }));
-  const source = path.join(root, "sessions/active/test/source");
+  const source = path.join(root, "sessions/active", sessionId, "source");
   await mkdir(source, { recursive: true });
-  const session = { sessionId: "test", metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" } };
+  const session = { sessionId, metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" } };
   return { root, source, session, file: path.join(source, "data-overview.json") };
 }
 
@@ -195,7 +195,8 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
   const read = await service.readOverview({ sessionId: "test" });
   assert.equal(read.valid, true); assert.equal(read.coverage.classified, 7);
   assert.equal(read.schema.tables.length, schema.tables.length);
-  assert.deepEqual(read.schema.relationships, schema.relationships);
+  assert.deepEqual(read.schema.relationships, schema.relationships.map((relationship) => ({ ...relationship, reference: relationship.id })));
+  assert.equal(read.schema.tables[0].reference, schema.tables[0].qualifiedName);
   assert.deepEqual(read.schema.tables[0].columns.map((column) => column.name), schema.tables[0].columns.map((column) => column.name));
   assert.match(read.instructions, /relationship distance|Relationship distance/u);
   const second = await fixture(t);
@@ -230,4 +231,168 @@ test("manual actor positions accept finite coordinates and reject unrelated tabl
   }
   assert.throws(() => validateDataOverview({ ...value, positions: { "public.checklists": { x: 0, y: 0 } } }));
   assert.throws(() => validateDataOverview({ ...value, positions: [] }));
+});
+
+test("one persisted MySQL overview survives session database changes, UI saves and real schema drift without SQL", async (t) => {
+  const first = await fixture(t);
+  const second = await fixture(t, "second");
+  const sessions = new Map([["test", first.session], ["second", second.session]]);
+  const schemas = new Map([...sessions.keys()].map((id) => {
+    const database = id === "test" ? "session_67913524" : "session_ca855ec2";
+    return [id, {
+      database, engine: "mysql", refreshedAt: "2026-09-14T00:00:00Z",
+      tables: ["contacts", "bookings", "audit"].map((name) => ({
+        name, schema: database, qualifiedName: `${database}.${name}`, kind: "table",
+        columns: [{ name: "id", nativeType: "integer", nullable: false }],
+        keys: [{ primary: true, columns: ["id"] }]
+      })),
+      relationships: [{
+        id: `${database}.bookings:bookings_contact_fk`, constraintName: "bookings_contact_fk",
+        sourceTable: `${database}.bookings`, referencedTable: `${database}.contacts`,
+        columns: ["contact_id"], referencedColumns: ["id"]
+      }]
+    }];
+  }));
+  const portable = {
+    version: 1, abstraction: "balanced",
+    actors: [
+      { table: "contacts", name: "Customers", description: "Customer records", tables: ["contacts"] },
+      { table: "bookings", name: "Bookings", description: "Appointments", tables: ["bookings"] }
+    ],
+    reviewedTables: ["contacts", "bookings", "audit"],
+    mainRelationships: ["bookings:bookings_contact_fk"],
+    rings: [["bookings"], ["contacts"]],
+    positions: { bookings: { x: 125, y: -75 }, "other-tables": { x: 500, y: 300 } }
+  };
+  const original = `${JSON.stringify(validateDataOverview(portable), null, 2)}\n`;
+  await writeFile(first.file, original);
+  const events = [];
+  const projectService = {
+    createRuntime: async () => ({
+      getSession: async (id) => sessions.get(id),
+      store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) }
+    }),
+    createSessionStore: async () => ({
+      readSession: async (id) => sessions.get(id),
+      readArtifact: async (id, key) => key === "database/schema.json" ? JSON.stringify(schemas.get(id)) : ""
+    }),
+    sessionDatabaseEnvironment: async ({ sessionId }) => {
+      const endpoint = { host: "127.0.0.1", port: 3306, database: schemas.get(sessionId).database };
+      return { databaseToolEnvironment: {
+        contract: "vibe64.database-tool-environment.v1", kind: "mysql",
+        read: { ...endpoint, username: "reader" }, write: { ...endpoint, username: "writer" }
+      } };
+    }
+  };
+  const sourceEditor = createSourceEditor({ projectService, temporaryRoot: first.root });
+  t.after(() => sourceEditor.close());
+  const service = createService({
+    projectService, sourceEditor, publishLayoutChanged: async (id) => events.push(id),
+    withKnex: () => assert.fail("Overview must use schema metadata, never SQL")
+  });
+
+  for (const [sessionId, file] of [["test", first.file], ["second", second.file]]) {
+    if (sessionId === "second") await writeFile(file, await readFile(first.file));
+    const physical = schemas.get(sessionId);
+    const state = await service.readState({ sessionId });
+    assert.equal(state.ok, true, JSON.stringify(state));
+    assert.deepEqual(state.schema, physical);
+    const definition = state.overview.definition;
+    assert.equal(definition.actors[1].table, `${physical.database}.bookings`);
+    assert.deepEqual(definition.rings, [[`${physical.database}.bookings`], [`${physical.database}.contacts`]]);
+    assert.deepEqual(definition.positions[`${physical.database}.bookings`], portable.positions.bookings);
+    assert.deepEqual(definition.positions["other-tables"], portable.positions["other-tables"]);
+    const graph = dataOverviewGraph(state.schema, definition);
+    assert.equal(graph.coverage.classified, 2);
+    assert.deepEqual(graph.coverage.unreviewed, []);
+    assert.deepEqual(graph.coverage.missing, []);
+    assert.deepEqual(graph.coverage.missingRelationships, []);
+    assert.equal(graph.edges.length, 1);
+    assert.equal(graph.edges[0].data.relationships[0].id, physical.relationships[0].id);
+    const cli = await service.readOverview({ sessionId });
+    assert.equal(cli.valid, true);
+    assert.deepEqual(cli.overview.definition, portable);
+    assert.deepEqual(cli.coverage.others, ["audit"]);
+    assert.deepEqual(cli.schema.tables.map((table) => table.reference), ["contacts", "bookings", "audit"]);
+    assert.equal(cli.schema.relationships[0].reference, "bookings:bookings_contact_fk");
+    assert.equal(cli.schema.relationships[0].id, physical.relationships[0].id);
+    assert.equal(await readFile(file, "utf8"), original, "reads must not rewrite source");
+
+    const saved = await service.saveOverview({ sessionId, definition, baseHash: state.overview.hash });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.deepEqual(saved.overview.definition, definition, "UI response keeps current physical identities");
+    assert.equal(await readFile(file, "utf8"), original, "saving must never reintroduce a session database name");
+    const outside = { ...definition, mainRelationships: ["unrelated_database.bookings:bookings_contact_fk"] };
+    assert.equal((await service.saveOverview({ sessionId, definition: outside, baseHash: saved.overview.hash })).ok, false);
+    assert.equal(await readFile(file, "utf8"), original);
+  }
+  assert.deepEqual(events, ["test", "second"]);
+
+  const changed = schemas.get("second");
+  changed.relationships = [];
+  const missingConnection = await service.readOverview({ sessionId: "second" });
+  assert.equal(missingConnection.valid, false);
+  assert.deepEqual(missingConnection.coverage.missingRelationships, ["bookings:bookings_contact_fk"]);
+  changed.tables = changed.tables.filter((table) => table.name !== "bookings");
+  const missingTable = await service.readOverview({ sessionId: "second" });
+  assert.deepEqual(missingTable.coverage.missing, ["bookings"]);
+  const state = await service.readState({ sessionId: "second" });
+  assert.deepEqual(dataOverviewGraph(state.schema, state.overview.definition).coverage.missing, ["session_ca855ec2.bookings"]);
+  assert.equal(await readFile(second.file, "utf8"), original);
+});
+
+test("PostgreSQL schema distinctions and constraint names remain exact across database changes", () => {
+  const definition = {
+    version: 1,
+    actors: ["public.bookings", "archive.bookings"].map((table) => ({ table, name: table, description: "", tables: [table] })),
+    mainRelationships: ["archive.bookings:archive_fk"],
+    rings: [["public.bookings"], ["archive.bookings"]],
+    positions: { "archive.bookings": { x: 25, y: 50 } }
+  };
+  for (const database of ["session_one", "session_two"]) {
+    const schema = { engine: "postgresql", database };
+    assert.deepEqual(dataOverviewDefinition(schema, definition), definition);
+    assert.deepEqual(dataOverviewDefinition(schema, definition, { qualified: true }), definition);
+    assert.equal(dataOverviewReference(schema, "archive.bookings:archive_fk"), "archive.bookings:archive_fk");
+  }
+  const mysql = { engine: "mysql", database: "session_one" };
+  assert.equal(dataOverviewReference(mysql, "session_one.bookings:fk_session_one.contacts"), "bookings:fk_session_one.contacts");
+  assert.throws(() => dataOverviewReference(mysql, "session_one_other.bookings:fk"), /outside the selected database/);
+});
+
+test("database-qualified MySQL source gets an explicit conversion message without rewriting or losing authored choices", async (t) => {
+  const { file, session } = await fixture(t);
+  const original = {
+    version: 1,
+    actors: [{ table: "old_session.bookings", name: "Bookings", description: "Appointments", tables: ["old_session.bookings"] }],
+    mainRelationships: ["old_session.bookings:contact_fk"],
+    reviewedTables: ["old_session.bookings", "old_session.audit"],
+    rings: [["old_session.bookings"]],
+    positions: { "old_session.bookings": { x: 150, y: -80 } }
+  };
+  const text = JSON.stringify(original);
+  await writeFile(file, text);
+  const schema = { engine: "mysql", database: "new_session" };
+  const ui = await readDataOverview(session, schema);
+  assert.equal(ui.present, true);
+  assert.match(ui.error, /omit the database name.*Review with AI/);
+  assert.deepEqual(ui.definition.actors, []);
+  assert.deepEqual((await readDataOverview(session)).definition, original, "authoring still receives all original choices");
+  assert.equal(await readFile(file, "utf8"), text);
+
+  // Explicit, one-time conversion against the known old database; ordinary
+  // reads never guess this prefix or persist a conversion themselves.
+  const converted = dataOverviewDefinition({ engine: "mysql", database: "old_session" }, original);
+  await writeFile(file, JSON.stringify(converted));
+  const repaired = await readDataOverview(session, schema);
+  assert.equal(repaired.error, "");
+  assert.equal(repaired.definition.actors[0].table, "new_session.bookings");
+  assert.deepEqual(repaired.definition.mainRelationships, ["new_session.bookings:contact_fk"]);
+  assert.deepEqual(repaired.definition.positions["new_session.bookings"], original.positions["old_session.bookings"]);
+  assert.deepEqual(converted, {
+    version: 1,
+    actors: [{ table: "bookings", name: "Bookings", description: "Appointments", tables: ["bookings"] }],
+    mainRelationships: ["bookings:contact_fk"], reviewedTables: ["bookings", "audit"],
+    rings: [["bookings"]], positions: { bookings: { x: 150, y: -80 } }
+  });
 });

@@ -46,7 +46,7 @@ import {
 import {
   quoteQualifiedTable
 } from "./sqlPolicy.js";
-import { readDataOverview } from "./dataOverview.js";
+import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
 function databaseResult(operation) {
@@ -315,18 +315,23 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const overview = await readDataOverview(context.session);
-        const coverage = dataOverviewCoverage(schema, overview.definition);
+        const reference = (value) => dataOverviewReference(schema, value);
+        const relationships = schema.relationships.map((relationship) => ({ ...relationship, reference: reference(relationship.id) }));
+        const coverage = dataOverviewCoverage({
+          tables: schema.tables.map((table) => ({ qualifiedName: reference(table.qualifiedName) })),
+          relationships: relationships.map((relationship) => ({ id: relationship.reference }))
+        }, overview.definition);
         return {
-          ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length,
+          ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length && !coverage.missingRelationships.length,
           instructions: DATA_OVERVIEW_INSTRUCTIONS,
           schema: {
             database: schema.database, engine: schema.engine, refreshedAt: schema.refreshedAt,
             tables: schema.tables.map((table) => ({
-              qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
+              reference: reference(table.qualifiedName), qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
               keys: table.keys,
               columns: table.columns.map((column) => ({ name: column.name, nativeType: column.nativeType, nullable: column.nullable, comment: column.comment }))
             })),
-            relationships: schema.relationships
+            relationships
           }
         };
       });
@@ -338,7 +343,7 @@ function createService({
         const [layout, workspace, overview] = await Promise.all([
           readErdLayout(context.store, context.sessionId, context.vibe64User),
           readWorkspace(context.store, context.sessionId, context.vibe64User),
-          readDataOverview(context.session)
+          readDataOverview(context.session, schema)
         ]);
         return {
           assistant: databaseAssistantAvailability(context.session),
@@ -375,7 +380,9 @@ function createService({
     async saveOverview(input = {}) {
       return databaseResult(async () => {
         const context = await sessionContext(input);
-        const definition = validateDataOverview(input.definition);
+        const schema = await currentSchema(context);
+        const definition = validateDataOverview(dataOverviewDefinition(schema, validateDataOverview(input.definition)));
+        const resolvedDefinition = dataOverviewDefinition(schema, definition, { qualified: true });
         const text = `${JSON.stringify(definition, null, 2)}\n`;
         if (Buffer.byteLength(text) > DATA_OVERVIEW_MAX_BYTES) {
           throw databaseError("Data overview is larger than 256 KiB.", "vibe64_database_overview_invalid");
@@ -391,7 +398,7 @@ function createService({
         const result = current.present ? await sourceEditor.saveFile(payload) : await sourceEditor.createFile(payload);
         if (result.ok === false) return result;
         await publishLayoutChanged(context.sessionId, context.session);
-        return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition } };
+        return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition: resolvedDefinition } };
       });
     },
 

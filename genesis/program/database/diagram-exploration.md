@@ -145,7 +145,20 @@ The Overview tab uses a source-owned `data-overview.json` definition:
 
 Membership is explicit and independent of relationship distance. Each table has
 one home; genuinely shared concepts can be separate actors. Every actor includes
-its main table. Exact qualified names come from the refreshed schema. Unassigned
+its main table. Persisted references come from the `reference` fields returned by
+`vibe64-database overview --json`: MySQL uses database-relative table names and
+`table:constraint` relationships; PostgreSQL retains `schema.table` and
+`schema.table:constraint` so same-named tables in different schemas stay distinct.
+The server resolves the stored definition to current physical identities for the
+UI and removes the selected MySQL database prefix when saving. This covers actor
+roots, membership, reviewed tables, rings, positions and main relationships;
+the inspected schema, detailed ERD and SQL identities stay fully qualified.
+Existing MySQL definitions with embedded database names need a one-time source
+edit through Review with AI to remove only the old database prefix from those
+fields. The UI shows a conversion message and keeps all physical tables available;
+the authoring command preserves their original definition and reports missing
+references until repaired. Reads never rewrite project source or guess
+that a missing table was renamed. Unassigned
 tables appear under Other tables, and missing references remain visible as a
 warning until reviewed. An invalid definition falls back to all tables in Other
 tables with its error visible. Opening each actor exposes every current table
@@ -166,7 +179,7 @@ is kept only in the mounted overview, separately per actor, and is never written
 over the shared full ERD layout. Close details, Escape, or clicking outside the
 layer restores the unchanged overview. Late worker completions cannot reopen it.
 
-Optional `mainRelationships` lists actual schema foreign-key IDs chosen for their
+Optional `mainRelationships` lists portable schema foreign-key references chosen for their
 business significance. The overview normally draws only these, bundled by directed
 actor pair. All connections exposes the complete cross-actor FK graph. Definitions
 without a selection show all connections with guidance to review them with AI;
