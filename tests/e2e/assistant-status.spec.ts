@@ -70,7 +70,7 @@ for (const viewport of viewports) {
     await composer(page).fill(draft);
     await expect(warning(page)).toBeVisible();
     await page.screenshot({ path: info.outputPath("busy.png") });
-    await expect(page.getByRole("button", { name: "Waiting for the assistant to accept guidance" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
     server.progress("The assistant kept working during verification recovery.");
     await expect(page.getByText("The assistant kept working during verification recovery.", { exact: true })).toBeVisible();
@@ -179,12 +179,68 @@ test("offline then online restores steering without a reload", async ({ page, co
   await context.setOffline(true);
   server.disconnect();
   await expect(page.getByText("Connection lost — assistant status unknown.", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Waiting for the assistant to accept guidance" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toBeDisabled();
   await context.setOffline(false);
   await expect(steer(page)).toBeEnabled();
   await expect(composer(page)).toHaveValue("Survive going offline.");
   expect(server.state.messages).toHaveLength(0);
 });
+
+for (const viewport of viewports) {
+  test(`server-forced disconnect recovers automatically at ${viewport.width}px`, async ({ page }, info) => {
+    await page.setViewportSize(viewport);
+    await openChat(page);
+    await composer(page).fill("Keep this draft while HTTP still works.");
+    await expect(steer(page)).toBeEnabled();
+    server.state.rejectConnections = true;
+    server.forceDisconnect();
+    const banner = page.locator("[data-vibe64-connection-recovery]");
+    await expect(banner).toContainText("Connection lost. Reconnecting automatically.");
+    const retry = page.getByRole("button", { name: "Reconnect live updates", exact: true });
+    await expect(retry).toBeEnabled();
+    const bounds = await retry.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(48);
+    expect(bounds!.height).toBeGreaterThanOrEqual(48);
+    await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toHaveText("Reconnecting…");
+    await expect.poll(() => server.state.connectionAttempts).toBeGreaterThanOrEqual(2);
+    expect((await page.request.get(`${server.url}/api/vibe64/sessions/${server.state.session.sessionId}`)).ok()).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("disconnected.png") });
+    server.state.rejectConnections = false;
+    await expect(steer(page)).toBeEnabled();
+    await expect(banner).toHaveCount(0);
+    await expect(composer(page)).toHaveValue("Keep this draft while HTTP still works.");
+    server.progress("Live updates resumed after the forced disconnect.");
+    await expect(page.getByText("Live updates resumed after the forced disconnect.", { exact: true })).toBeVisible();
+    expect(server.state.messages).toHaveLength(0);
+    expect(server.state.interrupts).toBe(0);
+  });
+}
+
+for (const control of ["indicator", "banner"]) {
+  test(`manual reconnect through the ${control} preserves the draft`, async ({ page }) => {
+    await openChat(page);
+    await composer(page).fill("Reconnect without sending me.");
+    await expect(steer(page)).toBeEnabled();
+    server.state.rejectConnections = true;
+    server.forceDisconnect();
+    await expect(page.locator("[data-vibe64-connection-recovery]")).toBeVisible();
+    const button = control === "indicator"
+      ? page.getByRole("button", { name: "Reconnect live updates", exact: true })
+      : page.locator("[data-vibe64-connection-recovery]").getByRole("button", { name: "Reconnect", exact: true });
+    // Keep automatic timers pending so the click has to cause recovery.
+    await page.clock.pauseAt(new Date());
+    const attempts = server.state.connectionAttempts;
+    server.state.rejectConnections = false;
+    await button.click();
+    await expect.poll(() => server.state.connectionAttempts).toBe(attempts + 1);
+    await page.clock.resume();
+    await expect(steer(page)).toBeEnabled();
+    await expect(composer(page)).toHaveValue("Reconnect without sending me.");
+    expect(server.state.messages).toHaveLength(0);
+    expect(server.state.interrupts).toBe(0);
+  });
+}
 
 test("failed display refresh does not invalidate a successful provider check", async ({ page }) => {
   server.state.detailHandler = (response) => {

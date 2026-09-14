@@ -355,6 +355,13 @@ function useVibe64MountedSessionData({
       void reconcileMountedAgentSession("visible");
     }
   };
+  function retryAgentConnection() {
+    if (disposed) return;
+    if (realtimeSocket.connected) {
+      return reconcileMountedAgentSession("manual-retry");
+    }
+    realtimeSocket.connect?.();
+  }
   globalThis.document?.addEventListener("visibilitychange", reconcileAfterVisible);
   realtimeSocket.on("connect", reconcileAfterRealtimeConnect);
   realtimeSocket.on("connect_error", markRealtimeDisconnected);
@@ -435,6 +442,7 @@ function useVibe64MountedSessionData({
     agentConnectionStatus,
     detailState,
     reconcileMountedAgentSession,
+    retryAgentConnection,
     refresh,
     resource: detailResource,
     session

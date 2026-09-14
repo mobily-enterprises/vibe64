@@ -111,6 +111,10 @@ const vibe64AutopilotViewProps = {
     default: "connected",
     type: String
   },
+  retryAgentConnection: {
+    default: () => {},
+    type: Function
+  },
   chatCollapsed: {
     default: false,
     type: Boolean
@@ -545,6 +549,9 @@ function useVibe64AutopilotView(props, emit, {
     ));
   });
   const composerSubmitMode = computed(() => {
+    if (props.agentConnectionStatus !== "connected") {
+      return "reconnecting";
+    }
     if (agentActive.value && !agentSteerable.value) {
       return "waiting";
     }
@@ -557,6 +564,7 @@ function useVibe64AutopilotView(props, emit, {
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
   const composerSubmitLabel = computed(() => ({
+    reconnecting: props.agentConnectionStatus === "disconnected" ? "Reconnecting…" : "Checking…",
     retry: "Retry",
     sending: "Sending…",
     steer: "Steer",
@@ -564,6 +572,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting…"
   })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
+    reconnecting: "Waiting for the connection to recover",
     retry: "Retry guidance to assistant",
     sending: "Sending message",
     steer: "Steer assistant",
@@ -571,6 +580,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting for the assistant to accept guidance"
   })[composerSubmitMode.value] || "Send message");
   const composerSubmitTitle = computed(() => ({
+    reconnecting: "Your draft is kept while the connection recovers",
     retry: "Retry the same guidance without duplicating it",
     sending: "Keep typing while this message is sent",
     steer: "Send this guidance to the active assistant turn",
@@ -578,6 +588,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => Boolean(
+    props.agentConnectionStatus === "connected" &&
     !composerDisabled.value &&
     !composerSending.value &&
     !interrupting.value &&

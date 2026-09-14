@@ -138,6 +138,29 @@
       </header>
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
+        <v-sheet
+          v-if="props.active && !props.sessionSelectionArchived && props.agentConnectionStatus !== 'connected'"
+          class="d-flex flex-wrap align-center justify-space-between ga-2 pa-3"
+          color="surface-variant"
+          rounded="lg"
+          role="status"
+          data-vibe64-connection-recovery
+        >
+          <span class="text-body-small">
+            {{ props.agentConnectionStatus === 'disconnected'
+              ? 'Connection lost. Reconnecting automatically.'
+              : 'Checking the assistant connection.' }}
+            Your draft is kept. Live status may be out of date.
+          </span>
+          <v-btn
+            variant="tonal"
+            min-height="48"
+            :disabled="props.agentConnectionStatus === 'reconciling'"
+            @click="props.retryAgentConnection()"
+          >
+            {{ props.agentConnectionStatus === 'disconnected' ? 'Reconnect' : 'Retry connection' }}
+          </v-btn>
+        </v-sheet>
         <v-sheet v-if="testApproval && resourceRecoveryControl" class="d-flex flex-wrap align-center justify-space-between ga-2 pa-2" color="surface-variant" rounded="lg">
           <span class="text-body-small">{{ testApproval.state === 'waiting' ? 'Tests need memory approval' : 'Resuming the original test…' }}</span>
           <component

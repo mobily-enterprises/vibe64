@@ -30,6 +30,8 @@ export async function assistantStatusServer() {
     checks: [] as Handler[],
     checkCount: 0,
     checkTimes: [] as number[],
+    connectionAttempts: 0,
+    rejectConnections: false,
     detailCount: 0,
     detailHandler: null as Handler | null,
     messages: [] as Record<string, unknown>[],
@@ -135,6 +137,10 @@ export async function assistantStatusServer() {
     }
   });
   const io = new Server(http, { path: "/socket.io" });
+  io.use((_socket, next) => {
+    state.connectionAttempts += 1;
+    next(state.rejectConnections ? new Error("Temporary authentication lookup failure") : undefined);
+  });
   function publishTurn() {
     session.revision += 1;
     session.manifest.revision = session.revision;
@@ -162,6 +168,9 @@ export async function assistantStatusServer() {
     },
     disconnect() {
       for (const socket of io.of("/").sockets.values()) socket.conn.close();
+    },
+    forceDisconnect() {
+      for (const socket of io.of("/").sockets.values()) socket.disconnect(true);
     },
     async close() {
       const closed = new Promise<void>((resolve) => io.close(() => resolve()));

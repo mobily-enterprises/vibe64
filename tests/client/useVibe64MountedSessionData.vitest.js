@@ -13,6 +13,7 @@ const realtimeMocks = vi.hoisted(() => ({
   events: [],
   handlers: new Map(),
   socket: {
+    connect: vi.fn(),
     connected: false,
     off: vi.fn(),
     on: vi.fn()
@@ -53,6 +54,7 @@ describe("useVibe64MountedSessionData", () => {
     realtimeMocks.events.length = 0;
     realtimeMocks.handlers.clear();
     realtimeMocks.socket.connected = false;
+    realtimeMocks.socket.connect.mockReset();
     realtimeMocks.socket.off.mockReset();
     realtimeMocks.socket.on.mockReset();
     realtimeMocks.socket.on.mockImplementation((event, handler) => {
@@ -379,6 +381,23 @@ describe("useVibe64MountedSessionData", () => {
       realtimeMocks.handlers.get("connect")();
       return controller;
     }
+
+    it("manual recovery reconnects the socket or rechecks the existing connection", async () => {
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      await controller.retryAgentConnection();
+      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(1);
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      realtimeMocks.socket.connected = true;
+      await controller.retryAgentConnection();
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      scope.stop();
+      await controller.retryAgentConnection();
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
 
     it("recovers from a busy response without reconnecting or losing the active turn", async () => {
       httpMocks.request.mockResolvedValueOnce({

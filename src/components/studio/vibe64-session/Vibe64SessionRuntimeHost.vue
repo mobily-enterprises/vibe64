@@ -7,6 +7,7 @@
     <Vibe64AutopilotView
       :active="autopilotModeActive"
       :agent-connection-status="agentConnectionStatus"
+      :retry-agent-connection="retryAgentConnection"
       :chat-collapsed="props.chatCollapsed"
       :cancel-agent-message="cancelAgentMessage"
       :conversation-log="conversationLog"
@@ -148,6 +149,7 @@ const emit = defineEmits([
 
 const {
   agentConnectionStatus,
+  retryAgentConnection,
   autopilotModeActive,
   autopilotSessionToolbar,
   agentTerminal,

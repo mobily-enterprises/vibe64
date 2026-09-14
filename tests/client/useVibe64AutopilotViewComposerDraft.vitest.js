@@ -401,13 +401,33 @@ describe("useVibe64AutopilotView direct chat", () => {
     };
     props.agentConnectionStatus = "disconnected";
     await nextTick();
-    expect(view.composerSubmitMode.value).toBe("waiting");
+    expect(view.composerSubmitMode.value).toBe("reconnecting");
+    expect(view.composerSubmitLabel.value).toBe("Reconnecting…");
     expect(view.composerCanSubmit.value).toBe(false);
 
     props.agentConnectionStatus = "connected";
     await nextTick();
     expect(view.composerSubmitMode.value).toBe("steer");
     expect(view.composerCanSubmit.value).toBe(true);
+  });
+
+  it("keeps an idle draft editable without sending it before connection verification", async () => {
+    const { props, view } = await createViewWithProps();
+    view.composerDraft.value = "Do not send this automatically.";
+    for (const status of ["disconnected", "reconciling", "unknown"]) {
+      props.agentConnectionStatus = status;
+      await nextTick();
+      expect(view.composerDisabled.value).toBe(false);
+      expect(view.composerCanSubmit.value).toBe(false);
+      expect(view.composerSubmitLabel.value).toBe(status === "disconnected" ? "Reconnecting…" : "Checking…");
+      await view.submitComposerMessage();
+      expect(props.sendAgentMessage).not.toHaveBeenCalled();
+      expect(view.composerDraft.value).toBe("Do not send this automatically.");
+    }
+    props.agentConnectionStatus = "connected";
+    await nextTick();
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
   });
 
   it("preserves a session draft through hidden, reconnecting, and warm-route states", async () => {

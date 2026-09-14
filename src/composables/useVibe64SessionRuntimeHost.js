@@ -664,6 +664,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
 
   return {
     agentConnectionStatus: mounted.agentConnectionStatus,
+    retryAgentConnection: mounted.retryAgentConnection,
     agentTerminal,
     autopilotModeActive: computed(() => Boolean(props.active)),
     autopilotSessionToolbar,
