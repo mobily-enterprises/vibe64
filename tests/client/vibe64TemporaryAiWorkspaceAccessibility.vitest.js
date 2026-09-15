@@ -121,7 +121,11 @@ function temporaryAiTestState(startResult) {
   return {
     activeTask: computed(() => tasks.value.find((task) => task.id === activeTaskId.value) || null),
     activeTaskId,
-    closeTask: vi.fn(),
+    closeTask: vi.fn(async (taskId) => {
+      tasks.value = tasks.value.filter((task) => task.id !== taskId);
+      activeTaskId.value = tasks.value[0]?.id || "";
+      open.value = tasks.value.length > 0;
+    }),
     closeWorkspace: vi.fn(),
     open,
     openTask: vi.fn(),
@@ -370,12 +374,12 @@ describe("Temporary AI recovery workspace accessibility", () => {
     app.unmount();
   });
 
-  it("shows verified repair as a system message without a recovery panel", async () => {
+  it("returns to Main chat after closing only the completed repair, and retains the chat if closing fails", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
       agentSettings: {}, busy: false, draft: "", error: "", id: "repair",
       messages: [
-        { id: "success", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
+        { id: "recovery:repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
       ],
       policy: "workspace_write", recoveryNotice: "Review the repair.",
       recoveryOperation: "update", recoveryOutcome: "succeeded",
@@ -383,18 +387,75 @@ describe("Temporary AI recovery workspace accessibility", () => {
     }];
     temporary.activeTaskId.value = "repair";
     temporary.open.value = true;
+    temporary.tasks.value.push({
+      agentSettings: {}, busy: false, draft: "Keep this other draft.", id: "other",
+      messages: [], title: "Other task", policy: "read"
+    });
     temporaryProvider.value = temporary;
+    const selectMainChat = vi.fn();
     const container = { children: [], parent: null, type: "root" };
-    const { app } = mountWorkspace(container, { sessionId: "session-1" });
+    const { app } = mountWorkspace(container, {
+      onSelectMainChat: selectMainChat, sessionId: "session-1", workspaceSetupStatus: "succeeded"
+    });
     try {
       await flushWorkspaceReveal();
       expect(findNode(container, (node) => node.props?.["data-temporary-ai-recovery"] === "")).toBeNull();
-      const message = findNode(container, (node) => node.type === "article" && nodeText(node).includes("Session updated."));
+      const message = findNode(container, (node) => node.type === "article" && nodeText(node).includes("Session updated"));
       expect(nodeText(findNode(message, (node) => node.type === "strong"))).toBe("System");
       expect(nodeText(findNode(message, (node) => node.type === "p"))).toBe(
-        "Session updated. Your changes were preserved. Nothing was published."
+        "Session updated and workspace ready. Your changes were preserved. Nothing was published."
       );
-      expect(nodeText(container).match(/Session updated\./gu)).toHaveLength(1);
+      expect(nodeText(container).match(/Session updated/gu)).toHaveLength(1);
+      const button = findNode(message, (node) => node.type === "button" && nodeText(node).trim() === "Return to main chat");
+      expect(button).toBeTruthy();
+      temporary.closeTask.mockRejectedValueOnce(new Error("Could not close the chat."));
+      await button.props.onClick();
+      await nextTick();
+      expect(nodeText(container)).toContain("Could not close the chat.");
+      expect(selectMainChat).not.toHaveBeenCalled();
+      expect(temporary.tasks.value).toHaveLength(2);
+      await button.props.onClick();
+      await nextTick();
+      expect(temporary.closeTask).toHaveBeenLastCalledWith("repair");
+      expect(selectMainChat).toHaveBeenCalledOnce();
+      expect(temporary.tasks.value).toHaveLength(1);
+      expect(temporary.tasks.value[0]).toMatchObject({ id: "other", draft: "Keep this other draft." });
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it.each([
+    ["running", "Session updated. Preparing workspace…", false],
+    ["failed", "Workspace preparation failed", false],
+    ["ambiguous", "Workspace preparation needs a choice", false],
+    ["required", "Workspace preparation is still required", false],
+    ["unconfigured", "Session updated.", true],
+    ["", "Session updated.", false]
+  ])("reports preparation status %s without claiming readiness", async (status, text, canReturn) => {
+    const temporary = temporaryAiTestState(deferred());
+    temporary.tasks.value = [{
+      agentSettings: {}, busy: false, draft: "", error: "", id: "repair", runId: "latest",
+      messages: [
+        { id: "recovery:earlier", role: "system", text: "Earlier repair verified." },
+        { id: "recovery:latest", role: "system", text: "Session updated." }
+      ],
+      recoveryOperation: "update", recoveryOutcome: "succeeded", status: "completed",
+      title: "Resolve Update", policy: "workspace_write"
+    }];
+    temporary.activeTaskId.value = "repair";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1", workspaceSetupStatus: status });
+    try {
+      await flushWorkspaceReveal();
+      expect(nodeText(container)).toContain(text);
+      expect(nodeText(container)).toContain("Earlier repair verified.");
+      expect(nodeText(container)).not.toContain("workspace ready");
+      const button = findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Return to main chat");
+      expect(Boolean(button)).toBe(canReturn);
+      expect(temporary.closeTask).not.toHaveBeenCalled();
     } finally {
       app.unmount();
     }

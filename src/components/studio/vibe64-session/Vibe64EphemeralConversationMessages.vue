@@ -24,7 +24,9 @@
       v-if="message.text && message.role === 'assistant'"
       :blocks="parseLongTextReviewBlocks(message.text)"
     />
-    <p v-else-if="message.text">{{ message.text }}</p>
+    <slot v-else-if="message.text" name="message-text" :message="message">
+      <p>{{ message.text }}</p>
+    </slot>
     <span v-else-if="message.status === 'interrupted'">Stopped.</span>
     <span v-else-if="message.status === 'failed'">{{ assistantLabel }} stopped with an error.</span>
     <Vibe64ConversationAttachments

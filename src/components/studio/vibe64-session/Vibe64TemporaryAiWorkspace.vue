@@ -123,7 +123,25 @@
           :session-id="props.sessionId"
           :messages="activeTask.messages"
           empty-message="Ask a focused question or investigate a problem without adding it to the main conversation."
-        />
+        >
+          <template #message-text="{ message }">
+            <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
+            <p v-else>{{ message.text }}</p>
+            <v-btn
+              v-if="message.id === recoveryMessageId && canReturnToMainChat"
+              ref="returnToMainButton"
+              :aria-busy="closingTask"
+              class="vibe64-temporary-ai__return"
+              color="primary"
+              :disabled="props.repositoryBusy || closingTask"
+              size="small"
+              variant="tonal"
+              @click="closeTask(activeTask.id, { returnToMainChat: true })"
+            >
+              Return to main chat
+            </v-btn>
+          </template>
+        </Vibe64EphemeralConversationMessages>
       </div>
 
       <div
@@ -278,6 +296,7 @@ const props = defineProps({
   repositoryBusy: Boolean,
   updateDisabled: Boolean,
   updateDisabledReason: { type: String, default: "" },
+  workspaceSetupStatus: { type: String, default: "" },
   agentSettings: {
     default: () => ({}),
     type: Object
@@ -293,6 +312,8 @@ const props = defineProps({
 });
 
 const workspace = ref(null);
+const completionMessage = ref(null);
+const returnToMainButton = ref(null);
 const taskTabButtons = new Map();
 const taskPrompts = new Map();
 const taskSendButtons = new Map();
@@ -334,6 +355,25 @@ const taskToClose = computed(() => temporary.tasks.value.find((task) => task.id 
 const activeTaskRecoveryChecking = computed(() => activeTask.value?.recoveryOutcome === "checking");
 const activeTaskRecoveryVerified = computed(() => (
   activeTask.value?.recoveryOutcome === "succeeded"
+));
+const recoveryMessageId = computed(() => activeTaskRecoveryVerified.value
+  ? `recovery:${activeTask.value.runId || activeTask.value.id}`
+  : "");
+const updateCompletionText = computed(() => {
+  if (activeTask.value?.recoveryOperation !== "update") return "";
+  const status = props.workspaceSetupStatus;
+  const heading = {
+    running: "Session updated. Preparing workspace…",
+    succeeded: "Session updated and workspace ready.",
+    failed: "Session updated. Workspace preparation failed; review the setup issue above.",
+    ambiguous: "Session updated. Workspace preparation needs a choice; review the setup issue above.",
+    required: "Session updated. Workspace preparation is still required."
+  }[status] || "Session updated.";
+  return `${heading} Your changes were preserved. Nothing was published.`;
+});
+const canReturnToMainChat = computed(() => activeTaskRecoveryVerified.value && !activeTask.value.busy && (
+  activeTask.value.recoveryOperation !== "update" ||
+  ["succeeded", "unconfigured"].includes(props.workspaceSetupStatus)
 ));
 const activeTaskRecoveryTitle = computed(() => {
   if (activeTaskRecoveryChecking.value) {
@@ -406,12 +446,15 @@ function requestCloseTask(task) {
   void closeTask(task.id);
 }
 
-async function closeTask(taskId) {
+async function closeTask(taskId, { returnToMainChat = false } = {}) {
   closingTask.value = true;
   delete actionErrors.value[taskId];
   try {
     await temporary.closeTask(taskId);
     closeTaskId.value = "";
+    if (returnToMainChat && !temporary.tasks.value.some((task) => task.id === taskId)) {
+      emit("select-main-chat");
+    }
   } catch (error) {
     actionErrors.value[taskId] = error?.message || "Temporary AI could not be closed. The chat is still open; try again.";
   } finally {
@@ -564,6 +607,13 @@ watch(() => temporary.activeTaskId.value, (taskId) => {
   void revealTaskTab(taskId);
 }, { flush: "post" });
 
+watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => {
+  if (!props.active || !recoveryMessageId.value) return;
+  await nextTick();
+  const target = returnToMainButton.value?.$el || completionMessage.value;
+  target?.scrollIntoView?.({ block: "nearest" });
+}, { flush: "post" });
+
 defineExpose({
   closeWorkspace: temporary.closeWorkspace,
   openTask: temporary.openTask,
@@ -700,6 +750,11 @@ defineExpose({
   padding: 0.55rem;
 }
 
+.vibe64-temporary-ai__messages p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 .vibe64-temporary-ai__recovery {
   flex: 0 0 auto;
   font-size: 0.85rem;
@@ -717,6 +772,12 @@ defineExpose({
 
 .vibe64-temporary-ai__check-update {
   margin-top: 0.4rem;
+}
+
+.vibe64-temporary-ai__return {
+  justify-self: start;
+  margin-top: 0.4rem;
+  scroll-margin-block: 0.55rem;
 }
 
 .vibe64-temporary-ai__recovery p {
@@ -774,6 +835,7 @@ defineExpose({
   .vibe64-temporary-ai__policy,
   .vibe64-temporary-ai__tab-close,
   .vibe64-temporary-ai__check-update,
+  .vibe64-temporary-ai__return,
   .vibe64-temporary-ai__composer-actions .v-btn {
     min-height: 3rem !important;
     min-width: 3rem !important;

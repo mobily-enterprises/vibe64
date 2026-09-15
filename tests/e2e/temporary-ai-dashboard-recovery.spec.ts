@@ -184,12 +184,59 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(checkUpdate).toHaveCount(0);
       expect(captured.temporaryCreates).toHaveLength(1);
       expect(captured.mainChatMessages).toHaveLength(0);
+      const returnToChat = systemMessage.getByRole("button", { name: "Return to main chat", exact: true });
+      await expectTouchTarget(returnToChat);
+      await expect(returnToChat).toBeInViewport({ ratio: 1 });
       await page.screenshot({ path: testInfo.outputPath("updated-mobile.png") });
+      await returnToChat.click();
+      await expect(workspace).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "Session chat", exact: true })).toBeFocused();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(captured.temporaryDeletes).toBe(1);
     } finally {
       for (const pending of updates) pending.resolve({ ok: false, error: "Test stopped." });
     }
   });
   }
+
+  test("Update completion follows automatic preparation before offering Return to main chat", async ({ page }, testInfo) => {
+    let setup = { status: "succeeded", updatedAt: "2026-09-15T00:00:00Z" };
+    const captured = await mockRepositoryRecovery(page, {
+      code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete",
+      workspaceSetup: () => setup,
+      async applyUpdate() {
+        setup = { status: "running", updatedAt: "2026-09-15T00:01:00Z" };
+        return { ok: true, status: "updated" };
+      }
+    });
+    await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+    await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+    const message = workspace.locator(".vibe64-ephemeral-conversation__message--system");
+    const returnToChat = message.getByRole("button", { name: "Return to main chat", exact: true });
+    await expect(message).toHaveCount(1);
+    await expect(message).toContainText("Session updated. Preparing workspace…");
+    await expect(message).not.toContainText("workspace ready");
+    await expect(returnToChat).toHaveCount(0);
+    setup = { status: "failed", updatedAt: "2026-09-15T00:02:00Z" };
+    server.sessionChanged("workspace-setup-failed");
+    await expect(message).toContainText("Session updated. Workspace preparation failed");
+    await expect(returnToChat).toHaveCount(0);
+    setup = { status: "running", updatedAt: "2026-09-15T00:03:00Z" };
+    server.sessionChanged("workspace-setup-started");
+    await expect(message).toContainText("Preparing workspace…");
+    setup = { status: "succeeded", updatedAt: "2026-09-15T00:04:00Z" };
+    server.sessionChanged("workspace-setup-succeeded");
+    await expect(message).toHaveCount(1);
+    await expect(message).toContainText("Session updated and workspace ready. Your changes were preserved. Nothing was published.");
+    await expect(returnToChat).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: testInfo.outputPath("ready-to-return.png") });
+    await returnToChat.click();
+    await expect(workspace).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Session chat", exact: true })).toBeFocused();
+    expect(captured.temporaryDeletes).toBe(1);
+    expect(captured.mainChatMessages).toHaveLength(0);
+  });
 
   test("repeated conflicts pause instead of looping, and a manual check preserves the unsent reply", async ({ page }) => {
     let checks = 0;
@@ -421,16 +468,19 @@ async function mockRepositoryRecovery(page: Page, {
   code,
   diagnostic,
   outcome = () => "continue",
+  workspaceSetup = () => ({ status: "unconfigured" }),
   applyUpdate = async () => ({ ok: true, status: "updated" })
 }: {
   code: typeof RECOVERY_CODES[number];
   diagnostic: string;
   outcome?: (turn: number) => string;
+  workspaceSetup?: () => Record<string, unknown>;
   applyUpdate?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }) {
   const mainChatMessages: Record<string, unknown>[] = [];
   const temporaryCreates: Record<string, unknown>[] = [];
   const temporaryTurns: Record<string, unknown>[] = [];
+  let temporaryDeletes = 0;
   let updated = false;
   await mockProjectGateReady(page);
 
@@ -521,6 +571,11 @@ async function mockRepositoryRecovery(page: Page, {
       });
       return;
     }
+    if (method === "DELETE" && url.pathname.endsWith("/temporary-conversations/temporary-conversation-1")) {
+      temporaryDeletes += 1;
+      await fulfillJson(route, { ok: true });
+      return;
+    }
     if (method === "POST" && url.pathname.endsWith("/updates/check")) {
       await fulfillJson(route, {
         code,
@@ -556,7 +611,7 @@ async function mockRepositoryRecovery(page: Page, {
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
-      await fulfillJson(route, directChatSessionPayload);
+      await fulfillJson(route, { ...directChatSessionPayload, workspaceSetup: workspaceSetup() });
       return;
     }
     await fulfillJson(route, {
@@ -574,6 +629,7 @@ async function mockRepositoryRecovery(page: Page, {
 
   return {
     mainChatMessages,
+    get temporaryDeletes() { return temporaryDeletes; },
     temporaryCreates,
     temporaryTurns
   };

@@ -546,6 +546,7 @@
         :repository-busy="saveWorkOperationActive || saveWorkSending"
         :update-disabled="updateWorkDisabled"
         :update-disabled-reason="saveWorkTitle"
+        :workspace-setup-status="workspaceSetupStatus"
         @check-update="checkTemporaryAiUpdate"
         @select-main-chat="showMainChat"
         @task-finished="finishTemporaryAiTask"

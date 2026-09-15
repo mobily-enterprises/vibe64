@@ -158,6 +158,13 @@ export async function assistantStatusServer() {
     state,
     url: `http://127.0.0.1:${(http.address() as { port: number }).port}`,
     publishTurn,
+    sessionChanged(reason: string) {
+      session.revision += 1;
+      io.emit("vibe64.session.changed", {
+        projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId,
+        revision: session.revision, reason
+      });
+    },
     progress(text: string) {
       conversation.commentary.push({ role: "assistant", text, at: new Date().toISOString() });
       io.emit("vibe64.session.changed", {

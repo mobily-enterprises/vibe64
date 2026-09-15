@@ -152,6 +152,11 @@ Projects should make preparation safe to repeat and skip work already satisfied.
 
 A verified Temporary AI repair adds one system message to its conversation.
 The repair panel disappears when verification succeeds.
+For Update repairs, that message follows workspace preparation and reports readiness
+only after setup succeeds. Once ready, **Return to main chat** closes the completed
+repair tab and focuses Main chat, leaving other temporary conversations intact.
+Projects without preparation can return as soon as Update succeeds. Preparation
+failures keep their diagnostic and retry action; they do not claim the workspace is ready.
 
 ## Root resolution
 
