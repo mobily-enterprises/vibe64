@@ -506,6 +506,20 @@ function createService({
     });
   }
 
+  async function prepareUpdatedWorkspace(runtime, sessionId, options = {}) {
+    try {
+      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const setup = await setupRunner.start({ runtime, session });
+      observeWorkspaceSetup(sessionId, setup.completion, options);
+    } catch (error) {
+      // Preparation cannot turn a completed repository update into a failed rebase.
+      vibe64SessionDebugLog("server.sessions.workspaceSetup.afterUpdate.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+    }
+  }
+
   async function recoverInterruptedSave(runtime, session, task) {
     if (task?.status !== "running" || typeof terminals.recoverSessionWorkSave !== "function") {
       return task;
@@ -572,7 +586,7 @@ function createService({
       if (result.reconciled === true) {
         await runtime.store.writeMetadataValue(session.sessionId, "base_commit", result.canonicalCommit);
       }
-      return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
+      const recovered = await runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
         event: {
           kind: "update-recovered",
           message: "Interrupted session update recovered.",
@@ -580,6 +594,8 @@ function createService({
         },
         patch: { ...result, status: "ready" }
       });
+      await prepareUpdatedWorkspace(runtime, session.sessionId);
+      return recovered;
     } catch (error) {
       return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
         event: {
@@ -1494,6 +1510,7 @@ function createService({
               status: "ready"
             }
           });
+          await prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId });
           await publishSessionChanged(sessionId, {
             operation: "updated",
             originId: text(input.originId),

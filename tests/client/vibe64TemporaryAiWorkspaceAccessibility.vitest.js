@@ -370,6 +370,36 @@ describe("Temporary AI recovery workspace accessibility", () => {
     app.unmount();
   });
 
+  it("shows verified repair as a system message without a recovery panel", async () => {
+    const temporary = temporaryAiTestState(deferred());
+    temporary.tasks.value = [{
+      agentSettings: {}, busy: false, draft: "", error: "", id: "repair",
+      messages: [
+        { id: "success", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
+      ],
+      policy: "workspace_write", recoveryNotice: "Review the repair.",
+      recoveryOperation: "update", recoveryOutcome: "succeeded",
+      status: "completed", title: "Resolve Update"
+    }];
+    temporary.activeTaskId.value = "repair";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1" });
+    try {
+      await flushWorkspaceReveal();
+      expect(findNode(container, (node) => node.props?.["data-temporary-ai-recovery"] === "")).toBeNull();
+      const message = findNode(container, (node) => node.type === "article" && nodeText(node).includes("Session updated."));
+      expect(nodeText(findNode(message, (node) => node.type === "strong"))).toBe("System");
+      expect(nodeText(findNode(message, (node) => node.type === "p"))).toBe(
+        "Session updated. Your changes were preserved. Nothing was published."
+      );
+      expect(nodeText(container).match(/Session updated\./gu)).toHaveLength(1);
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("keeps thinking in collapsed conversation details and the working status concise", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
@@ -458,7 +488,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     }
   });
 
-  it("makes independent product verification the recovery headline", async () => {
+  it("dismisses the repair panel after independent verification despite an earlier provider error", async () => {
     const startResult = deferred();
     const temporary = temporaryAiTestState(startResult);
     temporary.tasks.value = [{
@@ -491,13 +521,12 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const recoveryNotice = findNode(container, (node) => (
       node.props?.["data-temporary-ai-recovery"] === ""
     ));
-    expect(nodeText(recoveryNotice)).toContain("Repair verified");
-    expect(nodeText(recoveryNotice)).toContain("Workspace preparation succeeded");
+    expect(recoveryNotice).toBeNull();
     expect(nodeText(container)).toContain("The repair was independently verified");
     app.unmount();
   });
 
-  it("keeps Check Update outside the transcript, disables it during work, and shows verified success", async () => {
+  it("keeps Check Update outside the transcript, disables it during work, and removes it after success", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
       agentSettings: {}, attachments: [], busy: false, draft: "", error: "", id: "repair",
@@ -532,7 +561,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       expect(nodeText(container)).toContain("Checking Update…");
       temporary.tasks.value[0].recoveryOutcome = "succeeded";
       await nextTick();
-      expect(nodeText(container)).toContain("Session updated");
+      expect(findNode(container, (node) => node.props?.["data-temporary-ai-recovery"] === "")).toBeNull();
       expect(findNode(container, (node) => node.props?.["data-temporary-ai-check-update"] === "")).toBeNull();
     } finally {
       app.unmount();

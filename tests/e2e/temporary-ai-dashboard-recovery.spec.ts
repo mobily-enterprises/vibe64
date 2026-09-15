@@ -176,7 +176,11 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect.poll(() => updates.length).toBe(2);
       expect(updateInputs[1].reviewedConflictId).toBe("reviewed-conflict");
       updates[1].resolve({ ok: true, status: "updated" });
-      await expect(workspace).toContainText("Session updated");
+      const systemMessage = workspace.locator(".vibe64-ephemeral-conversation__message--system");
+      await expect(systemMessage).toHaveCount(1);
+      await expect(systemMessage).toContainText("System");
+      await expect(systemMessage).toContainText("Session updated. Your changes were preserved. Nothing was published.");
+      await expect(workspace.locator("[data-temporary-ai-recovery]")).toHaveCount(0);
       await expect(checkUpdate).toHaveCount(0);
       expect(captured.temporaryCreates).toHaveLength(1);
       expect(captured.mainChatMessages).toHaveLength(0);

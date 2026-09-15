@@ -11,7 +11,7 @@
     class="vibe64-ephemeral-conversation__message"
     :class="`vibe64-ephemeral-conversation__message--${message.role}`"
   >
-    <strong>{{ message.role === "user" ? userLabel : assistantLabel }}</strong>
+    <strong>{{ message.role === "system" ? "System" : message.role === "user" ? userLabel : assistantLabel }}</strong>
     <Vibe64ConversationProgress
       v-if="message.role === 'assistant' && message.progressUpdates?.length"
       :key="`${message.id}:${['starting', 'inProgress'].includes(message.status) ? 'active' : 'completed'}`"
@@ -87,6 +87,12 @@ defineProps({
 .vibe64-ephemeral-conversation__message--assistant {
   align-self: start;
   background: rgba(var(--v-theme-tertiary), 0.09);
+}
+
+.vibe64-ephemeral-conversation__message--system {
+  align-self: start;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-size: 0.875rem;
 }
 
 .vibe64-ephemeral-conversation__message p {

@@ -143,6 +143,16 @@ upstream version or a newly conflicting file without another review.
 An ordinary Rebase click starts over instead of submitting the repair tab's
 review. Neither action publishes the session's work.
 
+After a successful update, Vibe64 automatically starts the project's declared
+workspace preparation. This also applies when an interrupted update is recovered.
+Preparation uses the existing runner and runs once at a time; it does not wait
+for another click or an assistant turn. A preparation failure leaves the completed
+update intact and appears as a separate setup problem with a retry action.
+Projects should make preparation safe to repeat and skip work already satisfied.
+
+A verified Temporary AI repair adds one system message to its conversation.
+The repair panel disappears when verification succeeds.
+
 ## Root resolution
 
 Directory policy is centralized in the Vibe64 root resolver. Feature packages

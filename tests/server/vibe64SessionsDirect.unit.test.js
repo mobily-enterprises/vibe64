@@ -766,10 +766,18 @@ test("work inspection recovers an interrupted prepared Update and advances its b
     }
   };
   let recoverCalls = 0;
+  let prepareCalls = 0;
   const service = createService({
     project: {
       async createRuntime() {
         return runtime;
+      }
+    },
+    workspaceSetupRunner: {
+      async start() {
+        prepareCalls += 1;
+        assert.equal(updateTask.status, "ready");
+        return { completion: null, state: { status: "succeeded" } };
       }
     },
     terminals: {
@@ -801,6 +809,9 @@ test("work inspection recovers an interrupted prepared Update and advances its b
   ]);
   assert.equal(writes[0][0], "update-session");
   assert.equal(writes[0][1].event.kind, "update-recovered");
+  await service.inspectSessionWork("session-1");
+  assert.equal(recoverCalls, 1);
+  assert.equal(prepareCalls, 1);
 });
 
 test("work inspection observes a live Save without mistaking it for an interrupted operation", async () => {
@@ -1374,7 +1385,7 @@ test("work inspection repairs a failed update superseded by a later reconciled S
   assert.equal(result.updateOperation.resolvedBySaveCommit, "saved-commit");
 });
 
-test("Update resumes explicit reviews but starts ordinary retries from fresh state", async () => {
+test("Update starts fresh and automatically prepares the updated workspace", async () => {
   const conflictRecovery = {
     baseCommit: "base",
     canonicalCommit: "canonical",
@@ -1427,13 +1438,31 @@ test("Update resumes explicit reviews but starts ordinary retries from fresh sta
   };
   let updates = 0;
   let denyWrite = false;
+  let rejectPreparation = false;
+  const preparations = [];
+  const publications = [];
   const service = createService({
     project: {
       async createRuntime() {
         return runtime;
       }
     },
-    async publishSessionChanged() {},
+    async publishSessionChanged(_sessionId, event) {
+      publications.push(event);
+    },
+    workspaceSetupRunner: {
+      async start(input) {
+        assert.equal(input.runtime, runtime);
+        assert.equal(input.session.metadata.base_commit, "canonical");
+        assert.equal(tasks.get("update-session").status, "ready");
+        assert.notEqual(input.retry, true);
+        if (rejectPreparation) throw new Error("Preparation could not start.");
+        const pending = Promise.withResolvers();
+        preparations.push(pending);
+        session.workspaceSetup = { status: "running" };
+        return { state: session.workspaceSetup, completion: pending.promise };
+      }
+    },
     terminals: {
       async inspectSessionWork() {
         return {
@@ -1483,6 +1512,7 @@ test("Update resumes explicit reviews but starts ordinary retries from fresh sta
   assert.equal(failed.ok, false);
   assert.equal(tasks.get("update-session").status, "failed");
   assert.deepEqual(tasks.get("update-session").conflictRecovery, conflictRecovery);
+  assert.equal(preparations.length, 0, "A conflicting update must not start preparation.");
 
   const retried = await service.updateSessionWork("session-1", {
     reviewedConflictId: conflictRecovery.reviewId
@@ -1493,6 +1523,8 @@ test("Update resumes explicit reviews but starts ordinary retries from fresh sta
   assert.deepEqual(retried.operation.conflictPaths, []);
   assert.equal(retried.operation.code, "");
   assert.equal(retried.operation.error, "");
+  assert.equal(preparations.length, 1, "The HTTP result must not wait for preparation to finish.");
+  assert.equal(publications.at(-1).session.workspaceSetup.status, "running");
   assert.deepEqual(
     taskWrites.filter(({ input }) => input.event.kind === "update-started")
       .map(({ input }) => input.reset),
@@ -1527,6 +1559,17 @@ test("Update resumes explicit reviews but starts ordinary retries from fresh sta
     assert.equal(fresh.operation.conflictRecovery, null);
     assert.deepEqual(fresh.operation.events.map((event) => event.kind), ["update-started", "updated"]);
   }
+  assert.equal(preparations.length, 3);
+  rejectPreparation = true;
+  const preparedFailed = await service.updateSessionWork("session-1");
+  assert.equal(preparedFailed.ok, true, "A preparation startup failure must not undo successful Update.");
+  assert.equal(preparedFailed.operation.status, "ready");
+  session.workspaceSetup = { status: "failed", diagnostic: "Dependency installation failed." };
+  for (const pending of preparations) pending.resolve(session.workspaceSetup);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(tasks.get("update-session").status, "ready");
+  assert.ok(publications.some((event) => event.reason === "workspace-setup-completed" &&
+    event.workspaceSetup.status === "failed"));
 });
 
 test("one exact update check is shared, cached, and invalidates every sibling session", async () => {

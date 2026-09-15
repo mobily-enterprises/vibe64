@@ -921,6 +921,23 @@ describe("useVibe64TemporaryAi", () => {
     }));
   });
 
+  it("adds one system message after a verified repair and keeps it in the conversation", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    const message = "Session updated. Your changes were preserved. Nothing was published.";
+    temporary.reportRecoveryOutcome(task.id, { status: "checking" });
+    temporary.reportRecoveryOutcome(task.id, { status: "failed", message: "Still needs review." });
+    expect(temporary.activeTask.value.messages).toHaveLength(0);
+
+    temporary.reportRecoveryOutcome(task.id, { status: "succeeded", message });
+    temporary.reportRecoveryOutcome(task.id, { status: "succeeded", message });
+    expect(temporary.activeTask.value.messages).toEqual([
+      { id: `recovery:${task.id}`, role: "system", text: message }
+    ]);
+    temporary.closeWorkspace();
+    temporary.showWorkspace();
+    expect(temporary.activeTask.value.messages).toHaveLength(1);
+  });
+
   it("reports a completed task exactly once for global user feedback", async () => {
     const onTaskFinished = vi.fn();
     mocks.responses.push(

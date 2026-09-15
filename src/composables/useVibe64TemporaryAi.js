@@ -307,7 +307,17 @@ function useVibe64TemporaryAi({
     if (disposed || !task || closingTaskIds.has(taskId) || !["checking", "failed", "succeeded"].includes(outcome)) {
       return false;
     }
+    const messages = [...task.messages];
+    const messageId = `recovery:${task.runId || task.id}`;
+    if (outcome === "succeeded" && !messages.some(({ id }) => id === messageId)) {
+      messages.push({
+        id: messageId,
+        role: "system",
+        text: temporaryAiText(message) || "Repair verified."
+      });
+    }
     updateTask(taskId, {
+      messages,
       recoveryOutcome: outcome,
       recoveryAutoPaused: false,
       recoveryOutcomeMessage: temporaryAiText(message),

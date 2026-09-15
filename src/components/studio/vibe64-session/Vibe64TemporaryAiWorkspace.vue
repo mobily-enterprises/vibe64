@@ -92,13 +92,12 @@
     <template v-if="activeTask">
       <div class="vibe64-temporary-ai__recovery-row">
         <v-alert
-          v-if="activeTask.recoveryNotice"
+          v-if="activeTask.recoveryNotice && !activeTaskRecoveryVerified"
           aria-live="polite"
           class="vibe64-temporary-ai__recovery"
-          :color="activeTaskRecoveryVerified ? 'success' : undefined"
           data-temporary-ai-recovery
           density="compact"
-          :icon="activeTaskRecoveryVerified ? mdiCheckCircleOutline : mdiRobotOutline"
+          :icon="mdiRobotOutline"
           role="status"
           :title="activeTaskRecoveryTitle"
           variant="tonal"
@@ -256,7 +255,6 @@ import { computed, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
   mdiArrowUp,
-  mdiCheckCircleOutline,
   mdiClose,
   mdiPaperclip,
   mdiPlus,
@@ -348,9 +346,6 @@ const activeTaskRecoveryTitle = computed(() => {
   if (activeTask.value?.recoveryOutcome === "failed") {
     return "Update needs attention";
   }
-  if (activeTaskRecoveryVerified.value) {
-    return activeTask.value?.recoveryOperation === "update" ? "Session updated" : "Repair verified";
-  }
   if (activeTask.value?.recoveryOperation === "update") {
     return "Update not yet verified";
   }
@@ -372,9 +367,6 @@ const activeTaskRecoveryStatus = computed(() => {
   const task = activeTask.value || {};
   if (task.recoveryOutcome === "checking") {
     return "";
-  }
-  if (task.recoveryOutcome === "succeeded") {
-    return task.recoveryOutcomeMessage || "Vibe64 independently verified that the repair succeeded.";
   }
   if (task.recoveryOperation === "update" && props.updateDisabled && props.updateDisabledReason) {
     return props.updateDisabledReason;
