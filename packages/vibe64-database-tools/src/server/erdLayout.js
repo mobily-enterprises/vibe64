@@ -2,7 +2,7 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { createErdNodes, visibleErdNodes } from "../shared/erdModel.js";
 import { createErdRelationshipRoutes, erdRouteSnapshot } from "../shared/erdRelationships.js";
 
-export const ERD_AGENT_INSTRUCTIONS = [
+const ERD_AGENT_INSTRUCTIONS = [
   "This is the main ERD's saved session layout, separate from data-overview.json and the scoped Overview diagrams.",
   "Coordinates and connection points use diagram units before viewport zoom/pan. Rectangles include the displayed fields. Connections identify actual FK columns; points describe every routed segment, including bends.",
   "Only visible tables have routed connections. Hidden tables remain listed; scope and visible/total relationship counts are explicit. No table records or credentials are included.",
@@ -14,10 +14,11 @@ export const ERD_AGENT_INSTRUCTIONS = [
 ].join("\n");
 
 export function inspectErdLayout(schema, layout) {
+  const relationships = schema.relationships || [];
   const positioned = new Set(layout.nodes.map((node) => node.table));
-  const nodes = visibleErdNodes(createErdNodes(schema, layout), schema.relationships || [], layout);
+  const nodes = visibleErdNodes(createErdNodes(schema, layout), relationships, layout);
   const visible = nodes.filter((node) => !node.hidden && positioned.has(node.id));
-  const graph = createErdRelationshipRoutes(visible, schema.relationships || [], { previousRoutes: layout.routes || [] });
+  const graph = createErdRelationshipRoutes(visible, relationships, { previousRoutes: layout.routes || [] });
   const connections = graph.routes.map((route) => {
     const length = route.points.slice(1).reduce((sum, point, index) => sum +
       Math.abs(point.x - route.points[index].x) + Math.abs(point.y - route.points[index].y), 0);
@@ -30,25 +31,33 @@ export function inspectErdLayout(schema, layout) {
       detourRatio: directDistance ? length / directDistance : null, obstructed: route.obstructed
     };
   });
-  return {
+  const inspection = {
     revision: layout.revision, instructions: ERD_AGENT_INSTRUCTIONS,
     scope: { focusTable: layout.focusTable, activeGroup: layout.activeGroup },
     viewport: layout.viewport,
-    nodes: nodes.map((node) => ({ table: node.id, ...node.position, ...node.dimensions,
-      positioned: positioned.has(node.id), visible: !node.hidden, pinned: node.data.pinned,
-      collapsed: node.data.collapsed, expanded: node.data.expanded, group: node.data.group,
-      fields: node.data.columns.map((column) => column.name) })),
+    nodes: nodes.map((node) => ({
+      table: node.id,
+      ...node.position,
+      ...node.dimensions,
+      positioned: positioned.has(node.id),
+      visible: !node.hidden,
+      pinned: node.data.pinned,
+      collapsed: node.data.collapsed,
+      expanded: node.data.expanded,
+      group: node.data.group,
+      fields: node.data.columns.map((column) => column.name)
+    })),
     connections,
     metrics: {
-      totalRelationships: (schema.relationships || []).length,
+      totalRelationships: relationships.length,
       visibleRelationships: new Set(connections.map((route) => route.relationshipId)).size,
       routedConnections: connections.length,
       obstructedConnections: connections.filter((route) => route.obstructed).length,
       totalLength: connections.reduce((sum, route) => sum + route.length, 0),
       totalBends: connections.reduce((sum, route) => sum + route.bends, 0)
-    },
-    routes: erdRouteSnapshot(graph.routes)
+    }
   };
+  return { inspection, routes: erdRouteSnapshot(graph.routes) };
 }
 
 export function moveErdTables(schema, layout, input = {}) {
@@ -61,9 +70,12 @@ export function moveErdTables(schema, layout, input = {}) {
   const previousMoves = [];
   for (const move of input.moves) {
     const current = layout.nodes.find((node) => node.table === move?.table);
-    if (!current || !tables.has(move.table) || moves.has(move.table) ||
-      !Number.isFinite(move.x) || !Number.isFinite(move.y) || Math.abs(move.x) > 10_000_000 || Math.abs(move.y) > 10_000_000 ||
-      (move.pinned !== undefined && typeof move.pinned !== "boolean")) {
+    if (
+      !current || !tables.has(move.table) || moves.has(move.table) ||
+      !Number.isFinite(move.x) || !Number.isFinite(move.y) ||
+      Math.abs(move.x) > 10_000_000 || Math.abs(move.y) > 10_000_000 ||
+      (move.pinned !== undefined && typeof move.pinned !== "boolean")
+    ) {
       throw vibe64Error("Each move needs a distinct, positioned table from the current schema and finite x/y coordinates. Open the ERD first if it has no saved positions.", "vibe64_database_erd_moves_invalid");
     }
     if (current.pinned && move.pinned !== false && (current.x !== move.x || current.y !== move.y)) {
@@ -74,8 +86,14 @@ export function moveErdTables(schema, layout, input = {}) {
   }
   const moved = { ...layout, nodes: layout.nodes.map((node) => ({ ...node, ...moves.get(node.table) })) };
   // Choose fresh facing ports for affected connections, keeping unrelated clear paths stable.
-  const affected = new Set((schema.relationships || []).filter((relationship) => moves.has(relationship.sourceTable) || moves.has(relationship.referencedTable))
-    .flatMap((relationship) => relationship.columns.map((_, index) => relationship.columns.length > 1 ? `${relationship.id}:column-${index}` : relationship.id)));
+  const affected = new Set();
+  for (const relationship of schema.relationships || []) {
+    if (!moves.has(relationship.sourceTable) && !moves.has(relationship.referencedTable)) continue;
+    relationship.columns.forEach((_, index) => {
+      const id = relationship.columns.length > 1 ? `${relationship.id}:column-${index}` : relationship.id;
+      affected.add(id);
+    });
+  }
   moved.routes = (layout.routes || []).filter((route) => !affected.has(route.id));
   return { layout: moved, previousMoves };
 }

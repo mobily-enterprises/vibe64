@@ -112,7 +112,7 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   assert.deepEqual(current.groups, saved.groups);
   assert.deepEqual(current.viewport, saved.viewport);
   assert.deepEqual(current.nodes[0], saved.nodes[0]);
-  assert.deepEqual(inspectErdLayout(schema, current).connections, moved.connections);
+  assert.deepEqual(inspectErdLayout(schema, current).inspection.connections, moved.connections);
   const reopened = await service.readErd({ sessionId: "session" });
   assert.deepEqual(reopened.connections, moved.connections);
   assert.equal((await service.moveErdTables({ sessionId: "session", changes })).code, "vibe64_database_erd_layout_conflict");

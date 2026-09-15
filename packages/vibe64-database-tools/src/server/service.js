@@ -557,8 +557,7 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const layout = await readErdLayout(context.store, context.sessionId, input.vibe64User);
-        const { routes: _routes, ...inspection } = inspectErdLayout(schema, layout);
-        void _routes;
+        const { inspection } = inspectErdLayout(schema, layout);
         return { ok: true, ...inspection };
       });
     },
@@ -569,7 +568,7 @@ function createService({
         const schema = await currentSchema(context);
         const current = await readErdLayout(context.store, context.sessionId, input.vibe64User);
         const moved = moveErdTables(schema, current, input.changes);
-        const { routes, ...inspection } = inspectErdLayout(schema, moved.layout);
+        const { routes, inspection } = inspectErdLayout(schema, moved.layout);
         const layout = await saveErdLayout(context.store, context.sessionId, { ...moved.layout, routes }, {
           expectedRevision: input.changes.revision
         });

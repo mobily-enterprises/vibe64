@@ -104,9 +104,9 @@ function validateCommand(parsed = {}) {
       stdout: usageText()
     };
   }
-  const erd = parsed.command === "erd" && (parsed.positionals.length === 1 ||
-    (parsed.positionals.length === 2 && parsed.positionals[1] === "apply"));
-  if (!erd && (!["refresh", "overview"].includes(parsed.command) || parsed.positionals.length !== 1)) {
+  const singleCommand = ["refresh", "overview", "erd"].includes(parsed.command) && parsed.positionals.length === 1;
+  const applyMoves = parsed.command === "erd" && parsed.positionals.length === 2 && parsed.positionals[1] === "apply";
+  if (!singleCommand && !applyMoves) {
     return responseError("The database command accepts refresh, overview, erd or erd apply.", "vibe64_agent_database_command_usage", {
       exitCode: 2,
       usage: true
@@ -160,8 +160,9 @@ if (!socketPath || !sessionId || !token) fail("Vibe64 database command identity 
 if (version !== expectedVersion) fail("Vibe64 database command contract does not match this session.");
 
 const args = process.argv.slice(2);
+const positionals = args.filter((arg) => !arg.startsWith("-"));
 let changes;
-if (args[0] === "erd" && args[1] === "apply" && !args.includes("--help") && !args.includes("-h")) {
+if (positionals[0]?.trim().toLowerCase() === "erd" && positionals[1] === "apply" && !args.includes("--help") && !args.includes("-h")) {
   let source = "";
   process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) {
@@ -345,16 +346,14 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
       result = validateCommand(parsed);
       if (!result) {
         if (!databaseToolsProvider) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
-        if (parsed.command === "erd") {
-          const erd = await runInSessionProject(sessionId, () => parsed.positionals[1] === "apply"
-            ? databaseToolsProvider.moveErdTables({ sessionId, changes: input.changes })
-            : databaseToolsProvider.readErd({ sessionId }));
-          if (erd?.ok === false) throw vibe64Error(erd.error, erd.code);
-          result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(erd, null, 2)}\n` };
-        } else if (parsed.command === "overview") {
-          const overview = await runInSessionProject(sessionId, () => databaseToolsProvider.readOverview({ sessionId }));
-          if (overview?.ok === false) throw vibe64Error(overview.error, overview.code);
-          result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(overview, null, 2)}\n` };
+        if (parsed.command === "erd" || parsed.command === "overview") {
+          const payload = await runInSessionProject(sessionId, () => {
+            if (parsed.command === "overview") return databaseToolsProvider.readOverview({ sessionId });
+            if (parsed.positionals[1] === "apply") return databaseToolsProvider.moveErdTables({ sessionId, changes: input.changes });
+            return databaseToolsProvider.readErd({ sessionId });
+          });
+          if (payload?.ok === false) throw vibe64Error(payload.error, payload.code);
+          result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(payload, null, 2)}\n` };
         } else {
           const refreshed = await runInSessionProject(sessionId, () => databaseToolsProvider.refreshSchema({
             sessionId,

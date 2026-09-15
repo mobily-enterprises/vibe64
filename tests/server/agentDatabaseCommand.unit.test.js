@@ -149,17 +149,26 @@ test("agent ERD wrapper reads geometry and submits stdin moves only to its bound
     const read = await run(prepared.hostWrapperPath, ["erd", "--json"], env);
     assert.equal(read.code, 0, read.stderr);
     assert.equal(JSON.parse(read.stdout).revision, 7);
+    assert.deepEqual(calls, [{ sessionId: "erd-session" }]);
     const changes = { revision: 7, moves: [{ table: "public.items", x: 200, y: 300 }] };
-    const moved = await run(prepared.hostWrapperPath, ["erd", "apply", "--json"], env, JSON.stringify(changes));
-    assert.equal(moved.code, 0, moved.stderr);
-    assert.equal(JSON.parse(moved.stdout).revision, 8);
-    assert.deepEqual(calls, [{ sessionId: "erd-session" }, { sessionId: "erd-session", changes }]);
+    const applyArguments = [
+      ["erd", "apply", "--json"],
+      ["--json", "erd", "apply"],
+      ["erd", "--json", "apply"]
+    ];
+    for (const args of applyArguments) {
+      const moved = await run(prepared.hostWrapperPath, args, env, JSON.stringify(changes));
+      assert.equal(moved.code, 0, moved.stderr);
+      assert.equal(JSON.parse(moved.stdout).revision, 8);
+      assert.deepEqual(calls.at(-1), { sessionId: "erd-session", changes }, args.join(" "));
+    }
+    assert.equal(calls.length, 4);
     const invalid = await run(prepared.hostWrapperPath, ["erd", "apply"], env, "not JSON");
     assert.equal(invalid.code, 1);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 4);
     const denied = await command.run({ args: ["erd", "apply"], sessionId: "other-session", changes });
     assert.equal(denied.code, "vibe64_agent_database_command_session_unbound");
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 4);
   } finally {
     await command.closeAllForSession("erd-session");
     await rm(root, { force: true, recursive: true });

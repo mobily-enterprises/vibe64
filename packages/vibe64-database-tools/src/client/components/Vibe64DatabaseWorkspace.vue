@@ -556,6 +556,7 @@ import {
   onBeforeUnmount,
   reactive,
   ref,
+  shallowRef,
   watch
 } from "vue";
 import {
@@ -678,9 +679,8 @@ const activeView = ref("overview");
 // mounted; switching views only changes visibility and interaction.
 const openedViews = reactive({ overview: true, erd: false, data: false });
 watch(activeView, (view) => { openedViews[view] = true; }, { flush: "sync" });
-const diagramReturn = ref(null);
+const diagramReturn = shallowRef(null);
 const diagramSelections = reactive({ overview: "", erd: "" });
-let diagramReturnFocus = null;
 const copilotOpen = ref(false);
 const erdLayout = ref({ nodes: [] });
 const diagramSavesPending = ref(0);
@@ -805,7 +805,6 @@ watch([state, () => props.active, activeView], ([next, active]) => {
     assistantMessages.value = [];
     copilotOpen.value = false;
     diagramReturn.value = null;
-    diagramReturnFocus = null;
     diagramSelections.overview = "";
     diagramSelections.erd = "";
     erdLayout.value = next.layout || { nodes: [] };
@@ -925,8 +924,11 @@ function selectTable(table = {}) {
 
 function selectTableFromErd(table = {}, view = activeView.value, label = "") {
   if (!table.qualifiedName || running.value) return;
-  diagramReturn.value = { view, label: label || (view === "erd" ? "ERD" : "Overview") };
-  diagramReturnFocus = globalThis.document?.activeElement;
+  diagramReturn.value = {
+    view,
+    label: label || (view === "erd" ? "ERD" : "Overview"),
+    focusTarget: globalThis.document?.activeElement
+  };
   navigatorTab.value = "tables";
   tableSearch.value = "";
   return selectTable(table);
@@ -935,7 +937,7 @@ function selectTableFromErd(table = {}, view = activeView.value, label = "") {
 function returnToDiagram() {
   if (!diagramReturn.value) return;
   activeView.value = diagramReturn.value.view;
-  void nextTick(() => diagramReturnFocus?.focus?.({ preventScroll: true }));
+  void nextTick(() => diagramReturn.value?.focusTarget?.focus?.({ preventScroll: true }));
 }
 
 function loadSql(value = "") {

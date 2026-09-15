@@ -30,11 +30,12 @@ export function createErdNodes(schema, layout) {
 export function visibleErdNodes(nodes, relationships, layout) {
   const neighbours = erdNeighbours(layout.focusTable, relationships);
   const connected = new Set(relationships.flatMap((relationship) => [relationship.sourceTable, relationship.referencedTable]));
-  return nodes.map((node) => ({ ...node, hidden: Boolean(
-    (layout.focusTable && !neighbours.has(node.id)) ||
-    (layout.activeGroup && layout.activeGroup !== node.data.layoutGroup &&
-      !(layout.activeGroup === "erd-related" && connected.has(node.id)))
-  ) }));
+  return nodes.map((node) => {
+    const matchesFocus = !layout.focusTable || neighbours.has(node.id);
+    const matchesGroup = !layout.activeGroup || layout.activeGroup === node.data.layoutGroup ||
+      (layout.activeGroup === "erd-related" && connected.has(node.id));
+    return { ...node, hidden: !matchesFocus || !matchesGroup };
+  });
 }
 
 export function erdColumns(table, relationships = [], mode = "keys", expanded = false) {

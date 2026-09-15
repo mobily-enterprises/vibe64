@@ -281,6 +281,7 @@ obstructed paths are rerouted. This is layout inspection, not a database row que
 
 `vibe64-database erd apply --json < moves.json` accepts
 `{"revision":7,"moves":[{"table":"public.orders","x":400,"y":200}]}`.
+The `--json` flag can appear before, between or after the command words.
 It validates all table identities, coordinates and pins before saving. Explicit
 `pinned:false` is required to move a pinned table. The existing serialized layout
 writer checks the inspected revision atomically; a conflict leaves the saved
