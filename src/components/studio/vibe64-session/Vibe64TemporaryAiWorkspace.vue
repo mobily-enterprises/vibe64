@@ -67,26 +67,6 @@
         />
       </div>
       <span class="vibe64-temporary-ai__tabs-spacer" />
-      <v-btn
-        v-if="activeTask"
-        :aria-label="activeTask.policy === workspaceWritePolicy
-          ? 'Read/write: temporary AI may edit this session'
-          : 'Read-only: temporary AI cannot edit this session'"
-        class="vibe64-temporary-ai__policy"
-        :color="activeTask.policy === workspaceWritePolicy ? 'warning' : undefined"
-        :disabled="taskInputDisabled(activeTask)"
-        height="28"
-        min-width="40"
-        size="x-small"
-        :title="activeTask.policy === workspaceWritePolicy
-          ? 'R/W: temporary AI may edit this session. Click to make it read-only.'
-          : 'R/O: temporary AI cannot edit this session. Click to allow edits.'"
-        type="button"
-        variant="tonal"
-        @click="togglePolicy(activeTask)"
-      >
-        {{ activeTask.policy === workspaceWritePolicy ? "R/W" : "R/O" }}
-      </v-btn>
     </nav>
 
     <template v-if="activeTask">
@@ -118,122 +98,129 @@
           </v-btn>
         </v-alert>
       </div>
-      <div class="vibe64-temporary-ai__messages" aria-live="polite">
-        <Vibe64EphemeralConversationMessages
-          :session-id="props.sessionId"
-          :messages="activeTask.messages"
-          empty-message="Ask a focused question or investigate a problem without adding it to the main conversation."
-        >
-          <template #message-text="{ message }">
-            <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
-            <p v-else>{{ message.text }}</p>
-            <v-btn
-              v-if="message.id === recoveryMessageId && canReturnToMainChat"
-              ref="returnToMainButton"
-              :aria-busy="closingTask"
-              class="vibe64-temporary-ai__return"
-              color="primary"
-              :disabled="props.repositoryBusy || closingTask"
-              size="small"
-              variant="tonal"
-              @click="closeTask(activeTask.id, { returnToMainChat: true })"
-            >
-              Return to main chat
-            </v-btn>
-          </template>
-        </Vibe64EphemeralConversationMessages>
-      </div>
-
-      <div
-        v-if="activeTask.error || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
-        class="vibe64-temporary-ai__feedback"
-      >
-        <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
-          {{ actionErrors[activeTask.id] }}
-        </div>
-        <div
-          v-if="activeTask.error"
-          class="vibe64-temporary-ai__error"
-          :class="{ 'vibe64-temporary-ai__error--recovered': activeTaskRecoveryVerified }"
-          :role="activeTaskRecoveryVerified ? 'status' : 'alert'"
-        >
-          <template v-if="activeTaskRecoveryVerified">
-            Temporary AI did not report a clean finish: {{ activeTask.error }} The repair was independently verified.
-          </template>
-          <template v-else>{{ activeTask.error }}</template>
-        </div>
-        <Vibe64PromptHints
-          v-if="activeTask.busy || activeTaskRecoveryChecking"
-          class="vibe64-temporary-ai__activity"
-          :assistant-label="activeTaskRecoveryChecking ? 'Checking Update…' : 'AI is working…'"
-        />
-      </div>
-
-      <Vibe64AutopilotPromptTextarea
-        v-for="task in temporary.tasks.value"
-        v-show="task.id === activeTask.id"
-        :key="task.id"
-        :ref="(element) => setTaskPrompt(task.id, element)"
-        :model-value="task.draft"
-        aria-label="Message temporary AI"
-        :attachments-enabled="Boolean(props.sessionId)"
-        :disabled="taskInputDisabled(task)"
-        placeholder="Ask temporary AI…"
-        :rows="2"
+      <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
-        tab-to-submit
-        @attachments-change="temporary.updateAttachments(task.id, $event)"
-        @submit="sendTask(task.id)"
-        @tab-to-submit="focusSendButton"
-        @update:model-value="temporary.updateDraft(task.id, $event)"
+        :messages="activeTask.messages"
+        :scroll-key="activeTask.id"
+        empty-message="Ask a focused question or investigate a problem without adding it to the main conversation."
       >
-        <template #footer="{ attachmentState }">
-          <div class="vibe64-temporary-ai__composer-actions">
-            <Vibe64AgentSettingsMenu
-              :agent-settings="task.agentSettings"
-              :disabled="taskInputDisabled(task)"
-              @update-setting="updateActiveAgentSetting"
-            />
-            <v-btn
-              aria-label="Attach files"
-              :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"
-              :icon="mdiPaperclip"
-              size="small"
-              title="Attach files"
-              type="button"
-              variant="text"
-              @click="taskPrompt(task.id)?.openFilePicker?.()"
-            />
-            <span class="vibe64-temporary-ai__spacer" />
-            <v-btn
-              v-if="task.busy"
-              color="error"
-              :prepend-icon="mdiStopCircleOutline"
-              size="small"
-              type="button"
-              variant="tonal"
-              :disabled="task.status === 'starting'"
-              :loading="stoppingTaskId === task.id"
-              @click="stopTask(task.id)"
+        <template #message-text="{ message }">
+          <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
+          <p v-else>{{ message.text }}</p>
+          <v-btn
+            v-if="message.id === recoveryMessageId && canReturnToMainChat"
+            ref="returnToMainButton"
+            :aria-busy="closingTask"
+            class="vibe64-temporary-ai__return"
+            color="primary"
+            :disabled="props.repositoryBusy || closingTask"
+            size="small"
+            variant="tonal"
+            @click="closeTask(activeTask.id, { returnToMainChat: true })"
+          >
+            Return to main chat
+          </v-btn>
+        </template>
+        <template #hints>
+          <div
+            v-if="activeTask.error || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
+            class="vibe64-temporary-ai__feedback"
+          >
+            <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
+              {{ actionErrors[activeTask.id] }}
+            </div>
+            <div
+              v-if="activeTask.error"
+              class="vibe64-temporary-ai__error"
+              :class="{ 'vibe64-temporary-ai__error--recovered': activeTaskRecoveryVerified }"
+              :role="activeTaskRecoveryVerified ? 'status' : 'alert'"
             >
-              Stop
-            </v-btn>
-            <v-btn
-              v-else
-              :ref="(element) => setTaskSendButton(task.id, element)"
-              aria-label="Send to temporary AI"
-              color="primary"
-              :disabled="task.recoveryOutcome === 'checking' || !task.draft.trim() || !attachmentState.canSubmit"
-              :icon="mdiArrowUp"
-              size="small"
-              title="Send to temporary AI"
-              type="button"
-              variant="flat"
-              @click="sendTask(task.id)"
+              <template v-if="activeTaskRecoveryVerified">
+                Temporary AI did not report a clean finish: {{ activeTask.error }} The repair was independently verified.
+              </template>
+              <template v-else>{{ activeTask.error }}</template>
+            </div>
+            <Vibe64PromptHints
+              v-if="activeTask.busy || activeTaskRecoveryChecking"
+              class="vibe64-temporary-ai__activity"
+              :assistant-label="activeTaskRecoveryChecking ? 'Checking Update…' : 'AI is working…'"
             />
           </div>
         </template>
-      </Vibe64AutopilotPromptTextarea>
+        <template #composer>
+          <Vibe64AutopilotPromptTextarea
+            v-for="task in temporary.tasks.value"
+            v-show="task.id === activeTask.id"
+            :key="task.id"
+            :ref="(element) => setTaskPrompt(task.id, element)"
+            :model-value="task.draft"
+            aria-label="Message temporary AI"
+            :attachments-enabled="Boolean(props.sessionId)"
+            :disabled="taskInputDisabled(task)"
+            placeholder="Ask temporary AI…"
+            :rows="2"
+            :session-id="props.sessionId"
+            tab-to-submit
+            @attachments-change="temporary.updateAttachments(task.id, $event)"
+            @submit="sendTask(task.id)"
+            @tab-to-submit="focusSendButton"
+            @update:model-value="temporary.updateDraft(task.id, $event)"
+          >
+            <template #footer="{ attachmentState }">
+              <AssistantComposerActions
+                :ref="(element) => setTaskSendButton(task.id, element)"
+                :state="{
+                  canSend: !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit,
+                  canStop: task.busy,
+                  stopDisabled: task.status === 'starting',
+                  stopPending: stoppingTaskId === task.id,
+                  submitAriaLabel: 'Send to temporary AI'
+                }"
+                @submit="sendTask(task.id)"
+                @stop="stopTask(task.id)"
+              >
+                <Vibe64AgentSettingsMenu
+                  :agent-settings="task.agentSettings"
+                  :disabled="taskInputDisabled(task)"
+                  @update-setting="updateActiveAgentSetting"
+                />
+                <v-btn
+                  aria-label="Attach files"
+                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"
+                  :icon="mdiPaperclip"
+                  size="small"
+                  title="Attach files"
+                  type="button"
+                  variant="text"
+                  @click="taskPrompt(task.id)?.openFilePicker?.()"
+                />
+                <v-btn
+                  v-if="previewAttachmentState.captureAvailable"
+                  aria-label="Attach preview screenshot"
+                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
+                  :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
+                  :icon="mdiCameraOutline"
+                  size="small"
+                  title="Attach preview screenshot"
+                  variant="text"
+                  @click="previewAttachmentState.capture?.()"
+                />
+                <v-btn
+                  v-if="previewAttachmentState.diagnosticsAvailable"
+                  aria-label="Attach console and network diagnostics"
+                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
+                  :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
+                  :icon="mdiConsoleNetworkOutline"
+                  size="small"
+                  title="Attach console and network diagnostics"
+                  variant="text"
+                  @click="previewAttachmentState.attachDiagnostics?.()"
+                />
+              </AssistantComposerActions>
+            </template>
+          </Vibe64AutopilotPromptTextarea>
+        </template>
+      </Vibe64EphemeralConversationMessages>
     </template>
     <v-dialog
       v-if="taskToClose"
@@ -269,15 +256,16 @@
 </template>
 
 <script setup>
+import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
 import { computed, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
-  mdiArrowUp,
+  mdiCameraOutline,
   mdiClose,
+  mdiConsoleNetworkOutline,
   mdiPaperclip,
   mdiPlus,
   mdiRobotOutline,
-  mdiStopCircleOutline
 } from "@mdi/js";
 
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
@@ -285,7 +273,6 @@ import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vi
 import Vibe64EphemeralConversationMessages from "@/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 import Vibe64PromptHints from "@/components/studio/vibe64-session/Vibe64PromptHints.vue";
 import {
-  TEMPORARY_AI_WORKSPACE_WRITE_POLICY,
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
@@ -293,6 +280,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
+  previewAttachmentState: { type: Object, default: () => ({}) },
   repositoryBusy: Boolean,
   updateDisabled: Boolean,
   updateDisabledReason: { type: String, default: "" },
@@ -438,7 +426,6 @@ const activeTaskRecoveryStatus = computed(() => {
   }
   return task.nextStepMessage || "Follow progress here and reply below if Temporary AI needs a decision.";
 });
-const workspaceWritePolicy = TEMPORARY_AI_WORKSPACE_WRITE_POLICY;
 
 function requestCloseTask(task) {
   if (task.recoveryOperation === "update" && task.recoveryOutcome !== "succeeded" && (task.busy || task.messages.length)) {
@@ -590,14 +577,9 @@ async function revealTaskTab(taskId = "", { focus = false } = {}) {
 
 function focusSendButton() {
   const sendButton = taskSendButtons.get(activeTask.value?.id);
-  const button = sendButton?.$el || sendButton;
-  button?.focus?.();
+  sendButton?.focus?.();
 }
 
-function togglePolicy(task = {}) {
-  const policy = task.policy === workspaceWritePolicy ? "read" : workspaceWritePolicy;
-  temporary.updatePolicy(task.id, policy);
-}
 
 function updateActiveAgentSetting(parameterId = "", value = "") {
   if (activeTask.value?.id) {
@@ -617,6 +599,7 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
 }, { flush: "post" });
 
 defineExpose({
+  get composer() { return temporary.open.value ? taskPrompt(temporary.activeTaskId.value) : null; },
   closeWorkspace: temporary.closeWorkspace,
   openTask: temporary.openTask,
   reportTaskRecovery,
@@ -638,7 +621,7 @@ defineExpose({
   display: grid;
   grid-row: 3 / -1;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   left: 0.3rem;
   min-height: 0;
   overflow: hidden;
@@ -646,11 +629,6 @@ defineExpose({
   right: 0.3rem;
   top: 0;
   z-index: 12;
-}
-
-.vibe64-temporary-ai__composer-actions {
-  align-items: center;
-  display: flex;
 }
 
 .vibe64-temporary-ai__tabs {
@@ -732,30 +710,11 @@ defineExpose({
   flex: 1 1 auto;
 }
 
-.vibe64-temporary-ai__policy {
-  flex: 0 0 auto;
-  font-weight: 700;
-}
-
 .vibe64-temporary-ai__busy {
   background: rgb(var(--v-theme-primary));
   border-radius: 50%;
   height: 0.45rem;
   width: 0.45rem;
-}
-
-.vibe64-temporary-ai__messages {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0.55rem;
-}
-
-.vibe64-temporary-ai__messages p {
-  margin: 0;
-  white-space: pre-wrap;
 }
 
 .vibe64-temporary-ai__recovery {
@@ -809,20 +768,6 @@ defineExpose({
   color: rgba(var(--v-theme-on-surface), 0.66);
 }
 
-.vibe64-temporary-ai :deep(.studio-autopilot-prompt-textarea) {
-  margin: 4px;
-  width: auto;
-}
-
-.vibe64-temporary-ai__composer-actions {
-  gap: 0.2rem;
-  width: 100%;
-}
-
-.vibe64-temporary-ai__spacer {
-  flex: 1 1 auto;
-}
-
 @media (max-width: 720px) {
   .vibe64-temporary-ai {
     border: 0;
@@ -835,11 +780,9 @@ defineExpose({
 @media (pointer: coarse) {
   .vibe64-temporary-ai__tab-select,
   .vibe64-temporary-ai__new-task,
-  .vibe64-temporary-ai__policy,
   .vibe64-temporary-ai__tab-close,
   .vibe64-temporary-ai__check-update,
-  .vibe64-temporary-ai__return,
-  .vibe64-temporary-ai__composer-actions .v-btn {
+  .vibe64-temporary-ai__return {
     min-height: 3rem !important;
     min-width: 3rem !important;
   }

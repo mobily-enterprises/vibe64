@@ -73,7 +73,6 @@ const temporaryConversationCreateActionInputValidator = validator({
     additionalProperties: true,
     required: false
   },
-  policy: optionalText,
   sessionId: sessionIdField,
   vibe64User: vibe64UserField
 });
@@ -91,7 +90,7 @@ const temporaryConversationTurnActionInputValidator = validator({
   conversationId: requiredText,
   messageId: optionalText,
   message: requiredText,
-  policy: optionalText,
+  outputSchema: { type: "object", additionalProperties: true, required: false },
   promptLabel: optionalText,
   sessionId: sessionIdField,
   vibe64User: vibe64UserField

@@ -251,7 +251,7 @@ const conversationLoadingMore = computed(() => Boolean(props.conversationLog?.lo
   padding-top: 0.9rem;
 }
 
-.studio-archived-session-detail__conversation :deep(.studio-conversation-log__body) {
+.studio-archived-session-detail__conversation :deep(.assistant-transcript__body) {
   max-height: min(34rem, 70vh);
   min-height: 12rem;
   overflow-y: auto;

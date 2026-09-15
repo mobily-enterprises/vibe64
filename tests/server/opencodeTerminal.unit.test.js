@@ -418,7 +418,7 @@ test("OpenCode leaves starting state when Git identity admission fails", async (
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_git_identity_missing");
   assert.deepEqual(
-    harness.agentRunEvents.map(({ run }) => run.state),
+    [...new Set(harness.agentRunEvents.map(({ run }) => run.state))],
     ["starting", "failed"]
   );
   assert.equal(harness.userMessages.length, 0);
@@ -545,9 +545,28 @@ test("OpenCode returns a readable failed-message result after a cold start times
   assert.equal(harness.processStarts.length, 0);
   assert.equal(harness.userMessages.length, 0);
   assert.deepEqual(
-    harness.agentRunEvents.map(({ run }) => run.state),
+    [...new Set(harness.agentRunEvents.map(({ run }) => run.state))],
     ["starting", "failed"]
   );
+});
+
+test("OpenCode preserves application failure results for extracted transport errors", async (t) => {
+  const harness = await controllerHarness();
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  harness.failPrompt(Object.assign(new Error("OpenCode rejected the request."), {
+    code: "assistant_opencode_server_request_failed", statusCode: 503
+  }));
+  const result = await harness.controller.sendMessage("session-1", { message: "Hello", messageId: "transport-failure" });
+  assert.equal(result.ok, false);
+  assert.equal(result.delivered, false);
+  assert.equal(result.code, "vibe64_opencode_server_request_failed");
+  assert.equal(result.refreshRecommended, true);
+  assert.equal(result.turn.state, "failed");
+  assert.equal(harness.promptCalls.length, 1);
+  assert.equal(harness.userMessages.length, 0);
 });
 
 test("OpenCode reports local persistence failure after upstream admission without resending", async (t) => {
@@ -630,7 +649,7 @@ test("OpenCode persists a user message and its display attachments only after up
   );
   assert.equal(harness.userMessages.length, 0);
   assert.deepEqual(
-    harness.agentRunEvents.map(({ run }) => run.state),
+    [...new Set(harness.agentRunEvents.map(({ run }) => run.state))],
     ["starting", "failed"]
   );
 
@@ -1802,7 +1821,6 @@ test("OpenCode receives the same complete session command boundary as Codex", as
   });
   await harness.controller.runDetachedChatTurn("session-1", {
     conversationId: conversation.conversationId,
-    policy: "workspace_write",
     prompt: "Run one temporary task"
   }, {
     runtime: harness.runtime,
@@ -1818,7 +1836,7 @@ test("OpenCode receives the same complete session command boundary as Codex", as
   assert.deepEqual(temporaryEnvironment, {
     ...updatedRegistry.sessions[0],
     promptContext: {
-      conversationKind: "temporary-task",
+      conversationKind: "temporary",
       scope: "session",
       session: {
         managedDatabaseRefresh: true,
@@ -2047,4 +2065,118 @@ test("OpenCode reuses its terminal without creating prompt actor state", async (
     vibe64User: { preferredName: "Ada", username: "ada" }
   });
   assert.equal(Object.hasOwn(harness.promptCalls.at(-1).input.prompt, "turnContext"), false);
+});
+
+for (const fallback of [false, true]) {
+  test(`OpenCode observation loss verifies ${fallback ? "shared process exit" : "native abort"} and requires explicit Send`, async (t) => {
+    const loss = Promise.withResolvers();
+    let interrupts = 0;
+    let connections = 0;
+    const harness = await controllerHarness({
+      assistantResponses: [{ pending: true, text: "" }, "Explicit continuation"],
+      interrupt: async () => { interrupts += 1; return !fallback; },
+      async *events(_id, { onReady, signal }) {
+        onReady();
+        yield { data: { type: "session.status", properties: { sessionID: _id } } };
+        connections += 1;
+        await Promise.race([
+          connections === 1 ? loss.promise : new Promise(() => {}),
+          new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }))
+        ]);
+      }
+    });
+    t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+    await harness.controller.sendMessage("session-1", { message: "Work", messageId: "before-loss" });
+    loss.resolve();
+    const stopped = await harness.controller.waitForTurn("session-1");
+    assert.equal(stopped.active, false);
+    assert.match(stopped.error, /event connection ended/);
+    assert.equal(interrupts, 1);
+    assert.equal(harness.processStops.length, fallback ? 1 : 0);
+    assert.equal(harness.promptCalls.length, 1);
+    const admitted = await harness.controller.sendMessage("session-1", { message: "Continue", messageId: "after-loss" });
+    assert.equal(admitted.ok, true);
+    await harness.controller.waitForTurn("session-1");
+    assert.equal(harness.assistantMessages.at(-1).text, "Explicit continuation");
+  });
+}
+
+test("OpenCode keeps Stop available and refuses new work when process exit is unverified", async (t) => {
+  const loss = Promise.withResolvers();
+  let stopped = false;
+  const harness = await controllerHarness({
+    assistantResponses: [{ pending: true, text: "" }],
+    interrupt: async () => false,
+    stop: async () => ({ exited: stopped }),
+    async *events(_id, { onReady, signal }) {
+      onReady();
+      yield { data: { type: "session.status", properties: { sessionID: _id } } };
+      await Promise.race([loss.promise, new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }))]);
+    }
+  });
+  t.after(async () => { stopped = true; await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  await harness.controller.sendMessage("session-1", { message: "Work", messageId: "unknown-stop" });
+  loss.resolve();
+  const state = await harness.controller.waitForTurn("session-1");
+  assert.equal(state.active, true);
+  assert.equal(state.status, "observation_lost");
+  await assert.rejects(harness.controller.sendMessage("session-1", { message: "Cannot overlap", messageId: "overlap" }), /could not be verified/);
+  assert.equal(harness.promptCalls.length, 1);
+  stopped = true;
+  const retried = await harness.controller.interruptTurn("session-1");
+  assert.equal(retried.ok, true);
+  assert.equal(retried.turn.active, false);
+});
+
+test("OpenCode stops native work when saving its transcript fails", async (t) => {
+  let interrupts = 0;
+  const harness = await controllerHarness({ interrupt: async () => { interrupts += 1; return true; } });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  harness.runtime.store.writeConversationAssistantMessage = async () => { throw new Error("Transcript storage unavailable"); };
+  await harness.controller.sendMessage("session-1", { message: "Work", messageId: "storage-failure" });
+  const state = await harness.controller.waitForTurn("session-1");
+  assert.equal(interrupts, 1);
+  assert.equal(state.active, false);
+  assert.match(state.error, /Transcript storage unavailable/);
+  assert.equal(harness.promptCalls.length, 1);
+});
+
+test("OpenCode startup retries an unverified observation stop without restarting the turn", async (t) => {
+  const loss = Promise.withResolvers();
+  let exited = false;
+  const harness = await controllerHarness({
+    assistantResponses: [{ pending: true, text: "" }],
+    interrupt: async () => false,
+    stop: async () => ({ exited }),
+    async *events(id, { onReady, signal }) {
+      onReady();
+      yield { data: { type: "session.status", properties: { sessionID: id } } };
+      const aborted = new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+      await Promise.race([loss.promise, aborted]);
+    }
+  });
+  let restarted;
+  t.after(async () => {
+    exited = true;
+    await restarted?.closeAllForProject();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  await harness.controller.sendMessage("session-1", { message: "Work", messageId: "restart-unverified" });
+  loss.resolve();
+  await harness.controller.waitForTurn("session-1");
+  const savedRun = structuredClone(harness.agentRunEvents.at(-1).run);
+  assert.equal(savedRun.active, true);
+  assert.ok(savedRun.observationError);
+  const session = { ...harness.session, agentRuns: [savedRun] };
+  restarted = harness.createController();
+  const failed = await restarted.reconcileSessions([session]);
+  assert.equal(failed.ok, false);
+  assert.equal(harness.promptCalls.length, 1);
+  exited = true;
+  const stopped = await restarted.reconcileSessions([session]);
+  assert.equal(stopped.ok, true, JSON.stringify(stopped));
+  assert.equal(stopped.results[0].resumed, false);
+  assert.equal(harness.agentRunEvents.at(-1).run.active, false);
+  assert.equal(harness.promptCalls.length, 1);
 });

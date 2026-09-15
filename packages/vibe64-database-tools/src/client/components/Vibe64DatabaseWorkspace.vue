@@ -386,11 +386,9 @@
             <div class="database-workspace__assistant-note">
               Looks up bounded parts of the refreshed schema as needed. Database credentials stay server-side, schema metadata is untrusted, and it can run only read-only queries.
             </div>
-            <div class="database-workspace__messages">
-              <article v-for="(message, index) in assistantMessages" :key="index" :class="`database-workspace__message--${message.role}`">
-                <small>{{ message.role === 'user' ? 'You' : 'Copilot' }}</small>
-                <small v-if="message.table"> · {{ message.table }}</small>
-                <p>{{ message.content }}</p>
+            <AssistantConversationElement :adapter="assistantAdapter" configuration-mode="hidden" label="Database copilot">
+              <template #message-actions="{ message }">
+                <small v-if="message.table">{{ message.table }}</small>
                 <v-btn
                   v-if="message.sql"
                   :prepend-icon="mdiCodeTags"
@@ -401,37 +399,16 @@
                 >
                   Put SQL in editor
                 </v-btn>
-              </article>
-              <div v-if="assistantBusy" class="database-workspace__assistant-skeleton" role="status">
-                <v-skeleton-loader type="list-item-two-line, paragraph" />
-              </div>
-            </div>
-            <div class="database-workspace__assistant-composer">
-              <small class="database-workspace__assistant-context">{{ assistantTableName ? `Table: ${assistantTableName}` : 'Whole database' }}</small>
-              <v-textarea
-                v-model="assistantDraft"
-                auto-grow
-                density="compact"
-                :disabled="assistantBusy"
-                hide-details
-                max-rows="5"
-                :placeholder="assistantTableName ? 'Ask about this table…' : 'Ask about this database…'"
-                rows="2"
-                variant="outlined"
-                @keydown.meta.enter.prevent="askCopilot"
-                @keydown.ctrl.enter.prevent="askCopilot"
-              />
-              <v-btn
-                :aria-busy="assistantBusy ? 'true' : undefined"
-                color="primary"
-                :disabled="assistantBusy || !assistantDraft.trim()"
-                :icon="mdiSend"
-                title="Ask database copilot"
-                type="button"
-                variant="flat"
-                @click="askCopilot"
-              />
-            </div>
+              </template>
+              <template #hints>
+                <div v-if="assistantBusy" class="database-workspace__assistant-skeleton" role="status">
+                  <v-skeleton-loader type="list-item-two-line, paragraph" />
+                </div>
+              </template>
+              <template #composer-tools>
+                <small class="database-workspace__assistant-context">{{ assistantTableName ? `Table: ${assistantTableName}` : 'Whole database' }}</small>
+              </template>
+            </AssistantConversationElement>
           </div>
           <div v-else class="database-workspace__copilot-unavailable">
             <v-icon :icon="mdiInformationOutline" size="26" />
@@ -550,6 +527,8 @@
 </template>
 
 <script setup>
+import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   computed,
   nextTick,
@@ -582,7 +561,6 @@ import {
   mdiPlus,
   mdiRefresh,
   mdiRestore,
-  mdiSend,
   mdiStop,
   mdiTableSearch
 } from "@mdi/js";
@@ -638,7 +616,6 @@ function requestOverviewAssistant({ abstraction = "balanced", scope = "all" } = 
     displayMessage: `${scope === "new" ? "Process new tables only" : "Regenerate the data overview"}: ${level.title}.`,
     message: `Create or review this project's Data overview. Run \`vibe64-database overview --json\` to read its current definition, refreshed schema and exact authoring instructions. Inspect the relevant application source to understand the main actors. Selected abstraction: ${level.title} (${level.value}). ${level.description} ${scopeInstruction} Save the grouping in data-overview.json with abstraction set to "${level.value}". Supporting tables may be several relationships away. Change only this grouping file; do not change database records, schema or other application files. Run \`vibe64-database refresh\` followed by \`vibe64-database overview --json\`, fix invalid or missing references, and report coverage plus any tables left under Other tables.`,
     dedupeKey: "database-overview",
-    policy: "workspace_write"
   });
 }
 
@@ -769,6 +746,36 @@ const filteredResultRows = computed(() => {
     !search || row.some((value) => displayValue(value).toLowerCase().includes(search))
   ));
 });
+
+const assistantAdapter = computed(() => ({
+  conversation: {
+    turns: conversationTurnsFromMessages(assistantMessages.value.map((message, index) => ({
+      ...message,
+      id: `database-${index}`,
+      text: message.content
+    }))),
+    assistantLabel: "Copilot",
+    visible: true,
+    variant: "task",
+    scrollKey: props.sessionId
+  },
+  composer: {
+    draft: assistantDraft.value,
+    disabled: assistantBusy.value,
+    submitOnModifierEnter: true,
+    pending: assistantBusy.value,
+    canSend: assistantCanRun.value && !assistantBusy.value && Boolean(assistantDraft.value.trim()),
+    placeholder: assistantTableName.value ? "Ask about this table…" : "Ask about this database…",
+    ariaLabel: "Message database copilot",
+    submitAriaLabel: "Ask database copilot"
+  },
+  actions: {
+    setDraft(value) {
+      assistantDraft.value = value;
+    },
+    submit: askCopilot
+  }
+}));
 
 const resultTitle = computed(() => {
   if (!queryResult.value) return "Results";
@@ -1338,14 +1345,8 @@ async function askCopilot() {
 .database-workspace__copilot > header > div { min-width: 0; flex: 1; }
 .database-workspace__copilot > header strong, .database-workspace__copilot > header small { display: block; }
 .database-workspace__copilot > header small { color: rgba(var(--v-theme-on-surface), 0.54); font-size: 0.63rem; }
-.database-workspace__copilot-body { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; }
+.database-workspace__copilot-body { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 .database-workspace__assistant-note { margin: 0.65rem; padding: 0.6rem; border-radius: 10px; background: rgba(var(--v-theme-tertiary), 0.09); color: rgba(var(--v-theme-on-surface), 0.68); font-size: 0.67rem; }
-.database-workspace__messages { min-height: 0; overflow: auto; padding: 0.25rem 0.65rem 0.65rem; }
-.database-workspace__messages article { margin: 0.5rem 0; padding: 0.65rem; border-radius: 13px; background: rgb(var(--v-theme-surface-container)); font-size: 0.73rem; }
-.database-workspace__messages article.database-workspace__message--user { margin-left: 1.5rem; background: rgba(var(--v-theme-primary), 0.12); }
-.database-workspace__messages article small { color: rgba(var(--v-theme-on-surface), 0.5); }
-.database-workspace__messages article p { margin: 0.25rem 0; white-space: pre-wrap; }
-.database-workspace__assistant-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; align-items: end; padding: 0.65rem; border-top: 1px solid rgba(var(--v-theme-outline), 0.14); }
 .database-workspace__assistant-skeleton { margin: 0.5rem 0; }
 .database-workspace__filter-form, .database-workspace__edit-form { display: grid; gap: 0.25rem; padding-top: 1rem !important; }
 .database-workspace__filter-form { grid-template-columns: 1fr 0.8fr 1fr; }

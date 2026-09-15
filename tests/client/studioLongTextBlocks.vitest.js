@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseLongTextInlineParts,
   parseLongTextReviewBlocks
-} from "../../src/lib/studioLongTextBlocks.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 describe("Studio long text review blocks", () => {
   it("preserves paragraphs and wrapped bullet text from authored Markdown", () => {

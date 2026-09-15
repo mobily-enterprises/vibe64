@@ -256,7 +256,7 @@ async function outdatedSkillFixture(projectRoot) {
   return { skillPath, original, expected };
 }
 
-test("foreground assistant work refreshes skills under both write locks and preserves source customization", async (t) => {
+for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
   const lock = agentWriteLockHarness();
   const events = [];
   const { service, session, projectService } = await terminalServiceFixture(t, lock, {
@@ -279,12 +279,15 @@ test("foreground assistant work refreshes skills under both write locks and pres
   };
 
   // Provider delivery is unavailable in this fixture; preparation is deterministic.
-  await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+  const send = () => temporary
+    ? service.startAgentConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue." }, { engineId: "opencode" })
+    : service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" });
+  await send().catch(() => null);
   assert.equal(sourceWrites, 1);
   assert.equal(await readFile(skillPath, "utf8"), expected);
   assert.equal(await readFile(customPath, "utf8"), custom);
   assert.equal(events.some((event) => event.reason === "agent-skills-updated"), true);
-  await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+  await send().catch(() => null);
   assert.equal(sourceWrites, 1);
 });
 
@@ -354,10 +357,6 @@ test("assistant inspection and active-turn steering leave outdated skills untouc
     assert.fail("This operation must remain read-only.");
   };
   await service.ensureAgentSession(session.sessionId, { engineId: "opencode" }).catch(() => null);
-  assert.equal(await readFile(skillPath, "utf8"), original);
-  await service.startAgentConversationTurn(session.sessionId, {
-    conversationId: "read-only-conversation", message: "Explain this project."
-  }, { engineId: "opencode" }).catch(() => null);
   assert.equal(await readFile(skillPath, "utf8"), original);
   session.agentRuns = [{ state: "active", runId: "main-turn" }];
   await service.sendAgentMessage(session.sessionId, { message: "One more detail." }, { engineId: "opencode" }).catch(() => null);

@@ -4,7 +4,7 @@ import {
   answerChoiceInputFields,
   answerChoiceSugarForMessageInput,
   parseAnswerChoicePrompt
-} from "../../src/lib/vibe64AnswerChoiceSugar.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 describe("vibe64AnswerChoiceSugar", () => {
   it("parses explicit possible-answer blocks with labels and submitted text", () => {

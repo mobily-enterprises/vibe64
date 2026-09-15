@@ -2178,11 +2178,15 @@ async function writeCodexAppServerReplacementMetadata({
 async function ensureCodexAppServerThreadForSession({
   agentSettings = {},
   developerInstructions = "",
+  observeThread,
   provider,
   runtime,
   session = {},
   workdir = ""
 } = {}) {
+  if (typeof observeThread !== "function") {
+    throw new TypeError("Main Codex threads require an observer before they can resume.");
+  }
   const normalizedWorkdir = normalizeWorkdir(workdir);
   let stageStartedAt = Date.now();
   const availability = typeof provider.ensureAvailable === "function"
@@ -2218,6 +2222,8 @@ async function ensureCodexAppServerThreadForSession({
   let thread = null;
   stageStartedAt = Date.now();
   if (existingThreadId) {
+    // Resuming can immediately start an active goal before the RPC returns.
+    await observeThread(existingThreadId);
     try {
       thread = await provider.resumeThread(existingThreadId, threadSettings);
     } catch (error) {

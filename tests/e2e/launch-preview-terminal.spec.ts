@@ -385,13 +385,13 @@ for (const width of [390, 1440]) {
     const progress = workspace.getByLabel("Temporary AI progress", { exact: true }).last();
     const toggle = progress.getByRole("button");
     await expect(toggle).toHaveText("Show all 2 progress updates");
-    await expect(progress.locator(".vibe64-conversation-progress__message")).toHaveCount(0);
+    await expect(progress.locator(".assistant-progress__message")).toHaveCount(0);
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(progress.locator(".vibe64-conversation-progress__message")).toHaveCount(2);
+    await expect(progress.locator(".assistant-progress__message")).toHaveCount(2);
     progressUpdates.push({ id: "third", text: "Checking whether the repair can be applied. ".repeat(60) });
-    await expect(progress.locator(".vibe64-conversation-progress__message")).toHaveCount(3);
+    await expect(progress.locator(".assistant-progress__message")).toHaveCount(3);
     expect(await transcript.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     expect((await activity.boundingBox())!.height).toBeLessThan(55);
     expect((await composer.boundingBox())!.y).toBeLessThan(844);
@@ -1261,7 +1261,7 @@ for (const width of [390, 1440]) {
     await expect(workspace.getByRole("button", {
       name: "Read/write: temporary AI may edit this session",
       exact: true
-    })).toBeVisible();
+    })).toHaveCount(0);
 
     const expectedRecoveryPrompt = [
       "The managed preview could not sign in as `missing` (email: `missing@example.com`):",
@@ -1269,13 +1269,10 @@ for (const width of [390, 1440]) {
       "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
     ].join("\n\n");
     await expect.poll(() => recoveryRequests.temporaryStarts).toHaveLength(1);
-    expect(recoveryRequests.temporaryStarts[0]).toEqual(expect.objectContaining({
-      policy: "workspace_write"
-    }));
+    expect(recoveryRequests.temporaryStarts[0]).not.toHaveProperty("policy");
     await expect.poll(() => recoveryRequests.temporaryTurns).toHaveLength(1);
     expect(recoveryRequests.temporaryTurns[0]).toEqual(expect.objectContaining({
       message: expectedRecoveryPrompt,
-      policy: "workspace_write",
       promptLabel: "Fix preview identity"
     }));
     await expect(workspace.getByText("Temporary identity recovery complete.", {

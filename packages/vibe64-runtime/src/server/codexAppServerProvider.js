@@ -1,5 +1,5 @@
+import { CodexAppServerJsonRpcClient, socketPathFromCodexAppServerEndpoint } from "@jskit-ai/assistant-core/server/codex-client";
 import { createHash, randomUUID } from "node:crypto";
-import { createConnection } from "node:net";
 import {
   chmod,
   mkdir,
@@ -76,7 +76,6 @@ const CODEX_APP_SERVER_DESKTOP_BUS_ENV_NAMES = new Set([
   "DBUS_STARTER_ADDRESS",
   "DBUS_STARTER_BUS_TYPE"
 ]);
-const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_SESSION_COMMAND_HOOK_PATH = fileURLToPath(
   new URL("./codexSessionCommandHook.js", import.meta.url)
 );
@@ -400,14 +399,6 @@ function codexAppServerEconomyLoginResponseType(auth = {}) {
 
 function codexAppServerEconomyAccountType(auth = {}) {
   return auth.authMode === "chatgpt" ? "chatgpt" : "apiKey";
-}
-
-function codexAppServerRequestAbortedError(method = "") {
-  const error = new Error(`Codex app-server request was cancelled: ${normalizeAgentText(method)}`);
-  error.name = "AbortError";
-  error.code = "ABORT_ERR";
-  error.method = normalizeAgentText(method);
-  return error;
 }
 
 function codexAppServerEconomyRequestError(error = null, reason = "") {
@@ -1533,14 +1524,6 @@ async function stopCodexAppServerRuntime(options = {}) {
   };
 }
 
-function socketPathFromCodexAppServerEndpoint(endpoint = "") {
-  const normalizedEndpoint = normalizeAgentText(endpoint);
-  if (!normalizedEndpoint.startsWith("unix://")) {
-    return "";
-  }
-  return normalizedEndpoint.slice("unix://".length);
-}
-
 function codexAppServerEndpointForTarget(endpoint = "") {
   const normalizedEndpoint = normalizeAgentText(endpoint);
   if (!normalizedEndpoint) {
@@ -1831,7 +1814,7 @@ async function codexAppServerEndpointStatus(endpoint = "", {
   let timeout = null;
   const probe = (async () => {
     await client.connect();
-    await client.initialize();
+    await client.initialize({ clientInfo: { name: "vibe64", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION } });
     return CODEX_APP_SERVER_ENDPOINT_STATUS.RESPONSIVE;
   })();
   probe.catch(() => null);
@@ -2068,7 +2051,7 @@ async function waitForCodexAppServer(endpoint = "", {
   let timeout = null;
   const handshake = (async () => {
     await client.connect();
-    await client.initialize();
+    await client.initialize({ clientInfo: { name: "vibe64", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION } });
     return true;
   })();
   handshake.catch(() => null);
@@ -2587,308 +2570,6 @@ async function ensureCodexAppServerRuntime(options = {}) {
   }
 }
 
-function addSocketListener(socket, eventName, handler) {
-  if (typeof socket.addEventListener === "function") {
-    socket.addEventListener(eventName, handler);
-    return () => socket.removeEventListener?.(eventName, handler);
-  }
-  if (typeof socket.on === "function") {
-    socket.on(eventName, handler);
-    return () => socket.off?.(eventName, handler) || socket.removeListener?.(eventName, handler);
-  }
-  throw new Error("Unsupported WebSocket implementation.");
-}
-
-function socketMessageText(event, maxBytes = Number.POSITIVE_INFINITY) {
-  const data = event?.data ?? event;
-  if (typeof data === "string") {
-    return Buffer.byteLength(data, "utf8") <= maxBytes ? data : null;
-  }
-  if (data instanceof Buffer) {
-    return data.byteLength <= maxBytes ? data.toString("utf8") : null;
-  }
-  const text = String(data || "");
-  return Buffer.byteLength(text, "utf8") <= maxBytes ? text : null;
-}
-
-class CodexAppServerJsonRpcClient {
-  constructor({
-    endpoint = "",
-    maxMessageBytes = Number.POSITIVE_INFINITY,
-    requestTimeoutMs = CODEX_APP_SERVER_REQUEST_TIMEOUT_MS,
-    WebSocketImpl = WebSocket
-  } = {}) {
-    this.endpoint = normalizeAgentText(endpoint);
-    this.maxMessageBytes = Number.isSafeInteger(maxMessageBytes) && maxMessageBytes > 0
-      ? maxMessageBytes
-      : Number.POSITIVE_INFINITY;
-    this.requestTimeoutMs = normalizePositiveInteger(requestTimeoutMs, CODEX_APP_SERVER_REQUEST_TIMEOUT_MS);
-    this.WebSocketImpl = WebSocketImpl;
-    this.nextRequestId = 1;
-    this.notificationSubscribers = new Set();
-    this.pendingRequests = new Map();
-    this.requestHandler = null;
-    this.connected = false;
-    this.socket = null;
-  }
-
-  isOpen() {
-    return Boolean(this.socket && (this.connected || this.socket.readyState === 1));
-  }
-
-  async connect() {
-    if (!this.endpoint) {
-      throw new Error("Codex app-server endpoint is required.");
-    }
-    if (typeof this.WebSocketImpl !== "function") {
-      throw new Error("A WebSocket implementation is required for Codex app-server.");
-    }
-    if (this.isOpen()) {
-      return this;
-    }
-    this.close();
-    const unixSocketPath = socketPathFromCodexAppServerEndpoint(this.endpoint);
-    const socketOptions = unixSocketPath
-      ? {
-          createConnection: () => createConnection(unixSocketPath),
-          ...(Number.isFinite(this.maxMessageBytes) ? { maxPayload: this.maxMessageBytes } : {}),
-          perMessageDeflate: false
-        }
-      : {
-          ...(Number.isFinite(this.maxMessageBytes) ? { maxPayload: this.maxMessageBytes } : {}),
-          perMessageDeflate: false
-        };
-    const socket = new this.WebSocketImpl(unixSocketPath ? "ws://localhost/" : this.endpoint, socketOptions);
-    this.socket = socket;
-    await new Promise((resolve, reject) => {
-      const cleanup = [];
-      const settle = (callback, value) => {
-        for (const dispose of cleanup) {
-          dispose?.();
-        }
-        callback(value);
-      };
-      cleanup.push(addSocketListener(socket, "open", () => {
-        if (this.socket === socket) {
-          this.connected = true;
-        }
-        settle(resolve);
-      }));
-      cleanup.push(addSocketListener(socket, "error", (error) => {
-        if (this.socket === socket) {
-          this.connected = false;
-          this.socket = null;
-        }
-        settle(reject, error?.error || error);
-      }));
-    });
-    addSocketListener(socket, "message", (event) => this.handleMessage(event));
-    addSocketListener(socket, "close", () => {
-      if (this.socket === socket) {
-        this.connected = false;
-        this.socket = null;
-      }
-      this.rejectPendingRequests(new Error("Codex app-server connection closed."));
-    });
-    return this;
-  }
-
-  async initialize({
-    capabilities = {
-      experimentalApi: true,
-      requestAttestation: false
-    },
-    clientInfo = {
-      name: "vibe64",
-      title: "Vibe64",
-      version: CODEX_APP_SERVER_CLIENT_VERSION
-    }
-  } = {}) {
-    const result = await this.request("initialize", {
-      capabilities,
-      clientInfo
-    });
-    this.notify("initialized");
-    return result;
-  }
-
-  subscribe(callback) {
-    if (typeof callback !== "function") {
-      return () => null;
-    }
-    this.notificationSubscribers.add(callback);
-    return () => {
-      this.notificationSubscribers.delete(callback);
-    };
-  }
-
-  setRequestHandler(callback) {
-    this.requestHandler = typeof callback === "function" ? callback : null;
-  }
-
-  notify(method, params) {
-    this.send({
-      method,
-      ...(params === undefined ? {} : { params })
-    });
-  }
-
-  request(method, params = {}, {
-    signal = null
-  } = {}) {
-    const id = this.nextRequestId;
-    this.nextRequestId += 1;
-    return new Promise((resolve, reject) => {
-      if (signal?.aborted === true) {
-        reject(codexAppServerRequestAbortedError(method));
-        return;
-      }
-      const removeAbortListener = () => {
-        signal?.removeEventListener?.("abort", abort);
-      };
-      const abort = () => {
-        const pending = this.pendingRequests.get(id);
-        if (!pending) {
-          return;
-        }
-        clearTimeout(pending.timeout);
-        removeAbortListener();
-        this.pendingRequests.delete(id);
-        reject(codexAppServerRequestAbortedError(method));
-      };
-      const timeout = setTimeout(() => {
-        removeAbortListener();
-        this.pendingRequests.delete(id);
-        reject(new Error(`Codex app-server request timed out: ${method}`));
-      }, this.requestTimeoutMs);
-      this.pendingRequests.set(id, {
-        method,
-        removeAbortListener,
-        reject,
-        resolve,
-        timeout
-      });
-      signal?.addEventListener?.("abort", abort, { once: true });
-      try {
-        this.send({
-          id,
-          method,
-          params
-        });
-      } catch (error) {
-        clearTimeout(timeout);
-        removeAbortListener();
-        this.pendingRequests.delete(id);
-        reject(error);
-      }
-    });
-  }
-
-  send(payload) {
-    if (!this.isOpen() || typeof this.socket.send !== "function") {
-      throw new Error("Codex app-server connection is not open.");
-    }
-    const serialized = JSON.stringify(payload);
-    if (Buffer.byteLength(serialized, "utf8") > this.maxMessageBytes) {
-      const error = new Error("Codex app-server message exceeded the configured transport limit.");
-      error.code = "vibe64_codex_app_server_message_too_large";
-      throw error;
-    }
-    this.socket.send(serialized);
-  }
-
-  handleMessage(event) {
-    let message = null;
-    try {
-      const text = socketMessageText(event, this.maxMessageBytes);
-      if (text === null) {
-        const error = new Error("Codex app-server message exceeded the configured transport limit.");
-        error.code = "vibe64_codex_app_server_message_too_large";
-        this.rejectPendingRequests(error);
-        this.close();
-        return;
-      }
-      message = JSON.parse(text);
-    } catch {
-      return;
-    }
-    if (Object.hasOwn(message, "id") && message.method) {
-      void this.handleServerRequest(message);
-      return;
-    }
-    if (Object.hasOwn(message, "id")) {
-      const pending = this.pendingRequests.get(message.id);
-      if (!pending) {
-        return;
-      }
-      clearTimeout(pending.timeout);
-      pending.removeAbortListener?.();
-      this.pendingRequests.delete(message.id);
-      if (message.error) {
-        const error = new Error(message.error.message || `Codex app-server request failed: ${pending.method}`);
-        error.code = message.error.code;
-        error.data = message.error.data;
-        error.method = pending.method;
-        pending.reject(error);
-        return;
-      }
-      pending.resolve(message.result);
-      return;
-    }
-    for (const subscriber of this.notificationSubscribers) {
-      subscriber(message);
-    }
-  }
-
-  async handleServerRequest(message = {}) {
-    try {
-      if (!this.requestHandler) {
-        const error = new Error(`Codex app-server client does not handle server request: ${message.method || "(missing method)"}`);
-        error.code = -32601;
-        throw error;
-      }
-      const result = await this.requestHandler({
-        id: message.id,
-        method: message.method,
-        params: message.params
-      });
-      this.send({
-        id: message.id,
-        result
-      });
-    } catch (error) {
-      try {
-        this.send({
-          error: {
-            code: Number.isSafeInteger(error?.code) ? error.code : -32000,
-            message: normalizeAgentText(error?.message) || "Codex app-server client request failed."
-          },
-          id: message.id
-        });
-      } catch {
-        // The app-server connection closed before the response could be delivered.
-      }
-    }
-  }
-
-  rejectPendingRequests(error) {
-    for (const pending of this.pendingRequests.values()) {
-      clearTimeout(pending.timeout);
-      pending.removeAbortListener?.();
-      pending.reject(error);
-    }
-    this.pendingRequests.clear();
-  }
-
-  close() {
-    this.rejectPendingRequests(new Error("Codex app-server connection closed."));
-    const socket = this.socket;
-    this.connected = false;
-    this.socket = null;
-    socket?.close?.();
-  }
-}
-
 function codexTextInput(text = "") {
   return {
     text: String(text ?? ""),
@@ -3081,6 +2762,7 @@ class CodexAppServerAgentProvider {
     this.client = null;
     this.connectPromise = null;
     this.connectionGeneration = 0;
+    this.notificationSubscribers = new Set();
     this.economyAuth = null;
     this.economyAuthBlocked = false;
     this.initializeResult = null;
@@ -3361,6 +3043,7 @@ class CodexAppServerAgentProvider {
   }
 
   async connect() {
+    if (this.observationFailure) throw this.observationFailure;
     if (this.client?.isOpen?.() && this.runtime) {
       return {
         initializeResult: null,
@@ -3403,6 +3086,9 @@ class CodexAppServerAgentProvider {
     this.initializeResult = null;
     const client = new CodexAppServerJsonRpcClient({
       endpoint: runtime.endpoint,
+      onDisconnect: (error) => {
+        if (this.client === client) this.failObservation(error);
+      },
       ...(this.isEconomyProvider()
         ? { maxMessageBytes: CODEX_APP_SERVER_ECONOMY_MAX_MESSAGE_BYTES }
         : {}),
@@ -3414,7 +3100,7 @@ class CodexAppServerAgentProvider {
     try {
       await client.connect();
       initializeResult = await this.runRequest(
-        () => client.initialize(this.options.initialize),
+        () => client.initialize({ clientInfo: { name: "vibe64", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION }, ...this.options.initialize }),
         "codex-app-server-initialize"
       );
       await this.authenticateEconomyClient(client, runtime);
@@ -3455,7 +3141,7 @@ class CodexAppServerAgentProvider {
     this.planUsage = null;
     this.planUsagePending = null;
     client.subscribe((notification = {}) => {
-      if (this.client !== client) return;
+      if (this.client !== client || this.observationFailure) return;
       if (notification.method === "account/updated") {
         this.planUsage = null;
         this.planUsageAuthGeneration += 1;
@@ -3463,6 +3149,13 @@ class CodexAppServerAgentProvider {
       if (notification.method === "account/rateLimits/updated") {
         const limits = notification.params?.rateLimits;
         if (!limits?.limitId || limits.limitId === "codex") this.planUsage = codexPlanUsage(limits);
+      }
+      for (const subscriber of this.notificationSubscribers) {
+        try {
+          subscriber(notification);
+        } catch (error) {
+          this.failObservation(error);
+        }
       }
     });
     this.initializeResult = normalizeCodexAppServerInfo(initializeResult);
@@ -3537,6 +3230,7 @@ class CodexAppServerAgentProvider {
   }
 
   async activeClient() {
+    if (this.observationFailure) throw this.observationFailure;
     if (this.client?.isOpen?.()) {
       return this.client;
     }
@@ -3545,6 +3239,7 @@ class CodexAppServerAgentProvider {
   }
 
   async ensureAvailable() {
+    if (this.observationFailure) throw this.observationFailure;
     if (this.isAvailable()) {
       return {
         client: this.client,
@@ -3608,10 +3303,45 @@ class CodexAppServerAgentProvider {
   }
 
   subscribe(callback) {
-    if (!this.client) {
-      throw new Error("Codex app-server provider is not connected.");
+    if (typeof callback !== "function") {
+      throw new TypeError("Codex app-server observer must be a function.");
     }
-    return this.client.subscribe(callback);
+    // Observation belongs to this provider, not one replaceable socket.
+    this.notificationSubscribers.add(callback);
+    return () => this.notificationSubscribers.delete(callback);
+  }
+
+  failObservation(cause) {
+    this.observationFailure ||= Object.assign(
+      new Error("Codex observation failed. Work must be stopped before it can continue.", { cause }),
+      { code: "vibe64_codex_observation_lost" }
+    );
+    return this.options.onObservationLost?.(this.observationFailure);
+  }
+
+  async stopThreadForObservationLoss(threadId, turnId) {
+    // Control uses only this existing socket. It must not spawn or resume work
+    // to find out whether the work we lost sight of has stopped.
+    const client = this.client;
+    if (!client?.isOpen()) throw new Error("Codex control connection is unavailable.");
+    const signal = AbortSignal.timeout(5_000);
+    const request = (method, params) => client.request(method, params, { signal });
+    const { goal } = await request("thread/goal/get", { threadId });
+    if (goal?.status === "active") {
+      const result = await request("thread/goal/set", { threadId, status: "paused" });
+      if (result.goal?.status !== "paused" || result.goal?.createdAt !== goal.createdAt || result.goal?.objective !== goal.objective) {
+        throw new Error("Codex did not confirm that the same goal was paused.");
+      }
+    }
+    const readStatus = async () => {
+      const { thread } = await request("thread/read", { threadId, includeTurns: false });
+      return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
+    };
+    if (await readStatus() !== "idle") {
+      if (!turnId) throw new Error("Codex's running turn could not be identified.");
+      await request("turn/interrupt", { threadId, turnId });
+      if (await readStatus() !== "idle") throw new Error("Codex did not confirm that its turn stopped.");
+    }
   }
 
   setServerRequestHandler(callback) {
@@ -3654,6 +3384,7 @@ class CodexAppServerAgentProvider {
   }
 
   async resumeThread(threadId = "", params = {}) {
+    await this.options.beforeResumeThread?.(threadId);
     const client = await this.activeClient();
     const requestParams = codexAppServerThreadRequestParams(params, this.options.threadEnv);
     const response = await this.runRequest(
@@ -4029,6 +3760,7 @@ class CodexAppServerAgentProvider {
   close() {
     this.planUsage = null;
     this.planUsagePending = null;
+    this.notificationSubscribers.clear();
     this.client?.close();
     this.client = null;
     this.initializeResult = null;
@@ -4065,7 +3797,6 @@ export {
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
-  CodexAppServerJsonRpcClient,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexAppServerEconomyHomeDir,

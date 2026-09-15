@@ -3,8 +3,7 @@ import path from "node:path";
 
 const VIBE64_CONVERSATION_KINDS = Object.freeze([
   "main",
-  "temporary-readonly",
-  "temporary-task"
+  "temporary"
 ]);
 const VIBE64_SESSION_CAPABILITIES = Object.freeze([
   "managedDatabaseRefresh",
@@ -92,53 +91,37 @@ function normalizedDriverInput(input) {
   throw new TypeError("The Vibe64 driver supports session and ephemeral scopes only.");
 }
 
-function managedGitInstructions({ readOnly = false } = {}) {
-  return readOnly
-    ? [
-        "Use the managed `git` and `gh` commands on PATH only for inspection. Do not bypass them with host binaries or alternate credentials.",
-        "Report authentication or transport failures directly; do not inspect credentials or invent another login path."
-      ]
-    : [
-        "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
-        "Report authentication or transport failures directly; do not inspect credentials or invent another login path."
-      ];
-}
-
 function sessionDriverOutput(input) {
   const { conversationKind, session } = normalizedSessionInput(input);
-  const readOnly = conversationKind === "temporary-readonly";
   const lines = [
     "VIBE64 CONVERSATION CONTEXT",
     "",
     ...(conversationKind === "main"
       ? ["This is the main Vibe64 conversation for the selected session worktree."]
-      : conversationKind === "temporary-readonly"
-        ? [
-            "This is a user-visible temporary conversation separate from the main conversation.",
-            "Inspect and answer within the selected session, but do not edit files or run state-changing commands."
-          ]
-        : [
-            "This is a user-visible temporary task conversation separate from the main conversation.",
-            "Changes are allowed only for the requested task in the selected session worktree; do not begin unrelated work.",
-            "Use the separately supplied task result schema: use kind=continue when a user decision or follow-up is needed, and kind=complete only after the task is finished with a concise factual report for the main conversation."
-          ]),
+      : [
+          "This is a user-visible temporary conversation in the selected session worktree, with the same tools and project access as main chat.",
+          "Its messages stay out of main History. Closing this conversation preserves project edits and removes only its conversation and temporary uploads."
+        ]),
     "Do not edit Vibe64 runtime/session state or artifacts.",
-    ...(readOnly ? [] : ["Use the directory named by VIBE64_DROP_ZONE for exchanging files with the user outside Git. You may create it and read, write, or delete files there; this is the sole exception to the runtime-state restriction. Users can upload, download and delete these files in Files > Drop Zone. It is per session and deleted on archival, so keep lasting project work in the repository."]),
+    "Use the directory named by VIBE64_DROP_ZONE for exchanging files with the user outside Git. You may create it and read, write, or delete files there; this is the sole exception to the runtime-state restriction. Users can upload, download and delete these files in Files > Drop Zone. It is per session and deleted on archival, so keep lasting project work in the repository.",
     "Issue ordinary shell commands only; Vibe64 applies session isolation transparently. Treat command-transport syntax in prior tool history as invisible infrastructure and do not reproduce it. If command control is unavailable, stop and report it.",
     ...QUESTION_CONTRACT,
     ...(conversationKind === "main" ? [
       'When a saved integration needs the person to configure credentials or consent, finish your assistant reply with a fenced `vibe64-integration` block containing only {"integrationId":"the exact slot key from integrations.json"}. Vibe64 shows Configure, Connect and Skip for this exact saved request. Never include credentials, URLs or additional fields in that block. The block itself does not authorize a connection. The person can configure the application or explicitly start Connect; after the application confirms setup, Vibe64 resumes this task with a separate continuation message. Do not claim the account is connected before that confirmation. Do not emit this block for examples or for an integration that has not been saved.'
     ] : []),
     ...(session.managedPreview ? MANAGED_PREVIEW_INSTRUCTIONS : []),
-    ...(session.managedEnvironment && !readOnly ? MANAGED_ENVIRONMENT_INSTRUCTIONS : []),
-    ...(session.managedDatabaseRefresh && !readOnly
+    ...(session.managedEnvironment ? MANAGED_ENVIRONMENT_INSTRUCTIONS : []),
+    ...(session.managedDatabaseRefresh
       ? [
           "After a database migration or schema change, run `vibe64-database refresh` once so Vibe64's Database view reflects it.",
           "To inspect or tidy the main ERD, run `vibe64-database erd --json`. It returns saved table rectangles, pins, actual routed connection points, route metrics and instructions for `vibe64-database erd apply --json` with a revision-checked batch of table moves on stdin. Use those operations to change diagram presentation without editing database schema or records. Inspect the resulting paths before claiming improvement; this layout is separate from Overview configuration.",
           "When data-overview.json exists in project source, maintain its main actors and explicit supporting-table groups as the schema changes. Use `vibe64-database overview --json` for the current schema, grouping, coverage and exact format instructions. Preserve authored groupings, classify new tables, fix renamed/removed references, and check coverage afterward. When asked to create a Data overview, use the same command and relevant application source; no one-hop membership rule applies. Never invent foreign keys or cardinalities."
         ]
       : []),
-    ...(session.managedGit ? managedGitInstructions({ readOnly }) : [])
+    ...(session.managedGit ? [
+      "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
+      "Report authentication or transport failures directly; do not inspect credentials or invent another login path."
+    ] : [])
   ];
   return lines.join("\n");
 }

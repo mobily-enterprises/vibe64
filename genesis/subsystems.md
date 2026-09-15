@@ -38,6 +38,8 @@ Owns isolated working sessions, their lifecycle and recoverable workspace histor
 ## `conversation` Agent conversation
 
 Owns direct conversations and temporary assistance with connected coding agents.
+Consumes JSKIT conversation presentation, provider primitives and transcript
+policy; Vibe64 owns the adapters, filesystem history, access and execution.
 
 ### Program
 
@@ -139,6 +141,8 @@ Owns editing, reviewing and saving project source changes.
 ## `database` Database exploration
 
 Owns inspection, diagram exploration, agent-assisted layout changes and query execution for a selected project database.
+Its transient copilot consumes the shared JSKIT conversation UI with
+server-owned configuration and database-specific actions.
 
 ### Program
 

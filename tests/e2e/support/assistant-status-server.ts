@@ -27,6 +27,7 @@ export async function assistantStatusServer() {
     commentary: [{ role: "assistant", text: "I am working on the project.", at: new Date().toISOString() }]
   };
   const state = {
+    conversationLog: [conversation] as Array<Record<string, unknown>>,
     checks: [] as Handler[],
     checkCount: 0,
     checkTimes: [] as number[],
@@ -117,7 +118,7 @@ export async function assistantStatusServer() {
       else if (route === "/vibe64/env") result = { ok: true, env: { environment: "dev", records: [], unavailable: null } };
       else if (route === "/vibe64/sessions") result = { ok: true, sessions: [session], limits: { openSessionCount: 1 }, creation: { canCreate: true, mode: "direct" } };
       else if (route === "/vibe64/sessions/current") result = { ok: true, sessionId: session.sessionId };
-      else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: [conversation], pagination: { count: 1, totalTurnCount: 1, hasMoreBefore: false, limit: 20 } };
+      else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: state.conversationLog, pagination: { count: state.conversationLog.length, totalTurnCount: state.conversationLog.length, hasMoreBefore: false, limit: 20 } };
       else if (route === `${sessionRoute}/assistant-access`) result = { ok: true, available: true, canUse: true, ownerOnly: false };
       else if (route === `${sessionRoute}/message-suggestions`) result = { ok: true, suggestions: [], canManage: true };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
@@ -158,11 +159,11 @@ export async function assistantStatusServer() {
     state,
     url: `http://127.0.0.1:${(http.address() as { port: number }).port}`,
     publishTurn,
-    sessionChanged(reason: string) {
+    sessionChanged(reason: string, payload: Record<string, unknown> = {}) {
       session.revision += 1;
       io.emit("vibe64.session.changed", {
         projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId,
-        revision: session.revision, reason
+        revision: session.revision, reason, ...payload
       });
     },
     progress(text: string) {

@@ -231,12 +231,12 @@ test.describe("direct chat", () => {
           hints: bounds("[data-vibe64-prompt-hints]"),
           composer: bounds(".studio-autopilot__composer"),
           conversation: bounds(".studio-autopilot__conversation"),
-          scrollTop: panel.querySelector(".studio-conversation-log__body")!.scrollTop
+          scrollTop: panel.querySelector(".assistant-transcript__body")!.scrollTop
         };
       });
       await expect(composer).toBeVisible();
       await expect(hints).toHaveClass(/--hidden/);
-      const conversation = page.locator(".studio-conversation-log__body");
+      const conversation = page.locator(".assistant-transcript__body");
       await expect.poll(() => conversationDistanceFromBottom(conversation)).toBeLessThanOrEqual(48);
       await detachConversation(conversation, 600, width === 390 ? "touch" : "wheel");
       const empty = await geometry();
@@ -652,7 +652,6 @@ test.describe("direct chat", () => {
         navigation.getByRole("button", { name: "Close Temporary 1", exact: true }),
         navigation.getByRole("button", { name: "Close Temporary 2", exact: true }),
         navigation.getByRole("button", { name: "New temporary AI task", exact: true }),
-        navigation.getByRole("button", { name: /Read-only: temporary AI cannot edit/iu })
       ];
       for (const control of coarseControls) {
         const bounds = await control.boundingBox();
@@ -705,7 +704,6 @@ test.describe("direct chat", () => {
       expect(temporaryTurns).toHaveLength(1);
       expect(temporaryTurns[0]).toEqual(expect.objectContaining({
         message: "Inspect this without changing it.",
-        policy: "read",
         promptLabel: "Temporary 1"
       }));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -870,14 +868,14 @@ test.describe("direct chat", () => {
       });
 
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      const questions = page.locator(".studio-conversation-log__questions");
+      const questions = page.locator(".assistant-transcript__questions");
       await expect(questions).toBeVisible();
-      await expect(questions.locator(".studio-conversation-log__question-number")).toHaveText(["1", "2", "3"]);
-      await expect(questions.locator(".studio-conversation-log__question-text strong")).toHaveText([
+      await expect(questions.locator(".assistant-transcript__question-number")).toHaveText(["1", "2", "3"]);
+      await expect(questions.locator(".assistant-transcript__question-text strong")).toHaveText([
         "remain yellow", "“Invoiced” switch", "10% VIP discount"
       ]);
       await expect(questions.locator("code")).toHaveText(["yellow", "vip_discount"]);
-      await expect(questions.locator(".studio-conversation-log__question-choices strong")).toHaveText("Yes");
+      await expect(questions.locator(".assistant-transcript__question-choices strong")).toHaveText("Yes");
       await expect(questions).toContainText("Recommended");
       await expect(questions).not.toContainText("**");
       await expect(questions).toContainText("<b>literal HTML</b>");
@@ -935,7 +933,7 @@ test.describe("direct chat", () => {
       await mockDirectChat(page, { conversationLog });
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-      const body = page.locator(".studio-conversation-log__body");
+      const body = page.locator(".assistant-transcript__body");
       const reload = page.getByRole("button", { name: "Reload chat" });
       await expect(body).toBeVisible();
       await expect(body).toHaveAttribute("tabindex", "0");
@@ -1055,7 +1053,7 @@ test.describe("direct chat", () => {
     });
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    const body = page.locator(".studio-conversation-log__body");
+    const body = page.locator(".assistant-transcript__body");
     await body.evaluate((element) => {
       element.dispatchEvent(new WheelEvent("wheel", {
         bubbles: true,
@@ -1454,13 +1452,10 @@ async function expectTemporaryRecovery(page: Page, captured: {
   const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
   await expect(workspace).toBeVisible();
   await expect.poll(() => captured.temporaryStarts).toHaveLength(1);
-  expect(captured.temporaryStarts[0]).toEqual(expect.objectContaining({
-    policy: "workspace_write"
-  }));
+  expect(captured.temporaryStarts[0]).not.toHaveProperty("policy");
   await expect.poll(() => captured.temporaryTurns).toHaveLength(1);
   expect(captured.temporaryTurns[0]).toEqual(expect.objectContaining({
     message: expectedPrompt,
-    policy: "workspace_write",
     promptLabel
   }));
   await expect(workspace.getByText("Temporary answer", { exact: true })).toBeVisible();
@@ -1471,7 +1466,7 @@ async function expectTemporaryRecovery(page: Page, captured: {
   await expect(workspace.getByRole("button", {
     name: "Read/write: temporary AI may edit this session",
     exact: true
-  })).toBeVisible();
+  })).toHaveCount(0);
   expect(captured.temporaryStarts).toHaveLength(1);
   expect(captured.temporaryTurns).toHaveLength(1);
   expect(captured.messages).toHaveLength(0);

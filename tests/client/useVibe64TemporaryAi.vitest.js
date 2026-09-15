@@ -189,7 +189,7 @@ describe("useVibe64TemporaryAi", () => {
 
   it("reuses a completed Update repair even when the conflict diagnostic changes", async () => {
     const temporary = await temporaryAi();
-    const input = { recoveryOperation: "update", policy: "workspace_write", message: "Repair eight conflicts." };
+    const input = { recoveryOperation: "update", message: "Repair eight conflicts." };
     mocks.responses.push(
       { ok: true, conversationId: "conversation-1" },
       { ok: true, runId: "turn-1", status: "inProgress" },
@@ -214,7 +214,7 @@ describe("useVibe64TemporaryAi", () => {
 
   it.each(["draft", "attachment", "checking", "busy"])("preserves an existing repair with %s instead of opening another", async (state) => {
     const temporary = await temporaryAi();
-    const task = temporary.openTask({ recoveryOperation: "update", policy: "workspace_write" });
+    const task = temporary.openTask({ recoveryOperation: "update" });
     if (state === "draft") temporary.updateDraft(task.id, "Keep my question.");
     if (state === "attachment") temporary.updateAttachments(task.id, [{ attachmentId: "attachment-1" }]);
     if (state === "checking") temporary.reportRecoveryOutcome(task.id, { status: "checking" });
@@ -229,7 +229,7 @@ describe("useVibe64TemporaryAi", () => {
 
   it.each(["repeated", "limit"])("returns exact Update diagnostics to the same chat and pauses at the %s retry boundary", async (boundary) => {
     const temporary = await temporaryAi();
-    const task = temporary.openTask({ recoveryOperation: "update", policy: "workspace_write" });
+    const task = temporary.openTask({ recoveryOperation: "update" });
     Object.assign(temporary.tasks.value[0], { conversationId: "conversation-1", status: "completed", runId: "turn-1" });
     const attempts = boundary === "repeated" ? 1 : 3;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -258,10 +258,10 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.tasks.value).toHaveLength(1);
   });
 
-  it.each(["draft", "attachment", "stopped", "read-only", "repository-busy"])("does not auto-retry over %s", async (state) => {
+  it.each(["draft", "attachment", "stopped", "repository-busy"])("does not auto-retry over %s", async (state) => {
     const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
     const temporary = useVibe64TemporaryAi({ sessionId: () => "session-1", operationBusy: () => state === "repository-busy" });
-    const task = temporary.openTask({ recoveryOperation: "update", policy: state === "read-only" ? "read" : "workspace_write" });
+    const task = temporary.openTask({ recoveryOperation: "update" });
     if (state === "draft") temporary.updateDraft(task.id, "My decision.");
     if (state === "attachment") temporary.updateAttachments(task.id, [{ attachmentId: "attachment-1" }]);
     if (state === "stopped") temporary.tasks.value[0].status = "interrupted";
@@ -302,7 +302,6 @@ describe("useVibe64TemporaryAi", () => {
       failureMessage: "The AI stopped. Vibe64 is checking its edits.",
       message: "Inspect the full workspace diagnostic and repair the invalid contract.",
       nextStepMessage: "Vibe64 will verify the repair when the AI finishes.",
-      policy: "workspace_write",
       recoveryNotice: "Temporary AI can edit this session in a separate temporary chat.",
       title: "Fix workspace preparation"
     });
@@ -316,7 +315,6 @@ describe("useVibe64TemporaryAi", () => {
       draft: "",
       failureMessage: "The AI stopped. Vibe64 is checking its edits.",
       nextStepMessage: "Vibe64 will verify the repair when the AI finishes.",
-      policy: "workspace_write",
       recoveryNotice: "Temporary AI can edit this session in a separate temporary chat.",
       status: "starting",
       title: "Fix workspace preparation"
@@ -338,7 +336,6 @@ describe("useVibe64TemporaryAi", () => {
     expect(turnRequests[0][1]).toMatchObject({
       body: {
         message: "Inspect the full workspace diagnostic and repair the invalid contract.",
-        policy: "workspace_write",
         promptLabel: "Fix workspace preparation"
       },
       method: "POST"
@@ -386,7 +383,6 @@ describe("useVibe64TemporaryAi", () => {
     const task = {
       dedupeKey: "preview-identity:session-1",
       draft: "Fix preview identity.",
-      policy: "workspace_write",
       title: "Fix preview identity"
     };
 
@@ -444,14 +440,12 @@ describe("useVibe64TemporaryAi", () => {
     const chatStart = temporary.startTask({
       dedupeKey,
       message: "Resolve this update from chat.",
-      policy: "workspace_write",
       title: "Resolve Update"
     });
     const firstTaskId = temporary.activeTask.value.id;
     const dashboardStart = temporary.startTask({
       dedupeKey,
       message: "Resolve this update from Dashboard.",
-      policy: "workspace_write",
       title: "Resolve repository update"
     });
 
@@ -488,7 +482,6 @@ describe("useVibe64TemporaryAi", () => {
     const recovery = {
       dedupeKey: "workspace-preparation:session-1",
       message: "Fix workspace preparation.",
-      policy: "workspace_write",
       title: "Fix workspace preparation"
     };
     mocks.responses.push(
@@ -547,7 +540,6 @@ describe("useVibe64TemporaryAi", () => {
     const recovery = {
       dedupeKey: "save-conflict:session-1",
       message: "Resolve the Save conflict safely.",
-      policy: "workspace_write",
       title: "Resolve Save conflict"
     };
     mocks.responses.push(
@@ -607,7 +599,6 @@ describe("useVibe64TemporaryAi", () => {
     const recovery = {
       dedupeKey: "update-conflict:session-1",
       message: "Resolve the Update conflict safely.",
-      policy: "workspace_write",
       title: "Resolve Update"
     };
     mocks.responses.push(
@@ -673,7 +664,6 @@ describe("useVibe64TemporaryAi", () => {
     const result = await temporary.startTask({
       dedupeKey: "save-conflict:session-1",
       draft: "Resolve the Save conflict safely.",
-      policy: "workspace_write",
       title: "Resolve Save conflict"
     });
 
@@ -730,7 +720,6 @@ describe("useVibe64TemporaryAi", () => {
     const recovery = {
       dedupeKey: "update-conflict:session-1",
       message: "Resolve the Update conflict safely.",
-      policy: "workspace_write",
       title: "Resolve Update"
     };
 
@@ -891,7 +880,7 @@ describe("useVibe64TemporaryAi", () => {
   it("binds each repair completion to the conflict that turn reviewed", async () => {
     const finished = vi.fn();
     const { task, temporary } = await temporaryAiWithFinishedObserver(finished, {
-      policy: "workspace_write", recoveryOperation: "update", recoveryConflictId: "conflict-1"
+      recoveryOperation: "update", recoveryConflictId: "conflict-1"
     });
     mocks.responses.push(
       { ok: true, conversationId: "conversation-1" },
@@ -972,7 +961,54 @@ describe("useVibe64TemporaryAi", () => {
     }));
   });
 
-  it("turns a poll failure into a visible finished state", async () => {
+  it.each([
+    { ok: false, status: "inProgress", error: "The stop is not yet confirmed." },
+    { ok: true, status: "inProgress", error: "The stop is not yet confirmed." },
+    () => { throw Object.assign(new Error("The stop is not yet confirmed."), { status: 503 }); }
+  ])("keeps Stop and the reply draft available after an unconfirmed progress read (%#)", async (response) => {
+    const { task, temporary } = await runningTemporaryAi();
+    temporary.updateDraft(task.id, "Keep this reply.");
+    mocks.responses.push(response);
+    await vi.advanceTimersByTimeAsync(650);
+
+    expect(temporary.activeTask.value).toMatchObject({
+      busy: true,
+      draft: "Keep this reply.",
+      error: "The stop is not yet confirmed.",
+      runId: "turn-1",
+      status: "inProgress"
+    });
+    await expect(temporary.send(task.id)).resolves.toBe(false);
+    mocks.responses.push({ ok: true });
+    await expect(temporary.stopTask(task.id)).resolves.toBe(true);
+    expect(temporary.activeTask.value).toMatchObject({
+      busy: false,
+      draft: "Keep this reply.",
+      error: "",
+      status: "interrupted"
+    });
+    const requests = mocks.requests.length;
+    await vi.advanceTimersByTimeAsync(650);
+    expect(mocks.requests).toHaveLength(requests);
+  });
+
+  it("settles a confirmed failed turn without retrying progress or sending again", async () => {
+    const { task, temporary } = await runningTemporaryAi();
+    mocks.responses.push({ ok: false, status: "failed", error: "Native work stopped." });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.activeTask.value).toMatchObject({
+      busy: false,
+      error: "Native work stopped.",
+      status: "failed"
+    });
+    expect(temporary.activeTask.value.messages.at(-1).status).toBe("failed");
+    const requests = mocks.requests.length;
+    await vi.advanceTimersByTimeAsync(650);
+    expect(mocks.requests).toHaveLength(requests);
+    await expect(temporary.stopTask(task.id)).resolves.toBe(false);
+  });
+
+  it("settles an expired conversation after polling fails", async () => {
     mocks.responses.push(
       { conversationId: "conversation-1", ok: true },
       { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },

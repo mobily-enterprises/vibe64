@@ -17,7 +17,6 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
 - `packages/vibe64-system-graph/src/client/subsystemsModel.js`
 - `src/composables/useVibe64AutopilotView.js`
-- `src/lib/studioLongTextBlocks.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 

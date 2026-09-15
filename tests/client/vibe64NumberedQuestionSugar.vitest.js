@@ -8,7 +8,7 @@ import {
   numberedQuestionSugarForInput,
   parseNumberedQuestionPrompt,
   UI_QUESTION_FIELD_PREFIX
-} from "../../src/lib/vibe64NumberedQuestionSugar.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 const plainResponseField = {
   kind: "textarea",

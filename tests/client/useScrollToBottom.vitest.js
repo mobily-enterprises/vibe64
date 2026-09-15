@@ -46,7 +46,7 @@ describe("useScrollToBottom", () => {
     const anchor = {
       scrollIntoView: vi.fn()
     };
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollAfterLayout } = useScrollToBottom({
       anchor: ref(anchor),
       target: ref(target)
@@ -95,7 +95,7 @@ describe("useScrollToBottom", () => {
     const anchor = {
       scrollIntoView: vi.fn()
     };
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollAfterLayout } = useScrollToBottom({
       anchor: ref(anchor),
       target: ref(target)
@@ -123,7 +123,7 @@ describe("useScrollToBottom", () => {
     });
 
     const target = createScrollableElement(300);
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const {
       clearScheduledScrolls,
       scrollAfterLayout
@@ -154,7 +154,7 @@ describe("useScrollToBottom", () => {
     });
 
     const target = createScrollableElement(360);
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const {
       clearScheduledScrolls,
       scrollAfterLayout
@@ -183,7 +183,7 @@ describe("useScrollToBottom", () => {
 
     const target = createScrollableElement(120);
     const enabled = ref(false);
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollAfterLayout } = useScrollToBottom({
       enabled,
       target: ref(target)
@@ -202,7 +202,7 @@ describe("useScrollToBottom", () => {
     const anchor = {
       scrollIntoView: vi.fn()
     };
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollNow } = useScrollToBottom({
       anchor: ref(anchor),
       target: ref(target)
@@ -239,7 +239,7 @@ describe("useScrollToBottom", () => {
 
     const target = createScrollableElement(260);
     const enabled = ref(true);
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollAfterLayout } = useScrollToBottom({
       enabled,
       target: ref(target)
@@ -267,7 +267,7 @@ describe("useScrollToBottom", () => {
     const anchor = {
       scrollIntoView: vi.fn()
     };
-    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { useScrollToBottom } = await import("@jskit-ai/assistant-core/client/conversation-scroll");
     const { scrollAfterLayout } = useScrollToBottom({
       anchor: ref(anchor),
       scrollAnchorIntoView: false,

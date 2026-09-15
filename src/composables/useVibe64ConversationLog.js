@@ -29,7 +29,7 @@ import {
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
   normalizeThinkingMessageText
-} from "@/lib/vibe64ConversationThinkingText.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 import {
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";

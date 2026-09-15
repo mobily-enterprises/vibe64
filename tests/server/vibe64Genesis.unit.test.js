@@ -195,12 +195,11 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /Preserve authored groupings, classify new tables/u);
 
   assert.match(session, /fenced `vibe64-integration` block/u);
-  for (const conversationKind of ["temporary-readonly", "temporary-task"]) {
-    assert.doesNotMatch(vibe64Driver({
-      conversationKind, scope: "session",
-      session: { managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true }
-    }), /vibe64-integration/u);
-  }
+  assert.doesNotMatch(vibe64Driver({
+    conversationKind: "temporary",
+    scope: "session",
+    session: { managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true }
+  }), /vibe64-integration/u);
   assert.doesNotMatch(session, /tone|response length|policy revision|actor id|do not reveal/iu);
   assert.throws(
     () => vibe64Driver({
@@ -250,7 +249,7 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
       tone: "direct"
     });
     const composed = await composeVibe64SessionContext({
-      conversationKind: "temporary-readonly",
+      conversationKind: "temporary",
       projectRoot,
       session: {
         managedDatabaseRefresh: true,
@@ -267,8 +266,10 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(composed.output, /Use very short sentences/u);
     assert.match(composed.output, /including progress updates and final responses/u);
     assert.match(composed.output, /Use Australian English\./u);
-    assert.match(composed.output, /temporary conversation separate from the main conversation/u);
-    assert.doesNotMatch(composed.output, /vibe64-env set|vibe64-database refresh/u);
+    assert.match(composed.output, /temporary conversation in the selected session worktree/u);
+    assert.match(composed.output, /vibe64-env set/u);
+    assert.match(composed.output, /vibe64-database refresh/u);
+    assert.doesNotMatch(composed.output, /do not edit files or run state-changing commands|only for inspection/u);
   });
 });
 
@@ -282,7 +283,7 @@ test("Vibe64 uses configured beginner detail for main and temporary task progres
       projectRoot,
       responseLength: "detailed"
     });
-    for (const conversationKind of ["main", "temporary-task"]) {
+    for (const conversationKind of ["main", "temporary"]) {
       const composed = await composeVibe64SessionContext({
         conversationKind,
         projectRoot,

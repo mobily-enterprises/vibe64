@@ -45,6 +45,7 @@ async function controllerHarness({
   assistantResponses = [],
   assistantError = null,
   beforeMessages = null,
+  beforePrompt = null,
   beforeReadSession = null,
   catalogProviders = providerResult,
   commandEnvironmentGate = null,
@@ -54,12 +55,14 @@ async function controllerHarness({
   messagesErrorAfterPrompt = null,
   messagesErrorAfterPromptCount = 1,
   providerEvents = [],
+  events = null,
   sessionStatus = async () => ({ type: "idle" }),
   onSessionChanged = null,
   realAttachedTerminal = false,
   serverStartGate = null,
   serverClient = null,
   serverStartErrors = [],
+  stop = async () => ({ exited: true, signal: "SIGTERM" }),
   withCommandBoundary = false,
   zenModelIds = null
 } = {}) {
@@ -211,10 +214,17 @@ async function controllerHarness({
 
   function client(directory = "") {
     return {
-      async *events(id, { onReady } = {}) {
+      async *events(id, { onReady, signal } = {}) {
+        if (events) {
+          yield* events(id, { onReady, signal });
+          return;
+        }
         onReady?.();
         for (const event of providerEvents) {
           yield { ...event, data: { ...event.data, properties: { sessionID: id, ...event.data?.properties } } };
+        }
+        if (!signal?.aborted) {
+          await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
         }
       },
       async agents() {
@@ -287,9 +297,11 @@ async function controllerHarness({
         promptCalls.push({ id, input });
         promptDirectories.push({ directory, id });
         if (failNextPrompt) {
+          const error = failNextPrompt;
           failNextPrompt = false;
-          throw Object.assign(new Error("admission failed"), { statusCode: 503 });
+          throw error;
         }
+        await beforePrompt?.({ directory, id, input });
         outputs.set(id, id.startsWith("ses_detached_")
           ? helperResponse
           : queuedAssistantResponses.shift() || "Main turn complete");
@@ -381,7 +393,7 @@ async function controllerHarness({
         },
         async stop() {
           processStops.push(options);
-          return { exited: true, signal: "SIGTERM" };
+          return stop();
         }
       };
       processStarts.push(started);
@@ -454,8 +466,8 @@ async function controllerHarness({
     failHealth() {
       failNextHealth = true;
     },
-    failPrompt() {
-      failNextPrompt = true;
+    failPrompt(error = Object.assign(new Error("admission failed"), { statusCode: 503 })) {
+      failNextPrompt = error;
     },
     listConnectionCalls: () => listConnectionCalls,
     metadataWrites,

@@ -8,7 +8,7 @@ import {
   codexAppServerNotificationUsageLimitExceeded,
   codexAppServerOutputOwnerTurnId,
   codexAppServerProviderThreadAssistantSegments
-} from "../../packages/vibe64-terminals/src/server/codexAppServerEvents.js";
+} from "@jskit-ai/assistant-core/server/codex-events";
 
 test("Codex output belongs to the active Vibe64 turn across internal provider turns", () => {
   assert.equal(codexAppServerOutputOwnerTurnId({

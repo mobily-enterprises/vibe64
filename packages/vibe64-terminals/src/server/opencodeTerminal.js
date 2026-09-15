@@ -17,7 +17,6 @@ import {
 } from "@local/vibe64-genesis/server";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_WORKSPACE_WRITE_POLICY,
   VIBE64_ASSISTANT_ENGINE_IDS,
   defineVibe64AssistantSelection,
   vibe64AgentExecutionProfileAuditSnapshot,
@@ -503,7 +502,7 @@ function openCodeRunRealtimePayload(run = {}) {
       id: OPENCODE_AGENT_RUN_ID,
       provider: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
       providerInterface: OPENCODE_AGENT_RUN_ID,
-      providerStatus: state,
+      providerStatus: run.observationError ? "observation_lost" : state,
       providerThreadId: threadId,
       providerTurnId: turnId,
       state,
@@ -523,7 +522,7 @@ function openCodeRunRealtimePayload(run = {}) {
         runState: state,
         startedAt: text(run.startedAt),
         state: turnState,
-        status: state,
+        status: run.observationError ? "observation_lost" : state,
         updatedAt
       }
     }
@@ -540,7 +539,7 @@ function openCodeTurnSnapshot(turn = null, threadId = "") {
         id: text(source.id),
         startedAt: text(source.startedAt),
         state: text(source.state) || (active ? "active" : "completed"),
-        status: text(source.state) || (active ? "active" : "completed"),
+        status: source.observationError ? "observation_lost" : text(source.state) || (active ? "active" : "completed"),
         threadId: text(source.threadId || threadId),
         updatedAt: text(source.updatedAt)
       }
@@ -756,20 +755,27 @@ function createOpenCodeTerminalController({
       return sharedProcessStop;
     }
     const target = sharedProcess;
-    sharedProcess = null;
     if (!target) {
       return { exited: true, reason };
     }
-    sharedProcessStop = target.server.stop();
+    const stopping = (async () => {
+      const proof = await target.server.stop();
+      if (proof?.exited !== true) {
+        throw openCodeError("vibe64_opencode_stop_unverified", "OpenCode process exit could not be verified.", {}, 503);
+      }
+      if (sharedProcess === target) sharedProcess = null;
+      return proof;
+    })();
+    sharedProcessStop = stopping;
     try {
-      return await sharedProcessStop;
+      return await stopping;
     } finally {
-      sharedProcessStop = null;
+      if (sharedProcessStop === stopping) sharedProcessStop = null;
     }
   }
 
   async function ensureSharedProcess(context = {}, options = {}, selected = null, shimDirs = []) {
-    await sharedProcessStop?.catch(() => null);
+    await sharedProcessStop;
     if (sharedProcess) {
       const currentConnection = sharedProcess.connections.get(selected?.modelProviderId);
       if (
@@ -784,7 +790,7 @@ function createOpenCodeTerminalController({
           await sharedProcess.server.client.health({ signal: AbortSignal.timeout(1_000) });
           return sharedProcess;
         } catch {
-          await stopSharedProcess("opencode-health-check-failed").catch(() => null);
+          await stopSharedProcess("opencode-health-check-failed");
         }
       } else {
         await stopSharedProcess("opencode-connection-changed");
@@ -1036,6 +1042,14 @@ function createOpenCodeTerminalController({
     await closeTerminalSessionsForNamespace(
       opencodeTerminalNamespace(target.sessionId)
     );
+    const activeThreads = new Set();
+    if (turns.get(target.key)?.active) activeThreads.add(target.upstreamSessionId);
+    for (const entry of temporaryConversations.values()) {
+      if (entry.active && entry.target?.abortController === target.abortController) {
+        activeThreads.add(entry.conversationId);
+      }
+    }
+    for (const threadId of activeThreads) await stopUnobservedOpenCodeSession(target, threadId);
     target.abortController.abort();
     await Promise.all([...temporaryConversations.values()]
       .filter((entry) => entry.target?.abortController === target.abortController)
@@ -1092,7 +1106,7 @@ function createOpenCodeTerminalController({
       );
       const current = processes.get(context.key);
       if (
-        current &&
+        current && !current.abortController.signal.aborted &&
         current.canonicalUrl === connection.canonicalUrl &&
         current.connectionFingerprint === connection.fingerprint &&
         current.endpointCode === connection.endpointCode &&
@@ -1106,7 +1120,7 @@ function createOpenCodeTerminalController({
         return current;
       }
       const server = openCodeServerForDirectory(shared.server, context.workdir);
-      const created = current || {
+      const created = (current && !current.abortController.signal.aborted ? current : null) || {
         abortController: new AbortController(),
         key: context.key,
         sessionId: context.sessionId,
@@ -1429,6 +1443,7 @@ function createOpenCodeTerminalController({
         patch: {
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
           error,
+          observationError: text(turn.observationError),
           model: context.selection.modelId,
           modelProviderId: context.selection.modelProviderId,
           ...(vibe64AgentRunStateIsActive(state)
@@ -1482,6 +1497,7 @@ function createOpenCodeTerminalController({
       onReady,
       signal
     })) {
+      signal?.throwIfAborted();
       const summary = eventSummary(event);
       const current = !turn || Number(summary.at) >= Number(turn.eventStartedAt);
       if (
@@ -1495,7 +1511,7 @@ function createOpenCodeTerminalController({
         }));
       }
       if (summary.type && current && typeof onEvent === "function") {
-        onEvent({
+        await onEvent({
           ...summary,
           threadId: target.upstreamSessionId,
           turnId: turns.get(context.key)?.id || ""
@@ -1508,9 +1524,39 @@ function createOpenCodeTerminalController({
         });
       }
     }
+    if (!signal?.aborted) {
+      throw openCodeError("vibe64_opencode_observation_lost", "OpenCode's event connection ended before observation was closed.", {}, 503);
+    }
+  }
+
+  async function stopUnobservedOpenCodeSession(target, threadId) {
+    const signal = AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS);
+    try {
+      const confirmed = await target.server.client.interrupt(threadId, { signal });
+      const status = await target.server.client.sessionStatus(threadId, { signal });
+      if (confirmed !== true || status?.type !== "idle") {
+        throw new Error("OpenCode did not confirm that the session stopped.");
+      }
+    } catch (error) {
+      // The process owns the final stop proof when its control channel cannot.
+      // Stop this exact server, even if another connection has since replaced it.
+      const server = target.server;
+      const proof = sharedProcess?.server.stop === server.stop
+        ? await stopSharedProcess("opencode-observation-lost")
+        : await server.stop();
+      if (proof?.exited !== true) {
+        throw new Error("OpenCode observation was lost and process exit could not be verified.", { cause: error });
+      }
+      for (const affected of processes.values()) {
+        if (affected.server.stop === server.stop) {
+          affected.abortController.abort(new Error("OpenCode's shared service was stopped after observation failed. Send a message to continue."));
+        }
+      }
+    }
   }
 
   function beginMonitor(target = {}, context = {}, admitted = {}, options = {}) {
+    target = { ...target };
     const existing = monitors.get(context.key);
     if (existing) {
       return existing;
@@ -1526,7 +1572,7 @@ function createOpenCodeTerminalController({
       id: text(admitted.id),
       inputMessageId: text(admitted.id),
       startedAt,
-      state: "active",
+      state: options.admission ? VIBE64_AGENT_RUN_STATE.STARTING : VIBE64_AGENT_RUN_STATE.ACTIVE,
       threadId: target.upstreamSessionId,
       updatedAt: startedAt
     };
@@ -1542,11 +1588,9 @@ function createOpenCodeTerminalController({
         signal: AbortSignal.any([signal, eventAbort.signal])
       }).catch((error) => {
         options.eventReady?.reject(error);
-        if (error?.name !== "AbortError") {
-          vibe64SessionDebugLog("server.opencode.events.error", {
-            error: vibe64SessionDebugError(error),
-            sessionId: context.sessionId
-          });
+        if (!eventAbort.signal.aborted && !signal.aborted) {
+          eventFailure = error;
+          turn.abortController.abort(error);
         }
       });
       let finalState = VIBE64_AGENT_RUN_STATE.COMPLETED;
@@ -1556,6 +1600,7 @@ function createOpenCodeTerminalController({
       try {
         await turn.admission?.promise;
         signal.throwIfAborted();
+        turn.state = VIBE64_AGENT_RUN_STATE.ACTIVE;
         await writeRun(context, turn, VIBE64_AGENT_RUN_STATE.ACTIVE);
         const waitForCompletion = () => waitForOpenCodeMessages(
           target.server.client,
@@ -1601,6 +1646,7 @@ function createOpenCodeTerminalController({
         const projection = await writeConversationProjection(context, completion.messages, {
           inputMessageId: turn.inputMessageId
         });
+        signal.throwIfAborted();
         failure = projection.failure || text(eventFailure?.message);
         providerApiFailure = projection.providerApiFailure || openCodeProviderApiFailure(eventFailure);
         if (!failure && !turn.interruptRequested && !text(completion.result?.text)) {
@@ -1623,6 +1669,20 @@ function createOpenCodeTerminalController({
           finalState = target.abortController.signal.aborted
             ? VIBE64_AGENT_RUN_STATE.CANCELLED
             : VIBE64_AGENT_RUN_STATE.FAILED;
+          if (!target.abortController.signal.aborted) {
+            turn.observationError = failure;
+            try {
+              await writeRun(context, turn, turn.state, failure);
+            } catch {
+              // A failed store must not prevent stopping native work.
+            }
+            try {
+              await stopUnobservedOpenCodeSession(target, turn.threadId);
+            } catch (stopError) {
+              failure = `${failure} ${stopError.message}`;
+              finalState = VIBE64_AGENT_RUN_STATE.ACTIVE;
+            }
+          }
         }
       } finally {
         eventAbort.abort();
@@ -1657,7 +1717,7 @@ function createOpenCodeTerminalController({
             });
           });
         }
-        turn.active = false;
+        turn.active = vibe64AgentRunStateIsActive(finalState);
         turn.error = failure;
         turn.state = finalState;
         turn.updatedAt = new Date().toISOString();
@@ -1730,8 +1790,18 @@ function createOpenCodeTerminalController({
         turn: currentTurn
       };
     }
-    const currentMonitor = monitors.get(context.key);
     const currentTurn = turns.get(context.key);
+    if (currentTurn?.observationError) {
+      await monitors.get(context.key);
+    }
+    if (currentTurn?.active && currentTurn.observationError) {
+      // An explicit Send may retry stopping uncertain work, but cannot overlap it.
+      await stopUnobservedOpenCodeSession(processes.get(context.key), currentTurn.threadId);
+      currentTurn.active = false;
+      currentTurn.state = VIBE64_AGENT_RUN_STATE.INTERRUPTED;
+      await writeRun(context, currentTurn, VIBE64_AGENT_RUN_STATE.INTERRUPTED, currentTurn.observationError);
+    }
+    const currentMonitor = monitors.get(context.key);
     const currentThreadId = upstreamSessionId(context.runtime.stateRoot, context.sessionId);
     const ownershipMatchesTurn = Boolean(
       currentMonitor &&
@@ -1870,7 +1940,7 @@ function createOpenCodeTerminalController({
       if (actorFailure) {
         return actorFailure;
       }
-      const failureCode = text(error?.code);
+      const failureCode = text(error?.code).replace(/^assistant_opencode_/u, "vibe64_opencode_");
       if (failureCode.startsWith("vibe64_opencode_")) {
         return {
           code: failureCode,
@@ -1931,11 +2001,12 @@ function createOpenCodeTerminalController({
     };
   }
 
-  async function readDetachedConversation(target = {}, conversationId = "", tracked = null) {
+  async function readDetachedConversation(target = {}, conversationId = "", tracked = null, options = {}) {
     const messages = await target.server.client.messages(conversationId, {
       limit: 100,
       order: "desc"
-    });
+    }, options);
+    options.signal?.throwIfAborted();
     const result = lastAssistantResult(messages);
     return {
       conversationId,
@@ -2012,9 +2083,7 @@ function createOpenCodeTerminalController({
     tracked.conversationId = conversationId;
     tracked.promptContext = executionProfile
       ? null
-      : promptContext(input.policy === VIBE64_AGENT_WORKSPACE_WRITE_POLICY
-          ? "temporary-task"
-          : "temporary-readonly", context.assistantScope);
+      : promptContext("temporary", context.assistantScope);
     temporaryConversations.set(key, tracked);
     await writeSessionEnvironmentRegistry();
     return { context, conversationId, executionProfile, key, target, tracked };
@@ -2065,20 +2134,42 @@ function createOpenCodeTerminalController({
       target,
       tracked
     } = await detachedTarget(sessionId, input, options);
+    if (tracked.active && tracked.error) {
+      await stopUnobservedOpenCodeSession(tracked.target, conversationId);
+      tracked.active = false;
+    }
     if (tracked.active) {
       throw openCodeError("vibe64_opencode_conversation_busy", "This conversation is still working.", {}, 409);
     }
     tracked.active = true;
     tracked.error = null;
     tracked.interrupted = false;
-    tracked.abortController = new AbortController();
+    const turnAbort = new AbortController();
+    tracked.abortController = turnAbort;
     const inputMessageId = upstreamMessageId(input.messageId || input.operationId || randomUUID());
+    const observedTarget = { ...target, upstreamSessionId: conversationId };
+    const eventAbort = new AbortController();
+    const signal = AbortSignal.any([target.abortController.signal, turnAbort.signal]);
+    const eventReady = Promise.withResolvers();
+    const events = consumeEvents(observedTarget, context, null, {
+      onEvent: options.onEvent,
+      onReady: eventReady.resolve,
+      publish: false,
+      signal: AbortSignal.any([signal, eventAbort.signal])
+    }).catch((error) => {
+      eventReady.reject(error);
+      if (!eventAbort.signal.aborted && !signal.aborted) turnAbort.abort(error);
+    });
+    const readyTimeout = setTimeout(() => eventReady.reject(openCodeError(
+      "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
+    )), OPENCODE_EVENT_READY_TIMEOUT_MS);
     let admitted;
+    let promptAttempted = false;
     try {
-      options.onEvent?.({
-        threadId: conversationId,
-        type: "thread"
-      });
+      await eventReady.promise;
+      signal.throwIfAborted();
+      await options.onEvent?.({ threadId: conversationId, type: "thread" });
+      promptAttempted = true;
       admitted = await target.server.client.prompt(conversationId, {
         agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
         delivery: "queue",
@@ -2087,37 +2178,30 @@ function createOpenCodeTerminalController({
         prompt: { text: prompt },
         attachments: input.attachments,
         resume: true
-      });
+      }, { signal });
     } catch (error) {
-      tracked.active = false;
+      eventAbort.abort();
+      await events;
       tracked.error = error;
+      if (promptAttempted) await stopUnobservedOpenCodeSession(observedTarget, conversationId);
+      tracked.active = false;
       throw error;
+    } finally {
+      clearTimeout(readyTimeout);
     }
     tracked.runId = text(admitted.id);
-    const eventAbort = new AbortController();
-    const events = typeof options.onEvent === "function"
-      ? consumeEvents({ ...target, upstreamSessionId: conversationId }, context, null, {
-          onEvent: options.onEvent,
-          publish: false,
-          signal: eventAbort.signal
-        }).catch((error) => {
-          if (error?.name !== "AbortError") {
-            throw error;
-          }
-        })
-      : Promise.resolve();
     tracked.completion = (async () => {
+      let stopped = true;
       try {
         const timeoutMs = openCodeExecutionTimeout(input, executionProfile);
         await waitForOpenCodeMessages(target.server.client, conversationId, inputMessageId, {
           signal: AbortSignal.any([
-            target.abortController.signal,
-            tracked.abortController.signal,
+            signal,
             ...(timeoutMs ? [AbortSignal.timeout(timeoutMs)] : [])
           ])
         });
         const conversation = boundedOpenCodeExecutionOutput(
-          await readDetachedConversation(target, conversationId),
+          await readDetachedConversation(target, conversationId, null, { signal }),
           executionProfile
         );
         return {
@@ -2130,23 +2214,29 @@ function createOpenCodeTerminalController({
             : conversation.text
         };
       } catch (error) {
+        const failure = signal.aborted ? signal.reason : error;
         if (tracked.interrupted) {
           return { conversationId, ok: true, runId: tracked.runId, status: "interrupted", text: "" };
         }
         if (!target.abortController.signal.aborted) {
-          await target.server.client.interrupt(conversationId, {
-            signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
-          }).catch(() => null);
+          try {
+            await stopUnobservedOpenCodeSession(observedTarget, conversationId);
+          } catch (stopError) {
+            stopped = false;
+            throw new Error(`${failure.message} ${stopError.message}`, { cause: failure });
+          }
         }
-        throw error;
+        throw failure;
       } finally {
-        tracked.active = false;
         eventAbort.abort();
         await events;
+        if (tracked.abortController === turnAbort) tracked.active = !stopped;
       }
     })();
     // Keep a failed admitted turn observable to the client's conversation reads.
-    void tracked.completion.catch((error) => { tracked.error = error; });
+    void tracked.completion.catch((error) => {
+      if (tracked.abortController === turnAbort) tracked.error = error;
+    });
     return waitForCompletion ? tracked.completion : {
       conversationId,
       ok: true,
@@ -2588,6 +2678,16 @@ function createOpenCodeTerminalController({
           turn: openCodeTurnSnapshot(turn)
         };
       }
+      if (turn?.observationError) {
+        await monitors.get(context.key);
+        if (turn.active) {
+          await stopUnobservedOpenCodeSession(target, turn.threadId);
+          turn.active = false;
+          turn.state = VIBE64_AGENT_RUN_STATE.INTERRUPTED;
+          await writeRun(context, turn, turn.state, turn.observationError);
+        }
+        return { ok: true, interrupted: true, thread: { id: turn.threadId }, turn: openCodeTurnSnapshot(turn) };
+      }
       if (turn) {
         turn.interruptRequested = true;
       }
@@ -2651,14 +2751,17 @@ function createOpenCodeTerminalController({
           const activeRun = (Array.isArray(session?.agentRuns) ? session.agentRuns : [])
             .find((run) => run?.id === OPENCODE_AGENT_RUN_ID && run.active === true);
           const target = await ensureUpstreamSession(context, options);
-          if (activeRun) {
+          if (activeRun?.observationError) {
+            await stopUnobservedOpenCodeSession(target, activeRun.threadId);
+            await writeRun(context, { ...activeRun, id: activeRun.turnId }, VIBE64_AGENT_RUN_STATE.INTERRUPTED, activeRun.observationError);
+          } else if (activeRun) {
             beginMonitor(target, context, {
               eventStartedAt: Date.parse(text(activeRun.startedAt)) || Date.now(),
               id: text(activeRun.turnId) || upstreamMessageId(randomUUID()),
               startedAt: text(activeRun.startedAt)
             }, options);
           }
-          results.push({ ok: true, resumed: Boolean(activeRun), sessionId });
+          results.push({ ok: true, resumed: Boolean(activeRun && !activeRun.observationError), sessionId });
         } catch (error) {
           results.push({ error: text(error?.message), ok: false, sessionId });
         }
@@ -2698,11 +2801,15 @@ function createOpenCodeTerminalController({
         return { conversationId, ok: true, stopped: false };
       }
       try {
-        const confirmed = await target.server.client.interrupt(conversationId, {
-          signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
-        });
-        if (confirmed !== true) {
-          throw openCodeError("vibe64_opencode_interrupt_unconfirmed", "OpenCode did not confirm Stop. Try Stop again.", {}, 502);
+        if (tracked?.active && tracked.error) {
+          await stopUnobservedOpenCodeSession(target, conversationId);
+        } else {
+          const confirmed = await target.server.client.interrupt(conversationId, {
+            signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+          });
+          if (confirmed !== true) {
+            throw openCodeError("vibe64_opencode_interrupt_unconfirmed", "OpenCode did not confirm Stop. Try Stop again.", {}, 502);
+          }
         }
       } catch (error) {
         if (error?.name === "TimeoutError") {

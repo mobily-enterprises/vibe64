@@ -14,7 +14,7 @@ import {
 } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/components/studio/LongTextPreviewBlocks.vue", () => ({
+vi.mock("../../node_modules/@jskit-ai/assistant-core/src/client/conversation/LongTextPreviewBlocks.vue", () => ({
   default: defineComponent({
     inheritAttrs: false,
     setup(_props, { attrs }) {
@@ -26,6 +26,8 @@ vi.mock("@/components/studio/LongTextPreviewBlocks.vue", () => ({
 vi.mock("vuetify/components/VAlert", () => ({
   VAlert: passthroughComponent()
 }));
+
+vi.mock("vuetify/components/VSelect", () => ({ VSelect: defineComponent({ render: () => null }) }));
 
 vi.mock("vuetify/components/VBtn", () => ({
   VBtn: passthroughComponent("button")
@@ -46,6 +48,7 @@ vi.mock("@/components/studio/vibe64-session/Vibe64AttachmentDialog.vue", () => (
   default: defineComponent({ render: () => null })
 }));
 
+import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "../../src/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64ConversationAttachments from "../../src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue";
 
@@ -62,6 +65,17 @@ function attachClientRender(component, sourcePath, id) {
     prefixIdentifiers: true
   });
   component.render = new Function("Vue", componentTemplate.code)(VueRuntime);
+}
+
+for (const name of [
+  "AssistantConversationElement",
+  "AssistantTranscript",
+  "AssistantProgress",
+  "LongTextInlineParts",
+  "AssistantPromptInput",
+  "AssistantComposerActions"
+]) {
+  attachClientRender(SharedConversation[name], `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`, `${name}-test`);
 }
 
 attachClientRender(
@@ -232,6 +246,7 @@ function mountConversation({
   app.component("VAlert", passthroughComponent());
   app.component("VBtn", passthroughComponent("button"));
   app.component("VIcon", passthroughComponent("span"));
+  app.component("VSelect", passthroughComponent());
   app.component("VCard", passthroughComponent());
   app.component("VCardText", passthroughComponent());
   app.component("VCardActions", passthroughComponent());
@@ -244,7 +259,7 @@ function mountConversation({
 function conversationBody(container) {
   return findNode(container, (node) => String(node.props?.class || "")
     .split(" ")
-    .includes("studio-conversation-log__body"));
+    .includes("assistant-transcript__body"));
 }
 
 function loadOlderButton(container) {
@@ -258,7 +273,7 @@ function nodeHasClass(node, className) {
 }
 
 function userPromptContent(container) {
-  return findNode(container, (node) => nodeHasClass(node, "studio-conversation-log__user-content"));
+  return findNode(container, (node) => nodeHasClass(node, "assistant-transcript__user-content"));
 }
 
 function renderedUserPromptBlocks(container) {
@@ -270,7 +285,7 @@ function renderedUserPromptBlocks(container) {
 
 function userPromptToggle(container) {
   return findNode(container, (node) => (
-    node.type === "button" && nodeHasClass(node, "studio-conversation-log__user-content-toggle")
+    node.type === "button" && nodeHasClass(node, "assistant-transcript__user-content-toggle")
   ));
 }
 

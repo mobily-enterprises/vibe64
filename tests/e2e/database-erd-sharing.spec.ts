@@ -564,8 +564,8 @@ for (const provider of ["codex", "opencode"]) {
       await page.getByRole("button", { name: "Generate overview", exact: true }).click();
       await expect.poll(() => created.length).toBe(1);
       await expect.poll(() => turns.length).toBe(1);
-      expect(created[0].policy).toBe("workspace_write");
-      expect(turns[0].policy).toBe("workspace_write");
+      expect(created[0]).not.toHaveProperty("policy");
+      expect(turns[0]).not.toHaveProperty("policy");
       expect(turns[0].message).toContain("vibe64-database overview --json");
       expect(turns[0].message).toContain("data-overview.json");
       expect(turns[0].message).toContain("several relationships away");

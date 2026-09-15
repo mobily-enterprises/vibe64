@@ -4,15 +4,16 @@ import test from "node:test";
 import {
   parseLongTextInlineParts,
   parseLongTextReviewBlocks
-} from "../../src/lib/studioLongTextBlocks.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 
-test("ephemeral assistant replies reuse normal chat formatting while user text stays literal", async () => {
+test("temporary conversations use the same element and retain app-owned attachment and system slots", async () => {
   const source = await readFile(new URL(
     "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue", import.meta.url
   ), "utf8");
-  assert.match(source, /import LongTextPreviewBlocks from "@\/components\/studio\/LongTextPreviewBlocks.vue"/u);
-  assert.match(source, /<LongTextPreviewBlocks\s+v-if="message.text && message.role === 'assistant'"\s+:blocks="parseLongTextReviewBlocks\(message.text\)"/u);
-  assert.match(source, /<p v-else-if="message.text">\{\{ message.text \}\}<\/p>/u);
+  assert.match(source, /<AssistantConversationElement :adapter="adapter">/u);
+  assert.match(source, /conversationTurnsFromMessages\(props.messages\)/u);
+  assert.match(source, /#system-message/u);
+  assert.match(source, /#attachments/u);
   assert.doesNotMatch(source, /v-html/u);
 });
 

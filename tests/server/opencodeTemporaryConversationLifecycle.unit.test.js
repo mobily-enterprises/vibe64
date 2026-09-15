@@ -1,8 +1,38 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 
 import { controllerHarness } from "../fixtures/opencodeController.js";
+
+test("temporary OpenCode uses the main agent and project commands while keeping edits and history separate on close", async (t) => {
+  const harness = await controllerHarness({
+    withCommandBoundary: true,
+    helperResponse: "Project edited.",
+    beforePrompt({ directory, id }) {
+      if (id.startsWith("ses_detached_")) {
+        execFileSync("sh", ["-c", "printf 'Temporary command edit' > temporary-edit.txt"], { cwd: directory });
+      }
+    }
+  });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { recursive: true, force: true }); });
+  const workdir = harness.session.metadata.source_path;
+  await writeFile(path.join(workdir, "existing.txt"), "Unrelated local work");
+  await harness.controller.sendMessage("session-1", { message: "Main question", messageId: "main-question" });
+  await harness.controller.waitForTurn("session-1");
+  const mainHistory = structuredClone(harness.userMessages);
+  const conversation = await harness.controller.createConversation("session-1", { ephemeral: true });
+  await harness.controller.startConversationTurn("session-1", { conversationId: conversation.conversationId, message: "Edit the project." });
+  await harness.controller.waitForConversationTurn("session-1", { conversationId: conversation.conversationId });
+  assert.equal(harness.promptCalls.at(-1).input.agent, harness.promptCalls[0].input.agent);
+  assert.equal(harness.promptDirectories.at(-1).directory, workdir);
+  assert.equal(harness.promptDirectories[0].directory, workdir);
+  await harness.controller.deleteConversation("session-1", { conversationId: conversation.conversationId });
+  assert.equal(await readFile(path.join(workdir, "temporary-edit.txt"), "utf8"), "Temporary command edit");
+  assert.equal(await readFile(path.join(workdir, "existing.txt"), "utf8"), "Unrelated local work");
+  assert.deepEqual(harness.userMessages, mainHistory);
+});
 
 test("OpenCode temporary Start returns admission while the provider is still working", async (t) => {
   const reading = Promise.withResolvers();
@@ -195,4 +225,111 @@ test("OpenCode deletion retires only its own observer and shutdown retires the r
   assert.equal(harness.processStops.length, 0);
   await harness.controller.closeAllForProject();
   assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+});
+
+test("temporary OpenCode observation loss stops admitted work and waits for an explicit new Send", async (t) => {
+  const loss = Promise.withResolvers();
+  let interrupts = 0;
+  let connections = 0;
+  const reply = { pending: true, text: "" };
+  const harness = await controllerHarness({
+    helperResponse: reply,
+    interrupt: async () => { interrupts += 1; return true; },
+    async *events(_id, { onReady, signal }) {
+      onReady();
+      yield { data: { type: "session.status", properties: { sessionID: _id } } };
+      connections += 1;
+      await Promise.race([
+        connections === 1 ? loss.promise : new Promise(() => {}),
+        new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }))
+      ]);
+    }
+  });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const { conversationId } = await harness.controller.createConversation("session-1", { ephemeral: true });
+  await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
+  loss.resolve();
+  await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /event connection ended/);
+  assert.equal(interrupts, 1);
+  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(harness.promptCalls.length, 1);
+  assert.deepEqual(harness.userMessages, []);
+  reply.pending = false;
+  reply.text = "Explicitly continued";
+  await harness.controller.startConversationTurn("session-1", { conversationId, message: "Continue" });
+  const completed = await harness.controller.waitForConversationTurn("session-1", { conversationId });
+  assert.equal(completed.text, reply.text);
+});
+
+test("temporary OpenCode retains ownership after an unverified stop and can retry Stop", async (t) => {
+  const loss = Promise.withResolvers();
+  let exited = false;
+  const harness = await controllerHarness({
+    helperResponse: { pending: true, text: "" },
+    interrupt: async () => false,
+    stop: async () => ({ exited }),
+    async *events(_id, { onReady, signal }) {
+      onReady();
+      yield { data: { type: "session.status", properties: { sessionID: _id } } };
+      await Promise.race([loss.promise, new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }))]);
+    }
+  });
+  t.after(async () => { exited = true; await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const { conversationId } = await harness.controller.createConversation("session-1", { ephemeral: true });
+  await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
+  loss.resolve();
+  await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /could not be verified/);
+  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  const pending = await harness.controller.readConversation("session-1", { conversationId });
+  assert.equal(pending.ok, false);
+  assert.equal(pending.status, "inProgress");
+  assert.match(pending.error, /could not be verified/);
+  exited = true;
+  assert.equal((await harness.controller.stopConversation("session-1", { conversationId })).stopped, true);
+  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(harness.promptCalls.length, 1);
+});
+
+test("shared OpenCode process loss stops temporary-only sessions without writing main History", async (t) => {
+  const loss = Promise.withResolvers();
+  let firstThread = "";
+  const harness = await controllerHarness({
+    helperResponse: { pending: true, text: "" },
+    interrupt: async () => false,
+    async *events(id, { onReady, signal }) {
+      firstThread ||= id;
+      onReady();
+      yield { data: { type: "session.status", properties: { sessionID: id } } };
+      const aborted = new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+      await (id === firstThread ? Promise.race([loss.promise, aborted]) : aborted);
+    }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const second = structuredClone(harness.session);
+  second.sessionId = "session-2";
+  second.sessionRoot = path.join(harness.root, "session-state", second.sessionId);
+  second.metadata.source_path = path.join(harness.root, "sessions", "active", second.sessionId, "source");
+  await mkdir(second.metadata.source_path, { recursive: true });
+  const sessions = new Map([["session-1", harness.session], [second.sessionId, second]]);
+  harness.runtime.getSession = async (id) => sessions.get(id);
+  const conversations = [];
+  for (const id of sessions.keys()) {
+    const { conversationId } = await harness.controller.createConversation(id, { ephemeral: true });
+    conversations.push([id, conversationId]);
+    await harness.controller.startConversationTurn(id, { conversationId, message: `Work for ${id}` });
+  }
+  const completions = conversations.map(([id, conversationId]) => harness.controller.waitForConversationTurn(id, { conversationId }));
+  const settled = Promise.allSettled(completions);
+  loss.resolve();
+  await settled;
+  assert.equal(harness.processStops.length, 1);
+  for (const [id] of conversations) {
+    assert.equal(harness.controller.hasActiveTemporaryConversation(id), false);
+  }
+  assert.equal(harness.promptCalls.length, 2);
+  assert.deepEqual(harness.userMessages, []);
+  assert.deepEqual(harness.assistantMessages, []);
 });

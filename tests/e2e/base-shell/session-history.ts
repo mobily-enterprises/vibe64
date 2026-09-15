@@ -35,7 +35,7 @@ test.describe("session history navigation", () => {
       await expect(page.getByText("Read-only history. Source restore is not available from archived sessions.")).toBeVisible();
       await expect(page.getByText("Stop this session.")).toBeVisible();
       await expect(page.getByText("I stopped before finishing this session.")).toBeVisible();
-      const archiveConversationBody = page.locator(".studio-archived-session-detail__conversation .studio-conversation-log__body");
+      const archiveConversationBody = page.locator(".studio-archived-session-detail__conversation .assistant-transcript__body");
       await expect(archiveConversationBody).toHaveCSS("overflow-y", "auto");
       await expect(archiveConversationBody).toHaveCSS("overscroll-behavior-y", "contain");
       await page.getByRole("link", { name: "Back to sessions" }).click();

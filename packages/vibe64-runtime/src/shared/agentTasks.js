@@ -1,5 +1,3 @@
-const VIBE64_AGENT_WORKSPACE_WRITE_POLICY = "workspace_write";
-
 const VIBE64_AGENT_TASK_STATES = Object.freeze({
   COMPLETED: "completed",
   RUNNING: "running",
@@ -83,7 +81,6 @@ function vibe64AgentTaskIsActive(task = null) {
 }
 
 export {
-  VIBE64_AGENT_WORKSPACE_WRITE_POLICY,
   VIBE64_AGENT_TASK_RESULT_KINDS,
   VIBE64_AGENT_TASK_RESULT_SCHEMA,
   VIBE64_AGENT_TASK_STATES,

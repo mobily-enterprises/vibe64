@@ -1,3 +1,4 @@
+import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -21,7 +22,6 @@ import {
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
-  CodexAppServerJsonRpcClient,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexAppServerEconomyHomeDir,
@@ -511,6 +511,38 @@ class ResponsiveFakeWebSocket extends FakeWebSocket {
     }
   }
 }
+
+test("codex provider preserves observers across connection replacement and rejects old socket output", async () => {
+  const provider = new CodexAppServerAgentProvider({ WebSocketImpl: ResponsiveFakeWebSocket });
+  const runtime = { endpoint: "ws://localhost:9999" };
+  provider.ensureRuntime = async () => {
+    provider.runtime = runtime;
+    return runtime;
+  };
+  const received = [];
+  try {
+    await provider.connect();
+    const firstSocket = FakeWebSocket.instances.at(-1);
+    const unsubscribe = provider.subscribe((event) => received.push(event.params.text));
+    const emit = (socket, text) => socket.emit("message", {
+      data: JSON.stringify({ method: "item/completed", params: { text } })
+    });
+    emit(firstSocket, "before reconnect");
+    // Deliberate replacement follows the owner's stop policy; it is not a
+    // license to reconnect automatically after an unexpected observation loss.
+    provider.client.close();
+    await provider.connect();
+    const replacementSocket = FakeWebSocket.instances.at(-1);
+    assert.notEqual(firstSocket, replacementSocket);
+    emit(replacementSocket, "after reconnect");
+    emit(firstSocket, "obsolete socket");
+    unsubscribe();
+    emit(replacementSocket, "after unsubscribe");
+    assert.deepEqual(received, ["before reconnect", "after reconnect"]);
+  } finally {
+    provider.close();
+  }
+});
 
 class EconomyResponsiveFakeWebSocket extends ResponsiveFakeWebSocket {
   send(payload) {
@@ -4050,7 +4082,7 @@ test("codex JSON-RPC client enforces its transport payload limit", async () => {
   });
 
   await assert.rejects(pending, (error) => {
-    assert.equal(error.code, "vibe64_codex_app_server_message_too_large");
+    assert.equal(error.code, "assistant_codex_app_server_message_too_large");
     return true;
   });
   assert.equal(socket.closed, true);
@@ -4199,4 +4231,44 @@ test("Codex goal controls preserve objective and budget while changing status", 
       { method: "thread/goal/set", params: { threadId: "thread-one", status: "active" } }
     ]);
   } finally { await provider.close(); }
+});
+
+test("Codex observation stop pauses the same goal before interrupt and requires a fresh idle result", async () => {
+  const provider = new CodexAppServerAgentProvider();
+  const calls = [];
+  let active = true;
+  const goal = { status: "active", objective: "Finish", createdAt: 123 };
+  provider.client = {
+    isOpen: () => true,
+    async request(method, params, { signal }) {
+      calls.push(method);
+      assert.equal(params.threadId, "thread-one");
+      assert.ok(signal instanceof AbortSignal);
+      if (method === "thread/goal/get") return { goal };
+      if (method === "thread/goal/set") { goal.status = params.status; return { goal }; }
+      if (method === "turn/interrupt") { assert.equal(params.turnId, "turn-one"); active = false; return {}; }
+      return { thread: { status: { type: active ? "active" : "idle" } } };
+    }
+  };
+  await provider.stopThreadForObservationLoss("thread-one", "turn-one");
+  assert.deepEqual(calls, ["thread/goal/get", "thread/goal/set", "thread/read", "turn/interrupt", "thread/read"]);
+  provider.client.request = async () => ({ goal: null, thread: { status: { type: "active" } } });
+  await assert.rejects(provider.stopThreadForObservationLoss("thread-one", "turn-one"), /did not confirm/);
+  provider.client.isOpen = () => false;
+  await assert.rejects(provider.stopThreadForObservationLoss("thread-one", "turn-one"), /unavailable/);
+});
+
+test("unexpected Codex transport loss blocks reconnection and notifies its execution owner", async () => {
+  const failures = [];
+  const provider = new CodexAppServerAgentProvider({
+    WebSocketImpl: ResponsiveFakeWebSocket,
+    onObservationLost(error) { failures.push(error); }
+  });
+  provider.ensureRuntime = async () => ({ endpoint: "ws://localhost:9999" });
+  try {
+    await provider.connect();
+    FakeWebSocket.instances.at(-1).close();
+    assert.equal(failures.length, 1);
+    await assert.rejects(provider.connect(), { code: "vibe64_codex_observation_lost" });
+  } finally { provider.close(); }
 });

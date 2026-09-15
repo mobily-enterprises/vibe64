@@ -343,3 +343,46 @@ test("two browsers recover independently without sending either draft", async ({
     await otherContext.close();
   }
 });
+
+test("goal steering replies appear immediately, preserve the composer and survive reload", async ({ page }) => {
+  await openChat(page);
+  const replies = ["I am checking the remaining ownership cases.", "Next I will verify recovery without resending."];
+  for (const [index, question] of ["Why are you stuck?", "What happens next?"].entries()) {
+    await composer(page).fill(question);
+    await expect(steer(page)).toBeEnabled();
+    await steer(page).click();
+    await expect.poll(() => server.state.messages.length).toBe(index + 1);
+    await expect(composer(page)).toHaveValue("");
+    await composer(page).fill("Keep my next reply draft.");
+    await composer(page).evaluate((element: HTMLTextAreaElement) => {
+      element.focus();
+      element.setSelectionRange(5, 5);
+    });
+    const at = new Date().toISOString();
+    const turn = {
+      turnId: `turn-status-${index + 1}`,
+      user: { messageId: server.state.messages[index].messageId, role: "user", text: question, at },
+      assistant: { messageId: `native-final-${index}`, role: "assistant", text: replies[index], at },
+      commentary: [], thinking: []
+    };
+    server.state.conversationLog.push(turn);
+    server.sessionChanged("assistant-response-bundle", { conversationLogPatch: { type: "upsert-turn", turn } });
+    await expect(page.getByText(replies[index], { exact: true })).toBeVisible();
+    await expect(composer(page)).toHaveValue("Keep my next reply draft.");
+    await expect(composer(page)).toBeFocused();
+    expect(await composer(page).evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(5);
+    await expect(steer(page)).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  }
+  // Native continuation updates execution state separately from the replies.
+  server.state.session.agentSession.turn.id = "goal-successor";
+  server.publishTurn();
+  await expect(steer(page)).toBeEnabled();
+  expect(server.state.interrupts).toBe(0);
+  await page.reload();
+  for (const reply of replies) await expect(page.getByText(reply, { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await composer(page).fill("Continue with this guidance after reload.");
+  await expect(steer(page)).toBeEnabled();
+  expect(server.state.messages).toHaveLength(2);
+});

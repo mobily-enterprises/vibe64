@@ -73,7 +73,11 @@ export default defineConfig({
     }
   ],
   test: {
-    include: ["tests/client/**/*.vitest.js"]
+    include: ["tests/client/**/*.vitest.js"],
+    server: {
+      // The published assistant ships Vue source that needs the Vue transform.
+      deps: { inline: ["@jskit-ai/assistant-core"] }
+    }
   },
   optimizeDeps: {
     entries: [

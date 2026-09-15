@@ -17,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const temporaryProvider = vi.hoisted(() => ({ value: null }));
 
 vi.mock("@/composables/useVibe64TemporaryAi.js", () => ({
-  TEMPORARY_AI_WORKSPACE_WRITE_POLICY: "workspace_write",
   useVibe64TemporaryAi: () => temporaryProvider.value
 }));
 
@@ -27,6 +26,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
     success: vi.fn()
   })
 }));
+
+vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: defineComponent({ render: () => null }) }));
+
+vi.mock("vuetify/components/VSelect", () => ({ VSelect: defineComponent({ render: () => null }) }));
 
 vi.mock("vuetify/components/VBtn", () => ({
   VBtn: defineComponent({
@@ -85,16 +88,19 @@ vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", 
 import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
-import Vibe64ConversationProgress from "../../src/components/studio/vibe64-session/Vibe64ConversationProgress.vue";
+import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
+import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64PromptHints from "../../src/components/studio/vibe64-session/Vibe64PromptHints.vue";
 
 for (const [name, component] of [
-  ["Vibe64ConversationProgress", Vibe64ConversationProgress],
+  ...["AssistantConversationElement", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
   ["Vibe64PromptHints", Vibe64PromptHints],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages]
 ]) {
-  const componentPath = path.resolve(`src/components/studio/vibe64-session/${name}.vue`);
+  const componentPath = path.resolve(SharedConversation[name]
+    ? `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`
+    : `src/components/studio/vibe64-session/${name}.vue`);
   const componentSource = fs.readFileSync(componentPath, "utf8");
   const { descriptor } = parse(componentSource, { filename: componentPath });
   const script = compileScript(descriptor, { id: `${name}-test` });
@@ -158,7 +164,6 @@ function temporaryAiTestState(startResult) {
         error: "",
         id: "recovery-task",
         messages: [],
-        policy: "workspace_write",
         title: "Fix preview"
       };
       tasks.value = [task];
@@ -242,6 +247,9 @@ function mountWorkspace(container, props) {
       return () => h("button", attrs, slots.default?.());
     }
   }));
+  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog"]) {
+    app.component(name, defineComponent({ setup: (_props, { attrs, slots }) => () => h("div", attrs, slots.default?.()) }));
+  }
   app.provide(ssrContextKey, { modules: new Set() });
   return { app, workspace: app.mount(container) };
 }
@@ -348,7 +356,6 @@ describe("Temporary AI recovery workspace accessibility", () => {
       id: "recovery-task",
       messages: [],
       nextStepMessage: "Vibe64 will verify the repair when the AI finishes.",
-      policy: "workspace_write",
       recoveryNotice: "Temporary AI can edit this session in a separate temporary chat.",
       status: "inProgress",
       title: "Fix workspace preparation"
@@ -381,7 +388,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       messages: [
         { id: "recovery:repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
       ],
-      policy: "workspace_write", recoveryNotice: "Review the repair.",
+      recoveryNotice: "Review the repair.",
       recoveryOperation: "update", recoveryOutcome: "succeeded",
       status: "completed", title: "Resolve Update"
     }];
@@ -389,7 +396,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.open.value = true;
     temporary.tasks.value.push({
       agentSettings: {}, busy: false, draft: "Keep this other draft.", id: "other",
-      messages: [], title: "Other task", policy: "read"
+      messages: [], title: "Other task"
     });
     temporaryProvider.value = temporary;
     const selectMainChat = vi.fn();
@@ -401,7 +408,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       await flushWorkspaceReveal();
       expect(findNode(container, (node) => node.props?.["data-temporary-ai-recovery"] === "")).toBeNull();
       const message = findNode(container, (node) => node.type === "article" && nodeText(node).includes("Session updated"));
-      expect(nodeText(findNode(message, (node) => node.type === "strong"))).toBe("System");
+      expect(nodeText(findNode(message, (node) => node.props?.class === "assistant-transcript__system-meta"))).toContain("System");
       expect(nodeText(findNode(message, (node) => node.type === "p"))).toBe(
         "Session updated and workspace ready. Your changes were preserved. Nothing was published."
       );
@@ -441,7 +448,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
         { id: "recovery:latest", role: "system", text: "Session updated." }
       ],
       recoveryOperation: "update", recoveryOutcome: "succeeded", status: "completed",
-      title: "Resolve Update", policy: "workspace_write"
+      title: "Resolve Update"
     }];
     temporary.activeTaskId.value = "repair";
     temporary.open.value = true;
@@ -487,7 +494,6 @@ describe("Temporary AI recovery workspace accessibility", () => {
           text: ""
         }
       ],
-      policy: "workspace_write",
       title: "Fix workspace preparation"
     }];
     temporary.activeTaskId.value = "recovery-task";
@@ -520,7 +526,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       expect(findNode(container, (node) => node.type === "span" && nodeText(node) === "Working…")).toBeNull();
 
       const userMessage = findNode(container, (node) => (
-        node.type === "article" && nodeText(node).includes("Check this repair.")
+        String(node.props?.class || "").split(" ").includes("assistant-transcript__message--user") && nodeText(node).includes("Check this repair.")
       ));
       expect(userMessage).toBeTruthy();
       expect(findNode(userMessage, (node) => (
@@ -559,7 +565,6 @@ describe("Temporary AI recovery workspace accessibility", () => {
       error: "Timed out waiting for the provider response.",
       id: "recovery-task",
       messages: [],
-      policy: "workspace_write",
       recoveryNotice: "Temporary AI can edit this session in a separate temporary chat.",
       status: "failed",
       title: "Fix workspace preparation"
@@ -591,7 +596,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
       agentSettings: {}, attachments: [], busy: false, draft: "", error: "", id: "repair",
-      messages: [], policy: "workspace_write", recoveryNotice: "Repair this Update.",
+      messages: [], recoveryNotice: "Repair this Update.",
       recoveryOperation: "update", outcomeKind: "continue", status: "completed", title: "Resolve Update"
     }];
     temporary.activeTaskId.value = "repair";
@@ -605,7 +610,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     try {
       await flushWorkspaceReveal();
       const button = findNode(container, (node) => node.props?.["data-temporary-ai-check-update"] === "");
-      const messages = findNode(container, (node) => node.props?.class === "vibe64-temporary-ai__messages");
+      const messages = findNode(container, (node) => String(node.props?.class || "").split(" ").includes("assistant-transcript__body"));
       expect(button).toBeTruthy();
       expect(findNode(messages, (node) => node === button)).toBeNull();
       expect(button.props.disabled).toBeFalsy();
@@ -635,11 +640,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.tasks.value = [
       {
         agentSettings: {}, busy: false, draft: "", error: "", id: "first",
-        messages: [], policy: "read", title: "First"
+        messages: [], title: "First"
       },
       {
         agentSettings: {}, busy: false, draft: "", error: "", id: "second",
-        messages: [], policy: "read", title: "Second"
+        messages: [], title: "Second"
       }
     ];
     temporary.activeTaskId.value = "first";
@@ -683,11 +688,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.tasks.value = [
       {
         agentSettings: {}, busy: true, draft: "", error: "", id: "first",
-        messages: [], policy: "read", title: "First"
+        messages: [], title: "First"
       },
       {
         agentSettings: {}, busy: false, draft: "", error: "", id: "second",
-        messages: [], policy: "read", title: "Second"
+        messages: [], title: "Second"
       }
     ];
     temporary.activeTaskId.value = "first";

@@ -9,7 +9,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { prepareCodexAttachmentStorage } from "../../packages/vibe64-terminals/src/server/codexAttachments.js";
 import { codexTurnInput } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { sendCodexAppServerPromptForSession } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
-import { createOpenCodeServerClient } from "../../packages/vibe64-terminals/src/server/opencodeServerClient.js";
+import { createOpenCodeServerClient } from "@jskit-ai/assistant-core/server/opencode-client";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function fixture(root) {

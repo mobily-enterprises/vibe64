@@ -16,11 +16,9 @@ import {
 } from "@/lib/vibe64ChatMessage.js";
 import {
   numberedQuestionSubmissionText,
-  parseNumberedQuestionPrompt
-} from "@/lib/vibe64NumberedQuestionSugar.js";
-import {
+  parseNumberedQuestionPrompt,
   parseAnswerChoicePrompt
-} from "@/lib/vibe64AnswerChoiceSugar.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 import {
   latestAssistantMessageAwaitingUserReply
 } from "@/lib/vibe64ConversationQuestions.js";
@@ -403,8 +401,9 @@ function useVibe64AutopilotView(props, emit, {
     return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};
   });
   const agentActive = computed(() => activeAgentTurn.value.active === true);
+  const agentObservationLost = computed(() => activeAgentTurn.value.status === "observation_lost");
   const agentSteerable = computed(() => Boolean(
-    agentActive.value &&
+    agentActive.value && !agentObservationLost.value &&
     normalizedAgentTurnText(activeAgentTurn.value.id) &&
     normalizedAgentTurnText(activeAgentTurn.value.state) === "active" &&
     props.agentConnectionStatus === "connected"
@@ -628,6 +627,7 @@ function useVibe64AutopilotView(props, emit, {
     (!assistantConnectionReady.value && !sessionInteractionDisabled.value)
   ));
   const thinkingLabel = computed(() => (
+    (agentObservationLost.value && agentActive.value ? "Assistant stop not yet confirmed" : "") ||
     agentConnectionThinkingLabel({
       active: !sessionInteractionDisabled.value,
       status: props.agentConnectionStatus
@@ -636,7 +636,11 @@ function useVibe64AutopilotView(props, emit, {
     (composerSending.value ? "Sending to assistant..." : "")
   ));
   const composerHint = computed(() => (
-    structuredQuestionActive.value
+    agentObservationLost.value
+      ? agentActive.value
+        ? "The stop is not yet confirmed. Your draft is kept; you can retry Stop."
+        : "The assistant stopped because its progress could not be tracked. Send a message to continue."
+      : structuredQuestionActive.value
       ? "Answer the assistant, then send one combined reply."
       : ""
   ));
@@ -752,7 +756,6 @@ function useVibe64AutopilotView(props, emit, {
         failureMessage: "Temporary AI stopped before confirming completion. Vibe64 is checking whether its edits repaired workspace preparation.",
         message: workspaceSetupFixPrompt(setup),
         nextStepMessage: "When the AI finishes, Vibe64 will automatically retry workspace preparation to verify the repair.",
-        policy: "workspace_write",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         title: "Fix workspace preparation"
       });
@@ -860,7 +863,6 @@ function useVibe64AutopilotView(props, emit, {
       failureMessage: "Temporary AI stopped before completing the preview identity repair. Review the error and progress below before trying again.",
       message: previewIdentityFixPrompt(input),
       nextStepMessage: "When the AI finishes, try this preview identity again from the sign-in menu.",
-      policy: "workspace_write",
       recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
       title: "Fix preview identity"
     });
@@ -904,7 +906,6 @@ function useVibe64AutopilotView(props, emit, {
           saveWorkError.value
         ].filter(Boolean).join("\n\n"),
         nextStepMessage: action === "Update" ? UPDATE_REPAIR_MESSAGES.nextStep : `Review the repair, then retry ${action}.`,
-        policy: "workspace_write",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: action === "Update" ? "update" : "",
         recoveryConflictId: saveWorkFailure.value?.details?.conflictRecovery?.reviewId || "",
@@ -946,7 +947,6 @@ function useVibe64AutopilotView(props, emit, {
           diagnostic
         ].join("\n\n"),
         nextStepMessage: isUpdate ? UPDATE_REPAIR_MESSAGES.nextStep : "Review the repair, then retry the repository operation.",
-        policy: "workspace_write",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: isUpdate ? "update" : "",
         recoveryConflictId: isUpdate
@@ -1982,7 +1982,6 @@ function useVibe64AutopilotView(props, emit, {
         "Explain meaningful subsystem responsibilities and declare their Program operations and owned/used tables. Run Genesis inspect subsystems --json on the resulting file and resolve every validation error before claiming success. Creating the file alone is not completion.",
         "Leave the map as ordinary session changes for review; do not commit, push, or deploy."
       ].join("\n\n"),
-      policy: "workspace_write",
       completionMessage: "Subsystem map task finished. Review the map and session changes before saving.",
       failureMessage: "The subsystem map task stopped before completion. Review its progress and any partial edits.",
       nextStepMessage: "The subsystem view refreshes when this task finishes. File changes remain in the session for review and Save."

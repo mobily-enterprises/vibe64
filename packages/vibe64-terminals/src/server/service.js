@@ -104,7 +104,6 @@ import {
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
-  VIBE64_AGENT_WORKSPACE_WRITE_POLICY,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
@@ -2591,9 +2590,7 @@ function createService({
     startAgentConversationTurn(sessionId, input = {}, options = {}) {
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
       return runMainAgentWrite(sessionId, options, async (context) => {
-        if (input.policy === VIBE64_AGENT_WORKSPACE_WRITE_POLICY) {
-          await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-        }
+        await prepareAgentSkillsInsideAgentWrite(sessionId, context);
         return sessionAgent.startConversationTurn(sessionId, input, context);
       }, { operation: "start-agent-turn" });
     },

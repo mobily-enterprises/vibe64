@@ -143,7 +143,7 @@ describe("useVibe64ChatColumnResize", () => {
   });
 
   it("keeps off-screen conversation turns out of wide-pane relayouts", () => {
-    const filename = "src/components/studio/vibe64-session/Vibe64ConversationLog.vue";
+    const filename = "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantTranscript.vue";
     const source = readFileSync(filename, "utf8");
     const descriptor = parse(source, { filename }).descriptor;
     const style = descriptor.styles[0];
@@ -156,16 +156,16 @@ describe("useVibe64ChatColumnResize", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.code).toMatch(
-      /studio-conversation-log__turn[^}]*content-visibility:\s*auto/u
+      /assistant-transcript__turn[^}]*content-visibility:\s*auto/u
     );
     expect(result.code).toMatch(
-      /studio-conversation-log__turn[^}]*contain-intrinsic-block-size:\s*auto 12rem/u
+      /assistant-transcript__turn[^}]*contain-intrinsic-block-size:\s*auto 12rem/u
     );
   });
 
   it("bounds thinking, message parsing, and live scroll work", () => {
     const conversation = readFileSync(
-      "src/components/studio/vibe64-session/Vibe64ConversationLog.vue",
+      "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantTranscript.vue",
       "utf8"
     );
     const view = readFileSync(
@@ -173,7 +173,7 @@ describe("useVibe64ChatColumnResize", () => {
       "utf8"
     );
 
-    expect(conversation).toContain("Vibe64ConversationProgress");
+    expect(conversation).toContain("AssistantProgress");
     expect(conversation).toContain("DISPLAY_MESSAGE_CACHE_LIMIT = 500");
     expect(conversation).toContain(":pending=\"turn.pending\"");
     expect(conversation).toContain("turn.pending ? 'active' : 'completed'");

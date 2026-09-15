@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Readable } from "node:stream";
+import { codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 
 import {
   createCodexTerminalController
@@ -285,6 +286,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
       calls.push(["turn", threadId]);
       const turnId = `turn-${captures.turns.length + 1}`;
       captures.turns.push({ input, settings, threadId });
+      await captures.onSendTurn?.({ input, settings, threadId });
       return {
         id: turnId,
         raw: { status: "inProgress" }
@@ -1798,6 +1800,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
 
   const captures = {
     finalText: "",
+    finalItems: new Map(),
     omitSendTurnId: false,
     onSendTurn: null,
     onSteerTurn: null,
@@ -1880,7 +1883,11 @@ async function withAgentMessageController(operation, { throughTerminalService = 
         close() {
           provider.closed += 1;
         },
-        async ensureAvailable() {},
+        async ensureAvailable() { if (provider.observationFailure) throw provider.observationFailure; },
+        failObservation(error) {
+          provider.observationFailure = error;
+          return providerOptions.onObservationLost(error);
+        },
         async ensureRuntime() {
           const runtimeDir = path.join(temporaryRoot, "provider-runtime");
           return {
@@ -1920,6 +1927,9 @@ async function withAgentMessageController(operation, { throughTerminalService = 
           const turn = captures.turns.find((candidate) => (
             candidate.turnId === provider.turnId
           ));
+          const finalItems = [...captures.finalItems.values()]
+            .filter((entry) => entry.threadId === threadId && entry.turnId === provider.turnId)
+            .map((entry) => entry.item);
           const finalText = typeof captures.finalText === "function"
             ? captures.finalText(provider.turnId)
             : captures.finalText || `Completed ${provider.turnId}.`;
@@ -1936,12 +1946,12 @@ async function withAgentMessageController(operation, { throughTerminalService = 
                 }],
                 id: `user-${provider.turnId}`,
                 type: "userMessage"
-              }, {
+              }, ...(finalItems.length ? finalItems : [{
                 id: `answer-${provider.turnId}`,
                 phase: "final_answer",
                 text: finalText,
                 type: "agentMessage"
-              }],
+              }])],
               status: provider.status
             }] : []
           };
@@ -1953,6 +1963,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
           };
         },
         async resumeThread(threadId, settings = {}) {
+          await providerOptions.beforeResumeThread?.(threadId);
           provider.threadId = threadId;
           provider.threadCwd = settings.cwd || provider.threadCwd;
           return {
@@ -2018,11 +2029,19 @@ async function withAgentMessageController(operation, { throughTerminalService = 
           return captures.stopRuntimeResult || { stopped: true };
         },
         subscribe(callback) {
-          subscribers.add(callback);
-          return () => subscribers.delete(callback);
+          const receive = (notification) => {
+            const params = notification.params;
+            if (notification.method === "item/completed" && params?.item?.phase === "final_answer") {
+              captures.finalItems.set(`${params.threadId}:${params.turnId}:${params.item.id}`, params);
+            }
+            callback(notification);
+          };
+          subscribers.add(receive);
+          return () => subscribers.delete(receive);
         }
       };
       captures.provider = provider;
+      captures.onProviderCreated?.(provider);
       return provider;
     },
     env: {
@@ -3591,7 +3610,209 @@ test("an idle thread notification completes its currently owned turn without a p
   });
 });
 
-test("goal continuation events retain one outer chat turn and persist only the terminal final", async () => {
+test("main thread restoration installs its listener before native resume can emit goal output", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Start the goal observer fixture.",
+      messageId: "message-observer-owner"
+    })).ok, true);
+    const provider = captures.provider;
+    const threadId = provider.threadId;
+    provider.connectionGeneration = "replacement-connection";
+    captures.subscribers.clear();
+    provider.resumeThread = async () => {
+      assert.ok(captures.subscribers.size > 0, "native resume requires an attached listener");
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: "commentary-during-resume",
+        phase: "commentary",
+        text: "Progress emitted before the resume response.",
+        threadId,
+        turnId: provider.turnId
+      }));
+      return { id: threadId };
+    };
+    const ready = await controller.ensureThread(sessionId);
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    await waitForSessionValue(
+      () => store.readConversationLog(sessionId),
+      (turns) => turns.some((turn) => turn.commentary?.some((item) => (
+        item.text === "Progress emitted before the resume response."
+      ))),
+      "output emitted during native resume to be saved"
+    );
+  });
+});
+
+test("main thread restoration refuses native resume when its observer cannot attach", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Start the observer admission fixture.",
+      messageId: "message-observer-admission"
+    })).ok, true);
+    const provider = captures.provider;
+    provider.connectionGeneration = "replacement-connection";
+    captures.subscribers.clear();
+    let resumes = 0;
+    provider.resumeThread = async () => {
+      resumes += 1;
+      return { id: provider.threadId };
+    };
+    provider.subscribe = () => { throw new Error("Observer attachment failed."); };
+    const ready = await controller.ensureThread(sessionId);
+    assert.equal(ready.ok, false);
+    assert.equal(resumes, 0, "failed observation must prevent native resume");
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerStatus === "observation_lost" && !run.active, "verified stop after failed observer attachment");
+    assert.ok(captures.stopRuntimes > 0);
+  });
+});
+
+test("restart reconciliation keeps a live goal successor visible and steerable despite interrupted history", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    const messageId = "message-goal-restart-owner";
+    const started = await controller.sendMessage(sessionId, {
+      message: "Continue the approved goal across a restart.",
+      messageId
+    });
+    assert.equal(started.ok, true, JSON.stringify(started));
+
+    const provider = captures.provider;
+    const threadId = provider.threadId;
+    emitCodexNotification(captures.subscribers, threadGoalUpdated({
+      threadId,
+      turnId: provider.turnId
+    }));
+    await waitForSessionValue(
+      () => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerGoalStatus === "active",
+      "the durable goal before restart reconciliation"
+    );
+
+    // thread/read reports live activity without an id; turn history can still
+    // report interrupted while the automatically resumed turn is compacting.
+    const successorTurnId = "goal-successor-after-restart";
+    provider.turnId = successorTurnId;
+    provider.connectionGeneration = "connection-after-restart";
+    let liveStatus = "active";
+    provider.readThreadStatus = async () => ({
+      raw: { id: threadId, status: { type: liveStatus, activeFlags: [] } }
+    });
+    captures.threadSnapshotTurns = [{
+      id: successorTurnId,
+      items: [],
+      status: "interrupted"
+    }];
+    provider.listThreadTurns = async () => ({ data: captures.threadSnapshotTurns });
+
+    const ready = await controller.ensureThread(sessionId);
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    const recovered = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(recovered.state, VIBE64_AGENT_RUN_STATE.ACTIVE);
+    assert.equal(recovered.providerTurnId, successorTurnId);
+    assert.equal(recovered.outerTurnId, messageId);
+    assert.equal(recovered.providerGoalStatus, "active");
+
+    const text = "The resumed goal is continuing and its progress is visible.";
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "goal-restart-commentary",
+      phase: "commentary",
+      text,
+      threadId,
+      turnId: successorTurnId
+    }));
+    await waitForSessionValue(
+      () => store.readConversationLog(sessionId),
+      (turns) => turns.some((turn) => turn.commentary?.some((item) => item.text === text)),
+      "the resumed goal commentary in the transcript"
+    );
+    const steered = await controller.sendMessage(sessionId, {
+      message: "Give me a brief update, then continue the same goal.",
+      messageId: "message-goal-restart-steer"
+    });
+    assert.equal(steered.ok, true, JSON.stringify(steered));
+    assert.equal(captures.steers.at(-1)?.turnId, successorTurnId);
+    assert.equal(captures.turns.length, 1, "steering must not start another ordinary turn");
+    assert.equal(JSON.stringify(await store.readConversationLog(sessionId)).includes(
+      "Codex could not finish because its provider failed."
+    ), false);
+
+    // Failure reconciliation may await history while the goal starts working.
+    // The final decision must confirm inactivity after that awaited read.
+    const readThread = provider.readThread;
+    provider.readThread = async (...args) => {
+      liveStatus = "active";
+      return readThread(...args);
+    };
+    liveStatus = "idle";
+    await controller.ensureThread(sessionId);
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).state,
+      VIBE64_AGENT_RUN_STATE.ACTIVE);
+    provider.readThread = readThread;
+
+    // Once the provider really is idle, interrupted history must still settle
+    // the turn. An active goal alone is not evidence of a running provider.
+    liveStatus = "idle";
+    await controller.ensureThread(sessionId);
+    const stopped = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(stopped.state, VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+    assert.equal(stopped.providerTurnId, successorTurnId);
+
+    // If that idle snapshot was stale, a new authoritative live observation
+    // must repair the same turn without requiring a goal pause/resume nudge.
+    liveStatus = "active";
+    const observedAgain = await controller.ensureThread(sessionId);
+    assert.equal(observedAgain.ok, true, JSON.stringify(observedAgain));
+    const repaired = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(repaired.state, VIBE64_AGENT_RUN_STATE.ACTIVE);
+    assert.equal(repaired.providerTurnId, successorTurnId);
+    assert.equal(repaired.outerTurnId, messageId);
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Keep working on the same goal.",
+      messageId: "message-goal-observation-repaired"
+    })).ok, true);
+    assert.equal(captures.steers.at(-1)?.turnId, successorTurnId);
+  });
+});
+
+test("a provider activity read cannot undo a user Stop completed while that read was pending", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Exercise cancellation during reconciliation.", messageId: "stop-during-status-read"
+    })).ok, true);
+    const provider = captures.provider;
+    captures.threadSnapshotTurns = [];
+    provider.connectionGeneration = "replacement-connection";
+    const reading = createDeterministicHold();
+    let reads = 0;
+    provider.readThreadStatus = async () => {
+      const snapshot = { status: provider.status, turnId: provider.turnId };
+      if (++reads === 2) {
+        reading.enter();
+        await reading.wait;
+      }
+      return snapshot;
+    };
+    provider.interruptTurn = async () => {
+      provider.status = "idle";
+      return { interrupted: true };
+    };
+    const restoration = controller.ensureThread(sessionId);
+    try {
+      await reading.entered;
+      const stopped = await controller.interruptTurn(sessionId, { threadId: provider.threadId });
+      assert.equal(stopped.ok, true, JSON.stringify(stopped));
+      assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).state,
+        VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+    } finally {
+      reading.release();
+      await restoration;
+    }
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).state,
+      VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+  });
+});
+
+test("goal continuation publishes every final reply while retaining one outer chat owner", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
     const messageId = "message-goal-cadence-owner";
     const started = await controller.sendMessage(sessionId, {
@@ -3688,7 +3909,8 @@ test("goal continuation events retain one outer chat turn and persist only the t
     assert.equal(held.outerTurnId, messageId);
 
     const beforeGoalSettlement = await store.readConversationLog(sessionId);
-    assert.equal(beforeGoalSettlement.filter((turn) => turn.assistant).length, 0);
+    assert.deepEqual(beforeGoalSettlement.flatMap((turn) => turn.assistant ? [turn.assistant.text] : []),
+      goalTurns.map(({ final }) => final));
     assert.deepEqual(
       beforeGoalSettlement.flatMap((turn) => turn.thinking || []).map(({ text }) => text),
       goalTurns.map(({ reasoning }) => reasoning)
@@ -3732,10 +3954,10 @@ test("goal continuation events retain one outer chat turn and persist only the t
 
     const conversation = await store.readConversationLog(sessionId);
     const assistantMessages = conversation.map((turn) => turn.assistant).filter(Boolean);
-    assert.deepEqual(assistantMessages.map(({ text }) => text), [goalTurns[2].final]);
+    assert.deepEqual(assistantMessages.map(({ text }) => text), goalTurns.map(({ final }) => final));
     const allVisibleText = JSON.stringify(conversation);
-    assert.equal(allVisibleText.includes("Internal checkpoint one."), false);
-    assert.equal(allVisibleText.includes("Internal checkpoint two."), false);
+    assert.equal(allVisibleText.includes("Internal checkpoint one."), true);
+    assert.equal(allVisibleText.includes("Internal checkpoint two."), true);
 
     const run = await store.readAgentRun(sessionId, "codex_app_server");
     assert.equal(run.events.filter(({ kind }) => (
@@ -4636,11 +4858,11 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
     });
     const restarted = createRestartedController({ calls, captures: restartedState, projectService });
     const conversation = await restarted.createConversation("session-1", {
-      ephemeral: true, policy: "workspace_write"
+      ephemeral: true
     });
     assert.equal(conversation.ok, true, JSON.stringify(conversation));
     const turn = await restarted.startConversationTurn("session-1", {
-      conversationId: conversation.conversationId, message: "Repair the subsystem map.", policy: "workspace_write"
+      conversationId: conversation.conversationId, message: "Repair the subsystem map."
     });
     assert.equal(turn.ok, true, JSON.stringify(turn));
     assert.equal((await restarted.deleteConversation("session-1", {
@@ -4656,6 +4878,42 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
   });
 });
 
+test("temporary Codex uses normal execution settings, preserves command edits on close, and never writes main history", async () => {
+  await withConversationController(async ({ captures, controller, projectService, session, subscribers }) => {
+    const workdir = session.metadata.source_path;
+    await writeFile(path.join(workdir, "existing.txt"), "Unrelated local work");
+    const createRuntime = projectService.createRuntime.bind(projectService);
+    projectService.createRuntime = (...args) => {
+      const runtime = createRuntime(...args);
+      for (const method of ["writeConversationUserMessage", "writeConversationAssistantMessage", "upsertConversationAssistantMessage"]) {
+        runtime.store[method] = () => assert.fail("Temporary messages must not enter main History");
+      }
+      return runtime;
+    };
+    captures.onSendTurn = ({ settings }) => {
+      assert.deepEqual(settings, codexAppServerTurnSettings({ cwd: workdir }));
+      execFileSync("sh", ["-c", "printf 'Temporary command edit' > temporary-edit.txt"], { cwd: settings.cwd });
+    };
+    const conversation = await controller.createConversation("session-1", { ephemeral: true });
+    assert.equal(conversation.ok, true, JSON.stringify(conversation));
+    const ordinary = codexAppServerThreadSettings({ cwd: workdir });
+    assert.equal(captures.threads[0].sandbox, ordinary.sandbox);
+    assert.equal(captures.threads[0].approvalPolicy, ordinary.approvalPolicy);
+    assert.equal(Object.hasOwn(captures.threads[0], "dynamicTools"), false);
+    const turn = await controller.startConversationTurn("session-1", {
+      conversationId: conversation.conversationId, ephemeral: true, message: "Edit the project."
+    });
+    assert.equal(turn.ok, true, JSON.stringify(turn));
+    completeDetachedTurn(subscribers, { text: "Project edited." });
+    await controller.waitForConversationTurn("session-1", { conversationId: conversation.conversationId });
+    const closed = await controller.deleteConversation("session-1", { conversationId: conversation.conversationId, ephemeral: true });
+    assert.equal(closed.ok, true, JSON.stringify(closed));
+    assert.equal(await readFile(path.join(workdir, "temporary-edit.txt"), "utf8"), "Temporary command edit");
+    assert.equal(await readFile(path.join(workdir, "existing.txt"), "utf8"), "Unrelated local work");
+    assert.deepEqual(captures.deletes, [conversation.conversationId]);
+  });
+});
+
 test("temporary conversations receive task session context without turn enrichment", async () => {
   const vibe64User = {
     preferredName: "Ada",
@@ -4666,7 +4924,6 @@ test("temporary conversations receive task session context without turn enrichme
   await withConversationController(async ({ captures, controller, promptHintReads }) => {
     const conversation = await controller.createConversation("session-1", {
       ephemeral: true,
-      policy: "workspace_write",
       vibe64User
     });
     assert.equal(conversation.ok, true, JSON.stringify(conversation));
@@ -4675,14 +4932,13 @@ test("temporary conversations receive task session context without turn enrichme
       conversationId: conversation.conversationId,
       ephemeral: true,
       message: "Fix the focused issue.",
-      policy: "workspace_write",
       vibe64User
     });
     assert.equal(turn.ok, true, JSON.stringify(turn));
 
     assert.equal(
       captures.threads[0].developerInstructions,
-      "Genesis and Vibe64 temporary-task session context."
+      "Genesis and Vibe64 temporary session context."
     );
     assert.deepEqual(captures.turns[0].input, ["Fix the focused issue."]);
     assert.equal(Object.hasOwn(captures.turns[0].settings, "additionalContext"), false);
@@ -4793,7 +5049,7 @@ test("non-project ephemeral deletion requires verified Codex runtime exit and ca
   });
 });
 
-test("temporary workspace-write turns remain active for renewal until completion", async () => {
+test("temporary turns remain active for renewal until completion", async () => {
   await withConversationController(async ({ controller, subscribers }) => {
     const conversation = await controller.createConversation("session-1", {
       ephemeral: true
@@ -4804,7 +5060,6 @@ test("temporary workspace-write turns remain active for renewal until completion
       conversationId: conversation.conversationId,
       ephemeral: true,
       message: "Fix the focused issue.",
-      policy: "workspace_write"
     });
 
     assert.equal(turn.ok, true, JSON.stringify(turn));
@@ -4812,30 +5067,6 @@ test("temporary workspace-write turns remain active for renewal until completion
 
     emitCodexNotification(subscribers, codexEvent({
       message: "The focused issue is fixed.",
-      phase: "final_answer"
-    }));
-    emitCodexNotification(subscribers, turnCompleted());
-    await flushPromises();
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
-  });
-});
-
-test("temporary read-only turns remain active for renewal until completion", async () => {
-  await withConversationController(async ({ controller, subscribers }) => {
-    const conversation = await controller.createConversation("session-1", {
-      ephemeral: true
-    });
-    const turn = await controller.startConversationTurn("session-1", {
-      conversationId: conversation.conversationId,
-      ephemeral: true,
-      message: "Explain the focused issue."
-    });
-
-    assert.equal(turn.ok, true, JSON.stringify(turn));
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
-
-    emitCodexNotification(subscribers, codexEvent({
-      message: "The focused issue is explained.",
       phase: "final_answer"
     }));
     emitCodexNotification(subscribers, turnCompleted());
@@ -4853,7 +5084,6 @@ test("temporary turns remain active past the helper deadline and accept their ev
         conversationId: conversation.conversationId,
         ephemeral: true,
         message: "Carefully repair this conflict.",
-        policy: "workspace_write"
       });
       t.mock.timers.tick(180_001);
       await flushPromises();
@@ -4891,7 +5121,6 @@ for (const failure of ["disconnect", "replacement"]) {
           conversationId: conversation.conversationId,
           ephemeral: true,
           message: "Repair this conflict.",
-          policy: "workspace_write"
         });
         if (failure === "disconnect") captures.connected = false;
         else captures.connectionGeneration += 1;
@@ -4922,7 +5151,6 @@ async function startTemporaryRepair(controller) {
     conversationId: conversation.conversationId,
     ephemeral: true,
     message: "Repair this conflict.",
-    policy: "workspace_write"
   });
   return { conversationId: conversation.conversationId, runId: turn.runId, ephemeral: true };
 }
@@ -5017,7 +5245,6 @@ test("long-running temporary turns still stop on request", async (t) => {
         conversationId: conversation.conversationId,
         ephemeral: true,
         message: "Repair this conflict.",
-        policy: "workspace_write"
       });
       t.mock.timers.tick(180_001);
       assert.equal((await controller.stopConversation("session-1", {
@@ -5591,7 +5818,7 @@ test("interactive detached turns retain their existing writable settings and res
     });
     assert.equal(captures.turns[0].settings.summary, "concise");
     assert.equal(captures.configReads.length, 0);
-    assert.equal(captures.hookLists.length, 0);
+    assert.equal(captures.hookLists.length, 1);
 
     emitCodexNotification(subscribers, turnTokenUsage({
       usage: {
@@ -9014,3 +9241,441 @@ test("a goal event from an old subscribed thread cannot reconcile the replacemen
     assert.equal(run.providerGoalStatus, "active");
   });
 });
+
+for (const fallback of [false, true]) {
+  test(`Codex observation loss verifies ${fallback ? "runtime exit" : "thread stop"} and requires explicit Send`, async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      assert.equal((await controller.sendMessage(sessionId, { message: "Work", messageId: "loss-owner" })).ok, true);
+      const provider = captures.provider;
+      const threadId = provider.threadId;
+      let nativeStops = 0;
+      provider.stopThreadForObservationLoss = async (id) => {
+        nativeStops += 1;
+        assert.equal(id, threadId);
+        const pending = await store.readAgentRun(sessionId, "codex_app_server");
+        assert.equal(pending.providerStatus, "observation_lost");
+        assert.equal(pending.active, true, "ownership stays active until stop proof");
+        if (fallback) throw new Error("Control connection lost");
+        provider.status = "idle";
+      };
+      await provider.failObservation(new Error("Transcript observation failed"));
+      assert.equal(nativeStops, 1);
+      assert.equal(captures.stopRuntimes, fallback ? 1 : 0);
+      const stopped = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(stopped.state, VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+      assert.equal(stopped.providerStatus, "observation_lost");
+      const ready = await controller.ensureThread(sessionId);
+      assert.equal(ready.ok, true, "a suspended conversation remains usable for explicit Send");
+      assert.equal(ready.observationStopped, true);
+      assert.equal(captures.turns.length, 1);
+      const continued = await controller.sendMessage(sessionId, { message: "Continue", messageId: "explicit-after-loss" });
+      assert.equal(continued.ok, true, JSON.stringify(continued));
+      assert.equal(captures.turns.length, 2);
+      assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, true);
+    });
+  });
+}
+
+test("Codex retains ownership and refuses new Send when neither thread nor runtime stop is verified", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "unverified-owner" });
+    const provider = captures.provider;
+    provider.stopThreadForObservationLoss = async () => { throw new Error("Control unavailable"); };
+    captures.stopRuntimeResult = { stopped: false };
+    await assert.rejects(provider.failObservation(new Error("Observation lost")));
+    const run = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(run.active, true);
+    assert.equal(run.providerStatus, "observation_lost");
+    const sent = await controller.sendMessage(sessionId, { message: "Continue", messageId: "must-not-overlap" });
+    assert.equal(sent.ok, false);
+    assert.equal(captures.turns.length, 1);
+    captures.stopRuntimeResult = { stopped: true };
+    await provider.failObservation(new Error("Retry stop"));
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+  });
+});
+
+test("temporary Codex retains ownership after observation loss and retries the same stop owner", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+    const conversation = await controller.createConversation(sessionId, { ephemeral: true });
+    assert.equal(conversation.ok, true, JSON.stringify(conversation));
+    const conversationId = conversation.conversationId;
+    const turn = await controller.startConversationTurn(sessionId, {
+      conversationId, ephemeral: true, message: "Work"
+    });
+    assert.equal(turn.ok, true, JSON.stringify(turn));
+    const provider = captures.provider;
+    provider.stopThreadForObservationLoss = async () => { throw new Error("Control unavailable"); };
+    captures.stopRuntimeResult = { stopped: false };
+    await assert.rejects(provider.failObservation(new Error("Observation lost")));
+    const pending = await controller.readConversation(sessionId, { conversationId, ephemeral: true });
+    assert.equal(pending.status, "inProgress");
+    assert.match(pending.error, /stop is not yet confirmed/);
+    assert.equal(controller.hasActiveTemporaryConversation(sessionId), true);
+    const blocked = await controller.startConversationTurn(sessionId, {
+      conversationId, ephemeral: true, message: "Must not overlap"
+    });
+    assert.equal(blocked.ok, false);
+    captures.stopRuntimeResult = { stopped: true };
+    const stopped = await controller.stopConversation(sessionId, { conversationId, ephemeral: true, runId: turn.runId });
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.equal(controller.hasActiveTemporaryConversation(sessionId), false);
+    assert.equal(captures.stopRuntimes, 2);
+    assert.equal(captures.turns.length, 1);
+  });
+});
+
+test("a suspended Codex goal remains readable and only explicit Resume clears its stop barrier", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "goal-loss-owner" });
+    const provider = captures.provider;
+    const goal = { threadId: provider.threadId, status: "active", objective: "Finish fixture", createdAt: 10, tokensUsed: 99 };
+    provider.isEconomyProvider = () => false;
+    provider.readGoal = async () => ({ goal: { ...goal } });
+    provider.stopThreadForObservationLoss = async () => { goal.status = "paused"; provider.status = "idle"; };
+    provider.setGoalStatus = async (_threadId, status) => {
+      assert.ok(captures.subscribers.size, "Resume requires its observer first");
+      assert.notEqual((await store.readAgentRun(sessionId, "codex_app_server")).providerStatus, "observation_lost");
+      goal.status = status;
+      return { goal: { ...goal } };
+    };
+    await provider.failObservation(new Error("Observation failed"));
+    assert.equal((await controller.readGoal(sessionId)).goal.status, "paused");
+    await assert.rejects(provider.resumeThread(provider.threadId), /observation|stopped/);
+    emitCodexNotification(captures.subscribers, turnStarted({ threadId: provider.threadId, turnId: "obsolete-successor" }));
+    await controller.ensureThread(sessionId);
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+    const result = await controller.updateGoal(sessionId, {
+      action: "resume", threadId: provider.threadId, objective: goal.objective, createdAt: goal.createdAt
+    });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.goal.status, "active");
+    assert.equal(result.goal.tokensUsed, 99);
+  });
+});
+
+test("Codex stops when its notification queue cannot save commentary", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "commentary-storage-loss" });
+    const provider = captures.provider;
+    let stops = 0;
+    provider.stopThreadForObservationLoss = async () => { stops += 1; provider.status = "idle"; };
+    const write = store.writeConversationCommentaryMessage;
+    store.writeConversationCommentaryMessage = async () => { throw new Error("Commentary storage failed"); };
+    try {
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: "unsaved-commentary", phase: "commentary", text: "Working", threadId: provider.threadId, turnId: provider.turnId
+      }));
+      await waitForSessionValue(
+        () => store.readAgentRun(sessionId, "codex_app_server"),
+        (run) => run?.providerStatus === "observation_lost" && run.active === false,
+        "a verified stop after failed commentary persistence"
+      );
+      assert.equal(stops, 1);
+      assert.equal(captures.turns.length, 1);
+    } finally { store.writeConversationCommentaryMessage = write; }
+  });
+});
+
+test("active-goal steering publishes independent native replies immediately and preserves their rows", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "goal-work" });
+    const provider = captures.provider;
+    const threadId = provider.threadId;
+    const turnId = provider.turnId;
+    const patches = [];
+    captures.onSessionChanged = (_sessionId, event) => {
+      if (event.payload?.conversationLogPatch) patches.push(event.payload.conversationLogPatch.turn);
+    };
+    emitCodexNotification(captures.subscribers, threadGoalUpdated({ threadId, turnId }));
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerGoalStatus === "active", "active goal");
+    for (const [index, question] of ["Why are you stuck?", "What will happen next?"].entries()) {
+      const sent = await controller.sendMessage(sessionId, { message: question, messageId: `steer-${index}` });
+      assert.equal(sent.ok, true, JSON.stringify(sent));
+      assert.equal(sent.deliveryMode, "active_turn");
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: `steer-answer-${index}`, phase: "final_answer", text: "The same answer.", threadId, turnId
+      }));
+      const rows = await waitForSessionValue(() => store.readConversationLog(sessionId),
+        (rows) => rows.filter((row) => row.assistant).length === index + 1, "immediate reply before completion");
+      assert.equal(rows.at(-1).user.text, question);
+      const answerId = rows.at(-1).assistant.messageId;
+      await waitForSessionValue(() => patches, (patches) => patches.some((row) => row.assistant?.messageId === answerId), "realtime answer");
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.active, true);
+      assert.equal(run.outerTurnId, "goal-work");
+      assert.equal(run.events.some((event) => event.kind === "codex-app-server-result-processed"), false);
+    }
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "steer-answer-0", phase: "final_answer", text: "Corrected first answer.", threadId, turnId
+    }));
+    const corrected = await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "Corrected first answer."), "same-item correction");
+    assert.deepEqual(corrected.filter((row) => row.assistant).map((row) => [row.user.text, row.assistant.text]), [
+      ["Why are you stuck?", "Corrected first answer."], ["What will happen next?", "The same answer."]
+    ]);
+    emitCodexNotification(captures.subscribers, turnStarted({ threadId, turnId: "successor" }));
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerTurnId === "successor", "successor ownership");
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "steer-answer-1", phase: "final_answer", text: "The same answer.", threadId, turnId
+    }));
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "unowned-answer", phase: "final_answer", text: "Must stay absent", threadId, turnId: "unowned-turn"
+    }));
+    const missingTurnNotification = assistantItemCompleted({
+      itemId: "missing-turn-answer", phase: "final_answer", text: "Must stay absent", threadId, turnId
+    });
+    delete missingTurnNotification.params.turnId;
+    emitCodexNotification(captures.subscribers, missingTurnNotification);
+    await controller.closeAllForSession(sessionId);
+    const rows = await store.readConversationLog(sessionId);
+    assert.equal(rows.filter((row) => row.assistant).length, 2);
+    assert.equal(JSON.stringify(rows).includes("Must stay absent"), false);
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).providerTurnId, "successor");
+  });
+});
+
+for (const failure of ["storage", "realtime"]) {
+  test(`a final reply survives ${failure} failure and history recovery without duplicate publication`, async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      await controller.sendMessage(sessionId, { message: "Work", messageId: `recover-${failure}` });
+      const provider = captures.provider;
+      provider.stopThreadForObservationLoss = async () => { provider.status = "idle"; };
+      const write = store.writeConversationAssistantMessage;
+      let unavailable = true;
+      store.writeConversationAssistantMessage = (...args) => {
+        if (unavailable && failure === "storage") throw new Error("Transcript unavailable");
+        return write(...args);
+      };
+      captures.onSessionChanged = (_id, event) => {
+        if (unavailable && failure === "realtime" && event.payload?.conversationLogPatch?.turn?.assistant) {
+          throw new Error("Realtime unavailable");
+        }
+      };
+      try {
+        emitCodexNotification(captures.subscribers, assistantItemCompleted({
+          itemId: "recover-final", phase: "final_answer", text: "The complete reply.",
+          threadId: provider.threadId, turnId: provider.turnId
+        }));
+        await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+          (run) => run?.providerStatus === "observation_lost" && !run.active, "verified stop after publication failure");
+        assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length,
+          failure === "storage" ? 0 : 1);
+        unavailable = false;
+        provider.resumeThread = async () => { throw new Error("History recovery must not resume native work"); };
+        const readThread = provider.readThread;
+        provider.readThread = async () => { throw new Error("Saved native history is unavailable"); };
+        assert.equal((await controller.ensureThread(sessionId)).ok, false);
+        assert.equal((await controller.sendMessage(sessionId, { message: "Wait for history", messageId: "blocked-history" })).ok, false);
+        assert.equal(captures.turns.length, 1, "failed history recovery must not admit a new turn");
+        assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).providerStatus, "observation_lost");
+        provider.readThread = readThread;
+        assert.equal((await controller.ensureThread(sessionId)).ok, true);
+        assert.equal((await controller.ensureThread(sessionId)).ok, true);
+        assert.deepEqual((await store.readConversationLog(sessionId)).flatMap((row) => row.assistant ? [row.assistant.text] : []), ["The complete reply."]);
+        const run = await store.readAgentRun(sessionId, "codex_app_server");
+        assert.equal(run.active, false);
+        assert.equal(run.providerStatus, "observation_lost");
+        assert.equal(captures.turns.length, 1);
+      } finally {
+        unavailable = false;
+        store.writeConversationAssistantMessage = write;
+      }
+    });
+  });
+}
+
+test("a fresh controller recovers each active-goal final by native identity without resending", async () => {
+  await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "restart-goal" });
+    const { threadId, turnId } = captures.provider;
+    emitCodexNotification(captures.subscribers, threadGoalUpdated({ threadId, turnId }));
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      itemId: "before-restart", phase: "final_answer", text: "Already saved.", threadId, turnId
+    }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "Already saved."), "saved first reply");
+    await controller.closeAllForSession(sessionId);
+    const items = [
+      { id: "before-restart", phase: "final_answer", text: "Already saved.", type: "agentMessage" },
+      { id: "during-restart", phase: "final_answer", text: "Recovered while the goal continues.", type: "agentMessage" }
+    ];
+    captures.threadSnapshotTurns = [{ id: turnId, status: "inProgress", items }];
+    captures.onProviderCreated = (provider) => {
+      provider.threadId = threadId;
+      provider.turnId = turnId;
+      provider.status = "inProgress";
+      provider.listThreadTurns = async () => ({ data: captures.threadSnapshotTurns });
+      const resume = provider.resumeThread;
+      provider.resumeThread = (...args) => {
+        assert.ok(captures.subscribers.size, "the observer must precede resume");
+        return resume(...args);
+      };
+    };
+    const restarted = createCodexTerminalController(controllerOptions);
+    try {
+      assert.equal((await restarted.reconcileThreads([{ sessionId }])).ok, true);
+      assert.equal((await restarted.ensureThread(sessionId)).ok, true);
+      for (const item of items) {
+        emitCodexNotification(captures.subscribers, assistantItemCompleted({
+          itemId: item.id, phase: item.phase, text: item.text, threadId, turnId
+        }));
+      }
+      await restarted.closeAllForSession(sessionId);
+      assert.deepEqual((await store.readConversationLog(sessionId)).flatMap((row) => row.assistant ? [row.assistant.text] : []), items.map((item) => item.text));
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.active, true);
+      assert.equal(run.outerTurnId, "restart-goal");
+      assert.equal(run.providerGoalStatus, "active");
+      assert.equal(captures.turns.length, 1);
+    } finally {
+      await restarted.closeAllForSession(sessionId);
+    }
+  });
+});
+
+for (const verified of [true, false]) {
+  test(`startup observation failure retains its main-thread owner before registration (exit verified: ${verified})`, async () => {
+    await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+      await controller.sendMessage(sessionId, { message: "Work", messageId: "startup-owner" });
+      const { threadId, turnId } = captures.provider;
+      await controller.closeAllForSession(sessionId);
+      captures.stopRuntimes = 0;
+      captures.stopRuntimeResult = { stopped: verified };
+      let resumes = 0;
+      captures.onProviderCreated = (provider) => {
+        provider.threadId = threadId;
+        provider.turnId = turnId;
+        provider.ensureAvailable = async () => { throw new Error("Initial connection failed"); };
+        provider.resumeThread = async () => {
+          resumes += 1;
+          throw new Error("Must not resume");
+        };
+        provider.stopThreadForObservationLoss = async () => { throw new Error("Control unavailable"); };
+      };
+      const restarted = createCodexTerminalController(controllerOptions);
+      try {
+        assert.equal((await restarted.reconcileThreads([{ sessionId }])).ok, false);
+        const run = await store.readAgentRun(sessionId, "codex_app_server");
+        assert.equal(run.providerStatus, "observation_lost");
+        assert.equal(run.active, !verified);
+        assert.equal(resumes, 0);
+        assert.equal(captures.turns.length, 1);
+        if (!verified) {
+          const sent = await restarted.sendMessage(sessionId, { message: "Must not overlap", messageId: "blocked-startup" });
+          assert.equal(sent.ok, false);
+          captures.stopRuntimeResult = { stopped: true };
+          const stopped = await restarted.interruptTurn(sessionId, { threadId });
+          assert.equal(stopped.ok, true, JSON.stringify(stopped));
+          assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+        }
+      } finally {
+        captures.stopRuntimeResult = { stopped: true };
+        await restarted.closeAllForSession(sessionId);
+      }
+    });
+  });
+}
+
+test("shared Codex runtime loss settles providers that own only temporary conversations", async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    const session = await runtime.getSession(sessionId);
+    const secondId = "session-2";
+    const secondSource = path.join(path.dirname(path.dirname(session.metadata.source_path)), secondId, "source");
+    await mkdir(secondSource, { recursive: true });
+    await store.createSession({
+      sessionId: secondId,
+      runtimeKind: "genesis",
+      metadata: { ...session.metadata, source_path: secondSource }
+    });
+    const first = await controller.createConversation(sessionId, { ephemeral: true });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    const firstProvider = captures.provider;
+    await controller.startConversationTurn(sessionId, { conversationId: first.conversationId, ephemeral: true, message: "First temporary" });
+    captures.onProviderCreated = (provider) => { provider.threadId = "22222222-2222-4222-8222-222222222222"; };
+    const second = await controller.createConversation(secondId, { ephemeral: true });
+    assert.equal(second.ok, true, JSON.stringify(second));
+    await controller.startConversationTurn(secondId, { conversationId: second.conversationId, ephemeral: true, message: "Second temporary" });
+    assert.equal(captures.providerOptions[0].runtimeDir, captures.providerOptions[1].runtimeDir);
+    firstProvider.stopThreadForObservationLoss = async () => { throw new Error("Socket lost"); };
+    try {
+      await firstProvider.failObservation(new Error("Observation lost"));
+      assert.equal(captures.stopRuntimes, 1);
+      for (const [id, conversationId] of [[sessionId, first.conversationId], [secondId, second.conversationId]]) {
+        assert.equal(controller.hasActiveTemporaryConversation(id), false);
+        assert.equal((await controller.readConversation(id, { conversationId, ephemeral: true })).status, "interrupted");
+        assert.deepEqual(await store.readConversationLog(id), []);
+      }
+      assert.equal(captures.turns.length, 2);
+    } finally {
+      await controller.closeAllForSession(secondId);
+    }
+  });
+});
+
+test("a failed startup history write stops the owned turn and remains recoverable", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "failed-history-owner" });
+    const provider = captures.provider;
+    captures.threadSnapshotTurns = [{ id: provider.turnId, status: "inProgress", items: [{
+      id: "snapshot-final", type: "agentMessage", phase: "final_answer", text: "Recovered reply."
+    }] }];
+    provider.connectionGeneration = "reattached";
+    provider.listThreadTurns = async () => ({ data: captures.threadSnapshotTurns });
+    let stops = 0;
+    provider.stopThreadForObservationLoss = async () => {
+      stops += 1;
+      provider.status = "idle";
+    };
+    const write = store.writeConversationAssistantMessage;
+    store.writeConversationAssistantMessage = async () => { throw new Error("History write failed"); };
+    try {
+      await controller.ensureThread(sessionId);
+      await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+        (run) => run?.providerStatus === "observation_lost" && !run.active, "verified stop for history-write failure");
+      assert.equal(stops, 1);
+      assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length, 0);
+    } finally {
+      store.writeConversationAssistantMessage = write;
+    }
+    provider.resumeThread = async () => { throw new Error("Recovery must not resume"); };
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    assert.deepEqual((await store.readConversationLog(sessionId)).flatMap((row) => row.assistant ? [row.assistant.text] : []), ["Recovered reply."]);
+    assert.equal(captures.turns.length, 1);
+  });
+});
+
+for (const fallback of [false, true]) {
+  test(`Codex retains its stop owner until stop persistence succeeds (process fallback: ${fallback})`, async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      await controller.sendMessage(sessionId, { message: "Work", messageId: "stop-write-owner" });
+      const provider = captures.provider;
+      provider.stopThreadForObservationLoss = async () => {
+        if (fallback) throw new Error("Control unavailable");
+        provider.status = "idle";
+      };
+      const write = store.writeAgentRunEvent;
+      store.writeAgentRunEvent = (...args) => {
+        if (args[2]?.event?.kind === "codex-observation-stopped") throw new Error("Stop state could not be saved");
+        return write(...args);
+      };
+      try {
+        await assert.rejects(provider.failObservation(new Error("Observation lost")), /Stop state could not be saved/);
+        assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, true);
+        assert.ok(provider.observationFailure);
+        assert.equal(provider.closed, 0, "failed persistence must retain the owner for Stop retry");
+      } finally {
+        store.writeAgentRunEvent = write;
+      }
+      const stopped = await controller.interruptTurn(sessionId, { threadId: provider.threadId });
+      assert.equal(stopped.ok, true, JSON.stringify(stopped));
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.active, false);
+      assert.equal(run.providerStatus, "observation_lost");
+      assert.equal(captures.turns.length, 1);
+    });
+  });
+}

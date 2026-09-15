@@ -62,8 +62,15 @@ The hints row always reserves its height immediately above the message input,
 following the input as it grows without shifting the chat when hints change.
 Provider failures reach the conversation even when no assistant answer is created.
 Confirmed Stop releases chat controls without requiring a final provider message.
+Completed assistant replies appear immediately, including answers to steering
+questions while a goal continues. Each reply remains in the conversation;
+showing it does not finish the goal or disable further steering.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
+While the Vibe64 server is running, every executing assistant session must remain
+observed by the server and visible in its conversation, including across goal
+continuations and connection replacement. Observation belongs to the session's
+server lifecycle and does not depend on the person keeping its chat open.
 Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
@@ -523,3 +530,18 @@ People can open its objective and pause or resume an unfinished goal without
 losing its objective or usage history. Pause also interrupts the current turn.
 Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
+
+Main conversation, temporary assistance, and database copilot share the same
+conversation presentation. User-facing temporary chats have main chat's tools,
+capabilities and project access in Codex and OpenCode, without separate permission
+modes. Their messages stay out of main History, and closing them preserves their
+project edits. Internal helpers retain their deliberate execution restrictions.
+
+If Codex or OpenCode loses its server-side observation of a conversation, Vibe64
+stops native work and verifies the stop. When the individual conversation cannot
+be stopped through its control connection, Vibe64 uses the existing process
+owner; stopping a shared process can affect its other conversations. An
+unverified stop retains active ownership and keeps Stop available. Verified
+stops remain stopped until an explicit Resume or Send. Drafts remain editable
+during recovery, and the composer updates from external state without losing
+focus or selection.

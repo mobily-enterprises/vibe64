@@ -2,7 +2,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
   defaultVibe64AgentSettings,
-  normalizeVibe64AgentSettings
+  normalizeVibe64AgentSettings,
+  VIBE64_AGENT_TASK_RESULT_SCHEMA
 } from "@local/vibe64-runtime/shared";
 
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
@@ -18,7 +19,6 @@ import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const TEMPORARY_AI_POLL_INTERVAL_MS = 650;
-const TEMPORARY_AI_WORKSPACE_WRITE_POLICY = "workspace_write";
 
 function temporaryAiId(prefix = "temporary") {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -31,7 +31,8 @@ function temporaryAiText(value = "") {
 function temporaryAiRequestError(response = {}, fallback = "Temporary AI request failed.") {
   return Object.assign(new Error(vibe64ApiResponseError(response, fallback)), {
     code: temporaryAiText(response.code),
-    conversationExpired: response.conversationExpired === true
+    conversationExpired: response.conversationExpired === true,
+    status: temporaryAiText(response.status)
   });
 }
 
@@ -131,7 +132,6 @@ function useVibe64TemporaryAi({
     draft = "",
     failureMessage = "",
     nextStepMessage = "",
-    policy = "read",
     recoveryNotice = "",
     recoveryOperation = "",
     recoveryConflictId = "",
@@ -155,9 +155,6 @@ function useVibe64TemporaryAi({
       nextStepMessage: temporaryAiText(nextStepMessage),
       ownedAttachmentIds: [],
       pendingMessageId: "",
-      policy: policy === TEMPORARY_AI_WORKSPACE_WRITE_POLICY
-        ? TEMPORARY_AI_WORKSPACE_WRITE_POLICY
-        : "read",
       recoveryOutcome: "",
       recoveryOutcomeMessage: "",
       recoveryNotice: temporaryAiText(recoveryNotice),
@@ -287,14 +284,6 @@ function useVibe64TemporaryAi({
     });
   }
 
-  function updatePolicy(taskId = "", policy = "read") {
-    updateTask(taskId, {
-      policy: policy === TEMPORARY_AI_WORKSPACE_WRITE_POLICY
-        ? TEMPORARY_AI_WORKSPACE_WRITE_POLICY
-        : "read"
-    });
-  }
-
   function reportRecoveryOutcome(taskId = "", {
     message = "",
     status = "",
@@ -328,7 +317,7 @@ function useVibe64TemporaryAi({
     });
     if (outcome === "failed" && task.recoveryOperation === "update" && retryMessage && retryKey &&
         !readRefOrGetterValue(operationBusy) && !stoppingTaskIds.has(taskId) &&
-        !task.busy && task.status !== "interrupted" && task.policy === TEMPORARY_AI_WORKSPACE_WRITE_POLICY) {
+        !task.busy && task.status !== "interrupted") {
       const retries = task.recoveryRetryKeys || [];
       if (retries.includes(retryKey) || retries.length >= 3) {
         updateTask(taskId, {
@@ -407,7 +396,7 @@ function useVibe64TemporaryAi({
       updateTask(taskId, {
         busy: active,
         conversationId: response.conversationExpired === true ? "" : task.conversationId,
-        error: active ? "" : temporaryAiText(response.error),
+        error: temporaryAiText(response.error),
         messages,
         outcomeKind: temporaryAiText(response.outcome?.kind),
         runId: response.conversationExpired === true ? "" : task.runId,
@@ -421,17 +410,24 @@ function useVibe64TemporaryAi({
     } catch (error) {
       if (!canApplyResponse()) return;
       const message = temporaryAiText(error?.message || error) || "Temporary AI response could not be read.";
+      // A failed read does not prove that native work has stopped.
+      const active = error?.conversationExpired !== true &&
+        !["completed", "failed", "interrupted"].includes(error?.status);
       updateTask(taskId, {
-        busy: false,
+        busy: active,
         conversationId: error?.conversationExpired === true ? "" : task.conversationId,
         error: message,
         messages: temporaryAiTurnMessages(task.messages, task.runId, {
-          status: "failed"
+          status: active ? task.status : "failed"
         }),
         runId: error?.conversationExpired === true ? "" : task.runId,
-        status: "failed"
+        status: active ? task.status : "failed"
       });
-      reportTaskFinished(taskId);
+      if (active) {
+        pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
+      } else {
+        reportTaskFinished(taskId);
+      }
     }
   }
 
@@ -464,7 +460,7 @@ function useVibe64TemporaryAi({
     try {
       if (!conversationId) {
         const created = await request(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), {
-          body: { agentSettings: task.agentSettings, policy: task.policy },
+          body: { agentSettings: task.agentSettings },
           method: "POST"
         });
         conversationId = created.conversationId;
@@ -491,7 +487,7 @@ function useVibe64TemporaryAi({
             message: task.recoveryOperation === "update" && task.recoveryContext
               ? `${task.recoveryContext}\n\nUser message:\n${payload.message}`
               : payload.message,
-            policy: task.policy,
+            ...(task.recoveryOperation === "update" ? { outputSchema: VIBE64_AGENT_TASK_RESULT_SCHEMA } : {}),
             promptLabel: task.title
           },
           method: "POST"
@@ -570,6 +566,7 @@ function useVibe64TemporaryAi({
       if (disposed) return false;
       updateTask(taskId, {
         busy: false,
+        error: "",
         messages: temporaryAiTurnMessages(task.messages, task.runId, {
           status: "interrupted"
         }),
@@ -686,13 +683,11 @@ function useVibe64TemporaryAi({
     updateAgentSetting,
     updateAttachments,
     updateDraft,
-    updateRepairTask,
-    updatePolicy
+    updateRepairTask
   };
 }
 
 export {
-  TEMPORARY_AI_WORKSPACE_WRITE_POLICY,
   temporaryAiTurnIsActive,
   useVibe64TemporaryAi
 };

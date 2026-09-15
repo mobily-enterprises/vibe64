@@ -20,7 +20,7 @@ import {
 import {
   createOpenCodeServerClient,
   readBoundedResponse
-} from "./opencodeServerClient.js";
+} from "@jskit-ai/assistant-core/server/opencode-client";
 
 const OPENCODE_EXPECTED_VERSION = "1.18.22";
 const OPENCODE_ECONOMY_AGENT_ID = "vibe64-economy";
@@ -361,6 +361,7 @@ async function createOpenCodeServerProcess({
   const selectedPort = Number(port) || await availableLoopbackPort();
   const password = randomBytes(32).toString("base64url");
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: `http://${OPENCODE_HOST}:${selectedPort}`,
     fetchImpl,
     password
@@ -408,7 +409,7 @@ async function createOpenCodeServerProcess({
     if (stopPromise) {
       return stopPromise;
     }
-    stopPromise = Promise.resolve().then(async () => {
+    const stopping = Promise.resolve().then(async () => {
       const exitProof = processHandle
         ? await processHandle.stop()
         : { code: null, exited: true, signal: "" };
@@ -416,6 +417,12 @@ async function createOpenCodeServerProcess({
         await rm(normalizedPrivateRoot, { force: true, recursive: true });
       }
       return exitProof;
+    });
+    stopPromise = stopping;
+    void stopping.then((proof) => {
+      if (proof?.exited !== true && stopPromise === stopping) stopPromise = null;
+    }, () => {
+      if (stopPromise === stopping) stopPromise = null;
     });
     return stopPromise;
   }

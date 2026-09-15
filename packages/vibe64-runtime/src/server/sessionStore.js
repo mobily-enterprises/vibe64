@@ -1,3 +1,4 @@
+import { createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
@@ -110,10 +111,6 @@ const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const SESSION_RENEWAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 const SESSION_RENEWAL_STATE_FILE_PATTERN = /^([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
-const CONVERSATION_ACTIVITY_ROLES = new Set([
-  "commentary",
-  "thinking"
-]);
 const CONVERSATION_MESSAGE_ROLES = deepFreeze([
   "assistant",
   "commentary",
@@ -1115,16 +1112,6 @@ function nextConversationTurnId(turnIds = []) {
     .sort((left, right) => left - right)
     .at(-1) || 0;
   return String(latest + 1).padStart(6, "0");
-}
-
-function conversationTurnHasMessages(turn = {}) {
-  return Boolean(
-    turn.system ||
-    turn.user ||
-    turn.assistant ||
-    turn.commentary?.length ||
-    turn.thinking?.length
-  );
 }
 
 function createVibe64SessionStore({
@@ -2473,289 +2460,56 @@ function createVibe64SessionStore({
     return false;
   }
 
-  async function tailOpenConversationTurnId(sessionPaths) {
-    const turnIds = await conversationTurnIds(sessionPaths);
-    const turnId = turnIds.at(-1) || "";
-    if (!turnId) {
-      return "";
-    }
-    const turn = await readConversationTurn(sessionPaths, turnId);
-    return turn.user && !turn.assistant ? turnId : "";
-  }
-
-  async function tailThinkingOnlyConversationTurnId(sessionPaths, {
-    messageAt = ""
-  } = {}) {
-    const turnIds = await conversationTurnIds(sessionPaths);
-    const turnId = turnIds.at(-1) || "";
-    if (!turnId || !messageAt) {
-      return "";
-    }
-    const turn = await readConversationTurn(sessionPaths, turnId);
-    if (turn.system || turn.user || turn.assistant || turn.commentary.length || !turn.thinking.length) {
-      return "";
-    }
-    return turn.thinking.some((message) => message.at === messageAt) ? turnId : "";
-  }
-
-  async function readConversationLog(sessionId) {
-    return withReadableSessionPaths(sessionId, readConversationLogFromPaths);
-  }
-
-  async function readConversationLogFromPaths(sessionPaths) {
-    const turnIds = await conversationTurnIds(sessionPaths);
-    const turns = await Promise.all(turnIds.map((turnId) => readConversationTurn(sessionPaths, turnId)));
-    return turns.filter(conversationTurnHasMessages);
-  }
-
-  async function readConversationLogPage(sessionId, options = {}) {
-    return withReadableSessionPaths(sessionId, (sessionPaths) => readConversationLogPageFromPaths(sessionPaths, options));
-  }
-
-  async function readConversationLogPageFromPaths(sessionPaths, options = {}) {
-    const turnIds = await conversationTurnIds(sessionPaths);
-    const page = conversationLogPageTurnIds(turnIds, options);
-    const turns = await Promise.all(page.turnIds.map((turnId) => readConversationTurn(sessionPaths, turnId)));
-    const conversationLog = turns.filter(conversationTurnHasMessages);
+  function conversationTransaction(sessionPaths) {
     return {
-      conversationLog,
-      pagination: {
-        beforeTurnId: page.beforeTurnId,
-        count: conversationLog.length,
-        hasMoreBefore: page.hasMoreBefore,
-        limit: page.limit,
-        newestTurnId: conversationLog.at(-1)?.turnId || "",
-        nextBeforeTurnId: page.hasMoreBefore ? conversationLog[0]?.turnId || page.nextBeforeTurnId : "",
-        oldestTurnId: conversationLog[0]?.turnId || "",
-        totalTurnCount: turnIds.length
+      listTurnIds: () => conversationTurnIds(sessionPaths),
+      nextTurnId: async () => nextConversationTurnId(await conversationTurnIds(sessionPaths)),
+      readTurn: (turnId) => readConversationTurn(sessionPaths, turnId),
+      hasMessage: (messageId) => conversationMessageIdExistsFromPaths(sessionPaths, messageId),
+      async appendMessage(turnId, { role, text, messageId, at, attachments = [], turnMetadata = null }) {
+        const turnRoot = conversationTurnRoot(sessionPaths, turnId);
+        const displayAttachments = normalizeVibe64ConversationAttachments(attachments);
+        if (displayAttachments.length) {
+          await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_ATTACHMENTS_FILE), displayAttachments);
+        }
+        if (turnMetadata) {
+          await writeJsonFile(
+            path.join(turnRoot, CONVERSATION_TURN_METADATA_FILE),
+            normalizeConversationTurnMetadata(turnMetadata)
+          );
+        }
+        await writeTextFile(path.join(turnRoot, conversationMessageFileName(role, toDate(at), messageId)), `${text}\n`);
+      },
+      async replaceAssistant(turnId, { text, at }) {
+        const turnRoot = conversationTurnRoot(sessionPaths, turnId);
+        const assistantFiles = sortedFileNames(
+          await readDirectoryEntries(turnRoot),
+          (name) => name.startsWith("assistant.") && CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
+        );
+        const assistantFile = assistantFiles[0] || conversationMessageFileName("assistant", toDate(at));
+        await writeTextFile(path.join(turnRoot, assistantFile), `${text}\n`);
+        await Promise.all(assistantFiles.slice(1).map((name) => rm(path.join(turnRoot, name), { force: true })));
       }
     };
   }
 
-  function conversationLogPageTurnIds(turnIds = [], {
-    beforeTurnId = "",
-    limit = 0
-  } = {}) {
-    const ids = Array.isArray(turnIds) ? turnIds.filter((turnId) => CONVERSATION_TURN_ID_PATTERN.test(turnId)) : [];
-    const normalizedBeforeTurnId = normalizeText(beforeTurnId);
-    const normalizedLimit = normalizeConversationLogPageLimit(limit);
-    const beforeIndex = normalizedBeforeTurnId && ids.includes(normalizedBeforeTurnId)
-      ? ids.indexOf(normalizedBeforeTurnId)
-      : ids.length;
-    const endIndex = Math.max(0, beforeIndex);
-    const startIndex = normalizedLimit > 0
-      ? Math.max(0, endIndex - normalizedLimit)
-      : 0;
-    const pageIds = ids.slice(startIndex, endIndex);
-    return {
-      beforeTurnId: normalizedBeforeTurnId,
-      hasMoreBefore: startIndex > 0,
-      limit: normalizedLimit,
-      nextBeforeTurnId: pageIds[0] || "",
-      turnIds: pageIds
-    };
-  }
-
-  function normalizeConversationLogPageLimit(value = 0) {
-    const number = Number.parseInt(String(value || ""), 10);
-    if (!Number.isFinite(number) || number < 1) {
-      return 0;
+  const {
+    readConversationLog,
+    readConversationLogPage,
+    conversationMessageIdExists,
+    writeConversationUserMessage,
+    writeConversationAssistantMessage,
+    upsertConversationAssistantMessage,
+    writeConversationCommentaryMessage,
+    writeConversationThinkingMessage,
+    writeConversationSystemMessage
+  } = createConversationTranscript({
+    clock: now,
+    storage: {
+      read: (sessionId, callback) => withReadableSessionPaths(sessionId, (paths) => callback(conversationTransaction(paths))),
+      write: (sessionId, callback) => mutateSession(sessionId, (paths) => callback(conversationTransaction(paths)))
     }
-    return Math.min(number, 100);
-  }
-
-  async function conversationMessageIdExists(sessionId, messageId = "") {
-    return withReadableSessionPaths(sessionId, (sessionPaths) => (
-      conversationMessageIdExistsFromPaths(sessionPaths, messageId)
-    ));
-  }
-
-  async function writeConversationUserMessage(sessionId, {
-    attachments = [],
-    messageId = "",
-    text = "",
-    turnMetadata = null
-  } = {}) {
-    const messageText = normalizeText(text);
-    const normalizedMessageId = normalizeText(messageId);
-    if (!messageText) {
-      return null;
-    }
-    return mutateSession(sessionId, async (sessionPaths) => {
-      if (
-        normalizedMessageId &&
-        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
-      ) {
-        return null;
-      }
-      const turnId = nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      const createdAt = now();
-      const displayAttachments = normalizeVibe64ConversationAttachments(attachments);
-      if (displayAttachments.length) {
-        await writeJsonFile(
-          path.join(conversationTurnRoot(sessionPaths, turnId), CONVERSATION_TURN_ATTACHMENTS_FILE),
-          displayAttachments
-        );
-      }
-      if (turnMetadata) {
-        await writeJsonFile(
-          path.join(conversationTurnRoot(sessionPaths, turnId), CONVERSATION_TURN_METADATA_FILE),
-          normalizeConversationTurnMetadata(turnMetadata)
-        );
-      }
-      await writeTextFile(
-        path.join(
-          conversationTurnRoot(sessionPaths, turnId),
-          conversationMessageFileName("user", createdAt, normalizedMessageId)
-        ),
-        `${messageText}\n`
-      );
-      return readConversationTurn(sessionPaths, turnId);
-    });
-  }
-
-  async function writeConversationAssistantMessage(sessionId, {
-    messageId = "",
-    text = ""
-  } = {}) {
-    const messageText = normalizeText(text);
-    const normalizedMessageId = normalizeText(messageId);
-    if (!messageText) {
-      return null;
-    }
-    return mutateSession(sessionId, async (sessionPaths) => {
-      if (
-        normalizedMessageId &&
-        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
-      ) {
-        return null;
-      }
-      const turnId = await tailOpenConversationTurnId(sessionPaths) ||
-        nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      const createdAt = now();
-      await writeTextFile(
-        path.join(
-          conversationTurnRoot(sessionPaths, turnId),
-          conversationMessageFileName("assistant", createdAt, normalizedMessageId)
-        ),
-        `${messageText}\n`
-      );
-      return readConversationTurn(sessionPaths, turnId);
-    });
-  }
-
-  async function upsertConversationAssistantMessage(sessionId, {
-    text = "",
-    turnId = ""
-  } = {}) {
-    const messageText = normalizeText(text);
-    const normalizedTurnId = normalizeText(turnId);
-    if (!messageText) {
-      return null;
-    }
-    if (!CONVERSATION_TURN_ID_PATTERN.test(normalizedTurnId)) {
-      throw vibe64Error(
-        `Invalid vibe64 conversation turn id: ${normalizedTurnId || "(empty)"}`,
-        "vibe64_invalid_conversation_turn_id"
-      );
-    }
-    return mutateSession(sessionId, async (sessionPaths) => {
-      const turnRoot = conversationTurnRoot(sessionPaths, normalizedTurnId);
-      const assistantFiles = sortedFileNames(
-        await readDirectoryEntries(turnRoot),
-        (name) => name.startsWith("assistant.") && CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
-      );
-      const assistantFile = assistantFiles[0] || conversationMessageFileName("assistant", now());
-      await writeTextFile(path.join(turnRoot, assistantFile), `${messageText}\n`);
-      await Promise.all(assistantFiles.slice(1).map((fileName) => rm(path.join(turnRoot, fileName), {
-        force: true
-      })));
-      return readConversationTurn(sessionPaths, normalizedTurnId);
-    });
-  }
-
-  async function writeConversationActivityMessage(sessionId, role, {
-    at = "",
-    messageId = "",
-    requireOpenTurn = false,
-    text = ""
-  } = {}) {
-    if (!CONVERSATION_ACTIVITY_ROLES.has(role)) {
-      throw vibe64Error(
-        `Invalid vibe64 conversation activity role: ${role || "(empty)"}`,
-        "vibe64_invalid_conversation_role"
-      );
-    }
-    const messageText = normalizeText(text);
-    const normalizedMessageId = normalizeText(messageId);
-    if (!messageText) {
-      return null;
-    }
-    return mutateSession(sessionId, async (sessionPaths) => {
-      if (
-        normalizedMessageId &&
-        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
-      ) {
-        return null;
-      }
-      const createdAt = at ? toDate(at) : now();
-      const openTurnId = await tailOpenConversationTurnId(sessionPaths);
-      if (requireOpenTurn && !openTurnId) {
-        return null;
-      }
-      const thinkingOnlyTurnId = role === "thinking" && !openTurnId
-        ? await tailThinkingOnlyConversationTurnId(sessionPaths, {
-            messageAt: at ? createdAt.toISOString() : ""
-          })
-        : "";
-      const turnId = openTurnId || thinkingOnlyTurnId || nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      await writeTextFile(
-        path.join(
-          conversationTurnRoot(sessionPaths, turnId),
-          conversationMessageFileName(role, createdAt, normalizedMessageId)
-        ),
-        `${messageText}\n`
-      );
-      return readConversationTurn(sessionPaths, turnId);
-    });
-  }
-
-  async function writeConversationCommentaryMessage(sessionId, options = {}) {
-    return writeConversationActivityMessage(sessionId, "commentary", options);
-  }
-
-  async function writeConversationThinkingMessage(sessionId, options = {}) {
-    return writeConversationActivityMessage(sessionId, "thinking", options);
-  }
-
-  async function writeConversationSystemMessage(sessionId, {
-    messageId = "",
-    text = ""
-  } = {}) {
-    const messageText = normalizeText(text);
-    const normalizedMessageId = normalizeText(messageId);
-    if (!messageText) {
-      return null;
-    }
-    return mutateSession(sessionId, async (sessionPaths) => {
-      if (
-        normalizedMessageId &&
-        await conversationMessageIdExistsFromPaths(sessionPaths, normalizedMessageId)
-      ) {
-        return null;
-      }
-      const turnId = nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      const createdAt = now();
-      await writeTextFile(
-        path.join(
-          conversationTurnRoot(sessionPaths, turnId),
-          conversationMessageFileName("system", createdAt, normalizedMessageId)
-        ),
-        `${messageText}\n`
-      );
-      return readConversationTurn(sessionPaths, turnId);
-    });
-  }
+  });
 
   async function readManifest(sessionId) {
     return withReadableSessionPaths(sessionId, readManifestFromPaths);

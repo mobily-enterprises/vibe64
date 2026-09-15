@@ -12,6 +12,12 @@ connection and share one query-ownership boundary.
 
 ## Public contract
 
+Database copilot embeds the shared JSKIT conversation element. Its adapter maps
+SQL and table metadata into message actions, keeps configuration hidden and
+server-owned, and uses its existing bounded schema/read-only query backend.
+Copilot history remains transient in the database workspace; it is not copied
+into the main project conversation.
+
 SQL execution requires the session's canonical database-tool connection and,
 when a hosted user is present, owner access. It accepts one statement at a time.
 Read-only execution uses the reader endpoint and a read-only transaction;

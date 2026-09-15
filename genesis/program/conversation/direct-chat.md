@@ -35,11 +35,9 @@ including follow-up guidance while a turn is active.
 - `packages/vibe64-terminals/src/server/conversationActor.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
-- `packages/vibe64-terminals/src/server/codexAppServerEvents.js`
 - `packages/vibe64-terminals/src/server/codexTerminal.js`
 - `packages/vibe64-terminals/src/server/codexTurnOutcomeNotice.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
-- `packages/vibe64-terminals/src/server/opencodeServerClient.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js`
@@ -56,8 +54,6 @@ including follow-up guidance while a turn is active.
 - `src/components/studio/Vibe64CodexSession.vue`
 - `src/components/studio/Vibe64InteractiveTerminal.vue`
 - `src/components/studio/Vibe64OpenCodeSession.vue`
-- `src/components/studio/LongTextPreviewBlocks.vue`
-- `src/components/studio/LongTextInlineParts.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
@@ -66,12 +62,27 @@ including follow-up guidance while a turn is active.
 - `src/components/studio/vibe64-session/Vibe64PromptHints.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
+- `src/lib/vibe64AssistantHost.js`
 - `src/lib/vibe64ChatMessage.js`
 - `packages/vibe64-runtime/src/shared/integrationSetupRequest.js`
 - `src/lib/vibe64WelcomeName.js`
 - `vite.config.mjs`
 
 ## Public contract
+
+The conversation uses `AssistantConversationElement` from
+`@jskit-ai/assistant-core/client/conversation`. Main chat, temporary assistance,
+and database copilot share its transcript and composer primitives. Vibe64 owns
+selection, uploads, integration actions, model/permission settings, suggestions,
+Save and provider execution policy. Its application adapter is documented in
+`docs/assistant-application-contract.md`.
+
+The same package owns Codex notification classification, detached-turn watching,
+Codex JSON-RPC and OpenCode HTTP/SSE transport, and conversation transcript
+policy. The session store supplies the existing filesystem adapter and session
+locks. Saved files, history ordering, identity, actor metadata and archive
+behavior retain their current format and ownership. No transcript migration or
+second durable history is introduced.
 
 The Codex indicator reads the current main conversation goal from `thread/goal/get`
 on its existing provider. Goal controls require assistant access and accept only
@@ -83,6 +94,62 @@ budgets are not restarted by this control. Goal notifications invalidate the
 protected read endpoint without broadcasting the objective. The same square
 retains weekly allowance and exposes goal controls independently of plan data.
 
+When reconnecting to a native goal continuation, live thread activity takes
+precedence over a terminal status in turn history. History can lag while the
+resumed turn prepares its context. The main-thread bridge requires an observer
+before native resume, and provider observers survive replacement of the socket.
+Notifications from an obsolete socket cannot reach the current observers.
+Reading a saved final answer never resumes a thread.
+
+Each completed final reply is saved and broadcast immediately using its native
+thread, turn and item identity. Two replies in one provider turn remain separate,
+even when their text is equal. A replay is idempotent across controller restarts;
+a correction updates only that item's original row. Terminal-origin finals use
+this same writer. Commentary retains its separate duplicate-progress policy.
+Goal continuation and settlement keep their existing execution owner and do not
+gate message visibility. Older events cannot borrow a successor's identity.
+Native-history recovery uses the same per-item writer, including while a goal
+is active or a verified observation stop awaits explicit continuation.
+After observation loss, a failed native-history read rejects continuation and
+retains the stopped state until recovery succeeds.
+
+Vibe64 retains the outer chat owner, visible progress and steering while the
+provider reports activity. A fresh live observation can repair a falsely failed
+or interrupted current turn under the session lock. This does not let delayed
+notifications revive completed turns or overwrite a successor. An active goal
+alone does not override a confirmed inactive, interrupted turn.
+
+
+Observation loss is owned by the provider controller. Codex transport loss and
+notification-processing failures block provider work, persist an observation-loss
+barrier, then pause the native goal and interrupt its turn. A fresh idle read
+proves a per-thread stop. If control fails, the existing runtime owner must
+verify process exit; shared sessions are suspended together. The barrier prevents
+background native resume and stale activity writes. Only explicit Send or Resume
+clears it. A healthy stopped control connection remains available for goal reads.
+A shared-process fallback may make goal details unavailable until an explicit Send.
+The saved main-thread owner is registered before startup connection attempts.
+Failed observer attachment and failed history writes use the same stop owner.
+Shared-runtime cancellation includes providers that own only temporary chats.
+Failed stop-state persistence retains the owner for retry; provider retirement
+or release follows that durable write and precedes publication of the stopped
+state. Reconciliation cannot prune an unverified stop owner.
+
+OpenCode opens its SSE observer before prompt admission, including temporary
+turns without a UI event callback. Unexpected stream completion, event-handler
+failure, or transcript persistence failure triggers the same verified native-abort
+or process-stop policy. A failed stop retains active ownership for retry. Late
+SSE events are rejected after cancellation, and an explicitly resumed session
+gets a fresh cancellation controller after shared-process shutdown. Internal
+helper tool restrictions are unchanged.
+
+The composer keeps typing available while sending, stopping, or reconnecting.
+External run state updates its delivery controls directly; a verified suspended
+state permits a new Send. Pending Stop can settle from its matching realtime
+receipt before the original HTTP request completes. An observation-loss state
+with unverified cancellation blocks steering and explains that stop verification
+is pending. The shared textbox measures after Vue updates and responds to pane
+width changes once per animation frame, preserving the draft, caret, and focus.
 
 Codex plan allowance uses `account/rateLimits/read` and
 `account/rateLimits/updated` on the existing interactive provider connection.

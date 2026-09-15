@@ -46,7 +46,6 @@ test("temporary conversation actions reuse the terminal lifecycle and always sta
   await actionById(actions, ACTION_CREATE_TEMPORARY_CONVERSATION).execute({
     agentSettings: { model: "gpt-test" },
     ephemeral: false,
-    policy: "workspace_write",
     sessionId: "session-1"
   });
   await actionById(actions, ACTION_READ_TEMPORARY_CONVERSATION).execute({
@@ -73,7 +72,6 @@ test("temporary conversation actions reuse the terminal lifecycle and always sta
   assert.deepEqual(calls[0][2], {
     agentSettings: { model: "gpt-test" },
     ephemeral: true,
-    policy: "workspace_write",
     vibe64User: null
   });
   assert.deepEqual(calls.slice(1).map((entry) => entry[0]), ["read", "start", "stop", "delete"]);

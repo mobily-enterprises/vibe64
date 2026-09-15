@@ -146,7 +146,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(await view.describeSubsystems()).toBe(true);
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
       title: "Subsystem map",
-      policy: "workspace_write",
       dedupeKey: "subsystem-map:session-1"
     }));
     expect(requestTemporaryAi.mock.calls[0][0].message).toContain("genesis/subsystems.md");
@@ -764,6 +763,21 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value.some((turn) => turn.optimistic?.status === "failed")).toBe(false);
   });
 
+  it("reacts immediately to observation loss and a verified stop without clearing the draft", async () => {
+    const { props, view } = await createViewWithProps();
+    view.composerDraft.value = "Keep this draft";
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active", status: "observation_lost" };
+    expect(view.composerDisabled.value).toBe(false);
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(view.agentStopEnabled.value).toBe(true);
+    expect(view.thinkingLabel.value).toContain("not yet confirmed");
+    props.session.agentSession.turn = { active: false, id: "turn-1", state: "idle", status: "observation_lost" };
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.agentStopVisible.value).toBe(false);
+    expect(view.composerDraft.value).toBe("Keep this draft");
+    expect(view.composerHint.value).toContain("Send a message");
+  });
+
   it("releases Stop on its settled turn while the request remains pending", async () => {
     const interrupt = deferredResult();
     const { props, view } = await createViewWithProps({
@@ -983,7 +997,6 @@ describe("useVibe64AutopilotView direct chat", () => {
       failureMessage: expect.stringContaining("Vibe64 is checking whether its edits repaired"),
       message: expect.stringContaining(diagnostic),
       nextStepMessage: expect.stringContaining("automatically retry workspace preparation"),
-      policy: "workspace_write",
       recoveryNotice: expect.stringContaining("separate temporary chat"),
       title: "Fix workspace preparation"
     }));
@@ -1212,7 +1225,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
       dedupeKey: expect.stringContaining("preview-identity|session-1|email|ada@example.test|User not found."),
       message: expect.stringContaining("app-owned, idempotent development seed"),
-      policy: "workspace_write",
       title: "Fix preview identity"
     }));
     expect(requestTemporaryAi.mock.calls[0][0].message).toContain("User not found.");
@@ -1251,7 +1263,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
       dedupeKey: `repository-recovery|session-1|${code}|${diagnostic}`,
       message: expect.stringContaining(diagnostic),
-      policy: "workspace_write",
       recoveryConflictId: code === "vibe64_session_update_conflict" ? "persisted-conflict" : "",
       title: `Resolve ${action}`
     }));
@@ -1281,7 +1292,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
       dedupeKey: `repository-recovery|session-1|${code}|${diagnostic}`,
       message: expect.stringContaining(diagnostic),
-      policy: "workspace_write",
       title: "Resolve repository update"
     }));
     expect(sendAgentMessage).not.toHaveBeenCalled();

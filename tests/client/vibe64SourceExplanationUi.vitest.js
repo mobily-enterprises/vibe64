@@ -30,8 +30,8 @@ vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", 
     }
   })
 }));
-vi.mock("@/components/studio/LongTextPreviewBlocks.vue", () => ({
-  default: defineComponent({
+vi.mock("@jskit-ai/assistant-core/client/conversation", () => ({
+  LongTextPreviewBlocks: defineComponent({
     props: { blocks: { required: true, type: Array } },
     setup(props) {
       return () => h("div", props.blocks.map((block) => block.text).join("\n"));

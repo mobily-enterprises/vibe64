@@ -1,3 +1,4 @@
+import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -10,7 +11,6 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import {
   CodexAppServerAgentProvider,
-  CodexAppServerJsonRpcClient
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
 const codexVersion = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
@@ -28,6 +28,7 @@ test("native paginated conversations accept their first message and survive reco
   let processHandle;
   let client;
   let requestCount = 0;
+  let holdResponses = false;
   let stderr = "";
   const notifications = [];
   const protocolCalls = [];
@@ -38,6 +39,11 @@ test("native paginated conversations accept their first message and survive reco
       return;
     }
     requestCount += 1;
+    if (holdResponses) {
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.flushHeaders();
+      return;
+    }
     const item = {
       id: `message-${requestCount}`,
       type: "message",
@@ -86,6 +92,7 @@ test("native paginated conversations accept their first message and survive reco
     client = new CodexAppServerJsonRpcClient({ endpoint: `unix://${socketPath}`, requestTimeoutMs: 10000 });
     await client.connect();
     await client.initialize();
+    provider.client = client;
     client.subscribe((notification) => notifications.push(notification));
     const request = client.request.bind(client);
     client.request = (method, params, options) => {
@@ -98,6 +105,7 @@ test("native paginated conversations accept their first message and survive reco
     processHandle = spawn("codex", ["app-server", "--listen", `unix://${socketPath}`], {
       cwd: workdir,
       env: { PATH: process.env.PATH, HOME: toolHome, CODEX_HOME: toolHome, RUST_LOG: "error" },
+      detached: true,
       stdio: ["ignore", "ignore", "pipe"]
     });
     processHandle.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -117,8 +125,8 @@ test("native paginated conversations accept their first message and survive reco
     client?.close();
     if (processHandle?.exitCode === null) {
       const exited = once(processHandle, "exit");
-      processHandle.kill("SIGTERM");
-      const force = setTimeout(() => processHandle.kill("SIGKILL"), 5000);
+      process.kill(-processHandle.pid, "SIGTERM");
+      const force = setTimeout(() => process.kill(-processHandle.pid, "SIGKILL"), 5000);
       try { await exited; } finally { clearTimeout(force); }
     }
   }
@@ -200,5 +208,44 @@ test("native paginated conversations accept their first message and survive reco
     assert.equal(new Set(turns.map((turn) => turn.id)).size, 5);
     assert.equal(protocolCalls.some(({ method, params }) => method === "thread/read" && params.includeTurns), false);
     assert.equal(notifications.some((event) => event.method === "item/completed" && event.params.item.type === "agentMessage"), true);
+  });
+  await t.test("observation cancellation pauses a native goal and stops two active threads across restart", async () => {
+    const originalAnswers = (await provider.listThreadTurns(threadId, {
+      limit: 10, itemsView: "full"
+    })).data.map((turn) => ({ id: turn.id, items: turn.items }));
+    holdResponses = true;
+    const running = [];
+    for (const id of [threadId, threadIds[1]]) {
+      await provider.resumeThread(id, { cwd: workdir, config });
+      const turn = await provider.sendTurn(id, ["Keep working until interrupted"], {
+        cwd: workdir, model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }
+      });
+      running.push({ threadId: id, turnId: turn.id });
+    }
+    for (let attempt = 0; requestCount < 7; attempt += 1) {
+      assert.ok(attempt < 100, `Native turns did not reach the model: ${stderr}`);
+      await delay(50);
+    }
+    const { goal } = await client.request("thread/goal/set", { threadId, objective: "Continue until explicitly stopped" });
+    assert.equal(goal.status, "active");
+    for (const active of running) {
+      await provider.stopThreadForObservationLoss(active.threadId, active.turnId);
+      assert.equal((await provider.readThreadStatus(active.threadId)).raw.status.type, "idle");
+    }
+    const { goal: paused } = await provider.readGoal(threadId);
+    assert.equal(paused.status, "paused");
+    assert.equal(paused.objective, goal.objective);
+    assert.equal(paused.createdAt, goal.createdAt);
+    await stopProcess();
+    await startProcess();
+    for (const { threadId: id, turnId } of running) {
+      const history = await provider.listThreadTurns(id, { limit: 10, itemsView: "full" });
+      assert.ok(history.data.some((turn) => turn.id === turnId));
+    }
+    const restored = (await provider.listThreadTurns(threadId, { limit: 10, itemsView: "full" })).data;
+    assert.deepEqual(restored.filter((turn) => originalAnswers.some((saved) => saved.id === turn.id))
+      .map((turn) => ({ id: turn.id, items: turn.items })), originalAnswers);
+    assert.equal((await provider.readGoal(threadId)).goal.status, "paused");
+    assert.equal(requestCount, 7, "read-only recovery must not start another model request");
   });
 });

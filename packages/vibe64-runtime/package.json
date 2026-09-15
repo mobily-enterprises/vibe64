@@ -40,6 +40,7 @@
     "@local/vibe64-genesis": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
     "strip-ansi": "^7.2.0",
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "@jskit-ai/assistant-core": "0.1.169"
   }
 }

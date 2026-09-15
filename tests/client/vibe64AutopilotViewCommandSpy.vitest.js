@@ -7,6 +7,12 @@ const composablePath = path.resolve("src/composables/useVibe64AutopilotView.js")
 const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
+const sharedPromptInputPath = path.resolve(
+  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantPromptInput.vue"
+);
+const sharedComposerActionsPath = path.resolve(
+  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerActions.vue"
+);
 const promptHintsPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64PromptHints.vue"
 );
@@ -92,7 +98,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('#error-actions');
     expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)");
     expect(composable).toContain("const result = await props.saveSessionWork();");
-    expect(composable).toContain("await props.updateSessionWork();");
+    expect(composable).toContain("const result = await props.updateSessionWork(input);");
     expect(composable).toContain("const saveWorkUnsaved = computed");
     expect(composable).toContain("const saveWorkOperationActive = computed");
     expect(component).toContain('class="studio-autopilot__activity"');
@@ -112,7 +118,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain("temporaryAiWorkspace.value?.updateRepairTask");
     expect(component).toContain("{ force: true }");
     expect(component).toContain(':active="saveWorkOperationActive || saveWorkSending"');
-    expect(component).toContain(':dismissed="saveWorkActivityDismissed"');
+    expect(component).toContain(':dismissed="saveWorkActivityDismissed || updateHandledInRepair"');
     expect(component).toContain(':operation-key="saveWorkActivityKey"');
     expect(component).toContain('@dismiss="dismissSaveWorkActivity"');
     expect(composable).toContain("SHORT_ACTION_DISMISSALS_STORAGE_PREFIX");
@@ -152,7 +158,7 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("grid-row: 3 / -1");
     expect(temporaryAi).not.toContain("position: sticky");
     expect(temporaryAi.indexOf("data-temporary-ai-check-update")).toBeLessThan(
-      temporaryAi.indexOf('class="vibe64-temporary-ai__messages"')
+      temporaryAi.indexOf("<Vibe64EphemeralConversationMessages")
     );
     expect(component).toContain("temporaryAiWorkspace.value?.showWorkspace?.()");
     // Switching sessions retains the temporary workspace; Main chat closes it.
@@ -171,7 +177,7 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("startTask");
     expect(temporaryAi).not.toContain("Not saved to session history");
     expect(temporaryAi).not.toContain("vibe64-temporary-ai__header");
-    expect(temporaryAi).toContain('"R/W" : "R/O"');
+    expect(temporaryAi).not.toMatch(/R\/W|R\/O|updatePolicy/u);
     expect(temporaryAi).not.toContain("Read-only guidance");
     expect(temporaryAi).not.toContain("Allow edits");
     expect(temporaryAi).toContain('v-for="task in temporary.tasks.value"');
@@ -179,15 +185,17 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("<Vibe64AutopilotPromptTextarea");
     expect(temporaryAi).toContain("data-temporary-ai-recovery");
     expect(temporaryAi).toContain("AI repair in progress");
-    expect(temporaryAi).toContain("Repair verified");
+    expect(temporaryAi).toContain("The repair was independently verified.");
     expect(temporaryAi).toContain("activeTaskRecoveryStatus");
     expect(temporaryAi).toContain("AI is working…");
     expect(temporaryAi).toContain('class="vibe64-temporary-ai__activity"');
     expect(temporaryAi).toContain('role="status"');
     expect(temporaryAi).toContain("vibe64.temporary-ai.feedback");
     expect(temporaryAi).toContain("finished. Review the result before continuing.");
-    expect(temporaryAi).not.toContain("Attach visible preview");
-    expect(temporaryAi).not.toContain("console & network");
+    expect(temporaryAi).toContain('aria-label="Attach preview screenshot"');
+    expect(temporaryAi).toContain('aria-label="Attach console and network diagnostics"');
+    expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
+    expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
     expect(temporaryAiComposable).toContain("beforeunload");
     expect(temporaryAiComposable).toContain("keepalive: true");
     expect(temporaryAiComposable).toContain("vibe64AgentAttachmentFilePath");
@@ -233,18 +241,23 @@ describe("Vibe64 direct session view", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
     const promptHints = fs.readFileSync(promptHintsPath, "utf8");
+    const composerActions = fs.readFileSync(sharedComposerActionsPath, "utf8");
 
-    expect(component).toContain('v-if="agentStopVisible"');
-    expect(component).toContain(':aria-label="composerSubmitActionAriaLabel"');
+    expect(component).toContain("<AssistantComposerActions");
+    expect(component).toMatch(/canStop: agentStopVisible,\s+stopDisabled: !agentStopEnabled,\s+stopPending: interrupting/u);
+    expect(component).toContain("submitAriaLabel: composerSubmitActionAriaLabel");
     expect(component).toContain("composerSubmitMode === 'send' ? mdiSend");
-    expect(component).toContain("['steer', 'steering'].includes(composerSubmitMode)");
-    expect(component).toContain("{{ composerSubmitActionLabel }}");
+    expect(component).toContain("submitLabel: composerSubmitActionLabel");
+    expect(composerActions).toContain("{{ state.submitLabel || (state.pending ? 'Sending…' : 'Send') }}");
     expect(component).toContain('"Suggest to owner"');
     expect(component).not.toContain('"Suggesting…"');
-    expect(component).toContain(':aria-busy="composerSending ? \'true\' : undefined"');
-    expect(component).not.toContain(':loading="composerSending"');
-    expect(component).not.toContain(':loading="interrupting"');
-    expect(component).toContain('{{ interrupting ? "Stopping…" : "Stop" }}');
+    expect(component).toContain("pending: composerSending");
+    expect(component).toMatch(/@submit="sendComposerMessage"\s+@stop="requestAgentInterrupt"/u);
+    expect(composerActions).toContain(':aria-busy="state.pending ? \'true\' : undefined"');
+    expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
+    expect(composerActions).not.toContain(":loading=");
+    expect(composerActions).toContain('v-if="state.canStop"');
+    expect(composerActions).toContain("{{ state.stopPending ? 'Stopping…' : 'Stop' }}");
     expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
     expect(component).toContain("<Vibe64PromptHints");
     expect(promptHints).toContain("@media (prefers-reduced-motion: reduce)");
@@ -266,7 +279,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain("#selection=");
     expect(component).toContain("Answer normally instead");
     expect(component).toContain(':prepend-icon="mdiPencilOutline"');
-    expect(component.match(/:disabled="!composerCanSubmit \|\| !attachmentState\.canSubmit"/gu)).toHaveLength(1);
+    expect(component.match(/canSend: composerCanSubmit && attachmentState\.canSubmit/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');
     expect(composable).toContain("numberedQuestions.value.every");
   });
@@ -316,7 +329,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('@retry="retryWorkspaceSetup"');
     expect(component).not.toContain(':error-messages="composerError"');
     expect(composable).toContain("requestTemporaryAi({");
-    expect(composable).toContain('policy: "workspace_write"');
+    expect(composable).not.toContain('policy: "workspace_write"');
     expect(composable).toContain("handleTemporaryAiTaskFinished");
     expect(composable).toContain("Vibe64 will automatically rerun its deterministic workspace preparation");
     expect(composable.match(/recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE/gu)).toHaveLength(4);
@@ -345,15 +358,18 @@ describe("Vibe64 direct session view", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
+    const sharedPromptInput = fs.readFileSync(sharedPromptInputPath, "utf8");
 
     expect(component).toContain("tab-to-submit");
     expect(component).toContain(':submit-enabled="composerCanSubmit"');
     expect(component).toContain("@tab-to-submit=\"focusComposerSendButton\"");
     expect(component).not.toContain("submit-on-enter");
     expect(composable).not.toContain("Enter sends. Shift+Enter adds a line.");
-    expect(promptTextarea).toContain('event.key === "Enter" && !props.submitOnEnter');
-    expect(promptTextarea).toContain("props.submitEnabled");
-    expect(promptTextarea).toContain("event.stopPropagation()");
+    expect(promptTextarea).toContain("<AssistantPromptInput");
+    expect(promptTextarea).toContain('@tab-to-submit="emit(\'tab-to-submit\')"');
+    expect(sharedPromptInput).toContain('event.key === "Enter" && !props.submitOnEnter');
+    expect(sharedPromptInput).toContain("props.submitEnabled");
+    expect(sharedPromptInput).toContain("event.stopPropagation()");
   });
 
 });

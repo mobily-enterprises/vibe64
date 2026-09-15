@@ -1083,6 +1083,7 @@ test("codex app-server bridge starts a missing session thread and stores identit
   };
 
   const result = await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     developerInstructions: "Vibe64 briefing",
     provider,
     runtime,
@@ -1126,6 +1127,7 @@ test("codex app-server bridge reuses an already-available runtime when ensuring 
   };
 
   const result = await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     provider,
     runtime,
     session: {
@@ -1185,6 +1187,7 @@ test("codex app-server bridge activates exact project hooks for each new thread"
   };
 
   await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     provider,
     runtime,
     session: {
@@ -1241,6 +1244,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
   };
 
   const result = await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     provider,
     runtime,
     session: {
@@ -1309,6 +1313,7 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
   };
 
   await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     provider,
     runtime,
     session: {
@@ -1468,6 +1473,7 @@ test("codex app-server bridge replaces unreadable session threads after an inval
   };
 
   const result = await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     developerInstructions: "Vibe64 briefing",
     provider,
     runtime,
@@ -1555,6 +1561,7 @@ test("codex app-server bridge preserves a readable thread after an invalid resum
 
   await assert.rejects(
     () => ensureCodexAppServerThreadForSession({
+      observeThread() {},
       provider,
       runtime,
       session: {
@@ -1610,6 +1617,7 @@ test("codex app-server bridge does not replace transport resume failures", async
 
   await assert.rejects(
     () => ensureCodexAppServerThreadForSession({
+      observeThread() {},
       provider,
       runtime,
       session: {
@@ -1663,6 +1671,7 @@ test("codex app-server bridge resumes an existing provider thread without workfl
   };
 
   const result = await ensureCodexAppServerThreadForSession({
+    observeThread() {},
     provider,
     runtime,
     session: {

@@ -70,18 +70,12 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         name: "Resolve repository update",
         exact: true
       }));
-      await expectTouchTarget(workspace.getByRole("button", {
-        name: "Read/write: temporary AI may edit this session",
-        exact: true
-      }));
+      await expect(workspace.getByRole("button", { name: /Read\/write|Read-only/ })).toHaveCount(0);
       await expect.poll(() => captured.temporaryCreates).toHaveLength(1);
       await expect.poll(() => captured.temporaryTurns).toHaveLength(1);
-      expect(captured.temporaryCreates[0]).toEqual(expect.objectContaining({
-        policy: "workspace_write"
-      }));
+      expect(captured.temporaryCreates[0]).not.toHaveProperty("policy");
       expect(captured.temporaryTurns[0]).toEqual(expect.objectContaining({
         message: expect.stringContaining(expectedPrompt),
-        policy: "workspace_write",
         promptLabel: "Resolve repository update"
       }));
       expect(captured.temporaryTurns[0].message).toContain(diagnostic);
@@ -94,7 +88,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(workspace.getByRole("button", {
         name: "Read/write: temporary AI may edit this session",
         exact: true
-      })).toBeVisible();
+      })).toHaveCount(0);
       expect(captured.temporaryCreates).toHaveLength(1);
       expect(captured.temporaryTurns).toHaveLength(1);
       expect(captured.mainChatMessages).toHaveLength(0);

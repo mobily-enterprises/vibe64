@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   scrollDistanceFromBottom,
   scrollElementNearBottom
-} from "../../src/lib/scrollFollowState.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 describe("scroll follow state", () => {
   it("measures distance from the bottom of a scroll container", () => {

@@ -203,7 +203,7 @@ for (const viewport of viewports) {
         }
       }));
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       await expect(chat.getByText(/This integration uses public settings and has no account to connect/)).toBeVisible();
       await expect(chat.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
       await expect(chat.getByRole("button", { name: "Configure", exact: true })).toBeVisible();
@@ -217,7 +217,7 @@ for (const viewport of viewports) {
     test("connects inline and recovers consent after reload before cancellation and completion", async ({ page }) => {
       consentFlow = true;
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       await chat.getByRole("button", { name: "Connect", exact: true }).click();
       await expect(chat.getByRole("link", { name: "Continue with provider" })).toHaveAttribute("href", "https://provider.example/consent");
       await page.reload();
@@ -238,7 +238,7 @@ for (const viewport of viewports) {
     test("restores server-confirmed setup completion after Configure and reload", async ({ page }) => {
       confirmSetup = true;
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       await chat.getByRole("button", { name: "Configure", exact: true }).click();
       await expect(page).toHaveURL(/integrationRequest=a{64}/);
       if (viewport.name !== "expanded") await page.getByRole("button", { name: "Show chat", exact: true }).click();
@@ -261,7 +261,7 @@ for (const viewport of viewports) {
       confirmSetup = true;
       deliveryUnavailable = true;
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       await chat.getByRole("button", { name: "Configure", exact: true }).click();
       if (viewport.name !== "expanded") await page.getByRole("button", { name: "Show chat", exact: true }).click();
       await expect(chat.getByText(/Assistant delivery is not yet confirmed/)).toBeVisible();
@@ -275,7 +275,7 @@ for (const viewport of viewports) {
     });
     test("saves Skip and restores it after reload", async ({ page }) => {
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       const skip = chat.getByRole("button", { name: "Skip", exact: true });
       await expect(skip).toBeVisible();
       await skip.click();
@@ -289,7 +289,7 @@ for (const viewport of viewports) {
     });
     test("opens its saved slot and survives reload", async ({ page }) => {
       await page.goto(`${DASHBOARD_PATH}/integrations`);
-      const chat = page.locator(".studio-conversation-log");
+      const chat = page.locator(".assistant-transcript");
       const configure = chat.getByRole("button", {
         name: "Configure",
         exact: true,

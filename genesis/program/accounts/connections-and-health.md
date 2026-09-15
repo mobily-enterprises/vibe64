@@ -14,7 +14,6 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/codexTerminal.js`
-- `packages/vibe64-terminals/src/server/opencodeServerClient.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/service.js`

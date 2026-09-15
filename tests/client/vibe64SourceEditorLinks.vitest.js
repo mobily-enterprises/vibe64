@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseLongTextInlineParts
-} from "../../src/lib/studioLongTextBlocks.js";
+} from "@jskit-ai/assistant-core/shared/conversation";
 import {
   sourceEditorLinkTarget
 } from "../../src/lib/vibe64SourceEditorLinks.js";

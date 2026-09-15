@@ -229,11 +229,13 @@ import {
   mdiStop
 } from "@mdi/js";
 
-import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
+import { useScrollToBottom } from "@jskit-ai/assistant-core/client/conversation-scroll";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
-import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
-import { scrollElementNearBottom } from "@/lib/scrollFollowState.js";
-import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
+import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
+import {
+  scrollElementNearBottom,
+  parseLongTextReviewBlocks
+} from "@jskit-ai/assistant-core/shared/conversation";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
 const props = defineProps({

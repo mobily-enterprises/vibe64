@@ -24,7 +24,6 @@ session history.
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
-- `src/components/studio/vibe64-session/Vibe64ConversationProgress.vue`
 - `src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue`
 - `src/components/studio/vibe64-session/Vibe64PromptHints.vue`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
@@ -32,10 +31,13 @@ session history.
 
 ## Public contract
 
-Each temporary task has its own model settings, optional attachments, message
-stream, and explicit read-only or workspace-writing policy. Temporary tasks do
-not offer preview, console, or network diagnostic attachments and are visually
-distinct from the durable project conversation. Closing a task stops its live
+Each temporary task has its own model settings, attachments and message stream.
+User-facing temporary chats have the same capabilities, tools and project access
+as main chat in both Codex and OpenCode. They use normal execution settings and
+the same session write coordination and skill preparation. There is no temporary
+permission mode or R/O–R/W toggle. Preview screenshots and console/network
+diagnostics attach to the selected conversation through the normal upload path.
+Only conversation persistence and cleanup differ. Closing a task stops its live
 turn, deletes its provider conversation and exact uploaded attachments, and
 removes its browser-local state. Tasks are not restored after reload and never
 appear in session History.
@@ -61,6 +63,10 @@ not claim the application is repaired.
 Stop errors appear above the composer and Close errors inside the confirmation,
 so a notification cannot cover the retry control. Visible repair results do not
 also raise a duplicate toast; background completion still notifies the person.
+An unavailable progress read keeps the draft and Stop available and retries the
+existing read loop. It does not report completion or send another turn. Only a
+confirmed terminal state, expired conversation, or successful Stop releases the
+composer for another send.
 Task attachments use the shared upload queue, text references and preview/download
 dialog. They retain the temporary upload lease and exact-file cleanup when the
 task closes; they are not copied into the durable main conversation's artifacts.
@@ -69,7 +75,9 @@ attachment service.
 Assistant replies use the same formatted text presentation as normal chat,
 including lists, bold text, code, and links. User-authored text stays literal.
 Raw HTML remains text, and executable or data-URL links are not made clickable.
-Main and temporary chats share the collapsible progress component. Temporary
+Main and temporary chats use the same JSKIT conversation element, transcript,
+composer and collapsible progress components. Each temporary task retains its
+app-owned draft, uploads, settings and provider cleanup. Temporary
 progress starts collapsed inside its assistant message; expanding it uses the
 scrollable transcript. The fixed status above the composer uses normal chat's
 shared plain status component and says “AI is working…”. The transcript has no
@@ -107,7 +115,7 @@ Vibe64 verification, not an AI-owned Git operation, and reserve continue results
 for actual user decisions. A failed conflict check supplies its latest diagnostic
 to the same conversation. It permits at most three automatic follow-ups and
 pauses when the same canonical version and conflict diagnostic recur. A pending
-reply or attachment, read-only policy, Stop, departure, or active repository work
+reply or attachment, Stop, departure, or active repository work
 prevents automatic follow-up. Provider/admission failures stay visible for manual
 retry rather than looping. Questions, interrupted or failed turns, stale session
 completions, and duplicate completion notifications do not automatically run
@@ -137,12 +145,14 @@ using that provider.
 Temporary and lightweight helper conversations use the parent session's
 selected Codex or OpenCode service, but they do not start or retain a second
 resident assistant service. A user-visible temporary conversation receives one
-stable Genesis and Vibe64 context for its read-only or workspace-writing kind,
+stable Genesis and Vibe64 context with main chat's project capabilities,
 while ordinary human turns contain only the person's authored text. Update
 repair follow-ups additionally carry the latest Vibe64 verification diagnostic;
 the visible bubble keeps the person's text or a concise automatic retry label.
 It keeps the
-session directory and appropriate command boundary.
+session directory and normal command boundary. Ordinary temporary replies have
+no forced result schema. Update repair explicitly requests its structured
+completion result for verification; this format does not change permissions.
 
 The terminal service also exposes one generic non-project ephemeral
 conversation seam for a composing host. Its exact scope supplies a private

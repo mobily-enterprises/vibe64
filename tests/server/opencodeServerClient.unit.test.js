@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   OPENCODE_RESPONSE_LIMIT_BYTES,
   createOpenCodeServerClient
-} from "../../packages/vibe64-terminals/src/server/opencodeServerClient.js";
+} from "@jskit-ai/assistant-core/server/opencode-client";
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -18,6 +18,7 @@ test("OpenCode attachment access persists on its conversation, preserves other p
   let permission = [...initial];
   const requests = [];
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async (url, init) => {
       const body = init.body ? JSON.parse(init.body) : null;
@@ -48,6 +49,7 @@ test("OpenCode attachment access persists on its conversation, preserves other p
 test("OpenCode does not send attachments if their native access cannot be configured", async () => {
   const requests = [];
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async (_url, init) => {
       requests.push(init.method);
@@ -68,11 +70,15 @@ test("OpenCode client accepts only loopback HTTP origins", () => {
     "http://example.com:4096"
   ]) {
     assert.throws(
-      () => createOpenCodeServerClient({ baseUrl }),
+      () => createOpenCodeServerClient({
+        allowAttachmentDirectories: true,
+        baseUrl
+      }),
       /loopback HTTP server/u
     );
   }
   assert.doesNotThrow(() => createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096"
   }));
 });
@@ -80,6 +86,7 @@ test("OpenCode client accepts only loopback HTTP origins", () => {
 test("OpenCode provider reads allowlist catalogue metadata before it can be cached", async () => {
   const secret = "provider-secret-canary";
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async () => jsonResponse({
       all: [{
@@ -155,6 +162,7 @@ test("OpenCode provider reads allowlist catalogue metadata before it can be cach
 test("OpenCode provider reads expose only API-key compatibility from raw env metadata", async () => {
   const provider = (id, env) => ({ env, id, models: {}, name: id });
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async () => jsonResponse({
       all: [
@@ -192,13 +200,14 @@ test("OpenCode provider reads expose only API-key compatibility from raw env met
 test("OpenCode provider reads reject malformed or empty catalogues", async () => {
   for (const value of [null, {}, { all: {} }, { all: [] }, { all: [null] }]) {
     const client = createOpenCodeServerClient({
+      allowAttachmentDirectories: true,
       baseUrl: "http://127.0.0.1:4096",
       fetchImpl: async () => jsonResponse(value),
       password: "bridge-password"
     });
     await assert.rejects(
       () => client.providers(),
-      (error) => error?.code === "vibe64_opencode_catalog_invalid"
+      (error) => error?.code === "assistant_opencode_catalog_invalid"
     );
   }
 });
@@ -206,6 +215,7 @@ test("OpenCode provider reads reject malformed or empty catalogues", async () =>
 test("OpenCode project clients scope every request to one directory", async () => {
   const requests = [];
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async (url, options = {}) => {
       requests.push({ headers: { ...options.headers }, url: String(url) });
@@ -229,6 +239,7 @@ test("OpenCode project clients scope every request to one directory", async () =
 test("OpenCode client combines durable v2 sessions with stable execution routes and isolates provider keys", async () => {
   const requests = [];
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async (url, options = {}) => {
       requests.push({
@@ -318,13 +329,14 @@ test("OpenCode client combines durable v2 sessions with stable execution routes 
 
 test("OpenCode client rejects oversized responses before parsing them", async () => {
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://localhost:4096",
     fetchImpl: async () => new Response("x".repeat(OPENCODE_RESPONSE_LIMIT_BYTES + 1)),
     password: "password"
   });
   await assert.rejects(
     () => client.health(),
-    (error) => error?.code === "vibe64_opencode_response_too_large"
+    (error) => error?.code === "assistant_opencode_response_too_large"
   );
 });
 
@@ -341,6 +353,7 @@ test("OpenCode client decodes bounded server-sent events", async () => {
   ].join("\n");
   let eventUrl = "";
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://[::1]:4096",
     fetchImpl: async (url) => {
       eventUrl = String(url);
@@ -373,6 +386,7 @@ test("OpenCode client decodes bounded server-sent events", async () => {
 
 test("OpenCode session status reads native busy state and treats an omitted session as idle", async () => {
   const client = createOpenCodeServerClient({
+    allowAttachmentDirectories: true,
     baseUrl: "http://127.0.0.1:4096",
     fetchImpl: async (url) => {
       assert.equal(new URL(url).pathname, "/session/status");
