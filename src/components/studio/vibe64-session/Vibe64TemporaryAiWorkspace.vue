@@ -346,6 +346,8 @@ const temporary = useVibe64TemporaryAi({
   sessionsApiPath: resolvedSessionsApiPath
 });
 const activeTask = temporary.activeTask;
+const updateRepairVisible = computed(() => temporary.open.value &&
+  activeTask.value?.recoveryOperation === "update" && activeTask.value.recoveryOutcome !== "succeeded");
 const closeTitleId = useId();
 const closeTaskId = ref("");
 const closingTask = ref(false);
@@ -413,8 +415,8 @@ const activeTaskRecoveryStatus = computed(() => {
   }
   if (task.recoveryOutcome === "failed") {
     return task.recoveryAutoPaused
-      ? "Automatic repair paused after repeated conflicts. Continue here or check Update again; the latest diagnostic is in the activity panel above."
-      : "The Update check did not succeed. Continue this repair or check Update again; the latest diagnostic is in the activity panel above.";
+      ? "Automatic repair paused after repeated conflicts. Continue here or check Update again. Main chat has the latest Update diagnostic."
+      : "The Update check did not succeed. Continue this repair or check Update again. Main chat has the latest Update diagnostic.";
   }
   if (task.recoveryOperation === "update" && task.outcomeKind === "continue") {
     return "Reply if a decision is needed, or use Check Update to verify the prepared edits.";
@@ -621,6 +623,7 @@ defineExpose({
   selectTask: temporary.selectTask,
   startTask,
   showWorkspace,
+  updateRepairVisible,
   updateRepairTask: temporary.updateRepairTask
 });
 </script>

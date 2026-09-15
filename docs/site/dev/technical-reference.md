@@ -157,6 +157,9 @@ only after setup succeeds. Once ready, **Return to main chat** closes the comple
 repair tab and focuses Main chat, leaving other temporary conversations intact.
 Projects without preparation can return as soon as Update succeeds. Preparation
 failures keep their diagnostic and retry action; they do not claim the workspace is ready.
+While the matching Update repair chat is open, it presents the repair and check
+status in place of the separate Update activity banner. Main chat retains the
+Update diagnostic and operation log. Unrelated failures remain visible.
 
 ## Root resolution
 

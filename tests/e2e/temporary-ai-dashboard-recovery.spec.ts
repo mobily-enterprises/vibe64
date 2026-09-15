@@ -135,6 +135,8 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(workspace.getByRole("button", { name: "Close Resolve repository update", exact: true })).toBeDisabled();
       await expect(workspace.getByLabel("Message temporary AI")).toBeDisabled();
       const activity = page.getByLabel("Session activity", { exact: true });
+      await expect(activity).toBeHidden();
+      await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
       await expect(activity).toContainText("Update this session (rebase)");
       await activity.getByRole("button", { name: "Show Update this session (rebase) details", exact: true }).click();
       if (width <= 720) {
@@ -147,9 +149,12 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       } else {
         await expect(activity.getByRole("button", { name: "Collapse", exact: true })).toBeVisible();
       }
-      const activityBox = await activity.boundingBox();
+      await openTemporaryChat(page);
+      await expect(workspace).toBeVisible();
+      await expect(activity).toBeHidden();
+      const headerBox = await page.locator(".studio-autopilot__session-header:visible").boundingBox();
       const workspaceBox = await workspace.boundingBox();
-      expect(activityBox!.y + activityBox!.height).toBeLessThanOrEqual(workspaceBox!.y + 1);
+      expect(workspaceBox!.y - (headerBox!.y + headerBox!.height)).toBeLessThan(12);
       const mainBox = await workspace.getByRole("button", { name: "Main chat", exact: true }).boundingBox();
       const tabArea = await workspace.locator(".vibe64-temporary-ai__task-tabs").boundingBox();
       expect(mainBox!.x + mainBox!.width).toBeLessThanOrEqual(tabArea!.x + 1);
@@ -197,6 +202,50 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       for (const pending of updates) pending.resolve({ ok: false, error: "Test stopped." });
     }
   });
+  }
+
+  for (const width of [390, 1280]) {
+    test(`repair chat replaces the persisted Update failure banner at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      const diagnostic = "1 file needs review: data-overview.json.";
+      const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic });
+      await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/work`, (route) => fulfillJson(route, {
+        ok: true, unsaved: true, updateAvailable: true, behind: 1, operation: null,
+        updateOperation: {
+          operationId: "failed-update", status: "failed", code: "vibe64_session_update_conflict",
+          error: diagnostic, updatedAt: "2026-09-15T01:00:00Z", events: []
+        }
+      }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`, (route) => fulfillJson(route, {
+        ok: true, status: "inProgress", runId: "temporary-run-1",
+        progressUpdates: [{ id: "one", text: "Reviewing the overlapping changes." }]
+      }));
+      await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+      const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+      if (width <= 720) await showChat.click();
+      const activity = page.getByLabel("Session activity", { exact: true });
+      await expect(activity).toContainText(diagnostic);
+      await activity.getByRole("button", { name: "Fix it with AI", exact: true }).click();
+      const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+      await expect(workspace).toContainText("AI repair in progress");
+      await expect(activity).toBeHidden();
+      const headerBox = await page.locator(".studio-autopilot__session-header:visible").boundingBox();
+      const workspaceBox = await workspace.boundingBox();
+      expect(workspaceBox!.y - (headerBox!.y + headerBox!.height)).toBeLessThan(12);
+      await page.screenshot({ path: testInfo.outputPath("repair-without-banner.png") });
+
+      await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
+      await expect(activity).toContainText(diagnostic);
+      await expect(activity).toBeVisible();
+      await openTemporaryChat(page);
+      await expect(activity).toBeHidden();
+      await workspace.getByRole("button", { name: "New temporary AI task", exact: true }).click();
+      await expect(activity).toBeVisible();
+      await workspace.getByRole("button", { name: "Resolve Update Assistant working", exact: true }).click();
+      await expect(activity).toBeHidden();
+      expect(captured.temporaryCreates).toHaveLength(1);
+      expect(captured.temporaryTurns).toHaveLength(1);
+    });
   }
 
   test("Update completion follows automatic preparation before offering Return to main chat", async ({ page }, testInfo) => {
@@ -633,6 +682,16 @@ async function mockRepositoryRecovery(page: Page, {
     temporaryCreates,
     temporaryTurns
   };
+}
+
+async function openTemporaryChat(page: Page) {
+  const button = page.getByRole("button", { name: "Open temporary AI", exact: true });
+  if (await button.isVisible()) {
+    await button.click();
+  } else {
+    await page.locator("[data-vibe64-session-actions]:visible").click();
+    await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
+  }
 }
 
 function requestBodyWithoutOrigin(request: Request) {

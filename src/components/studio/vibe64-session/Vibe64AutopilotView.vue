@@ -175,7 +175,7 @@
         </v-sheet>
         <Vibe64TemporaryActionTerminal
           :active="saveWorkOperationActive || saveWorkSending"
-          :dismissed="saveWorkActivityDismissed"
+          :dismissed="saveWorkActivityDismissed || updateHandledInRepair"
           :error="saveWorkError"
           :error-title="`${saveWorkActivityLabel} needs attention`"
           height="clamp(8rem, 22vh, 14rem)"
@@ -1172,6 +1172,9 @@ watch(agentActive, (active) => {
 }, { flush: "sync", immediate: true });
 const conversationAssistantLabel = computed(() => (
   props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" : "Codex"
+));
+const updateHandledInRepair = computed(() => Boolean(
+  saveWorkActivityIsUpdate.value && temporaryAiWorkspace.value?.updateRepairVisible
 ));
 
 const promptHintsBlankConversation = computed(() => chatTurns.value.length < 1);
