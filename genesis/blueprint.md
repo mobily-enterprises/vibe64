@@ -283,6 +283,11 @@ The new session and its handover remain available for the person to repair an
 expired login, quota, or provider problem and continue. Renewal stops only when
 Vibe64 cannot establish the fresh conversation, its handover, or its saved
 source safely.
+Renewal takes its source identity from the project's configured authority and
+verified Git commit. Missing or stale session metadata does not redefine it.
+Retries keep the saved handover without asking the AI to write it again. If the
+source or conversation changed, the existing text returns for review with
+current source details before the person confirms continuation.
 
 Every project has exactly one source authority. For a GitHub-connected project,
 the configured GitHub branch is authoritative. For a hosted Vibe64-only

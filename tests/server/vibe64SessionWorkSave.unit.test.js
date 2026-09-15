@@ -641,6 +641,65 @@ test("local-source current changes reuses one snapshot for its initial file diff
   }
 });
 
+test("canonical checks return project-configured source identity despite stale session metadata", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-canonical-source-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    Object.assign(session.metadata, {
+      repository_mode: "local_source",
+      base_branch: "obsolete",
+      source_default_branch: "obsolete",
+      source_remote_url: "https://obsolete.example/project.git"
+    });
+    const check = await checkSessionUpdates({
+      project: {
+        projectRuntimeRoot: path.join(root, "project-runtime"),
+        repository: {
+          mode: "github",
+          defaultBranch: "main",
+          github: { cloneUrl: fixture.remote }
+        }
+      },
+      runCommand: commandRunner,
+      session
+    });
+    assert.equal(check.sessionCurrent, true);
+    assert.deepEqual(check.canonicalSource, {
+      authority: "github",
+      commit: fixture.baseCommit,
+      ref: "refs/heads/main",
+      repository: fixture.remote
+    });
+    for (const [repository, code] of [
+      [{ mode: "github", github: { cloneUrl: fixture.remote } }, "vibe64_session_save_context_incomplete"],
+      [{ mode: "github", defaultBranch: "main" }, "vibe64_session_save_authority_missing"],
+      [{ mode: "managed_git", defaultBranch: "main" }, "vibe64_session_save_authority_missing"]
+    ]) {
+      await assert.rejects(checkSessionUpdates({
+        project: { repository },
+        runCommand: () => assert.fail("Incomplete project authority must fail before Git runs"),
+        session
+      }), { code });
+    }
+    const localCheck = await checkSessionUpdates({
+      project: {
+        sourceRoot: fixture.seed,
+        repository: { mode: "local_source", defaultBranch: "main" }
+      },
+      runCommand: commandRunner,
+      session
+    });
+    assert.deepEqual(localCheck.canonicalSource, {
+      authority: "local_source",
+      commit: fixture.baseCommit,
+      ref: "refs/heads/main"
+    });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("Update preserves unsaved session work while advancing to newer GitHub work", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
   try {

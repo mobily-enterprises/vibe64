@@ -455,6 +455,12 @@ async function renewalHarness(targetRoot, {
     async checkSessionUpdates() {
       return {
         canonicalCommit: commit,
+        canonicalSource: {
+          authority: "github",
+          commit,
+          ref: "refs/heads/main",
+          repository: "https://example.invalid/renewal-resource-proof.git"
+        },
         relationship: "current",
         sessionCurrent: true,
         updateAvailable: false

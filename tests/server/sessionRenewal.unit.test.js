@@ -13,6 +13,7 @@ import {
 import {
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
+  createSessionRenewalDraft,
   createSessionRenewalState,
   readSessionRenewalState
 } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
@@ -948,6 +949,12 @@ function fixture({
       }
       return {
         canonicalCommit,
+        canonicalSource: {
+          authority: "github",
+          commit: canonicalCommit,
+          ref: "refs/heads/main",
+          repository: "https://example.test/project.git"
+        },
         relationship: "current",
         sessionCurrent: true,
         updateAvailable: false
@@ -1298,6 +1305,40 @@ test("draft generation is durable, exact, and idempotent", async () => {
     totalTurnCount: 21
   });
   assert.equal(context.calls.generate, 1);
+});
+
+test("renewal uses verified project authority despite missing or stale session source metadata", async (t) => {
+  for (const stale of [false, true]) {
+    await t.test(stale ? "stale metadata" : "missing metadata", async () => {
+      const context = fixture();
+      const metadata = context.sessions.get(OLD_SESSION_ID).metadata;
+      for (const name of ["repository_mode", "source_default_branch", "base_branch", "source_remote_url"]) {
+        if (stale) {
+          metadata[name] = "stale";
+        } else {
+          delete metadata[name];
+        }
+      }
+      const reviewed = await reviewedRenewal(context);
+      assert.deepEqual(reviewed.basis.source, {
+        authority: "github",
+        commit: COMMIT,
+        ref: "refs/heads/main",
+        repository: "https://example.test/project.git"
+      });
+      await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+        expectedHash: reviewed.draft.hash,
+        expectedRevision: reviewed.draft.revision,
+        operationKey: reviewed.operationKey
+      });
+      await eventually(
+        () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+        (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+      );
+      assert.equal(context.calls.generate, 1);
+      assert.equal(context.calls.seedInput.handover, reviewed.draft.text);
+    });
+  }
 });
 
 test("draft requests cannot create renewal state for a non-active session", async (t) => {
@@ -2133,24 +2174,24 @@ test("one explicit failed-draft retry claims a fresh provider operation and acto
   assert.equal(context.calls.generate, 2);
 });
 
-test("confirmation rejects a conversation changed after review", async () => {
+test("confirmation keeps the handover for review when the conversation changed", async () => {
   const context = fixture();
   const reviewed = await reviewedRenewal(context);
   context.setConversation({
     newestTurnId: "turn-newer",
     totalTurnCount: 22
   });
-  await assert.rejects(
-    context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
-      expectedHash: reviewed.draft.hash,
-      expectedRevision: reviewed.draft.revision,
-      operationKey: reviewed.operationKey
-    }),
-    {
-      code: "vibe64_session_renewal_review_stale",
-      message: "This session changed after the handover was prepared. Cancel this renewal, then prepare and review a fresh handover."
-    }
-  );
+  const result = await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  assert.equal(result.renewal.status, SESSION_RENEWAL_STATUS.REVIEW);
+  assert.equal(result.renewal.draft.text, reviewed.draft.text);
+  assert.equal(result.renewal.draft.hash, reviewed.draft.hash);
+  assert.equal(result.renewal.draft.revision, reviewed.draft.revision + 1);
+  assert.equal(result.renewal.error.code, "vibe64_session_renewal_review_stale");
+  assert.equal(context.calls.generate, 1);
   assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
   assert.deepEqual(context.calls.ordering.slice(-4), [
     "freeze",
@@ -2215,10 +2256,10 @@ test("failed quiescence returns to review and a changed source cannot be frozen 
     newestTurnId: "turn-after-failed-quiescence",
     totalTurnCount: 22
   });
-  await assert.rejects(
-    context.controller.confirmSessionRenewal(OLD_SESSION_ID, confirmation),
-    { code: "vibe64_session_renewal_review_stale" }
-  );
+  const result = await context.controller.confirmSessionRenewal(OLD_SESSION_ID, confirmation);
+  assert.equal(result.renewal.status, SESSION_RENEWAL_STATUS.REVIEW);
+  assert.equal(result.renewal.draft.text, reviewed.draft.text);
+  assert.equal(context.calls.generate, 1);
   assert.equal(context.calls.quiesce, 0);
   assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
   assert.equal(context.terminalAdmissions.has(OLD_SESSION_ID), false);
@@ -3662,7 +3703,7 @@ test("restart completes durable private-archive failure restoration", async () =
   assert.equal(context.terminalAdmissions.has(OLD_SESSION_ID), false);
 });
 
-test("retry discards a hidden successor and regenerates review when the predecessor basis changed", async () => {
+test("retry discards a hidden successor and retains the handover when the predecessor basis changed", async () => {
   const context = fixture({ setupStatus: "failed" });
   const reviewed = await reviewedRenewal(context);
   await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
@@ -3684,18 +3725,80 @@ test("retry discards a hidden successor and regenerates review when the predeces
   await context.controller.retrySessionRenewal(OLD_SESSION_ID, {
     operationKey: reviewed.operationKey
   });
-  const regenerated = await eventually(
+  const retained = await eventually(
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
-    (state) => state?.status === SESSION_RENEWAL_STATUS.REVIEW &&
-      state.generation?.attempt === 2
+    (state) => state?.status === SESSION_RENEWAL_STATUS.REVIEW
   );
 
   assert.equal(context.sessions.has(staleSuccessorId), false);
   assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
-  assert.equal(regenerated.approved, null);
-  assert.equal(regenerated.successor, null);
+  assert.equal(retained.approved, null);
+  assert.equal(retained.successor, null);
+  assert.equal(retained.draft.text, failed.approved.text);
+  assert.equal(retained.draft.hash, failed.approved.hash);
+  assert.equal(retained.generation.attempt, failed.generation.attempt);
   assert.equal(context.calls.discard, 1);
-  assert.equal(context.calls.generate, 2);
+  assert.equal(context.calls.generate, 1);
+  await context.newController().confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: retained.draft.hash,
+    expectedRevision: retained.draft.revision,
+    operationKey: retained.operationKey
+  });
+  await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+  );
+  assert.equal(context.calls.generate, 1);
+});
+
+test("retry recovers a saved handover with legacy authority without generating another one", async () => {
+  const context = fixture({ setupStatus: "failed" });
+  const reviewed = await reviewedRenewal(context);
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  const failed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+  const text = failed.approved.text
+    .replace("- Authority: github", "- Authority: local_source")
+    .replace("## Touched areas", "Preserve this handover note.\n\n## Touched areas");
+  const savedDraft = createSessionRenewalDraft(text, { origin: "edited" });
+  context.artifacts.set(OLD_SESSION_ID, JSON.stringify({
+    ...failed,
+    approved: savedDraft,
+    draft: savedDraft,
+    basis: {
+      ...failed.basis,
+      source: { ...failed.basis.source, authority: "local_source" }
+    }
+  }));
+  delete context.sessions.get(OLD_SESSION_ID).metadata.repository_mode;
+  context.setSetupStatus("succeeded");
+
+  const result = await context.newController().retrySessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  const retained = result.renewal;
+  assert.equal(retained.status, SESSION_RENEWAL_STATUS.REVIEW);
+  assert.equal(retained.basis.source.authority, "github");
+  assert.equal(retained.draft.text, text.replace("- Authority: local_source", "- Authority: github"));
+  assert.equal(retained.draft.origin, "edited");
+  assert.equal(context.calls.generate, 1);
+  await context.newController().confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: retained.draft.hash,
+    expectedRevision: retained.draft.revision,
+    operationKey: retained.operationKey
+  });
+  await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+  );
+  assert.equal(context.calls.generate, 1);
+  assert.equal(context.calls.seedInput.handover, retained.draft.text);
 });
 
 test("restart recovery resumes an exact quiesced predecessor with a hidden successor", async () => {
@@ -4669,6 +4772,12 @@ test("eligibility rejects active work, dirty source, and stale canonical source"
         async checkSessionUpdates() {
           return {
             canonicalCommit: COMMIT,
+            canonicalSource: {
+              authority: "github",
+              commit: COMMIT,
+              ref: "refs/heads/main",
+              repository: "https://example.test/project.git"
+            },
             relationship: "current",
             sessionCurrent: true,
             updateAvailable: false,

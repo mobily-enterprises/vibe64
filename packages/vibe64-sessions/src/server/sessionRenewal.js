@@ -246,23 +246,6 @@ async function assertNoRepositoryOperation(runtime, sessionId = "") {
   }
 }
 
-function sourceEnvelope(session = {}, sourceDescriptor = {}, canonicalCommit = "") {
-  const metadata = {
-    ...(sourceDescriptor?.metadata || {}),
-    ...(session.metadata || {})
-  };
-  const authority = normalizeText(metadata.repository_mode) || "local_source";
-  const branch = normalizeText(metadata.source_default_branch || metadata.base_branch) || "main";
-  return {
-    authority,
-    commit: normalizeText(canonicalCommit).toLowerCase(),
-    ref: `refs/heads/${branch}`,
-    ...(normalizeText(metadata.source_remote_url)
-      ? { repository: normalizeText(metadata.source_remote_url) }
-      : {})
-  };
-}
-
 function assertCanonicalClean(check = {}, work = {}) {
   const canonicalCommit = normalizeText(check.canonicalCommit || work.canonicalCommit).toLowerCase();
   const sessionHead = normalizeText(work.sessionHead).toLowerCase();
@@ -328,7 +311,18 @@ async function inspectSessionRenewalEligibility({
     session: refreshedSession
   });
   const canonicalCommit = assertCanonicalClean(check, work);
-  const sourceDescriptor = await runtime.store.readSessionSourceDescriptor(session.sessionId);
+  const source = check.canonicalSource;
+  if (
+    !source?.authority ||
+    !source.ref ||
+    (source.authority !== "local_source" && !source.repository) ||
+    source.commit !== canonicalCommit
+  ) {
+    throw renewalError(
+      "The project's canonical source authority could not be verified.",
+      "vibe64_session_renewal_source_invalid"
+    );
+  }
   const conversation = conversationFingerprint(
     await runtime.readConversationLogPage(session.sessionId, { limit: 1 })
   );
@@ -338,7 +332,7 @@ async function inspectSessionRenewalEligibility({
     provider: {
       threadId: normalizeText(refreshedSession.metadata?.agent_identity_conversation_id)
     },
-    source: sourceEnvelope(refreshedSession, sourceDescriptor, canonicalCommit),
+    source,
     verifiedAt: timestamp()
   };
 }
@@ -589,6 +583,40 @@ function createSessionRenewalController({
       });
     }
     return predecessor;
+  }
+
+  async function returnToRenewalReview(runtime, state, basis) {
+    const savedDraft = state.approved || state.draft;
+    let text = savedDraft.text;
+    if (!sourceEnvelopesMatch(basis.source, state.basis?.source)) {
+      const sourceSection = /^## Saved source\n([\s\S]*?)(?=^## Touched areas$)/mu;
+      const sourceField = /^- (Authority|Repository|Ref|Commit): /u;
+      const templateSource = manualDraftTemplate(terminals, basis).match(sourceSection)[1];
+      const sourceLines = templateSource.split("\n").filter((line) => sourceField.test(line));
+      text = text.replace(sourceSection, (_match, content) => {
+        const notes = content.split("\n").filter((line) => !sourceField.test(line));
+        return `## Saved source\n${sourceLines.join("\n")}\n${notes.join("\n")}`;
+      });
+    }
+    const draft = createSessionRenewalDraft(text, {
+      origin: savedDraft.origin,
+      revision: Math.max(savedDraft.revision, state.draft?.revision || 0) + 1
+    });
+    validateReviewedHandover({ ...state, basis }, draft);
+    return mutateSessionRenewalState(runtime, state.sessionId, (latest) => statePatch(latest, {
+      approved: null,
+      basis,
+      confirmedBy: null,
+      draft,
+      error: {
+        code: "vibe64_session_renewal_review_stale",
+        message: "This session changed. Your saved handover has been kept with current source details. Review it before continuing; no new AI handover was requested.",
+        retryable: true
+      },
+      stage: SESSION_RENEWAL_STAGE.DRAFT_READY,
+      status: SESSION_RENEWAL_STATUS.REVIEW,
+      successor: null
+    }));
   }
 
   function validateReviewedHandover(state = {}, draft = {}) {
@@ -1491,21 +1519,28 @@ function createSessionRenewalController({
     }
   }
 
-  function assertSuccessorSource(state, successor) {
+  function assertSuccessorSource(state, successor = {}) {
+    const metadata = successor.metadata || {};
     const expectedCommit = normalizeText(state.basis?.source?.commit).toLowerCase();
-    const actualBaseCommit = normalizeText(successor?.metadata?.base_commit).toLowerCase();
-    const actualCanonicalCommit = normalizeText(successor?.metadata?.canonical_commit).toLowerCase();
-    const actualSource = sourceEnvelope(successor, {
-      metadata: successor?.metadata || {}
-    }, actualBaseCommit);
+    const actualBaseCommit = normalizeText(metadata.base_commit).toLowerCase();
+    const actualCanonicalCommit = normalizeText(metadata.canonical_commit).toLowerCase();
+    const repository = normalizeText(metadata.source_remote_url);
+    const actualSource = {
+      authority: normalizeText(metadata.repository_mode),
+      commit: actualBaseCommit,
+      ref: `refs/heads/${normalizeText(metadata.source_default_branch)}`,
+      ...(metadata.repository_mode !== "local_source" && repository ? { repository } : {})
+    };
+    const commitMismatch = actualBaseCommit !== expectedCommit || actualCanonicalCommit !== expectedCommit;
     if (
       !expectedCommit ||
-      actualBaseCommit !== expectedCommit ||
-      actualCanonicalCommit !== expectedCommit ||
+      commitMismatch ||
       !sourceEnvelopesMatch(actualSource, state.basis?.source)
     ) {
       throw renewalError(
-        "The renewed session was not created from the exact approved source commit.",
+        commitMismatch
+          ? "The renewed session was not created from the exact approved source commit."
+          : "The renewed session's source authority, repository, or branch does not match the approved handover.",
         SESSION_RENEWAL_SUCCESSOR_SOURCE_INVALID_CODE,
         {
           details: {
@@ -2403,10 +2438,9 @@ function createSessionRenewalController({
             vibe64User: input.vibe64User
           });
           if (!renewalBasisMatches(basis, current.basis)) {
-            throw renewalError(
-              "This session changed after the handover was prepared. Cancel this renewal, then prepare and review a fresh handover.",
-              "vibe64_session_renewal_review_stale"
-            );
+            const review = await returnToRenewalReview(runtime, current, basis);
+            await thawPredecessorTerminalAdmission(review);
+            return review;
           }
           confirmed = await mutateSessionRenewalState(runtime, sessionId, (latest) => {
             assertSessionRenewalOperation(latest, input.operationKey);
@@ -2649,25 +2683,7 @@ function createSessionRenewalController({
           });
           if (!renewalBasisMatches(basis, current.basis)) {
             await cleanupRenewalSuccessor(runtime, current);
-            const attempt = Math.max(1, Number(current.generation?.attempt) || 1) + 1;
-            current = await mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
-              ...(input.vibe64User ? { actor: actorFromUser(input.vibe64User) } : {}),
-              approved: null,
-              basis: null,
-              confirmedBy: null,
-              continuedBy: input.vibe64User ? actorFromUser(input.vibe64User) : null,
-              draft: null,
-              error: null,
-              generation: {
-                attempt,
-                operationId: operationId(latest.renewalId, `draft-${attempt}`)
-              },
-              manualRequired: false,
-              manualTemplateHash: null,
-              stage: SESSION_RENEWAL_STAGE.DRAFT_GENERATING,
-              status: SESSION_RENEWAL_STATUS.RUNNING,
-              successor: null
-            }));
+            current = await returnToRenewalReview(runtime, current, basis);
             await thawPredecessorTerminalAdmission(current);
             return current;
           }

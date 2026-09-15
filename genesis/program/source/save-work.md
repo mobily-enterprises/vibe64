@@ -63,6 +63,11 @@ check results cannot replace a newer confirmation, and pending incoming work
 survives an older work inspection until that inspection sees the announced
 canonical commit. An initially unknown file-change list does not hide a
 confirmed Update action.
+The same authority check returns the verified source mode, repository, branch
+ref and commit to session renewal, so handover creation uses the project
+configuration that Git actually checked.
+Missing configured branch or repository authority fails before Git runs;
+session metadata cannot supply a replacement canonical authority.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.

@@ -93,6 +93,15 @@ prevents an assistant reply. A failure before prompt admission, a reused
 conversation, a changed source, or an unusable workspace still leaves the
 predecessor available.
 
+The repository authority check supplies the handover's source identity from
+project configuration and the verified Git commit. Renewal does not infer it
+from legacy predecessor metadata or default a missing authority to local source.
+Unchanged retries reuse the exact approved handover. When source identity or
+conversation changes before confirmation or after a failure, renewal retains
+the existing text, refreshes only its canonical source fields, and returns it
+for review without another AI generation. A stale review cannot create a
+successor until the person confirms the refreshed draft.
+
 Repository status uses realtime changes as its primary signal and a bounded
 freshness check as fallback. The fallback does no work while the page is hidden
 and refreshes immediately when the person returns. Session-renewal recovery

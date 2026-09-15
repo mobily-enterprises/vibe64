@@ -67,11 +67,7 @@ function saveError(message, code = "vibe64_session_save_failed", details = {}) {
 function repositoryContext(session = {}, project = {}) {
   const sessionMetadata = metadata(session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  const branch = text(
-    project.repository?.defaultBranch ||
-    sessionMetadata.source_default_branch ||
-    sessionMetadata.base_branch
-  );
+  const branch = text(project.repository?.defaultBranch);
   const worktreePath = text(session.sourcePath || sessionMetadata.source_path);
   const sessionId = text(session.sessionId || session.id);
   const baseCommit = text(sessionMetadata.base_commit);
@@ -93,9 +89,9 @@ function repositoryContext(session = {}, project = {}) {
     );
   }
   const remoteUrl = mode === PROJECT_REPOSITORY_MODE_GITHUB
-    ? text(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl || sessionMetadata.source_remote_url)
+    ? text(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl)
     : mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
-      ? text(project.canonicalRepositoryPath || sessionMetadata.source_remote_url)
+      ? text(project.canonicalRepositoryPath)
       : standaloneSourceRoot;
   if (!remoteUrl) {
     throw saveError(
@@ -1613,6 +1609,14 @@ async function checkSessionUpdatesDirect({
     baseCommit: context.baseCommit,
     behind,
     canonicalCommit,
+    canonicalSource: {
+      authority: context.mode,
+      commit: canonicalCommit,
+      ref: `refs/heads/${context.branch}`,
+      ...(context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+        ? {}
+        : { repository: context.remoteUrl })
+    },
     ...incoming,
     ok: true,
     operationId,
