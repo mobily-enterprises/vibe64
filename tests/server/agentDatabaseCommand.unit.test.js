@@ -35,11 +35,11 @@ function projectService() {
   };
 }
 
-function run(command, args, env) {
+function run(command, args, env, input = "") {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"]
     });
     let stderr = "";
     let stdout = "";
@@ -49,6 +49,7 @@ function run(command, args, env) {
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.once("error", reject);
     child.once("close", (code) => resolve({ code, stderr, stdout }));
+    child.stdin.end(input);
   });
 }
 
@@ -131,6 +132,38 @@ test("agent database command refuses a stale project binding", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_agent_database_command_project_binding_changed");
+});
+
+test("agent ERD wrapper reads geometry and submits stdin moves only to its bound session", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-erd-command-"));
+  const command = createAgentDatabaseCommandService({ projectService: projectService() });
+  const calls = [];
+  command.setDatabaseToolsProvider({
+    refreshSchema() { assert.fail("ERD commands do not refresh the schema"); },
+    async readErd(input) { calls.push(input); return { ok: true, revision: 7, nodes: [], connections: [] }; },
+    async moveErdTables(input) { calls.push(input); return { ok: true, revision: 8, previousMoves: [] }; }
+  });
+  try {
+    const prepared = await prepareAgentDatabaseCommand({ commandService: command, sessionId: "erd-session", wrapperHostDir: root });
+    const env = { ...process.env, ...prepared.env };
+    const read = await run(prepared.hostWrapperPath, ["erd", "--json"], env);
+    assert.equal(read.code, 0, read.stderr);
+    assert.equal(JSON.parse(read.stdout).revision, 7);
+    const changes = { revision: 7, moves: [{ table: "public.items", x: 200, y: 300 }] };
+    const moved = await run(prepared.hostWrapperPath, ["erd", "apply", "--json"], env, JSON.stringify(changes));
+    assert.equal(moved.code, 0, moved.stderr);
+    assert.equal(JSON.parse(moved.stdout).revision, 8);
+    assert.deepEqual(calls, [{ sessionId: "erd-session" }, { sessionId: "erd-session", changes }]);
+    const invalid = await run(prepared.hostWrapperPath, ["erd", "apply"], env, "not JSON");
+    assert.equal(invalid.code, 1);
+    assert.equal(calls.length, 2);
+    const denied = await command.run({ args: ["erd", "apply"], sessionId: "other-session", changes });
+    assert.equal(denied.code, "vibe64_agent_database_command_session_unbound");
+    assert.equal(calls.length, 2);
+  } finally {
+    await command.closeAllForSession("erd-session");
+    await rm(root, { force: true, recursive: true });
+  }
 });
 
 test("agent database wrapper authenticates to its session socket", async () => {

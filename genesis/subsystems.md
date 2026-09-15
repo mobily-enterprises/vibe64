@@ -138,7 +138,7 @@ Owns editing, reviewing and saving project source changes.
 
 ## `database` Database exploration
 
-Owns inspection, diagram exploration and query execution for a selected project database.
+Owns inspection, diagram exploration, agent-assisted layout changes and query execution for a selected project database.
 
 ### Program
 

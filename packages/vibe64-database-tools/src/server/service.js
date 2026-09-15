@@ -47,6 +47,7 @@ import {
   quoteQualifiedTable
 } from "./sqlPolicy.js";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
+import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
 function databaseResult(operation) {
@@ -548,6 +549,32 @@ function createService({
           );
         }
         return result;
+      });
+    },
+
+    async readErd(input = {}) {
+      return databaseResult(async () => {
+        const context = await sessionContext(input);
+        const schema = await currentSchema(context);
+        const layout = await readErdLayout(context.store, context.sessionId, input.vibe64User);
+        const { routes: _routes, ...inspection } = inspectErdLayout(schema, layout);
+        void _routes;
+        return { ok: true, ...inspection };
+      });
+    },
+
+    async moveErdTables(input = {}) {
+      return databaseResult(async () => {
+        const context = await sessionContext(input);
+        const schema = await currentSchema(context);
+        const current = await readErdLayout(context.store, context.sessionId, input.vibe64User);
+        const moved = moveErdTables(schema, current, input.changes);
+        const { routes, ...inspection } = inspectErdLayout(schema, moved.layout);
+        const layout = await saveErdLayout(context.store, context.sessionId, { ...moved.layout, routes }, {
+          expectedRevision: input.changes.revision
+        });
+        await publishLayoutChanged(context.sessionId, context.session);
+        return { ok: true, ...inspection, revision: layout.revision, previousMoves: moved.previousMoves };
       });
     },
 

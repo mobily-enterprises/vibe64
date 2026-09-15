@@ -29,7 +29,7 @@ import {
 const AGENT_DATABASE_COMMAND_NAME = "vibe64-database";
 const AGENT_DATABASE_COMMAND_SOCKET_NAME = "database-command.sock";
 const AGENT_DATABASE_COMMAND_CONTRACT_VERSION = "1";
-const AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES = 64 * 1024;
+const AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES = 528 * 1024;
 const VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV = "VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION";
 const VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID";
 const VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV = "VIBE64_AGENT_DATABASE_COMMAND_SOCKET";
@@ -54,10 +54,13 @@ function usageText() {
     "Usage:",
     "  vibe64-database refresh [--json]",
     "  vibe64-database overview [--json]",
+    "  vibe64-database erd [--json]",
+    "  vibe64-database erd apply [--json] < moves.json",
     "",
     "Run this once after a migration or any other database schema change.",
     "It refreshes the session Database tool's tables, relationships, indexes, and ERD source.",
-    "Overview reads the current schema, data-overview.json grouping, coverage and authoring instructions. It does not run queries or alter data."
+    "Overview reads the current schema, data-overview.json grouping, coverage and authoring instructions. It does not run queries or alter data.",
+    "ERD reads saved table bounds, pins and routed connection paths. Its response includes the exact revision and move format. Apply accepts that revision and a batch of table moves as JSON on stdin; it changes only the session diagram."
   ].join("\n") + "\n";
 }
 
@@ -101,8 +104,10 @@ function validateCommand(parsed = {}) {
       stdout: usageText()
     };
   }
-  if (!["refresh", "overview"].includes(parsed.command) || parsed.positionals.length !== 1) {
-    return responseError("The database command accepts refresh or overview.", "vibe64_agent_database_command_usage", {
+  const erd = parsed.command === "erd" && (parsed.positionals.length === 1 ||
+    (parsed.positionals.length === 2 && parsed.positionals[1] === "apply"));
+  if (!erd && (!["refresh", "overview"].includes(parsed.command) || parsed.positionals.length !== 1)) {
+    return responseError("The database command accepts refresh, overview, erd or erd apply.", "vibe64_agent_database_command_usage", {
       exitCode: 2,
       usage: true
     });
@@ -154,8 +159,20 @@ if (commandName !== ${JSON.stringify(AGENT_DATABASE_COMMAND_NAME)}) fail("Unsupp
 if (!socketPath || !sessionId || !token) fail("Vibe64 database command identity is unavailable for this session.");
 if (version !== expectedVersion) fail("Vibe64 database command contract does not match this session.");
 
+const args = process.argv.slice(2);
+let changes;
+if (args[0] === "erd" && args[1] === "apply" && !args.includes("--help") && !args.includes("-h")) {
+  let source = "";
+  process.stdin.setEncoding("utf8");
+  for await (const chunk of process.stdin) {
+    source += chunk;
+    if (Buffer.byteLength(source) > 512 * 1024) fail("ERD moves exceed 512 KiB.");
+  }
+  try { changes = JSON.parse(source); } catch { fail("Provide ERD moves as valid JSON on stdin."); }
+}
 const responseText = await requestSocket({
-  args: process.argv.slice(2),
+  args,
+  changes,
   sessionId,
   token
 }).catch((error) => fail(error?.message || error));
@@ -328,7 +345,13 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
       result = validateCommand(parsed);
       if (!result) {
         if (!databaseToolsProvider) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
-        if (parsed.command === "overview") {
+        if (parsed.command === "erd") {
+          const erd = await runInSessionProject(sessionId, () => parsed.positionals[1] === "apply"
+            ? databaseToolsProvider.moveErdTables({ sessionId, changes: input.changes })
+            : databaseToolsProvider.readErd({ sessionId }));
+          if (erd?.ok === false) throw vibe64Error(erd.error, erd.code);
+          result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(erd, null, 2)}\n` };
+        } else if (parsed.command === "overview") {
           const overview = await runInSessionProject(sessionId, () => databaseToolsProvider.readOverview({ sessionId }));
           if (overview?.ok === false) throw vibe64Error(overview.error, overview.code);
           result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(overview, null, 2)}\n` };

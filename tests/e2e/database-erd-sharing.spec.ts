@@ -60,6 +60,7 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
   let service;
   const saves: { actor: string; layout: unknown }[] = [];
   const reads: string[] = [];
+  const assistantRequests: unknown[] = [];
   const http = createServer(async (request, response) => {
     try {
       const url = new URL(request.url!, frontend);
@@ -79,6 +80,9 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
         } else if (request.method === "GET" && !match[2]) {
           reads.push(actor);
           result = await service.readState(input);
+        } else if (match[2] === "/assistant") {
+          assistantRequests.push(body);
+          result = { ok: true, answer: `Explanation of ${body.messages.at(-1).table}`, intent: "explain", sql: "", queries: [] };
         } else if (match[2] === "/queries") {
           result = { ok: true, kind: "result-set", columns: [], rows: [], cellMeta: [], durationMs: 0 };
         } else {
@@ -132,7 +136,9 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
   await once(http, "listening");
   const address = http.address() as { port: number };
   return {
-    url: `http://127.0.0.1:${address.port}`, saves, reads,
+    url: `http://127.0.0.1:${address.port}`, saves, reads, assistantRequests,
+    readErd: () => service.readErd({ sessionId: directChatSessionId }),
+    moveErd: (changes) => service.moveErdTables({ sessionId: directChatSessionId, changes }),
     clients: () => realtime.diagnostics().connectedClients,
     setOverview,
     readOverviewFile: () => readFile(path.join(sourceRoot(directChatSessionId), "data-overview.json"), "utf8"),
@@ -737,7 +743,7 @@ for (const pendingAction of ["remote move", "local column change"]) {
       const orders = '.vue-flow__node[data-id="public.orders"]';
       const position = (page: Page) => page.locator(orders).evaluate((node: HTMLElement) => node.style.transform);
       const initialPosition = await position(second);
-      const camera = second.locator(".vue-flow__transformationpane");
+      const camera = second.locator(".database-workspace__main > .database-erd .vue-flow__transformationpane");
       const initialCamera = await camera.getAttribute("style");
       const initialSaves = server.saves.length;
       await routing.hold();
@@ -787,13 +793,13 @@ test("shared ERD moves reach another browser without reloads or echo saves", asy
     const orders = '.vue-flow__node[data-id="public.orders"]';
     const position = (page: Page, selector: string) => page.locator(selector).evaluate((node: HTMLElement) => node.style.transform);
     const original = await position(second, customers);
-    const camera = await second.locator(".vue-flow__transformationpane").getAttribute("style");
+    const camera = await second.locator(".database-workspace__main > .database-erd .vue-flow__transformationpane").getAttribute("style");
     const startSaves = server.saves.length;
     await dragTable(first, "customers", 100, 90);
     await expect.poll(() => server.saves.length).toBe(startSaves + 1);
     await expect.poll(() => position(second, customers)).not.toBe(original);
     await expect.poll(() => position(second, customers)).toBe(await position(first, customers));
-    expect(await second.locator(".vue-flow__transformationpane").getAttribute("style")).toBe(camera);
+    expect(await second.locator(".database-workspace__main > .database-erd .vue-flow__transformationpane").getAttribute("style")).toBe(camera);
     expect(server.saves.at(-1)!.actor).toBe("alice");
 
     await dragTable(second, "orders", -70, 130);
@@ -846,10 +852,10 @@ for (const width of [390, 960, 1600]) {
       const page = await context.newPage();
       await openDiagram(page, server.url);
       const jobs = page.locator('.vue-flow__node[data-id="public.Jobs"]');
-      const positions = () => page.locator(".vue-flow__node").evaluateAll((nodes: HTMLElement[]) =>
+      const positions = () => page.locator(".database-workspace__main > .database-erd .vue-flow__node").evaluateAll((nodes: HTMLElement[]) =>
         nodes.map((node) => ({ id: node.dataset.id, position: node.style.transform })));
       const initialPositions = await positions();
-      const camera = page.locator(".vue-flow__transformationpane");
+      const camera = page.locator(".database-workspace__main > .database-erd .vue-flow__transformationpane");
       const initialCamera = await camera.getAttribute("style");
       const initialSaves = server.saves.length;
       await expect(jobs.locator("[data-column]")).toHaveCount(1);
@@ -919,12 +925,12 @@ for (const saved of [false, true]) {
       await search.fill("table_1");
       expect(Date.now() - started).toBeLessThan(1500);
       await search.press("Escape");
-      await expect(page.locator(".vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
-      await expect(page.locator(".vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
       const reset = page.getByRole("button", { name: "Fit", exact: true });
       await expect(reset).toBeEnabled({ timeout: 15_000 });
       await expect.poll(() => server.saves.length).toBe(1);
-      const positions = () => page.locator(".vue-flow__node").evaluateAll((nodes: HTMLElement[]) => nodes.map(node => ({ id: node.dataset.id, position: node.style.transform })));
+      const positions = () => page.locator(".database-workspace__main > .database-erd .vue-flow__node").evaluateAll((nodes: HTMLElement[]) => nodes.map(node => ({ id: node.dataset.id, position: node.style.transform })));
       const initial = await positions();
       if (saved) {
         const persisted = new Map((server.saves[0].layout as any).nodes.map(node => [node.table, node]));
@@ -933,7 +939,7 @@ for (const saved of [false, true]) {
       await diagramAction(page, "All columns");
       await expect.poll(() => server.saves.length).toBe(2);
       expect(await positions()).toEqual(initial);
-      await expect(page.locator(".vue-flow__edge")).toHaveCount(479);
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
       await diagramAction(page, "Keys only");
       await expect.poll(() => server.saves.length).toBe(3);
       await diagramAction(page, "Reset positions");
@@ -941,7 +947,7 @@ for (const saved of [false, true]) {
       await page.getByRole("button", { name: "Data", exact: true }).click();
       await page.getByRole("button", { name: "ERD", exact: true }).click();
       await expect(reset).toBeEnabled({ timeout: 15_000 });
-      await expect(page.locator(".vue-flow__edge")).toHaveCount(479);
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
       expect(errors).toEqual([]);
     } finally {
       await context.close();
@@ -976,7 +982,7 @@ test("@erd-dense routing worker errors leave an actionable retry and recover", a
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(page.locator('.database-erd__notice[role="alert"]')).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Fit", exact: true })).toBeEnabled();
-    await expect(page.locator(".vue-flow__node")).toHaveCount(2);
+    await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(2);
     expect(errors).toEqual([]);
   } finally {
     await context.close();
@@ -1746,5 +1752,87 @@ test("@overview-escape Escape closes table details from the sidebar, cards and e
       await expect(camera).toHaveAttribute("style", cameraBefore!);
       await expect(explore).toBeFocused();
     }
+  } finally { await context.close(); await server.close(); }
+});
+
+for (const width of [960, 1600]) {
+  test(`@erd-continuity scoped drag, Data return and selected-table Copilot at ${width}px`, async ({ browser, baseURL }, testInfo) => {
+    const schema = dataOverviewSchema();
+    const extra = Array.from({ length: 40 }, (_, index) => ({ ...schema.tables[0], name: `extra_${index}`, qualifiedName: `public.extra_${index}` }));
+    schema.tables.unshift(...extra);
+    const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: bookingOverview() });
+    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    try {
+      const page = await context.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await openDiagram(page, server.url, { view: 'Overview', waitForReady: false });
+      await page.getByRole('button', { name: 'Explore Bookings', exact: true }).click();
+      const details = page.getByRole('region', { name: 'ERD for Bookings' });
+      await expect(details.locator('.database-erd__flow--ready')).toBeVisible();
+      const sidebar = details.getByRole('complementary', { name: 'Actor tables and fields' });
+      await sidebar.getByRole('button', { name: 'transactions table', exact: false }).click();
+      const table = details.locator('[data-id="public.transactions"]');
+      await table.locator('header').hover();
+      const original = await table.getAttribute('style');
+      await dragTable(page, 'transactions', 50, 30);
+      await expect(table).not.toHaveAttribute('style', original!);
+      await expect(details.getByText('Arranging tables…', { exact: true })).toHaveCount(0);
+      const position = await table.getAttribute('style');
+      const camera = details.locator('.vue-flow__transformationpane');
+      const viewport = await camera.getAttribute('style');
+      await table.evaluate(node => { (window as any).retainedErdTable = node; });
+      await details.getByRole('button', { name: 'Open data', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Back to Bookings', exact: true })).toBeVisible();
+      const navigation = page.locator('.database-workspace__navigator');
+      const selected = navigation.locator('.database-workspace__table-button--active');
+      await expect(selected).toContainText('transactions');
+      expect(await selected.evaluate(node => {
+        const item = node.getBoundingClientRect();
+        const list = node.parentElement!.getBoundingClientRect();
+        return item.top >= list.top - 1 && item.bottom <= list.bottom + 1;
+      })).toBe(true);
+      expect(await navigation.locator('.database-workspace__nav-scroll').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      await page.getByRole('button', { name: 'Copilot', exact: true }).click();
+      await expect(page.locator('.database-workspace__assistant-context')).toHaveText('Table: public.transactions');
+      await page.getByPlaceholder('Ask about this table…').fill('Explain this table to me');
+      await page.getByRole('button', { name: 'Ask database copilot', exact: true }).click();
+      await expect(page.locator('.database-workspace__messages')).toContainText('Explanation of public.transactions');
+      expect((server.assistantRequests[0] as any).messages.at(-1)).toMatchObject({ content: 'Explain this table to me', table: 'public.transactions' });
+      await page.getByRole('button', { name: 'Collapse database copilot', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to Bookings', exact: true }).click();
+      await expect(details).toBeVisible();
+      expect(await table.evaluate(node => node === (window as any).retainedErdTable)).toBe(true);
+      await expect(table).toHaveAttribute('style', position!);
+      await expect(camera).toHaveAttribute('style', viewport!);
+      await page.screenshot({ path: testInfo.outputPath(`return-to-diagram-${width}.png`) });
+      expect(errors).toEqual([]);
+    } finally { await context.close(); await server.close(); }
+  });
+}
+
+test('@erd-continuity agent moves appear with the inspected connection paths and survive Data return', async ({ browser, baseURL }) => {
+  const server = await sharedDiagramServer(baseURL!, { largeTable: true });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  try {
+    const page = await context.newPage();
+    await openDiagram(page, server.url);
+    await expect.poll(server.clients).toBe(1);
+    const erd = page.locator('.database-workspace__main > .database-erd');
+    const node = erd.locator('[data-id="public.orders"]');
+    await expect.poll(async () => (await server.readErd()).connections.length).toBe(1);
+    const before = await server.readErd();
+    const moved = await server.moveErd({ revision: before.revision, moves: [{ table: 'public.orders', x: 750, y: 180 }] });
+    expect(moved.ok, moved.error).toBe(true);
+    await expect(node).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 750, 180)');
+    const paths = erd.locator('.vue-flow__edge-path');
+    const points = moved.connections[0].points;
+    const expectedPath = points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join('');
+    await expect(paths.first()).toHaveAttribute('d', expectedPath);
+    await node.locator('header').click();
+    await erd.getByRole('button', { name: 'Open data', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to ERD', exact: true }).click();
+    await expect(node).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 750, 180)');
+    await expect(paths.first()).toHaveAttribute('d', expectedPath);
   } finally { await context.close(); await server.close(); }
 });

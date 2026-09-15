@@ -27,7 +27,7 @@
 <script setup>
 import { computed } from "vue";
 import { BaseEdge, EdgeText } from "@vue-flow/core";
-import { erdPolylinePath } from "../erdRouting.js";
+import { erdPolylinePath } from "../../shared/erdRouting.js";
 
 defineOptions({ inheritAttrs: false });
 

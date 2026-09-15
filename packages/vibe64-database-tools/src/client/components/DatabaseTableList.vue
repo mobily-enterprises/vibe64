@@ -1,6 +1,6 @@
 <template>
   <div class="database-table-list">
-    <div class="database-workspace__nav-scroll">
+    <div ref="tableList" class="database-workspace__nav-scroll">
       <template v-for="group in filteredSchemas" :key="group.name">
         <div class="database-workspace__schema-label">
           <span>{{ group.name || database }}</span>
@@ -50,9 +50,10 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { mdiTable, mdiTableEye, mdiKeyVariant, mdiLinkVariant } from "@mdi/js";
 const props = defineProps({
+  active: { type: Boolean, default: true },
   schema: { type: Object, required: true },
   selectedTableName: { type: String, default: "" },
   search: { type: String, default: "" },
@@ -61,6 +62,7 @@ const props = defineProps({
   interactiveColumns: { type: Boolean, default: false }
 });
 const emit = defineEmits(["select-table", "select-column"]);
+const tableList = ref(null);
 const selectedTable = computed(() => props.schema.tables.find((table) => table.qualifiedName === props.selectedTableName));
 const filteredSchemas = computed(() => {
   const search = (props.search || "").trim().toLowerCase();
@@ -71,6 +73,16 @@ const filteredSchemas = computed(() => {
     ))
   })).filter((group) => group.tables.length > 0);
 });
+watch([() => props.selectedTableName, () => props.active, filteredSchemas, tableList], () => {
+  if (!props.active || !tableList.value) return;
+  const button = tableList.value.querySelector('.database-workspace__table-button--active');
+  if (!button) return;
+  const bounds = tableList.value.getBoundingClientRect();
+  const selected = button.getBoundingClientRect();
+  if (selected.top < bounds.top) tableList.value.scrollTop += selected.top - bounds.top;
+  else if (selected.bottom > bounds.bottom) tableList.value.scrollTop += selected.bottom - bounds.bottom;
+}, { flush: "post" });
+
 function columnKeyIcon(column = {}) {
   const primary = selectedTable.value?.keys?.some((key) => key.primary && key.columns.includes(column.name));
   if (primary) return mdiKeyVariant;

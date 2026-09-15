@@ -1,6 +1,7 @@
 import {
   createVibe64FeatureRoutes
 } from "@local/vibe64-core/server/featureRoutes";
+import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
 function withUser(request, input = {}) {
   const {
@@ -29,6 +30,7 @@ function databaseStatusCode(response = {}) {
     "vibe64_database_edit_conflict",
     "vibe64_database_delete_conflict",
     "vibe64_database_query_id_active",
+    "vibe64_database_erd_layout_conflict",
     "vibe64_database_overview_conflict"
   ].includes(response?.code)) {
     return 409;
@@ -108,7 +110,7 @@ function registerRoutes(http, {
   }, (request) => databaseTools.searchLookup(withUser(request, routes.requestBody(request))));
 
   route("PUT", "/layout", {
-    bodyLimit: 512 * 1024,
+    bodyLimit: ERD_LAYOUT_MAX_BYTES + 16 * 1024,
     summary: "Persist the shared selected-session ERD layout and notify its viewers."
   }, (request) => databaseTools.saveLayout(withUser(request, routes.requestBody(request))));
 

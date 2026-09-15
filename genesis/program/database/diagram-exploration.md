@@ -12,12 +12,13 @@ requiring every table and field to be read at once.
 - `packages/vibe64-database-tools/src/client/components/Vibe64DatabaseWorkspace.vue`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
-- `packages/vibe64-database-tools/src/client/erdModel.js`
-- `packages/vibe64-database-tools/src/client/erdRelationships.js`
-- `packages/vibe64-database-tools/src/client/erdRouting.js`
+- `packages/vibe64-database-tools/src/shared/erdModel.js`
+- `packages/vibe64-database-tools/src/shared/erdRelationships.js`
+- `packages/vibe64-database-tools/src/shared/erdRouting.js`
 - `packages/vibe64-database-tools/src/client/workers/erdLayout.js`
 - `packages/vibe64-database-tools/src/client/workers/erdLayout.worker.js`
 - `packages/vibe64-database-tools/src/server/sessionState.js`
+- `packages/vibe64-database-tools/src/server/erdLayout.js`
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-database-tools/src/server/events.js`
 - `packages/vibe64-database-tools/src/client/components/DatabaseOverview.vue`
@@ -169,8 +170,7 @@ reduces its opacity, and layers a scoped `DatabaseErd` over it. This is the exis
 ERD component with the group's physical tables. Incident FK metadata preserves
 the normal key columns and icons; the existing router draws only relationships
 whose two endpoints are visible in that group. The existing worker uses shared rectangular rings to
-centre the main table and distribute its supporting tables around it. Nodes cannot
-be dragged in this scoped mode; the full ERD retains dragging. Search, fields,
+centre the main table and distribute its supporting tables around it. Tables in this scoped mode and the full ERD can be dragged by their headers. Search, fields,
 selection, highlighting, focus, zoom and other ERD interactions use the same owner.
 The shared `DatabaseTableList` renders tables and fields in both the database
 navigator and the scoped layer; ERD selections update its selected table, and its
@@ -203,8 +203,8 @@ and closing a scoped ERD never refits it. Overview uses the full workspace width
 including intermediate sidebar breakpoints and chat/copilot layouts. Unchanged
 refreshes retain zoom without another routing request.
 
-Dragging a collapsed actor moves the concept itself; scoped physical tables remain
-fixed. During movement, incident connections use the existing Vue Flow inexpensive
+Dragging a collapsed actor moves the concept itself; dragging a scoped table
+moves that physical card within its actor’s retained diagram. During movement, incident connections use the existing Vue Flow inexpensive
 path calculation. Routing keeps the existing cards and connections mounted at
 their displayed positions; it never exposes the temporary layout grid. A new
 gesture retires older routing replies. Saving and routing do not disable dragging:
@@ -256,3 +256,37 @@ per-column handles and accepts clear worker routes; `erdRouting.js` repairs
 cross-group and moved routes using obstacle-aware orthogonal routing with
 lane-sharing penalties. `sessionState.js` normalizes bounded layout/view data
 and stores the shared diagram through the existing session artifact boundary.
+
+## Data navigation and agent layout access
+
+Overview, full ERD and Data are instantiated on first use and retained in one
+workspace grid cell. Visibility, inertness and a reduced-motion-aware fade select
+the active view without destroying diagram state. Open data records one return
+view/label and focus target; Back reveals that exact diagram. Workspace reloads
+with the same schema identity do not rebuild it. Actual schema refreshes preserve
+the camera; only initial layout and explicit Reset/Fit arrange the view.
+Scoped layouts remain browser-local per actor and survive Data navigation; they
+are not persisted across a page reload. The full layout remains session-shared.
+The table list scrolls only its own container when selection, visibility or
+filter results change. Open data selects Tables and clears the old sidebar search.
+
+`vibe64-database erd --json` inspects the bound session’s main ERD. It returns
+positioned/visible table rectangles, field names, pins, scope, camera, actual FK
+endpoints, routed polyline points, lengths, bends, detour ratios and obstruction
+counts. It explicitly distinguishes visible from total relationships. Open the
+ERD once to create its initial saved positions. It uses the same shared node
+geometry, visibility and routing functions as the browser. Saved connection paths
+retain readable manual arrangements and survive reload; changed endpoints or
+obstructed paths are rerouted. This is layout inspection, not a database row query.
+
+`vibe64-database erd apply --json < moves.json` accepts
+`{"revision":7,"moves":[{"table":"public.orders","x":400,"y":200}]}`.
+It validates all table identities, coordinates and pins before saving. Explicit
+`pinned:false` is required to move a pinned table. The existing serialized layout
+writer checks the inspected revision atomically; a conflict leaves the saved
+layout untouched. Other nodes, groups, named views and the camera are retained.
+The result includes recalculated paths/metrics and `previousMoves` for reversal
+against the new revision. Open diagrams receive the ordinary shared refresh event;
+a remote arrangement also creates a local Undo checkpoint. The agent must inspect
+the resulting paths before claiming readability improved. It cannot alter schema
+or records through these commands. Overview authoring remains a separate operation.

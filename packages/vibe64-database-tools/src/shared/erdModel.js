@@ -2,6 +2,40 @@ export const ERD_NODE_WIDTH = 296;
 export const ERD_HEADER_HEIGHT = 64;
 export const ERD_ROW_HEIGHT = 28;
 export const ERD_FOOTER_HEIGHT = 28;
+export const ERD_LAYOUT_MAX_BYTES = 4 * 1024 * 1024;
+
+// The browser and agent inspection use the same table rectangles and field ports.
+export function createErdNodes(schema, layout) {
+  const records = new Map((layout.nodes || []).map((node) => [node.table, node]));
+  const nodes = (schema.tables || []).map((table) => {
+    const record = records.get(table.qualifiedName) || {};
+    const columns = erdColumns(table, schema.relationships, layout.columnMode, record.expanded);
+    return {
+      id: table.qualifiedName,
+      position: { x: record.x || 0, y: record.y || 0 },
+      dimensions: { width: ERD_NODE_WIDTH, height: erdNodeHeight(columns, record.collapsed) },
+      data: { table, columns, group: record.group || "", collapsed: record.collapsed === true,
+        expanded: record.expanded === true, pinned: record.pinned === true }
+    };
+  });
+  const membership = new Map(erdLayoutGroups(nodes, schema.relationships || [])
+    .flatMap((group) => group.tables.map((id) => [id, group])));
+  for (const node of nodes) {
+    node.data.layoutGroup = membership.get(node.id)?.id;
+    node.data.groupName = layout.groups?.find((group) => group.id === node.data.group)?.name || membership.get(node.id)?.name;
+  }
+  return nodes;
+}
+
+export function visibleErdNodes(nodes, relationships, layout) {
+  const neighbours = erdNeighbours(layout.focusTable, relationships);
+  const connected = new Set(relationships.flatMap((relationship) => [relationship.sourceTable, relationship.referencedTable]));
+  return nodes.map((node) => ({ ...node, hidden: Boolean(
+    (layout.focusTable && !neighbours.has(node.id)) ||
+    (layout.activeGroup && layout.activeGroup !== node.data.layoutGroup &&
+      !(layout.activeGroup === "erd-related" && connected.has(node.id)))
+  ) }));
+}
 
 export function erdColumns(table, relationships = [], mode = "keys", expanded = false) {
   if (mode === "all" || expanded) return table.columns || [];

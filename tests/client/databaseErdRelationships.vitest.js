@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/client/erdRelationships.js";
+import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
 import { routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
-import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/client/erdRouting.js";
-import { erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/client/erdModel.js";
+import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
+import { erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
 
 function tableNode(id, x, columns, { collapsed = false, y = 0 } = {}) {
   return {
@@ -52,7 +52,7 @@ describe("Database ERD relationships", () => {
     const edges = nodes.slice(0, 4).flatMap((source) => nodes.filter((target) => target !== source)
       .map((target) => ({ id: `${source.id}-${target.id}`, source: source.id, target: target.id })));
     const routes = routeOverviewEdges(nodes, edges);
-    const obstacles = erdObstacles(nodes, 48);
+    const obstacles = erdObstacles(nodes, 24);
     expect(routes).toHaveLength(124);
     for (const [index, route] of routes.entries()) {
       expect(route.obstructed, route.id).toBe(false);

@@ -670,6 +670,32 @@ test("MySQL/MariaDB inspection keeps foreign keys, checks, indexes, defaults, an
   }]);
 });
 
+test("database assistant retains selected-table context per question and rejects a stale current selection", async () => {
+  const schema = testSchema();
+  const turns = [];
+  const options = {
+    schema, executeReadQuery: async () => assert.fail("Explanation should not query rows"),
+    deleteThread: async () => ({ ok: true }),
+    runAgentTurn: async (input) => {
+      turns.push(input);
+      return { ok: true, executionProfile: databaseExecutionProfile(), threadId: "table-context", text: JSON.stringify({ action: "answer", intent: "explain", answer: "Explanation", schema: "", sql: "" }) };
+    }
+  };
+  await runDatabaseAssistant({ ...options, messages: [
+    { role: "user", content: "Explain this table", table: "public.books" },
+    { role: "assistant", content: "Books" },
+    { role: "user", content: "And this one?", table: "public.categories" }
+  ] });
+  const conversation = JSON.parse(turns[0].prompt.split("DATABASE_CONVERSATION_JSON_BEGIN\n")[1].split("\nDATABASE_CONVERSATION_JSON_END")[0]);
+  assert.equal(conversation[0].table, "public.books");
+  assert.equal(conversation[2].table, "public.categories");
+  assert.equal(conversation[2].content, "And this one?");
+  await assert.rejects(runDatabaseAssistant({ ...options, messages: [{ role: "user", content: "Explain this table", table: "missing.table" }] }), {
+    code: "vibe64_database_assistant_table_invalid"
+  });
+  assert.equal(turns.length, 1);
+});
+
 test("database assistant uses one selected-provider secondary conversation and always deletes it", async () => {
   const schema = testSchema();
   const turns = [];

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { denseErdSchema } from "../fixtures/denseErdSchema.js";
-import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/client/erdRelationships.js";
-import { erdColumns, erdNodeHeight, erdLayoutGroups, placeErdNodes } from "../../packages/vibe64-database-tools/src/client/erdModel.js";
+import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
+import { erdColumns, erdNodeHeight, erdLayoutGroups, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
 
 import {
   createErdLayoutGraph,

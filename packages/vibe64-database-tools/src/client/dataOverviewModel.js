@@ -1,6 +1,6 @@
 import { dataOverviewCoverage } from "../shared/dataOverview.js";
-import { erdCardinality } from "./erdModel.js";
-import { erdObstacles, routeErdConnection } from "./erdRouting.js";
+import { erdCardinality } from "../shared/erdModel.js";
+import { erdObstacles, routeErdConnection } from "../shared/erdRouting.js";
 
 export function routeOverviewEdges(nodes, edges) {
   const byId = new Map(nodes.map((node) => [node.id, node]));

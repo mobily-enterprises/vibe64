@@ -4,6 +4,8 @@ import { actorKey, readErdLayout, readWorkspace, saveErdLayout, saveSnippet } fr
 import { createService } from "../../packages/vibe64-database-tools/src/server/service.js";
 import { createDatabaseLayoutChangedPublisher } from "../../packages/vibe64-database-tools/src/server/events.js";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { dataOverviewSchema } from "../fixtures/dataOverviewSchema.js";
+import { inspectErdLayout } from "../../packages/vibe64-database-tools/src/server/erdLayout.js";
 
 function stateStore() {
   const records = new Map();
@@ -67,6 +69,79 @@ test("shared saves serialize and assign revisions in persisted order", async () 
   const layouts = await Promise.all([1, 2, 3].map((x) => saveErdLayout(store, "session", { nodes: [{ table: "orders", x, y: 0 }] })));
   assert.deepEqual(layouts.map((layout) => layout.revision), [1, 2, 3]);
   assert.deepEqual(await readErdLayout(store, "session"), layouts[2]);
+});
+
+test("agent ERD moves retain exact routed paths, reject stale batches and preserve unrelated state", async () => {
+  const store = stateStore();
+  const schema = dataOverviewSchema();
+  await store.writeJsonArtifact("session", "database/schema.json", schema);
+  store.readSession = async (sessionId) => ({ sessionId });
+  const published = [];
+  const service = createService({
+    projectService: {
+      createSessionStore: async () => store,
+      sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
+        contract: "vibe64.database-tool-environment.v1", kind: "postgresql",
+        read: { host: "127.0.0.1", port: 5432, database: schema.database, username: "reader" },
+        write: { host: "127.0.0.1", port: 5432, database: schema.database, username: "writer" }
+      } })
+    },
+    withKnex: () => assert.fail("Layout inspection and movement cannot query records"),
+    publishLayoutChanged: async (id) => published.push(id)
+  });
+  const saved = await saveErdLayout(store, "session", {
+    nodes: schema.tables.map((table, i) => ({ table: table.qualifiedName, x: i * 600, y: i * 100, pinned: i === 0 })),
+    groups: [{ id: "bookkeeping", name: "Bookkeeping" }],
+    views: [{ id: "original", name: "Original", nodes: [] }], viewport: { x: 20, y: 40, zoom: .6 }
+  });
+  const before = await service.readErd({ sessionId: "session" });
+  assert.equal(before.ok, true, JSON.stringify(before));
+  assert.equal(before.connections.length, schema.relationships.length);
+  assert.ok(before.connections.every((route) => route.points.length >= 2 && route.length > 0));
+  assert.deepEqual(before.connections[0].parent, { table: "public.contacts", column: "id" });
+  assert.equal(before.nodes[0].width, 296);
+  assert.equal(before.nodes[0].pinned, true);
+  const changes = { revision: before.revision, moves: [{ table: "public.addresses", x: 400, y: 0 }] };
+  const moved = await service.moveErdTables({ sessionId: "session", changes });
+  assert.equal(moved.ok, true, JSON.stringify(moved));
+  assert.equal(moved.revision, before.revision + 1);
+  assert.equal(moved.nodes[1].x, 400);
+  assert.ok(moved.connections[0].length < before.connections[0].length);
+  const current = await readErdLayout(store, "session");
+  assert.deepEqual(current.views, saved.views);
+  assert.deepEqual(current.groups, saved.groups);
+  assert.deepEqual(current.viewport, saved.viewport);
+  assert.deepEqual(current.nodes[0], saved.nodes[0]);
+  assert.deepEqual(inspectErdLayout(schema, current).connections, moved.connections);
+  const reopened = await service.readErd({ sessionId: "session" });
+  assert.deepEqual(reopened.connections, moved.connections);
+  assert.equal((await service.moveErdTables({ sessionId: "session", changes })).code, "vibe64_database_erd_layout_conflict");
+  assert.deepEqual(await readErdLayout(store, "session"), current);
+  const pinned = await service.moveErdTables({ sessionId: "session", changes: {
+    revision: moved.revision, moves: [{ table: "public.contacts", x: 200, y: 100 }]
+  } });
+  assert.equal(pinned.code, "vibe64_database_erd_table_pinned");
+  const invalid = await service.moveErdTables({ sessionId: "session", changes: {
+    revision: moved.revision, moves: [{ table: "public.addresses", x: 100, y: 100 }, { table: "other.missing", x: 0, y: 0 }]
+  } });
+  assert.equal(invalid.code, "vibe64_database_erd_moves_invalid");
+  assert.deepEqual(await readErdLayout(store, "session"), current);
+  assert.equal((await service.readErd({ sessionId: "session", vibe64User: { role: "member" } })).code, "vibe64_owner_required");
+  const undo = await service.moveErdTables({ sessionId: "session", changes: { revision: moved.revision, moves: moved.previousMoves } });
+  assert.equal(undo.ok, true);
+  assert.deepEqual((await readErdLayout(store, "session")).nodes, saved.nodes);
+  assert.deepEqual(published, ["session", "session"]);
+  assert.equal((await readErdLayout(store, "other-session")).nodes.length, 0);
+});
+
+test("revision checks happen inside the serialized layout write", async () => {
+  const store = stateStore();
+  const saved = await saveErdLayout(store, "session", { nodes: [] });
+  const results = await Promise.allSettled([1, 2].map((x) => saveErdLayout(store, "session", {
+    nodes: [{ table: "t", x, y: 0 }]
+  }, { expectedRevision: saved.revision })));
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.find((result) => result.status === "rejected").reason.code, "vibe64_database_erd_layout_conflict");
 });
 
 test("service publishes a scoped hint only after a successful shared save, without executing SQL", async () => {

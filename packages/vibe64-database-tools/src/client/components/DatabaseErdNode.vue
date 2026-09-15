@@ -72,7 +72,7 @@
 <script setup>
 import { Handle } from "@vue-flow/core";
 import { mdiChevronDown, mdiChevronUp, mdiPin, mdiPinOutline } from "@mdi/js";
-import { ERD_NODE_WIDTH, ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, ERD_FOOTER_HEIGHT } from "../erdModel.js";
+import { ERD_NODE_WIDTH, ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, ERD_FOOTER_HEIGHT } from "../../shared/erdModel.js";
 
 defineProps({
   controlsVisible: { default: true, type: Boolean },

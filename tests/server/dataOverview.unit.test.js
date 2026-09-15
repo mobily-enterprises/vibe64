@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { dataOverviewCoverage, validateDataOverview } from "../../packages/vibe64-database-tools/src/shared/dataOverview.js";
 import { dataOverviewGraph, routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
-import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/client/erdRouting.js";
+import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "../../packages/vibe64-database-tools/src/server/dataOverview.js";
 import { createService } from "../../packages/vibe64-database-tools/src/server/service.js";
 import { createService as createSourceEditor } from "../../packages/vibe64-source-editor/src/server/service.js";

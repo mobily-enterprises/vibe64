@@ -1,7 +1,7 @@
 import ELK from "elkjs/lib/elk-api.js";
 import ElkWorker from "elkjs/lib/elk-worker.min.js?worker";
 
-import { createErdRelationshipRoutes } from "../erdRelationships.js";
+import { createErdRelationshipRoutes } from "../../shared/erdRelationships.js";
 import { layoutErdGroups, layoutErdRings } from "./erdLayout.js";
 import { routeOverviewEdges } from "../dataOverviewModel.js";
 

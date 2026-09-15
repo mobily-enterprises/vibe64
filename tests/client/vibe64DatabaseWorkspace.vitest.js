@@ -4,7 +4,7 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ database: null }));
+const mocks = vi.hoisted(() => ({ database: null, overviewMounts: 0, overviewUnmounts: 0 }));
 
 vi.mock("../../packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js", () => ({
   useVibe64DatabaseTools: () => mocks.database
@@ -13,7 +13,7 @@ vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseErd.
   default: { render: () => null }
 }));
 vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseOverview.vue", () => ({
-  default: { render: () => null }
+  default: { mounted() { mocks.overviewMounts += 1; }, unmounted() { mocks.overviewUnmounts += 1; }, render: () => null }
 }));
 vi.mock("../../packages/vibe64-database-tools/src/client/components/DatabaseSqlEditor.vue", () => ({
   default: {
@@ -94,10 +94,10 @@ function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout
   }));
   mocks.database = {
     state, runQuery, saveLayout, running: Vue.ref(false), loading: Vue.ref(false), error: Vue.ref(""),
-    reload: vi.fn(async () => null)
+    reload: vi.fn(async () => null), askAssistant: vi.fn(async () => ({ answer: "Explanation", queries: [] })), assistantBusy: Vue.ref(false)
   };
   const renderer = Vue.createRenderer({
-    createElement: (type) => ({ type, children: [], props: {}, style: {}, parent: null }),
+    createElement: (type) => ({ type, children: [], props: {}, style: {}, parent: null, querySelector: () => null }),
     createComment: (text) => ({ type: "comment", text, children: [], props: {} }),
     createText: (text) => ({ type: "text", text, children: [], props: {} }),
     insert(child, parent, anchor = null) {
@@ -153,6 +153,45 @@ const firstState = {
 const secondState = { ...firstState, schema: { ...firstState.schema, tables: [secondTable] } };
 
 describe("Database Workspace automatic table admission", () => {
+  it("retains the originating Overview while visiting Data and returning, with a fresh sidebar selection", async () => {
+    const before = mocks.overviewMounts;
+    const unmounts = mocks.overviewUnmounts;
+    const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace.tableSearch = "does not match";
+      fixture.workspace.navigatorTab = "history";
+      await fixture.workspace.selectTableFromErd(firstTable, "overview", "Inventory");
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("data");
+      expect(fixture.workspace.tableSearch).toBe("");
+      expect(fixture.workspace.navigatorTab).toBe("tables");
+      expect(fixture.workspace.diagramReturn).toEqual({ view: "overview", label: "Inventory" });
+      fixture.workspace.returnToDiagram();
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+      expect(mocks.overviewMounts - before).toBe(1);
+      expect(mocks.overviewUnmounts - unmounts).toBe(0);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+    } finally { await fixture.close(); }
+  });
+
+  it("captures each Copilot question's own selected table across Data and diagram selections", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: { available: true },
+      schema: { ...firstState.schema, tables: [firstTable, secondTable] } } });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace.assistantDraft = "Explain this table";
+      await fixture.workspace.askCopilot();
+      fixture.workspace.activeView = "erd";
+      fixture.workspace.diagramSelections.erd = secondTable.qualifiedName;
+      fixture.workspace.assistantDraft = "And this one?";
+      await fixture.workspace.askCopilot();
+      const messages = mocks.database.askAssistant.mock.calls.at(-1)[0];
+      expect(messages[0]).toMatchObject({ content: "Explain this table", table: "public.items" });
+      expect(messages[2]).toMatchObject({ content: "And this one?", table: "public.orders" });
+    } finally { await fixture.close(); }
+  });
   it("opens a subsystem table in the ERD without admitting a record query", async () => {
     const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
     try {

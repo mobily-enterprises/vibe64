@@ -189,7 +189,13 @@ durable ownership removal. The task uses that acknowledgement for its exact
 thread instead of interrupting or deleting it again. Failed retirement retains
 ownership and remains reportable and retryable through the same runtime owner.
 
-Database Copilot begins with only bounded database identity and object counts.
+Database Copilot begins with bounded database identity and object counts, plus
+the exact selected table attached to each user question. The current selection
+must exist in the refreshed schema; historical messages retain their original
+table context. The UI shows the current context above the composer. “This table”
+uses the question’s captured selection and the existing bounded schema lookup.
+Changing selection during a request cannot retarget it or replace another
+table’s visible query result.
 Its temporary helper can search the refreshed schema, list object names and
 kinds, and request complete SQL-relevant definitions for a bounded set of
 matches before proposing a query. Truncation is explicit and another search is

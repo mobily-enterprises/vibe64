@@ -1,10 +1,18 @@
 import { ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, erdCardinality } from "./erdModel.js";
 import { erdObstacles, erdPathClear, routeErdConnection } from "./erdRouting.js";
 
+export function erdRouteSnapshot(routes = []) {
+  return routes.map(({ id, sourcePosition, targetPosition, points, obstructed }) => ({
+    id, sourcePosition, targetPosition, points: points.map(({ x, y }) => ({ x, y })), obstructed: Boolean(obstructed)
+  }));
+}
+
 export function createErdRelationshipRoutes(nodes = [], relationships = [], { previousRoutes = [], dragging = false, fixedSides = false, calculatePaths = true, layoutPaths = new Map() } = {}) {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const portsByNode = new Map(nodes.map((node) => [node.id, []]));
-  const previous = new Map(previousRoutes.map((route) => [route.id, route]));
+  const previous = new Map(previousRoutes.map((route) => [route.id, {
+    ...route, start: route.points?.[0], end: route.points?.at(-1)
+  }]));
   const routes = [];
   relationships.forEach((relationship, index) => {
     const sourceNode = nodeById.get(relationship.referencedTable);

@@ -89,6 +89,7 @@
 
           <DatabaseTableList
             v-if="navigatorTab === 'tables'"
+            :active="active && activeView !== 'overview'"
             :schema="schema" :selected-table-name="selectedTableName" :search="tableSearch"
             :database="connection.database" :running="running" @select-table="selectTable"
           >
@@ -138,30 +139,47 @@
 
         <main class="database-workspace__main">
           <DatabaseOverview
-            v-if="activeView === 'overview'"
+            v-if="openedViews.overview"
+            class="database-workspace__view"
+            :class="{ 'database-workspace__view--hidden': activeView !== 'overview' }"
+            :inert="activeView !== 'overview' || !active"
+            :aria-hidden="activeView !== 'overview'"
             :key="sessionId"
             :schema="schema"
             :overview="state?.overview || { present: false, hash: '', definition: { version: 1, actors: [] } }"
             :assistant-available="assistantAvailable"
             :save-overview="saveOverview"
-            @select-table="selectTableFromErd"
+            @select-table="(table, label) => selectTableFromErd(table, 'overview', label)"
+            @inspect-table="diagramSelections.overview = $event"
             @reload="reload"
             @request-assistant="requestOverviewAssistant"
           />
           <DatabaseErd
             :key="sessionId"
-            v-else-if="activeView === 'erd'"
+            v-if="openedViews.erd"
+            class="database-workspace__view"
+            :class="{ 'database-workspace__view--hidden': activeView !== 'erd' }"
+            :inert="activeView !== 'erd' || !active"
+            :aria-hidden="activeView !== 'erd'"
             :layout="erdLayout"
             :focus-request="openRequest"
             :schema="schema"
             @save-layout="saveDiagramLayout"
-            @select-table="selectTableFromErd"
+            @select-table="table => selectTableFromErd(table, 'erd')"
+            @inspect-table="diagramSelections.erd = $event"
           />
 
-          <template v-else>
+          <div
+            v-if="openedViews.data" class="database-workspace__view database-workspace__data"
+            :class="{ 'database-workspace__view--hidden': activeView !== 'data' }"
+            :inert="activeView !== 'data' || !active" :aria-hidden="activeView !== 'data'"
+          >
             <section class="database-workspace__query">
               <header class="database-workspace__query-toolbar">
                 <div class="database-workspace__query-actions">
+                  <v-btn v-if="diagramReturn" :prepend-icon="mdiChevronLeft" size="small" variant="text" @click="returnToDiagram">
+                    Back to {{ diagramReturn.label }}
+                  </v-btn>
                   <v-btn
                     ref="runButton"
                     :aria-busy="running ? 'true' : undefined"
@@ -344,7 +362,7 @@
                 <span>Direct physical fields remain editable whenever this result includes a complete primary or unique key.</span>
               </div>
             </section>
-          </template>
+          </div>
         </main>
 
         <aside
@@ -371,6 +389,7 @@
             <div class="database-workspace__messages">
               <article v-for="(message, index) in assistantMessages" :key="index" :class="`database-workspace__message--${message.role}`">
                 <small>{{ message.role === 'user' ? 'You' : 'Copilot' }}</small>
+                <small v-if="message.table"> · {{ message.table }}</small>
                 <p>{{ message.content }}</p>
                 <v-btn
                   v-if="message.sql"
@@ -388,6 +407,7 @@
               </div>
             </div>
             <div class="database-workspace__assistant-composer">
+              <small class="database-workspace__assistant-context">{{ assistantTableName ? `Table: ${assistantTableName}` : 'Whole database' }}</small>
               <v-textarea
                 v-model="assistantDraft"
                 auto-grow
@@ -395,7 +415,7 @@
                 :disabled="assistantBusy"
                 hide-details
                 max-rows="5"
-                placeholder="Ask about this database…"
+                :placeholder="assistantTableName ? 'Ask about this table…' : 'Ask about this database…'"
                 rows="2"
                 variant="outlined"
                 @keydown.meta.enter.prevent="askCopilot"
@@ -532,6 +552,7 @@
 <script setup>
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   reactive,
   ref,
@@ -653,6 +674,13 @@ const {
 } = database;
 
 const activeView = ref("overview");
+// Retain each visited view in the same grid cell. Its diagram and camera stay
+// mounted; switching views only changes visibility and interaction.
+const openedViews = reactive({ overview: true, erd: false, data: false });
+watch(activeView, (view) => { openedViews[view] = true; }, { flush: "sync" });
+const diagramReturn = ref(null);
+const diagramSelections = reactive({ overview: "", erd: "" });
+let diagramReturnFocus = null;
 const copilotOpen = ref(false);
 const erdLayout = ref({ nodes: [] });
 const diagramSavesPending = ref(0);
@@ -721,6 +749,10 @@ const assistantUnavailableCopy = computed(() => {
   return "Configure the server’s database-assistant OpenAI key to enable it. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
+const assistantTableName = computed(() => {
+  const name = activeView.value === "data" ? selectedTableName.value : diagramSelections[activeView.value];
+  return schema.value.tables.some((table) => table.qualifiedName === name) ? name : "";
+});
 const currentQueryIsDefault = computed(() => Boolean(
   selectedTable.value && sqlText.value.trim() === defaultTableSql(selectedTable.value)
 ));
@@ -772,6 +804,10 @@ watch([state, () => props.active, activeView], ([next, active]) => {
     filters.value = [];
     assistantMessages.value = [];
     copilotOpen.value = false;
+    diagramReturn.value = null;
+    diagramReturnFocus = null;
+    diagramSelections.overview = "";
+    diagramSelections.erd = "";
     erdLayout.value = next.layout || { nodes: [] };
   }
   if (activeView.value !== "data") return;
@@ -798,6 +834,8 @@ watch(() => props.sessionId, () => {
   if (hydratedSessionId.value !== props.sessionId) {
     hydratedSessionId.value = "";
     activeView.value = "overview";
+    openedViews.erd = false;
+    openedViews.data = false;
   }
 }, { immediate: true });
 
@@ -885,8 +923,19 @@ function selectTable(table = {}) {
   return openTable(table);
 }
 
-function selectTableFromErd(table = {}) {
-  selectTable(table);
+function selectTableFromErd(table = {}, view = activeView.value, label = "") {
+  if (!table.qualifiedName || running.value) return;
+  diagramReturn.value = { view, label: label || (view === "erd" ? "ERD" : "Overview") };
+  diagramReturnFocus = globalThis.document?.activeElement;
+  navigatorTab.value = "tables";
+  tableSearch.value = "";
+  return selectTable(table);
+}
+
+function returnToDiagram() {
+  if (!diagramReturn.value) return;
+  activeView.value = diagramReturn.value.view;
+  void nextTick(() => diagramReturnFocus?.focus?.({ preventScroll: true }));
 }
 
 function loadSql(value = "") {
@@ -1177,13 +1226,15 @@ function useAssistantSql(sql) {
 async function askCopilot() {
   const content = assistantDraft.value.trim();
   if (!content || assistantBusy.value || !assistantCanRun.value) return;
-  assistantMessages.value.push({ content, role: "user" });
+  const table = assistantTableName.value;
+  const sessionId = props.sessionId;
+  assistantMessages.value.push({ content, role: "user", table });
   assistantDraft.value = "";
-  const result = await askAssistant(assistantMessages.value.map(({ content: text, role }) => ({ content: text, role })));
-  if (!result) return;
+  const result = await askAssistant(assistantMessages.value.map(({ content: text, role, table }) => ({ content: text, role, table })));
+  if (!result || disposed || props.sessionId !== sessionId) return;
   assistantMessages.value.push({ content: result.answer, intent: result.intent, role: "assistant", sql: result.sql });
   const lastQuery = result.queries?.at(-1)?.result;
-  if (lastQuery) {
+  if (lastQuery && activeView.value === "data" && table === selectedTableName.value) {
     queryResult.value = lastQuery;
     rememberSelectedTableState();
   }
@@ -1244,8 +1295,12 @@ async function askCopilot() {
 .database-workspace__saved-query small { color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.62rem; }
 .database-workspace__empty-copy { padding: 1rem; color: rgba(var(--v-theme-on-surface), 0.55); font-size: 0.74rem; text-align: center; }
 
-.database-workspace__main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(16rem, 1fr); }
-.database-workspace__main > .database-erd, .database-workspace__main > .database-overview { grid-row: 1 / -1; }
+.database-workspace__main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.database-workspace__view { grid-area: 1 / 1; min-width: 0; min-height: 0; transition: opacity 140ms ease, visibility 140ms; }
+.database-workspace__view--hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.database-workspace__data { display: grid; grid-template-rows: auto minmax(16rem, 1fr); }
+.database-workspace__assistant-context { grid-column: 1 / -1; overflow-wrap: anywhere; color: rgba(var(--v-theme-on-surface), .65); }
+@media (prefers-reduced-motion: reduce) { .database-workspace__view { transition: none; } }
 .database-workspace__query { display: grid; grid-template-rows: auto 5.25rem; min-height: 0; border-bottom: 1px solid rgba(var(--v-theme-outline), 0.18); }
 .database-workspace__query-toolbar { justify-content: space-between; min-height: 3.2rem; padding: 0.45rem 0.65rem; }
 .database-workspace__query-actions { min-width: 0; flex-wrap: wrap; }

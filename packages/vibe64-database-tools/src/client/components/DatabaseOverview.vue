@@ -86,10 +86,9 @@
           :schema="actorSchema"
           :central-table="activeGroup.table"
           :layout="actorLayouts[activeGroup.id]"
-          :draggable="false"
           @save-layout="actorLayouts[activeGroup.id] = $event"
           @inspect-table="selectedTableName = $event"
-          @select-table="emit('select-table', $event)"
+          @select-table="emit('select-table', $event, activeGroup.name)"
         >
           <template #options="{ close }">
             <v-divider />
@@ -162,7 +161,7 @@ const props = defineProps({
   assistantAvailable: { type: Boolean, default: true },
   saveOverview: { type: Function, required: true }
 });
-const emit = defineEmits(["reload", "request-assistant", "select-table"]);
+const emit = defineEmits(["reload", "request-assistant", "select-table", "inspect-table"]);
 const feedback = useUiFeedback({ source: "vibe64.database-overview.feedback" });
 const overviewOptions = ref(false);
 const allRelationships = ref(false);
@@ -180,6 +179,7 @@ const actorLayouts = ref({});
 const closeButton = ref(null);
 const tableSearch = ref("");
 const selectedTableName = ref("");
+watch(selectedTableName, (name) => emit("inspect-table", name));
 const selectedPhysicalTable = computed(() => actorSchema.value.tables.find(table => table.qualifiedName === selectedTableName.value));
 const savingPosition = ref(false);
 let dragging = false;
@@ -229,6 +229,7 @@ async function openActor(group) {
 function closeActor(event) {
   if (!activeGroup.value || editor.value || generation.value || event?.defaultPrevented) return;
   activeGroupId.value = "";
+  selectedTableName.value = "";
   void nextTick(() => returnFocus?.focus?.());
 }
 function locateTable(table) {

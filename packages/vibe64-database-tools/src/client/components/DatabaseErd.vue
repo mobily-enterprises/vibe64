@@ -159,8 +159,8 @@ import { MarkerType, VueFlow } from "@vue-flow/core";
 import { MiniMap } from "@vue-flow/minimap";
 import DatabaseErdEdge from "./DatabaseErdEdge.vue";
 import DatabaseErdNode from "./DatabaseErdNode.vue";
-import { createErdRelationshipRoutes } from "../erdRelationships.js";
-import { ERD_NODE_WIDTH, erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdNodeHeight, erdSearch, placeErdNodes } from "../erdModel.js";
+import { createErdRelationshipRoutes, erdRouteSnapshot } from "../../shared/erdRelationships.js";
+import { createErdNodes, visibleErdNodes, erdCardinality, erdColumns, erdLayoutGroups, erdSearch, placeErdNodes } from "../../shared/erdModel.js";
 
 const props = defineProps({
   focusRequest: { type: Object, default: null },
@@ -237,7 +237,7 @@ let rebuildId = 0;
 let graphRefreshId = 0;
 let routingPromise = null;
 let relationshipDragFrame = null;
-let routes = [];
+let routes = props.layout.routes || [];
 let storedNodes = props.layout.nodes || [];
 let draggingSnapshot = null;
 let pendingRemoteLayout = null;
@@ -249,6 +249,7 @@ const layoutResolvers = new Map();
 function tableName(id) { return tables.value.find((table) => table.qualifiedName === id)?.name || id; }
 function snapshot() {
   return {
+    routes: erdRouteSnapshot(routes),
     nodes: nodes.value.map((node) => ({ table: node.id, x: node.position.x, y: node.position.y, collapsed: node.data.collapsed, expanded: node.data.expanded, pinned: node.data.pinned, group: node.data.group, hidden: false })),
     columnMode: columnMode.value, focusTable: focusTable.value, activeGroup: activeGroup.value,
     groups: groups.value.map((group) => ({ ...group })),
@@ -262,36 +263,26 @@ function checkpoint() {
 function clearViewportSave() { clearTimeout(viewportSaveTimer); viewportSaveTimer = null; }
 function persistPositions() { clearViewportSave(); emit("save-layout", { ...snapshot(), views: views.value }); }
 function buildNodes(saved = storedNodes) {
-  const records = new Map(saved.map((node) => [node.table, node]));
-  const memberships = new Map(erdLayoutGroups(tables.value.map((table) => ({ id: table.qualifiedName, data: { table, group: records.get(table.qualifiedName)?.group } })), relationships.value)
-    .flatMap((group) => group.tables.map((id) => [id, group])));
-  return tables.value.map((table) => {
-    const record = records.get(table.qualifiedName) || {};
-    const columns = erdColumns(table, relationships.value, columnMode.value, record.expanded);
-    const group = record.group || "";
+  return createErdNodes({ tables: tables.value, relationships: relationships.value }, {
+    nodes: saved, columnMode: columnMode.value, groups: groups.value
+  }).map((node) => {
+    const { table, columns } = node.data;
     return {
-      id: table.qualifiedName, type: "table", draggable: props.draggable && !record.pinned,
-      position: { x: record.x || 0, y: record.y || 0 },
-      dimensions: { width: ERD_NODE_WIDTH, height: erdNodeHeight(columns, record.collapsed) },
+      ...node, type: "table", draggable: props.draggable && !node.data.pinned, dragHandle: ".database-erd-node header",
       data: {
-        table: markRaw(table), columns: markRaw(columns), group, collapsed: record.collapsed === true, expanded: record.expanded === true, pinned: record.pinned === true,
+        ...node.data, table: markRaw(table), columns: markRaw(columns),
         columnMode: columnMode.value, keyColumnCount: erdColumns(table, relationships.value).length,
         primaryColumns: new Set((table.keys || []).filter((key) => key.primary).flatMap((key) => key.columns)),
         uniqueColumns: new Set((table.keys || []).flatMap((key) => key.columns)),
         foreignColumns: new Set(relationships.value.filter((relationship) => relationship.sourceTable === table.qualifiedName).flatMap((relationship) => relationship.columns)),
-        layoutGroup: memberships.get(table.qualifiedName)?.id,
-        groupName: groups.value.find((item) => item.id === group)?.name || memberships.get(table.qualifiedName)?.name,
         onToggle: toggleNode, onExpand: expandNode, onPin: togglePin
       }
     };
   });
 }
 function applyVisibility() {
-  const neighbours = erdNeighbours(focusTable.value, relationships.value);
-  nodes.value = nodes.value.map((node) => {
-    const matchesGroup = !activeGroup.value || activeGroup.value === node.data.layoutGroup ||
-      (activeGroup.value === "erd-related" && connectedTables.value.has(node.id));
-    return { ...node, hidden: Boolean((focusTable.value && !neighbours.has(node.id)) || !matchesGroup) };
+  nodes.value = visibleErdNodes(nodes.value, relationships.value, {
+    focusTable: focusTable.value, activeGroup: activeGroup.value
   });
 }
 function emphasize() {
@@ -345,7 +336,7 @@ async function refreshGraph({ dragging = false, reset = false, layoutPaths = new
     kind: "routes",
     nodes: JSON.parse(JSON.stringify(routingNodes)),
     relationships: JSON.parse(JSON.stringify(relationships.value)),
-    options: { previousRoutes: reset ? [] : routes, dragging, fixedSides: reset, layoutPaths }
+    options: { previousRoutes: reset ? [] : erdRouteSnapshot(routes), dragging, fixedSides: reset, layoutPaths }
   });
   routingPromise = operation;
   let graph;
@@ -389,7 +380,7 @@ async function rebuild({ force = false } = {}) {
   layoutPending.value = true;
   layoutError.value = "";
   const saved = nodes.value.length ? snapshot().nodes : storedNodes;
-  const initialViewport = !nodes.value.length && saved.length ? props.layout.viewport : null;
+  const initialViewport = !force && (nodes.value.length ? flow?.getViewport?.() : saved.length ? props.layout.viewport : null);
   try {
     const sourceNodes = buildNodes(saved);
     const savedTables = new Set(saved.map((node) => node.table));
@@ -403,10 +394,10 @@ async function rebuild({ force = false } = {}) {
     });
     if (disposed || request !== rebuildId) return;
     nodes.value = placeErdNodes(sourceNodes, layout.nodes, saved, force);
-    if (!await refreshGraph({ reset: true, layoutPaths: new Map(layout.paths.map((path) => [path.id, path.points])) })) return;
+    if (!await refreshGraph({ reset: force, layoutPaths: force || !saved.length ? new Map(layout.paths.map((path) => [path.id, path.points])) : new Map() })) return;
     if (!await updateViewport(initialViewport, { animate: diagramReady.value })) return;
     diagramReady.value = true;
-    if (needsSave) persistPositions();
+    if (needsSave || JSON.stringify(erdRouteSnapshot(routes)) !== JSON.stringify(props.layout.routes || [])) persistPositions();
     if (layout.fallback) feedback.error(new Error("The recommended layout was unavailable; a basic arrangement was used."), "Layout needs attention.");
   } catch (error) {
     if (request === rebuildId) layoutError.value = error.message || "The ERD could not be arranged.";
@@ -428,9 +419,10 @@ async function restore(state, { remote = false } = {}) {
     selectedRelationshipId.value = "";
     hoveredRelationshipId.value = "";
   }
+  routes = state.routes || [];
   nodes.value = buildNodes(state.nodes);
   try {
-    if (!await refreshGraph({ reset: true })) return false;
+    if (!await refreshGraph()) return false;
     if (!remote) {
       if (!await updateViewport(state.viewport)) return false;
       persistPositions();
@@ -506,10 +498,10 @@ async function onNodeDragStop() {
   persistPositions();
 }
 function onNodeClick({ node }) { selectedTable.value = node.id; emit("inspect-table", node.id); selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
-function onEdgeClick({ edge }) { selectedRelationshipId.value = edge.data.relationshipId; selectedTable.value = ""; emphasize(); }
+function onEdgeClick({ edge }) { selectedRelationshipId.value = edge.data.relationshipId; selectedTable.value = ""; emit("inspect-table", ""); emphasize(); }
 function onEdgeHover({ edge }) { hoveredRelationshipId.value = edge.data.relationshipId; emphasize(); }
 function onEdgeLeave() { hoveredRelationshipId.value = ""; emphasize(); }
-function clearSelection() { selectedTable.value = ""; selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
+function clearSelection() { selectedTable.value = ""; emit("inspect-table", ""); selectedRelationshipId.value = ""; hoveredRelationshipId.value = ""; searchColumn.value = ""; emphasize(); }
 async function setFocus(id) {
   checkpoint();
   focusTable.value = id;
@@ -637,7 +629,10 @@ function onKeydown(event) {
     if (event.shiftKey) void redo(); else void undo();
   } else if (event.key === "Escape" && !viewDialog.value && !groupDialog.value) clearSelection();
 }
-watch(() => props.schema, () => { if (layoutWorker) void rebuild(); });
+// State reloads replace the same snapshot object; only a refreshed schema needs layout work.
+watch([() => props.schema.refreshedAt, () => props.schema.database, () => props.schema.engine], () => {
+  if (layoutWorker) void rebuild();
+});
 watch(() => props.layout, (layout) => {
   if (!layout.revision || layout.revision <= appliedLayoutRevision) return;
   appliedLayoutRevision = layout.revision;
@@ -655,6 +650,7 @@ watch(() => props.layout, (layout) => {
   if (draggingSnapshot) {
     pendingRemoteLayout = layout;
   } else if (layoutWorker) {
+    checkpoint();
     void restore(layout, { remote: true });
   }
 });

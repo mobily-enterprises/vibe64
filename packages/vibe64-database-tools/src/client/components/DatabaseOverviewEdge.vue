@@ -5,7 +5,7 @@
 <script setup>
 import { computed } from "vue";
 import { BaseEdge, EdgeText, getSmoothStepPath } from "@vue-flow/core";
-import { erdPolylinePath } from "../erdRouting.js";
+import { erdPolylinePath } from "../../shared/erdRouting.js";
 const props = defineProps({
   id: { type: String, required: true },
   sourceX: { type: Number, required: true },

@@ -109,8 +109,16 @@ supporting tables around it. A small loading indicator keeps progress clear
 without covering the diagram area in flashing placeholders. Real tables start fully opaque; selecting a table
 keeps it and its direct neighbours solid while dimming unrelated tables. Hovering
 connections does not change which tables are dimmed. The shared table/field sidebar follows selection.
-Scoped tables cannot be dragged; closing the detail layer restores the unchanged
-overview. Every unassigned table remains available under Other tables. Balanced
+Scoped tables can be dragged by their headers, with their arrangement retained
+while exploring. Closing the detail layer restores the unchanged overview.
+Opening Data retains the originating diagram, and a labelled Back action restores
+its selection, expanded fields, positions and camera through a short transition.
+The data sidebar reveals the selected table. Database Copilot shows its current
+table context and captures it with each question, so “this table” refers to the
+selection at the time of sending. Project agents can inspect the main ERD’s
+table rectangles and routed connections and submit revision-checked table moves
+through the existing database command. Changes preserve unrelated layout state
+and reach other viewers; returned prior positions allow reversing the batch. Every unassigned table remains available under Other tables. Balanced
 generation targets 5–10 business concepts and their main business connections;
 Very abstract targets 3–5 broader domains. All connections remain inspectable on
 request, retaining actual table endpoints and schema cardinalities. People can edit the
