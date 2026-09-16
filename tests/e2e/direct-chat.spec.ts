@@ -80,7 +80,9 @@ test.describe("direct chat", () => {
     };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, { ok: true, ...session.agentSession }));
-    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, { ok: true, status: "available", goal: null }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, {
+      ok: true, status: "available", goal: { objective: "Finish the import review", status: "paused", timeUsedSeconds: 73056 }
+    }));
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, {
       ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 73 }]
     }));
@@ -88,11 +90,13 @@ test.describe("direct chat", () => {
     const input = page.getByLabel("Message AI assistant");
     const settings = page.getByRole("button", { name: "Chat settings: attention required", exact: true });
     const notice = page.getByRole("status").filter({ hasText: "The assistant stopped because its progress could not be tracked." });
-    for (const width of [390, 1280]) {
+    for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 844 });
       await expect(input).toBeVisible();
       await expect(notice).not.toBeVisible();
       const row = page.locator(".studio-autopilot__composer-actions:visible");
+      await expect(row.getByRole("button", { name: "Goal paused", exact: true })).toBeVisible();
+      await expect(row.getByRole("button", { name: "Weekly Codex allowance remaining: 73%", exact: true })).toBeVisible();
       const bounds = await row.locator("button").evaluateAll(buttons => buttons.map(button => {
         const { y, height } = button.getBoundingClientRect();
         return y + height / 2;
@@ -103,16 +107,27 @@ test.describe("direct chat", () => {
     }
     await page.getByRole("button", { name: "Add to message", exact: true }).click();
     await expect(page.getByRole("button", { name: "Attach files", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Attach files", exact: true })).toHaveCSS("justify-content", "flex-start");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Weekly Codex allowance remaining: 73%", exact: true }).click();
+    await expect(page.getByText("Codex plan allowance", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await input.fill("Keep my draft");
     await settings.click();
     await expect(notice).toBeVisible();
-    await expect(page.getByRole("button", { name: "Choose AI", exact: true })).toBeVisible();
-    await expect(page.getByText("Starred files", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Weekly Codex allowance remaining: 73%", exact: true }).click();
-    await expect(page.getByText("Codex plan allowance", { exact: true })).toBeVisible();
+    const modelRow = page.getByRole("button", { name: "Choose AI", exact: true });
+    await expect(modelRow).toContainText("AI model and access");
+    await modelRow.click({ position: { x: 12, y: 16 } });
+    await expect(page.getByLabel("AI session selector", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(modelRow).toBeFocused();
+    const starredRow = page.getByRole("button", { name: "Starred files (0)", exact: true });
+    await expect(starredRow).toContainText("Starred files");
+    await starredRow.click({ position: { x: 12, y: 16 } });
+    await expect(page.getByLabel("Find a starred file", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close starred files", exact: true }).click();
+    await expect(starredRow).toBeFocused();
+    await page.screenshot({ path: test.info().outputPath("settings-menu.png") });
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(input).toHaveValue("Keep my draft");
     expect(messages).toHaveLength(0);

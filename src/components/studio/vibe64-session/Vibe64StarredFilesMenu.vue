@@ -1,5 +1,6 @@
 <template>
   <component
+    ref="menu"
     :is="mobile ? VBottomSheet : VMenu"
     v-model="opened"
     :close-on-content-click="false"
@@ -12,16 +13,20 @@
   >
     <template #activator="{ props: activatorProps }">
       <v-btn
-        ref="trigger"
         v-bind="activatorProps"
         aria-haspopup="dialog"
         :aria-label="`Starred files (${bookmarks.files.value.length})`"
-        :prepend-icon="mdiStarOutline"
+        block
+        class="justify-space-between"
         size="small"
         title="Your starred files"
         variant="text"
       >
-        {{ bookmarks.files.value.length }}
+        Starred files
+        <template #append>
+          <v-icon :icon="mdiStarOutline" />
+          <span class="ms-1">{{ bookmarks.files.value.length }}</span>
+        </template>
       </v-btn>
     </template>
     <v-card ref="panel" class="starred-files-menu" rounded="lg" @keydown.esc.stop.prevent="dismiss">
@@ -60,7 +65,7 @@ const emit = defineEmits(["open-file"]);
 const { xs: mobile } = useDisplay();
 const opened = ref(false);
 const query = ref("");
-const trigger = ref(null);
+const menu = ref(null);
 const panel = ref(null);
 const searchField = ref(null);
 const matchingFiles = computed(() => {
@@ -82,7 +87,7 @@ function dismiss() {
 
 function restoreTriggerFocus() {
   if (returnFocus) {
-    trigger.value?.$el?.focus();
+    menu.value?.activatorEl?.focus();
   }
   returnFocus = false;
 }
@@ -91,7 +96,7 @@ function onOpenChange(value) {
   if (value) {
     query.value = "";
     void props.bookmarks.refresh();
-  } else if (document.activeElement === trigger.value?.$el || panel.value?.$el?.contains(document.activeElement)) {
+  } else if (document.activeElement === menu.value?.activatorEl || panel.value?.$el?.contains(document.activeElement)) {
     returnFocus = true;
   }
 }

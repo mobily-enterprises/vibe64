@@ -384,7 +384,7 @@
                       <v-btn
                         v-if="composerAttachmentsSupported"
                         aria-label="Attach files"
-                        class="studio-autopilot__composer-action"
+                        class="studio-autopilot__composer-action justify-start"
                         :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles"
                         :prepend-icon="mdiPaperclip"
                         size="small"
@@ -398,7 +398,7 @@
                       <v-btn
                         v-if="composerAttachmentsSupported && previewAttachmentState.captureAvailable"
                         aria-label="Attach visible preview"
-                        class="studio-autopilot__composer-action"
+                        class="studio-autopilot__composer-action justify-start"
                         :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
                         :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
                         :prepend-icon="mdiEyePlusOutline"
@@ -413,7 +413,7 @@
                       <v-btn
                         v-if="composerAttachmentsSupported && previewAttachmentState.diagnosticsAvailable"
                         aria-label="Attach console & network"
-                        class="studio-autopilot__composer-action"
+                        class="studio-autopilot__composer-action justify-start"
                         :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
                         :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
                         :prepend-icon="mdiConsoleNetworkOutline"
@@ -425,12 +425,6 @@
                       >
                         Attach console &amp; network
                       </v-btn>
-                      <Vibe64CodexPlanUsage
-                        :usage-target="composerUsageTarget"
-                        :active="props.active && !props.sessionSelectionArchived"
-                        :session="props.session"
-                        :sessions-api-path="props.sessionsApiPath"
-                      />
                     </v-card>
                   </v-menu>
                   <v-menu v-model="composerSettingsOpen" eager location="top start" :close-on-content-click="false">
@@ -455,37 +449,35 @@
                           Continue
                         </v-btn>
                       </div>
-                      <div class="studio-autopilot__settings-row">
-                        <span>AI model and access</span>
-                        <Vibe64AssistantAccessPanel
-                          :access-error="assistantAccessError"
-                          :action-is-pending="assistantActionIsPending"
-                          :can-manage="assistantSuggestionsCanManage"
-                          :pending-action="assistantPendingAction"
-                          :pending-suggestions="assistantPendingSuggestions"
-                          :suggestions-error="assistantSuggestionsError"
-                          @approve="approveAssistantSuggestion"
-                          @discard="discardAssistantSuggestion"
-                          @reload="reloadAssistantAccess"
-                          @withdraw="withdrawAssistantSuggestion"
-                        />
-                        <Vibe64SessionAssistantMenu
-                          :access-label="assistantAccessLabel"
-                          :access-loading="assistantAccessLoading"
-                          :can-configure="assistantSuggestionsCanManage"
-                          :changes-disabled="composerSending || agentActive"
-                          :session="props.session"
-                          :sessions-api-path="props.sessionsApiPath"
-                        />
-                      </div>
-                      <div ref="composerToolsTarget" class="studio-autopilot__settings-row" />
-                      <div class="studio-autopilot__settings-row">
-                        <span>Starred files</span>
-                        <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
-                      </div>
-                      <div ref="composerUsageTarget" class="studio-autopilot__settings-row" />
+                      <Vibe64AssistantAccessPanel
+                        :access-error="assistantAccessError"
+                        :action-is-pending="assistantActionIsPending"
+                        :can-manage="assistantSuggestionsCanManage"
+                        :pending-action="assistantPendingAction"
+                        :pending-suggestions="assistantPendingSuggestions"
+                        :suggestions-error="assistantSuggestionsError"
+                        @approve="approveAssistantSuggestion"
+                        @discard="discardAssistantSuggestion"
+                        @reload="reloadAssistantAccess"
+                        @withdraw="withdrawAssistantSuggestion"
+                      />
+                      <Vibe64SessionAssistantMenu
+                        :access-label="assistantAccessLabel"
+                        :access-loading="assistantAccessLoading"
+                        :can-configure="assistantSuggestionsCanManage"
+                        :changes-disabled="composerSending || agentActive"
+                        :session="props.session"
+                        :sessions-api-path="props.sessionsApiPath"
+                      />
+                      <div ref="composerToolsTarget" />
+                      <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                     </v-card>
                   </v-menu>
+                  <Vibe64CodexPlanUsage
+                    :active="props.active && !props.sessionSelectionArchived"
+                    :session="props.session"
+                    :sessions-api-path="props.sessionsApiPath"
+                  />
                   <div class="studio-autopilot__composer-delivery">
                     <v-btn
                       v-if="agentStopVisible" aria-label="Stop" title="Stop assistant"
@@ -856,7 +848,6 @@ const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
 const composerInput = ref(null);
 const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
-const composerUsageTarget = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
@@ -1666,11 +1657,10 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__composer-actions,
-.studio-autopilot__composer-delivery,
-.studio-autopilot__settings-row {
+.studio-autopilot__composer-delivery {
   align-items: center;
   display: flex;
-  gap: 0.4rem;
+  gap: 0.25rem;
   min-width: 0;
 }
 
@@ -1693,15 +1683,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.4rem;
   max-width: calc(100vw - 24px);
-}
-
-.studio-autopilot__settings-row {
-  justify-content: space-between;
-  font-size: 0.85rem;
-}
-
-.studio-autopilot__settings-row:empty {
-  display: none;
 }
 
 .studio-autopilot__save-work {

@@ -60,9 +60,11 @@ Repair conversations keep their input and action buttons visible on small screen
 Long drafts scroll inside the input; repair details start collapsed, and a shared
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.
-The main chat composer keeps Add, Settings, and icon-only Send on one row at
-all widths, with Stop beside Send while needed. Add holds attachments and goal
-controls; Settings holds model/access, companion, bookmarks, and allowance.
+The main chat composer keeps Add, Settings, Goal, Codex allowance, and icon-only
+Send on one row, with Stop beside Send while needed. Goal and available allowance
+stay visible when menus are closed. Add holds left-aligned attachment actions.
+Settings uses full-width clickable rows with text left and icons right for
+model/access, companion, and bookmarks.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.
@@ -545,12 +547,12 @@ the operator; account provisioning and other campaign types remain outside this
 first Search path.
 
 When Codex uses a ChatGPT plan, authorized account users can see the remaining
-weekly allowance as a single percentage inside chat Settings, with its
+weekly allowance as a single percentage on the bottom chat row, with its
 label, known reset times, and the five-hour allowance in the hover/tap details. Allowance is account-wide, distinct
 from conversation context usage. API-key connections and other assistants do
 not show a plan meter; unavailable readings never imply unused allowance.
 
-The Add menu exposes goal controls with a flashing red light for a running goal and a steady
+The bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
 orange light for a paused goal. Elapsed running time appears beside the light
 when the chat pane has room and remains available in its details. Paused time
 does not accumulate. Reduced-motion settings keep the running light steady.

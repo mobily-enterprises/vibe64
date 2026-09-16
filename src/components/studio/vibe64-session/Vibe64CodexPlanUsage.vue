@@ -10,7 +10,6 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const props = defineProps({
   active: Boolean,
-  usageTarget: { type: Object, default: null },
   session: { type: Object, default: null },
   sessionsApiPath: { type: [Function, Object, String], default: "" }
 });
@@ -160,25 +159,22 @@ const goalState = computed(() => ({
       </v-card-actions>
     </v-card>
   </v-dialog>
-  <Teleport v-if="enabled && available" :to="usageTarget" :disabled="!usageTarget">
-    <span v-if="usageTarget">Codex allowance</span>
-    <v-menu location="top" :close-on-content-click="false">
-      <template #activator="{ props: menuProps }">
-        <v-btn
-          v-bind="menuProps" class="codex-plan-usage" size="small" variant="text"
-          :title="details" :aria-label="`Weekly Codex allowance remaining: ${summary}`"
-        >
-          {{ summary }}
-        </v-btn>
-      </template>
-      <v-card max-width="340" class="pa-3">
-        <strong>Codex plan allowance</strong>
-        <p class="codex-plan-usage__details text-body-small">{{ details }}</p>
-        <v-btn href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
-        <v-btn size="small" variant="text" @click="usage.reload()">Refresh</v-btn>
-      </v-card>
-    </v-menu>
-  </Teleport>
+  <v-menu v-if="enabled && available" location="top" :close-on-content-click="false">
+    <template #activator="{ props: menuProps }">
+      <v-btn
+        v-bind="menuProps" class="codex-plan-usage" size="small" variant="text"
+        :title="details" :aria-label="`Weekly Codex allowance remaining: ${summary}`"
+      >
+        {{ summary }}
+      </v-btn>
+    </template>
+    <v-card max-width="340" class="pa-3">
+      <strong>Codex plan allowance</strong>
+      <p class="codex-plan-usage__details text-body-small">{{ details }}</p>
+      <v-btn href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
+      <v-btn size="small" variant="text" @click="usage.reload()">Refresh</v-btn>
+    </v-card>
+  </v-menu>
 </template>
 
 <style scoped>
