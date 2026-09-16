@@ -573,7 +573,6 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
   text-transform: uppercase;
 }
 
-.vibe64-session-assistant-menu__empty,
 .vibe64-session-assistant-menu__locked-note {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.82rem;
@@ -635,12 +634,12 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
 }
 
 @media (max-width: 600px) {
-.vibe64-session-assistant-menu__confirm-actions {
+  .vibe64-session-assistant-menu__confirm-actions {
     align-items: stretch;
     flex-direction: column-reverse;
   }
 
-.vibe64-session-assistant-menu__confirm-actions .v-btn {
+  .vibe64-session-assistant-menu__confirm-actions .v-btn {
     width: 100%;
   }
 }
