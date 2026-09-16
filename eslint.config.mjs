@@ -4,6 +4,10 @@ export default [
   {
     ignores: [
       "dist/**",
+      ".vibe64-release/**",
+      "server.static.mjs",
+      "server.bundle.mjs",
+      ".jskit/static-server-provider-registry.mjs",
       "docs/site/.vitepress/dist/**",
       "node_modules/**",
       "coverage/**",

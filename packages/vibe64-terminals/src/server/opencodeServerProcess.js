@@ -22,6 +22,8 @@ import {
   readBoundedResponse
 } from "@jskit-ai/assistant-core/server/opencode-client";
 
+import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
+
 const OPENCODE_EXPECTED_VERSION = "1.18.22";
 const OPENCODE_ECONOMY_AGENT_ID = "vibe64-economy";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
@@ -224,6 +226,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
     dataRoot: path.join(privateRoot, "data"),
     extraEnv: {
       ...managed,
+      ...genesisParserEnvironment({ environment: baseEnv }),
       NO_PROXY: [text(baseEnv.NO_PROXY), OPENCODE_HOST, "localhost", "::1"]
         .filter(Boolean)
         .join(","),

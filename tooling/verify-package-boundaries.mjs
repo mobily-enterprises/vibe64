@@ -221,6 +221,9 @@ function verifyRootPackage({
     ...(rootManifest.bundleDependencies || []),
     ...(rootManifest.bundledDependencies || [])
   ]);
+  if (bundledDependencies.size) {
+    errors.push("The source manifest must not bundle complete dependency packages; the runtime release builder owns the staged manifest.");
+  }
 
   for (const [packageName, workspacePackage] of packagesByName) {
     const declaredVersion = rootDependencies[packageName];
@@ -228,9 +231,6 @@ function verifyRootPackage({
       errors.push(
         `root package.json must depend on ${packageName}@${workspacePackage.manifest.version}; found ${declaredVersion || "<missing>"}.`
       );
-    }
-    if (!bundledDependencies.has(packageName)) {
-      errors.push(`root package.json must bundle internal workspace package ${packageName}.`);
     }
   }
 
@@ -243,14 +243,8 @@ function verifyRootPackage({
     }
     if (/^(?:file|workspace):/u.test(String(versionSpec))) {
       errors.push(
-        `root package.json must not publish ${dependencyName} as a ${versionSpec} dependency; use the workspace package version and bundle it.`
+        `root package.json must use the exact workspace version for ${dependencyName}, not ${versionSpec}.`
       );
-    }
-  }
-
-  for (const dependencyName of bundledDependencies) {
-    if (isWorkspaceDependency(dependencyName) && !packagesByName.has(dependencyName)) {
-      errors.push(`root package.json bundles unknown internal workspace package ${dependencyName}.`);
     }
   }
 

@@ -22,6 +22,16 @@ Genesis without creating another interpretation of the application.
 
 ## Public contract
 
+Code indexing uses Genesis's parser management interface. Standalone first use
+prepares only missing parsers needed by the source, outside project dependencies.
+The Genesis command exposes `parsers list`, `parsers install`, and `parsers verify`.
+Agent command and OpenCode environments preserve Genesis's parser directory and
+automatic-installation policy through the public integration boundary. Hosts can
+prepare all parsers in advance and prohibit runtime downloads with the same API.
+Genesis runs native indexing in a finite child; the persistent Vibe64 process
+retains no language parser mappings after indexing. Installation and verification
+failures remain actionable Genesis diagnostics.
+
 The library integration explicitly trusts only the validated source worktree
 passed to each Genesis operation. That grant stays within the operation's
 async context, so shared Unix ownership does not prevent inspection and

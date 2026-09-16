@@ -28,7 +28,7 @@ import {
   stopVibe64OwnedExecutions,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
-import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
   pathInsideOrEqual
 } from "./terminalShared.js";
@@ -569,6 +569,7 @@ function createAgentSessionCommandService({
     });
     const childEnv = {
       ...sanitizedCommandEnvironment(input.env),
+      ...genesisParserEnvironment(),
       [VIBE64_AGENT_SESSION_RUN_COMMAND_ENV]: Buffer.from(command, "utf8").toString("base64"),
       [VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV]: outputPath,
       [VIBE64_AGENT_SESSION_RUN_RESULT_ENV]: resultPath

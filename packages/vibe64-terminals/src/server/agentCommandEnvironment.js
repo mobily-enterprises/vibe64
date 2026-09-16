@@ -1,6 +1,6 @@
 import process from "node:process";
 
-import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
   prepareAgentDatabaseCommand
 } from "./agentDatabaseCommand.js";
@@ -114,7 +114,7 @@ async function prepareAgentSessionCommandEnvironment({
   const hostWrapperDir = text(git.hostWrapperDir);
   const dropZoneRoot = text(runtime?.store?.paths?.(normalizedSessionId)?.dropZoneRoot);
   return {
-    env: Object.assign({}, ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {
+    env: Object.assign({}, genesisParserEnvironment({ environment: env }), ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {
       VIBE64_DROP_ZONE: dropZoneRoot
     } : {}),
     hostWrapperDir,

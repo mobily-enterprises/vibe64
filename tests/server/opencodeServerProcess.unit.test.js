@@ -398,6 +398,8 @@ test("OpenCode servers run and drain through one managed execution id", async (t
     dbPath: path.join(root, "state", "opencode.db"),
     env: {
       ANTHROPIC_API_KEY: "must-not-leak",
+      GENESIS_PARSER_ROOT: "/release/genesis-parsers",
+      GENESIS_PARSER_AUTO_INSTALL: "0",
       LANG: "en_AU.UTF-8",
       PATH: "/usr/bin"
     },
@@ -445,6 +447,8 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   );
   assert.match(request.args[1], /exec "\$@" <\/dev\/null/u);
   assert.equal(request.baseEnv.ANTHROPIC_API_KEY, undefined);
+  assert.equal(request.baseEnv.GENESIS_PARSER_ROOT, "/release/genesis-parsers");
+  assert.equal(request.baseEnv.GENESIS_PARSER_AUTO_INSTALL, "0");
   assert.equal(request.baseEnv.OPENCODE_DB, path.join(root, "state", "opencode.db"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);

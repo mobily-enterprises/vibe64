@@ -14,7 +14,15 @@ import {
   genesisCommandShimDirectory
 } from "../../packages/vibe64-genesis/src/server/index.js";
 
-test("agent shell commands run as session-owned managed executions and drain on session close", async () => {
+test("agent shell commands run as session-owned managed executions and drain on session close", async (t) => {
+  for (const [name, value] of Object.entries({ GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" })) {
+    const before = process.env[name];
+    process.env[name] = value;
+    t.after(() => {
+      if (before === undefined) delete process.env[name];
+      else process.env[name] = before;
+    });
+  }
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-session-command-"));
   const sessionId = "session-1";
   const projectSlug = "project-1";
@@ -85,6 +93,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
         DBUS_STARTER_ADDRESS: "unix:path=/run/user/1000/bus",
         DBUS_STARTER_BUS_TYPE: "session",
         SAFE_ENV: "kept",
+        GENESIS_PARSER_ROOT: "/untrusted/parser-cache",
+        GENESIS_PARSER_AUTO_INSTALL: "1",
         VIBE64_AGENT_SESSION_COMMAND_TOKEN: "must-not-leak"
       },
       sessionId
@@ -107,6 +117,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
       genesisCommandShimDirectory()
     ]);
     assert.equal(request.baseEnv.SAFE_ENV, "kept");
+    assert.equal(request.baseEnv.GENESIS_PARSER_ROOT, "/release/genesis-parsers");
+    assert.equal(request.baseEnv.GENESIS_PARSER_AUTO_INSTALL, "0");
     assert.equal(Object.hasOwn(request.baseEnv, "DBUS_SESSION_BUS_ADDRESS"), false);
     assert.equal(Object.hasOwn(request.baseEnv, "DBUS_STARTER_ADDRESS"), false);
     assert.equal(Object.hasOwn(request.baseEnv, "DBUS_STARTER_BUS_TYPE"), false);

@@ -10,3 +10,8 @@ test-results/
 .env.*
 !.env.example
 .ai[-]studio/runtime/
+
+.vibe64-release/
+server.static.mjs
+server.bundle.mjs
+.jskit/static-server-provider-registry.mjs

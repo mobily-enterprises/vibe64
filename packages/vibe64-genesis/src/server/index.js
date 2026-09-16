@@ -62,6 +62,7 @@ const {
   inspectSubsystems,
   projectSessionContext,
   listTemplates,
+  parserEnvironment,
   setCollaboration,
   setEngineeringProfile,
   syncSkills,
@@ -119,6 +120,10 @@ function genesisPromptRequest(input = {}, action = {}) {
     action.label
   ];
   return candidates.map(normalizeText).find(Boolean) || "Continue the requested project work.";
+}
+
+function genesisParserEnvironment(options = {}) {
+  return parserEnvironment(options);
 }
 
 function genesisPackageBinDirectory() {
@@ -419,6 +424,7 @@ export {
   VIBE64_INTEGRATION_SETUP_SECTION,
   inspectVibe64IntegrationSetup,
   parseVibe64IntegrationSetupLines,
+  genesisParserEnvironment,
   GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,

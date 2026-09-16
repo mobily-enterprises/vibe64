@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import process from "node:process";
 
+import { packRelease } from "../tooling/release/pack-release.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_ACCESS = "public";
 const DEFAULT_BUMP = "patch";
@@ -30,7 +32,7 @@ function run(command, args, { check = true, quiet = false } = {}) {
   });
 
   if (check && result.status !== 0) {
-    process.exit(result.status || 1);
+    throw result.error || new Error(`${command} failed with exit code ${result.status ?? "unknown"}.`);
   }
 
   return result;
@@ -366,8 +368,10 @@ try {
   } else {
     log("continuing with existing local package version bump.");
   }
+  const tarball = await packRelease({ appRoot: ROOT });
   run("npm", [
     "publish",
+    tarball,
     "--access",
     options.access,
     "--registry",

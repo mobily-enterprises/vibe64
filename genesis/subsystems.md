@@ -174,3 +174,20 @@ Owns presenting Genesis explanations, authored subsystems and source Cities.
 ### Data used
 
 - Nothing.
+
+## `distribution` Runtime distribution
+
+Owns the shared compact runtime builder, npm artifact preparation and isolated
+installation proof. Hosted consumers supply their private runtime requirements.
+
+### Program
+
+- `genesis/program/operations/runtime-release.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.

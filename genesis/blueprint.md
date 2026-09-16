@@ -621,3 +621,13 @@ Vibe64 never invents resource values or provisions standalone infrastructure.
 Projects with only terminal or downloadable outputs explain how to run them
 without displaying unavailable browser controls. Projects with no runnable
 output remain usable through the conversation.
+
+Project code indexing automatically prepares the language parsers it needs without
+changing project dependencies. Hosts can provide a complete prepared parser set
+for offline use. Indexing releases its native parser memory when it finishes,
+while parser downloads remain cached for later work.
+
+People install a compact built editor through npm while retaining the frontend,
+terminal, repository and project-understanding features. Maintainers can build
+and test the exact distributable before publishing it; release preparation does
+not remove their installed development tools.

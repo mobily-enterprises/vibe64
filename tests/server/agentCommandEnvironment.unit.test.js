@@ -16,7 +16,7 @@ test("assistant engines share one complete session command environment", async (
     agentEnvCommand: service("environment-service"),
     agentPreviewCommand: service("preview-service"),
     agentSessionCommand: service("session-command-service"),
-    env: { LIVE_ENV: "yes" },
+    env: { LIVE_ENV: "yes", GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" },
     gitCommand: service("git-service"),
     gitEnvironment: { ATTACHMENT_ENV: "yes" },
     prepareDatabaseCommand: async (input) => {
@@ -63,6 +63,8 @@ test("assistant engines share one complete session command environment", async (
   }
   assert.deepEqual(prepared, {
     env: {
+      GENESIS_PARSER_ROOT: "/release/genesis-parsers",
+      GENESIS_PARSER_AUTO_INSTALL: "0",
       DATABASE_BOUNDARY: "ready",
       ENV_BOUNDARY: "ready",
       GIT_BOUNDARY: "ready",

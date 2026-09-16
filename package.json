@@ -1,6 +1,6 @@
 {
   "name": "vibe64",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": false,
   "type": "module",
   "workspaces": [
@@ -20,25 +20,6 @@
     "server/",
     "tooling/"
   ],
-  "bundleDependencies": [
-    "@local/vibe64-accounts",
-    "@local/vibe64-core",
-    "@local/vibe64-database-tools",
-    "@local/vibe64-execution",
-    "@local/vibe64-genesis",
-    "@local/vibe64-project",
-    "@local/vibe64-runtime",
-    "@local/vibe64-sessions",
-    "@local/vibe64-source-editor",
-    "@local/vibe64-system-graph",
-    "@local/vibe64-terminals",
-    "@local/current-app",
-    "@local/main",
-    "@local/studio-health",
-    "@local/studio-terminal-core",
-    "genesis-compiler",
-    "genesis-stack"
-  ],
   "publishConfig": {
     "access": "public"
   },
@@ -54,7 +35,7 @@
     "vue-demi@0.14.10": true
   },
   "scripts": {
-    "prepack": "npm run verify:packages && npm run build && npm run prune:packaged-deps",
+    "prepack": "node ./tooling/release/require-release-artifact.mjs",
     "server": "node ./bin/server.js --no-open",
     "server:all": "node ./bin/server.js --no-open",
     "server:app": "SERVER_SURFACE=app node ./bin/server.js --no-open",
@@ -81,13 +62,13 @@
     "cloc:other": "git ls-files | rg -v '^(src/|packages/[^/]+/src/client/)' | rg -v '(^|/)(test|tests)/|(^|/)package-lock\\.json$' | cloc --by-file --timeout 60 --exclude-ext=md,txt,text --list-file=-",
     "verify": "npm run lint && npm run test:full && npm run test:client && npm run build && npm run verify:packages",
     "verify:packages": "node ./tooling/verify-package-boundaries.mjs",
-    "prune:packaged-deps": "node ./tooling/prune-packaged-deps.mjs",
     "smoke:package": "node ./tooling/package-install-smoke.mjs",
     "smoke:new-project": "node ./tooling/verify-new-project-foundation.mjs",
     "release": "node ./scripts/npm-release.js",
     "dev:home": "VITE_SURFACE=home vite",
     "jskit:update": "npx --yes @jskit-ai/jskit-catalog@latest update",
-    "jskit:check": "jskit check"
+    "jskit:check": "jskit check",
+    "pack:release": "node ./tooling/release/pack-release.mjs"
   },
   "dependencies": {
     "@jskit-ai/connectors-core": "0.1.15",
@@ -137,7 +118,7 @@
     "diff2html": "^3.4.56",
     "execa": "^9.6.1",
     "fastify": "^5.7.4",
-    "genesis-compiler": "1.6.0",
+    "genesis-compiler": "1.7.0",
     "genesis-stack": "1.1.2",
     "get-port": "^7.2.0",
     "json-rest-schema": "^1.0.16",
@@ -166,7 +147,8 @@
     "vite": "^6.1.0",
     "vite-plugin-vuetify": "^2.1.3",
     "vitepress": "^1.6.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "esbuild": "0.25.12"
   },
   "overrides": {
     "vitepress": {
