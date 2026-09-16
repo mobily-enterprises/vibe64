@@ -372,7 +372,6 @@ test("configured blocked Outputs keep disabled targets without exposing private 
   assert.deepEqual(targets, [outputTargetView({
     available: false,
     disabledReason,
-    environmentSetupRequired: true,
     downloads: [{ id: "bundle", mediaType: "application/zip", name: "bundle.zip" }]
   })]);
   assert.deepEqual(await createVibe64OutputTargetTerminalSpec({
@@ -665,7 +664,6 @@ test("environment setup applies to terminal and finite outputs without a databas
     });
     const [target] = await listVibe64OutputTargets(context, { inspect: () => outputs });
     assert.equal(target.available, false);
-    assert.equal(target.environmentSetupRequired, true);
     assert.equal(target.presentation?.kind || null, mode === "interactive" ? "terminal" : null);
     assert.equal(target.mode, mode);
     const ready = vibe64OutputsInspection({
@@ -674,6 +672,5 @@ test("environment setup applies to terminal and finite outputs without a databas
     });
     const [readyTarget] = await listVibe64OutputTargets(context, { inspect: () => ready });
     assert.equal(readyTarget.available, true);
-    assert.equal(readyTarget.environmentSetupRequired, undefined);
   }
 });

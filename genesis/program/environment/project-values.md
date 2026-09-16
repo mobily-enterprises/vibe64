@@ -10,6 +10,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `src/components/studio/EnvPanel.vue`
+- `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/RuntimeConfigRecordsTable.vue`
 
 ## Public contract
@@ -73,3 +74,9 @@ stdin, never copy values between scopes, and never reveal stored values.
 Successful development Env mutations publish the shared project refresh hint,
 so other tabs reread the protected project state without receiving values or
 secrets over realtime.
+
+Project onboarding uses the same read-only environment resolution and alternative
+binding rules as Env to report missing variable names, including for projects
+with no runnable output. Existing host values, defaults, and allowed empty values
+count toward satisfaction. The setup notice links to Env and can be rechecked;
+it does not provision resources, expose values, or replace the output area.

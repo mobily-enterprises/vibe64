@@ -170,12 +170,8 @@ there is no one-line terminal mode. Hiding the terminal disconnects only the
 view and does not stop the target. Once opened, the terminal remains open after
 the process exits until the person hides it.
 
-Output inspection marks missing declared resources with
-`environmentSetupRequired`; the public target view carries this boolean without
-resource values. The output surface uses the selected web target, or the default
-non-web target, to present setup recovery through the existing Env page. It does
-not inspect framework names, seed identities, database kinds, or diagnostic
-wording to choose that action. Other launch diagnostics retain their own reasons.
+Project onboarding owns missing-environment guidance independently of outputs.
+Output inspection still owns launch availability and its diagnostic reasons.
 A project without a web target hides unavailable browser-address controls and
 points to Run for terminal or downloadable outputs. No declared outputs remains
 a normal idle state that does not demand a web server.

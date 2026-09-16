@@ -1,5 +1,4 @@
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
-import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -850,14 +849,10 @@ function useVibe64OutputControlsSurface(props) {
     outputSetupUnavailableReason.value &&
     !loadError.value
   ));
-  const previewEnvironmentSetupVisible = computed(() => Boolean(
-    previewCheckAgainVisible.value && outputSetupTarget.value?.environmentSetupRequired
-  ));
   const previewBrowserControlsVisible = computed(() => Boolean(
     loading.value || loadError.value || previewUrl.value ||
     outputTargets.value.some((target) => target.presentation?.kind === "web")
   ));
-  const previewEnvironmentPath = computed(() => projectAppPath(projectSlug.value, "/dashboard/env"));
   const previewStarting = computed(() => Boolean(
     previewState.value === "starting"
   ));
@@ -1975,9 +1970,7 @@ function useVibe64OutputControlsSurface(props) {
     previewCanShowLog,
     previewCanStart,
     previewCheckAgainVisible,
-    previewEnvironmentSetupVisible,
     previewBrowserControlsVisible,
-    previewEnvironmentPath,
     previewDisplayedAddress,
     previewDisplayedUrl,
     previewDiagnosticsAvailable,

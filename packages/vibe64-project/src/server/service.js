@@ -1021,10 +1021,25 @@ function createService({
     const catalogue = inspection.templateEligible
       ? await listTemplates({ projectRoot: source.sourceRoot })
       : { templates: [] };
+    let environmentSetup = null;
+    if (inspection.state === "ready") {
+      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
+      const missingKeys = new Set();
+      for (const { resource } of resolved.resources) {
+        const alternative = requiredAlternative(resource, resolved.effectiveEnvironment);
+        for (const [semantic, name] of Object.entries(alternative?.bindings || {})) {
+          if (!valuePresent(resolved.effectiveEnvironment, name, (alternative.allowEmpty || []).includes(semantic))) {
+            missingKeys.add(name);
+          }
+        }
+      }
+      environmentSetup = { missingKeys: [...missingKeys], warning: resolved.warning };
+    }
     return {
       ok: true,
       available: true,
       inspection,
+      environmentSetup,
       templates: catalogue.templates,
       source: { rootKind: source.rootKind, sessionId: source.sessionId }
     };

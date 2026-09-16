@@ -579,19 +579,7 @@
         >
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
-        <template v-if="previewEnvironmentSetupVisible">
-          <h2 class="text-title-large text-center">Set up your project's environment</h2>
-          <p class="text-body-medium text-center">
-            This project needs the environment values it declares before its outputs can run.
-            Add your values in Env, then return here and check again.
-          </p>
-          <v-btn :to="previewEnvironmentPath" color="primary" variant="flat">Open Env</v-btn>
-          <details class="vibe64-launch-controls__preview-status-detail">
-            <summary>Required configuration</summary>
-            <p class="mt-2">{{ previewEmptyText }}</p>
-          </details>
-        </template>
-        <span v-else>{{ previewEmptyText }}</span>
+        <span>{{ previewEmptyText }}</span>
         <v-btn
           v-if="previewCheckAgainVisible"
           :disabled="operationBusy || loading"
@@ -894,9 +882,7 @@ const {
   previewCanRestart,
   previewCanShowLog,
   previewCheckAgainVisible,
-  previewEnvironmentSetupVisible,
   previewBrowserControlsVisible,
-  previewEnvironmentPath,
   previewDisplayedAddress,
   previewDiagnosticsAvailable,
   previewDiagnosticsBusy: previewDiagnosticsRequestBusy,

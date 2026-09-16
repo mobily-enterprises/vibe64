@@ -31,6 +31,32 @@
         <span v-else-if="asking" role="status">Sending to the conversation…</span>
       </div>
     </v-alert>
+    <v-alert
+      v-if="!props.archived && (environmentSetup?.missingKeys.length || environmentSetup?.warning)"
+      class="project-preview__warning"
+      density="compact"
+      role="status"
+      type="warning"
+      variant="tonal"
+    >
+      <h2 class="text-title-medium">Set up your project's environment</h2>
+      <p v-if="environmentSetup.warning">{{ environmentSetup.warning }}</p>
+      <template v-if="environmentSetup.missingKeys.length">
+        <p>This project requires environment values. Add them in Env, then recheck setup.</p>
+        <details>
+          <summary>Required configuration</summary>
+          <ul>
+            <li v-for="key in environmentSetup.missingKeys" :key="key"><code>{{ key }}</code></li>
+          </ul>
+        </details>
+      </template>
+      <div class="project-preview__warning-actions">
+        <v-btn :to="projectAppPath(projectSlug, '/dashboard/env')" size="small" variant="flat" color="primary">Open Env</v-btn>
+        <v-btn :disabled="!enabled || resource.isFetching.value" size="small" variant="text" @click="resource.reload()">
+          {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
+        </v-btn>
+      </div>
+    </v-alert>
     <div v-if="showPreview" class="project-preview__output">
       <slot />
     </div>
@@ -89,6 +115,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
+import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
 
@@ -134,6 +161,7 @@ const command = useCommand({
 });
 const onboarding = computed(() => resource.data.value?.ok === true ? resource.data.value : null);
 const state = computed(() => onboarding.value?.inspection?.state || "");
+const environmentSetup = computed(() => onboarding.value?.environmentSetup);
 const loadError = computed(() => vibe64ResourceResponseError(resource.data.value) || resource.loadError.value);
 const showPreview = computed(() => {
   if (props.archived || onboarding.value?.available === false || loadError.value) return true;

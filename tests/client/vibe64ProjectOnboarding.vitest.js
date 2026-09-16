@@ -193,9 +193,9 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
   };
 }
 
-async function render(state, props = {}) {
+async function render(state, props = {}, environmentSetup = null) {
   mocks.resource.data.value = state === null ? null : {
-    ok: true, available: true,
+    ok: true, available: true, environmentSetup,
     inspection: { state, nextAction: "migrate", diagnostics: [{ message: "The project uses an older format." }] },
     // Deliberately retain stale offers: the presentation must still obey state.
     templates: [{ id: "official:jskit/public", technology: "jskit", name: "Public starter", description: "A public app." }]
@@ -215,6 +215,16 @@ describe("Preview project onboarding", () => {
   beforeEach(() => {
     mocks.live = false;
     mocks.resource = { data: Vue.ref(null), isFetching: Vue.ref(false), loadError: Vue.ref(""), reload: vi.fn() };
+  });
+  it("shows project requirements independently of outputs and hides them when satisfied or archived", async () => {
+    const setup = { missingKeys: ["STORAGE_TOKEN"], warning: "" };
+    const html = await render("ready", {}, setup);
+    expect(html).toContain("Set up your project&#39;s environment");
+    expect(html).toContain("STORAGE_TOKEN");
+    expect(html).toContain('to="/app/project/project-a/dashboard/env"');
+    expect(html).toContain("Normal outputs");
+    expect(await render("ready", {}, { missingKeys: [], warning: "" })).not.toContain("Open Env");
+    expect(await render("ready", { archived: true }, setup)).not.toContain("Open Env");
   });
   it("offers a starter only for empty projects and disables choices during source work", async () => {
     expect(await render("new")).toContain("Public starter");

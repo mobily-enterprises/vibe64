@@ -48,26 +48,30 @@ for (const width of [390, 768, 1280]) {
         mode: kind === "finite" ? "finite" : "interactive",
         presentation: kind === "finite" ? null : { kind },
         downloads: [],
-        environmentSetupRequired: true,
         disabledReason: "Object storage requires OBJECT_STORE_TOKEN."
       }];
       await mockLaunchSession(page, { initialLaunchStatus: idleLaunchStatusPayload(targets) });
+      let configured = false;
+      await page.route("**/vibe64/onboarding?*", (route) => fulfillJson(route, {
+        ok: true, available: true, inspection: { state: "ready", diagnostics: [] }, templates: [],
+        environmentSetup: { missingKeys: configured ? [] : ["OBJECT_STORE_TOKEN"], warning: "" }
+      }));
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
       if (width <= 960) {
         await page.getByRole("button", { name: "Show project", exact: true }).click();
       }
+      await expect(page.getByRole("heading", { name: "Set up your project's environment" })).toBeVisible();
+      const env = page.getByRole("link", { name: "Open Env", exact: true });
+      await expect(env).toHaveAttribute("href", `${DASHBOARD_PATH}/env`);
+      await expect(env).toBeInViewport();
+      await page.getByText("Required configuration", { exact: true }).click();
+      await expect(page.getByText("OBJECT_STORE_TOKEN", { exact: true })).toBeVisible();
       if (kind === "none") {
         await expect(page.getByText("No runnable output is declared. You can continue working in the conversation.", { exact: true })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Open Env", exact: true })).toHaveCount(0);
-      } else {
-        await expect(page.getByRole("heading", { name: "Set up your project's environment" })).toBeVisible();
-        const env = page.getByRole("link", { name: "Open Env", exact: true });
-        await expect(env).toHaveAttribute("href", `${DASHBOARD_PATH}/env`);
-        await expect(env).toBeInViewport();
-        await page.getByText("Required configuration", { exact: true }).click();
-        await expect(page.getByText("Object storage requires OBJECT_STORE_TOKEN.", { exact: true }).first()).toBeVisible();
-        await expect(page.getByRole("button", { name: "Check again", exact: true })).toBeEnabled();
       }
+      configured = true;
+      await page.getByRole("button", { name: "Recheck setup", exact: true }).click();
+      await expect(env).toHaveCount(0);
       if (kind !== "web") {
         await expect(page.getByPlaceholder("Preview URL unavailable")).toHaveCount(0);
       }

@@ -12,7 +12,7 @@ import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpe
 const exec = promisify(execFile);
 const sessionId = "2026-09-06_10-00-00";
 
-async function fixture(targetRoot) {
+async function fixture(targetRoot, options = {}) {
   const templateRoot = path.join(path.dirname(targetRoot), "template");
   const root = sourcePath(targetRoot, sessionId);
   for (const cwd of [templateRoot, root]) {
@@ -29,6 +29,7 @@ async function fixture(targetRoot) {
   const templateSources = [{ namespace: "test", catalog }];
   const service = createService({
     env: {},
+    ...options,
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
@@ -165,5 +166,66 @@ test("template application requires an explicit open session and shares the agen
       release();
       await holding;
     }
+  });
+});
+
+test("project environment setup does not require outputs and clears after Env is saved", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { root, service } = await fixture(targetRoot, {
+      inspectEnvironment: () => ({
+        components: [],
+        environmentDefaults: [],
+        files: [],
+        resources: [{
+          component: "example",
+          resource: {
+            id: "storage",
+            kind: "object-storage",
+            environmentAlternatives: [
+              { preferred: true, bindings: { token: "STORAGE_TOKEN", region: "STORAGE_REGION" }, allowEmpty: ["region"] },
+              { bindings: { url: "STORAGE_URL" } }
+            ]
+          }
+        }]
+      })
+    });
+    await writeFile(path.join(root, "genesis/blueprint.md"), "# Blueprint\n\nAn archive of research documents.\n");
+    await writeFile(path.join(root, "research.md"), "# Research archive\n");
+    await writeFile(path.join(root, "genesis/stack.md"), "# Stack\n\n## Components\n\n- `nodejs`\n");
+    const initial = await service.readOnboarding({ sessionId });
+    assert.equal(initial.inspection.state, "ready");
+    assert.deepEqual(initial.environmentSetup.missingKeys, ["STORAGE_TOKEN", "STORAGE_REGION"]);
+    const saved = await service.saveEnvUserValues({ values: {
+      STORAGE_TOKEN: { value: "private-token", secret: true },
+      STORAGE_REGION: ""
+    } });
+    assert.equal(saved.ok, true);
+    const configured = await service.readOnboarding({ sessionId });
+    assert.deepEqual(configured.environmentSetup.missingKeys, []);
+    assert.equal(JSON.stringify(configured).includes("private-token"), false);
+    const savedAlternative = await service.saveEnvUserValues({ values: {
+      STORAGE_TOKEN: "",
+      STORAGE_URL: { value: "private-url", secret: true }
+    } });
+    assert.equal(savedAlternative.ok, true);
+    const alternative = await service.readOnboarding({ sessionId });
+    assert.deepEqual(alternative.environmentSetup.missingKeys, []);
+    assert.equal(JSON.stringify(alternative).includes("private-url"), false);
+    service.setResourceEnvironmentProvider({
+      managedDevelopmentDatabase: true,
+      environmentForProvisionedResources: () => ({
+        contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+        resourceValues: [{
+          declaration: { component: "example", id: "storage", kind: "object-storage" },
+          values: { token: "host-private-token", region: "host-region" }
+        }]
+      }),
+      environmentForResources() { assert.fail("Reading onboarding must never provision resources."); }
+    });
+    await service.saveEnvUserValues({ values: { STORAGE_URL: "" } });
+    const hosted = await service.readOnboarding({ sessionId });
+    assert.equal(hosted.ok, true, JSON.stringify(hosted));
+    assert.deepEqual(hosted.environmentSetup.missingKeys, []);
+    assert.equal(JSON.stringify(hosted).includes("host-private-token"), false);
   });
 });
