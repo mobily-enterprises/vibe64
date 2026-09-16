@@ -597,3 +597,9 @@ unverified stop retains active ownership and keeps Stop available. Verified
 stops remain stopped until an explicit Resume or Send. Drafts remain editable
 during recovery, and the composer updates from external state without losing
 focus or selection.
+
+People can choose a helper model for their Codex connection in AI Accounts.
+The installation-wide choice is separate from each session's chat model and
+is used by new hints, commit naming and other bounded helper tasks. Recommended
+uses Vibe64's default; explicit choices must support the helper's low thinking
+profile. Changing the setting does not interrupt running work.

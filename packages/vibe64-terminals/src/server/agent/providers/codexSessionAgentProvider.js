@@ -1,3 +1,4 @@
+import { CODEX_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/codexHelperModel";
 import { createHash } from "node:crypto";
 
 import {
@@ -27,7 +28,7 @@ const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000,
 const CODEX_ECONOMY_PROFILE_REVISION = "codex-economy-luna-low-v2";
 const CODEX_ECONOMY_MODEL_CANDIDATES = Object.freeze([
   Object.freeze({
-    model: "gpt-5.6-luna",
+    model: CODEX_RECOMMENDED_HELPER_MODEL,
     thinking: "low"
   })
 ]);
@@ -153,7 +154,7 @@ function codexEconomyExecutionProfileRequest(request = {}) {
   };
 }
 
-function resolveCodexEconomyExecutionProfile(request = {}, catalog = null) {
+function resolveCodexEconomyExecutionProfile(request = {}, catalog = null, modelId = "") {
   const {
     executionProfile,
     limits
@@ -162,7 +163,8 @@ function resolveCodexEconomyExecutionProfile(request = {}, catalog = null) {
   const models = codexCatalogRows(catalog);
   let unsupportedReasoningModel = "";
   let selected = null;
-  for (const candidate of CODEX_ECONOMY_MODEL_CANDIDATES) {
+  const candidates = modelId ? [{ model: modelId, thinking: "low" }] : CODEX_ECONOMY_MODEL_CANDIDATES;
+  for (const candidate of candidates) {
     const model = models.find((row) => (
       row?.hidden !== true && normalizeText(row?.model) === candidate.model
     ));
@@ -191,7 +193,7 @@ function resolveCodexEconomyExecutionProfile(request = {}, catalog = null) {
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
       "The Codex economy model is not available for this account. No interactive-model fallback was attempted.",
       {
-        candidates: CODEX_ECONOMY_MODEL_CANDIDATES.map(({ model }) => model)
+        candidates: candidates.map(({ model }) => model)
       }
     );
   }
@@ -638,6 +640,7 @@ function createCodexSessionAgentProvider({
         executionProfile,
         limits
       } = codexEconomyExecutionProfileRequest(input);
+      const helperModelId = await controller.readHelperModel();
       return resolveCodexEconomyExecutionProfile(
         executionProfile,
         await controller.executionProfileModelCatalog(context.sessionId, {
@@ -645,7 +648,8 @@ function createCodexSessionAgentProvider({
           session: context.session,
           signal: context.signal,
           timeoutMs: limits.timeoutMs
-        })
+        }),
+        helperModelId
       );
     },
     async readTerminal(context, input = {}) {

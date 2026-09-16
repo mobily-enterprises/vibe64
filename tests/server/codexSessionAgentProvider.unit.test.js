@@ -424,6 +424,7 @@ test("Codex economy fails closed when Luna-low is hidden or low reasoning is una
 test("Codex declares one provider-owned economy capability with limits for every bounded workload", () => {
   const provider = createCodexSessionAgentProvider({
     controller: {
+      readHelperModel: async () => "",
       executionProfileModelCatalog: async () => ({ data: [catalogModel()] })
     }
   });
@@ -445,6 +446,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
   const session = Object.freeze({ sessionId: "session-a" });
   const controller = {
+    readHelperModel: async () => "",
     async executionProfileModelCatalog(sessionId, options) {
       calls.push(["catalog", sessionId, options]);
       return {
@@ -489,6 +491,26 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   assert.equal(result.executionProfile.model, "gpt-5.6-luna");
   assert.equal(result.executionProfile.revision, CODEX_ECONOMY_PROFILE_REVISION);
   assert.equal(Object.hasOwn(result.executionProfile, "enforcement"), false);
+});
+
+test("Codex helper changes affect the next task while an already resolved task keeps its model", async () => {
+  let helperModel = "chosen-helper";
+  const provider = createCodexSessionAgentProvider({ controller: {
+    readHelperModel: async () => helperModel,
+    executionProfileModelCatalog: async () => ({ data: [catalogModel(), catalogModel({ model: "chosen-helper" })] }),
+    async runDetachedChatTurn(_sessionId, input) {
+      assert.equal(input.executionProfile.model, "chosen-helper");
+      return { ok: true, text: "Done" };
+    }
+  } });
+  const context = { sessionId: "session-a" };
+  const first = await provider.resolveExecutionProfile(context, economyRequest());
+  assert.equal(first.model, "chosen-helper");
+  helperModel = "";
+  const next = await provider.resolveExecutionProfile(context, economyRequest());
+  assert.equal(next.model, "gpt-5.6-luna");
+  const result = await provider.runDetachedChatTurn(context, { executionProfile: first, prompt: "Continue" });
+  assert.equal(result.executionProfile.model, "chosen-helper");
 });
 
 test("Codex adapter publishes the resolved audit profile before a streamed detached turn", async () => {
@@ -1075,6 +1097,7 @@ test("Codex adapter accepts ten terminal attachments and rejects eleven", async 
 test("Codex adapter rejects consumer-supplied model knobs", async () => {
   const provider = createCodexSessionAgentProvider({
     controller: {
+      readHelperModel: async () => "",
       executionProfileModelCatalog: async () => ({ data: [catalogModel()] })
     }
   });
@@ -1172,4 +1195,11 @@ test("Codex adapter propagates explicit runtime and session through detached cle
   assert.equal(calls[1][2], interruptInput);
   assert.equal(calls[1][3].runtime, runtime);
   assert.equal(calls[1][3].session, session);
+});
+
+test("Codex helper preference selects the exact model and never silently falls back", () => {
+  const catalog = { data: [catalogModel(), { ...catalogModel(), model: "chosen-model" }] };
+  assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "chosen-model").model, "chosen-model");
+  assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "").model, "gpt-5.6-luna");
+  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "missing-model"), /not available/);
 });

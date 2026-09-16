@@ -5,6 +5,9 @@ and see whether the Studio host is ready to support them.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/codexHelperModel.js`
+- `packages/vibe64-accounts/src/client/studio/HelperModelSettings.vue`
+
 - `packages/vibe64-accounts/src/server/service.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
@@ -110,3 +113,13 @@ a stale catalogue or unavailable managed execution, error details do not expose
 the submitted secret, and the temporary credential state is removed on every
 outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
+
+Codex helper-model preferences belong to the connection, outside project source,
+at `<systemRoot>/ai-connections/codex-helper-model.json`. An empty model ID means
+Recommended and resolves the code default at execution time. Account management
+authorization also protects reads and writes of this preference. The account
+API offers live models supporting low thinking, rejects unavailable choices,
+and preserves unreadable settings instead of replacing them. Each new economy
+profile captures the saved choice; existing profiles and the main assistant are
+unchanged. The shared Helper model dialog is also available to hosts for their
+own connection-owned preferences through an explicit endpoint.

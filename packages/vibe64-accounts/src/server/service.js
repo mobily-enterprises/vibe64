@@ -5,6 +5,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import stripAnsi from "strip-ansi";
 
 import {
+  CODEX_RECOMMENDED_HELPER_MODEL,
+  createCodexHelperModelStore,
+  normalizeHelperModelId
+} from "@local/vibe64-core/server/codexHelperModel";
+
+import {
   closeTerminalSession,
   resizeTerminalSession,
   readTerminalSession,
@@ -1318,6 +1324,7 @@ function createService({
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   invalidateAgentRuntimes = async () => null,
   personalProfileStore = null,
+  listAssistantCapabilities = null,
   previousGithub = null,
   projectService = null,
   requireExplicitRoots = true,
@@ -2056,6 +2063,33 @@ function createService({
     return terminal;
   }
 
+  async function readHelperModel(input = {}) {
+    return accountsResult(async () => {
+      const managementError = codexManagementError(input);
+      if (managementError) {
+        return managementError;
+      }
+      const result = await listAssistantCapabilities({ engineId: "codex" });
+      if (result?.ok === false) {
+        throw new Error(result.error || "Codex models could not be loaded.");
+      }
+      const engine = result.engines?.find((item) => item.engineId === "codex");
+      if (!engine) {
+        throw new Error("Codex models could not be loaded.");
+      }
+      const models = (engine.modelProviders || []).flatMap((provider) => provider.models || [])
+        .filter((model) => model.status === "available" && model.variants?.some((variant) => variant.id === "low"))
+        .map(({ id, label }) => ({ id, label }));
+      const modelId = await createCodexHelperModelStore({ systemRoot: resolvedSystemRoot }).read();
+      return {
+        ok: true,
+        modelId,
+        recommendedModelId: CODEX_RECOMMENDED_HELPER_MODEL,
+        models
+      };
+    });
+  }
+
   return Object.freeze({
     async getStatus(input = {}) {
       return accountsResult(async () => {
@@ -2184,6 +2218,28 @@ function createService({
           ok: account?.ok !== false,
           output: result.output || ""
         };
+      });
+    },
+
+    readHelperModel,
+
+    async saveHelperModel(input = {}) {
+      return accountsResult(async () => {
+        const managementError = codexManagementError(input);
+        if (managementError) {
+          return managementError;
+        }
+        const modelId = normalizeHelperModelId(input.modelId);
+        const current = await readHelperModel(input);
+        if (current.ok === false) {
+          return current;
+        }
+        if (modelId && !current.models.some((model) => model.id === modelId)) {
+          throw new Error("This helper model is unavailable or does not support low thinking. Refresh the model list.");
+        }
+        await createCodexHelperModelStore({ systemRoot: resolvedSystemRoot }).write(modelId);
+        await publishAccountChanged("codex", { reason: "helper-model-updated" });
+        return { ...current, modelId };
       });
     },
 

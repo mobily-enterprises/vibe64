@@ -1,3 +1,4 @@
+import { createCodexHelperModelStore } from "@local/vibe64-core/server/codexHelperModel";
 import {
   createCodexAppServerDetachedTurnWatcher,
   codexAppServerTurnStatusIsActive,
@@ -13217,6 +13218,10 @@ function createCodexTerminalController({
 
     createConversation(sessionId, input = {}, options = {}) {
       return createCodexAppServerConversation(sessionId, input, options);
+    },
+
+    readHelperModel() {
+      return createCodexHelperModelStore({ systemRoot: codexAppServerProviderOptions.systemRoot }).read();
     },
 
     assistantAccess() {

@@ -73,6 +73,18 @@ const gitIdentityInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const helperModelInputValidator = deepFreeze({
+  schema: createSchema({
+    ...vibe64UserInputSchema,
+    modelId: {
+      type: "string",
+      required: true,
+      maxLength: 200
+    }
+  }),
+  mode: "patch"
+});
+
 const accountIdInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
@@ -124,6 +136,7 @@ const personalAiProfileInputValidator = deepFreeze({
 });
 
 export {
+  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
   accountAuthSessionInputValidator,

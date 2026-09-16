@@ -131,6 +131,7 @@ const Vibe64AccountsFeature = defineFeature({
         targetRoot
       }),
       personalProfileStore,
+      listAssistantCapabilities: (input) => terminals.listAssistantCapabilities(input),
       invalidateAgentRuntimes: async (input = {}) => {
         if (typeof terminals?.invalidateAgentRuntimes === "function") {
           return terminals.invalidateAgentRuntimes(input);

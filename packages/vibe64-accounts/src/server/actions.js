@@ -1,4 +1,5 @@
 import {
+  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
@@ -12,6 +13,8 @@ import {
   vibe64ConnectionsChangedActionEvent
 } from "./accountRealtimeEvents.js";
 
+const ACTION_READ_HELPER_MODEL = "vibe64.accounts.helper-model.read";
+const ACTION_SAVE_HELPER_MODEL = "vibe64.accounts.helper-model.save";
 const ACTION_READ_ACCOUNTS = "vibe64.accounts.read";
 const ACTION_START_ACCOUNT_AUTH = "vibe64.accounts.auth.start";
 const ACTION_LOGOUT_ACCOUNT = "vibe64.accounts.logout";
@@ -26,6 +29,28 @@ function createActions({ accounts } = {}) {
   }
 
   return Object.freeze([
+    {
+      id: ACTION_READ_HELPER_MODEL,
+      version: 1,
+      kind: "query",
+      input: accountsReadInputValidator,
+      output: null,
+      idempotency: "none",
+      audit: { actionName: ACTION_READ_HELPER_MODEL },
+      observability: {},
+      execute: (input) => accounts.readHelperModel(input)
+    },
+    {
+      id: ACTION_SAVE_HELPER_MODEL,
+      version: 1,
+      kind: "command",
+      input: helperModelInputValidator,
+      output: null,
+      idempotency: "optional",
+      audit: { actionName: ACTION_SAVE_HELPER_MODEL },
+      observability: {},
+      execute: (input) => accounts.saveHelperModel(input)
+    },
     {
       id: ACTION_READ_ACCOUNTS,
       version: 1,
@@ -151,6 +176,8 @@ function createActions({ accounts } = {}) {
 }
 
 export {
+  ACTION_READ_HELPER_MODEL,
+  ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,

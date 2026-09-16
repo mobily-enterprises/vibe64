@@ -1,4 +1,6 @@
 import {
+  ACTION_READ_HELPER_MODEL,
+  ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,
@@ -8,6 +10,7 @@ import {
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
+  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
   accountAuthStartInputValidator,
@@ -47,6 +50,18 @@ function registerRoutes(
     buildInput: (request) => queryInput(routes, request),
     query: accountsReadInputValidator,
     summary: "Read Vibe64 account readiness."
+  });
+
+  routes.actionRoute("GET", "/helper-model", {
+    actionId: ACTION_READ_HELPER_MODEL,
+    buildInput: (request) => withVibe64User(request, {}),
+    summary: "Read the Codex helper model preference and available models."
+  });
+  routes.actionRoute("PATCH", "/helper-model", {
+    actionId: ACTION_SAVE_HELPER_MODEL,
+    body: helperModelInputValidator,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Save the Codex helper model preference."
   });
 
   routes.actionRoute("POST", "/auth", {

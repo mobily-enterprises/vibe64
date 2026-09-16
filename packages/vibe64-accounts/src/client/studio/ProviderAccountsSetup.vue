@@ -163,6 +163,10 @@
           >
             {{ primaryAuthLabel(account) }}
           </v-btn>
+          <HelperModelSettings
+            v-if="account.id === 'codex' && account.connected"
+            :disabled="!accountsReadyForActions"
+          />
           <v-btn
             :aria-busy="logoutAccountId === account.id ? 'true' : undefined"
             class="accounts-setup__pending-action"
@@ -375,6 +379,7 @@
 </template>
 
 <script setup>
+import HelperModelSettings from "./HelperModelSettings.vue";
 import {
   mdiAlertCircleOutline,
   mdiCheckCircle,

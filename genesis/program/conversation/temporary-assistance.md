@@ -257,3 +257,8 @@ parameters. Selections remain local until Apply, matching the main chat control;
 changing them preserves the prompt draft. Vibe64 supplies each provider's allowed
 parameters and passes the applied configuration through the normal temporary
 conversation endpoint.
+
+Bounded Codex economy tasks resolve the connection's saved helper model before
+starting. Recommended selects the default; explicit models must remain available
+and support low thinking. An unavailable choice does not fall back to the main
+chat model. The resolved execution profile retains the model for that task.
