@@ -585,6 +585,11 @@ while preserving project edits. Failed cleanup remains visible and retryable.
 Successful Close removes that chat from other connected browsers; reconnecting
 reconciles missed closures. Draft saves wait for brief assistant-operation
 contention and retry automatically when it remains busy.
+Opening a new session keeps main chat visible while the assistant prepares.
+Temporary-chat restoration waits for confirmed assistant readiness on startup
+and reconnect, then retries any remaining assistant-operation contention
+automatically. This expected wait shows no error and needs no Try again.
+Genuine load failures remain visible and retryable.
 Temporary chats show who is typing in that same conversation, using the main
 chat's indicator. Switching chats, sending, or leaving clears that presence.
 Internal helpers retain their deliberate execution restrictions.

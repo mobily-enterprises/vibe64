@@ -25,6 +25,7 @@ session history.
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
 - `src/composables/useVibe64TemporaryAi.js`
+- `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -53,7 +54,18 @@ from sending the same work again. Native history reconciles replies completed
 while the browser was absent; incomplete replies remain visible as they arrive.
 Temporary conversation requests wait briefly for that coordinator instead of
 failing immediately on contention. A still-busy draft save retries automatically;
-a later successful save clears the earlier save error.
+a later successful save clears the earlier save error. Restoration observes
+`useVibe64MountedSessionData`'s shared `agentConnectionStatus` and starts only
+when it is `connected`, after provider preparation or reconnect reconciliation.
+It reads the current readiness on mount and watches later changes, so mounting
+after initialization needs no new notification. The session layer owns connection
+recovery; restoration has no separate socket-connect handler. A new session
+stays on main chat while its assistant prepares. Any assistant-operation
+contention after readiness still retries automatically without opening an empty
+temporary workspace or showing an error. Losing readiness cancels restoration
+retries and invalidates pending responses; recovery restores again. Changing
+sessions or unmounting also retires pending restoration. Genuine restoration
+failures retain the explicit retry action.
 Typing presence reuses the session presence endpoint, realtime event, debounce,
 heartbeat and expiry with the saved conversation ID as an additional scope.
 The server takes the actor from authentication and checks that the chat belongs

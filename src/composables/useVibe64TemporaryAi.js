@@ -1,9 +1,6 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import {
-  useRealtimeEvent,
-  useRealtimeSocket
-} from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   defaultVibe64AgentSettings,
   normalizeVibe64AgentSettings,
@@ -64,6 +61,7 @@ function temporaryAiTurnMessages(messages = [], runId = "", update = {}) {
 
 function useVibe64TemporaryAi({
   agentSettings = () => defaultVibe64AgentSettings(),
+  assistantReady = () => false,
   onTaskFinished = null,
   operationBusy = () => false,
   sessionId,
@@ -80,6 +78,7 @@ function useVibe64TemporaryAi({
   const projectSlug = useVibe64ProjectSlug();
   const restoreError = ref("");
   let restoreGeneration = 0;
+  let restoreRetryTimer;
   const closingTaskIds = new Set();
   const stoppingTaskIds = new Set();
   let disposed = false;
@@ -198,7 +197,9 @@ function useVibe64TemporaryAi({
   }
 
   async function restoreTasks() {
+    clearTimeout(restoreRetryTimer);
     const generation = ++restoreGeneration;
+    if (disposed || !readRefOrGetterValue(assistantReady)) return;
     const ownerSessionId = currentSessionId();
     const apiPath = currentSessionsApiPath();
     if (!ownerSessionId || !apiPath) return;
@@ -239,10 +240,14 @@ function useVibe64TemporaryAi({
       }
       if (tasks.value.length) open.value = true;
     } catch (error) {
-      if (!disposed && generation === restoreGeneration) {
-        restoreError.value = `Temporary chats could not be restored: ${error.message}`;
-        open.value = true;
+      if (disposed || generation !== restoreGeneration) return;
+      if (error.code === "vibe64_agent_write_mode_busy") {
+        restoreError.value = "";
+        restoreRetryTimer = setTimeout(() => void restoreTasks(), 1000);
+        return;
       }
+      restoreError.value = `Temporary chats could not be restored: ${error.message}`;
+      open.value = true;
     }
   }
 
@@ -805,30 +810,29 @@ function useVibe64TemporaryAi({
       removeTask(task?.id || payload.conversationId);
     }
   });
-  const realtimeSocket = useRealtimeSocket({ required: false });
-  const reconcileAfterConnect = () => {
-    if (!disposed) void restoreTasks();
-  };
-  realtimeSocket.on("connect", reconcileAfterConnect);
-
-  onMounted(() => { void restoreTasks(); });
-  watch(currentSessionId, () => {
-    restoreGeneration += 1;
-    for (const timer of pollTimers.values()) clearTimeout(timer);
-    for (const timer of saveTimers.values()) clearTimeout(timer);
-    pollTimers.clear();
-    saveTimers.clear();
-    closedConversationIds.clear();
-    tasks.value = [];
-    activeTaskId.value = "";
-    open.value = false;
+  // Read the current readiness as well as future changes; mounting after
+  // initialization must work without waiting for another connection event.
+  watch([currentSessionId, currentSessionsApiPath, () => readRefOrGetterValue(assistantReady)], (
+    [ownerSessionId, apiPath], [previousSessionId, previousApiPath]
+  ) => {
+    if (ownerSessionId !== previousSessionId || apiPath !== previousApiPath) {
+      restoreError.value = "";
+      for (const timer of pollTimers.values()) clearTimeout(timer);
+      for (const timer of saveTimers.values()) clearTimeout(timer);
+      pollTimers.clear();
+      saveTimers.clear();
+      closedConversationIds.clear();
+      tasks.value = [];
+      activeTaskId.value = "";
+      open.value = false;
+    }
     void restoreTasks();
-  });
+  }, { immediate: true });
   onBeforeUnmount(() => {
     // Removing a view never closes a conversation or interrupts native work.
     for (const taskId of saveTimers.keys()) void saveTask(taskId);
     disposed = true;
-    realtimeSocket.off("connect", reconcileAfterConnect);
+    clearTimeout(restoreRetryTimer);
     restoreGeneration += 1;
     for (const timer of pollTimers.values()) clearTimeout(timer);
     for (const timer of saveTimers.values()) clearTimeout(timer);

@@ -1,4 +1,4 @@
-import { createRenderer } from "vue";
+import { createRenderer, ref } from "vue";
 import { EventEmitter } from "node:events";
 import { routeLocationKey } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +20,12 @@ const CLOSED_CONVERSATION = {
 };
 const mountedApps = new Set();
 
-function mountTemporaryAi({ socket = new EventEmitter(), openTask = true } = {}) {
+function mountTemporaryAi({
+  assistantReady = ref(true),
+  socket = new EventEmitter(),
+  openTask = true,
+  sessionId = () => "session-1"
+} = {}) {
   let temporary;
   const onTaskFinished = vi.fn();
   const app = createRenderer({
@@ -32,8 +37,9 @@ function mountTemporaryAi({ socket = new EventEmitter(), openTask = true } = {})
   }).createApp({
     setup() {
       temporary = useVibe64TemporaryAi({
+        assistantReady,
         onTaskFinished,
-        sessionId: () => "session-1",
+        sessionId,
         sessionsApiPath: () => "/api/app/project-a/vibe64/sessions"
       });
       return () => null;
@@ -45,6 +51,7 @@ function mountTemporaryAi({ socket = new EventEmitter(), openTask = true } = {})
   mountedApps.add(app);
   const task = openTask ? temporary.openTask({ draft: "Repair this conflict.", recoveryOperation: "update" }) : null;
   return {
+    assistantReady,
     onTaskFinished,
     task,
     temporary,
@@ -75,6 +82,148 @@ describe("temporary AI mounted lifetime", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("waits for shared assistant readiness before restoring, including manual retry", async () => {
+    const assistantReady = ref(false);
+    http.request.mockResolvedValue({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready", draft: "Keep this" }] });
+    const { temporary } = mountTemporaryAi({ assistantReady, openTask: false });
+    await temporary.restoreTasks();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(http.request).not.toHaveBeenCalled();
+    expect(temporary.open.value).toBe(false);
+    expect(temporary.restoreError.value).toBe("");
+    expect(vi.getTimerCount()).toBe(0);
+
+    assistantReady.value = true;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    expect(temporary.activeTask.value.draft).toBe("Keep this");
+    expect(temporary.open.value).toBe(true);
+  });
+
+  it("restores when mounted after initialization without needing a ready event", async () => {
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledExactlyOnceWith(`${SESSION_PATH}/temporary-conversations`, { method: "GET" });
+    expect(temporary.open.value).toBe(false);
+  });
+
+  it("cancels a busy retry while readiness is lost and resumes after reconciliation", async () => {
+    http.request.mockResolvedValueOnce({ ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy" });
+    const { assistantReady, socket, temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(1);
+    assistantReady.value = false;
+    socket.emit("connect");
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(temporary.restoreError.value).toBe("");
+    assistantReady.value = true;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(http.request).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { ok: true, conversations: [{ conversationId: "obsolete", status: "ready" }] },
+    { ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy" },
+    { ok: false, error: "Failed on the old connection" }
+  ])("ignores an obsolete restoration response after readiness is lost: $ok $error", async (response) => {
+    const listing = Promise.withResolvers();
+    http.request.mockReturnValueOnce(listing.promise);
+    const { assistantReady, temporary } = mountTemporaryAi({ openTask: false });
+    assistantReady.value = false;
+    await vi.advanceTimersByTimeAsync(0);
+    assistantReady.value = true;
+    await vi.advanceTimersByTimeAsync(0);
+    listing.resolve(response);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(temporary.tasks.value).toEqual([]);
+    expect(temporary.restoreError.value).toBe("");
+    expect(temporary.open.value).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("waits for a new session's readiness and ignores the previous session's pending restore", async () => {
+    const sessionId = ref("session-1");
+    const listing = Promise.withResolvers();
+    http.request.mockReturnValueOnce(listing.promise);
+    const { assistantReady, temporary } = mountTemporaryAi({ openTask: false, sessionId });
+    sessionId.value = "session-2";
+    assistantReady.value = false;
+    await vi.advanceTimersByTimeAsync(0);
+    listing.resolve({ ok: true, conversations: [{ conversationId: "obsolete", status: "ready" }] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    expect(temporary.tasks.value).toEqual([]);
+    assistantReady.value = true;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(http.request).toHaveBeenLastCalledWith(
+      "/api/app/project-a/vibe64/sessions/session-2/temporary-conversations", { method: "GET" }
+    );
+  });
+
+  it.each([false, true])("retries busy restoration without replacing main chat (saved chat: %s)", async (savedChat) => {
+    const busy = { ok: false, code: "vibe64_agent_write_mode_busy", error: "The assistant is still reconnecting." };
+    http.request.mockResolvedValueOnce(busy)
+      .mockRejectedValueOnce(Object.assign(new Error(busy.error), { code: busy.code }))
+      .mockResolvedValueOnce({ ok: true, conversations: savedChat ? [{ conversationId: "conversation-1", status: "ready", draft: "Keep this" }] : [] });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.open.value).toBe(false);
+    expect(temporary.restoreError.value).toBe("");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(temporary.open.value).toBe(false);
+    expect(temporary.restoreError.value).toBe("");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(temporary.open.value).toBe(savedChat);
+    expect(temporary.tasks.value).toHaveLength(savedChat ? 1 : 0);
+    if (savedChat) expect(temporary.activeTask.value.draft).toBe("Keep this");
+    expect(temporary.restoreError.value).toBe("");
+    expect(http.request).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("cancels a pending restoration retry when the view unmounts", async () => {
+    http.request.mockResolvedValue({ ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy" });
+    const { unmount } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    unmount();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not carry a pending restoration retry into another session", async () => {
+    const sessionId = ref("session-1");
+    http.request.mockResolvedValueOnce({ ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy" })
+      .mockResolvedValue({ ok: true, conversations: [] });
+    const { temporary } = mountTemporaryAi({ openTask: false, sessionId });
+    await vi.advanceTimersByTimeAsync(0);
+    sessionId.value = "session-2";
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(http.request.mock.calls.map(([path]) => path)).toEqual([
+      `${SESSION_PATH}/temporary-conversations`,
+      "/api/app/project-a/vibe64/sessions/session-2/temporary-conversations"
+    ]);
+    expect(temporary.open.value).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("still exposes a genuine restoration failure with manual retry", async () => {
+    http.request.mockResolvedValueOnce({ ok: false, error: "Saved conversations could not be read." });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(temporary.restoreError.value).toContain("Saved conversations could not be read.");
+    expect(temporary.open.value).toBe(true);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    await temporary.restoreTasks();
+    expect(temporary.restoreError.value).toBe("");
+    expect(temporary.tasks.value).toHaveLength(1);
   });
 
   it.each([
@@ -348,10 +497,15 @@ describe("temporary AI mounted lifetime", () => {
 
   it("reconciles missed closures on reconnect while preserving a new local draft", async () => {
     http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
-    const { temporary, socket, task } = mountTemporaryAi();
+    const { assistantReady, temporary, socket, task } = mountTemporaryAi();
+    await vi.advanceTimersByTimeAsync(0);
+    assistantReady.value = false;
     await vi.advanceTimersByTimeAsync(0);
     http.request.mockResolvedValueOnce({ ok: true, conversations: [] });
     socket.emit("connect");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.tasks.value).toHaveLength(2);
+    assistantReady.value = true;
     await vi.advanceTimersByTimeAsync(0);
     expect(temporary.tasks.value.map((task) => task.id)).toEqual([task.id]);
     expect(temporary.activeTask.value.draft).toBe("Repair this conflict.");

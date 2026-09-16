@@ -504,6 +504,7 @@
         ref="temporaryAiWorkspace"
         :active="props.active"
         :agent-settings="currentAgentSettings"
+        :assistant-ready="props.agentConnectionStatus === 'connected'"
         :connection-unavailable="connectionRecoveryVisible"
         :preview-attachment-state="previewAttachmentState"
         :project-slug="projectSlug"

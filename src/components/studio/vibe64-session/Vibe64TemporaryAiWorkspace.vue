@@ -300,6 +300,7 @@ import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTy
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
+  assistantReady: Boolean,
   connectionUnavailable: Boolean,
   projectSlug: { type: String, default: "" },
   previewAttachmentState: { type: Object, default: () => ({}) },
@@ -333,6 +334,7 @@ const temporaryAiFeedback = useUiFeedback({
 });
 const temporary = useVibe64TemporaryAi({
   agentSettings: computed(() => props.agentSettings),
+  assistantReady: () => props.assistantReady,
   operationBusy: () => props.repositoryBusy,
   onTaskFinished(task = {}) {
     emit("task-finished", task);

@@ -66,6 +66,43 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  hintTest("@startup-restoration waits for initialization and handles later contention without replacing main chat", async ({ page }) => {
+    const preparation = Promise.withResolvers<void>();
+    const events: string[] = [];
+    let reads = 0;
+    await mockDirectChat(page);
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, async route => {
+      events.push("preparing");
+      await preparation.promise;
+      events.push("ready");
+      await fulfillJson(route, { ok: true, ...directSession().agentSession });
+    });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations`, async route => {
+      reads += 1;
+      if (reads === 1) {
+        events.push("busy");
+        await route.fulfill({ status: 409, json: {
+          ok: false, code: "vibe64_agent_write_mode_busy", retryable: true,
+          error: "The assistant is busy. Try again shortly."
+        } });
+      } else {
+        await fulfillJson(route, { ok: true, conversations: [] });
+        events.push("restored");
+      }
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    await expect.poll(() => events).toEqual(["preparing"]);
+    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Temporary AI workspace", exact: true })).not.toBeVisible();
+    await expect(page.getByText(/Temporary chats could not be restored:/)).not.toBeVisible();
+    expect(reads).toBe(0);
+    preparation.resolve();
+    await expect.poll(() => events).toEqual(["preparing", "ready", "busy", "restored"]);
+    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Temporary AI workspace", exact: true })).not.toBeVisible();
+    await expect(page.getByText(/Temporary chats could not be restored:/)).not.toBeVisible();
+  });
+
   hintTest("keeps chat inside its divider at the minimum resize width", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockDirectChat(page);
