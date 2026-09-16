@@ -14,6 +14,8 @@ workspace.
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `src/composables/useVibe64ProjectsResource.js`
 - `src/composables/useProjectSelectionGate.js`
+- `src/composables/useVibe64AppPage.js`
+- `src/components/studio/ProjectSelectionGate.vue`
 
 ## Public contract
 
@@ -66,6 +68,11 @@ project response. The gate owns its refresh-event subscription and invalidates
 that shared query once, even while both readers are mounted. Its cache identity
 remains separate from the global catalog, whose selected project may differ
 from the current browser route.
+Opening a project URL confirms that its runtime has reopened before mounting
+session, assistant and preview controls, including with cached project data.
+Selecting the current project or following the same project link retries that
+opening without a browser reload. Failed opening offers an inline retry; late
+responses from another project cannot unlock the current project's controls.
 Runtime lifecycle publication uses that same project-event owner. Deletion
 publishes only a catalog refresh hint, so clients can remove a deleted project
 without exposing its former identity to a broader audience.

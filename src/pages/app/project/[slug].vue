@@ -40,8 +40,11 @@ const {
   projectLoadError,
   projectPane,
   projectPaneNavigationVisible,
+  projectRuntimeError,
+  projectRuntimeReady,
   projectSlug,
   projectTabs,
+  retryProjectRuntime,
   selectProjectPane,
   setChatCollapsed,
   showProjectPane,
@@ -171,6 +174,9 @@ const {
 
       <div class="studio-screen__gate-scroll">
         <ProjectSelectionGate
+          :runtime-ready="projectRuntimeReady"
+          :runtime-error="projectRuntimeError"
+          @retry-runtime="retryProjectRuntime"
           :key="projectSlug"
           scope-selection-to-current-project
           @error="handleProjectSelectionError"

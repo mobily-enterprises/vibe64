@@ -9,6 +9,9 @@ application, environment, and the system's explained structure in one place.
 Each session keeps valuable work recoverable and separate from unrelated work.
 Opening a project shows loading while its sessions are being fetched, including
 when restoring the last selected session. It does not imply creation is blocked.
+Opening a project link reopens its runtime before chat and Preview load, including
+when returning with cached data. A failed opening offers Retry without requiring
+a browser reload.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
 Archiving immediately makes a session inactive and selects the previous available

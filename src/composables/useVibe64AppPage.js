@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import {
   mdiChevronDown,
   mdiChevronLeft,
@@ -59,6 +59,14 @@ function useVibe64AppPage() {
   const lastDashboardRoutePath = ref("");
   let mobilePaneMediaQuery = null;
   const projectSlug = computed(() => projectSlugFromRoute(route));
+  const projectOpenRevision = ref(0);
+  const projectOpenKey = computed(() => `${projectSlug.value}:${projectOpenRevision.value}`);
+  const openedProjectKey = ref("");
+  const projectOpenFailure = ref(null);
+  const projectRuntimeReady = computed(() => !projectSlug.value || openedProjectKey.value === projectOpenKey.value);
+  const projectRuntimeError = computed(() => projectOpenFailure.value?.key === projectOpenKey.value
+    ? projectOpenFailure.value.message : "");
+  let attemptedProjectOpenKey = "";
   const projectSelection = useVibe64ProjectsResource({
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
@@ -183,10 +191,21 @@ function useVibe64AppPage() {
     { immediate: true }
   );
 
-  watch(projectSlug, (slug) => {
-    void openProjectRuntimeForSlug(slug);
-  }, {
-    immediate: true
+  watch(projectSlug, retryProjectRuntime, { flush: "sync" });
+  watch(
+    [projectOpenKey, () => openProjectRuntimeCommand.canRun, () => openProjectRuntimeCommand.isRunning],
+    ([key, canRun, running]) => {
+      if (!projectSlug.value || !canRun || running || attemptedProjectOpenKey === key) return;
+      attemptedProjectOpenKey = key;
+      void openProjectRuntimeForSlug(projectSlug.value, { key });
+    },
+    { immediate: true }
+  );
+  const removeProjectNavigation = router.afterEach((to, _from, failure) => {
+    if (isNavigationFailure(failure, NavigationFailureType.duplicated) &&
+        projectSlugFromRoute(to) === projectSlug.value) {
+      retryProjectRuntime();
+    }
   });
 
   onMounted(() => {
@@ -203,6 +222,7 @@ function useVibe64AppPage() {
   });
 
   onBeforeUnmount(() => {
+    removeProjectNavigation();
     clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);
     if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
@@ -260,8 +280,11 @@ function useVibe64AppPage() {
     projectLoadError,
     projectPane,
     projectPaneNavigationVisible,
+    projectRuntimeError,
+    projectRuntimeReady,
     projectSlug,
     projectTabs,
+    retryProjectRuntime,
     selectProjectPane,
     setChatCollapsed,
     showProjectPane,
@@ -300,8 +323,11 @@ function useVibe64AppPage() {
 
   function openProject(project = {}) {
     const slug = String(project.slug || "").trim();
-    if (!slug || slug === projectSlug.value) {
+    if (!slug) {
       return;
+    }
+    if (slug === projectSlug.value && route.path !== projectAppPath(slug)) {
+      retryProjectRuntime();
     }
     void router.push(projectAppPath(slug));
   }
@@ -342,18 +368,27 @@ function useVibe64AppPage() {
   }
 
   async function openProjectRuntimeForSlug(slug = "", {
-    reason = "project-open"
+    reason = "project-open",
+    key = projectOpenKey.value
   } = {}) {
     const project = String(slug || "").trim();
     if (!project) {
       return null;
     }
     try {
-      return await openProjectRuntimeCommand.run({
+      const result = await openProjectRuntimeCommand.run({
         projectSlug: project,
         reason
       });
+      if (result?.ok !== true || result?.runtime?.open !== true) {
+        throw new Error(result?.error || "Project could not open. Try again.");
+      }
+      if (key === projectOpenKey.value) openedProjectKey.value = key;
+      return result;
     } catch (error) {
+      if (key === projectOpenKey.value) {
+        projectOpenFailure.value = { key, message: String(error?.message || "Project could not open. Try again.") };
+      }
       vibe64SessionDebugLog("client.projectRuntime.open.error", {
         error: vibe64SessionDebugError(error),
         projectSlug: project,
@@ -361,6 +396,10 @@ function useVibe64AppPage() {
       });
       return null;
     }
+  }
+
+  function retryProjectRuntime() {
+    projectOpenRevision.value += 1;
   }
 
   function handleProjectRuntimeClosed(payload = {}) {

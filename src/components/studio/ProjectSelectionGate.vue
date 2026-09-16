@@ -8,11 +8,16 @@
     />
 
     <v-skeleton-loader
-      v-if="selectionInitialLoading"
+      v-if="selectionInitialLoading || (!runtimeReady && !runtimeError)"
       aria-label="Loading project"
       class="project-selection-gate__loading"
       type="article"
     />
+
+    <v-alert v-else-if="runtimeError" type="error" variant="tonal">
+      {{ runtimeError }}
+      <v-btn variant="text" @click="emit('retry-runtime')">Retry opening project</v-btn>
+    </v-alert>
 
     <slot
       v-else-if="selectedSlotVisible"
@@ -88,6 +93,14 @@ import {
 } from "@/lib/vibe64ProjectScope.js";
 
 const props = defineProps({
+  runtimeReady: {
+    type: Boolean,
+    default: true
+  },
+  runtimeError: {
+    type: String,
+    default: ""
+  },
   forcePicker: {
     type: Boolean,
     default: false
@@ -102,7 +115,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["missing", "ready", "error"]);
+const emit = defineEmits(["missing", "ready", "error", "retry-runtime"]);
 const router = useRouter();
 
 const {
