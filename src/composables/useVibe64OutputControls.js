@@ -850,6 +850,7 @@ function useVibe64OutputControls({
   });
 
   const status = computed(() => outputTargetsResource.data.value || {});
+  const outputTargetsLoaded = computed(() => status.value.ok !== false && Array.isArray(status.value.outputTargets));
   const launchStatusLoadError = computed(() => {
     const error = outputTargetsResource.query?.error?.value || null;
     return launchStatusErrorText({
@@ -1812,6 +1813,7 @@ function useVibe64OutputControls({
     launchStarting,
     launchWaiting,
     outputTargets,
+    outputTargetsLoaded,
     outputExecution,
     outputResults,
     outputRuns,

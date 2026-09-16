@@ -35,6 +35,46 @@ const TARGET_APP_URL = "http://127.0.0.1:4103/home";
 const PROXY_APP_URL = "http://127.0.0.1:49000/home";
 const TEST_ASSISTANT_CATALOG_REVISION = `sha256:${"a".repeat(64)}`;
 
+for (const width of [390, 768, 1280]) {
+  for (const kind of ["web", "terminal", "finite", "none"]) {
+    test(`@starter-requirements ${kind} setup at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await mockLaunchTerminalSocket(page);
+      const targets = kind === "none" ? [] : [{
+        id: "app",
+        label: "Run project",
+        default: true,
+        available: false,
+        mode: kind === "finite" ? "finite" : "interactive",
+        presentation: kind === "finite" ? null : { kind },
+        downloads: [],
+        environmentSetupRequired: true,
+        disabledReason: "Object storage requires OBJECT_STORE_TOKEN."
+      }];
+      await mockLaunchSession(page, { initialLaunchStatus: idleLaunchStatusPayload(targets) });
+      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+      if (width <= 960) {
+        await page.getByRole("button", { name: "Show project", exact: true }).click();
+      }
+      if (kind === "none") {
+        await expect(page.getByText("No runnable output is declared. You can continue working in the conversation.", { exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Open Env", exact: true })).toHaveCount(0);
+      } else {
+        await expect(page.getByRole("heading", { name: "Set up your project's environment" })).toBeVisible();
+        const env = page.getByRole("link", { name: "Open Env", exact: true });
+        await expect(env).toHaveAttribute("href", `${DASHBOARD_PATH}/env`);
+        await expect(env).toBeInViewport();
+        await page.getByText("Required configuration", { exact: true }).click();
+        await expect(page.getByText("Object storage requires OBJECT_STORE_TOKEN.", { exact: true }).first()).toBeVisible();
+        await expect(page.getByRole("button", { name: "Check again", exact: true })).toBeEnabled();
+      }
+      if (kind !== "web") {
+        await expect(page.getByPlaceholder("Preview URL unavailable")).toHaveCount(0);
+      }
+    });
+  }
+}
+
 for (const width of [390, 1440]) {
   test(`@update-icon failed Update retains Rebase until success at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -1058,10 +1098,9 @@ test("@preview-setup-warning retains reload when launch settings have no usable 
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await expect(page.locator(".project-preview__warning")).toBeVisible();
-  await expect(page.getByLabel("Preview URL", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Preview URL", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Preview URL", { exact: true })).toHaveCount(0);
   const reads = launch.getLaunchStatusRequestCount();
-  await page.locator('button[title="Reload preview"]').click();
+  await page.getByRole("button", { name: "Refresh output status", exact: true }).click();
   await expect.poll(() => launch.getLaunchStatusRequestCount()).toBeGreaterThan(reads);
   expect(launch.getLaunchStartPayloads()).toHaveLength(0);
   await expect(page.locator(".vibe64-launch-controls__preview-frame")).toHaveCount(0);

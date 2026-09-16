@@ -63,6 +63,7 @@ function vibe64OutputTargetView(target = {}) {
     : null;
   return {
     available,
+    ...(target.environmentSetupRequired === true ? { environmentSetupRequired: true } : {}),
     ...(target.default === true ? { default: true } : {}),
     disabledReason: available
       ? ""

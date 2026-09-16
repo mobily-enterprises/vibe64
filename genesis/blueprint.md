@@ -418,7 +418,7 @@ ends. An interactive AI terminal is launched
 explicitly, always matches the kind of assistant chosen when the session began,
 and can be closed independently of the conversation. A project that declares
 no application output remains idle: Preview says there is nothing to run and
-keeps its browser controls available without offering an empty launch menu.
+keeps output-status refresh available without offering an empty launch menu.
 
 Genesis remains the portable authority for what a project is, how its Program
 is explained, which technologies it uses, its environment/resource
@@ -608,3 +608,11 @@ The installation-wide choice is separate from each session's chat model and
 is used by new hints, commit naming and other bounded helper tasks. Recommended
 uses Vibe64's default; explicit choices must support the helper's low thinking
 profile. Changing the setting does not interrupt running work.
+
+When a declared output is blocked by missing environment resources, the project
+shows a setup explanation and a direct route to Env, with the exact requirement
+available on demand. This applies to web, terminal, and downloadable outputs.
+Vibe64 never invents resource values or provisions standalone infrastructure.
+Projects with only terminal or downloadable outputs explain how to run them
+without displaying unavailable browser controls. Projects with no runnable
+output remain usable through the conversation.

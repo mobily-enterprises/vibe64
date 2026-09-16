@@ -614,9 +614,11 @@ function vibe64OutputsInspection({ environment = {}, section = {} } = {}) {
   const disabledReason = environmentDiagnostics.length === 0
     ? null
     : environmentDiagnostics.map(({ message }) => message).join(" ");
+  const environmentSetupRequired = environmentDiagnostics.some(({ code }) => code === "STACK_RESOURCE_MISSING");
   const targets = parsed.targets.map((target) => ({
     ...target,
     source: section.source || null,
+    ...(environmentSetupRequired ? { environmentSetupRequired: true } : {}),
     available: sectionDiagnostics.length === 0 && environmentDiagnostics.length === 0,
     disabledReason
   }));

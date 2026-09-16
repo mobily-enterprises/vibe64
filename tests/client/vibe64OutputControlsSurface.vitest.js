@@ -58,6 +58,15 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("Preview is ready to start.");
   });
 
+  it("explains non-web outputs without waiting for a web server", () => {
+    expect(launchPreviewEmptyText({ nonWebOutputsAvailable: true }))
+      .toBe("This project has no web preview. Use Run to choose an output; terminal output and downloads appear here.");
+    expect(launchPreviewEmptyText({ nonWebOutputsAvailable: true, previewStartUnavailableReason: "Set API_TOKEN in Env." }))
+      .toBe("Set API_TOKEN in Env.");
+    expect(launchPreviewEmptyText({ nonWebOutputsAvailable: true, terminalIsRunning: true }))
+      .toBe("Preparing preview.");
+  });
+
   it("does not call idle auto-start placeholders preparing preview", () => {
     expect(launchPreviewEmptyText({
       previewAutoStartPreparing: true
@@ -144,7 +153,7 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewEmptyText({
       outputTargetsUnavailable: true,
       previewMessage: "Run an output target first."
-    })).toBe("This project does not declare an application output.");
+    })).toBe("No runnable output is declared. You can continue working in the conversation.");
   });
 
   it("surfaces a manual start state when an embedded target can be launched", () => {

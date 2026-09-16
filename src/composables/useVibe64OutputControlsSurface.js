@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
+import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -604,13 +605,13 @@ function useVibe64OutputControlsSurface(props) {
     acceptResourceRetry,
     testApproval,
     launchStatusAttempt,
-    launchStatusIdleRecoveryExhausted,
     launchStarting,
     launchWaiting,
     outputExecution,
     outputResults,
     outputRuns,
     outputTargets,
+    outputTargetsLoaded,
     loading,
     loadError,
     minimizeTerminal,
@@ -729,8 +730,14 @@ function useVibe64OutputControlsSurface(props) {
       managedPreviewTarget(outputTargets.value) ||
       preferredPreviewTarget(outputTargets.value);
   });
-  const embeddedStartTargetUnavailableReason = computed(() => {
-    const target = embeddedStartTarget.value;
+  const outputSetupTarget = computed(() => (
+    embeddedStartTarget.value ||
+    outputTargets.value.find((target) => target.default) ||
+    outputTargets.value[0] ||
+    null
+  ));
+  const outputSetupUnavailableReason = computed(() => {
+    const target = outputSetupTarget.value;
     return target?.available === false
       ? String(target.disabledReason || "Preview cannot start yet.").trim()
       : "";
@@ -840,9 +847,17 @@ function useVibe64OutputControlsSurface(props) {
     previewState.value === "idle" &&
     !previewUrl.value &&
     !terminalVisible.value &&
-    embeddedStartTargetUnavailableReason.value &&
+    outputSetupUnavailableReason.value &&
     !loadError.value
   ));
+  const previewEnvironmentSetupVisible = computed(() => Boolean(
+    previewCheckAgainVisible.value && outputSetupTarget.value?.environmentSetupRequired
+  ));
+  const previewBrowserControlsVisible = computed(() => Boolean(
+    loading.value || loadError.value || previewUrl.value ||
+    outputTargets.value.some((target) => target.presentation?.kind === "web")
+  ));
+  const previewEnvironmentPath = computed(() => projectAppPath(projectSlug.value, "/dashboard/env"));
   const previewStarting = computed(() => Boolean(
     previewState.value === "starting"
   ));
@@ -978,9 +993,10 @@ function useVibe64OutputControlsSurface(props) {
     previewManualStartAvailable: embeddedManualStartButtonVisible.value,
     previewMessage: previewMessage.value,
     previewState: previewState.value,
-    previewStartUnavailableReason: embeddedStartTargetUnavailableReason.value,
+    previewStartUnavailableReason: outputSetupUnavailableReason.value,
     launchStarting: launchStarting.value,
-    outputTargetsUnavailable: launchStatusIdleRecoveryExhausted.value && outputTargets.value.length < 1,
+    outputTargetsUnavailable: outputTargetsLoaded.value && outputTargets.value.length < 1,
+    nonWebOutputsAvailable: outputTargets.value.length > 0 && !embeddedStartTarget.value,
     terminalIsRunning: terminalIsRunning.value
   }));
   
@@ -1959,6 +1975,9 @@ function useVibe64OutputControlsSurface(props) {
     previewCanShowLog,
     previewCanStart,
     previewCheckAgainVisible,
+    previewEnvironmentSetupVisible,
+    previewBrowserControlsVisible,
+    previewEnvironmentPath,
     previewDisplayedAddress,
     previewDisplayedUrl,
     previewDiagnosticsAvailable,
@@ -2047,6 +2066,7 @@ function launchPreviewEmptyText({
   loadError = "",
   loading = false,
   outputTargetsUnavailable = false,
+  nonWebOutputsAvailable = false,
   previewInFlightText = "",
   previewManualStartAvailable = false,
   previewMessage = "",
@@ -2082,7 +2102,10 @@ function launchPreviewEmptyText({
     return "Checking preview status.";
   }
   if (outputTargetsUnavailable) {
-    return "This project does not declare an application output.";
+    return "No runnable output is declared. You can continue working in the conversation.";
+  }
+  if (nonWebOutputsAvailable) {
+    return "This project has no web preview. Use Run to choose an output; terminal output and downloads appear here.";
   }
   return "Preview will appear here when it is ready.";
 }

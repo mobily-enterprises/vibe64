@@ -372,6 +372,7 @@ test("configured blocked Outputs keep disabled targets without exposing private 
   assert.deepEqual(targets, [outputTargetView({
     available: false,
     disabledReason,
+    environmentSetupRequired: true,
     downloads: [{ id: "bundle", mediaType: "application/zip", name: "bundle.zip" }]
   })]);
   assert.deepEqual(await createVibe64OutputTargetTerminalSpec({
@@ -635,4 +636,44 @@ test("unsupported runtimes disable a target before terminal creation", async (t)
     ok: false,
     message: "Vibe64 does not provide a pinned runtime for: future-runtime."
   });
+});
+
+test("environment setup applies to terminal and finite outputs without a database or web server", async (t) => {
+  const context = await outputContext(t);
+  for (const mode of ["interactive", "finite"]) {
+    const lines = [
+      "### Target `tool`: Run tool",
+      `- Mode: \`${mode}\``,
+      "- Runtimes: `nodejs`",
+      ...(mode === "interactive"
+        ? ["- Run `Execute`: `node` `tool.js`", "#### Presentation", "- Kind: `terminal`"]
+        : ["- Build `Generate`: `node` `tool.js`", "#### Download `report`", "- Path: `report.txt`", "- Name: `report.txt`", "- Media type: `text/plain`"])
+    ];
+    const section = {
+      status: "ready",
+      stackHash: "sha256:unit",
+      diagnostics: [],
+      source: "project",
+      lines
+    };
+    const outputs = vibe64OutputsInspection({
+      environment: {
+        stackHash: "sha256:unit",
+        diagnostics: [{ code: "STACK_RESOURCE_MISSING", message: "Object storage requires OBJECT_STORE_TOKEN." }]
+      },
+      section
+    });
+    const [target] = await listVibe64OutputTargets(context, { inspect: () => outputs });
+    assert.equal(target.available, false);
+    assert.equal(target.environmentSetupRequired, true);
+    assert.equal(target.presentation?.kind || null, mode === "interactive" ? "terminal" : null);
+    assert.equal(target.mode, mode);
+    const ready = vibe64OutputsInspection({
+      environment: { stackHash: "sha256:unit", diagnostics: [] },
+      section
+    });
+    const [readyTarget] = await listVibe64OutputTargets(context, { inspect: () => ready });
+    assert.equal(readyTarget.available, true);
+    assert.equal(readyTarget.environmentSetupRequired, undefined);
+  }
 });
