@@ -14,7 +14,7 @@ const sharedComposerActionsPath = path.resolve(
   "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerActions.vue"
 );
 const promptHintsPath = path.resolve(
-  "src/components/studio/vibe64-session/Vibe64PromptHints.vue"
+  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerSupport.vue"
 );
 const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue");
 const temporaryAiPath = path.resolve(
@@ -259,7 +259,7 @@ describe("Vibe64 direct session view", () => {
     expect(composerActions).toContain('v-if="state.canStop"');
     expect(composerActions).toContain("{{ state.stopPending ? 'Stopping…' : 'Stop' }}");
     expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
-    expect(component).toContain("<Vibe64PromptHints");
+    expect(component).toContain("<AssistantComposerSupport");
     expect(promptHints).toContain("@media (prefers-reduced-motion: reduce)");
     expect(composable).toContain('waiting: "Waiting…"');
     expect(composable).toContain('steering: "Steering…"');
@@ -271,14 +271,16 @@ describe("Vibe64 direct session view", () => {
 
   it("requires complete compact structured answers while preserving free-form escape", () => {
     const component = fs.readFileSync(componentPath, "utf8");
+    const questions = fs.readFileSync(path.resolve("node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantQuestionInputs.vue"), "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
 
-    expect(component).toContain("<v-select");
-    expect(component).toContain('item-title="selectLabel"');
-    expect(component).toContain(':items="numberedQuestionSelectItems[question.name]"');
-    expect(component).not.toContain("#selection=");
-    expect(component).toContain("Answer normally instead");
-    expect(component).toContain(':prepend-icon="mdiPencilOutline"');
+    expect(component).toContain("<AssistantQuestionInputs")
+    expect(questions).toContain("<v-select");
+    expect(questions).toContain('item-title="selectLabel"');
+    expect(component).toContain(':select-items="numberedQuestionSelectItems"');
+    expect(questions).not.toContain("#selection=");
+    expect(questions).toContain("Answer normally instead");
+    expect(questions).toContain(':prepend-icon="mdiPencilOutline"');
     expect(component.match(/canSend: composerCanSubmit && attachmentState\.canSubmit/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');
     expect(composable).toContain("numberedQuestions.value.every");

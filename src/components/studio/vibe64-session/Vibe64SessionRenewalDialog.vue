@@ -390,7 +390,7 @@
           </v-btn>
         </template>
         <v-btn
-          v-else-if="renewal.phase === 'failed' && renewal.renewal?.error?.retryable !== false"
+          v-else-if="renewal.phase === 'failed'"
           :aria-busy="renewal.pendingAction === 'retry' ? 'true' : undefined"
           autofocus
           class="studio-session-renewal__action studio-session-renewal__action--primary"

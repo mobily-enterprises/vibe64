@@ -515,15 +515,24 @@ describe("session renewal dialog", () => {
     expect(html).toContain('aria-live="off"');
   });
 
-  it("does not instruct the user to retry a non-retryable renewal", async () => {
-    const html = await renderRenewal(renewalModel({
+  it("allows an explicit retry of a saved failure marked non-retryable", async () => {
+    const model = renewalModel({
       phase: "failed",
-      renewal: { error: { message: "The saved operation cannot continue.", retryable: false } }
-    }));
+      renewal: {
+        stage: "draft_generating",
+        status: "failed",
+        error: { message: "Save this session before renewing it.", retryable: false }
+      }
+    });
+    const html = await renderRenewal(model);
 
-    expect(html).toContain("This renewal cannot be retried here");
-    expect(html).not.toContain("retry the same saved renewal");
-    expect(html).not.toMatch(/>Retry</u);
+    expect(html).toContain("retry the same saved renewal");
+    expect(html).not.toContain("cannot be retried");
+    const retry = renewalUiHarness.buttons.find((button) => button.onClick === model.retry);
+    expect(retry).toHaveProperty("autofocus");
+    expect(retry.disabled).toBe(false);
+    retry.onClick();
+    expect(model.retry).toHaveBeenCalledOnce();
   });
 
   it("keeps opening a completed successor actionable after automatic navigation fails", async () => {

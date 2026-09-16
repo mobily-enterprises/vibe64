@@ -71,6 +71,7 @@ for (const name of [
   "AssistantConversationElement",
   "AssistantTranscript",
   "AssistantProgress",
+  "AssistantMessageAttachments",
   "LongTextInlineParts",
   "AssistantPromptInput",
   "AssistantComposerActions"

@@ -2414,10 +2414,10 @@ function createService({
     },
 
     async updateAgentGoal(sessionId, input = {}) {
-      if (input.action === "resume") {
+      if (["set", "resume"].includes(input.action)) {
         return runMainAgentWrite(sessionId, input, (context) => (
           sessionAgent.updateGoal(sessionId, input, context)
-        ), { operation: "resume-agent-goal" });
+        ), { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
       }
       return sessionAgent.updateGoal(sessionId, input, await assistantSessionOptions(sessionId, input));
     },

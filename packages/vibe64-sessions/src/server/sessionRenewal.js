@@ -268,6 +268,7 @@ function assertCanonicalClean(check = {}, work = {}) {
       "Save this session and bring it fully up to date before renewing it.",
       "vibe64_session_renewal_source_not_ready",
       {
+        retryable: true,
         details: {
           canonicalCommit,
           changedPaths,

@@ -87,6 +87,7 @@ import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
+  working: { type: Boolean, default: undefined },
   integrationConnections: { default: () => ({}), type: Object },
   integrationActionPending: { default: null, type: Object },
   integrationActionError: { default: null, type: Object },
@@ -198,6 +199,7 @@ function presentationMessage(message) {
 
 const adapter = computed(() => ({
   conversation: {
+    working: props.working,
     assistantLabel: props.assistantLabel,
     error: props.error,
     followLatestKey: props.followLatestKey,

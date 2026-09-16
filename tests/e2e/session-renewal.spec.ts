@@ -85,6 +85,19 @@ async function mockRenewal(page: Page, {
   initialRenewal?: Record<string, unknown>;
 } = {}) {
   await mockProjectGateReady(page);
+  await routeApiEndpoint(page, "/vibe64/assistants/capabilities", (route) => fulfillJson(route, {
+    ok: true,
+    engines: [{
+      engineId: "codex", label: "Codex", revision: `sha256:${"a".repeat(64)}`,
+      health: { status: "ready" },
+      agents: [{ id: "codex", label: "Codex", mode: "primary" }],
+      defaults: { agentId: "codex", modelId: "gpt-5.6", modelProviderId: "openai" },
+      modelProviders: [{
+        id: "openai", label: "OpenAI", connected: true, defaultModelId: "gpt-5.6",
+        models: [{ id: "gpt-5.6", label: "GPT-5.6", status: "available", variants: [] }]
+      }]
+    }]
+  }));
   const predecessor = {
     ...directChatSessionPayload,
     renewalAdvisory: {
@@ -97,6 +110,8 @@ async function mockRenewal(page: Page, {
   const state = {
     confirmValidationError: "",
     renewal: initialRenewal,
+    retryResult: null as Record<string, unknown> | null,
+    retryRequests: [] as Record<string, unknown>[],
     selectedSessionId: directChatSessionId,
     sessions: [predecessor] as Record<string, unknown>[]
   };
@@ -107,6 +122,10 @@ async function mockRenewal(page: Page, {
     const method = request.method();
     const sessionId = decodeURIComponent(url.pathname.match(/\/sessions\/([^/]+)/u)?.[1] || "");
 
+    if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
+      await fulfillJson(route, { ok: true, available: true, canUse: true, ownerOnly: false });
+      return;
+    }
     if (method === "PUT" && url.pathname.endsWith("/current")) {
       state.selectedSessionId = String(requestBody(request).sessionId || directChatSessionId);
       await fulfillJson(route, { ok: true, sessionId: state.selectedSessionId });
@@ -183,7 +202,8 @@ async function mockRenewal(page: Page, {
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/renewal/retry")) {
-      state.renewal = {
+      state.retryRequests.push(requestBody(request));
+      state.renewal = state.retryResult || {
         ...state.renewal,
         error: null,
         revision: Number(state.renewal.revision || 0) + 1,
@@ -345,6 +365,68 @@ test("preserves review edits, exposes conflicts, and keeps server validation in 
   await expect(dialog.getByText(renewal.state.confirmValidationError, { exact: true })).toBeVisible();
   await handover.fill("Corrected local handover");
   await expect(dialog.getByText(renewal.state.confirmValidationError, { exact: true })).toHaveCount(0);
+});
+
+test("recovers a persisted source failure through a manual handover on a phone", async ({ page }, testInfo) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  const sourceFailure = reviewRenewal({
+    basis: null,
+    draft: null,
+    error: {
+      code: "vibe64_session_renewal_source_not_ready",
+      message: "Save this session and bring it fully up to date before renewing it.",
+      retryable: false
+    },
+    stage: "draft_generating",
+    status: "failed"
+  });
+  const renewal = await mockRenewal(page, { initialRenewal: sourceFailure });
+  renewal.state.retryResult = sourceFailure;
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+  await openRenewal(page);
+  const dialog = page.getByRole("dialog", { name: "Renew this session" });
+  const retry = dialog.getByRole("button", { name: "Retry", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(retry).toBeInViewport();
+  await page.screenshot({ animations: "disabled", path: testInfo.outputPath("renewal-retry.png") });
+  await dialog.getByRole("button", { name: "Close session renewal" }).click();
+  await page.reload();
+  await openRenewal(page);
+  await retry.click();
+  await expect.poll(() => renewal.state.retryRequests.length).toBe(1);
+  await expect(dialog.locator('[data-vibe64-session-renewal-phase="failed"]')).toBeVisible();
+  await expect(retry).toBeEnabled();
+  expect(renewal.state.selectedSessionId).toBe(directChatSessionId);
+
+  // After Save, the exhausted provider leaves an editable manual handover.
+  renewal.state.retryResult = reviewRenewal({
+    draft: {
+      hash: DRAFT_HASH, origin: "manual", revision: 1,
+      text: "# Session handover", updatedAt: "2026-08-24T01:00:00.000Z"
+    },
+    error: { message: "Complete the editable handover template.", retryable: false },
+    manualRequired: true,
+    revision: 3
+  });
+  await retry.click();
+  await expect.poll(() => renewal.state.retryRequests.length).toBe(2);
+  expect(renewal.state.retryRequests).toEqual([
+    expect.objectContaining({ operationKey: sourceFailure.operationKey }),
+    expect.objectContaining({ operationKey: sourceFailure.operationKey })
+  ]);
+  const handover = dialog.getByLabel("Handover for the fresh session");
+  await expect(handover).toHaveValue("# Session handover");
+  await handover.fill("Reviewed handover with unfinished work and verification evidence.");
+  await dialog.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
+  await page.reload();
+  await openRenewal(page);
+  await expect(handover).toHaveValue("Reviewed handover with unfinished work and verification evidence.");
+  await dialog.getByRole("button", { name: "Renew session", exact: true }).click();
+  await expect(dialog.locator('[data-vibe64-session-renewal-phase="progress"]')).toBeVisible();
+  renewal.complete();
+  await expect.poll(() => renewal.state.selectedSessionId, { timeout: 10_000 }).toBe("fresh-session");
+  await expect(dialog).not.toBeVisible();
 });
 
 test("keeps a failed predecessor visible, retries, and opens the completed successor", async ({ page }) => {

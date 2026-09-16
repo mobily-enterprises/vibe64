@@ -93,6 +93,13 @@ prevents an assistant reply. A failure before prompt admission, a reused
 conversation, a changed source, or an unusable workspace still leaves the
 predecessor available.
 
+Every failed renewal exposes explicit Retry, including persisted failures whose
+old error record says `retryable: false`. The renewal controller owns recovery
+from the saved stage and rechecks its current prerequisites; an error flag does
+not permanently remove that action. Unsaved or outdated source remains blocked
+until Save or Update resolves it. A provider quota failure during generation
+then reaches the existing editable manual handover and successor AI selection.
+
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it
 from legacy predecessor metadata or default a missing authority to local source.

@@ -25,7 +25,6 @@ session history.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue`
-- `src/components/studio/vibe64-session/Vibe64PromptHints.vue`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 
@@ -214,3 +213,10 @@ MySQL or MariaDB implement one server dialect contract for connection,
 inspection, SQL policy, read-only execution, and result interpretation, while
 the assistant consumes only the normalized schema contract. Any requested
 query runs only through the session's read-only database identity.
+
+
+Temporary chat uses the shared model chooser for its native model and thinking
+parameters. Selections remain local until Apply, matching the main chat control;
+changing them preserves the prompt draft. Vibe64 supplies each provider's allowed
+parameters and passes the applied configuration through the normal temporary
+conversation endpoint.

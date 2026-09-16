@@ -1,295 +1,126 @@
 <template>
-  <v-menu
+  <AssistantModelControl
     v-model="menuOpen"
-    :close-on-content-click="false"
-    location="top start"
-    transition="scale-transition"
+    :provider-rows="providerRows" :model-rows="modelRows" :variant-rows="variantRows"
+    :model-provider-id="modelProviderId" :model-id="modelId" :variant-id="variantId"
+    :selection-summary="selectionSummary" :button-title="buttonTitle" :changes-disabled="changesDisabled"
+    :saving="saving" :can-save="canSave" :catalog-loading="catalogLoading" :catalog-error="catalogError"
+    @select-provider="selectProvider" @select-model="selectModel" @select-variant="selectVariant"
+    @apply="save" @reload="catalog.reload()"
   >
-    <template #activator="{ props: menuProps }">
-      <v-btn
-        v-bind="menuProps"
-        aria-label="Choose AI"
-        class="vibe64-session-assistant-menu__button"
-        density="comfortable"
-        :icon="mdiCogOutline"
-        rounded="lg"
-        size="small"
-        :title="buttonTitle"
-        type="button"
-        variant="tonal"
-      />
+    <template #before-choices>
+      <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
+        This session's saved AI connection is unavailable. Choose an available model and Apply to reconnect.
+      </p>
     </template>
-
-    <v-sheet
-      aria-label="AI session selector"
-      border
-      class="vibe64-session-assistant-menu"
-      :elevation="3"
-      rounded="xl"
-    >
-      <header class="vibe64-session-assistant-menu__header">
-        <v-avatar color="primary" size="36" variant="tonal">
-          <v-icon :icon="mdiBrain" size="20" />
-        </v-avatar>
-        <div>
-          <strong class="text-title-small">AI controls</strong>
-          <span class="text-body-small">{{ selectionSummary }}</span>
-        </div>
-      </header>
-
-      <v-sheet
-        v-if="changesDisabled"
-        class="vibe64-session-assistant-menu__view-only"
-        rounded="lg"
-        role="status"
+    <template #model-note>
+      <small
+        v-if="modelAccess.configurable && !modelAccess.managementOnly && !modelAccessUnlocked"
+        class="vibe64-session-assistant-menu__locked-note"
       >
-        <v-icon :icon="mdiClockOutline" size="18" />
-        <span>AI choices are view-only while the assistant is working.</span>
-      </v-sheet>
-
-      <div
-        v-if="catalogLoading"
-        aria-label="Loading available AIs"
-        class="vibe64-session-assistant-menu__loading"
+        <v-icon :icon="mdiLockOutline" size="14" />
+        Additional paid models are hidden until they are enabled.
+      </small>
+    </template>
+    <template #provider-controls>
+      <section
+        v-if="modelAccess.configurable && !modelAccess.managementOnly"
+        aria-label="Provider model access"
+        class="vibe64-session-assistant-menu__section"
       >
-        <v-skeleton-loader type="text, chip@4, text, chip@4" />
-      </div>
-
-      <div
-        v-else-if="catalogError"
-        class="vibe64-session-assistant-menu__state"
-        role="alert"
-      >
-        <span>{{ catalogError }}</span>
-        <v-btn size="small" variant="text" @click="catalog.reload()">Try again</v-btn>
-      </div>
-
-      <div
-        v-else-if="!providerRows.length"
-        class="vibe64-session-assistant-menu__state"
-        role="status"
-      >
-        No configured AIs are available for this session.
-      </div>
-
-      <div v-else class="vibe64-session-assistant-menu__choices">
-        <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
-          This session's saved AI connection is unavailable. Choose an available model and Apply to reconnect.
-        </p>
-        <section
-          v-if="providerRows.length > 1"
-          aria-label="Provider"
-          class="vibe64-session-assistant-menu__section"
+        <div class="vibe64-session-assistant-menu__label">Z.AI access</div>
+        <v-sheet
+          class="vibe64-session-assistant-menu__access"
+          :class="{ 'vibe64-session-assistant-menu__access--paid': modelAccessUnlocked }"
+          rounded="lg"
         >
-          <div class="vibe64-session-assistant-menu__label">Provider</div>
-          <div class="vibe64-session-assistant-menu__options">
-            <v-btn
-              v-for="provider in providerRows"
-              :key="provider.id"
-              :active="modelProviderId === provider.id"
-              :aria-pressed="modelProviderId === provider.id"
-              class="vibe64-session-assistant-menu__option"
-              :color="modelProviderId === provider.id ? 'primary' : undefined"
-              :disabled="changesDisabled"
-              rounded="lg"
-              size="small"
-              type="button"
-              :variant="modelProviderId === provider.id ? 'tonal' : 'outlined'"
-              @click="selectProvider(provider.id)"
-            >
-              <span>{{ provider.label }}</span>
-              <v-icon v-if="modelProviderId === provider.id" :icon="mdiCheck" size="15" />
-            </v-btn>
-          </div>
-        </section>
-
-        <section aria-label="Model" class="vibe64-session-assistant-menu__section">
-          <div class="vibe64-session-assistant-menu__label">Model</div>
-          <v-autocomplete
-            v-if="modelRows.length > 6"
-            auto-select-first="exact"
-            hide-details
-            :items="modelRows"
-            item-title="label"
-            item-value="id"
-            label="Choose model"
-            :model-value="modelId"
-            no-data-text="No matching models"
-            variant="outlined"
-            @update:model-value="selectModel"
-          />
-          <div v-else-if="modelRows.length" class="vibe64-session-assistant-menu__options">
-            <v-btn
-              v-for="model in modelRows"
-              :key="model.id"
-              :active="modelId === model.id"
-              :aria-label="model.label"
-              :aria-pressed="modelId === model.id"
-              class="vibe64-session-assistant-menu__option"
-              :color="modelId === model.id ? 'primary' : undefined"
-              :disabled="changesDisabled"
-              rounded="lg"
-              size="small"
-              :title="changesDisabled ? 'Wait for the active turn to finish before changing models.' : model.label"
-              type="button"
-              :variant="modelId === model.id ? 'tonal' : 'outlined'"
-              @click="selectModel(model.id)"
-            >
-              <span>{{ model.label }}</span>
-              <v-icon v-if="modelId === model.id" :icon="mdiCheck" size="15" />
-            </v-btn>
-          </div>
-          <span v-else class="vibe64-session-assistant-menu__empty">No available models.</span>
-          <small
-            v-if="modelAccess.configurable && !modelAccess.managementOnly && !modelAccessUnlocked"
-            class="vibe64-session-assistant-menu__locked-note"
-          >
-            <v-icon :icon="mdiLockOutline" size="14" />
-            Additional paid models are hidden until they are enabled.
-          </small>
-        </section>
-
-        <section
-          v-if="modelAccess.configurable && !modelAccess.managementOnly"
-          aria-label="Provider model access"
-          class="vibe64-session-assistant-menu__section"
-        >
-          <div class="vibe64-session-assistant-menu__label">Z.AI access</div>
-          <v-sheet
-            class="vibe64-session-assistant-menu__access"
-            :class="{ 'vibe64-session-assistant-menu__access--paid': modelAccessUnlocked }"
-            rounded="lg"
-          >
-            <div class="vibe64-session-assistant-menu__access-summary">
-              <v-avatar :color="modelAccessUnlocked ? 'warning' : 'success'" size="36" variant="tonal">
-                <v-icon :icon="modelAccessUnlocked ? mdiCreditCardOutline : mdiShieldCheckOutline" size="19" />
-              </v-avatar>
-              <span>
-                <strong>{{ modelAccessUnlocked ? "Paid models unlocked" : "Free-only mode" }}</strong>
-                <small>
-                  {{ modelAccessUnlocked
-                    ? "Other Z.AI models can consume API credit."
-                    : `${recommendedModel?.label || "The recommended model"} stays available without paid credit.` }}
-                </small>
-              </span>
-            </div>
-            <v-switch
-              color="primary"
-              :disabled="changesDisabled || !canConfigure || modelAccessUpdating || saving"
-              hide-details
-              inset
-              :label="modelAccessUpdating ? modelAccessPendingLabel : modelAccess.label"
-              :model-value="modelAccessUnlocked"
-              @click.prevent="requestModelAccessChange(!modelAccessUnlocked)"
-            />
-            <v-btn
-              v-if="canRestoreRecommendedModel"
-              block
-              color="primary"
-              :disabled="changesDisabled || saving || modelAccessUpdating"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="restoreRecommendedModel"
-            >
-              {{ saving ? `Switching to ${recommendedModel.label}…` : `Use ${recommendedModel.label}` }}
-            </v-btn>
-          </v-sheet>
-        </section>
-
-        <section
-          v-if="variantRows.length > 1"
-          aria-label="Thinking"
-          class="vibe64-session-assistant-menu__section"
-        >
-          <div class="vibe64-session-assistant-menu__label">Thinking</div>
-          <div class="vibe64-session-assistant-menu__options">
-            <v-btn
-              v-for="variant in variantRows"
-              :key="variant.id || 'automatic'"
-              :active="variantId === variant.id"
-              :aria-pressed="variantId === variant.id"
-              class="vibe64-session-assistant-menu__option"
-              :color="variantId === variant.id ? 'primary' : undefined"
-              :disabled="changesDisabled"
-              rounded="lg"
-              size="small"
-              type="button"
-              :variant="variantId === variant.id ? 'tonal' : 'outlined'"
-              @click="selectVariant(variant.id)"
-            >
-              <span>{{ variant.label }}</span>
-              <v-icon v-if="variantId === variant.id" :icon="mdiCheck" size="15" />
-            </v-btn>
-          </div>
-        </section>
-      </div>
-
-      <footer class="vibe64-session-assistant-menu__actions">
-        <v-btn
-          v-if="canConfigure"
-          :disabled="changesDisabled"
-          size="small"
-          variant="text"
-          @click="openConnectionSettings"
-        >
-          Configure more AIs
-        </v-btn>
-        <span />
-        <v-btn
-          color="primary"
-          :disabled="!canSave || saving"
-          size="small"
-          variant="flat"
-          @click="save"
-        >
-          {{ saving ? "Applying…" : "Apply" }}
-        </v-btn>
-      </footer>
-    </v-sheet>
-
-    <v-dialog v-model="unlockConfirmOpen" max-width="31rem" persistent>
-      <v-card rounded="xl">
-        <v-card-item class="vibe64-session-assistant-menu__confirm-header">
-          <template #prepend>
-            <v-avatar color="warning" size="44" variant="tonal">
-              <v-icon :icon="mdiCreditCardOutline" size="23" />
+          <div class="vibe64-session-assistant-menu__access-summary">
+            <v-avatar :color="modelAccessUnlocked ? 'warning' : 'success'" size="36" variant="tonal">
+              <v-icon :icon="modelAccessUnlocked ? mdiCreditCardOutline : mdiShieldCheckOutline" size="19" />
             </v-avatar>
-          </template>
-          <v-card-title>{{ modelAccess.label || "Unlock provider models" }}?</v-card-title>
-          <v-card-subtitle class="vibe64-session-assistant-menu__confirm-subtitle">
-            GLM-4.7 Flash stays available either way.
-          </v-card-subtitle>
-        </v-card-item>
-        <v-card-text class="text-body-medium">
-          {{ modelAccess.warning || "These models may consume paid provider credit." }}
-        </v-card-text>
-        <v-card-actions class="vibe64-session-assistant-menu__confirm-actions">
-          <v-btn :disabled="modelAccessUpdating" type="button" variant="text" @click="unlockConfirmOpen = false">
-            Keep free only
-          </v-btn>
+            <span>
+              <strong>{{ modelAccessUnlocked ? "Paid models unlocked" : "Free-only mode" }}</strong>
+              <small>
+                {{ modelAccessUnlocked
+                  ? "Other Z.AI models can consume API credit."
+                  : `${recommendedModel?.label || "The recommended model"} stays available without paid credit.` }}
+              </small>
+            </span>
+          </div>
+          <v-switch
+            color="primary"
+            :disabled="changesDisabled || !canConfigure || modelAccessUpdating || saving"
+            hide-details
+            inset
+            :label="modelAccessUpdating ? modelAccessPendingLabel : modelAccess.label"
+            :model-value="modelAccessUnlocked"
+            @click.prevent="requestModelAccessChange(!modelAccessUnlocked)"
+          />
           <v-btn
-            color="warning"
-            :disabled="modelAccessUpdating"
+            v-if="canRestoreRecommendedModel"
+            block
+            color="primary"
+            :disabled="changesDisabled || saving || modelAccessUpdating"
+            size="small"
             type="button"
-            variant="flat"
-            @click="confirmUnlockModelAccess"
+            variant="tonal"
+            @click="restoreRecommendedModel"
           >
-            Unlock paid models
+            {{ saving ? `Switching to ${recommendedModel.label}…` : `Use ${recommendedModel.label}` }}
           </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-  </v-menu>
+        </v-sheet>
+      </section>
+    </template>
+    <template #footer>
+      <v-btn
+        v-if="canConfigure"
+        :disabled="changesDisabled"
+        size="small"
+        variant="text"
+        @click="openConnectionSettings"
+      >
+        Configure more AIs
+      </v-btn>
+    </template>
+  </AssistantModelControl>
+  <v-dialog v-model="unlockConfirmOpen" max-width="31rem" persistent>
+    <v-card rounded="xl">
+      <v-card-item class="vibe64-session-assistant-menu__confirm-header">
+        <template #prepend>
+          <v-avatar color="warning" size="44" variant="tonal">
+            <v-icon :icon="mdiCreditCardOutline" size="23" />
+          </v-avatar>
+        </template>
+        <v-card-title>{{ modelAccess.label || "Unlock provider models" }}?</v-card-title>
+        <v-card-subtitle class="vibe64-session-assistant-menu__confirm-subtitle">
+          GLM-4.7 Flash stays available either way.
+        </v-card-subtitle>
+      </v-card-item>
+      <v-card-text class="text-body-medium">
+        {{ modelAccess.warning || "These models may consume paid provider credit." }}
+      </v-card-text>
+      <v-card-actions class="vibe64-session-assistant-menu__confirm-actions">
+        <v-btn :disabled="modelAccessUpdating" type="button" variant="text" @click="unlockConfirmOpen = false">
+          Keep free only
+        </v-btn>
+        <v-btn
+          color="warning"
+          :disabled="modelAccessUpdating"
+          type="button"
+          variant="flat"
+          @click="confirmUnlockModelAccess"
+        >
+          Unlock paid models
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
+import { AssistantModelControl } from "@jskit-ai/assistant-core/client/conversation";
 import {
-  mdiBrain,
-  mdiCheck,
-  mdiClockOutline,
-  mdiCogOutline,
   mdiCreditCardOutline,
   mdiLockOutline,
   mdiShieldCheckOutline
@@ -728,62 +559,6 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
 </script>
 
 <style scoped>
-.vibe64-session-assistant-menu__button {
-  flex: 0 0 2rem;
-  height: 2rem;
-  min-height: 2rem;
-  min-width: 2rem;
-  width: 2rem;
-}
-
-.vibe64-session-assistant-menu {
-  display: grid;
-  gap: 0.75rem;
-  max-height: calc(100vh - 2rem);
-  max-width: calc(100vw - 2rem);
-  min-width: min(24rem, calc(100vw - 2rem));
-  overflow-y: auto;
-  padding: 0.75rem;
-  width: min(24rem, calc(100vw - 2rem));
-}
-
-.vibe64-session-assistant-menu__header {
-  align-items: center;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
-  display: flex;
-  gap: 0.65rem;
-  padding: 0.1rem 0.1rem 0.7rem;
-}
-
-.vibe64-session-assistant-menu__header > div {
-  display: grid;
-  min-width: 0;
-}
-
-.vibe64-session-assistant-menu__header span {
-  color: rgba(var(--v-theme-on-surface), 0.65);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-session-assistant-menu__view-only {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.08);
-  color: rgba(var(--v-theme-on-surface), 0.78);
-  display: flex;
-  font-size: 0.78rem;
-  gap: 0.5rem;
-  line-height: 1.35;
-  padding: 0.6rem 0.7rem;
-}
-
-.vibe64-session-assistant-menu__choices,
-.vibe64-session-assistant-menu__loading {
-  display: grid;
-  gap: 0.55rem;
-}
-
 .vibe64-session-assistant-menu__section {
   display: grid;
   gap: 0.32rem;
@@ -796,18 +571,6 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
   line-height: 1.2;
   padding-inline: 0.12rem;
   text-transform: uppercase;
-}
-
-.vibe64-session-assistant-menu__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-}
-
-.vibe64-session-assistant-menu__option {
-  letter-spacing: 0;
-  min-height: 2.5rem;
-  text-transform: none;
 }
 
 .vibe64-session-assistant-menu__empty,
@@ -855,27 +618,6 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
   line-height: 1.35;
 }
 
-.vibe64-session-assistant-menu__state {
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  display: flex;
-  font-size: 0.84rem;
-  gap: 0.5rem;
-  justify-content: space-between;
-  min-height: 4rem;
-  padding: 0.5rem 0.25rem;
-}
-
-.vibe64-session-assistant-menu__actions {
-  align-items: center;
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.12);
-  display: grid;
-  gap: 0.4rem;
-  grid-template-columns: auto 1fr auto;
-  min-height: 2.5rem;
-  padding-top: 0.4rem;
-}
-
 .vibe64-session-assistant-menu__confirm-header {
   padding: 1.25rem 1.25rem 0.5rem;
 }
@@ -892,27 +634,13 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
   white-space: normal;
 }
 
-@media (pointer: coarse) {
-  .vibe64-session-assistant-menu__button {
-    flex-basis: 3rem;
-    height: 3rem;
-    min-height: 3rem;
-    min-width: 3rem;
-    width: 3rem;
-  }
-
-  .vibe64-session-assistant-menu__option {
-    min-height: 3rem;
-  }
-}
-
 @media (max-width: 600px) {
-  .vibe64-session-assistant-menu__confirm-actions {
+.vibe64-session-assistant-menu__confirm-actions {
     align-items: stretch;
     flex-direction: column-reverse;
   }
 
-  .vibe64-session-assistant-menu__confirm-actions .v-btn {
+.vibe64-session-assistant-menu__confirm-actions .v-btn {
     width: 100%;
   }
 }

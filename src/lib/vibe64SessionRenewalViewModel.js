@@ -119,10 +119,8 @@ function sessionRenewalFailureSupportingMessage(renewal = null) {
   let message = "";
   if (String(renewal?.error?.code || "").trim() === "vibe64_session_renewal_restore_failed") {
     message = "The old session and its recovery state are retained, but it is not writable yet. Retry to finish restoring it safely.";
-  } else if (renewal?.error?.retryable !== false) {
-    message = "The old session remains available. Fix the reported condition, then retry the same saved renewal.";
   } else {
-    message = "The old session remains available. This renewal cannot be retried here; resolve the reported condition before continuing from the old session.";
+    message = "The old session remains available. Fix the reported condition, then retry the same saved renewal.";
   }
   return String(renewal?.error?.message || "").trim() === message ? "" : message;
 }

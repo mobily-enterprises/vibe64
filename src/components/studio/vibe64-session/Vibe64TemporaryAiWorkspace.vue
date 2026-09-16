@@ -101,6 +101,7 @@
       <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
         :messages="activeTask.messages"
+        :working="activeTask.busy"
         :scroll-key="activeTask.id"
         empty-message="Ask a focused question or investigate a problem without adding it to the main conversation."
       >
@@ -140,10 +141,10 @@
               </template>
               <template v-else>{{ activeTask.error }}</template>
             </div>
-            <Vibe64PromptHints
+            <AssistantComposerSupport
               v-if="activeTask.busy || activeTaskRecoveryChecking"
               class="vibe64-temporary-ai__activity"
-              :assistant-label="activeTaskRecoveryChecking ? 'Checking Update…' : 'AI is working…'"
+              :activity="{ label: activeTaskRecoveryChecking ? 'Checking Update…' : 'AI is working…' }"
             />
           </div>
         </template>
@@ -271,7 +272,7 @@ import {
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import Vibe64EphemeralConversationMessages from "@/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
-import Vibe64PromptHints from "@/components/studio/vibe64-session/Vibe64PromptHints.vue";
+import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import {
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";

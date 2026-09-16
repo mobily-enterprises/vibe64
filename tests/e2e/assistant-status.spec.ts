@@ -318,6 +318,7 @@ test("navigation and browser history preserve recovery and the draft", async ({ 
 
 test("two browsers recover independently without sending either draft", async ({ page, browser }) => {
   const otherContext = await browser.newContext();
+  const releaseChecks = Promise.withResolvers<void>();
   try {
     const otherPage = await otherContext.newPage();
     otherPage.on("pageerror", (error) => pageErrors.push(error.message));
@@ -328,10 +329,15 @@ test("two browsers recover independently without sending either draft", async ({
     await composer(otherPage).fill("Second browser draft.");
     await expect(steer(otherPage)).toBeEnabled();
     expect(server.state.checkCount).toBe(2);
-    server.state.checks.push(busy, busy);
+    const failAfterBothBrowsersCheck = async (response) => {
+      await releaseChecks.promise;
+      busy(response);
+    };
+    server.state.checks.push(failAfterBothBrowsersCheck, failAfterBothBrowsersCheck);
     server.disconnect();
-    await expect(warning(page)).toBeVisible();
-    await expect(warning(otherPage)).toBeVisible();
+    await expect.poll(() => server.state.checkCount).toBe(4);
+    releaseChecks.resolve();
+    await Promise.all([expect(warning(page)).toBeVisible(), expect(warning(otherPage)).toBeVisible()]);
     await expect(steer(page)).toBeEnabled();
     await expect(steer(otherPage)).toBeEnabled();
     await expect(composer(page)).toHaveValue("First browser draft.");
@@ -340,6 +346,7 @@ test("two browsers recover independently without sending either draft", async ({
     expect(server.state.messages).toHaveLength(0);
     expect(server.state.interrupts).toBe(0);
   } finally {
+    releaseChecks.resolve();
     await otherContext.close();
   }
 });
@@ -386,3 +393,54 @@ test("goal steering replies appear immediately, preserve the composer and surviv
   await expect(steer(page)).toBeEnabled();
   expect(server.state.messages).toHaveLength(2);
 });
+
+for (const provider of ["codex", "opencode"]) {
+test(`${provider} continuation groups saved reasoning rows and follows execution state`, async ({ page }) => {
+  server.state.session.agentSession.providerId = provider;
+  server.state.session.agentSession.transportId = provider === "codex" ? "codex_app_server" : "opencode_server";
+  const at = new Date().toISOString();
+  server.state.conversationLog = [{
+    turnId: "completed-request",
+    user: { role: "user", text: "Complete the plan.", at },
+    assistant: { role: "assistant", text: "The first stage is complete.", at }
+  }];
+  const progress = (index: number) => {
+    const turn = {
+      turnId: `standalone-progress-${index}`,
+      thinking: [{ role: "thinking", text: `Reasoning summary ${index}`, at }]
+    };
+    server.state.conversationLog.push(turn);
+    server.sessionChanged("codex-app-server-live-progress", { conversationLogPatch: { type: "upsert-turn", turn } });
+  };
+  progress(1);
+  progress(2);
+  progress(3);
+  await openChat(page);
+  const groups = page.locator(".assistant-progress");
+  const summaries = page.locator(".assistant-progress__message");
+  await expect(groups).toHaveCount(1);
+  await expect(summaries).toHaveText(["Reasoning summary 2", "Reasoning summary 3"]);
+  await composer(page).fill("Keep this draft through continuation.");
+  await composer(page).evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(5, 9));
+  server.state.session.agentSession.turn.id = "next-native-turn";
+  server.publishTurn();
+  progress(4);
+  await expect(groups).toHaveCount(1);
+  await expect(summaries).toHaveText(["Reasoning summary 3", "Reasoning summary 4"]);
+  await expect(composer(page)).toBeFocused();
+  expect(await composer(page).evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([5, 9]);
+  server.state.session.agentSession.turn.active = false;
+  server.publishTurn();
+  await expect(summaries).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Show all 4 progress updates" })).toBeVisible();
+  server.state.session.agentSession.turn.active = true;
+  server.publishTurn();
+  await expect(summaries).toHaveText(["Reasoning summary 3", "Reasoning summary 4"]);
+  await expect(composer(page)).toHaveValue("Keep this draft through continuation.");
+  await page.reload();
+  await expect(groups).toHaveCount(1);
+  await expect(summaries).toHaveText(["Reasoning summary 3", "Reasoning summary 4"]);
+  expect(server.state.interrupts).toBe(0);
+  expect(server.state.messages).toHaveLength(0);
+});
+}

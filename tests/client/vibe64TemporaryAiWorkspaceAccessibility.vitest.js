@@ -90,11 +90,11 @@ import Vibe64EphemeralConversationMessages from "../../src/components/studio/vib
 
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
-import Vibe64PromptHints from "../../src/components/studio/vibe64-session/Vibe64PromptHints.vue";
+import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 
 for (const [name, component] of [
   ...["AssistantConversationElement", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
-  ["Vibe64PromptHints", Vibe64PromptHints],
+  ["AssistantComposerSupport", AssistantComposerSupport],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages]
 ]) {
@@ -517,7 +517,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       await nextTick();
       expect(nodeText(progress)).toBe("Hide progress updates Inspecting the conflict. Checking the repair.");
       const activity = findNode(container, (node) => (
-        node.props?.class === "vibe64-prompt-hints__assistant-status"
+        node.props?.class === "assistant-composer-support__assistant-status"
       ));
       expect(nodeText(activity)).toBe("AI is working…");
       expect(findNode(container, (node) => (

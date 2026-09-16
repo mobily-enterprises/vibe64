@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -65,27 +66,13 @@ useRealtimeEvent({
   onEvent: () => { if (!globalThis.document?.hidden) void goalResource.reload(); }
 });
 const goal = computed(() => goalResource.data.value?.goal || null);
-const goalStatusLabel = computed(() => ({
-  active: "Goal active",
-  paused: "Goal paused",
-  blocked: "Goal blocked",
-  usageLimited: "Goal waiting for allowance",
-  budgetLimited: "Goal budget reached",
-  complete: "Goal complete"
-})[goal.value?.status] || "No goal");
-const goalAvailable = computed(() => !goalResource.loadError.value && goalResource.data.value?.status === "available" && goal.value);
-const goalRunning = computed(() => goalAvailable.value && goal.value.status === "active");
-const goalUnavailableMessage = computed(() => goalResource.loadError.value || (
-  goalResource.data.value?.status === "available"
-    ? "No goal in this conversation."
-    : "Goal status is unavailable."
-));
+const goalAvailable = computed(() => !goalResource.loadError.value && goalResource.data.value?.status === "available");
 const changingGoal = ref(false);
 const goalError = ref("");
 watch([sessionId, sessionsPath], () => {
   goalError.value = "";
 });
-async function changeGoal(action) {
+async function changeGoal(action, input = {}) {
   if (changingGoal.value || !goalAvailable.value) {
     return;
   }
@@ -97,9 +84,10 @@ async function changeGoal(action) {
       method: "POST",
       body: {
         action,
-        threadId: goal.value.threadId,
-        createdAt: goal.value.createdAt,
-        objective: goal.value.objective
+        threadId: goal.value?.threadId || goalResource.data.value?.threadId || "",
+        createdAt: goal.value?.createdAt,
+        objective: goal.value?.objective,
+        ...input
       }
     });
     if (result.ok === false) {
@@ -133,60 +121,43 @@ const details = computed(() => {
   lines.push("Shared across sessions.");
   return lines.join("\n");
 });
-const indicatorTitle = computed(() => [
-  details.value,
-  goalAvailable.value ? goalStatusLabel.value : ""
-].filter(Boolean).join("\n"));
-const indicatorLabel = computed(() => [
-  available.value ? `Weekly Codex allowance remaining: ${summary.value}` : "Codex goal",
-  goalAvailable.value ? goalStatusLabel.value : ""
-].filter(Boolean).join(". "));
+const goalState = computed(() => ({
+  enabled: enabled.value && Boolean(goalAvailable.value || goalError.value),
+  goal: goalAvailable.value && goal.value ? {
+    ...goal.value,
+    elapsedSeconds: goal.value.timeUsedSeconds,
+    sampledAt: Number.isFinite(goal.value.updatedAt)
+      ? goal.value.updatedAt * (goal.value.updatedAt < 1_000_000_000_000 ? 1000 : 1) : undefined
+  } : null,
+  pending: changingGoal.value,
+  error: goalError.value,
+  set: (input) => changeGoal("set", input),
+  pause: () => changeGoal("pause"),
+  resume: () => changeGoal("resume")
+}));
 </script>
 
 <template>
-  <v-menu v-if="enabled && (available || goalAvailable || goalError)" location="top" :close-on-content-click="false">
+  <AssistantGoalControl :state="goalState" />
+  <v-menu v-if="enabled && available" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn
-        v-bind="menuProps"
-        class="codex-plan-usage"
-        size="small"
-        variant="text"
-        :title="indicatorTitle"
-        :aria-label="indicatorLabel"
+        v-bind="menuProps" class="codex-plan-usage" size="small" variant="text"
+        :title="details" :aria-label="`Weekly Codex allowance remaining: ${summary}`"
       >
-        {{ summary || (!goalAvailable ? "!" : "") }}
-        <span v-if="goalRunning" class="codex-plan-usage__running" aria-hidden="true" />
-        <span v-else-if="goalAvailable && !summary" class="codex-plan-usage__goal" aria-hidden="true">{{ goal.status === 'paused' ? 'Ⅱ' : '○' }}</span>
+        {{ summary }}
       </v-btn>
     </template>
     <v-card max-width="340" class="pa-3">
-      <section v-if="goalAvailable" class="mb-3">
-        <strong>{{ goalStatusLabel }}</strong>
-        <p class="codex-plan-usage__details text-body-small">{{ goal.objective }}</p>
-        <v-btn v-if="goalRunning" size="small" :loading="changingGoal" :disabled="changingGoal" @click="changeGoal('pause')">Pause goal</v-btn>
-        <v-btn v-else-if="['paused', 'blocked', 'usageLimited'].includes(goal.status)" size="small" :loading="changingGoal" :disabled="changingGoal" @click="changeGoal('resume')">Resume goal</v-btn>
-        <p v-if="goal.status === 'budgetLimited'" class="text-body-small">The goal reached its token budget. Adjust the budget in Codex before resuming.</p>
-      </section>
-      <p v-if="!goalAvailable" class="text-body-small">{{ goalUnavailableMessage }}</p>
-      <p v-if="goalError" role="alert" class="text-error text-body-small">{{ goalError }}</p>
-      <strong v-if="available">Codex plan allowance</strong>
-      <p v-if="available" class="codex-plan-usage__details text-body-small">{{ details }}</p>
-      <v-btn v-if="available" href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
-      <v-btn size="small" variant="text" @click="usage.reload(); goalResource.reload()">Refresh</v-btn>
+      <strong>Codex plan allowance</strong>
+      <p class="codex-plan-usage__details text-body-small">{{ details }}</p>
+      <v-btn href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
+      <v-btn size="small" variant="text" @click="usage.reload()">Refresh</v-btn>
     </v-card>
   </v-menu>
 </template>
 
 <style scoped>
 .codex-plan-usage { max-width: 100%; font-size: 0.7rem; text-transform: none; }
-.codex-plan-usage__goal { margin-inline-start: 0.25rem; }
-.codex-plan-usage__running {
-  width: 6px;
-  height: 6px;
-  margin-inline-start: 6px;
-  border-radius: 50%;
-  background: rgb(var(--v-theme-success));
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-success), 0.12);
-}
 .codex-plan-usage__details { white-space: pre-line; margin-block: 0.5rem; }
 </style>

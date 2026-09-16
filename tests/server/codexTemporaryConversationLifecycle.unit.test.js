@@ -9024,8 +9024,65 @@ for (const failureIndex of [0, 1]) {
   });
 }
 
-test("goal UI controls reject stale goals and pause before interrupting the current turn", async () => {
-  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+test("a first goal prepares the ordinary main conversation before activation", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, runtime }) => {
+    captures.onProviderCreated = provider => {
+      provider.readGoal = async () => ({ goal: null });
+      provider.setGoal = async (threadId, input) => {
+        assert.ok(captures.subscribers.size);
+        assert.ok(captures.threadStarts.length, "The main conversation must exist before setting a goal");
+        return { goal: { ...input, threadId, status: "active", createdAt: 10 } };
+      };
+    };
+    const result = await controller.updateGoal(sessionId, { action: "set", threadId: "", objective: "Finish the fixture" });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.goal.objective, "Finish the fixture");
+    assert.equal((await runtime.getSession(sessionId)).agentRuns[0].providerGoalStatus, "active");
+    assert.equal(captures.threadStarts.length, 1);
+  });
+});
+
+test("setting a goal uses the observed main thread and rejects overwriting a live goal", async () => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+    const provider = captures.provider;
+    let goal = null;
+    const calls = [];
+    provider.isEconomyProvider = () => false;
+    provider.readGoal = async () => ({ goal });
+    provider.setGoal = async (threadId, input) => {
+      assert.ok(captures.subscribers.size, "A goal needs an observer before activation");
+      calls.push({ threadId, ...input });
+      goal = { threadId, ...input, status: "active", createdAt: 100 };
+      return { goal };
+    };
+    const input = { action: "set", threadId: provider.threadId, objective: "Finish the fixture", tokenBudget: 5000 };
+    assert.equal((await terminalService.readAgentGoal(sessionId)).threadId, provider.threadId);
+    assert.equal((await terminalService.updateAgentGoal(sessionId, { ...input, tokenBudget: 0 })).ok, false);
+    assert.equal((await terminalService.updateAgentGoal(sessionId, { ...input, threadId: "old-thread" })).ok, false);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const writing = runtime.store.runSessionExclusive(sessionId, "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    try {
+      const blocked = await terminalService.updateAgentGoal(sessionId, input);
+      assert.equal(blocked.code, "vibe64_agent_write_mode_busy", JSON.stringify(blocked));
+      assert.deepEqual(calls, []);
+    } finally { release.resolve(); await writing; }
+    const created = await terminalService.updateAgentGoal(sessionId, input);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    assert.deepEqual(calls, [{ threadId: provider.threadId, objective: input.objective, tokenBudget: 5000 }]);
+    assert.equal((await runtime.getSession(sessionId)).agentRuns[0].providerGoalStatus, "active");
+    assert.equal((await terminalService.updateAgentGoal(sessionId, input)).ok, false);
+    assert.equal(calls.length, 1);
+  }, { throughTerminalService: true });
+});
+
+test("goal UI controls reject stale goals and pause without interrupting the current turn", async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => {
     const started = await controller.sendMessage(sessionId, { message: "Exercise goal controls", messageId: "goal-control-test" });
     assert.equal(started.ok, true);
     const provider = captures.provider;
@@ -9048,7 +9105,8 @@ test("goal UI controls reject stale goals and pause before interrupting the curr
     assert.deepEqual(calls, []);
     const paused = await controller.updateGoal(sessionId, input);
     assert.equal(paused.ok, true, JSON.stringify(paused));
-    assert.deepEqual(calls, ["paused", "interrupt"]);
+    assert.deepEqual(calls, ["paused"]);
+    assert.equal((await runtime.getSession(sessionId)).agentRuns[0].active, true);
     const resumed = await controller.updateGoal(sessionId, { ...input, action: "resume" });
     assert.equal(resumed.ok, true, JSON.stringify(resumed));
     assert.equal(resumed.goal.tokensUsed, 99);
@@ -9127,15 +9185,20 @@ test("goal Resume respects Save admission and protects the gap before a native t
     assert.equal(captures.steers.length, 1);
     assert.equal(captures.steers[0].turnId, provider.turnId);
 
-    provider.interruptTurn = async () => { provider.status = "interrupted"; return {}; };
+    provider.interruptTurn = async () => { throw new Error("Pausing a goal must not interrupt its turn"); };
     const paused = await runtime.store.runSessionExclusive(sessionId, "agent-write-mode", () => (
       terminalService.updateAgentGoal(sessionId, { ...input, action: "pause" })
     ));
     assert.equal(paused.acquired, true);
     assert.equal(paused.value.ok, true, JSON.stringify(paused.value));
-    const stopped = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
-    assert.equal(stopped.providerGoalStatus, "paused");
-    assert.equal(stopped.active, false);
+    const pausedRun = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
+    assert.equal(pausedRun.providerGoalStatus, "paused");
+    assert.equal(pausedRun.active, true);
+    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    completeAgentMessageHarnessTurn(captures, provider, provider.turnId, "Finished the current turn after pausing the goal.");
+    await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
+      session.agentRuns.some((run) => run.providerGoalStatus === "paused" && !run.active)
+    ), "the paused goal's current turn to finish normally");
     await assert.rejects(terminalService.saveSessionWork(sessionId, {
       onRepositoryWriteAcquired() { throw stopBeforeGit; }
     }), (error) => error === stopBeforeGit);

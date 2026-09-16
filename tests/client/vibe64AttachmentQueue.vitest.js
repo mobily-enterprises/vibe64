@@ -166,7 +166,7 @@ describe("Vibe64 attachment queue", () => {
 
     expect(html).toContain("Preparing");
     expect(html).toContain("0 of 1 ready · in progress");
-    expect(html).toContain("vibe64-attachment-queue__progress--stationary");
+    expect(html).toContain("assistant-attachment-queue__progress--stationary");
     expect(html).not.toContain("<progress");
   });
 
@@ -192,6 +192,6 @@ describe("Vibe64 attachment queue", () => {
   });
 
   it("renders nothing when the queue is empty", async () => {
-    expect(await renderQueue([])).toBe("<!---->");
+    expect((await renderQueue([])).replace(/<!--.*?-->/gu, "")).toBe("");
   });
 });

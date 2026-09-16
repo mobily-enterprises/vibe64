@@ -21,10 +21,10 @@ vi.mock("vuetify/lib/components/VIcon/index.mjs", () => ({
   VIcon: defineComponent({ render: () => null })
 }));
 
-import Vibe64PromptHints from "../../src/components/studio/vibe64-session/Vibe64PromptHints.vue";
+import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 
 const hintComponentPath = path.resolve(
-  "src/components/studio/vibe64-session/Vibe64PromptHints.vue"
+  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerSupport.vue"
 );
 const autopilotPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
@@ -41,13 +41,13 @@ const hintComponentSource = fs.readFileSync(hintComponentPath, "utf8");
 const { descriptor: hintDescriptor } = parse(hintComponentSource, {
   filename: hintComponentPath
 });
-const hintScript = compileScript(hintDescriptor, { id: "vibe64-prompt-hints-test" });
+const hintScript = compileScript(hintDescriptor, { id: "assistant-composer-support-test" });
 const hintTemplate = compile(hintDescriptor.template.content, {
   bindingMetadata: hintScript.bindings,
   mode: "function",
   prefixIdentifiers: true
 });
-Vibe64PromptHints.render = new Function("Vue", hintTemplate.code)(VueRuntime);
+AssistantComposerSupport.render = new Function("Vue", hintTemplate.code)(VueRuntime);
 
 function passthroughComponent(element) {
   return defineComponent({
@@ -113,7 +113,7 @@ function nodeText(node) {
 
 function mountPromptHints(input = {}) {
   const state = reactive({
-    assistantLabel: "",
+    activity: { label: "" },
     loading: false,
     statusId: "prompt-hint-status",
     suggestions: [],
@@ -127,7 +127,7 @@ function mountPromptHints(input = {}) {
   };
   const Root = defineComponent({
     setup() {
-      return () => h(Vibe64PromptHints, {
+      return () => h(AssistantComposerSupport, {
         ...state,
         onDismiss: events.dismiss,
         onFocusout: events.focusout,
@@ -150,7 +150,7 @@ describe("Vibe64 prompt hints UI", () => {
     const component = hintComponentSource;
 
     expect(component).toContain("mdiLightbulbOnOutline");
-    expect(component).not.toContain("vibe64-prompt-hints__label");
+    expect(component).not.toContain("assistant-composer-support__label");
     expect(component).not.toContain("<span>Suggestions</span>");
     expect(component).toContain('v-for="suggestion in suggestions"');
     expect(component).toContain(':aria-label="`Use suggestion: ${suggestion.prompt}`"');
@@ -181,19 +181,17 @@ describe("Vibe64 prompt hints UI", () => {
 
     expect(component).toContain("Thinking of a few ideas");
     expect(component).toContain('aria-live="polite"');
-    expect(component).not.toContain("vibe64-prompt-hints__typing");
-    expect(autopilot).toContain("<Vibe64PromptHints");
-    expect(autopilot.indexOf("<Vibe64PromptHints")).toBeGreaterThan(
+    expect(component).not.toContain("assistant-composer-support__typing");
+    expect(autopilot).toContain("<AssistantComposerSupport");
+    expect(autopilot.indexOf("<AssistantComposerSupport")).toBeGreaterThan(
       autopilot.indexOf("<Vibe64ConversationLog")
     );
-    expect(autopilot.indexOf("<Vibe64PromptHints")).toBeLessThan(
+    expect(autopilot.indexOf("<AssistantComposerSupport")).toBeLessThan(
       autopilot.indexOf('class="studio-autopilot__composer"')
     );
-    expect(autopilot.indexOf("<Vibe64PromptHints")).toBeLessThan(
+    expect(autopilot.indexOf("<AssistantComposerSupport")).toBeLessThan(
       autopilot.indexOf("<Vibe64TemporaryAiWorkspace")
     );
-    expect(component).toContain("grid-row: 4;");
-    expect(autopilot).toContain("grid-row: 5;");
     expect(autopilot).not.toContain("studio-autopilot__thinking-mark");
   });
 
@@ -236,12 +234,12 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot).toMatch(
       /watch\(agentActive,[\s\S]{0,120}!active[\s\S]{0,120}openCodeProgressLabel\.value = ""[\s\S]{0,80}immediate: true/u
     );
-    expect(autopilot).toContain(':assistant-label="composerAssistantLabel"');
+    expect(autopilot).toContain(':activity="{ label: composerAssistantLabel }"');
     expect(autopilot).toContain('@input-activity="noteTypingActivity"');
     expect(autopilot).toContain("stopTypingOnSubmit();");
     expect(autopilot).toContain("stopTypingOnBlur();");
     expect(promptTextarea).toContain('"input-activity"');
-    expect(promptTextarea).toContain('emit("input-activity");');
+    expect(promptTextarea).toContain('@input-activity="emit(\'input-activity\')"');
   });
 
   it("fills and refocuses the editable composer rather than sending", () => {
@@ -266,27 +264,11 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot).not.toMatch(/function applyPromptHint[\s\S]{0,500}submitComposerMessage/gu);
     expect(promptTextarea).toContain('"attachment-state-change"');
     expect(promptTextarea).toContain('"escape"');
-    expect(promptTextarea).toContain('@focus="handleTextareaFocus"');
-    expect(promptTextarea).toContain('@blur="handleTextareaBlur"');
+    expect(promptTextarea).toContain('@focus="emit(\'focus\', $event)"');
+    expect(promptTextarea).toContain('@blur="emit(\'blur\', $event)"');
     expect(promptTextarea).toContain("focus: focusTextarea");
     expect(promptTextarea).toContain("function preserveHeightForNextModelValue()");
-    expect(promptTextarea).toContain("placeholderAffectsHeight");
-    expect(promptTextarea).toMatch(
-      /!props\.placeholderAffectsHeight && !textarea\.value[\s\S]{0,80}return;[\s\S]{0,300}textarea\.scrollHeight/u
-    );
-    expect(promptTextarea).toContain("preserveHeightForNextModelValueChange = false;");
-    expect(promptTextarea).toMatch(
-      /function preserveHeightForNextModelValue\(\)[\s\S]{0,500}cancelAnimationFrame\(resizeFrame\)[\s\S]{0,500}getBoundingClientRect\(\)\.height[\s\S]{0,500}overflowY = "auto"/u
-    );
-    expect(promptTextarea).toMatch(
-      /function handleTextareaInput[\s\S]{0,200}preserveHeightForNextModelValueChange = false;[\s\S]{0,300}queueResizeTextarea\(\)/u
-    );
-    expect(promptTextarea).toMatch(
-      /preserveHeightForNextModelValueChange && modelValueChanged[\s\S]{0,200}return;[\s\S]{0,200}queueResizeTextarea\(\)/u
-    );
-    expect(promptTextarea).toMatch(
-      /props\.modelValue,\s*props\.placeholder,\s*props\.placeholderAffectsHeight,\s*props\.rows/u
-    );
+    expect(promptTextarea).toContain("promptInput.value?.preserveHeightForNextModelValue()");
     expect(autopilot).toContain('@blur="handleComposerBlur"');
     expect(autopilot).toContain('@focusout="handleComposerRegionFocusOut"');
     expect(autopilot).toContain('@dismiss="dismissPromptHintsAndFocus"');
@@ -324,7 +306,7 @@ describe("Vibe64 prompt hints UI", () => {
     statuses = findNodes(mounted.container, (node) => node.props?.role === "status");
     expect(statuses).toHaveLength(1);
     expect(nodeText(statuses[0])).toBe(
-      "Three suggested prompts are available before the message controls."
+      "3 suggested prompts are available before the message controls."
     );
     const groups = findNodes(mounted.container, (node) => node.props?.role === "group");
     expect(groups).toHaveLength(1);

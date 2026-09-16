@@ -220,7 +220,7 @@ test.describe("direct chat", () => {
         ] });
       });
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      const hints = page.locator("[data-vibe64-prompt-hints]");
+      const hints = page.locator("[data-assistant-composer-support]");
       const composer = page.getByLabel("Message AI assistant");
       const geometry = () => page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
         const bounds = (selector: string) => {
@@ -228,7 +228,7 @@ test.describe("direct chat", () => {
           return { top: rect.top, bottom: rect.bottom, height: rect.height };
         };
         return {
-          hints: bounds("[data-vibe64-prompt-hints]"),
+          hints: bounds("[data-assistant-composer-support]"),
           composer: bounds(".studio-autopilot__composer"),
           conversation: bounds(".studio-autopilot__conversation"),
           scrollTop: panel.querySelector(".assistant-transcript__body")!.scrollTop
@@ -417,7 +417,7 @@ test.describe("direct chat", () => {
       const save = page.getByRole("button", { name: "Save selected session work", exact: true });
       await expect(save).toBeVisible();
       await expect(save).toBeDisabled();
-      await expect(page.locator(".vibe64-prompt-hints__assistant-status")).toHaveText("Checking assistant status...");
+      await expect(page.locator(".assistant-composer-support__assistant-status")).toHaveText("Checking assistant status...");
       releasePreparation();
       await expect(save).toBeEnabled();
       await save.click();
@@ -632,6 +632,11 @@ test.describe("direct chat", () => {
       await expect(workspace).toBeVisible();
       await expect(navigation.getByRole("button", { name: "Main chat", exact: true })).toBeVisible();
       await workspace.getByLabel("Message temporary AI").fill("Inspect this without changing it.");
+      await workspace.getByRole("button", { name: "Choose AI", exact: true }).click();
+      await page.getByRole("button", { name: "GPT-5.5", exact: true }).click();
+      await page.getByRole("button", { name: "High", exact: true }).click();
+      await page.getByRole("button", { name: "Apply", exact: true }).click();
+      await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Inspect this without changing it.");
       await workspace.getByRole("button", { name: "Send to temporary AI" }).click();
       await workspace.getByRole("button", { name: "Show all 1 progress update", exact: true }).click();
       await expect(workspace.getByText(
@@ -703,6 +708,7 @@ test.describe("direct chat", () => {
       expect(temporaryStarts).toHaveLength(1);
       expect(temporaryTurns).toHaveLength(1);
       expect(temporaryTurns[0]).toEqual(expect.objectContaining({
+        agentSettings: expect.objectContaining({ model: "gpt-5.5", thinking: "high" }),
         message: "Inspect this without changing it.",
         promptLabel: "Temporary 1"
       }));

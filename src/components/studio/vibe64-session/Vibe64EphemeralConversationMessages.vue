@@ -20,6 +20,7 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 const props = defineProps({
+  working: { type: Boolean, default: undefined },
   sessionId: { type: String, default: "" },
   scrollKey: { type: String, default: "" },
   assistantLabel: { type: String, default: "Temporary AI" },
@@ -29,6 +30,7 @@ const props = defineProps({
 });
 const adapter = computed(() => ({
   conversation: {
+    working: props.working,
     turns: conversationTurnsFromMessages(props.messages),
     assistantLabel: props.assistantLabel,
     scrollKey: props.scrollKey,

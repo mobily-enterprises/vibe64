@@ -362,7 +362,7 @@ for (const width of [390, 1440]) {
     await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    const activity = workspace.locator(".vibe64-prompt-hints__assistant-status");
+    const activity = workspace.locator(".assistant-composer-support__assistant-status");
     const transcript = workspace.locator(".vibe64-temporary-ai__messages");
     const composer = workspace.getByRole("textbox", { name: "Message temporary AI", exact: true });
     await expect(activity).toHaveText("AI is working…");
@@ -495,7 +495,7 @@ for (const width of [390, 1440]) {
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
       await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
       const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-      const activity = workspace.locator(".vibe64-prompt-hints__assistant-status");
+      const activity = workspace.locator(".assistant-composer-support__assistant-status");
       const close = workspace.getByRole("button", { name: "Close Resolve Update", exact: true });
       await expect(activity).toHaveText("AI is working…");
       await close.click();
@@ -1363,13 +1363,13 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
   await expect(captureButton).toBeVisible();
 
   await captureButton.click();
-  await expect(page.locator(".vibe64-attachment-queue__item")).toHaveCount(1);
+  await expect(page.locator(".assistant-attachment-queue__item")).toHaveCount(1);
   await expect(page.getByRole("progressbar", {
     name: /Upload progress for vibe64-preview-/u
   })).toHaveCount(1);
   await captureButton.click();
-  await expect(page.locator(".vibe64-attachment-queue__item")).toHaveCount(2);
-  await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(2);
+  await expect(page.locator(".assistant-attachment-queue__item")).toHaveCount(2);
+  await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(2);
   expect(launchSession.getAttachmentUploads()).toHaveLength(2);
   expect(launchSession.getAttachmentUploads().every((upload) => (
     upload.contentType === "image/png" &&
@@ -1485,15 +1485,15 @@ test("@preview-lifecycle attaches isolated proxied-app console and network diagn
     });
   await expect(attachDiagnostics).toBeVisible();
   await attachDiagnostics.click();
-  await expect(page.locator(".vibe64-attachment-queue__item")).toHaveCount(1);
-  const diagnosticsRow = page.locator(".vibe64-attachment-queue__item", {
+  await expect(page.locator(".assistant-attachment-queue__item")).toHaveCount(1);
+  const diagnosticsRow = page.locator(".assistant-attachment-queue__item", {
     hasText: "vibe64-preview-diagnostics-"
   });
   await expect(diagnosticsRow).toContainText("Uploading");
   await expect(diagnosticsRow.getByRole("progressbar", {
     name: /Upload progress for vibe64-preview-diagnostics-/u
   })).toBeVisible();
-  await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(1);
+  await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(1);
   await expect.poll(() => launchSession.getAttachmentUploads().length).toBe(1);
 
   const [upload] = launchSession.getAttachmentUploads();
@@ -1554,7 +1554,7 @@ for (const viewportWidth of [390, 960, 1600]) {
     const queue = page.getByRole("region", {
       name: "Message attachments"
     });
-    const row = queue.locator(".vibe64-attachment-queue__item", {
+    const row = queue.locator(".assistant-attachment-queue__item", {
       hasText: fileName
     });
     await expect(row).toContainText("Uploading");
@@ -1621,7 +1621,7 @@ test("@preview-lifecycle multipart upload exposes genuine nonzero monotonic brow
     name: fileName
   });
 
-  const row = page.locator(".vibe64-attachment-queue__item", {
+  const row = page.locator(".assistant-attachment-queue__item", {
     hasText: fileName
   });
   await expect(row).toContainText("Uploading");
@@ -1666,7 +1666,7 @@ test("@preview-lifecycle reduced motion keeps unknown upload progress stationary
     name: fileName
   });
 
-  const row = page.locator(".vibe64-attachment-queue__item", {
+  const row = page.locator(".assistant-attachment-queue__item", {
     hasText: fileName
   });
   const progress = row.getByRole("progressbar", {
@@ -1675,7 +1675,7 @@ test("@preview-lifecycle reduced motion keeps unknown upload progress stationary
   await expect(row).toContainText("Uploading");
   await expect(row).toContainText("0 B / 128.0 KB");
   await expect(progress).toHaveCount(0);
-  await expect(row.locator(".vibe64-attachment-queue__progress--stationary")).toBeVisible();
+  await expect(row.locator(".assistant-attachment-queue__progress--stationary")).toBeVisible();
   const activeHeight = Number((await row.boundingBox())?.height || 0);
 
   await expect(row).toContainText("Ready", { timeout: 12_000 });
@@ -1714,7 +1714,7 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
   });
 
   const queue = workspace.getByRole("region", { name: "Message attachments" });
-  const row = queue.locator(".vibe64-attachment-queue__item", { hasText: fileName });
+  const row = queue.locator(".assistant-attachment-queue__item", { hasText: fileName });
   await expect(row).toContainText("Uploading");
   await expect(send).toBeDisabled();
 
@@ -1777,7 +1777,7 @@ test("@preview-lifecycle Codex interactive terminal keeps one attachment queue a
   });
 
   const queue = terminal.getByRole("region", { name: "Message attachments" });
-  const row = queue.locator(".vibe64-attachment-queue__item", {
+  const row = queue.locator(".assistant-attachment-queue__item", {
     hasText: firstFileName
   });
   await expect(row).toBeVisible();
@@ -1833,7 +1833,7 @@ test("@preview-lifecycle Codex interactive terminal keeps one attachment queue a
     }));
   }, secondFileName);
   const failedRow = terminal.getByRole("region", { name: "Message attachments" })
-    .locator(".vibe64-attachment-queue__item", { hasText: secondFileName });
+    .locator(".assistant-attachment-queue__item", { hasText: secondFileName });
   await expect(terminalHost).toBeVisible();
   await expect(failedRow).toContainText("Upload failed");
   await failedRow.getByRole("button", { name: `Remove ${secondFileName}` }).click();
@@ -1880,7 +1880,7 @@ for (const viewportWidth of [390, 1600]) {
       name: fileName
     });
 
-    const row = terminal.locator(".vibe64-attachment-queue__item", {
+    const row = terminal.locator(".assistant-attachment-queue__item", {
       hasText: fileName
     });
     await expect(row).toBeVisible();
@@ -6483,7 +6483,7 @@ for (const engine of ["codex", "opencode"]) {
         { name: "two.png", mimeType: "image/png", buffer: png },
         { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("Saved attachment") }
       ]);
-      await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(3);
+      await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(3);
       for (const reference of ["[Image #1]", "[Image #2]", "[File #1]"]) {
         expect(await composer.inputValue()).toContain(reference);
       }
@@ -6498,7 +6498,7 @@ for (const engine of ["codex", "opencode"]) {
       await expect(composer).toHaveValue(/^Inspect these\s+\[Image #1\]\s+\[File #1\]\s*$/u);
       await expect.poll(() => deleted.length).toBe(1);
       await composer.fill("I removed the tokens myself.");
-      await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(2);
+      await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(2);
       expect(deleted).toHaveLength(1);
       await composer.fill("Review [Image #1] and [File #1]. I edited this.");
       await page.getByRole("button", { name: "Send message", exact: true }).click();
@@ -6517,14 +6517,14 @@ for (const engine of ["codex", "opencode"]) {
       expect(messages[1].attachmentIds).toEqual(messages[0].attachmentIds);
       expect(messages[1].messageId).toBe(messages[0].messageId);
       expect(uploads.size).toBe(4);
-      await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(1);
+      await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(1);
       await expect(composer).toHaveValue(/Keep this next draft\s+\[File #1\]/u);
       await expect(page.getByRole("button", { name: /\[File #1\] later.txt/u })).toBeVisible();
       expect(deleted).toHaveLength(1);
       await page.getByRole("button", { name: "Remove later.txt", exact: true }).click();
       await composer.fill("");
-      await expect(page.locator(".vibe64-attachment-queue__item--ready")).toHaveCount(0);
-      const sent = page.locator(".vibe64-conversation-attachments");
+      await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(0);
+      const sent = page.locator(".assistant-conversation-attachments");
       await sent.getByRole("button", { name: /two.png/u }).click();
       await expect.poll(() => dialog.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1);
       await dialog.getByRole("button", { name: "Close", exact: true }).click();

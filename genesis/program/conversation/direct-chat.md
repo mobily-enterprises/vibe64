@@ -3,6 +3,13 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+The shared transcript groups adjacent reasoning summaries across storage rows.
+User messages, commentary, answers and system messages separate progress groups.
+Vibe64 supplies the existing active execution state as `conversation.working`;
+the renderer previews only trailing progress while working. No provider-turn
+association or history rewrite is required for grouping, including goal
+continuation and loading older history.
+
 ## Sources
 
 - `src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue`
@@ -59,7 +66,6 @@ including follow-up guidance while a turn is active.
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64AttachmentDialog.vue`
-- `src/components/studio/vibe64-session/Vibe64PromptHints.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/lib/vibe64AssistantHost.js`
@@ -69,6 +75,14 @@ including follow-up guidance while a turn is active.
 - `vite.config.mjs`
 
 ## Public contract
+
+JSKIT owns the suggestion and working-status presentation, debounced suggestion
+lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
+Vibe64 supplies native state and actions, project-aware suggestion requests,
+connected-provider policies, upload storage, attachment opening, and favourite files.
+The goal indicator flashes red while active, stays orange while paused, and shows
+elapsed active time when space permits. The application omits goal controls for
+assistants without that capability.
 
 The conversation uses `AssistantConversationElement` from
 `@jskit-ai/assistant-core/client/conversation`. Main chat, temporary assistance,
@@ -88,8 +102,9 @@ The Codex indicator reads the current main conversation goal from `thread/goal/g
 on its existing provider. Goal controls require assistant access and accept only
 pause/resume on that session's current thread and unchanged objective/creation
 identity. Status-only `thread/goal/set` preserves Codex-owned objective, budget
-and usage history. Pause sets paused before interrupting the current turn;
-resume uses Codex's native goal scheduler. Completed goals and exhausted token
+and usage history. Pause prevents further automatic turns without interrupting
+the current turn or releasing its write ownership; Stop still interrupts work.
+Resume uses Codex's native goal scheduler. Completed goals and exhausted token
 budgets are not restarted by this control. Goal notifications invalidate the
 protected read endpoint without broadcasting the objective. The same square
 retains weekly allowance and exposes goal controls independently of plan data.
@@ -771,3 +786,15 @@ reading the setup request or consulting a provider. A focused real-store fixture
 checks archived and renewal-quiesced sessions: both reject admission and retain
 the pending continuation unchanged. No separate integration lifecycle bypass
 is available for an old session.
+
+
+The shared goal control can create a Codex goal with an objective and optional
+positive token budget. Vibe64 validates the displayed thread and any completed
+goal being replaced, prepares the ordinary main thread if necessary, and
+attaches its observer before activation. Creation uses the same agent-write
+coordination as Resume. An observation-stopped conversation requires explicit
+Resume/Send before a new goal; goal creation does not bypass that stop barrier.
+The shared model chooser, file queue, sent-file list, preview and question inputs
+provide presentation. Vibe64 retains native model/account policy, authorized
+attachment URLs and accepted-file retention, question submission ownership,
+favourite files, project access and operation admission.

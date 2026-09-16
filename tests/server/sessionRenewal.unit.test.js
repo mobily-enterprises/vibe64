@@ -2125,6 +2125,80 @@ test("a confirmation replay resumes a durably approved workflow that was never s
   assert.equal(context.calls.seed, 1);
 });
 
+test("a saved source failure can be retried through quota exhaustion to a reviewed manual handover", async () => {
+  const quotaError = new Error("You've hit your usage limit.");
+  quotaError.code = "vibe64_session_renewal_turn_failed";
+  const context = fixture({ generationError: quotaError });
+  context.setSessionWork(OLD_SESSION_ID, {
+    changedPaths: ["src/app.js"], dirty: true, unsaved: true
+  });
+  await context.controller.requestSessionRenewalDraft(OLD_SESSION_ID, {
+    operationKey: "renewal:unsaved-and-quota"
+  });
+  const failed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+  assert.equal(failed.error.code, "vibe64_session_renewal_source_not_ready");
+  assert.equal(failed.error.retryable, true);
+
+  // A deployed version persisted this flag as false. Reload and retry that
+  // exact operation without deleting its state or bypassing the source check.
+  context.artifacts.set(OLD_SESSION_ID, JSON.stringify({
+    ...failed, error: { ...failed.error, retryable: false }
+  }));
+  await context.newController().retrySessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  const stillDirty = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+  assert.equal(stillDirty.error.code, "vibe64_session_renewal_source_not_ready");
+  assert.equal(context.calls.create, 0);
+  assert.equal(context.calls.quiesce, 0);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+
+  context.setSessionWork(OLD_SESSION_ID, {});
+  await context.newController().retrySessionRenewal(OLD_SESSION_ID, {
+    operationKey: failed.operationKey
+  });
+  const reviewed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.REVIEW
+  );
+  assert.equal(reviewed.renewalId, failed.renewalId);
+  assert.equal(reviewed.draft.origin, "manual");
+  assert.equal(reviewed.manualRequired, true);
+  assert.equal(reviewed.error.code, quotaError.code);
+  assert.equal(reviewed.draft.text, sessionRenewalManualHandoverTemplate({ source: reviewed.basis.source }));
+  const updated = await context.controller.updateSessionRenewalDraft(OLD_SESSION_ID, {
+    draft: HANDOVER,
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  const selected = {
+    agentId: "build", catalogRevision: `sha256:${"c".repeat(64)}`,
+    engineId: "opencode", modelId: "glm-4.7-flash", modelProviderId: "zai", variantId: ""
+  };
+  await context.newController().confirmSessionRenewal(OLD_SESSION_ID, {
+    assistantSelection: selected,
+    expectedHash: updated.renewal.draft.hash,
+    expectedRevision: updated.renewal.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  const completed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+  );
+  assert.equal(completed.renewalId, failed.renewalId);
+  assert.equal(completed.successor.assistantSelection.engineId, "opencode");
+  assert.equal(context.calls.seedInput.handover, HANDOVER);
+  assert.equal(context.calls.create, 1);
+  assert.equal(context.sessions.get(OLD_SESSION_ID).archived, true);
+});
+
 test("one explicit failed-draft retry claims a fresh provider operation and actor", async () => {
   const providerFailure = new Error("Provider turn failed");
   providerFailure.code = "provider_failed";

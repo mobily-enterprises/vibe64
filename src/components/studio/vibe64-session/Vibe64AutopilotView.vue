@@ -290,6 +290,7 @@
 
       <Vibe64ConversationLog
         ref="conversationElement"
+        :working="agentStopVisible"
         :integration-action-pending="props.conversationLog?.integrationActionPending"
         :integration-connections="props.conversationLog?.integrationConnections"
         :integration-action-error="props.conversationLog?.integrationActionError"
@@ -324,8 +325,8 @@
         @resend-turn="resendOptimisticMessage"
       >
         <template #hints>
-          <Vibe64PromptHints
-            :assistant-label="composerAssistantLabel"
+          <AssistantComposerSupport
+            :activity="{ label: composerAssistantLabel }"
             :loading="!composerAssistantLabel && promptHintsVisible && promptHintsLoading"
             :status-id="thinkingStatusId"
             :suggestions="!composerAssistantLabel && promptHintsVisible ? promptHintSuggestions : []"
@@ -365,74 +366,11 @@
               @tab-to-submit="focusComposerSendButton"
             >
               <template #input-start>
-                <div
-                  v-if="numberedQuestions.length"
-                  class="studio-autopilot__question-fields"
-                  aria-label="Assistant questions"
-                >
-                  <div class="studio-autopilot__question-fields-header">
-                    <v-btn
-                      aria-label="Answer normally instead"
-                      color="primary"
-                      :prepend-icon="mdiPencilOutline"
-                      size="small"
-                      variant="tonal"
-                      @click="dismissNumberedQuestions"
-                    >
-                      Answer normally instead
-                    </v-btn>
-                  </div>
-                  <div
-                    v-for="question in numberedQuestions"
-                    :key="question.name"
-                    class="studio-autopilot__question-field"
-                  >
-                    <v-select
-                      v-if="question.choices.length"
-                      v-model="questionAnswers[question.name]"
-                      class="studio-autopilot__question-select"
-                      density="compact"
-                      hide-details="auto"
-                      item-title="selectLabel"
-                      item-value="value"
-                      :items="numberedQuestionSelectItems[question.name]"
-                      :label="`[${question.number}] ${question.label}`"
-                      :title="question.label"
-                      variant="outlined"
-                    />
-                    <v-text-field
-                      v-else
-                      v-model="questionAnswers[question.name]"
-                      autocomplete="off"
-                      density="compact"
-                      hide-details="auto"
-                      :label="`[${question.number}] ${question.label}`"
-                      :title="question.label"
-                      variant="outlined"
-                    />
-                  </div>
-                </div>
-                <div
-                  v-else-if="answerChoices.length"
-                  class="studio-autopilot__answer-choices"
-                  aria-label="Suggested answers"
-                >
-                  <v-chip-group
-                    v-model="selectedAnswerChoice"
-                    column
-                    selected-class="text-primary"
-                  >
-                    <v-chip
-                      v-for="choice in answerChoices"
-                      :key="choice.value"
-                      filter
-                      :value="choice.value"
-                      variant="outlined"
-                    >
-                      {{ choice.label }}
-                    </v-chip>
-                  </v-chip-group>
-                </div>
+                <AssistantQuestionInputs
+                  v-model:answers="questionAnswers" v-model:choice="selectedAnswerChoice"
+                  :questions="numberedQuestions" :select-items="numberedQuestionSelectItems" :choices="answerChoices"
+                  @dismiss="dismissNumberedQuestions"
+                />
               </template>
               <template #footer="{ attachmentState }">
                 <AssistantComposerActions
@@ -783,7 +721,6 @@ import {
   mdiGithub,
   mdiIncognito,
   mdiPaperclip,
-  mdiPencilOutline,
   mdiSend,
   mdiSourcePull,
 } from "@mdi/js";
@@ -795,7 +732,7 @@ import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe6
 import Vibe64StarredFilesMenu from "@/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
-import Vibe64PromptHints from "@/components/studio/vibe64-session/Vibe64PromptHints.vue";
+import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
@@ -1284,7 +1221,7 @@ function handleComposerBlur(event = {}) {
   stopTypingOnBlur();
   if (focusTargetInside(
     event.relatedTarget,
-    "[data-vibe64-prompt-hints], .studio-autopilot__composer"
+    "[data-assistant-composer-support], .studio-autopilot__composer"
   )) {
     return;
   }
@@ -1294,7 +1231,7 @@ function handleComposerBlur(event = {}) {
 function handleComposerRegionFocusOut(event = {}) {
   if (
     event.currentTarget?.contains?.(event.relatedTarget) ||
-    focusTargetInside(event.relatedTarget, "[data-vibe64-prompt-hints]")
+    focusTargetInside(event.relatedTarget, "[data-assistant-composer-support]")
   ) {
     return;
   }
@@ -1670,45 +1607,6 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__composer-tools::-webkit-scrollbar {
   display: none;
-}
-
-.studio-autopilot__question-fields {
-  display: grid;
-  gap: 0.3rem;
-  padding: 0.3rem 0.45rem 0;
-}
-
-.studio-autopilot__question-fields-header {
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
-  gap: 0.25rem 0.5rem;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.studio-autopilot__question-fields-header > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.studio-autopilot__question-fields-header :deep(.v-btn) {
-  margin-left: auto;
-}
-
-.studio-autopilot__question-field {
-  min-width: 0;
-}
-
-.studio-autopilot__question-select {
-  max-width: 100%;
-  min-width: 0;
-}
-
-.studio-autopilot__answer-choices {
-  padding: 0.35rem 0.55rem 0;
 }
 
 .studio-autopilot__save-work {

@@ -65,6 +65,9 @@ Confirmed Stop releases chat controls without requiring a final provider message
 Completed assistant replies appear immediately, including answers to steering
 questions while a goal continues. Each reply remains in the conversation;
 showing it does not finish the goal or disable further steering.
+Consecutive reasoning summaries form one collapsible progress group, regardless
+of storage rows or automatic goal turns. The latest group previews current
+reasoning while the assistant is working; ordinary messages separate groups.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
 While the Vibe64 server is running, every executing assistant session must remain
@@ -290,6 +293,9 @@ The new session and its handover remain available for the person to repair an
 expired login, quota, or provider problem and continue. Renewal stops only when
 Vibe64 cannot establish the fresh conversation, its handover, or its saved
 source safely.
+Failed renewals always offer an explicit Retry, including after reopening the
+dialog. Save or Update prerequisites can be corrected in the old session;
+Retry checks the current conditions before continuing the saved renewal.
 Renewal takes its source identity from the project's configured authority and
 verified Git commit. Missing or stale session metadata does not redefine it.
 Retries keep the saved handover without asking the AI to write it again. If the
@@ -525,9 +531,15 @@ label, known reset times, and the five-hour allowance in the hover/tap details. 
 from conversation context usage. API-key connections and other assistants do
 not show a plan meter; unavailable readings never imply unused allowance.
 
-The Codex chat indicator also shows the current conversation goal status.
-People can open its objective and pause or resume an unfinished goal without
-losing its objective or usage history. Pause also interrupts the current turn.
+The shared chat shows a flashing red light for a running goal and a steady
+orange light for a paused goal. Elapsed running time appears beside the light
+when the chat pane has room and remains available in its details. Paused time
+does not accumulate. Reduced-motion settings keep the running light steady.
+Goal controls are optional; OpenCode does not expose them.
+People can set an objective with an optional token budget, including before the
+first chat message. They can open its details and pause or resume an unfinished goal without
+losing its objective or usage history. Pause prevents further automatic turns;
+the current turn continues until it finishes or the person presses Stop.
 Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
 

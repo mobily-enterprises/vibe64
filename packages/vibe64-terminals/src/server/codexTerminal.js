@@ -13116,32 +13116,62 @@ function createCodexTerminalController({
       const threadId = codexAppServerTurnState(context.session).threadId ||
         codexThreadIdForWorkdir(context.session, context.workdir);
       if (!threadId) {
-        return { status: "available", goal: null };
+        return { status: "available", threadId: "", goal: null };
       }
       const sessionKey = codexTerminalNamespace(sessionId);
       for (const [key, provider] of codexAppServerProviders) {
         if (codexAppServerProviderOwners.get(key)?.sessionKey === sessionKey &&
             !provider.isEconomyProvider() && provider.isAvailable()) {
           const result = await provider.readGoal(threadId);
-          return { status: "available", goal: result.goal || null };
+          return { status: "available", threadId, goal: result.goal || null };
         }
       }
       return { status: "unavailable", goal: null };
     },
 
     async updateGoal(sessionId, input = {}, options = {}) {
-      if (!["pause", "resume"].includes(input.action)) {
-        return { ok: false, error: "Choose pause or resume." };
+      if (!["set", "pause", "resume"].includes(input.action)) {
+        return { ok: false, error: "Choose set, pause, or resume." };
+      }
+      if (input.action === "set" && (typeof input.objective !== "string" || !input.objective.trim() ||
+          (input.tokenBudget !== undefined && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget <= 0)))) {
+        return { ok: false, error: "Enter a goal objective and an optional positive whole-number token budget." };
       }
       const admission = beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId));
       if (admission.ok === false) return admission;
       try {
-        const context = await codexAppServerConversationContext(sessionId, {}, options);
+        let context = await codexAppServerConversationContext(sessionId, {}, options);
         if (context.ok === false) return context;
-        const threadId = codexAppServerTurnState(context.session).threadId ||
+        let threadId = codexAppServerTurnState(context.session).threadId ||
           codexThreadIdForWorkdir(context.session, context.workdir);
-        if (!threadId || threadId !== input.threadId) {
+        if (threadId !== input.threadId || (!threadId && input.action !== "set")) {
           return { ok: false, error: "The Codex conversation changed. Refresh the goal before trying again." };
+        }
+        if (input.action === "set") {
+          if (codexAppServerTurnState(context.session).status === "observation_lost") {
+            return { ok: false, error: "Resume or send a message to restore the stopped conversation before setting a goal." };
+          }
+          if (!threadId) {
+            const prepared = await ensureCodexAppServerThreadReady(sessionId);
+            if (prepared.ok === false) return prepared;
+            context = await codexAppServerConversationContext(sessionId);
+            if (context.ok === false) return context;
+            threadId = codexAppServerTurnState(context.session).threadId ||
+              codexThreadIdForWorkdir(context.session, context.workdir);
+          }
+          const { goal: previousGoal } = await context.provider.readGoal(threadId);
+          if (previousGoal && (previousGoal.status !== "complete" || previousGoal.createdAt !== input.createdAt)) {
+            return { ok: false, error: "The Codex goal changed. Refresh it before setting a new goal." };
+          }
+          subscribeCodexAppServerEvents(sessionId, context.provider, threadId, context.providerOptions);
+          const result = await context.provider.setGoal(threadId, {
+            objective: input.objective, tokenBudget: input.tokenBudget
+          });
+          await reconcileCodexAppServerGoalUpdated(sessionId, context.provider, threadId, {
+            params: { goal: result.goal }
+          });
+          await publishSessionChanged(sessionId, { reason: "codex-goal" });
+          return { ok: true, status: "available", threadId, goal: result.goal || null };
         }
         const { goal } = await context.provider.readGoal(threadId);
         if (!goal || goal.status === "complete" || goal.createdAt !== input.createdAt || goal.objective !== input.objective) {
@@ -13175,12 +13205,6 @@ function createCodexTerminalController({
         await reconcileCodexAppServerGoalUpdated(sessionId, context.provider, threadId, {
           params: { goal: result.goal }
         });
-        if (input.action === "pause") {
-          const stopped = await interruptCodexAppServerTurnWithinAdmission(sessionId, { threadId });
-          if (stopped.ok === false) {
-            return { ...stopped, goal: result.goal };
-          }
-        }
         await publishSessionChanged(sessionId, { reason: "codex-goal" });
         return { ok: true, status: "available", goal: result.goal || null };
       } finally {

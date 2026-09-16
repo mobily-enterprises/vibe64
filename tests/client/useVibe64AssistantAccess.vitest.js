@@ -294,6 +294,7 @@ describe("useVibe64AssistantAccess", () => {
     const assistantMenuSource = fs.readFileSync(path.resolve(
       "src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue"
     ), "utf8");
+    const modelControlSource = fs.readFileSync(path.resolve("node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantModelControl.vue"), "utf8");
     const assistantDialog = fs.readFileSync(path.resolve(
       "src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue"
     ), "utf8");
@@ -316,8 +317,8 @@ describe("useVibe64AssistantAccess", () => {
     expect(autopilot).toContain(':access-loading="assistantAccessLoading"');
     expect(autopilot).toContain(':can-configure="assistantSuggestionsCanManage"');
     expect(autopilot).toContain(':changes-disabled="composerSending || agentActive"');
-    expect(assistantMenuSource).toContain('aria-label="AI session selector"');
-    expect(assistantMenuSource).toContain('AI choices are view-only while the assistant is working.');
+    expect(modelControlSource).toContain('aria-label="AI session selector"');
+    expect(modelControlSource).toContain('AI choices are view-only while the assistant is working.');
     expect(assistantMenuSource).not.toMatch(/aria-label="Choose AI"[\s\S]{0,180}:disabled=/u);
     expect(assistantMenuSource).toContain('providerConnectedOnly: true');
     expect(assistantMenuSource).toContain('active: catalogActive');
@@ -333,8 +334,8 @@ describe("useVibe64AssistantAccess", () => {
     expect(assistantMenuSource).toContain('Unlock paid models');
     expect(assistantMenuSource).toContain('restoreRecommendedModel');
     expect(assistantMenuSource).toContain('vibe64AssistantModelAccessPath');
-    expect(assistantMenuSource).toContain('aria-label="Model"');
-    expect(assistantMenuSource).toContain('aria-label="Thinking"');
+    expect(modelControlSource).toContain('aria-label="Model"');
+    expect(modelControlSource).toContain('aria-label="Thinking"');
     expect(assistantMenuSource).toContain('watch(assistantSelection, hydrateSelection, { immediate: true });');
     expect(assistantMenuSource).toContain('void catalog.reload().catch(() => null);');
     expect(assistantMenuSource).not.toContain('<v-select');

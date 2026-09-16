@@ -47,6 +47,14 @@ vi.mock("vuetify/components/VCard", async () => {
   const { h } = await import("vue");
   return { VCard: { setup: (_, { slots }) => () => h("div", slots.default?.()) } };
 });
+vi.mock("vuetify/components/VTextarea", async () => {
+  const { h } = await import("vue");
+  return { VTextarea: { setup: (_, { attrs }) => () => h("textarea", { "aria-label": attrs.label }) } };
+});
+vi.mock("vuetify/components/VTextField", async () => {
+  const { h } = await import("vue");
+  return { VTextField: { setup: (_, { attrs }) => () => h("input", { "aria-label": attrs.label }) } };
+});
 import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue";
 
 async function render(data, props = {}) {
@@ -132,12 +140,20 @@ it("sends an explicit status action for the displayed goal and reloads after fai
   mocks.goal = null;
 });
 
-it("offers Pause and the compact running dot only for an active goal", async () => {
+it("uses the shared running and paused indicators for native goal state", async () => {
   for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimited", "complete"]) {
     mocks.goal = { status: "available", goal: { status, objective: "Finish migration" } };
     const html = await render({ status: "available", windows: [{ remainingPercent: 1, windowDurationMins: 10080 }] });
     expect(html.includes("Pause goal")).toBe(status === "active");
-    expect(html.includes('class="codex-plan-usage__running"')).toBe(status === "active");
+    expect(html.includes("assistant-goal__light--running")).toBe(status === "active");
+    expect(html.includes("assistant-goal__light--paused")).toBe(status === "paused");
   }
+  mocks.goal = null;
+});
+
+it("offers goal creation before the first goal and hides it for OpenCode", async () => {
+  mocks.goal = { status: "available", threadId: "", goal: null };
+  expect(await render(null)).toContain("Goal objective");
+  expect(await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "opencode" } } })).not.toContain("Goal objective");
   mocks.goal = null;
 });

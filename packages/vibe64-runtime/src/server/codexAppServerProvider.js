@@ -3413,6 +3413,21 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async setGoal(threadId, { objective, tokenBudget } = {}) {
+    if (typeof objective !== "string" || !objective.trim() ||
+        (tokenBudget !== undefined && (!Number.isSafeInteger(tokenBudget) || tokenBudget <= 0))) {
+      throw new TypeError("A Codex goal requires an objective and an optional positive token budget.");
+    }
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/goal/set", {
+        threadId: normalizeAgentText(threadId), objective: objective.trim(), status: "active",
+        ...(tokenBudget === undefined ? {} : { tokenBudget })
+      }),
+      "codex-app-server-goal-set"
+    );
+  }
+
   async setGoalStatus(threadId = "", status = "") {
     if (!["active", "paused"].includes(status)) {
       throw new TypeError("Invalid Codex goal status.");
