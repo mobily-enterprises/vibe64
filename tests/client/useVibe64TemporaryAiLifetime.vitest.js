@@ -84,6 +84,95 @@ describe("temporary AI mounted lifetime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows a pending message throughout conversation creation and turn startup, then reconciles it once", async () => {
+    const creation = Promise.withResolvers();
+    const starting = Promise.withResolvers();
+    const { temporary, task } = mountTemporaryAi();
+    task.agentSettings.model = "original-model";
+    http.request.mockReturnValueOnce(creation.promise).mockReturnValueOnce(starting.promise);
+    const sending = temporary.send(task.id);
+    const current = () => temporary.activeTask.value;
+    const turns = () => current().delivery.turns([]);
+    expect(current().draft).toBe("");
+    expect(current().delivery.state.sending).toBe(true);
+    expect(turns()).toHaveLength(1);
+    expect(turns()[0]).toMatchObject({
+      optimistic: { status: "pending" }, user: { text: "Repair this conflict." }
+    });
+    const messageId = turns()[0].user.messageId;
+    task.agentSettings.model = "changed-before-creation-finished";
+    creation.resolve({ ok: true, conversationId: "conversation-1" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(current().delivery.state.sending).toBe(true);
+    expect(turns()).toHaveLength(1);
+    expect(http.request).toHaveBeenLastCalledWith(`${CONVERSATION_PATH}/turns`, expect.objectContaining({
+      body: expect.objectContaining({
+        messageId,
+        agentSettings: expect.objectContaining({ model: "original-model" }),
+        presentation: expect.objectContaining({ draft: "" })
+      })
+    }));
+    temporary.updateDraft(task.id, "A draft typed while startup is pending.");
+    await vi.advanceTimersByTimeAsync(250);
+    starting.resolve({ ok: true, status: "completed", runId: "turn-1", messages: [
+      { id: messageId, role: "user", text: "Repair this conflict." },
+      { id: "answer-1", role: "assistant", text: "Done.", status: "completed" }
+    ] });
+    await expect(sending).resolves.toBe(true);
+    expect(current().delivery.state.sending).toBe(false);
+    expect(current().delivery.state.messages).toEqual([]);
+    expect(current().messages.filter((message) => message.role === "user")).toHaveLength(1);
+    http.request.mockClear();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(http.request).toHaveBeenCalledWith(CONVERSATION_PATH, expect.objectContaining({
+      method: "PATCH", body: expect.objectContaining({
+        presentation: expect.objectContaining({ draft: "A draft typed while startup is pending." })
+      })
+    }));
+  });
+
+  it("retries a failed message with its original identity and payload while preserving a newer draft", async () => {
+    const { temporary, task } = mountTemporaryAi();
+    temporary.updateAttachments(task.id, [{ attachmentId: "original-file", fileName: "first.txt" }]);
+    http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockRejectedValueOnce(new Error("Provider unavailable."));
+    await expect(temporary.send(task.id)).resolves.toBe(false);
+    const failed = temporary.activeTask.value.delivery.state.messages[0];
+    expect(failed).toMatchObject({ text: "Repair this conflict.", status: "failed", error: "Provider unavailable." });
+    const originalBody = http.request.mock.calls.find(([path]) => path.endsWith("/turns"))[1].body;
+    temporary.updateDraft(task.id, "A newer question.");
+    temporary.updateAgentSetting(task.id, "model", "another-model");
+    temporary.updateAttachments(task.id, [
+      { attachmentId: "original-file", fileName: "first.txt" },
+      { attachmentId: "new-file", fileName: "next.txt" }
+    ]);
+    http.request.mockResolvedValueOnce({ ok: true, status: "completed", runId: "turn-1" });
+    await expect(temporary.send(task.id, { retryMessageId: failed.id })).resolves.toBe(true);
+    const bodies = http.request.mock.calls.filter(([path]) => path.endsWith("/turns")).map(([, options]) => options.body);
+    expect(bodies).toEqual([originalBody, originalBody]);
+    expect(temporary.activeTask.value.draft).toBe("A newer question.");
+    expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
+    expect(temporary.activeTask.value.attachments.map((file) => file.attachmentId)).toEqual(["new-file"]);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
+      method: "PATCH", body: expect.objectContaining({
+        attachmentIds: ["new-file"], presentation: expect.objectContaining({ draft: "A newer question." })
+      })
+    }));
+  });
+
+  it.each(["editMessage", "cancelMessage"])("%s removes the failed entry without losing a newer draft", async (action) => {
+    const { temporary, task } = mountTemporaryAi();
+    http.request.mockRejectedValueOnce(new Error("Provider unavailable."));
+    await temporary.send(task.id);
+    const messageId = temporary.activeTask.value.delivery.state.messages[0].id;
+    temporary.updateDraft(task.id, "My next question.");
+    expect(temporary[action](task.id, messageId)).toBe(true);
+    expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
+    expect(temporary.activeTask.value.draft).toBe(action === "editMessage"
+      ? "Repair this conflict.\n\nMy next question." : "My next question.");
+  });
+
   it("waits for shared assistant readiness before restoring, including manual retry", async () => {
     const assistantReady = ref(false);
     http.request.mockResolvedValue({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready", draft: "Keep this" }] });

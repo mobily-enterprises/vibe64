@@ -66,6 +66,55 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  hintTest("@temporary-delivery shows the message before startup and uses shared failure actions to retry it once", async ({ page }) => {
+    const creation = Promise.withResolvers<void>();
+    const startup = Promise.withResolvers<void>();
+    const submissions: Record<string, unknown>[] = [];
+    const message = "Explain the ongoing work.";
+    await mockDirectChat(page, { onTemporaryConversation: () => creation.promise });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations/temporary-conversation-1/turns`, async route => {
+      const body = requestBodyWithoutOrigin(route.request());
+      submissions.push(body);
+      if (submissions.length === 1) {
+        await startup.promise;
+        await fulfillJson(route, { ok: false, error: "Assistant could not start." });
+      } else {
+        await fulfillJson(route, { ok: true, runId: "temporary-run-1", status: "completed", messages: [
+          { id: body.messageId, role: "user", text: body.displayMessage },
+          { id: "temporary-answer", role: "assistant", text: "Here is the explanation.", status: "completed" }
+        ] });
+      }
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    await openTemporaryAiWorkspace(page);
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace", exact: true });
+    const input = workspace.getByLabel("Message temporary AI");
+    await input.fill(message);
+    await workspace.getByRole("button", { name: "Send to temporary AI", exact: true }).click();
+    await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+    await expect(workspace.locator(".assistant-composer-support__assistant-status")).toHaveText("Sending to assistant…");
+    await expect(workspace.getByText("AI is working…", { exact: true })).not.toBeVisible();
+    await expect(workspace.getByText("Ask a focused question or investigate a problem without adding it to the main conversation.")).not.toBeVisible();
+    expect(submissions).toHaveLength(0);
+    creation.resolve();
+    await expect.poll(() => submissions.length).toBe(1);
+    await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+    await expect(workspace.locator(".assistant-composer-support__assistant-status")).toHaveText("Sending to assistant…");
+    startup.resolve();
+    await expect(workspace.getByRole("button", { name: "Resend", exact: true })).toBeVisible();
+    await expect(workspace.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+    await expect(workspace.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+    await expect(workspace.getByText("Assistant could not start.", { exact: true })).toHaveCount(1);
+    await input.fill("Keep this newer draft.");
+    await workspace.getByRole("button", { name: "Resend", exact: true }).click();
+    await expect(workspace.getByText("Here is the explanation.", { exact: true })).toBeVisible();
+    await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
+    await expect(workspace.getByRole("button", { name: "Resend", exact: true })).not.toBeVisible();
+    await expect(input).toHaveValue("Keep this newer draft.");
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toEqual(submissions[0]);
+  });
+
   hintTest("@startup-restoration waits for initialization and handles later contention without replacing main chat", async ({ page }) => {
     const preparation = Promise.withResolvers<void>();
     const events: string[] = [];

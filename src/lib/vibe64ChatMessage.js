@@ -44,37 +44,4 @@ function chatMessagePayload(message = "", attachments = []) {
   };
 }
 
-function turnMatchesOptimisticMessage(turn = {}, optimistic = {}) {
-  const canonicalMessageId = chatText(turn?.user?.messageId);
-  const optimisticMessageId = chatText(optimistic.id);
-  if (canonicalMessageId && optimisticMessageId) {
-    return canonicalMessageId === optimisticMessageId;
-  }
-  if (chatText(turn?.user?.text) !== optimistic.text) {
-    return false;
-  }
-  const userAtMs = Date.parse(String(turn?.user?.at || ""));
-  return Number.isFinite(userAtMs) && userAtMs >= optimistic.createdAtMs - 5000;
-}
-
-function unmatchedOptimisticMessages(turns = [], optimisticMessages = []) {
-  const conversationTurns = Array.isArray(turns) ? turns : [];
-  const matchedTurnIndexes = new Set();
-  return (Array.isArray(optimisticMessages) ? optimisticMessages : []).filter((message) => {
-    const turnIndex = conversationTurns.findIndex((turn, index) => (
-      !matchedTurnIndexes.has(index) && turnMatchesOptimisticMessage(turn, message)
-    ));
-    if (turnIndex < 0) {
-      return true;
-    }
-    matchedTurnIndexes.add(turnIndex);
-    return false;
-  });
-}
-
-export {
-  chatMessagePayload,
-  createChatMessageId,
-  turnMatchesOptimisticMessage,
-  unmatchedOptimisticMessages
-};
+export { chatMessagePayload, createChatMessageId };

@@ -14,12 +14,22 @@ its `examples/conversation` directory is a runnable independent consumer.
 | Temporary AI | `Vibe64EphemeralConversationMessages` maps flat messages into the same element. | Per-task retained drafts/uploads/settings, repair status/actions, stop/close and exact cleanup. |
 | Database copilot | `Vibe64DatabaseWorkspace` supplies a conversation adapter directly. | Table context, SQL actions, owner access, request errors and server-owned configuration. |
 
-The UI's adapter is `{ conversation, composer?, actions }`. Conversation state
+The UI's adapter is `{ conversation, composer?, delivery?, actions }`. Conversation state
 contains the ordered turn model and loading/pagination fields. Composer state
 contains the draft and send/stop availability. Actions call the existing
 application operations; the component does not own HTTP, permissions or storage.
 Configuration is hidden for database copilot and supplied by its server. Main
 and temporary chat retain their authorized Vibe64 settings controls in slots.
+
+Main and temporary chat use JSKIT's `createAssistantMessageDelivery` to insert
+submitted messages immediately and retain failed entries with Resend/Edit/Cancel.
+The controller owns pending state and matching canonical receipts; Vibe64 owns
+transport, admission, stable request IDs, repair context and conversation lifetime.
+Main chat continues to settle from its authoritative realtime receipt. Temporary
+chat overlays pending entries through `adapter.delivery` before saves, creation
+or turn-start requests finish. Retries preserve the original request and newer
+drafts/uploads. Only accepted attachments are cleared. Other JSKIT applications
+can use the same controller and the element's default failure actions.
 
 User-facing temporary chats use main chat's capabilities, tools, project access,
 command runtime and write coordination in both providers. They have no separate

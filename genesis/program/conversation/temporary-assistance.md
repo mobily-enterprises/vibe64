@@ -117,11 +117,21 @@ Assistant replies use the same formatted text presentation as normal chat,
 including lists, bold text, code, and links. User-authored text stays literal.
 Raw HTML remains text, and executable or data-URL links are not made clickable.
 Main and temporary chats use the same JSKIT conversation element, transcript,
-composer and collapsible progress components. Each temporary task retains its
+composer and collapsible progress components. Both use JSKIT's
+`createAssistantMessageDelivery` for pending entries, failed delivery and receipt
+matching. Temporary Send inserts its user bubble before waiting for a draft save,
+conversation creation or native admission. The shared element overlays that entry
+on canonical history and replaces it once by message identity. Resend keeps the
+original message ID, text, settings and attachment IDs, while preserving a newer
+draft and unsent files; their presentation is saved after retry acceptance. Edit
+and Cancel act on the failed entry. The application retains request admission,
+repair context, attachment ownership and task lifetime checks.
+Each temporary task retains its
 server-owned draft, attachments, settings and provider cleanup. Temporary
 progress starts collapsed inside its assistant message; expanding it uses the
 scrollable transcript. The fixed status above the composer uses normal chat's
-shared plain status component and says “AI is working…”. The transcript has no
+shared plain status component and says “Sending to assistant…” during admission,
+then “AI is working…” during execution. The transcript has no
 second working indicator and the status never repeats reasoning paragraphs.
 Long progress cannot push Stop or the composer out of view. The temporary
 workspace leaves the project session tabs and shared Save/Update activity

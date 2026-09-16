@@ -20,6 +20,7 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 const props = defineProps({
+  delivery: { type: Object, default: null },
   working: { type: Boolean, default: undefined },
   sessionId: { type: String, default: "" },
   scrollKey: { type: String, default: "" },
@@ -28,7 +29,9 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   userLabel: { type: String, default: "You" }
 });
+const emit = defineEmits(["resend", "cancel", "edit"]);
 const adapter = computed(() => ({
+  delivery: props.delivery,
   conversation: {
     working: props.working,
     turns: conversationTurnsFromMessages(props.messages),
@@ -41,6 +44,10 @@ const adapter = computed(() => ({
     systemLabel: "System",
     welcomeMessage: props.messages.length ? "" : props.emptyMessage
   },
-  actions: {}
+  actions: {
+    resend: (id) => emit("resend", id),
+    cancel: (id) => emit("cancel", id),
+    edit: (id) => emit("edit", id)
+  }
 }));
 </script>

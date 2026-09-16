@@ -8,6 +8,8 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
+import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
@@ -224,6 +226,7 @@ function useVibe64TemporaryAi({
           attachments: record.attachments || [],
           restoredAttachments: record.attachments || [],
           pendingMessageId: "",
+          delivery: createAssistantMessageDelivery(),
           draft: record.draft || "",
           messages: record.messages || [],
           busy: temporaryAiTurnIsActive(record.status),
@@ -308,6 +311,7 @@ function useVibe64TemporaryAi({
       failureMessage: temporaryAiText(failureMessage),
       id: temporaryAiId("temporary-ai"),
       messages: [],
+      delivery: createAssistantMessageDelivery(),
       nextStepMessage: temporaryAiText(nextStepMessage),
       pendingMessageId: "",
       recoveryOutcome: "",
@@ -553,6 +557,7 @@ function useVibe64TemporaryAi({
         runId: response.conversationExpired === true ? "" : response.runId || task.runId,
         status
       });
+      task.delivery.reconcile(conversationTurnsFromMessages(messages));
       if (active) {
         pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
       } else {
@@ -586,20 +591,34 @@ function useVibe64TemporaryAi({
     }
   }
 
-  async function send(taskId = "") {
+  async function send(taskId = "", { retryMessageId = "" } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
         readRefOrGetterValue(operationBusy) || task.busy || task.recoveryOutcome === "checking") {
       return false;
     }
-    const payload = chatMessagePayload(task.draft, task.attachments);
+    const retry = retryMessageId ? task.delivery.find(retryMessageId) : null;
+    if (retryMessageId && retry?.status !== "failed") return false;
+    const draftPayload = chatMessagePayload(task.draft, task.attachments);
+    const payload = retry?.payload || (draftPayload && {
+      ...draftPayload,
+      agentSettings: task.agentSettings,
+      displayMessage: task.displayMessage || draftPayload.displayMessage,
+      draftSnapshot: task.draft,
+      presentation: { ...taskPresentation(task), draft: "" },
+      message: task.recoveryOperation === "update" && task.recoveryContext
+        ? `${task.recoveryContext}\n\nUser message:\n${draftPayload.message}`
+        : draftPayload.message,
+      ...(task.recoveryOperation === "update" ? { outputSchema: VIBE64_AGENT_TASK_RESULT_SCHEMA } : {}),
+      promptLabel: task.title
+    });
     if (!payload?.message) {
       return false;
     }
-    const messageId = task.pendingMessageId || temporaryAiId("message");
+    const messageId = retryMessageId || task.pendingMessageId || temporaryAiId("message");
     updateTask(taskId, {
       busy: true,
-      draft: "",
+      draft: retry && task.draft !== payload.draftSnapshot ? task.draft : "",
       error: "",
       errorCode: "",
       pendingMessageId: messageId,
@@ -616,34 +635,31 @@ function useVibe64TemporaryAi({
     const apiPath = task.apiPath;
     const ownerSessionId = task.sessionId;
     try {
-      if (saves.has(taskId)) await saves.get(taskId);
-      if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
-      conversationId = conversationId || await ensureConversation(task);
-      if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
-      const response = await request(
-        vibe64TemporaryConversationTurnsPath(
-          apiPath,
-          ownerSessionId,
-          conversationId
-        ),
-        {
-          body: {
-            agentSettings: task.agentSettings,
-            ...(payload.attachmentIds?.length ? { attachmentIds: payload.attachmentIds } : {}),
-            messageId,
-            displayMessage: task.displayMessage || payload.displayMessage,
-            presentation: { ...taskPresentation(tasks.value.find((current) => current.id === taskId)), draft: task.draft },
-            message: task.recoveryOperation === "update" && task.recoveryContext
-              ? `${task.recoveryContext}\n\nUser message:\n${payload.message}`
-              : payload.message,
-            ...(task.recoveryOperation === "update" ? { outputSchema: VIBE64_AGENT_TASK_RESULT_SCHEMA } : {}),
-            promptLabel: task.title
-          },
-          method: "POST"
+      const response = await task.delivery.send(payload, {
+        messageId,
+        isCurrent: () => canApplyTaskResponse(taskId) && !closingTaskIds.has(taskId),
+        async deliver(submission) {
+          if (saves.has(taskId)) await saves.get(taskId);
+          if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
+          conversationId = conversationId || await ensureConversation(task);
+          if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
+          return request(vibe64TemporaryConversationTurnsPath(apiPath, ownerSessionId, conversationId), {
+            body: {
+              agentSettings: submission.agentSettings,
+              ...(submission.attachmentIds?.length ? { attachmentIds: submission.attachmentIds } : {}),
+              messageId,
+              displayMessage: submission.displayMessage,
+              presentation: submission.presentation,
+              message: submission.message,
+              ...(submission.outputSchema ? { outputSchema: submission.outputSchema } : {}),
+              promptLabel: submission.promptLabel
+            },
+            method: "POST"
+          });
         }
-      );
+      });
       const current = tasks.value.find((candidate) => candidate.id === taskId);
-      if (disposed || !current || closingTaskIds.has(taskId)) return false;
+      if (response === false || disposed || !current || closingTaskIds.has(taskId)) return false;
       const status = current.status === "interrupted" ? "interrupted" : response.status || "inProgress";
       const messages = response.messages || [
         ...task.messages,
@@ -652,7 +668,7 @@ function useVibe64TemporaryAi({
           id: messageId,
           role: "user",
           status: "completed",
-          text: task.displayMessage || payload.displayMessage
+          text: payload.displayMessage
         },
         {
           id: temporaryAiId("message"),
@@ -663,9 +679,10 @@ function useVibe64TemporaryAi({
           text: ""
         }
       ];
+      const acceptedAttachmentIds = new Set(payload.attachmentIds || []);
       updateTask(taskId, {
-        attachments: [],
-        restoredAttachments: [],
+        attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
+        restoredAttachments: current.restoredAttachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
         busy: temporaryAiTurnIsActive(status),
         conversationId,
         displayMessage: "",
@@ -675,6 +692,11 @@ function useVibe64TemporaryAi({
         runId: response.runId,
         status
       });
+      task.delivery.reconcile(conversationTurnsFromMessages(messages));
+      if (retry || current.draft || current.agentSettings !== task.agentSettings ||
+          current.attachments.some((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId))) {
+        scheduleSave(taskId);
+      }
       if (temporaryAiTurnIsActive(status)) void pollTask(taskId);
       else if (status !== "interrupted") reportTaskFinished(taskId);
       return true;
@@ -687,7 +709,7 @@ function useVibe64TemporaryAi({
       updateTask(taskId, {
         busy: false,
         conversationId: error?.conversationExpired === true ? "" : conversationId,
-        draft: task.draft,
+        draft: tasks.value.find((candidate) => candidate.id === taskId).draft || payload.draftSnapshot,
         error: temporaryAiText(error?.message || error) || "Temporary AI message could not be sent.",
         errorCode: temporaryAiText(error?.code),
         pendingMessageId: messageId,
@@ -697,6 +719,31 @@ function useVibe64TemporaryAi({
       reportTaskFinished(taskId);
       return false;
     }
+  }
+
+  function cancelMessage(taskId, messageId) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const message = task?.delivery.find(messageId);
+    if (disposed || !message || message.status !== "failed" || task.busy ||
+        readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
+    task.delivery.remove(messageId);
+    updateTask(taskId, {
+      ...(task.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
+      ...(task.error === message.error ? { error: "", errorCode: "" } : {}),
+      ...(task.draft === message.payload.draftSnapshot ? { draft: "", displayMessage: "" } : {})
+    });
+    return true;
+  }
+
+  function editMessage(taskId, messageId) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const message = task?.delivery.find(messageId);
+    if (!message || !cancelMessage(taskId, messageId)) return false;
+    const draft = task.draft;
+    updateDraft(taskId, !draft || draft === message.payload.draftSnapshot
+      ? message.text
+      : draft.startsWith(message.text) ? draft : `${message.text}\n\n${draft}`);
+    return true;
   }
 
   async function stopTask(taskId = "") {
@@ -845,6 +892,8 @@ function useVibe64TemporaryAi({
     activeTaskId,
     closeTask,
     closeWorkspace,
+    cancelMessage,
+    editMessage,
     open,
     openTask,
     reportRecoveryOutcome,

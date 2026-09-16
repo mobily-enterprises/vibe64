@@ -11,9 +11,9 @@ import {
 } from "@/composables/useVibe64ProjectScope.js";
 import {
   chatMessagePayload,
-  createChatMessageId,
-  unmatchedOptimisticMessages
+  createChatMessageId
 } from "@/lib/vibe64ChatMessage.js";
+import { createAssistantMessageDelivery, unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import {
   numberedQuestionSubmissionText,
   parseNumberedQuestionPrompt,
@@ -417,11 +417,11 @@ function useVibe64AutopilotView(props, emit, {
   const composerDraft = ref("");
   const composerAttachments = ref([]);
   const composerRetrySubmission = ref(null);
-  const composerSending = ref(false);
+  const messageDelivery = createAssistantMessageDelivery();
+  const composerSending = computed(() => messageDelivery.state.sending);
   const composerSubmissionKind = ref("");
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
-  const optimisticMessages = ref([]);
   const questionAnswers = ref({});
   const dismissedNumberedQuestionText = ref("");
   const submittedQuestionText = ref("");
@@ -991,32 +991,6 @@ function useVibe64AutopilotView(props, emit, {
     });
   }
 
-  function optimisticMessage(payload = {}, messageId = "") {
-    const now = new Date();
-    return {
-      attachments: Array.isArray(payload?.displayAttachments)
-        ? payload.displayAttachments
-        : [],
-      createdAt: now.toISOString(),
-      createdAtMs: now.getTime(),
-      error: "",
-      id: messageId,
-      payload,
-      status: "pending",
-      text: normalizedAgentTurnText(
-        payload?.displayMessage || payload?.message
-      )
-    };
-  }
-
-  function updateOptimisticMessage(messageId = "", update = {}) {
-    optimisticMessages.value = optimisticMessages.value.map((message) => (
-      message.id === messageId
-        ? { ...message, ...update }
-        : message
-    ));
-  }
-
   function settleComposerRetry(retry = composerRetrySubmission.value) {
     if (!retry || retry.messageId !== composerRetrySubmission.value?.messageId) {
       return false;
@@ -1039,13 +1013,7 @@ function useVibe64AutopilotView(props, emit, {
     const messageId = String(existingMessageId || "").trim() || nextMessageId();
     const sendingSessionId = sessionId.value;
     const sendingProjectSlug = projectSlug.value;
-    const optimistic = optimisticMessage(payload, messageId);
-    optimisticMessages.value = [
-      ...optimisticMessages.value.filter((message) => message.id !== messageId),
-      optimistic
-    ];
     composerSubmissionKind.value = submissionKind === "steer" ? "steer" : "send";
-    composerSending.value = true;
     let acknowledgeMessage;
     const receipt = new Promise((resolve) => { acknowledgeMessage = resolve; });
     const stopWatchingReceipt = watch(
@@ -1063,30 +1031,26 @@ function useVibe64AutopilotView(props, emit, {
       const sendMessage = typeof sendMainChatMessage === "function"
         ? sendMainChatMessage
         : props.sendAgentMessage;
-      const response = await Promise.race([
-        sendMessage({
-          ...payload,
-          ...(requestAgentSettings.value ? { agentSettings: requestAgentSettings.value } : {}),
-          messageId
-        }),
-        receipt
-      ]);
+      const response = await messageDelivery.send({
+        ...payload,
+        agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
+      }, {
+        messageId,
+        isCurrent: () => sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug,
+        deliver: ({ agentSettings, ...submission }) => Promise.race([
+          sendMessage({
+            ...submission,
+            ...(agentSettings ? { agentSettings } : {})
+          }),
+          receipt
+        ])
+      });
       if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug) {
         return false;
       }
       const accepted = response !== false && response?.ok !== false;
-      const suggested = response?.suggested === true;
-      if (!accepted) {
-        updateOptimisticMessage(messageId, {
-          error: "Message could not be sent.",
-          status: "failed"
-        });
-      }
-      if (accepted && suggested) {
-        optimisticMessages.value = optimisticMessages.value.filter((message) => (
-          message.id !== messageId
-        ));
-      } else if (accepted) {
+      if (accepted && response?.suggested === true) messageDelivery.remove(messageId);
+      if (accepted && response?.suggested !== true) {
         conversationFollowLatestKey.value += 1;
       }
       if (accepted && payload.attachmentIds?.length) {
@@ -1098,10 +1062,6 @@ function useVibe64AutopilotView(props, emit, {
         return false;
       }
       const message = normalizedAgentTurnText(error?.message || error) || "Message could not be sent.";
-      updateOptimisticMessage(messageId, {
-        error: message,
-        status: "failed"
-      });
       const attention = executionAttentionForError(error, message);
       if (attention) {
         emit("execution-attention", attention);
@@ -1110,7 +1070,6 @@ function useVibe64AutopilotView(props, emit, {
     } finally {
       stopWatchingReceipt();
       if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug) {
-        composerSending.value = false;
         composerSubmissionKind.value = "";
       }
     }
@@ -1178,7 +1137,7 @@ function useVibe64AutopilotView(props, emit, {
         draftSnapshot,
         messageId,
         optimistic,
-        payload,
+        payload: optimistic.payload || payload,
         questionTextSnapshot,
         submissionKind
       };
@@ -1202,7 +1161,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function optimisticMessageById(messageId = "") {
-    return optimisticMessages.value.find((message) => message.id === messageId) || null;
+    return messageDelivery.find(messageId);
   }
 
   async function cancelOptimisticMessage(messageId = "") {
@@ -1216,7 +1175,7 @@ function useVibe64AutopilotView(props, emit, {
     if (composerRetrySubmission.value?.messageId === messageId) {
       settleComposerRetry(composerRetrySubmission.value);
     }
-    optimisticMessages.value = optimisticMessages.value.filter((item) => item.id !== messageId);
+    messageDelivery.remove(messageId);
     return true;
   }
 
@@ -1225,13 +1184,9 @@ function useVibe64AutopilotView(props, emit, {
     if (!message || message.status !== "failed") {
       return false;
     }
-    const currentDraft = String(composerDraft.value || "");
-    composerDraft.value = !currentDraft
-      ? message.text
-      : currentDraft.startsWith(message.text)
-        ? currentDraft
-        : [message.text, currentDraft].filter(Boolean).join("\n\n");
-    optimisticMessages.value = optimisticMessages.value.filter((item) => item.id !== messageId);
+    const draft = messageDelivery.edit(messageId, String(composerDraft.value || ""));
+    if (draft === null) return false;
+    composerDraft.value = draft;
     return true;
   }
 
@@ -1243,7 +1198,7 @@ function useVibe64AutopilotView(props, emit, {
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    optimisticMessages.value = optimisticMessages.value.filter((item) => item.id !== messageId);
+    messageDelivery.remove(messageId);
     const accepted = await sendChatPayload(message.payload, {
       messageId,
       submissionKind: retry?.submissionKind || (agentSteerable.value ? "steer" : "send")
@@ -1687,30 +1642,9 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
 
-  const chatTurns = computed(() => {
-    const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
-    if (!optimisticMessages.value.length) {
-      return turns;
-    }
-    const optimistic = unmatchedOptimisticMessages(turns, optimisticMessages.value);
-    return [
-      ...turns,
-      ...optimistic.map((message) => ({
-        optimistic: {
-          error: message.error,
-          id: message.id,
-          status: message.status
-        },
-        turnId: message.id,
-        user: {
-          attachments: message.attachments,
-          at: message.createdAt,
-          role: "user",
-          text: message.text
-        }
-      }))
-    ];
-  });
+  const chatTurns = computed(() => messageDelivery.turns(
+    Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []
+  ));
   const emptyConversationWelcome = computed(() => (
     sessionId.value &&
     !props.conversationLog?.loading &&
@@ -2072,13 +2006,12 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkAttempt.value = null;
     saveWorkError.value = "";
     saveWorkFailure.value = null;
-    composerSending.value = false;
     composerSubmissionKind.value = "";
     interrupting.value = false;
     composerDraft.value = "";
     composerAttachments.value = [];
     composerRetrySubmission.value = null;
-    optimisticMessages.value = [];
+    messageDelivery.reset();
     questionAnswers.value = {};
     dismissedNumberedQuestionText.value = "";
     submittedQuestionText.value = "";
@@ -2109,17 +2042,14 @@ function useVibe64AutopilotView(props, emit, {
   });
 
   watch(() => props.conversationLog?.turns, (turns) => {
-    if (!optimisticMessages.value.length) {
+    if (!messageDelivery.state.messages.length) {
       return;
     }
-    const remaining = unmatchedOptimisticMessages(turns, optimisticMessages.value);
     const retry = composerRetrySubmission.value;
     if (retry && !unmatchedOptimisticMessages(turns, [retry.optimistic]).length) {
       settleComposerRetry(retry);
     }
-    if (remaining.length !== optimisticMessages.value.length) {
-      optimisticMessages.value = remaining;
-    }
+    messageDelivery.reconcile(turns);
   });
 
   watch(() => Boolean(

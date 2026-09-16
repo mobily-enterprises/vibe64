@@ -590,6 +590,10 @@ Temporary-chat restoration waits for confirmed assistant readiness on startup
 and reconnect, then retries any remaining assistant-operation contention
 automatically. This expected wait shows no error and needs no Try again.
 Genuine load failures remain visible and retryable.
+Sending a temporary message shows it immediately, including while its conversation
+is being created. Sending and assistant work have distinct status labels. Failed
+messages retain Resend, Edit and Cancel; retry preserves the original request
+and leaves a newer draft and its attachments intact.
 Temporary chats show who is typing in that same conversation, using the main
 chat's indicator. Switching chats, sending, or leaving clears that presence.
 Internal helpers retain their deliberate execution restrictions.

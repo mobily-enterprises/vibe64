@@ -107,9 +107,13 @@
       <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
         :messages="activeTask.messages"
-        :working="activeTask.busy"
+        :delivery="activeTask.delivery"
+        :working="activeTask.busy && !activeTask.delivery.state.sending"
         :scroll-key="activeTask.id"
         :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
+        @resend="sendTask(activeTask.id, { retryMessageId: $event })"
+        @cancel="temporary.cancelMessage(activeTask.id, $event)"
+        @edit="temporary.editMessage(activeTask.id, $event)"
       >
         <template #message-text="{ message }">
           <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
@@ -194,6 +198,7 @@
                   canStop: task.busy,
                   stopDisabled: !task.conversationId,
                   stopPending: stoppingTaskId === task.id,
+                  pending: task.delivery.state.sending,
                   submitAriaLabel: 'Send to temporary AI'
                 }"
                 @submit="sendTask(task.id)"
@@ -359,6 +364,9 @@ const temporary = useVibe64TemporaryAi({
 });
 const activeTask = temporary.activeTask;
 const activeTaskError = computed(() => {
+  if (activeTask.value?.delivery.state.messages.some((message) => (
+    message.status === "failed" && message.error === activeTask.value.error
+  ))) return "";
   if (props.connectionUnavailable && activeTask.value?.errorCode === "vibe64_agent_write_mode_busy") {
     return "";
   }
@@ -383,6 +391,7 @@ const typingPresence = useVibe64SessionTypingPresence({
 });
 const activityLabel = computed(() => {
   if (activeTaskRecoveryChecking.value) return "Checking Update…";
+  if (activeTask.value?.delivery.state.sending) return "Sending to assistant…";
   if (activeTask.value?.busy) return "AI is working…";
   return typingPresence.typingLabel.value;
 });
@@ -538,15 +547,19 @@ function setTaskSendButton(taskId = "", element = null) {
   taskSendButtons.delete(normalizedTaskId);
 }
 
-async function sendTask(taskId = "") {
+async function sendTask(taskId = "", options = {}) {
   const currentPrompt = taskPrompt(taskId);
   if (props.connectionUnavailable || !taskId || currentPrompt?.attachmentsCanSubmit?.() === false) {
     return;
   }
+  const task = temporary.tasks.value.find((task) => task.id === taskId);
+  const attachmentIds = options.retryMessageId
+    ? task.delivery.find(options.retryMessageId)?.payload.attachmentIds || []
+    : task.attachments.map((attachment) => attachment.attachmentId);
   typingPresence.submit();
-  const sent = await temporary.send(taskId);
+  const sent = await temporary.send(taskId, options);
   if (sent) {
-    currentPrompt?.clearAttachments?.();
+    currentPrompt?.clearAttachments?.({ attachmentIds });
   }
   return sent;
 }

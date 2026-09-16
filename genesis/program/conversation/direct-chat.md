@@ -508,6 +508,10 @@ a user message entered through its native terminal into Vibe64 History, that
 history item inherits the actor metadata from the latest Vibe64 UI message.
 This attribution is internal conversation data and is never sent to the model.
 
+Main and temporary chat share JSKIT's `createAssistantMessageDelivery` controller
+for optimistic entries, failed sends and canonical receipt matching. Vibe64
+supplies its native transport, admission policy and authoritative receipt watcher;
+the shared controller has no Vibe64 session or provider dependency.
 Message delivery and provider work remain visibly distinct. The composer shows
 the initial send while the message is being accepted, then reports the selected
 assistant as working for the rest of the active turn. The session tab and

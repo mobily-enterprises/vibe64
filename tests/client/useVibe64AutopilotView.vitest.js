@@ -1,9 +1,9 @@
+import { unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { describe, expect, it } from "vitest";
 
 import {
   chatMessagePayload,
-  createChatMessageId,
-  unmatchedOptimisticMessages
+  createChatMessageId
 } from "../../src/lib/vibe64ChatMessage.js";
 
 describe("direct chat messages", () => {

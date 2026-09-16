@@ -1408,17 +1408,21 @@ describe("useVibe64AutopilotView direct chat", () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
     const view = await createView({ sendAgentMessage });
+    view.currentAgentSettings.value.model = "original-model";
     view.composerDraft.value = "Try this change.";
 
     await expect(view.submitComposerMessage()).resolves.toBe(false);
     const failedTurn = view.chatTurns.value.at(-1);
     expect(failedTurn.optimistic.status).toBe("failed");
+    view.currentAgentSettings.value.model = "new-model";
 
     await expect(view.resendOptimisticMessage(failedTurn.optimistic.id)).resolves.toBe(true);
     expect(sendAgentMessage).toHaveBeenCalledTimes(2);
     expect(sendAgentMessage.mock.calls[1][0].messageId).toBe(
       sendAgentMessage.mock.calls[0][0].messageId
     );
+    expect(sendAgentMessage.mock.calls[1][0]).toEqual(sendAgentMessage.mock.calls[0][0]);
+    expect(sendAgentMessage.mock.calls[1][0].agentSettings.model).toBe("original-model");
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Try this change.");
   });
 
