@@ -19,6 +19,7 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
     return {
       async request(...args) {
         mocks.requests.push(args);
+        if (args[1]?.method === "PATCH") return { ok: true };
         const response = mocks.responses.shift();
         return typeof response === "function" ? response(...args) : response;
       }
@@ -27,9 +28,7 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
 }));
 
 async function flushPromises() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
 }
 
 function deferredPromise() {
@@ -102,7 +101,7 @@ describe("useVibe64TemporaryAi", () => {
     await expect(temporary.closeTask(task.id)).rejects.toThrow("Could not stop the AI.");
     expect(temporary.activeTask.value).toMatchObject({ id: task.id, busy: true });
     expect(temporary.open.value).toBe(true);
-    expect(mocks.requests.some(([, options]) => options.method === "DELETE")).toBe(false);
+    expect(mocks.requests.at(-1)[1].method).toBe("DELETE");
     mocks.responses.push({ ok: true, status: "inProgress", progressUpdates: [{ id: "later", text: "Still working." }] });
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.activeTask.value.messages.at(-1).progressUpdates).toEqual([{ id: "later", text: "Still working." }]);
@@ -110,7 +109,9 @@ describe("useVibe64TemporaryAi", () => {
 
   it("keeps a stopped repair visible when deletion fails and allows retry", async () => {
     const { task, temporary } = await runningTemporaryAi();
-    mocks.responses.push({ ok: true }, { ok: false, error: "Could not close the conversation." });
+    mocks.responses.push({ ok: true });
+    await temporary.stopTask(task.id);
+    mocks.responses.push({ ok: false, error: "Could not close the conversation." });
     await expect(temporary.closeTask(task.id)).rejects.toThrow("Could not close the conversation.");
     expect(temporary.activeTask.value).toMatchObject({ id: task.id, busy: false, status: "interrupted" });
     expect(temporary.open.value).toBe(true);
@@ -138,21 +139,20 @@ describe("useVibe64TemporaryAi", () => {
     expect(observer).not.toHaveBeenCalled();
   });
 
-  it("does not discard a repair while its start request is pending", async () => {
+  it("Close waits for pending creation and deletes it without sending a turn", async () => {
     const { task, temporary } = await temporaryAiWithDraft();
     const start = deferredPromise();
     mocks.responses.push(() => start.promise);
     const sending = temporary.send(task.id);
-    await expect(temporary.closeTask(task.id)).rejects.toThrow("still starting");
+    const closing = temporary.closeTask(task.id);
     expect(temporary.activeTask.value.id).toBe(task.id);
-    mocks.responses.push(
-      { ok: true, runId: "turn-1", status: "inProgress" },
-      { ok: true, status: "inProgress" }
-    );
+    mocks.responses.push({ ok: true, deleted: true });
     start.resolve({ ok: true, conversationId: "conversation-1" });
-    await sending;
-    await flushPromises();
-    expect(temporary.activeTask.value).toMatchObject({ busy: true, runId: "turn-1" });
+    await closing;
+    await expect(sending).resolves.toBe(false);
+    expect(temporary.tasks.value).toEqual([]);
+    expect(mocks.requests.some(([path]) => path.endsWith("/turns"))).toBe(false);
+    expect(mocks.requests.at(-1)[1].method).toBe("DELETE");
   });
 
   it("carries repair completion identity and blocks new AI edits while Update is checking", async () => {
@@ -920,7 +920,7 @@ describe("useVibe64TemporaryAi", () => {
     temporary.reportRecoveryOutcome(task.id, { status: "succeeded", message });
     temporary.reportRecoveryOutcome(task.id, { status: "succeeded", message });
     expect(temporary.activeTask.value.messages).toEqual([
-      { id: `recovery:${task.id}`, role: "system", text: message }
+      { id: `recovery_${task.id}`, role: "system", text: message }
     ]);
     temporary.closeWorkspace();
     temporary.showWorkspace();

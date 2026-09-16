@@ -159,6 +159,9 @@ export async function assistantStatusServer() {
     state,
     url: `http://127.0.0.1:${(http.address() as { port: number }).port}`,
     publishTurn,
+    presence(payload: Record<string, unknown>) {
+      io.emit("vibe64.session.presence.changed", payload);
+    },
     sessionChanged(reason: string, payload: Record<string, unknown> = {}) {
       session.revision += 1;
       io.emit("vibe64.session.changed", {

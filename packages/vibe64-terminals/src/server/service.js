@@ -1,4 +1,5 @@
 import { createCodexTerminalController } from "./codexTerminal.js";
+import { createSessionConversations } from "./sessionConversations.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import {
   createSessionAgentManager
@@ -1077,8 +1078,24 @@ function createService({
     const migration = await migrateLegacyAssistantSelections(admittedSessions, options);
     const sourceFailures = await ensureReconciledSessionSourcesSelfContained(migration.sessions);
     await resetKnownAgentSessionsBeforeReconcile();
+    const temporaryFailures = [];
+    for (const session of migration.sessions) {
+      try {
+        const restored = await sessionConversations.listTemporaryConversations(session.sessionId, options);
+        for (const conversation of restored.conversations) {
+          if (conversation.state === "closing") {
+            await sessionConversations.deleteTemporaryConversation(session.sessionId, { conversationId: conversation.conversationId }, options);
+          } else if (conversation.readError) {
+            throw new Error(conversation.error);
+          }
+        }
+      } catch (error) {
+        temporaryFailures.push({ sessionId: session.sessionId, error: error.message });
+      }
+    }
     const result = await sessionAgent.reconcileSessions(migration.sessions, options);
     return reconcileResultWithSourceFailures(result, [
+      ...temporaryFailures,
       ...migration.failed,
       ...sourceFailures
     ]);
@@ -1323,6 +1340,21 @@ function createService({
         projectContextRoot: context.projectContextRoot
       };
     }
+    for (const session of sessions) {
+      const temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
+      if (temporary.active) {
+        return {
+          dormancy,
+          dormant: false,
+          ok: true,
+          skipped: true,
+          reason: "active-temporary-conversation",
+          runtime,
+          projectSlug: context.projectSlug,
+          projectContextRoot: context.projectContextRoot
+        };
+      }
+    }
     vibe64SessionDebugLog("server.terminals.projectRuntime.dormantClose.start", {
       idleMs: dormancy.idleMs,
       lastActivityAt: dormancy.lastActivityAt,
@@ -1412,7 +1444,14 @@ function createService({
     return { execution, normalizedSessionId, runtime, session };
   }
 
+  const sessionConversations = createSessionConversations({
+    sessionAgent,
+    attachments: sessionAttachments,
+    runAgentWrite: runMainAgentWrite,
+    prepareAgentSkills: prepareAgentSkillsInsideAgentWrite
+  });
   const service = {
+    ...sessionConversations,
     configureAssistantRuntime(input = {}) {
       for (const name of [
         "codexConnectionStatus",

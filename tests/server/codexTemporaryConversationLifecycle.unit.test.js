@@ -280,7 +280,17 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
     async readThread(threadId) {
       calls.push(["read", threadId]);
       captures.onReadThread?.(threadId);
+      if (captures.persistentHistory) return { raw: { id: threadId, status: captures.persistentStatus || "idle", turns: captures.persistentHistory } };
       throw new Error("ephemeral threads do not support includeTurns");
+    },
+    async readThreadStatus(threadId) {
+      return this.readThread(threadId);
+    },
+    async readGoal() { return { goal: captures.persistentGoal || null }; },
+    async stopThreadForObservationLoss(threadId, turnId) {
+      calls.push(["stopObserved", threadId, turnId]);
+      captures.persistentStatus = "idle";
+      if (captures.persistentGoal) captures.persistentGoal.status = "paused";
     },
     async sendTurn(threadId, input, settings) {
       calls.push(["turn", threadId]);
@@ -9742,3 +9752,62 @@ for (const fallback of [false, true]) {
     });
   });
 }
+
+test("durable Codex chats keep native history and goal ownership across browser and controller lifetimes", async () => {
+  await withConversationController(async ({ captures, controller, subscribers, projectService, calls, session }) => {
+    captures.persistentHistory = [];
+    const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+    assert.notEqual(captures.threads.at(-1).ephemeral, true);
+    captures.onSendTurn = ({ settings }) => {
+      assert.ok(subscribers.size, "observation must exist before Send");
+      execFileSync("sh", ["-c", "printf 'Saved edit' > durable-edit.txt"], { cwd: settings.cwd });
+    };
+    await controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "input", message: "Edit files" });
+    captures.persistentHistory.push({ id: "turn-1", status: "completed", items: [
+      { id: "user", type: "userMessage", clientId: "input", content: [{ type: "inputText", text: "Edit files" }] },
+      { id: "thought", type: "reasoning", summary: ["Checking files"] },
+      { id: "answer", type: "agentMessage", phase: "final_answer", text: "Edited." }
+    ] });
+    captures.persistentStatus = "idle";
+    captures.persistentGoal = { status: "active", objective: "Long goal" };
+    let result = await controller.readConversation("session-1", { conversationId, persistent: true, messageId: "input" });
+    assert.equal(result.admitted, true);
+    assert.equal(result.status, "inProgress", "an active goal owns the interval between native turns");
+    assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+    assert.deepEqual(result.messages.map((message) => message.text), ["Checking files", "Edited."]);
+    assert.equal(calls.some(([method]) => method === "stopObserved"), false, "browser reads must not stop work");
+    captures.persistentHistory.push({ id: "turn-2", status: "completed", items: [
+      { id: "answer", type: "agentMessage", phase: "final_answer", text: "Edited again." }
+    ] });
+    result = await controller.readConversation("session-1", { conversationId, persistent: true });
+    assert.equal(new Set(result.messages.map((message) => message.id)).size, 3,
+      "provider item ids reused by another turn must remain distinct");
+    for (const message of result.messages) assert.match(message.id, /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u);
+    await controller.closeAllForSession("session-1");
+    assert.equal(captures.persistentGoal.status, "paused");
+    assert.deepEqual(captures.deletes, [], "runtime shutdown must preserve durable native chats");
+    const restarted = createRestartedController({ captures, projectService, subscribers: new Set() });
+    try {
+      result = await restarted.readConversation("session-1", { conversationId, persistent: true });
+      assert.equal(result.messages.at(-1).text, "Edited again.");
+      assert.equal(captures.turns.length, 1, "restoration must not send a new turn");
+      await restarted.stopConversation("session-1", { conversationId, persistent: true });
+      await restarted.deleteConversation("session-1", { conversationId, persistent: true });
+      assert.deepEqual(captures.deletes, [conversationId]);
+      assert.equal(await readFile(path.join(session.metadata.source_path, "durable-edit.txt"), "utf8"), "Saved edit");
+    } finally { await restarted.closeAllForSession("session-1"); }
+  });
+});
+
+test("a fresh Codex observer pauses an unobserved temporary goal before exposing recovery", async () => {
+  await withConversationController(async ({ captures, controller, calls }) => {
+    captures.persistentHistory = [];
+    captures.persistentGoal = { status: "active", objective: "Do work" };
+    captures.persistentStatus = "idle";
+    const restored = await controller.readConversation("session-1", { conversationId: "saved-native", persistent: true });
+    assert.equal(restored.status, "interrupted");
+    assert.equal(captures.persistentGoal.status, "paused");
+    assert.ok(calls.some(([method, id]) => method === "stopObserved" && id === "saved-native"));
+    assert.deepEqual(captures.turns, []);
+  });
+});

@@ -2031,8 +2031,14 @@ function createService({
             status: "unavailable"
           };
         }
+        const conversationId = text(input.conversationId);
+        if (conversationId) {
+          const conversation = await runtime.store.readSessionConversation(sessionId, conversationId);
+          if (!conversation) return { ok: true, status: "unavailable" };
+        }
         return sessionPresence.update({
           ...actor,
+          ...(conversationId ? { conversationId } : {}),
           originId: input.originId,
           projectSlug,
           sequence: input.sequence,

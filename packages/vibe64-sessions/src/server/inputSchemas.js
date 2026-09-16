@@ -237,6 +237,14 @@ const sessionPreviewStateInputValidator = patchSchema({
 });
 
 const sessionPresenceFields = {
+  conversationId: {
+    type: "string",
+    noTrim: false,
+    minLength: 1,
+    maxLength: 128,
+    pattern: /^[A-Za-z0-9_-]{1,128}$/u,
+    required: false
+  },
   originId: {
     type: "string",
     noTrim: false,

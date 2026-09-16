@@ -3337,7 +3337,11 @@ class CodexAppServerAgentProvider {
       const { thread } = await request("thread/read", { threadId, includeTurns: false });
       return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
     };
-    if (await readStatus() !== "idle") {
+    if (!["idle", "notLoaded"].includes(await readStatus())) {
+      if (!turnId) {
+        const page = await request("thread/turns/list", { threadId, limit: 1, sortDirection: "desc", itemsView: "summary" });
+        turnId = page.data?.[0]?.id;
+      }
       if (!turnId) throw new Error("Codex's running turn could not be identified.");
       await request("turn/interrupt", { threadId, turnId });
       if (await readStatus() !== "idle") throw new Error("Codex did not confirm that its turn stopped.");

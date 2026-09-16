@@ -7,6 +7,8 @@ import {
 import {
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
   ACTION_OPEN_OUTPUT_TARGET,
+  ACTION_LIST_TEMPORARY_CONVERSATIONS,
+  ACTION_UPDATE_TEMPORARY_CONVERSATION,
   ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
   ACTION_DELETE_TEMPORARY_CONVERSATION,
@@ -403,16 +405,27 @@ function registerRoutes(
     }
   });
 
+  routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations", {
+    actionId: ACTION_LIST_TEMPORARY_CONVERSATIONS,
+    buildInput: (request) => ({ sessionId: request.params.sessionId }),
+    summary: "Restore Vibe64 temporary conversations."
+  });
+  routes.actionRoute("PATCH", "/sessions/:sessionId/temporary-conversations/:conversationId", {
+    actionId: ACTION_UPDATE_TEMPORARY_CONVERSATION,
+    buildInput: (request) => ({ ...routes.requestBody(request), ...temporaryConversationInput(request) }),
+    summary: "Save a Vibe64 temporary conversation draft and settings."
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations", {
     actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
     buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
-    summary: "Create an ephemeral Vibe64 assistant conversation."
+    summary: "Create a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations/:conversationId", {
     actionId: ACTION_READ_TEMPORARY_CONVERSATION,
     buildInput: temporaryConversationInput,
-    summary: "Read an ephemeral Vibe64 assistant conversation."
+    summary: "Read a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", {
@@ -421,7 +434,7 @@ function registerRoutes(
       ...routes.requestBody(request),
       ...temporaryConversationInput(request)
     }),
-    summary: "Start a turn in an ephemeral Vibe64 assistant conversation."
+    summary: "Start a turn in a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations/:conversationId/stop", {
@@ -430,13 +443,13 @@ function registerRoutes(
       ...routes.requestBody(request),
       ...temporaryConversationInput(request)
     }),
-    summary: "Stop an ephemeral Vibe64 assistant conversation."
+    summary: "Stop a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("DELETE", "/sessions/:sessionId/temporary-conversations/:conversationId", {
     actionId: ACTION_DELETE_TEMPORARY_CONVERSATION,
     buildInput: temporaryConversationInput,
-    summary: "Delete an ephemeral Vibe64 assistant conversation."
+    summary: "Delete a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/prompt-hints", {

@@ -333,3 +333,38 @@ test("shared OpenCode process loss stops temporary-only sessions without writing
   assert.deepEqual(harness.userMessages, []);
   assert.deepEqual(harness.assistantMessages, []);
 });
+
+test("durable OpenCode history survives a controller restart without starting another model turn", async (t) => {
+  const harness = await controllerHarness({ helperResponse: "Saved answer" });
+  let restarted;
+  t.after(async () => {
+    await restarted?.closeAllForProject();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true });
+  await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "input", message: "Question" });
+  await harness.controller.waitForConversationTurn("session-1", { conversationId });
+  await harness.controller.closeAllForProject();
+  restarted = harness.createController();
+  const restored = await restarted.readConversation("session-1", { conversationId, persistent: true, messageId: "input" });
+  assert.equal(restored.status, "completed");
+  assert.equal(restored.admitted, true);
+  assert.equal(restored.messages.at(-1).text, "Saved answer");
+  assert.equal(harness.promptCalls.length, 1);
+  assert.deepEqual(harness.userMessages, []);
+  await restarted.stopConversation("session-1", { conversationId, persistent: true });
+  await restarted.deleteConversation("session-1", { conversationId, persistent: true });
+});
+
+test("durable OpenCode Close never kills main chat when an observed Stop is unconfirmed", async (t) => {
+  let attempts = 0;
+  const harness = await controllerHarness({ interrupt: async () => ++attempts > 1 });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true });
+  await assert.rejects(harness.controller.stopConversation("session-1", { conversationId, persistent: true }), {
+    code: "vibe64_opencode_interrupt_unconfirmed"
+  });
+  assert.equal(harness.processStops.length, 0);
+  assert.equal((await harness.controller.stopConversation("session-1", { conversationId, persistent: true })).stopped, true);
+});

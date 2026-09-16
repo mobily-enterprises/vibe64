@@ -15,6 +15,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const temporaryProvider = vi.hoisted(() => ({ value: null }));
+const presenceEvents = vi.hoisted(() => ({ receive: null }));
+
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent(options) { presenceEvents.receive = options.onEvent; },
+  useRealtimeSocket: () => ({ on() {}, off() {} })
+}));
 
 vi.mock("@/composables/useVibe64TemporaryAi.js", () => ({
   useVibe64TemporaryAi: () => temporaryProvider.value
@@ -135,6 +141,8 @@ function temporaryAiTestState(startResult) {
     closeWorkspace: vi.fn(),
     open,
     openTask: vi.fn(),
+    restoreError: ref(""),
+    restoreTasks: vi.fn(),
     reportRecoveryOutcome: vi.fn((taskId, outcome = {}) => {
       if (!tasks.value.some((task) => task.id === taskId)) {
         return false;
@@ -293,6 +301,45 @@ describe("Temporary AI recovery workspace accessibility", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses the shared status for typing only in the visible temporary conversation", async () => {
+    const temporary = temporaryAiTestState(deferred());
+    temporaryProvider.value = temporary;
+    temporary.tasks.value = ["one", "two"].map((id) => ({
+      id, conversationId: id, agentSettings: {}, busy: false, draft: "", error: "", messages: [], title: id
+    }));
+    temporary.activeTaskId.value = "one";
+    temporary.open.value = true;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, {
+      active: true, projectSlug: "beepollen", sessionId: "session-1", sessionsApiPath: "/api/vibe64/sessions"
+    });
+    const payload = {
+      actorId: "member", displayName: "John", originId: "other-tab", projectSlug: "beepollen",
+      sessionId: "session-1", conversationId: "two", typing: true, sequence: 1,
+      updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3000).toISOString()
+    };
+    try {
+      presenceEvents.receive({ payload });
+      await nextTick();
+      expect(nodeText(container)).not.toContain("John is typing");
+      presenceEvents.receive({ payload: { ...payload, conversationId: "one" } });
+      await nextTick();
+      expect(nodeText(container)).toContain("John is typing…");
+      temporary.selectTask("two");
+      await nextTick();
+      expect(nodeText(container)).not.toContain("John is typing");
+      presenceEvents.receive({ payload });
+      await nextTick();
+      expect(nodeText(container)).toContain("John is typing…");
+      temporary.tasks.value[1].busy = true;
+      await nextTick();
+      expect(nodeText(container)).toContain("AI is working…");
+      expect(nodeText(container)).not.toContain("John is typing");
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("preserves the main chat's two-update preview and resets completed progress to collapsed", async () => {
     const pending = ref(true);
     const messages = ref([1, 2, 3].map((id) => ({ id: String(id), text: `Progress ${id}.` })));
@@ -386,7 +433,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.tasks.value = [{
       agentSettings: {}, busy: false, draft: "", error: "", id: "repair",
       messages: [
-        { id: "recovery:repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
+        { id: "recovery_repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
       ],
       recoveryNotice: "Review the repair.",
       recoveryOperation: "update", recoveryOutcome: "succeeded",
@@ -444,8 +491,8 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.tasks.value = [{
       agentSettings: {}, busy: false, draft: "", error: "", id: "repair", runId: "latest",
       messages: [
-        { id: "recovery:earlier", role: "system", text: "Earlier repair verified." },
-        { id: "recovery:latest", role: "system", text: "Session updated." }
+        { id: "recovery_earlier", role: "system", text: "Earlier repair verified." },
+        { id: "recovery_latest", role: "system", text: "Session updated." }
       ],
       recoveryOperation: "update", recoveryOutcome: "succeeded", status: "completed",
       title: "Resolve Update"

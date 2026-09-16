@@ -328,6 +328,51 @@ test("typing presence trusts the authenticated request user and never accepts a 
   }]);
 });
 
+test("temporary typing presence requires a saved chat in the requested session", async () => {
+  const updates = [];
+  const lookups = [];
+  const service = createService({
+    project: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) { return { sessionId, status: "active" }; },
+          store: {
+            async readSessionConversation(sessionId, conversationId) {
+              lookups.push([sessionId, conversationId]);
+              return sessionId === "session-1" && conversationId === "saved-chat" ? { conversationId } : null;
+            }
+          }
+        };
+      }
+    },
+    sessionPresence: {
+      close() {},
+      async update(input) {
+        updates.push(input);
+        return { ok: true, status: "typing" };
+      }
+    },
+    terminals: {}
+  });
+  const action = createSessionActions({ sessions: service })
+    .find((candidate) => candidate.id === ACTION_UPDATE_SESSION_PRESENCE);
+  const context = { requestMeta: { request: { vibe64User: { username: "member", preferredName: "John" } } } };
+  for (const [sessionId, conversationId, status] of [
+    ["session-1", "saved-chat", "typing"],
+    ["session-1", "closed-chat", "unavailable"],
+    ["session-2", "saved-chat", "unavailable"]
+  ]) {
+    const validated = action.input.schema.create({ sessionId, conversationId, originId: "tab:member", sequence: 1, typing: true });
+    assert.deepEqual(validated.errors, {});
+    const result = await runWithProjectRequestContext({ slug: "beepollen" }, () => action.execute(validated.validatedObject, context));
+    assert.equal(result.status, status);
+  }
+  assert.equal(lookups.length, 3);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].conversationId, "saved-chat");
+  assert.equal(updates[0].actorId, "member");
+});
+
 test("assistant message action accepts attachment lease ids and display details", () => {
   const action = createSessionActions({ sessions: {} })
     .find((candidate) => candidate.id === ACTION_SEND_AGENT_MESSAGE);

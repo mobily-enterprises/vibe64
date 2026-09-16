@@ -222,6 +222,37 @@ describe("useVibe64SessionTypingPresence", () => {
     scope.stop();
   });
 
+  it("isolates Main and temporary chats and clears the old chat when switching", async () => {
+    const conversationId = ref("temporary-one");
+    const { presence, request, scope } = createPresence({ conversationId });
+    emitPresence(remotePayload());
+    emitPresence(remotePayload({ conversationId: "temporary-two" }));
+    expect(presence.typingLabel.value).toBe("");
+    emitPresence(remotePayload({ conversationId: "temporary-one" }));
+    expect(presence.typingLabel.value).toBe("John is typing…");
+
+    presence.noteInputActivity();
+    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-one", typing: true });
+    conversationId.value = "temporary-two";
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-one", typing: false });
+    expect(presence.typingLabel.value).toBe("");
+    emitPresence(remotePayload({ conversationId: "temporary-one", sequence: 3 }));
+    expect(presence.typingLabel.value).toBe("");
+    presence.noteInputActivity();
+    await vi.advanceTimersByTimeAsync(VIBE64_SESSION_PRESENCE_DEBOUNCE_MS);
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-two", typing: true });
+    scope.stop();
+    expect(request.mock.calls.at(-1)[1].body).toMatchObject({ conversationId: "temporary-two", typing: false });
+
+    const main = createPresence();
+    emitPresence(remotePayload({ conversationId: "temporary-one" }));
+    expect(main.presence.typingLabel.value).toBe("");
+    emitPresence(remotePayload());
+    expect(main.presence.typingLabel.value).toBe("John is typing…");
+    main.scope.stop();
+  });
+
   it("clears remote people on disconnect and renews local presence on reconnect", async () => {
     const { presence, request, scope } = createPresence();
     presence.noteInputActivity();

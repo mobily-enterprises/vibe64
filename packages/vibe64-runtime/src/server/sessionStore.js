@@ -886,6 +886,7 @@ function sessionPathsFromRoot({
     closingSessionsRoot,
     archivedSessionsRoot,
     conversationLogRoot: sessionRoot ? path.join(sessionRoot, "conversation-log") : "",
+    conversationsRoot: sessionRoot ? path.join(sessionRoot, "conversations") : "",
     currentSessionAliasPath,
     dropZoneRoot: sessionRoot ? path.join(sessionRoot, "drop-zone") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
@@ -2493,6 +2494,58 @@ function createVibe64SessionStore({
     };
   }
 
+  function conversationPaths(sessionPaths, conversationId) {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(String(conversationId || ""))) {
+      throw vibe64Error("Invalid assistant conversation id.", "vibe64_invalid_conversation_id");
+    }
+    const root = path.join(sessionPaths.conversationsRoot, conversationId);
+    return { ...sessionPaths, conversationRoot: root, conversationLogRoot: path.join(root, "conversation-log") };
+  }
+
+  async function readSessionConversation(sessionId, conversationId) {
+    return withReadableSessionPaths(sessionId, async (paths) => {
+      const text = await readTextIfExists(path.join(conversationPaths(paths, conversationId).conversationRoot, "conversation.json"));
+      return text ? JSON.parse(text) : null;
+    });
+  }
+
+  async function listSessionConversations(sessionId) {
+    return withReadableSessionPaths(sessionId, async (paths) => {
+      const entries = await readDirectoryEntries(paths.conversationsRoot);
+      const records = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+        const text = await readTextIfExists(path.join(conversationPaths(paths, entry.name).conversationRoot, "conversation.json"));
+        return text ? JSON.parse(text) : null;
+      }));
+      return records.filter(Boolean).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    });
+  }
+
+  async function writeSessionConversation(sessionId, conversationId, patch) {
+    return mutateSession(sessionId, async (paths) => {
+      const file = path.join(conversationPaths(paths, conversationId).conversationRoot, "conversation.json");
+      const text = await readTextIfExists(file);
+      const previous = text ? JSON.parse(text) : {};
+      const record = { ...previous, ...patch, conversationId,
+        createdAt: previous.createdAt || now().toISOString(), updatedAt: now().toISOString() };
+      await writeJsonFile(file, record);
+      return record;
+    });
+  }
+
+  async function deleteSessionConversation(sessionId, conversationId) {
+    return mutateSession(sessionId, (paths) => rm(conversationPaths(paths, conversationId).conversationRoot, {
+      recursive: true, force: true
+    }));
+  }
+
+  function withConversationTransaction(scope, callback, write) {
+    const sessionId = typeof scope === "string" ? scope : scope.sessionId;
+    const operation = write ? mutateSession : withReadableSessionPaths;
+    return operation(sessionId, (paths) => callback(conversationTransaction(
+      typeof scope === "string" ? paths : conversationPaths(paths, scope.conversationId)
+    )));
+  }
+
   const {
     readConversationLog,
     readConversationLogPage,
@@ -2506,8 +2559,8 @@ function createVibe64SessionStore({
   } = createConversationTranscript({
     clock: now,
     storage: {
-      read: (sessionId, callback) => withReadableSessionPaths(sessionId, (paths) => callback(conversationTransaction(paths))),
-      write: (sessionId, callback) => mutateSession(sessionId, (paths) => callback(conversationTransaction(paths)))
+      read: (scope, callback) => withConversationTransaction(scope, callback, false),
+      write: (scope, callback) => withConversationTransaction(scope, callback, true)
     }
   });
 
@@ -4632,6 +4685,10 @@ function createVibe64SessionStore({
     readBackgroundTask,
     readBackgroundTasks,
     readConversationLog,
+    readSessionConversation,
+    listSessionConversations,
+    writeSessionConversation,
+    deleteSessionConversation,
     skipIntegrationSetupRequest,
     completeIntegrationSetupRequest,
     claimIntegrationContinuation,

@@ -39,6 +39,7 @@ function normalizedRemotePresence(payload = {}, now = Date.now()) {
   const originId = presenceText(payload.originId);
   const projectSlug = presenceText(payload.projectSlug);
   const sessionId = presenceText(payload.sessionId);
+  const conversationId = presenceText(payload.conversationId);
   const sequence = Number(payload.sequence);
   const updatedAt = presenceTimestamp(payload.updatedAt);
   const expiresAt = presenceTimestamp(payload.expiresAt);
@@ -57,6 +58,7 @@ function normalizedRemotePresence(payload = {}, now = Date.now()) {
   const typing = payload.typing === true && expiresAt > now;
   return Object.freeze({
     actorId,
+    conversationId,
     displayName: Array.from(displayName).slice(0, 80).join("") || "Another user",
     expiresAt,
     originId,
@@ -78,6 +80,7 @@ function typingPresenceLabel(people = []) {
 
 function useVibe64SessionTypingPresence({
   active = true,
+  conversationId = "",
   projectSlug = "",
   sessionId = "",
   sessionsApiPath = ""
@@ -104,6 +107,7 @@ function useVibe64SessionTypingPresence({
 
   const currentContext = computed(() => Object.freeze({
     active: readRefOrGetterValue(active) !== false,
+    conversationId: presenceText(readRefOrGetterValue(conversationId)),
     projectSlug: presenceText(readRefOrGetterValue(projectSlug)),
     sessionId: presenceText(readRefOrGetterValue(sessionId)),
     sessionsApiPath: presenceText(readRefOrGetterValue(sessionsApiPath))
@@ -156,6 +160,7 @@ function useVibe64SessionTypingPresence({
     localSequence += 1;
     void request(sessionPresencePath(context.sessionsApiPath, context.sessionId), {
       body: {
+        ...(context.conversationId ? { conversationId: context.conversationId } : {}),
         originId,
         sequence: localSequence,
         typing: typing === true
@@ -249,7 +254,8 @@ function useVibe64SessionTypingPresence({
       !entry ||
       entry.originId === originId ||
       entry.projectSlug !== context.projectSlug ||
-      entry.sessionId !== context.sessionId
+      entry.sessionId !== context.sessionId ||
+      entry.conversationId !== context.conversationId
     ) {
       return;
     }
@@ -301,6 +307,7 @@ function useVibe64SessionTypingPresence({
 
   watch(() => [
     currentContext.value.active,
+    currentContext.value.conversationId,
     currentContext.value.projectSlug,
     currentContext.value.sessionId,
     currentContext.value.sessionsApiPath

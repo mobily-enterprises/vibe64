@@ -553,8 +553,16 @@ Codex users even when no weekly allowance is reported.
 Main conversation, temporary assistance, and database copilot share the same
 conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex and OpenCode, without separate permission
-modes. Their messages stay out of main History, and closing them preserves their
-project edits. Internal helpers retain their deliberate execution restrictions.
+modes. The server keeps their conversations, settings, drafts and sent attachments
+until explicit Close. Reloading or navigating away does not stop their work;
+returning restores the same chats. A server restart retains their history and
+stops any work whose observation was lost until an explicit Send or Resume.
+Their messages stay out of main History. Close stops the conversation and any
+active goal, confirms cleanup, and deletes its conversation data and attachments
+while preserving project edits. Failed cleanup remains visible and retryable.
+Temporary chats show who is typing in that same conversation, using the main
+chat's indicator. Switching chats, sending, or leaving clears that presence.
+Internal helpers retain their deliberate execution restrictions.
 
 If Codex or OpenCode loses its server-side observation of a conversation, Vibe64
 stops native work and verifies the stop. When the individual conversation cannot

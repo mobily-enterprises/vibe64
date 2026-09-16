@@ -2,7 +2,7 @@ import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/cod
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -199,12 +199,14 @@ test("native paginated conversations accept their first message and survive reco
     let cursor;
     const turns = [];
     do {
-      const page = await provider.listThreadTurns(threadId, { limit: 2, sortDirection: "desc", itemsView: "full", ...(cursor ? { cursor } : {}) });
+      const page = await provider.listThreadTurns(threadId, { limit: 2, sortDirection: "asc", itemsView: "full", ...(cursor ? { cursor } : {}) });
       assert.ok(page.data.length <= 2);
       turns.push(...page.data);
       cursor = page.nextCursor;
     } while (cursor);
     assert.equal(turns.length, 5);
+    assert.match(JSON.stringify(turns[0]), /Message 0:/u);
+    assert.match(JSON.stringify(turns.at(-1)), /Message 4:/u);
     assert.equal(new Set(turns.map((turn) => turn.id)).size, 5);
     assert.equal(protocolCalls.some(({ method, params }) => method === "thread/read" && params.includeTurns), false);
     assert.equal(notifications.some((event) => event.method === "item/completed" && event.params.item.type === "agentMessage"), true);
@@ -229,7 +231,7 @@ test("native paginated conversations accept their first message and survive reco
     const { goal } = await client.request("thread/goal/set", { threadId, objective: "Continue until explicitly stopped" });
     assert.equal(goal.status, "active");
     for (const active of running) {
-      await provider.stopThreadForObservationLoss(active.threadId, active.turnId);
+      await provider.stopThreadForObservationLoss(active.threadId, "");
       assert.equal((await provider.readThreadStatus(active.threadId)).raw.status.type, "idle");
     }
     const { goal: paused } = await provider.readGoal(threadId);
@@ -248,4 +250,12 @@ test("native paginated conversations accept their first message and survive reco
     assert.equal((await provider.readGoal(threadId)).goal.status, "paused");
     assert.equal(requestCount, 7, "read-only recovery must not start another model request");
   });
+  await t.test("explicit deletion removes the stopped conversation and preserves project edits", async () => {
+    const editedFile = path.join(workdir, "keep.txt");
+    await writeFile(editedFile, "Keep this project edit.");
+    await provider.deleteThread(threadId);
+    await assert.rejects(provider.readThreadStatus(threadId));
+    assert.equal(await readFile(editedFile, "utf8"), "Keep this project edit.");
+  });
+
 });

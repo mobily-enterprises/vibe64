@@ -1383,7 +1383,7 @@ function createCodexTerminalController({
   const codexAppServerEconomyThreadMutations = new Map();
   const codexAppServerEconomyTurnStarts = new Map();
   const codexAppServerEconomyThreadRestores = new Map();
-  const codexAppServerEphemeralConversations = new Map();
+  const codexAppServerConversations = new Map();
   const codexAppServerSessionContexts = new Map();
   const codexAppServerSessionClosures = new Map();
   const codexAppServerRenewalSessionClosures = new WeakSet();
@@ -2069,7 +2069,7 @@ function createCodexTerminalController({
     const managed = codexAppServerManagedSessions.get(providerKey);
     const targets = [{ sessionId, providerKey, provider, ...managed, projectContext: currentProjectRequestContext() }];
     const threads = new Map();
-    for (const entry of codexAppServerEphemeralConversations.get(codexTerminalNamespace(sessionId))?.values() || []) {
+    for (const entry of codexAppServerConversations.get(codexTerminalNamespace(sessionId))?.values() || []) {
       if (entry.provider !== provider) continue;
       threads.set(entry.conversationId, entry.runId);
       if (codexAppServerConversationTurnIsActive(entry.status)) entry.error = pendingMessage;
@@ -2148,7 +2148,7 @@ function createCodexTerminalController({
         } else {
           target.provider.observationFailure = null;
         }
-        for (const entry of codexAppServerEphemeralConversations.get(codexTerminalNamespace(target.sessionId))?.values() || []) {
+        for (const entry of codexAppServerConversations.get(codexTerminalNamespace(target.sessionId))?.values() || []) {
           if (entry.provider === target.provider) {
             entry.status = "interrupted";
             entry.error = message;
@@ -10198,8 +10198,8 @@ function createCodexTerminalController({
     };
   }
 
-  function codexAppServerEphemeralConversation(sessionId = "", conversationId = "") {
-    return codexAppServerEphemeralConversations.get(
+  function codexAppServerConversation(sessionId = "", conversationId = "") {
+    return codexAppServerConversations.get(
       codexTerminalNamespace(sessionId)
     )?.get(conversationId) || null;
   }
@@ -10979,6 +10979,100 @@ function createCodexTerminalController({
     return detachedCodexAppServerChatTurn(sessionId, input, options);
   }
 
+  function observeCodexConversation(sessionId, conversationId, provider) {
+    const key = codexTerminalNamespace(sessionId);
+    const conversations = codexAppServerConversations.get(key) || new Map();
+    let state = conversations.get(conversationId);
+    if (state?.provider === provider && state.unsubscribe) return state;
+    state?.unsubscribe?.();
+    state = { conversationId, provider, persistent: true, status: "ready", runId: "", error: "" };
+    state.unsubscribe = provider.subscribe((notification) => {
+      if (codexAppServerNotificationThreadId(notification) !== conversationId) return;
+      const turnId = codexAppServerNotificationTurnId(notification);
+      if (turnId) state.runId = turnId;
+      const status = codexAppServerNotificationTurnStatus(notification);
+      if (status) state.status = status;
+      if (notification.method === "thread/goal/updated") state.goal = notification.params.goal;
+      if (notification.method === "thread/goal/cleared") state.goal = null;
+    });
+    conversations.set(conversationId, state);
+    codexAppServerConversations.set(key, conversations);
+    return state;
+  }
+
+  async function readPersistentCodexConversation(sessionId, input, context) {
+    const conversationId = normalizeText(input.conversationId);
+    const previous = codexAppServerConversation(sessionId, conversationId);
+    const state = observeCodexConversation(sessionId, conversationId, context.provider);
+    let thread = await context.provider.readThreadStatus(conversationId);
+    const turns = [];
+    if (codexAppServerThreadRawValue(thread).historyMode === "paginated") {
+      let cursor;
+      do {
+        const page = await context.provider.listThreadTurns(conversationId, {
+          limit: 100, itemsView: "full", sortDirection: "asc", ...(cursor ? { cursor } : {})
+        });
+        turns.push(...page.data);
+        cursor = page.nextCursor;
+      } while (cursor);
+    } else {
+      thread = await context.provider.readThread(conversationId);
+      turns.push(...codexAppServerRenewalThreadTurns(thread));
+    }
+    const latest = turns.at(-1);
+    const runId = codexAppServerRenewalTurnId(latest || {});
+    let status = codexAppServerThreadStatus(thread);
+    if (!codexAppServerConversationTurnIsActive(status) && latest) status = codexAppServerRenewalTurnStatus(latest);
+    let goal = (await context.provider.readGoal(conversationId)).goal;
+    // A new backend observer cannot assume it saw the work preceding connection.
+    // Stop it once; browser reloads reuse the existing backend observer.
+    if (previous?.provider !== context.provider && (codexAppServerConversationTurnIsActive(status) || goal?.status === "active")) {
+      Object.assign(state, { runId, status: "inProgress", goal });
+      try {
+        await context.provider.stopThreadForObservationLoss(conversationId, "");
+      } catch (error) {
+        await context.provider.failObservation(error);
+        if (codexAppServerConversationTurnIsActive(state.status)) throw error;
+      }
+      status = "interrupted";
+      goal = (await context.provider.readGoal(conversationId)).goal;
+    }
+    if (goal?.status === "active") status = "inProgress";
+    Object.assign(state, { runId, status, goal });
+    const messages = [];
+    for (const turn of turns) {
+      const turnId = codexAppServerRenewalTurnId(turn);
+      const complete = !codexAppServerConversationTurnIsActive(codexAppServerRenewalTurnStatus(turn));
+      for (const item of codexAppServerRenewalTurnItems(turn)) {
+        let role;
+        if (item.type === "reasoning") role = "thinking";
+        else if (item.type === "agentMessage") role = item.phase === "commentary" ? "commentary" : "assistant";
+        else continue;
+        const text = role === "thinking" ? codexAppServerContentText(item.summary) : codexAppServerAssistantItemText(item);
+        if (text) messages.push({
+          id: codexAppServerConversationMessageId(conversationId, turnId, role, item.id || text),
+          role,
+          text,
+          complete
+        });
+      }
+    }
+    const latestText = latest ? codexAppServerRenewalTurnItems(latest)
+      .filter((item) => item.type === "agentMessage" && item.phase !== "commentary")
+      .map(codexAppServerAssistantItemText).filter(Boolean).join("\n\n") : "";
+    return {
+      conversationId,
+      ok: true,
+      status,
+      runId,
+      messages,
+      goal,
+      admitted: Boolean(input.messageId && turns.some((turn) => codexAppServerRenewalTurnClientIds(turn).includes(input.messageId))),
+      ...codexAppServerConversationResponse(latestText),
+      error: state.error || codexAppServerThreadError(thread)
+    };
+  }
+
   async function createCodexAppServerConversation(sessionId, input = {}, options = {}) {
     return vibe64Result(async () => {
       const context = await codexAppServerConversationContext(sessionId, input, options);
@@ -10994,9 +11088,10 @@ function createCodexTerminalController({
       if (!conversationId) {
         throw new Error("Codex app-server did not return a conversation id.");
       }
+      if (input.persistent === true) observeCodexConversation(sessionId, conversationId, context.provider);
       if (input.ephemeral === true) {
         const sessionKey = codexTerminalNamespace(sessionId);
-        const conversations = codexAppServerEphemeralConversations.get(sessionKey) || new Map();
+        const conversations = codexAppServerConversations.get(sessionKey) || new Map();
         conversations.set(conversationId, {
           conversationId,
           provider: context.provider,
@@ -11012,7 +11107,7 @@ function createCodexTerminalController({
           turnMetadata: null,
           watcher: null
         });
-        codexAppServerEphemeralConversations.set(sessionKey, conversations);
+        codexAppServerConversations.set(sessionKey, conversations);
       }
       return {
         conversationId,
@@ -11045,32 +11140,32 @@ function createCodexTerminalController({
       if (context.ok === false) {
         return context;
       }
-      const ephemeralConversation = codexAppServerEphemeralConversation(sessionId, conversationId);
-      if (input.ephemeral === true && !ephemeralConversation) {
+      const conversationState = codexAppServerConversation(sessionId, conversationId);
+      if (input.ephemeral === true && !conversationState) {
         return {
           ...codexAppServerExpiredEphemeralConversation(conversationId, input),
           code: "vibe64_temporary_conversation_expired",
           ok: false,
         };
       }
-      if (ephemeralConversation && messageId && ephemeralConversation.messageId === messageId) {
-        return codexAppServerEphemeralConversationSnapshot(ephemeralConversation);
+      if (conversationState && messageId && conversationState.messageId === messageId) {
+        return codexAppServerEphemeralConversationSnapshot(conversationState);
       }
-      if (ephemeralConversation && codexAppServerConversationTurnIsActive(ephemeralConversation.status)) {
+      if (conversationState && codexAppServerConversationTurnIsActive(conversationState.status)) {
         return {
           code: "vibe64_temporary_conversation_turn_active",
           error: "Temporary AI is already working on this conversation.",
           ok: false
         };
       }
-      if (!ephemeralConversation || context.assistantScope) {
+      if (!conversationState || input.persistent === true || context.assistantScope) {
         const threadSettings = await codexAppServerConversationThreadSettings(context);
         await context.provider.resumeThread(conversationId, threadSettings);
       }
       let watcher = null;
       let waitForResult = null;
-      if (ephemeralConversation) {
-        Object.assign(ephemeralConversation, {
+      if (conversationState && !input.persistent) {
+        Object.assign(conversationState, {
           error: "",
           message: "",
           messageId,
@@ -11085,7 +11180,7 @@ function createCodexTerminalController({
           includeThreadHistory: false,
           timeoutMs: 0,
           onEvent(classification = {}) {
-            const current = codexAppServerEphemeralConversation(sessionId, conversationId);
+            const current = codexAppServerConversation(sessionId, conversationId);
             if (!current || (classification.turnId && current.runId && classification.turnId !== current.runId)) {
               return;
             }
@@ -11096,12 +11191,13 @@ function createCodexTerminalController({
         });
         waitForResult = watcher.wait();
         void waitForResult.catch(() => null);
-        ephemeralConversation.watcher = watcher;
+        conversationState.watcher = watcher;
       }
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
           agentSettings: context.agentSettings,
+          clientUserMessageId: input.messageId,
           outputSchema: input.outputSchema,
           prompt,
           attachments: input.attachments,
@@ -11113,8 +11209,8 @@ function createCodexTerminalController({
       } catch (error) {
         watcher?.failNow(error);
         await waitForResult?.catch(() => null);
-        if (ephemeralConversation) {
-          Object.assign(ephemeralConversation, {
+        if (conversationState) {
+          Object.assign(conversationState, {
             error: errorMessage(error, "Temporary AI message could not be sent."),
             status: "failed",
             watcher: null
@@ -11129,8 +11225,8 @@ function createCodexTerminalController({
         await waitForResult?.catch(() => null);
         throw new Error("Codex app-server accepted a conversation turn without returning its id.");
       }
-      if (ephemeralConversation) {
-        Object.assign(ephemeralConversation, {
+      if (conversationState && !input.persistent) {
+        Object.assign(conversationState, {
           runId,
           status: codexAppServerTurnStatusIsSuccessfulComplete(status) ? status : "inProgress"
         });
@@ -11141,7 +11237,7 @@ function createCodexTerminalController({
           await watcher.completeNow(status);
         }
         void waitForResult.then((result = {}) => {
-          const current = codexAppServerEphemeralConversation(sessionId, conversationId);
+          const current = codexAppServerConversation(sessionId, conversationId);
           if (!current || current.runId !== runId) {
             return;
           }
@@ -11153,7 +11249,7 @@ function createCodexTerminalController({
             watcher: null
           });
         }).catch((error) => {
-          const current = codexAppServerEphemeralConversation(sessionId, conversationId);
+          const current = codexAppServerConversation(sessionId, conversationId);
           if (!current || current.runId !== runId || current.status === "interrupted") {
             return;
           }
@@ -11164,13 +11260,8 @@ function createCodexTerminalController({
           });
         });
       }
-      return {
-        conversationId,
-        messageId,
-        ok: true,
-        runId,
-        status
-      };
+      if (input.persistent && conversationState) Object.assign(conversationState, { runId, status, messageId });
+      return { conversationId, messageId, ok: true, runId, status };
     });
     if (deliveryKey) {
       codexAppServerConversationTurnStarts.set(deliveryKey, start);
@@ -11194,9 +11285,9 @@ function createCodexTerminalController({
           ok: false
         };
       }
-      const ephemeralConversation = codexAppServerEphemeralConversation(sessionId, conversationId);
-      if (ephemeralConversation) {
-        return codexAppServerEphemeralConversationSnapshot(ephemeralConversation);
+      const conversationState = codexAppServerConversation(sessionId, conversationId);
+      if (conversationState && !input.persistent) {
+        return codexAppServerEphemeralConversationSnapshot(conversationState);
       }
       if (input.ephemeral === true) {
         return codexAppServerExpiredEphemeralConversation(conversationId, input);
@@ -11205,6 +11296,7 @@ function createCodexTerminalController({
       if (context.ok === false) {
         return context;
       }
+      if (input.persistent) return readPersistentCodexConversation(sessionId, input, context);
       const thread = await context.provider.readThread(conversationId);
       const runId = normalizeText(input.runId) || codexAppServerThreadTurnId(thread);
       const status = codexAppServerThreadStatus(thread);
@@ -11274,15 +11366,15 @@ function createCodexTerminalController({
 
   async function stopCodexAppServerConversation(sessionId, input = {}, options = {}) {
     const conversationId = normalizeText(input.conversationId);
-    const ephemeralConversation = codexAppServerEphemeralConversation(sessionId, conversationId);
-    if (ephemeralConversation?.provider.observationFailure) {
-      await ephemeralConversation.provider.failObservation(ephemeralConversation.provider.observationFailure);
-      if (codexAppServerConversationTurnIsActive(ephemeralConversation.status)) {
+    const conversationState = codexAppServerConversation(sessionId, conversationId);
+    if (conversationState?.provider.observationFailure) {
+      await conversationState.provider.failObservation(conversationState.provider.observationFailure);
+      if (codexAppServerConversationTurnIsActive(conversationState.status)) {
         throw new Error("Codex's stop is not yet confirmed.");
       }
-      return { conversationId, ok: true, runId: ephemeralConversation.runId, status: "interrupted" };
+      return { conversationId, ok: true, runId: conversationState.runId, status: "interrupted" };
     }
-    if (input.ephemeral === true && !ephemeralConversation) {
+    if (input.ephemeral === true && !conversationState) {
       return {
         conversationExpired: true,
         conversationId,
@@ -11291,14 +11383,29 @@ function createCodexTerminalController({
         status: "interrupted"
       };
     }
+    if (input.persistent) {
+      const context = await codexAppServerConversationContext(sessionId, input, options);
+      if (context.ok === false) return context;
+      try {
+        await context.provider.readThreadStatus(conversationId);
+        await context.provider.stopThreadForObservationLoss(conversationId, "");
+      } catch (error) {
+        if (!codexAppServerThreadIsMissing(error, conversationId) || error.message.toLowerCase().startsWith("thread not loaded:")) throw error;
+      }
+      if (conversationState) {
+        conversationState.status = "interrupted";
+        if (conversationState.goal?.status === "active") conversationState.goal = { ...conversationState.goal, status: "paused" };
+      }
+      return { ok: true, conversationId, status: "interrupted" };
+    }
     const result = await interruptDetachedCodexAppServerChatTurn(sessionId, {
       threadId: input.conversationId,
       turnId: input.runId
     }, options);
-    if (result.ok !== false && ephemeralConversation) {
-      ephemeralConversation.status = "interrupted";
-      ephemeralConversation.watcher?.failNow(new Error("Temporary AI turn was stopped."));
-      ephemeralConversation.watcher = null;
+    if (result.ok !== false && conversationState) {
+      conversationState.status = "interrupted";
+      conversationState.watcher?.failNow(new Error("Temporary AI turn was stopped."));
+      conversationState.watcher = null;
     }
     return {
       ...result,
@@ -11310,7 +11417,7 @@ function createCodexTerminalController({
   async function deleteCodexAppServerConversation(sessionId, input = {}, options = {}) {
     const conversationId = normalizeText(input.conversationId);
     const sessionKey = codexTerminalNamespace(sessionId);
-    const conversations = codexAppServerEphemeralConversations.get(sessionKey);
+    const conversations = codexAppServerConversations.get(sessionKey);
     const conversationExpired = input.ephemeral === true && !conversations?.has(conversationId);
     let result;
     if (conversationExpired) {
@@ -11325,9 +11432,10 @@ function createCodexTerminalController({
         return { ...result, conversationId };
       }
       conversations?.get(conversationId)?.watcher?.failNow(new Error("Temporary AI conversation was closed."));
+      conversations?.get(conversationId)?.unsubscribe?.();
       conversations?.delete(conversationId);
       if (conversations?.size === 0) {
-        codexAppServerEphemeralConversations.delete(sessionKey);
+        codexAppServerConversations.delete(sessionKey);
       }
     }
     let providerExit = null;
@@ -11354,13 +11462,17 @@ function createCodexTerminalController({
     };
   }
 
-  async function cleanupCodexAppServerEphemeralConversations(sessionId) {
-    const sessionKey = codexTerminalNamespace(sessionId);
-    const conversationIds = [...(codexAppServerEphemeralConversations.get(sessionKey)?.keys() || [])];
-    for (const conversationId of conversationIds) {
-      await deleteCodexAppServerConversation(sessionId, { conversationId }).catch(() => null);
+  async function closeCodexAppServerConversations(sessionId) {
+    const key = codexTerminalNamespace(sessionId);
+    for (const state of codexAppServerConversations.get(key)?.values() || []) {
+      if (state.persistent) {
+        await stopCodexAppServerConversation(sessionId, { conversationId: state.conversationId, persistent: true });
+        state.unsubscribe?.();
+      } else {
+        await deleteCodexAppServerConversation(sessionId, { conversationId: state.conversationId }).catch(() => null);
+      }
     }
-    codexAppServerEphemeralConversations.delete(sessionKey);
+    codexAppServerConversations.delete(key);
   }
 
   async function startAndRememberCodexAppServerEconomyThread({
@@ -12868,7 +12980,7 @@ function createCodexTerminalController({
           });
           throw error;
         }
-        await cleanupCodexAppServerEphemeralConversations(normalizedSessionId);
+        await closeCodexAppServerConversations(normalizedSessionId);
         try {
           unsubscribeResult = await unsubscribeCodexAppServerThreadForSession(
             normalizedSessionId,
@@ -13041,11 +13153,12 @@ function createCodexTerminalController({
     },
 
     hasActiveTemporaryConversation(sessionId) {
-      const conversations = codexAppServerEphemeralConversations.get(
+      const conversations = codexAppServerConversations.get(
         codexTerminalNamespace(sessionId)
       );
       return Boolean(conversations && [...conversations.values()].some((conversation) => (
-        codexAppServerConversationTurnIsActive(conversation.status)
+        codexAppServerConversationTurnIsActive(conversation.status) ||
+        conversation.goal?.status === "active" && !conversation.provider.observationFailure
       )));
     },
 
@@ -13442,11 +13555,11 @@ function createCodexTerminalController({
           await restoreCodexAppServerEconomyThreads({ runtime })
         );
         const sessionNamespacePrefix = codexTerminalNamespace("");
-        for (const sessionKey of [...codexAppServerEphemeralConversations.keys()]) {
+        for (const sessionKey of [...codexAppServerConversations.keys()]) {
           if (!sessionKey.startsWith(sessionNamespacePrefix)) {
             continue;
           }
-          await cleanupCodexAppServerEphemeralConversations(
+          await closeCodexAppServerConversations(
             sessionKey.slice(sessionNamespacePrefix.length)
           );
         }

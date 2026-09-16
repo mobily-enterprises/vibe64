@@ -40,6 +40,8 @@ Owns isolated working sessions, their lifecycle and recoverable workspace histor
 Owns direct conversations and temporary assistance with connected coding agents.
 Consumes JSKIT conversation presentation, provider primitives and transcript
 policy; Vibe64 owns the adapters, filesystem history, access and execution.
+Temporary conversation discovery and explicit-close cleanup belong here too;
+these chats survive view removal and stay separate from main History.
 
 ### Program
 

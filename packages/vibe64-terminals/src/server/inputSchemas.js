@@ -67,7 +67,17 @@ const agentAttachmentDeleteActionInputValidator = validator({
   attachmentId: requiredText,
   sessionId: sessionIdField
 });
+const temporaryConversationListInputValidator = validator({ sessionId: sessionIdField });
+const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
+const temporaryConversationUpdateInputValidator = validator({
+  conversationId: requiredText, sessionId: sessionIdField,
+  agentSettings: { type: "object", additionalProperties: true, required: false },
+  presentation: temporaryConversationPresentationField,
+  attachmentIds: attachmentIdsField
+});
 const temporaryConversationCreateActionInputValidator = validator({
+  conversationId: optionalText,
+  presentation: temporaryConversationPresentationField,
   agentSettings: {
     type: "object",
     additionalProperties: true,
@@ -88,7 +98,9 @@ const temporaryConversationTurnActionInputValidator = validator({
   },
   attachmentIds: attachmentIdsField,
   conversationId: requiredText,
-  messageId: optionalText,
+  messageId: requiredText,
+  displayMessage: optionalText,
+  presentation: temporaryConversationPresentationField,
   message: requiredText,
   outputSchema: { type: "object", additionalProperties: true, required: false },
   promptLabel: optionalText,
@@ -182,6 +194,8 @@ export {
   sessionPromptHintsActionInputValidator,
   terminalControlKeyInputValidator,
   terminalControlTextInputValidator,
+  temporaryConversationListInputValidator,
+  temporaryConversationUpdateInputValidator,
   temporaryConversationCreateActionInputValidator,
   temporaryConversationInputValidator,
   temporaryConversationStopActionInputValidator,

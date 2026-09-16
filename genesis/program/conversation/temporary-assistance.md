@@ -14,6 +14,11 @@ session history.
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-terminals/src/server/codexEconomyThreadLedger.js`
 - `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/sessionConversations.js`
+- `packages/vibe64-terminals/src/server/sessionAttachments.js`
+- `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-sessions/src/server/sessionPresence.js`
+- `src/composables/useVibe64SessionTypingPresence.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
@@ -36,26 +41,41 @@ as main chat in both Codex and OpenCode. They use normal execution settings and
 the same session write coordination and skill preparation. There is no temporary
 permission mode or R/O–R/W toggle. Preview screenshots and console/network
 diagnostics attach to the selected conversation through the normal upload path.
-Only conversation persistence and cleanup differ. Closing a task stops its live
-turn, deletes its provider conversation and exact uploaded attachments, and
-removes its browser-local state. Tasks are not restored after reload and never
-appear in session History.
-Switching between project sessions preserves each session's selected temporary
-chat, progress, and reply draft. Selecting Main chat explicitly keeps Main chat
-selected when returning to that session.
-Removing the project view retires its pending sends and progress readers. Late
-replies cannot restart polling, report a repair completion, or show obsolete
-Stop or Close errors. Failures remain visible and retryable while the view is
-still mounted. If conversation creation finishes after departure, the browser
-requests deletion of that exact
-conversation without starting a turn. Departure cleanup is best-effort; it does
-not provide the confirmed Stop and deletion guarantee of explicitly closing a
-task. Hiding a retained session or selecting Main chat does not retire its work.
+Only conversation persistence and cleanup differ. The server stores each chat's
+identity, settings, draft and repair state below its session's `conversations/`
+directory. Each chat uses the existing JSKIT transcript policy with a separate
+filesystem scope and a persisted native provider conversation. Codex user-facing
+chats are not native ephemeral threads. They never appear in main History.
+The collection GET restores open chats; POST creates an idempotently named draft;
+PATCH saves presentation and settings. First Send creates the native conversation
+under the session write coordinator. Accepted message identities prevent a retry
+from sending the same work again. Native history reconciles replies completed
+while the browser was absent; incomplete replies remain visible as they arrive.
+Typing presence reuses the session presence endpoint, realtime event, debounce,
+heartbeat and expiry with the saved conversation ID as an additional scope.
+The server takes the actor from authentication and checks that the chat belongs
+to this session. Main chat and other temporary chats ignore its typing events.
+The shared composer status displays the person's name, or a count for several
+people, without receiving draft text through presence. Blur, Send, switching
+chats, hiding the workspace and disposal clear the old presence; reconnect
+refreshes it only while typing remains active. This indicator does not lock or
+merge simultaneous draft edits.
+Switching sessions preserves each session's selected temporary chat and draft.
+Reloading or removing the project view stops only its local readers. It sends no
+Stop or Delete request. Late responses cannot restart a retired reader or report
+an obsolete repair result. Server startup restores discovery and finishes recorded
+Close attempts. Work discovered without its original backend observer is stopped;
+restoration does not send or resume a turn. Active temporary work and Codex goals
+also prevent dormant-project cleanup, just like main chat.
+Explicit Close is one server operation: retain the closing record, pause any goal,
+confirm native work stopped, delete the native conversation, remove its owned
+attachments, then delete the record and transcript. A failure retains the record
+and offers the same Close again, including after reload. File edits remain.
 Closing an incomplete Update repair requires confirmation that partial edits
 will remain and may still need repair. Closing waits for Stop and provider
 deletion to succeed; a failure leaves the chat available for retry, and a failed
-Stop resumes progress polling. Startup and Update verification must finish
-before their task can be closed. Stop does not reset source files, HEAD, or the
+Stop resumes progress polling. Update verification must finish before its repair can be closed. A Close during
+conversation creation waits for creation and prevents a pending Send. Stop does not reset source files, HEAD, or the
 index, and a late response cannot turn a cancelled repair into an automatic
 Update. Partial application edits remain subject to review; cancellation does
 not claim the application is repaired.
@@ -67,16 +87,17 @@ existing read loop. It does not report completion or send another turn. Only a
 confirmed terminal state, expired conversation, or successful Stop releases the
 composer for another send.
 Task attachments use the shared upload queue, text references and preview/download
-dialog. They retain the temporary upload lease and exact-file cleanup when the
-task closes; they are not copied into the durable main conversation's artifacts.
-Both assistant adapters receive file descriptors resolved by the shared
-attachment service.
+dialog. The shared attachment service retains sent and saved draft files under
+an explicit conversation owner. Closing removes only that owner's files and
+uploads; it cannot delete main-chat attachments. Restored draft attachments appear
+beside the composer and can be removed before Send. Both adapters receive trusted
+file descriptors from the same attachment service.
 Assistant replies use the same formatted text presentation as normal chat,
 including lists, bold text, code, and links. User-authored text stays literal.
 Raw HTML remains text, and executable or data-URL links are not made clickable.
 Main and temporary chats use the same JSKIT conversation element, transcript,
 composer and collapsible progress components. Each temporary task retains its
-app-owned draft, uploads, settings and provider cleanup. Temporary
+server-owned draft, attachments, settings and provider cleanup. Temporary
 progress starts collapsed inside its assistant message; expanding it uses the
 scrollable transcript. The fixed status above the composer uses normal chat's
 shared plain status component and says “AI is working…”. The transcript has no

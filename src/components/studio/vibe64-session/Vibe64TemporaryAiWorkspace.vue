@@ -69,37 +69,41 @@
       <span class="vibe64-temporary-ai__tabs-spacer" />
     </nav>
 
-    <template v-if="activeTask">
-      <div class="vibe64-temporary-ai__recovery-row">
-        <div
-          v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
-          aria-live="polite"
-          class="vibe64-temporary-ai__recovery"
-          data-temporary-ai-recovery
-          role="status"
-        >
-          <div class="vibe64-temporary-ai__recovery-summary">
-            <strong>{{ activeTaskRecoveryTitle }}</strong>
-            <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
-              <summary>Details</summary>
-              <p>{{ activeTaskRecoveryStatus }}</p>
-            </details>
-          </div>
-          <v-btn
-            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
-            class="vibe64-temporary-ai__check-update"
-            data-temporary-ai-check-update
-            :disabled="props.updateDisabled || taskInputDisabled(activeTask)"
-            :loading="activeTaskRecoveryChecking"
-            :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
-            size="small"
-            variant="tonal"
-            @click="emit('check-update', activeTask)"
-          >
-            Check Update
-          </v-btn>
+    <div class="vibe64-temporary-ai__recovery-row">
+      <v-alert v-if="temporary.restoreError.value" type="error" density="compact">
+        {{ temporary.restoreError.value }}
+        <v-btn size="small" @click="temporary.restoreTasks()">Try again</v-btn>
+      </v-alert>
+      <div
+        v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
+        aria-live="polite"
+        class="vibe64-temporary-ai__recovery"
+        data-temporary-ai-recovery
+        role="status"
+      >
+        <div class="vibe64-temporary-ai__recovery-summary">
+          <strong>{{ activeTaskRecoveryTitle }}</strong>
+          <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
+            <summary>Details</summary>
+            <p>{{ activeTaskRecoveryStatus }}</p>
+          </details>
         </div>
+        <v-btn
+          v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
+          class="vibe64-temporary-ai__check-update"
+          data-temporary-ai-check-update
+          :disabled="props.updateDisabled || taskInputDisabled(activeTask)"
+          :loading="activeTaskRecoveryChecking"
+          :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
+          size="small"
+          variant="tonal"
+          @click="emit('check-update', activeTask)"
+        >
+          Check Update
+        </v-btn>
       </div>
+    </div>
+    <template v-if="activeTask">
       <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
         :messages="activeTask.messages"
@@ -126,7 +130,7 @@
         </template>
         <template #hints>
           <div
-            v-if="activeTaskError || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
+            v-if="activeTaskError || actionErrors[activeTask.id] || activityLabel"
             class="vibe64-temporary-ai__feedback"
           >
             <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
@@ -144,13 +148,22 @@
               <template v-else>{{ activeTaskError }}</template>
             </div>
             <AssistantComposerSupport
-              v-if="activeTask.busy || activeTaskRecoveryChecking"
+              v-if="activityLabel"
               class="vibe64-temporary-ai__activity"
-              :activity="{ label: activeTaskRecoveryChecking ? 'Checking Update…' : 'AI is working…' }"
+              :activity="{ label: activityLabel }"
             />
           </div>
         </template>
         <template #composer>
+          <div v-if="activeTask.restoredAttachments?.length" aria-label="Saved draft attachments">
+            <v-chip
+              v-for="attachment in activeTask.restoredAttachments" :key="attachment.attachmentId"
+              closable :disabled="taskInputDisabled(activeTask)"
+              @click:close="temporary.removeRestoredAttachment(activeTask.id, attachment.attachmentId)"
+            >
+              {{ attachment.reference }} {{ attachment.fileName }}
+            </v-chip>
+          </div>
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
             v-show="task.id === activeTask.id"
@@ -167,6 +180,8 @@
             :session-id="props.sessionId"
             tab-to-submit
             @attachments-change="temporary.updateAttachments(task.id, $event)"
+            @blur="typingPresence.blur()"
+            @input-activity="typingPresence.noteInputActivity()"
             @submit="sendTask(task.id)"
             @tab-to-submit="focusSendButton"
             @update:model-value="temporary.updateDraft(task.id, $event)"
@@ -177,7 +192,7 @@
                 :state="{
                   canSend: !props.connectionUnavailable && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit,
                   canStop: task.busy,
-                  stopDisabled: task.status === 'starting',
+                  stopDisabled: !task.conversationId,
                   stopPending: stoppingTaskId === task.id,
                   submitAriaLabel: 'Send to temporary AI'
                 }"
@@ -280,11 +295,13 @@ import {
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
   connectionUnavailable: Boolean,
+  projectSlug: { type: String, default: "" },
   previewAttachmentState: { type: Object, default: () => ({}) },
   repositoryBusy: Boolean,
   updateDisabled: Boolean,
@@ -354,11 +371,24 @@ const stoppingTaskId = ref("");
 const actionErrors = ref({});
 const taskToClose = computed(() => temporary.tasks.value.find((task) => task.id === closeTaskId.value));
 const activeTaskRecoveryChecking = computed(() => activeTask.value?.recoveryOutcome === "checking");
+const typingPresence = useVibe64SessionTypingPresence({
+  active: computed(() => props.active && temporary.open.value && Boolean(activeTask.value?.conversationId) &&
+    !taskInputDisabled(activeTask.value) && !closingTask.value),
+  conversationId: computed(() => activeTask.value?.conversationId || ""),
+  projectSlug: computed(() => props.projectSlug),
+  sessionId: computed(() => props.sessionId),
+  sessionsApiPath: resolvedSessionsApiPath
+});
+const activityLabel = computed(() => {
+  if (activeTaskRecoveryChecking.value) return "Checking Update…";
+  if (activeTask.value?.busy) return "AI is working…";
+  return typingPresence.typingLabel.value;
+});
 const activeTaskRecoveryVerified = computed(() => (
   activeTask.value?.recoveryOutcome === "succeeded"
 ));
 const recoveryMessageId = computed(() => activeTaskRecoveryVerified.value
-  ? `recovery:${activeTask.value.runId || activeTask.value.id}`
+  ? `recovery_${activeTask.value.runId || activeTask.value.id}`
   : "");
 const updateCompletionText = computed(() => {
   if (activeTask.value?.recoveryOperation !== "update") return "";
@@ -475,7 +505,7 @@ async function stopTask(taskId) {
 }
 
 function taskInputDisabled(task) {
-  return props.repositoryBusy || task.busy || task.recoveryOutcome === "checking";
+  return props.repositoryBusy || task.busy || task.status === "closing" || task.recoveryOutcome === "checking";
 }
 
 function taskPrompt(taskId = "") {
@@ -511,6 +541,7 @@ async function sendTask(taskId = "") {
   if (props.connectionUnavailable || !taskId || currentPrompt?.attachmentsCanSubmit?.() === false) {
     return;
   }
+  typingPresence.submit();
   const sent = await temporary.send(taskId);
   if (sent) {
     currentPrompt?.clearAttachments?.();

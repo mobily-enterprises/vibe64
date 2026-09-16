@@ -401,6 +401,7 @@ function createSessionActions({ sessions } = {}) {
       idempotency: "domain_native",
       input: sessionPresenceActionInputValidator,
       execute: (input, context) => sessions.updateSessionPresence(input.sessionId, {
+        ...(input.conversationId ? { conversationId: input.conversationId } : {}),
         originId: input.originId,
         sequence: input.sequence,
         typing: input.typing,

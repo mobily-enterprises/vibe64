@@ -2101,13 +2101,14 @@ function createOpenCodeTerminalController({
       );
     }
     const key = `${context.key}\0${conversationId}`;
-    return {
-      context,
-      conversationId,
-      key,
-      tracked: temporaryConversations.get(key) || null,
-      target: temporaryConversations.get(key)?.target || processes.get(context.key) || null
-    };
+    let tracked = temporaryConversations.get(key) || null;
+    let target = tracked?.target || processes.get(context.key) || null;
+    if (input.persistent && (!target || target.abortController.signal.aborted)) {
+      temporaryConversations.delete(key);
+      tracked = null;
+      target = await ensureProcess(context, options);
+    }
+    return { context, conversationId, key, tracked, target };
   }
 
   function openCodeReadUnavailable() {
@@ -2539,7 +2540,11 @@ function createOpenCodeTerminalController({
         await writeSessionEnvironmentRegistry();
         return { conversationId, deleted: false, ok: true };
       }
-      await target.server.client.deleteSession(conversationId);
+      try {
+        await target.server.client.deleteSession(conversationId);
+      } catch (error) {
+        if (!input.persistent || error.statusCode !== 404) throw error;
+      }
       if (tracked) {
         tracked.interrupted = true;
         tracked.abortController?.abort();
@@ -2739,7 +2744,35 @@ function createOpenCodeTerminalController({
       if (!target) {
         throw openCodeReadUnavailable();
       }
-      return readDetachedConversation(target, conversationId, tracked);
+      if (!input.persistent) return readDetachedConversation(target, conversationId, tracked);
+      let status = await target.server.client.sessionStatus(conversationId);
+      if (!tracked && status.type !== "idle") {
+        await stopUnobservedOpenCodeSession(target, conversationId);
+        status = { type: "idle" };
+      }
+      const rows = openCodeMessageRows(await target.server.client.messages(conversationId));
+      const result = lastAssistantResult(rows);
+      const messages = rows.filter((row) => row.type === "assistant").flatMap((row) => {
+        const complete = Boolean(row.time?.completed || row.finish || row.error);
+        const reasoning = (row.content || []).filter((part) => part.type === "reasoning" && text(part.text))
+          .map((part, index) => ({ id: conversationMessageId(row.id, part.id || index, "reasoning"), role: "thinking", text: part.text, complete }));
+        const answer = assistantMessageText(row);
+        return [...reasoning, ...(answer ? [{ id: conversationMessageId(row.id, "assistant"), role: "assistant", text: answer, complete }] : [])];
+      });
+      let conversationStatus = "completed";
+      if (status.type !== "idle" || tracked?.active) conversationStatus = "inProgress";
+      else if (tracked?.interrupted) conversationStatus = "interrupted";
+      else if (tracked?.error || result.error) conversationStatus = "failed";
+      return {
+        conversationId,
+        ok: true,
+        messages,
+        text: result.text,
+        admitted: Boolean(input.messageId && rows.some((row) => row.id === upstreamMessageId(input.messageId))),
+        error: text(tracked?.error?.message) || result.error,
+        runId: tracked?.runId || [...rows].reverse().find((row) => row.type === "user")?.id || "",
+        status: conversationStatus
+      };
     },
     readTerminal,
     async reconcileSessions(sessions = [], options = {}) {
@@ -2807,11 +2840,15 @@ function createOpenCodeTerminalController({
           const confirmed = await target.server.client.interrupt(conversationId, {
             signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
           });
-          if (confirmed !== true) {
+          const status = input.persistent ? await target.server.client.sessionStatus(conversationId, {
+            signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+          }) : null;
+          if (confirmed !== true || status && status.type !== "idle") {
             throw openCodeError("vibe64_opencode_interrupt_unconfirmed", "OpenCode did not confirm Stop. Try Stop again.", {}, 502);
           }
         }
       } catch (error) {
+        if (input.persistent && error.statusCode === 404) return { conversationId, ok: true, stopped: true };
         if (error?.name === "TimeoutError") {
           throw openCodeError("vibe64_opencode_interrupt_timeout", "OpenCode did not confirm Stop within 5 seconds. Try Stop again.", {}, 504);
         }

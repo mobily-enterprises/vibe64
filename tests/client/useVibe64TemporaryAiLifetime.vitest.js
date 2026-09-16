@@ -81,18 +81,16 @@ describe("temporary AI mounted lifetime", () => {
     expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, { method: "GET" });
     const stateBefore = temporary.activeTask.value;
     unmount();
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(CONVERSATION_PATH, {
-      credentials: "same-origin", keepalive: true, method: "DELETE"
-    });
+    expect(fetch).not.toHaveBeenCalled();
     poll.resolve(response);
     await vi.advanceTimersByTimeAsync(1950);
     expect(onTaskFinished).not.toHaveBeenCalled();
-    expect(http.request).toHaveBeenCalledTimes(3);
+    expect(http.request).toHaveBeenCalledTimes(4);
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
   });
 
-  it("deletes a conversation created after unmount without starting an AI turn", async () => {
+  it("retains a conversation created after unmount without starting an AI turn", async () => {
     const creating = Promise.withResolvers();
     const { onTaskFinished, task, temporary, unmount } = mountTemporaryAi();
     http.request.mockReturnValueOnce(creating.promise);
@@ -103,8 +101,8 @@ describe("temporary AI mounted lifetime", () => {
     await expect(sending).resolves.toBe(false);
     await vi.advanceTimersByTimeAsync(1950);
     expect(http.request.mock.calls).toEqual([
-      [expect.stringContaining("/temporary-conversations"), expect.objectContaining({ method: "POST" })],
-      [CONVERSATION_PATH, { method: "DELETE" }]
+      [expect.stringContaining("/temporary-conversations"), { method: "GET" }],
+      [expect.stringContaining("/temporary-conversations"), expect.objectContaining({ method: "POST" })]
     ]);
     expect(onTaskFinished).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
@@ -121,17 +119,15 @@ describe("temporary AI mounted lifetime", () => {
       .mockReturnValueOnce(starting.promise);
     const sending = temporary.send(task.id);
     await vi.advanceTimersByTimeAsync(0);
-    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(http.request).toHaveBeenCalledTimes(3);
     unmount();
     const stateBefore = temporary.activeTask.value;
     starting.resolve(response);
     await expect(sending).resolves.toBe(false);
     await vi.advanceTimersByTimeAsync(1950);
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(CONVERSATION_PATH, {
-      credentials: "same-origin", keepalive: true, method: "DELETE"
-    });
+    expect(fetch).not.toHaveBeenCalled();
     expect(onTaskFinished).not.toHaveBeenCalled();
-    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(http.request).toHaveBeenCalledTimes(3);
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
   });
@@ -152,7 +148,7 @@ describe("temporary AI mounted lifetime", () => {
     stopping.resolve({ ok: false, error: "Could not stop the AI." });
     await retired;
     await vi.advanceTimersByTimeAsync(1950);
-    expect(http.request).toHaveBeenCalledTimes(4);
+    expect(http.request).toHaveBeenCalledTimes(5);
     expect(onTaskFinished).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
@@ -177,7 +173,7 @@ describe("temporary AI mounted lifetime", () => {
     const stateBefore = temporary.activeTask.value;
     deletion.resolve(response);
     await retired;
-    expect(http.request).toHaveBeenCalledTimes(5);
+    expect(http.request).toHaveBeenCalledTimes(6);
     expect(onTaskFinished).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
@@ -198,10 +194,8 @@ describe("temporary AI mounted lifetime", () => {
     stopping.resolve({ ok: true });
     await closing;
     await vi.advanceTimersByTimeAsync(1950);
-    expect(http.request).toHaveBeenCalledTimes(4);
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(CONVERSATION_PATH, {
-      credentials: "same-origin", keepalive: true, method: "DELETE"
-    });
+    expect(http.request).toHaveBeenCalledTimes(5);
+    expect(fetch).not.toHaveBeenCalled();
     expect(onTaskFinished).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
@@ -222,8 +216,57 @@ describe("temporary AI mounted lifetime", () => {
     expect(onTaskFinished).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       id: task.id, status: "completed", outcomeKind: "complete", recoveryOperation: "update"
     }));
-    expect(http.request).toHaveBeenCalledTimes(4);
+    expect(http.request).toHaveBeenCalledTimes(5);
     expect(fetch).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("restores a running server conversation after reload and streams subsequent messages", async () => {
+    const { task, temporary, unmount } = mountTemporaryAi();
+    http.request
+      .mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockResolvedValueOnce({ ok: true, runId: "turn-1", status: "inProgress" });
+    await temporary.send(task.id);
+    unmount();
+    expect(http.request.mock.calls.some(([, options]) => options.method === "DELETE")).toBe(false);
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{
+      conversationId: "conversation-1", title: "Saved task", status: "inProgress", runId: "turn-1",
+      draft: "My next question", messages: [{ id: "user", role: "user", text: "Repair this conflict." }]
+    }] });
+    http.request.mockResolvedValueOnce({ ok: true, status: "inProgress", runId: "turn-1", messages: [
+      { id: "user", role: "user", text: "Repair this conflict." },
+      { id: "reply", role: "assistant", text: "Working on" }
+    ] });
+    const restored = mountTemporaryAi();
+    await vi.advanceTimersByTimeAsync(0);
+    const chat = restored.temporary.tasks.value.find((candidate) => candidate.conversationId === "conversation-1");
+    expect(chat).toMatchObject({ busy: true, draft: "My next question", title: "Saved task" });
+    expect(chat.messages.at(-1).text).toBe("Working on");
+    http.request.mockResolvedValueOnce({ ok: true, status: "completed", messages: [
+      { id: "user", role: "user", text: "Repair this conflict." },
+      { id: "reply", role: "assistant", text: "Work finished." }
+    ] });
+    // Remove the fixture's unrelated blank tab before its save timer fires.
+    await restored.temporary.closeTask(restored.task.id);
+    await vi.advanceTimersByTimeAsync(650);
+    expect(restored.temporary.activeTask.value.messages.at(-1).text).toBe("Work finished.");
+    expect(restored.temporary.activeTask.value.busy).toBe(false);
+    expect(restored.temporary.activeTask.value.draft).toBe("My next question");
+  });
+
+  it("retains a failed Close on reload and lets the user retry that exact conversation", async () => {
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{
+      conversationId: "conversation-1", title: "Closing task", state: "closing", status: "closing",
+      error: "Stop not confirmed", messages: [], attachments: []
+    }] });
+    const { temporary, task } = mountTemporaryAi();
+    await vi.advanceTimersByTimeAsync(0);
+    await temporary.closeTask(task.id);
+    expect(temporary.activeTask.value).toMatchObject({ status: "closing", error: "Stop not confirmed" });
+    http.request.mockResolvedValueOnce({ ok: true, deleted: true });
+    await temporary.closeTask("conversation-1");
+    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, { method: "DELETE" });
+    expect(temporary.tasks.value).toEqual([]);
+  });
+
 });

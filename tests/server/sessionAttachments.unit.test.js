@@ -47,7 +47,7 @@ for (const engine of ["codex", "opencode"]) {
       });
       const uploaded = await manager.uploadAttachment("one", { fileName: "screen.png", stream: Readable.from(["attachment bytes"]) });
       await manager.sendMessage("one", {
-        message: "Inspect [Image #1]", attachmentIds: [uploaded.attachmentId],
+        message: "Inspect [Image #1]", attachmentIds: [uploaded.attachmentId], attachmentsPrepared: true,
         attachments: [{ path: "/etc/passwd", contentType: "image/png" }],
         displayAttachments: [{ attachmentId: uploaded.attachmentId, fileName: "forged.html", reference: "[Image #1]" }]
       }, { runtime });

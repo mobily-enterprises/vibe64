@@ -471,7 +471,7 @@ function createSessionAgentManager({
           };
         }
       }
-      if (attachments && ["sendMessage", "startConversationTurn"].includes(method)) {
+      if (attachments && !options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
         providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
       }
       const result = await operation(context, providerInput);

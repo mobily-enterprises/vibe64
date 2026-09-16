@@ -24,6 +24,7 @@ function presenceActor(vibe64User = null) {
 
 function presenceKey({
   actorId = "",
+  conversationId = "",
   originId = "",
   projectSlug = "",
   sessionId = ""
@@ -31,6 +32,7 @@ function presenceKey({
   return JSON.stringify([
     presenceText(projectSlug),
     presenceText(sessionId),
+    presenceText(conversationId),
     presenceText(actorId),
     presenceText(originId)
   ]);
@@ -42,6 +44,7 @@ function assertPresenceInput(input = {}) {
   const originId = presenceText(input.originId);
   const projectSlug = presenceText(input.projectSlug);
   const sessionId = presenceText(input.sessionId);
+  const conversationId = presenceText(input.conversationId);
   const sequence = Number(input.sequence);
   if (!actorId || !projectSlug || !sessionId) {
     throw new TypeError("Session presence requires an actor, project, and session.");
@@ -52,6 +55,12 @@ function assertPresenceInput(input = {}) {
     error.statusCode = 400;
     throw error;
   }
+  if (conversationId && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) {
+    throw Object.assign(new Error("Session presence conversation is invalid."), {
+      code: "vibe64_session_presence_conversation_invalid",
+      statusCode: 400
+    });
+  }
   if (!Number.isSafeInteger(sequence) || sequence < 1) {
     const error = new Error("Session presence sequence is invalid.");
     error.code = "vibe64_session_presence_sequence_invalid";
@@ -60,6 +69,7 @@ function assertPresenceInput(input = {}) {
   }
   return Object.freeze({
     actorId,
+    ...(conversationId ? { conversationId } : {}),
     displayName: Array.from(displayName).slice(0, 80).join("") || "Another user",
     originId,
     projectSlug,
@@ -95,7 +105,7 @@ function createSessionPresencePublisher(events) {
       source: "vibe64",
       entity: "session_presence",
       operation: presence.typing ? "typing" : "idle",
-      entityId: `${presence.sessionId}:${presence.actorId}:${presence.originId}`,
+      entityId: [presence.sessionId, presence.conversationId, presence.actorId, presence.originId].filter(Boolean).join(":"),
       scope: Object.freeze({
         kind: "global",
         id: null

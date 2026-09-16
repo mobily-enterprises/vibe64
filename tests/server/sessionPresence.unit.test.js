@@ -212,3 +212,34 @@ test("presence storage is bounded and publication failure stays ephemeral", asyn
   ]);
   service.close();
 });
+
+test("temporary chats have independent presence sequences and expiry within the same browser tab", async () => {
+  const clock = fakeClock();
+  const published = [];
+  const service = createSessionPresenceService({
+    clearTimer: clock.clearTimer,
+    now: clock.now,
+    publishPresence: async (payload) => published.push(payload),
+    setTimer: clock.setTimer
+  });
+  try {
+    for (const conversationId of ["", "temporary-one", "temporary-two"]) {
+      assert.equal((await service.update(presenceInput({ conversationId }))).status, "typing");
+    }
+    assert.equal(service.size(), 3);
+    await service.update(presenceInput({ conversationId: "temporary-one", sequence: 2, typing: false }));
+    assert.equal(published.at(-1).conversationId, "temporary-one");
+    assert.equal(published.at(-1).typing, false);
+    assert.equal((await service.update(presenceInput({ conversationId: "temporary-one" }))).status, "stale");
+    await clock.advance(SESSION_PRESENCE_IDLE_MS);
+    assert.deepEqual(published.slice(-2).map(({ conversationId = "", typing }) => ({ conversationId, typing })), [
+      { conversationId: "", typing: false },
+      { conversationId: "temporary-two", typing: false }
+    ]);
+    assert.throws(() => assertPresenceInput(presenceInput({ conversationId: "../other-session" })), {
+      code: "vibe64_session_presence_conversation_invalid"
+    });
+  } finally {
+    service.close();
+  }
+});

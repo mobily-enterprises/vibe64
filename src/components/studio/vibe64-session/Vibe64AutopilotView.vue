@@ -468,6 +468,7 @@
         :agent-settings="currentAgentSettings"
         :connection-unavailable="connectionRecoveryVisible"
         :preview-attachment-state="previewAttachmentState"
+        :project-slug="projectSlug"
         :session-id="sessionId"
         :sessions-api-path="props.sessionsApiPath"
         :repository-busy="saveWorkOperationActive || saveWorkSending"
