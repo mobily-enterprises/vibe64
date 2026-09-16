@@ -1,13 +1,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
+  useRealtimeEvent,
+  useRealtimeSocket
+} from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import {
   defaultVibe64AgentSettings,
   normalizeVibe64AgentSettings,
   VIBE64_AGENT_TASK_RESULT_SCHEMA
 } from "@local/vibe64-runtime/shared";
 
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
+import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
+  VIBE64_SESSION_CHANGED_EVENT,
   vibe64TemporaryConversationPath,
   vibe64TemporaryConversationsPath,
   vibe64TemporaryConversationStopPath,
@@ -70,6 +76,8 @@ function useVibe64TemporaryAi({
   const saveTimers = new Map();
   const creations = new Map();
   const saves = new Map();
+  const closedConversationIds = new Set();
+  const projectSlug = useVibe64ProjectSlug();
   const restoreError = ref("");
   let restoreGeneration = 0;
   const closingTaskIds = new Set();
@@ -93,6 +101,10 @@ function useVibe64TemporaryAi({
     return temporaryAiText(readRefOrGetterValue(sessionsApiPath));
   }
 
+  function canApplyTaskResponse(taskId) {
+    return !disposed && tasks.value.some((task) => task.id === taskId);
+  }
+
   function updateTask(taskId = "", update = {}) {
     tasks.value = tasks.value.map((task) => (
       task.id === taskId ? { ...task, ...update } : task
@@ -114,7 +126,9 @@ function useVibe64TemporaryAi({
   }
 
   async function ensureConversation(task) {
-    if (task.conversationId) return task.conversationId;
+    const current = tasks.value.find((candidate) => candidate.id === task.id);
+    if (!current) throw temporaryAiRequestError({ code: "vibe64_conversation_closed" });
+    if (current.conversationId) return current.conversationId;
     if (creations.has(task.id)) return creations.get(task.id);
     const creation = request(vibe64TemporaryConversationsPath(task.apiPath, task.sessionId), {
       method: "POST",
@@ -135,12 +149,12 @@ function useVibe64TemporaryAi({
     }
   }
 
-  function scheduleSave(taskId) {
+  function scheduleSave(taskId, delayMs = 250) {
     clearTimeout(saveTimers.get(taskId));
     saveTimers.set(taskId, setTimeout(() => {
       saveTimers.delete(taskId);
       void saveTask(taskId);
-    }, 250));
+    }, delayMs));
   }
 
   async function saveTask(taskId) {
@@ -149,7 +163,9 @@ function useVibe64TemporaryAi({
     const previous = saves.get(taskId);
     const operation = (async () => {
       await previous;
+      if (!tasks.value.some((current) => current.id === taskId)) return;
       const conversationId = await ensureConversation(task);
+      if (!tasks.value.some((current) => current.id === taskId)) return;
       await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
         method: "PATCH",
         body: {
@@ -158,8 +174,20 @@ function useVibe64TemporaryAi({
           attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)
         }
       });
+      const current = tasks.value.find((candidate) => candidate.id === taskId);
+      if (!disposed && current?.error?.startsWith("Draft could not be saved:")) {
+        updateTask(taskId, { error: "" });
+      }
     })().catch((error) => {
-      if (!disposed) updateTask(taskId, { error: `Draft could not be saved: ${error.message}` });
+      if (!canApplyTaskResponse(taskId)) return;
+      if (error.code === "vibe64_conversation_closed") {
+        removeTask(taskId);
+        return;
+      }
+      updateTask(taskId, { error: `Draft could not be saved: ${error.message}` });
+      if (error.code === "vibe64_agent_write_mode_busy" && !closingTaskIds.has(taskId)) {
+        scheduleSave(taskId, 1000);
+      }
     });
     saves.set(taskId, operation);
     try {
@@ -174,11 +202,17 @@ function useVibe64TemporaryAi({
     const ownerSessionId = currentSessionId();
     const apiPath = currentSessionsApiPath();
     if (!ownerSessionId || !apiPath) return;
+    const persistedTasks = tasks.value.filter((task) => task.conversationId);
     try {
       const response = await request(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), { method: "GET" });
       if (disposed || generation !== restoreGeneration) return;
       restoreError.value = "";
-      for (const record of response.conversations || []) {
+      const records = response.conversations || [];
+      for (const task of persistedTasks) {
+        if (!records.some((record) => record.conversationId === task.conversationId)) removeTask(task.id);
+      }
+      for (const record of records) {
+        if (closedConversationIds.has(record.conversationId)) continue;
         if (tasks.value.some((task) => task.conversationId === record.conversationId || task.id === record.conversationId)) continue;
         const task = {
           ...record,
@@ -521,6 +555,10 @@ function useVibe64TemporaryAi({
       }
     } catch (error) {
       if (!canApplyResponse()) return;
+      if (error.code === "vibe64_conversation_closed") {
+        removeTask(taskId);
+        return;
+      }
       const message = temporaryAiText(error?.message || error) || "Temporary AI response could not be read.";
       // A failed read does not prove that native work has stopped.
       const active = error?.conversationExpired !== true &&
@@ -574,8 +612,9 @@ function useVibe64TemporaryAi({
     const ownerSessionId = task.sessionId;
     try {
       if (saves.has(taskId)) await saves.get(taskId);
+      if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
       conversationId = conversationId || await ensureConversation(task);
-      if (disposed || closingTaskIds.has(taskId) || !tasks.value.some((current) => current.id === taskId)) return false;
+      if (!canApplyTaskResponse(taskId) || closingTaskIds.has(taskId)) return false;
       const response = await request(
         vibe64TemporaryConversationTurnsPath(
           apiPath,
@@ -625,6 +664,7 @@ function useVibe64TemporaryAi({
         busy: temporaryAiTurnIsActive(status),
         conversationId,
         displayMessage: "",
+        error: "",
         messages,
         pendingMessageId: "",
         runId: response.runId,
@@ -634,7 +674,11 @@ function useVibe64TemporaryAi({
       else if (status !== "interrupted") reportTaskFinished(taskId);
       return true;
     } catch (error) {
-      if (disposed) return false;
+      if (!canApplyTaskResponse(taskId)) return false;
+      if (error.code === "vibe64_conversation_closed") {
+        removeTask(taskId);
+        return false;
+      }
       updateTask(taskId, {
         busy: false,
         conversationId: error?.conversationExpired === true ? "" : conversationId,
@@ -672,7 +716,7 @@ function useVibe64TemporaryAi({
           method: "POST"
         }
       );
-      if (disposed) return false;
+      if (!canApplyTaskResponse(taskId)) return false;
       updateTask(taskId, {
         busy: false,
         error: "",
@@ -683,7 +727,11 @@ function useVibe64TemporaryAi({
       });
       return true;
     } catch (error) {
-      if (disposed) return false;
+      if (!canApplyTaskResponse(taskId)) return false;
+      if (error.code === "vibe64_conversation_closed") {
+        removeTask(taskId);
+        return false;
+      }
       pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
       throw error;
     } finally {
@@ -717,15 +765,9 @@ function useVibe64TemporaryAi({
         );
       }
       if (disposed) return;
-      tasks.value = tasks.value.filter((candidate) => candidate.id !== taskId);
-      if (activeTaskId.value === taskId) {
-        activeTaskId.value = tasks.value[0]?.id || "";
-      }
-      if (tasks.value.length === 0) {
-        open.value = false;
-      }
+      removeTask(taskId);
     } catch (error) {
-      if (disposed) return;
+      if (!canApplyTaskResponse(taskId)) return;
       updateTask(taskId, { error: error.message });
       if (task.busy) pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
       throw error;
@@ -738,6 +780,37 @@ function useVibe64TemporaryAi({
     open.value = false;
   }
 
+  function removeTask(taskId) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    closedConversationIds.add(task?.conversationId || taskId);
+    stopPolling(taskId);
+    clearTimeout(saveTimers.get(taskId));
+    saveTimers.delete(taskId);
+    tasks.value = tasks.value.filter((candidate) => candidate.id !== taskId);
+    if (activeTaskId.value === taskId) activeTaskId.value = tasks.value[0]?.id || "";
+    if (!tasks.value.length) open.value = false;
+  }
+
+  useRealtimeEvent({
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} }) => (
+      !disposed && payload.projectSlug === projectSlug.value &&
+      payload.sessionId === currentSessionId() && payload.reason === "temporary-conversation-closed" &&
+      Boolean(payload.conversationId)
+    ),
+    onEvent: ({ payload }) => {
+      const task = tasks.value.find((candidate) => (
+        candidate.conversationId === payload.conversationId || candidate.id === payload.conversationId
+      ));
+      removeTask(task?.id || payload.conversationId);
+    }
+  });
+  const realtimeSocket = useRealtimeSocket({ required: false });
+  const reconcileAfterConnect = () => {
+    if (!disposed) void restoreTasks();
+  };
+  realtimeSocket.on("connect", reconcileAfterConnect);
+
   onMounted(() => { void restoreTasks(); });
   watch(currentSessionId, () => {
     restoreGeneration += 1;
@@ -745,6 +818,7 @@ function useVibe64TemporaryAi({
     for (const timer of saveTimers.values()) clearTimeout(timer);
     pollTimers.clear();
     saveTimers.clear();
+    closedConversationIds.clear();
     tasks.value = [];
     activeTaskId.value = "";
     open.value = false;
@@ -754,6 +828,7 @@ function useVibe64TemporaryAi({
     // Removing a view never closes a conversation or interrupts native work.
     for (const taskId of saveTimers.keys()) void saveTask(taskId);
     disposed = true;
+    realtimeSocket.off("connect", reconcileAfterConnect);
     restoreGeneration += 1;
     for (const timer of pollTimers.values()) clearTimeout(timer);
     for (const timer of saveTimers.values()) clearTimeout(timer);

@@ -1,4 +1,6 @@
 import { createRenderer } from "vue";
+import { EventEmitter } from "node:events";
+import { routeLocationKey } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const http = vi.hoisted(() => ({ request: vi.fn() }));
@@ -10,9 +12,15 @@ import { useVibe64TemporaryAi } from "../../src/composables/useVibe64TemporaryAi
 
 const SESSION_PATH = "/api/app/project-a/vibe64/sessions/session-1";
 const CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/conversation-1`;
+const CLOSED_CONVERSATION = {
+  reason: "temporary-conversation-closed",
+  conversationId: "conversation-1",
+  projectSlug: "project-a",
+  sessionId: "session-1"
+};
 const mountedApps = new Set();
 
-function mountTemporaryAi() {
+function mountTemporaryAi({ socket = new EventEmitter(), openTask = true } = {}) {
   let temporary;
   const onTaskFinished = vi.fn();
   const app = createRenderer({
@@ -31,13 +39,16 @@ function mountTemporaryAi() {
       return () => null;
     }
   });
+  app.provide("jskit.realtime.runtime.client.socket", socket);
+  app.provide(routeLocationKey, { params: { slug: "project-a" } });
   app.mount({});
   mountedApps.add(app);
-  const task = temporary.openTask({ draft: "Repair this conflict.", recoveryOperation: "update" });
+  const task = openTask ? temporary.openTask({ draft: "Repair this conflict.", recoveryOperation: "update" }) : null;
   return {
     onTaskFinished,
     task,
     temporary,
+    socket,
     unmount() {
       app.unmount();
       mountedApps.delete(app);
@@ -267,6 +278,151 @@ describe("temporary AI mounted lifetime", () => {
     await temporary.closeTask("conversation-1");
     expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, { method: "DELETE" });
     expect(temporary.tasks.value).toEqual([]);
+  });
+
+  it.each(["POST", "PATCH"])("automatically retries a busy draft %s and clears its save error", async (method) => {
+    let busy = true;
+    http.request.mockImplementation(async (_path, options) => {
+      if (options.method === "GET") return { ok: true, conversations: [] };
+      if (options.method === method && busy) {
+        busy = false;
+        return { ok: false, code: "vibe64_agent_write_mode_busy", error: "Another assistant operation is starting." };
+      }
+      return { ok: true, conversationId: "conversation-1" };
+    });
+    const { temporary } = mountTemporaryAi();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(temporary.activeTask.value.error).toContain("Draft could not be saved:");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(temporary.activeTask.value.error).toBe("");
+    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
+      method: "PATCH", body: expect.objectContaining({ presentation: expect.objectContaining({ draft: "Repair this conflict." }) })
+    }));
+    expect(http.request.mock.calls.filter(([, options]) => options.method === method)).toHaveLength(2);
+  });
+
+  it("closes the exact tab in both mounted clients and cancels the other client's pending draft save", async () => {
+    const socket = new EventEmitter();
+    http.request.mockImplementation(async (_path, options) => {
+      if (options.method === "GET") return { ok: true, conversations: [
+        { conversationId: "conversation-1", status: "ready" },
+        { conversationId: "conversation-2", status: "ready" }
+      ] };
+      if (options.method === "DELETE") socket.emit("vibe64.session.changed", CLOSED_CONVERSATION);
+      return { ok: true };
+    });
+    const first = mountTemporaryAi({ socket, openTask: false });
+    const second = mountTemporaryAi({ socket, openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    second.temporary.updateDraft("conversation-1", "Ideas?");
+    await first.temporary.closeTask("conversation-1");
+    for (const { temporary } of [first, second]) {
+      expect(temporary.tasks.value.map((task) => task.id)).toEqual(["conversation-2"]);
+      expect(temporary.activeTask.value.id).toBe("conversation-2");
+    }
+    await expect(second.temporary.send("conversation-1")).resolves.toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(http.request.mock.calls.map(([, options]) => options.method)).toEqual(["GET", "GET", "DELETE"]);
+    first.unmount();
+    second.unmount();
+    expect(socket.listenerCount("connect")).toBe(0);
+    expect(socket.listenerCount("vibe64.session.changed")).toBe(0);
+  });
+
+  it("scopes closure events to the project and session and ignores a late restoration of a closed chat", async () => {
+    const listing = Promise.withResolvers();
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    const { temporary, socket } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, projectSlug: "project-b" });
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, sessionId: "session-2" });
+    expect(temporary.tasks.value).toHaveLength(1);
+    http.request.mockReturnValueOnce(listing.promise);
+    const restoring = temporary.restoreTasks();
+    socket.emit("vibe64.session.changed", CLOSED_CONVERSATION);
+    expect(temporary.tasks.value).toEqual([]);
+    listing.resolve({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    await restoring;
+    expect(temporary.tasks.value).toEqual([]);
+  });
+
+  it("reconciles missed closures on reconnect while preserving a new local draft", async () => {
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    const { temporary, socket, task } = mountTemporaryAi();
+    await vi.advanceTimersByTimeAsync(0);
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [] });
+    socket.emit("connect");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.tasks.value.map((task) => task.id)).toEqual([task.id]);
+    expect(temporary.activeTask.value.draft).toBe("Repair this conflict.");
+  });
+
+  it("does not follow a late creation response with a draft save or Send after remote Close", async () => {
+    const creating = Promise.withResolvers();
+    const { temporary, socket, task } = mountTemporaryAi();
+    http.request.mockReturnValueOnce(creating.promise);
+    await vi.advanceTimersByTimeAsync(250);
+    const sending = temporary.send(task.id);
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, conversationId: task.id });
+    creating.resolve({ ok: true, conversationId: task.id });
+    await expect(sending).resolves.toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(temporary.tasks.value).toEqual([]);
+    expect(http.request.mock.calls.map(([, options]) => options.method)).toEqual(["GET", "POST"]);
+  });
+
+  it.each(["PATCH", "POST"])("removes a closed conversation reported by %s even without its realtime event", async (method) => {
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    temporary.updateDraft("conversation-1", "Ideas?");
+    http.request.mockRejectedValueOnce(Object.assign(new Error("This conversation has been closed."), { code: "vibe64_conversation_closed", status: 404 }));
+    if (method === "PATCH") await vi.advanceTimersByTimeAsync(250);
+    else await expect(temporary.send("conversation-1")).resolves.toBe(false);
+    expect(temporary.tasks.value).toEqual([]);
+    await expect(temporary.send("conversation-1")).resolves.toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(http.request.mock.calls.map(([, options]) => options.method)).toEqual(["GET", method]);
+  });
+
+  it.each(["poll", "stopTask", "closeTask"])("ignores a late %s failure after another browser closes the conversation", async (operation) => {
+    const response = Promise.withResolvers();
+    const { temporary, task, socket, onTaskFinished } = mountTemporaryAi();
+    http.request
+      .mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockResolvedValueOnce({ ok: true, runId: "turn-1", status: "inProgress" });
+    await temporary.send(task.id);
+    await vi.advanceTimersByTimeAsync(0);
+    http.request.mockReturnValueOnce(response.promise);
+    let pending;
+    if (operation === "poll") await vi.advanceTimersByTimeAsync(650);
+    else pending = temporary[operation](task.id);
+    socket.emit("vibe64.session.changed", CLOSED_CONVERSATION);
+    expect(temporary.tasks.value).toEqual([]);
+    const calls = http.request.mock.calls.length;
+    response.resolve({ ok: false, error: "Connection lost." });
+    await pending;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(http.request).toHaveBeenCalledTimes(calls);
+    expect(onTaskFinished).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("discards queued saves after another browser closes the conversation", async () => {
+    http.request.mockResolvedValueOnce({ ok: true, conversations: [{ conversationId: "conversation-1", status: "ready" }] });
+    const { temporary, socket } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    const saving = Promise.withResolvers();
+    http.request.mockReturnValueOnce(saving.promise);
+    temporary.updateDraft("conversation-1", "First edit");
+    await vi.advanceTimersByTimeAsync(250);
+    temporary.updateDraft("conversation-1", "Second edit");
+    await vi.advanceTimersByTimeAsync(250);
+    socket.emit("vibe64.session.changed", CLOSED_CONVERSATION);
+    saving.resolve({ ok: true });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(temporary.tasks.value).toEqual([]);
+    expect(http.request.mock.calls.map(([, options]) => options.method)).toEqual(["GET", "PATCH"]);
   });
 
 });

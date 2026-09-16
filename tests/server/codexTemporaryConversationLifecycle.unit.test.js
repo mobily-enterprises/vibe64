@@ -5820,7 +5820,9 @@ test("interactive detached turns retain their existing writable settings and res
     assert.equal(captures.threads.length, 1);
     assert.equal(captures.threads[0].sandbox, "danger-full-access");
     assert.equal("allowProviderModelFallback" in captures.threads[0], false);
-    assert.equal("config" in captures.threads[0], false);
+    assert.deepEqual(captures.threads[0].config, {
+      model_reasoning_effort: "xhigh", model_reasoning_summary: "concise"
+    });
     assert.equal("dynamicTools" in captures.threads[0], false);
     assert.deepEqual(captures.turns[0].settings.sandboxPolicy, {
       networkAccess: "enabled",
@@ -9473,6 +9475,13 @@ test("Codex streams answer chunks before persistence, replaces the live answer a
     await waitForSessionValue(() => snapshots.at(-1),
       (snapshot) => snapshot?.messages[0]?.text === "Hello world", "broadcast text");
     assert.equal(hydrations, 0, "text chunks must not hydrate the session runtime");
+    emitCodexNotification(captures.subscribers, reasoningSummaryDelta({
+      threadId, turnId, itemId: "stream-reasoning", text: "**Checking the answer**"
+    }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.thinking?.some((message) => message.text === "Checking the answer")),
+      "reasoning beside streamed text");
+    assert.equal(hydrations, 0, "reasoning chunks must not hydrate the session runtime");
     const reopenedStore = createVibe64SessionStore({ projectContextRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot });
     assert.equal(reopenedStore.readConversationStream(sessionId).messages[0].text, "Hello world");
     assert.equal((await store.readConversationLog(sessionId)).some((row) => row.assistant), false);
@@ -9504,6 +9513,88 @@ test("Codex streams answer chunks before persistence, replaces the live answer a
     assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length, 1);
   });
 });
+
+test("slow stream delivery combines waiting fragments without crossing reasoning or completion", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "slow-stream" });
+    const { threadId, turnId } = captures.provider;
+    const params = { threadId, turnId, itemId: "slow-answer" };
+    const delivery = createDeterministicHold();
+    const received = [];
+    captures.onSessionChanged = async (_id, event) => {
+      if (event.reason === "assistant-stream") {
+        received.push(event.payload.conversationStream.messages[0].text);
+        if (received.length === 1) {
+          delivery.enter();
+          await delivery.wait;
+        }
+      } else if (event.reason === "codex-app-server-reasoning-summary") {
+        received.push("reasoning");
+      }
+    };
+    try {
+      emitCodexNotification(captures.subscribers, {
+        method: "item/agentMessage/delta", params: { ...params, delta: "Start " }
+      });
+      await delivery.entered;
+      for (const delta of "a".repeat(100)) {
+        emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta } });
+      }
+      emitCodexNotification(captures.subscribers, reasoningSummaryDelta({
+        threadId, turnId, itemId: "slow-reasoning", text: "**Checking delivery**"
+      }));
+      for (const delta of "b".repeat(100)) {
+        emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta } });
+      }
+      const text = `Start ${"a".repeat(100)}${"b".repeat(100)}`;
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({ ...params, phase: "final_answer", text }));
+      // This fragment must stay after completion and must never revive the item.
+      emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "late" } });
+      delivery.release();
+      await controller.closeAllForSession(sessionId);
+      assert.deepEqual(received, ["Start ", `Start ${"a".repeat(100)}`, "reasoning", text]);
+      assert.deepEqual(store.readConversationStream(sessionId).messages, []);
+      const rows = await store.readConversationLog(sessionId);
+      assert.equal(rows.at(-1).assistant.text, text);
+      assert.equal(rows.at(-1).thinking.at(-1).text, "Checking delivery");
+    } finally {
+      delivery.release();
+    }
+  });
+});
+
+for (const loaded of [true, false]) {
+  test(`Codex reconnect restores the saved selection and concise summaries (loaded: ${loaded})`, async () => {
+    await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId }) => {
+      assert.equal((await controller.ensureThread(sessionId)).ok, true);
+      const expected = { model_reasoning_effort: "high", model_reasoning_summary: "concise" };
+      assert.equal(captures.threadStarts[0].model, "gpt-5.5");
+      assert.deepEqual(captures.threadStarts[0].config, expected);
+      const { threadId } = captures.provider;
+      await controller.closeAllForSession(sessionId);
+      const resumed = [];
+      captures.onProviderCreated = (provider) => {
+        provider.threadId = threadId;
+        provider.listLoadedThreads = async () => ({ data: loaded ? [threadId] : [] });
+        const resume = provider.resumeThread;
+        provider.resumeThread = (id, settings) => {
+          resumed.push(settings);
+          return resume(id, settings);
+        };
+      };
+      const restarted = createCodexTerminalController(controllerOptions);
+      try {
+        const result = await restarted.reconcileThreads([{ sessionId }]);
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal(resumed.length, 1);
+        assert.equal(resumed[0].model, "gpt-5.5");
+        assert.deepEqual(resumed[0].config, expected);
+      } finally {
+        await restarted.closeAllForSession(sessionId);
+      }
+    });
+  });
+}
 
 test("Codex streamed commentary disappears after completion even when saved progress is deduplicated", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {

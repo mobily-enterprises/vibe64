@@ -248,6 +248,7 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
     developerInstructions: "Vibe64 briefing"
   }), {
     approvalPolicy: "never",
+    config: { model_reasoning_effort: "xhigh", model_reasoning_summary: "concise" },
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
     developerInstructions: "Vibe64 briefing",
     model: VIBE64_CODEX_DEFAULT_MODEL,
@@ -302,10 +303,26 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
 
 test("Codex thread and turn requests preserve Astra and its advertised ultra effort", () => {
   const agentSettings = { model: "gpt-6-astra", thinking: "ultra", providerId: "codex" };
-  assert.equal(codexAppServerThreadSettings({ agentSettings, cwd: "/workspace" }).model, "gpt-6-astra");
+  const thread = codexAppServerThreadSettings({ agentSettings, cwd: "/workspace" });
+  assert.equal(thread.model, "gpt-6-astra");
+  assert.deepEqual(thread.config, {
+    model_reasoning_effort: "ultra", model_reasoning_summary: "concise"
+  });
   const turn = codexAppServerTurnSettings({ agentSettings, cwd: "/workspace" });
   assert.equal(turn.model, "gpt-6-astra");
   assert.equal(turn.effort, "ultra");
+});
+
+test("Codex thread summary defaults respect model support and explicit isolation settings", () => {
+  const spark = codexAppServerThreadSettings({
+    agentSettings: { model: VIBE64_CODEX_SPARK_MODEL, thinking: "high" }, cwd: "/workspace"
+  });
+  assert.equal(spark.config.model_reasoning_effort, "high");
+  assert.equal(Object.hasOwn(spark.config, "model_reasoning_summary"), false);
+  const isolated = codexAppServerThreadSettings({
+    config: { model_reasoning_summary: "none", model_reasoning_effort: "low" }, cwd: "/workspace"
+  });
+  assert.deepEqual(isolated.config, { model_reasoning_summary: "none", model_reasoning_effort: "low" });
 });
 
 test("Codex economy settings are Luna-low, bounded, tool-free, and never fall back", async () => {
@@ -1205,6 +1222,8 @@ test("codex app-server bridge activates exact project hooks for each new thread"
     params: {
       approvalPolicy: "never",
       config: {
+        model_reasoning_effort: "xhigh",
+        model_reasoning_summary: "concise",
         hooks: {
           state: {
             "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0": {
@@ -1266,6 +1285,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
       method: "resumeThread",
       params: {
         approvalPolicy: "never",
+        config: { model_reasoning_effort: "xhigh", model_reasoning_summary: "concise" },
         cwd: "/repo/worktree",
         developerInstructions: null,
         model: VIBE64_CODEX_DEFAULT_MODEL,
@@ -1332,6 +1352,8 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
   assert.equal(providerCalls[1].method, "resumeThread");
   assert.equal(providerCalls[1].threadId, "thread-existing");
   assert.deepEqual(providerCalls[1].params.config, {
+    model_reasoning_effort: "xhigh",
+    model_reasoning_summary: "concise",
     hooks: {
       state: {
         "/repo/worktree/.codex/hooks.json:stop:0:0": {

@@ -38,7 +38,13 @@ function requireSuccess(result) {
 
 // Session storage owns discovery and the transcript. Existing provider adapters
 // own native turns. Only explicit Close removes a user-facing temporary chat.
-function createSessionConversations({ sessionAgent, attachments, runAgentWrite, prepareAgentSkills }) {
+function createSessionConversations({
+  sessionAgent,
+  attachments,
+  runAgentWrite,
+  prepareAgentSkills,
+  publishSessionChanged = async () => {}
+}) {
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
     if (!record) throw Object.assign(new Error("This conversation has been closed."), {
@@ -123,7 +129,8 @@ function createSessionConversations({ sessionAgent, attachments, runAgentWrite, 
   // All state transitions, including transcript reconciliation, use the existing
   // session write coordinator so a late read cannot recreate a closed record.
   const write = (sessionId, options, operation) => runAgentWrite(sessionId, options, operation, {
-    operation: "temporary-conversation"
+    operation: "temporary-conversation",
+    waitMs: 10_000
   });
 
   return {
@@ -234,7 +241,7 @@ function createSessionConversations({ sessionAgent, attachments, runAgentWrite, 
     },
 
     async deleteTemporaryConversation(sessionId, input = {}, options = {}) {
-      return write(sessionId, options, async (ctx) => {
+      const result = await write(sessionId, options, async (ctx) => {
         let record = await ctx.runtime.store.readSessionConversation(sessionId, input.conversationId);
         if (!record) return { ok: true, deleted: true };
         record = await save(ctx, record, { state: "closing", error: "" });
@@ -254,6 +261,13 @@ function createSessionConversations({ sessionAgent, attachments, runAgentWrite, 
           throw error;
         }
       });
+      if (result.ok) {
+        await publishSessionChanged(sessionId, {
+          reason: "temporary-conversation-closed",
+          payload: { conversationId: input.conversationId }
+        });
+      }
+      return result;
     }
   };
 }

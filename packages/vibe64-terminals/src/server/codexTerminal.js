@@ -1414,6 +1414,7 @@ function createCodexTerminalController({
   const codexAppServerAutomaticHookThreads = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerNotificationTasks = new Map();
+  const codexAppServerPendingStreams = new Map();
   let codexAppServerProviderLifecycle = Promise.resolve();
   let codexAppServerServerClosing = false;
   let codexAppServerShutdownPromise = null;
@@ -3840,6 +3841,9 @@ function createCodexTerminalController({
     const taskSessionId = normalizeText(context.sessionId);
     const taskSessionKey = normalizeText(context.sessionKey) ||
       codexTerminalNamespace(taskSessionId);
+    // Other notifications end the pending stream batch so completion, reasoning
+    // and turn changes retain their position in the provider's event order.
+    codexAppServerPendingStreams.delete(taskSessionKey);
     const previous = codexAppServerNotificationTasks.get(taskSessionKey) || Promise.resolve();
     const task = previous
       .catch(() => null)
@@ -4606,9 +4610,9 @@ function createCodexTerminalController({
   async function recordCodexAppServerReasoningForSession(sessionId = "", threadId = "", notification = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
-    const runtime = await createRuntimeForSession();
-    const session = await runtime.getSession(normalizedSessionId);
-    const currentTurn = codexAppServerTurnState(session);
+    const store = await createStoreForSession(normalizedSessionId);
+    const run = await readCodexAppServerAgentRunForSession(store, normalizedSessionId);
+    const currentTurn = codexAppServerTurnStateFromAgentRun(run || {});
     const ownerTurnId = codexAppServerOutputOwnerTurnId({
       notificationThreadId: normalizedThreadId,
       notificationTurnId: codexAppServerNotificationTurnId(notification),
@@ -4778,6 +4782,27 @@ function createCodexTerminalController({
         }
       }
     }
+  }
+
+  function queueCodexAppServerStream(context, classification) {
+    if (codexAppServerServerClosing || !classification.itemId || !classification.turnId) return;
+    const pending = codexAppServerPendingStreams.get(context.sessionKey);
+    if (classification.kind === "assistant_delta" && pending &&
+        pending.threadId === classification.threadId &&
+        pending.turnId === classification.turnId && pending.itemId === classification.itemId) {
+      pending.delta += classification.delta;
+      return;
+    }
+    const stream = { ...classification, delta: classification.delta || "" };
+    runCodexAppServerNotificationTask(context, () => {
+      if (codexAppServerPendingStreams.get(context.sessionKey) === stream) {
+        codexAppServerPendingStreams.delete(context.sessionKey);
+      }
+      return writeCodexAppServerStream(context.sessionId, stream);
+    });
+    // Combine only fragments still waiting for delivery. The running write owns
+    // an immutable batch; there is no timer or delay before the next write.
+    codexAppServerPendingStreams.set(context.sessionKey, stream);
   }
 
   async function writeCodexAppServerStream(sessionId, classification) {
@@ -7270,7 +7295,7 @@ function createCodexTerminalController({
       }
       if (["assistant_started", "assistant_delta"].includes(classification.kind) &&
           !codexAppServerAutomaticHookThreads.has(normalizedThreadId)) {
-        runCodexAppServerNotificationTask(notificationContext, () => writeCodexAppServerStream(normalizedSessionId, classification));
+        queueCodexAppServerStream(notificationContext, classification);
       }
       if (classification.kind === "final_assistant_result") {
         const event = codexAppServerNotificationEvent(notification);
@@ -8101,9 +8126,10 @@ function createCodexTerminalController({
           );
           const subscriptionStatus = normalizeText(subscription?.status) || "subscribed";
           if (subscriptionStatus !== "alreadySubscribed") {
-            await provider.resumeThread(threadId, {
+            await provider.resumeThread(threadId, codexAppServerThreadSettings({
+              agentSettings: { ...codexAgentSettingsFromSession(session), ...agentSettings },
               cwd: workdir
-            });
+            }));
           }
           rememberCodexAppServerManagedSession(providerKey, {
             providerOptions,
@@ -8317,7 +8343,7 @@ function createCodexTerminalController({
             { workdir }
           )).output;
           const thread = await ensureCodexAppServerThreadForSession({
-            agentSettings,
+            agentSettings: { ...codexAgentSettingsFromSession(currentSession), ...agentSettings },
             developerInstructions,
             observeThread: (threadId) => subscribeCodexAppServerEvents(sessionId, provider, threadId, providerOptions),
             provider,
@@ -13357,7 +13383,10 @@ function createCodexTerminalController({
               patch: { providerStatus: "interrupted", error: "" }
             });
           });
-          await context.provider.resumeThread(threadId, { cwd: context.workdir });
+          await context.provider.resumeThread(threadId, codexAppServerThreadSettings({
+            agentSettings: codexAgentSettingsFromSession(context.session),
+            cwd: context.workdir
+          }));
         }
         const result = await context.provider.setGoalStatus(threadId, input.action === "pause" ? "paused" : "active");
         await reconcileCodexAppServerGoalUpdated(sessionId, context.provider, threadId, {

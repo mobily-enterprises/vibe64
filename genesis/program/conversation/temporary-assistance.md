@@ -51,6 +51,9 @@ PATCH saves presentation and settings. First Send creates the native conversatio
 under the session write coordinator. Accepted message identities prevent a retry
 from sending the same work again. Native history reconciles replies completed
 while the browser was absent; incomplete replies remain visible as they arrive.
+Temporary conversation requests wait briefly for that coordinator instead of
+failing immediately on contention. A still-busy draft save retries automatically;
+a later successful save clears the earlier save error.
 Typing presence reuses the session presence endpoint, realtime event, debounce,
 heartbeat and expiry with the saved conversation ID as an additional scope.
 The server takes the actor from authentication and checks that the chat belongs
@@ -71,6 +74,12 @@ Explicit Close is one server operation: retain the closing record, pause any goa
 confirm native work stopped, delete the native conversation, remove its owned
 attachments, then delete the record and transcript. A failure retains the record
 and offers the same Close again, including after reload. File edits remain.
+After deletion succeeds, the session realtime event identifies the closed
+conversation. Other browsers remove only that project's matching session tab,
+cancel its pending saves and polls, and ignore late responses that would restore
+it. Reconnection reconciles the saved collection to recover missed closures while
+preserving new local drafts. A closed-conversation API error also removes the
+stale tab; Send never recreates a chat closed by another browser.
 Closing an incomplete Update repair requires confirmation that partial edits
 will remain and may still need repair. Closing waits for Stop and provider
 deletion to succeed; a failure leaves the chat available for retry, and a failed

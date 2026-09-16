@@ -91,6 +91,8 @@ showing it does not finish the goal or disable further steering.
 Consecutive reasoning summaries form one collapsible progress group, regardless
 of storage rows or automatic goal turns. The latest group previews current
 reasoning while the assistant is working; ordinary messages separate groups.
+Reconnecting preserves the selected model and reasoning effort and requests
+short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
 While the Vibe64 server is running, every executing assistant session must remain
@@ -576,6 +578,9 @@ stops any work whose observation was lost until an explicit Send or Resume.
 Their messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.
+Successful Close removes that chat from other connected browsers; reconnecting
+reconciles missed closures. Draft saves wait for brief assistant-operation
+contention and retry automatically when it remains busy.
 Temporary chats show who is typing in that same conversation, using the main
 chat's indicator. Switching chats, sending, or leaving clears that presence.
 Internal helpers retain their deliberate execution restrictions.

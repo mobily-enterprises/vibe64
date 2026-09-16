@@ -16,8 +16,7 @@ import {
   VIBE64_AGENT_PROVIDER_IDS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
-  effectiveVibe64AgentExecutionSettings,
-  effectiveVibe64AgentSettings
+  effectiveVibe64AgentExecutionSettings
 } from "../shared/agentSettings.js";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
@@ -714,10 +713,6 @@ async function codexAppServerEconomyIsolationState(provider, executionProfile = 
   });
 }
 
-function codexEffectiveAgentSettings(agentSettings = {}) {
-  return effectiveVibe64AgentSettings(agentSettings);
-}
-
 function codexEffectiveAgentExecutionSettings(agentSettings = {}) {
   return effectiveVibe64AgentExecutionSettings(agentSettings);
 }
@@ -733,12 +728,18 @@ function codexAppServerThreadSettings({
   if (!normalizedCwd) {
     throw new Error("Codex app-server thread requires a working directory.");
   }
-  const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
+  const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
   return {
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
-    ...(config && typeof config === "object" && !Array.isArray(config)
-      ? { config }
-      : {}),
+    config: {
+      ...(effectiveSettings.request.reasoning !== false
+        ? { model_reasoning_effort: effectiveSettings.thinking }
+        : {}),
+      ...(effectiveSettings.request.summary !== false
+        ? { model_reasoning_summary: CODEX_SESSION_REASONING_SUMMARY }
+        : {}),
+      ...(config && typeof config === "object" && !Array.isArray(config) ? config : {})
+    },
     cwd: normalizedCwd,
     developerInstructions: normalizeAgentText(developerInstructions) || null,
     model: normalizeAgentText(model) || effectiveSettings.model,

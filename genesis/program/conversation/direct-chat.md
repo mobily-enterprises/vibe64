@@ -119,6 +119,11 @@ project/session scope and saved message identities, and broadcasts snapshots on
 its existing realtime channel. The history read includes the current snapshot
 for browser reconnects. The client uses JSKIT's `mergeConversationStream` and
 ignores older revisions; chunk events do not refetch history or session details.
+The session notification queue combines adjacent text fragments still waiting
+for delivery, so a slow authenticated broadcast does not create one pending
+storage operation per fragment. Reasoning, completion and turn-state events end
+the batch and preserve provider order. Text and reasoning notification handlers
+read the agent-run record without hydrating the full session history.
 Successful persistence replaces the live item. Stop and verified observation loss
 clear unfinished output. Saved replies retain their recovery authority, and a
 server-process restart relies on native history rather than a second partial log.
@@ -138,6 +143,10 @@ When reconnecting to a native goal continuation, live thread activity takes
 precedence over a terminal status in turn history. History can lag while the
 resumed turn prepares its context. The main-thread bridge requires an observer
 before native resume, and provider observers survive replacement of the socket.
+Thread preparation and reconnection restore the saved assistant selection and
+request concise reasoning summaries in the thread configuration, including when
+Codex resumes a goal before the next explicit message. Model capability rules and
+explicit isolation settings still apply.
 Notifications from an obsolete socket cannot reach the current observers.
 Reading a saved final answer never resumes a thread.
 

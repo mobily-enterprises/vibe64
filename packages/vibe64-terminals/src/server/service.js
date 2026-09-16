@@ -1448,7 +1448,8 @@ function createService({
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
-    prepareAgentSkills: prepareAgentSkillsInsideAgentWrite
+    prepareAgentSkills: prepareAgentSkillsInsideAgentWrite,
+    publishSessionChanged: publishAgentSessionChanged
   });
   const service = {
     ...sessionConversations,

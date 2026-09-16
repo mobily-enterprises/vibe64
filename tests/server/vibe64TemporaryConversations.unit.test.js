@@ -4,6 +4,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -142,12 +143,63 @@ async function conversationFixture(root) {
       return { ok: true };
     }
   };
-  const restart = () => createSessionConversations({ sessionAgent, attachments,
+  const events = [];
+  const restart = (overrides = {}) => createSessionConversations({
+    sessionAgent,
+    attachments,
     prepareAgentSkills: async () => {},
-    runAgentWrite: async (sessionId, _options, operation) => operation({ runtime, session: await runtime.getSession(sessionId) })
+    runAgentWrite: async (sessionId, _options, operation, lockOptions) => {
+      const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+        const session = await runtime.getSession(sessionId);
+        return operation({ runtime, session });
+      }, lockOptions);
+      return result.value;
+    },
+    publishSessionChanged: async (...args) => { events.push(args); },
+    ...overrides
   });
-  return { attachments, native, restart, service: restart(), store };
+  return { attachments, events, native, restart, service: restart(), store };
 }
+
+test("a temporary draft waits for another assistant operation and saves once the lock is released", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, store } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holding = store.runSessionExclusive("one", "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await entered.promise;
+    const saving = service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Ideas?" } });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } finally {
+      release.resolve();
+      await holding;
+    }
+    assert.equal((await saving).ok, true);
+    assert.equal((await store.readSessionConversation("one", "chat")).draft, "Ideas?");
+  });
+});
+
+test("Close publishes its exact conversation after deletion, including retries, without recreating it on publication failure", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, store, restart, events } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    const failingPublisher = restart({ publishSessionChanged: async () => {
+      assert.equal(await store.readSessionConversation("one", "chat"), null);
+      throw new Error("Realtime unavailable");
+    } });
+    await assert.rejects(failingPublisher.deleteTemporaryConversation("one", { conversationId: "chat" }), /Realtime unavailable/);
+    assert.equal(await store.readSessionConversation("one", "chat"), null);
+    await service.deleteTemporaryConversation("one", { conversationId: "chat" });
+    assert.deepEqual(events, [["one", { reason: "temporary-conversation-closed", payload: { conversationId: "chat" } }]]);
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Late save" } }), { code: "vibe64_conversation_closed" });
+    assert.equal(await store.readSessionConversation("one", "chat"), null);
+  });
+});
 
 test("temporary conversations survive a new service, stream and reconcile without entering main History", async () => {
   await withTemporaryRoot(async (root) => {
@@ -185,7 +237,7 @@ test("temporary conversations survive a new service, stream and reconcile withou
 
 test("Close retains a retryable record until stop, native deletion and attachment cleanup succeed; edits remain", async () => {
   await withTemporaryRoot(async (root) => {
-    const { service, restart, store, native, attachments } = await conversationFixture(root);
+    const { service, restart, store, native, attachments, events } = await conversationFixture(root);
     const edit = path.join(root, "user-edit.txt");
     await writeFile(edit, "preserve me");
     const upload = await attachments.uploadAttachment({ sessionId: "one" }, { fileName: "notes.txt", stream: Readable.from(["notes"]) });
@@ -203,6 +255,7 @@ test("Close retains a retryable record until stop, native deletion and attachmen
     native.stopError = "";
     native.deleteError = "Delete unavailable";
     await assert.rejects(restart().deleteTemporaryConversation("one", { conversationId: "chat" }), /Delete unavailable/);
+    assert.deepEqual(events, []);
     await access(filePath);
     native.deleteError = "";
     await restart().deleteTemporaryConversation("one", { conversationId: "chat" });
