@@ -19,6 +19,10 @@ vi.mock("vuetify/components/VChip", () => ({
   VChip: passthroughComponent("button")
 }));
 
+vi.mock("vuetify/components/VProgressCircular", () => ({
+  VProgressCircular: passthroughComponent("span")
+}));
+
 vi.mock("vuetify/components/VTooltip", () => ({
   VTooltip: passthroughComponent("aside")
 }));
@@ -388,5 +392,35 @@ describe("session creation controls", () => {
     expect(buttonSource).toContain("min-height: 3rem");
     expect(buttonSource).toContain("min-width: 3rem");
     expect(buttonSource).toContain("prefers-reduced-motion: reduce");
+  });
+});
+
+describe("session closure progress", () => {
+  it.each([
+    ["stopping", "Stopping preview, AI and tools (1/3)"],
+    ["resources", "Archiving resources (2/3)"],
+    ["source", "Archiving workspace and history (3/3)"]
+  ])("shows the durable %s stage and elapsed time outside the truncated tab", async (phase, label) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-16T00:02:05Z"));
+    try {
+      const html = await renderToolbar({ sessions: [{
+        sessionId: "closing-session", archiving: true,
+        archiveStartedAt: "2026-09-16T00:00:00Z", archiveOperation: { phase }
+      }] });
+      expect(html).toContain('role="status"');
+      expect(html).toContain(label);
+      expect(html).toContain("2m 5s elapsed");
+      expect(html).toContain("Completion has not been confirmed");
+      expect(html).toContain("You can keep working in another session");
+    } finally { vi.useRealTimers(); }
+  });
+  it("does not infer a stage before the server admits closure", async () => {
+    const html = await renderToolbar({ sessions: [{ sessionId: "pending", archiving: true }] });
+    expect(html).toContain("Waiting for the server to begin");
+    expect(html).not.toContain("elapsed");
+  });
+  it("removes progress when no closure is active", async () => {
+    expect(await renderToolbar()).not.toContain("archive-progress");
   });
 });

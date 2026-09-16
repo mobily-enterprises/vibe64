@@ -736,6 +736,7 @@ describe("background session archive selection", () => {
     const { scope, sessionData } = mountSessionData();
     await nextTick();
     expect(sessionData.selectedSessionId.value).toBe("session-a");
+    expect(sessionData.sessions.value.at(-1).archiveOperation.phase).toBe("source");
     creationHarness.queryData.value.sessions[1].metadata.session_archive_operation = JSON.stringify({
       status: "failed", phase: "source", error: "Recovery failed"
     });

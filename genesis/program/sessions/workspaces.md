@@ -46,7 +46,11 @@ Archive confirmation immediately selects the preceding available tab and leaves
 the requested session gray and unavailable while its existing request runs.
 Archive state and feedback belong to the project panel. With no selection, the
 empty layout stays usable even when hidden runtimes are retained. Failure
-restores the tab without stealing the current selection.
+restores the tab without stealing the current selection. A persistent line beneath
+the tabs names each closing session, its last reported stage and elapsed time.
+It starts immediately, survives reload through the stored operation, and does
+not imply that elapsed time proves server activity. Completion removes the
+progress line and the existing archive feedback announces the outcome.
 
 Initial session loading stays visible until the session list resolves, including
 when the remembered session's runtime mounts first. A mounted runtime alone does
@@ -58,7 +62,7 @@ stop before resources and source are removed. Durable stopping, resources, and
 source stages let startup resume interrupted archives. A failure retains its
 stage and error for explicit retry; source recovery evidence keeps its protection
 marker. Startup also finalizes interrupted archive publication from the immutable
-closing tree. Start, completion, and failure publish `vibe64.session.changed` to
+closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
 
 The chat header shares its available width among up to three session tabs,

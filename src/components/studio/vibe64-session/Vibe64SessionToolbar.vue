@@ -1,7 +1,10 @@
 <template>
   <div
     class="studio-ai-sessions__toolbar"
-    :class="{ 'studio-ai-sessions__toolbar--compact': compact }"
+    :class="{
+      'studio-ai-sessions__toolbar--compact': compact,
+      'studio-ai-sessions__toolbar--closing': closingSessions.length > 0
+    }"
   >
     <div class="studio-ai-sessions__tabs">
       <v-chip
@@ -98,11 +101,25 @@
 
       <slot name="after-sessions" />
     </div>
+    <div
+      v-for="closing in closingSessions"
+      :key="closing.sessionId"
+      class="studio-ai-sessions__archive-progress"
+    >
+      <v-progress-circular indeterminate size="16" width="2" aria-hidden="true" />
+      <div>
+        <div role="status">Closing {{ closing.title }} — {{ closing.stage }}</div>
+        <div class="studio-ai-sessions__archive-detail">
+          {{ closing.elapsed }}You can keep working in another session.
+          <span v-if="closing.slow">Completion has not been confirmed; the last reported stage is shown above.</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, inject, ref, useId, watch } from "vue";
+import { computed, inject, onMounted, ref, useId, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiArchiveOutline,
@@ -278,6 +295,31 @@ function sessionTabAriaLabel(sessionItem = {}) {
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
+const archiveNow = ref(Date.now());
+const hasClosingSessions = computed(() => props.active && allSessions.value.some((session) => session.archiving));
+onMounted(() => {
+  watch(hasClosingSessions, (running, _previous, onCleanup) => {
+    archiveNow.value = Date.now();
+    if (!running) return;
+    const timer = setInterval(() => { archiveNow.value = Date.now(); }, 1000);
+    onCleanup(() => clearInterval(timer));
+  }, { immediate: true });
+});
+const closingSessions = computed(() => allSessions.value.filter((session) => session.archiving).map((session) => {
+  const startedAt = Date.parse(session.archiveStartedAt || "");
+  const seconds = Number.isFinite(startedAt) ? Math.max(0, Math.floor((archiveNow.value - startedAt) / 1000)) : null;
+  return {
+    sessionId: session.sessionId,
+    title: sessionTabLabel(session),
+    stage: ({
+      stopping: "Stopping preview, AI and tools (1/3)",
+      resources: "Archiving resources (2/3)",
+      source: "Archiving workspace and history (3/3)"
+    })[session.archiveOperation?.phase] || "Waiting for the server to begin",
+    elapsed: seconds === null ? "" : `${Math.floor(seconds / 60)}m ${seconds % 60}s elapsed. `,
+    slow: seconds !== null && seconds >= 60
+  };
+}));
 const sessionLimit = computed(() => Math.max(0, Number(props.maxVisibleSessions || 0)));
 const createSessionButtonClass = computed(() => [
   "studio-ai-sessions__create-button",
@@ -295,8 +337,25 @@ const visibleSessions = computed(() => {
 </script>
 
 <style scoped>
+.studio-ai-sessions__archive-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(var(--v-theme-primary), 0.08);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.studio-ai-sessions__archive-detail {
+  margin-top: 0.2rem;
+  opacity: 0.8;
+}
+
 .studio-ai-sessions__toolbar {
   align-items: center;
+  flex-wrap: wrap;
   display: flex;
   gap: 0.75rem;
   justify-content: flex-start;
@@ -519,6 +578,10 @@ const visibleSessions = computed(() => {
 .studio-ai-sessions__toolbar--compact {
   height: 2rem;
   min-height: 2rem;
+}
+
+.studio-ai-sessions__toolbar--compact.studio-ai-sessions__toolbar--closing {
+  height: auto;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {

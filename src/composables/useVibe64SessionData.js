@@ -303,13 +303,19 @@ function useVibe64SessionData({
       if (attempt.succeeded) {
         items.delete(id);
       } else {
-        items.set(id, { ...(items.get(id) || attempt.session), archiving: true });
+        items.set(id, {
+          ...(items.get(id) || attempt.session),
+          archiving: true,
+          archiveStartedAt: attempt.startedAt
+        });
       }
     }
     return visibleVibe64Sessions([...items.values()]).map((session) => {
       const operation = sessionArchiveOperation(session);
       return {
         ...session,
+        archiveOperation: operation,
+        archiveStartedAt: operation?.startedAt || session.archiveStartedAt,
         archiveError: operation?.status === "failed" ? operation.error : "",
         archiving: Boolean(session.archiving || operation?.status === "running" || (
           operation?.status !== "failed" && session.metadata?.session_closing_reason === "archived"
@@ -480,6 +486,7 @@ function useVibe64SessionData({
   const archive = proxyRefs(useVibe64SessionDialogs({
     beginArchive(sessionId) {
       archiveAttempts.value[sessionId] = {
+        startedAt: new Date().toISOString(),
         session: sessions.value.find((session) => session.sessionId === sessionId)
       };
       if (selectedSessionId.value === sessionId) {
@@ -516,7 +523,12 @@ function useVibe64SessionData({
       if (!id) return;
       if (payload.reason === "session-archiving") {
         const session = sessions.value.find((item) => item.sessionId === id);
-        if (session) archiveAttempts.value[id] = { session };
+        if (session) {
+          archiveAttempts.value[id] = {
+            session,
+            startedAt: archiveAttempts.value[id]?.startedAt || new Date().toISOString()
+          };
+        }
         if (selectedSessionId.value === id) selectPreviousSession(id);
       } else if (payload.reason === "session-archived") {
         archiveAttempts.value[id] = { succeeded: true };

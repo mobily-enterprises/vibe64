@@ -16,7 +16,9 @@ Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
 Archiving immediately makes a session inactive and selects the previous available
 session. Its gray tab remains while Preview, AI work, and other tools stop and
-its workspace is archived in the background. Success removes the tab; failure
+its workspace is archived in the background. A visible status beneath the tabs
+names the closing session, current stage and elapsed time, including after reload.
+Long waits explicitly state that completion is still unconfirmed. Success removes the tab; failure
 restores its availability with a warning. All open tabs observe the transition.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.

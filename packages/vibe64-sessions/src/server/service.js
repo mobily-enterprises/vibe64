@@ -863,6 +863,16 @@ function createService({
         const persist = () => runtime.store.writeMetadataValue(
           sessionId, "session_archive_operation", JSON.stringify(operation)
         );
+        async function advanceArchivePhase(phase) {
+          operation.phase = phase;
+          await persist();
+          await publishSessionChanged(sessionId, {
+            operation: "updated",
+            originId: text(input.originId),
+            reason: "session-archive-progress",
+            payload: { clientRefresh: { includeList: true } }
+          });
+        }
         await persist();
         try {
           const closingSession = await runtime.markSessionClosing(sessionId, {
@@ -880,8 +890,7 @@ function createService({
             if (typeof terminals.removeOutputResultsForSession === "function") {
               await terminals.removeOutputResultsForSession(sessionId);
             }
-            operation.phase = "resources";
-            await persist();
+            await advanceArchivePhase("resources");
           }
           if (operation.phase === "resources") {
             if (!sourceCreationFailed && typeof project.releaseSessionResources === "function") {
@@ -890,8 +899,7 @@ function createService({
                 throw new Error(released.error || "Session resources could not be archived.");
               }
             }
-            operation.phase = "source";
-            await persist();
+            await advanceArchivePhase("source");
           }
           return await runtime.archiveSession(sessionId);
         } catch (error) {

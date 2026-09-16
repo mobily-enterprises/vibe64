@@ -56,7 +56,7 @@ for (const [phase, expected] of [
     const result = await f.service().resumeSessionArchives();
     assert.deepEqual(result.failures, []);
     assert.deepEqual(f.calls, expected);
-    assert.deepEqual(f.events.map(e => e.reason), ["session-archiving", "session-archived"]);
+    assert.deepEqual(f.events.map(e => e.reason), ["session-archiving", ...expected.slice(1).map(() => "session-archive-progress"), "session-archived"]);
     assert.ok(f.events.every(e => e.payload.clientRefresh.includeList));
   });
 }
@@ -133,8 +133,23 @@ test("SIGKILL leaves durable progress and a fresh runtime recovers through the s
     const recovered = await service.resumeSessionArchives();
     assert.deepEqual(recovered.failures, []);
     assert.equal((await runtime.getSession("interrupted")).archived, true);
-    assert.deepEqual(events, ["session-archiving", "session-archived"]);
+    assert.deepEqual(events, ["session-archiving", "session-archive-progress", "session-archive-progress", "session-archived"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("phase announcements follow durable progress before the next slow operation", async () => {
+  const f = fixture();
+  f.project.releaseSessionResources = async () => {
+    assert.equal(JSON.parse(f.session.metadata.session_archive_operation).phase, "resources");
+    assert.equal(f.events.at(-1).reason, "session-archive-progress");
+    return { ok: true };
+  };
+  f.runtime.archiveSession = async () => {
+    assert.equal(JSON.parse(f.session.metadata.session_archive_operation).phase, "source");
+    assert.equal(f.events.filter(e => e.reason === "session-archive-progress").length, 2);
+    return f.session;
+  };
+  assert.equal((await f.service().archiveSession("session-a")).ok, true);
 });
