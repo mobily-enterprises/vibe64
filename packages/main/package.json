@@ -28,7 +28,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.196",
-    "@jskit-ai/realtime": "0.1.193"
+    "@jskit-ai/kernel": "0.1.197",
+    "@jskit-ai/realtime": "0.1.194"
   }
 }
