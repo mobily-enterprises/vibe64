@@ -2135,6 +2135,7 @@ function useVibe64AutopilotView(props, emit, {
     Vibe64OutputControls,
     assistantDirectAllowed,
     agentActive,
+    agentObservationLost,
     agentStopEnabled,
     agentStopVisible,
     answerChoices,

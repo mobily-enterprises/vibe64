@@ -145,7 +145,7 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
   });
 
-  it("keeps temporary AI unmistakable, ephemeral, multi-task, and attachment-owned", () => {
+  it("keeps temporary AI separate, restorable, multi-task, and attachment-owned", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const temporaryAi = fs.readFileSync(temporaryAiPath, "utf8");
     const temporaryAiComposable = fs.readFileSync(temporaryAiComposablePath, "utf8");
@@ -196,9 +196,11 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain('aria-label="Attach console and network diagnostics"');
     expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
     expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
-    expect(temporaryAiComposable).toContain("beforeunload");
-    expect(temporaryAiComposable).toContain("keepalive: true");
-    expect(temporaryAiComposable).toContain("vibe64AgentAttachmentFilePath");
+    expect(temporaryAiComposable).not.toContain("beforeunload");
+    expect(temporaryAiComposable).toContain("onMounted(() => { void restoreTasks(); });");
+    expect(temporaryAiComposable).toContain("for (const taskId of saveTimers.keys()) void saveTask(taskId);");
+    expect(temporaryAiComposable).toContain("attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)");
+    expect(temporaryAiComposable).toContain("restoredAttachments: record.attachments || []");
     expect(temporaryAiComposable).toContain("function showWorkspace()");
     expect(temporaryAiComposable).toContain("async function startTask(options = {})");
     expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
@@ -243,16 +245,14 @@ describe("Vibe64 direct session view", () => {
     const promptHints = fs.readFileSync(promptHintsPath, "utf8");
     const composerActions = fs.readFileSync(sharedComposerActionsPath, "utf8");
 
-    expect(component).toContain("<AssistantComposerActions");
-    expect(component).toMatch(/canStop: agentStopVisible,\s+stopDisabled: !agentStopEnabled,\s+stopPending: interrupting/u);
-    expect(component).toContain("submitAriaLabel: composerSubmitActionAriaLabel");
+    expect(component).toContain('v-if="agentStopVisible"');
+    expect(component).toContain(':disabled="!agentStopEnabled"');
+    expect(component).toContain(':aria-label="composerSubmitActionAriaLabel"');
     expect(component).toContain("composerSubmitMode === 'send' ? mdiSend");
-    expect(component).toContain("submitLabel: composerSubmitActionLabel");
-    expect(composerActions).toContain("{{ state.submitLabel || (state.pending ? 'Sending…' : 'Send') }}");
-    expect(component).toContain('"Suggest to owner"');
-    expect(component).not.toContain('"Suggesting…"');
-    expect(component).toContain("pending: composerSending");
-    expect(component).toMatch(/@submit="sendComposerMessage"\s+@stop="requestAgentInterrupt"/u);
+    expect(component).toContain('"Request message from workspace owner"');
+    expect(component).toContain(':aria-busy="composerSending ? \'true\' : undefined"');
+    expect(component).toContain('@click="sendComposerMessage"');
+    expect(component).toContain('@click="requestAgentInterrupt"');
     expect(composerActions).toContain(':aria-busy="state.pending ? \'true\' : undefined"');
     expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
     expect(composerActions).not.toContain(":loading=");
@@ -281,7 +281,7 @@ describe("Vibe64 direct session view", () => {
     expect(questions).not.toContain("#selection=");
     expect(questions).toContain("Answer normally instead");
     expect(questions).toContain(':prepend-icon="mdiPencilOutline"');
-    expect(component.match(/canSend: composerCanSubmit && attachmentState\.canSubmit/gu)).toHaveLength(1);
+    expect(component.match(/:disabled="!composerCanSubmit \|\| !attachmentState\.canSubmit"/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');
     expect(composable).toContain("numberedQuestions.value.every");
   });

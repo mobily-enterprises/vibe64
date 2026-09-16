@@ -348,11 +348,10 @@
               :attachments-enabled="composerAttachmentsEnabled"
               :described-by="composerSupportStatusVisible ? thinkingStatusId : ''"
               :disabled="composerDisabled"
-              :hint="composerAccessHint"
-              persistent-hint
+              density="compact"
               :placeholder="composerPromptHintPlaceholder"
               :placeholder-affects-height="!composerPromptHintPreview"
-              :rows="numberedQuestions.length ? 1 : 2"
+              :rows="1"
               :session-id="sessionId"
               :submit-enabled="composerCanSubmit"
               tab-to-submit
@@ -373,89 +372,136 @@
                 />
               </template>
               <template #footer="{ attachmentState }">
-                <AssistantComposerActions
-                  ref="composerSendButton"
-                  :state="{
-                    canSend: composerCanSubmit && attachmentState.canSubmit,
-                    pending: composerSending,
-                    canStop: agentStopVisible,
-                    stopDisabled: !agentStopEnabled,
-                    stopPending: interrupting,
-                    submitLabel: composerSubmitActionLabel,
-                    submitAriaLabel: composerSubmitActionAriaLabel,
-                    submitTitle: composerSubmitActionTitle,
-                    submitIcon: composerSuggesting ? mdiAccountArrowRightOutline : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)
-                  }"
-                  @submit="sendComposerMessage"
-                  @stop="requestAgentInterrupt"
-                >
-                  <div ref="composerToolsTarget" class="studio-autopilot__composer-tools">
-                    <Vibe64AssistantAccessPanel
-                      :access-error="assistantAccessError"
-                      :action-is-pending="assistantActionIsPending"
-                      :can-manage="assistantSuggestionsCanManage"
-                      :pending-action="assistantPendingAction"
-                      :pending-suggestions="assistantPendingSuggestions"
-                      :suggestions-error="assistantSuggestionsError"
-                      @approve="approveAssistantSuggestion"
-                      @discard="discardAssistantSuggestion"
-                      @reload="reloadAssistantAccess"
-                      @withdraw="withdrawAssistantSuggestion"
-                    />
-                    <Vibe64SessionAssistantMenu
-                      :access-label="assistantAccessLabel"
-                      :access-loading="assistantAccessLoading"
-                      :can-configure="assistantSuggestionsCanManage"
-                      :changes-disabled="composerSending || agentActive"
-                      :session="props.session"
-                      :sessions-api-path="props.sessionsApiPath"
-                    />
-                    <Vibe64CodexPlanUsage
-                      :active="props.active && !props.sessionSelectionArchived"
-                      :session="props.session"
-                      :sessions-api-path="props.sessionsApiPath"
-                    />
-                    <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
+                <div class="studio-autopilot__composer-actions">
+                  <v-menu eager location="top start" :close-on-content-click="false">
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps" aria-label="Add to message" title="Add to message"
+                        :icon="mdiPlus" size="small" variant="text" class="studio-autopilot__composer-action"
+                      />
+                    </template>
+                    <v-card class="studio-autopilot__composer-menu pa-2" aria-label="Add to message">
+                      <v-btn
+                        v-if="composerAttachmentsSupported"
+                        aria-label="Attach files"
+                        class="studio-autopilot__composer-action"
+                        :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles"
+                        :prepend-icon="mdiPaperclip"
+                        size="small"
+                        title="Attach files"
+                        type="button"
+                        variant="text"
+                        @click="composerInput?.openFilePicker?.()"
+                      >
+                        Attach files
+                      </v-btn>
+                      <v-btn
+                        v-if="composerAttachmentsSupported && previewAttachmentState.captureAvailable"
+                        aria-label="Attach visible preview"
+                        class="studio-autopilot__composer-action"
+                        :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
+                        :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
+                        :prepend-icon="mdiEyePlusOutline"
+                        size="small"
+                        title="Attach visible preview"
+                        type="button"
+                        variant="text"
+                        @click="captureVisiblePreview"
+                      >
+                        Attach visible preview
+                      </v-btn>
+                      <v-btn
+                        v-if="composerAttachmentsSupported && previewAttachmentState.diagnosticsAvailable"
+                        aria-label="Attach console & network"
+                        class="studio-autopilot__composer-action"
+                        :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
+                        :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
+                        :prepend-icon="mdiConsoleNetworkOutline"
+                        size="small"
+                        title="Attach console and network diagnostics"
+                        type="button"
+                        variant="text"
+                        @click="attachPreviewDiagnostics"
+                      >
+                        Attach console &amp; network
+                      </v-btn>
+                      <Vibe64CodexPlanUsage
+                        :usage-target="composerUsageTarget"
+                        :active="props.active && !props.sessionSelectionArchived"
+                        :session="props.session"
+                        :sessions-api-path="props.sessionsApiPath"
+                      />
+                    </v-card>
+                  </v-menu>
+                  <v-menu v-model="composerSettingsOpen" eager location="top start" :close-on-content-click="false">
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps" :aria-label="composerAccessHint ? 'Chat settings: attention required' : 'Chat settings'"
+                        title="Chat settings" icon size="small" variant="text"
+                        class="studio-autopilot__composer-action"
+                      >
+                        <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
+                          <v-icon :icon="mdiCogOutline" />
+                        </v-badge>
+                      </v-btn>
+                    </template>
+                    <v-card class="studio-autopilot__composer-menu pa-3" width="300" aria-label="Chat settings">
+                      <div v-if="composerAccessHint" class="text-body-small" role="status">
+                        {{ composerAccessHint }}
+                        <v-btn
+                          v-if="agentObservationLost && !agentActive" size="small" variant="text"
+                          :disabled="composerDisabled || composerSending" @click="continueConversation"
+                        >
+                          Continue
+                        </v-btn>
+                      </div>
+                      <div class="studio-autopilot__settings-row">
+                        <span>AI model and access</span>
+                        <Vibe64AssistantAccessPanel
+                          :access-error="assistantAccessError"
+                          :action-is-pending="assistantActionIsPending"
+                          :can-manage="assistantSuggestionsCanManage"
+                          :pending-action="assistantPendingAction"
+                          :pending-suggestions="assistantPendingSuggestions"
+                          :suggestions-error="assistantSuggestionsError"
+                          @approve="approveAssistantSuggestion"
+                          @discard="discardAssistantSuggestion"
+                          @reload="reloadAssistantAccess"
+                          @withdraw="withdrawAssistantSuggestion"
+                        />
+                        <Vibe64SessionAssistantMenu
+                          :access-label="assistantAccessLabel"
+                          :access-loading="assistantAccessLoading"
+                          :can-configure="assistantSuggestionsCanManage"
+                          :changes-disabled="composerSending || agentActive"
+                          :session="props.session"
+                          :sessions-api-path="props.sessionsApiPath"
+                        />
+                      </div>
+                      <div ref="composerToolsTarget" class="studio-autopilot__settings-row" />
+                      <div class="studio-autopilot__settings-row">
+                        <span>Starred files</span>
+                        <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
+                      </div>
+                      <div ref="composerUsageTarget" class="studio-autopilot__settings-row" />
+                    </v-card>
+                  </v-menu>
+                  <div class="studio-autopilot__composer-delivery">
                     <v-btn
-                      v-if="composerAttachmentsSupported"
-                      aria-label="Attach files"
-                      class="studio-autopilot__composer-action"
-                      :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles"
-                      :icon="mdiPaperclip"
-                      size="small"
-                      title="Attach files"
-                      type="button"
-                      variant="text"
-                      @click="composerInput?.openFilePicker?.()"
+                      v-if="agentStopVisible" aria-label="Stop" title="Stop assistant"
+                      :disabled="!agentStopEnabled" :aria-busy="interrupting ? 'true' : undefined"
+                      :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
+                      @click="requestAgentInterrupt"
                     />
                     <v-btn
-                      v-if="composerAttachmentsSupported && previewAttachmentState.captureAvailable"
-                      aria-label="Attach visible preview"
-                      class="studio-autopilot__composer-action"
-                      :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
-                      :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
-                      :icon="mdiEyePlusOutline"
-                      size="small"
-                      title="Attach visible preview"
-                      type="button"
-                      variant="text"
-                      @click="captureVisiblePreview"
-                    />
-                    <v-btn
-                      v-if="composerAttachmentsSupported && previewAttachmentState.diagnosticsAvailable"
-                      aria-label="Attach console & network"
-                      class="studio-autopilot__composer-action"
-                      :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
-                      :disabled="!composerAttachmentsEnabled || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
-                      :icon="mdiConsoleNetworkOutline"
-                      size="small"
-                      title="Attach console and network diagnostics"
-                      type="button"
-                      variant="text"
-                      @click="attachPreviewDiagnostics"
+                      ref="composerSendButton" :aria-label="composerSubmitActionAriaLabel"
+                      :title="composerSubmitActionTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
+                      :aria-busy="composerSending ? 'true' : undefined" color="primary" size="small" variant="flat"
+                      :icon="composerSuggesting ? mdiAccountArrowRightOutline : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
+                      class="studio-autopilot__composer-action" @click="sendComposerMessage"
                     />
                   </div>
-                </AssistantComposerActions>
+                </div>
               </template>
             </Vibe64AutopilotPromptTextarea>
           </div>
@@ -703,7 +749,6 @@
 <script setup>
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
-  AssistantComposerActions,
   createAssistantTextSubmission,
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
@@ -716,6 +761,7 @@ import {
   mdiArrowTopRight,
   mdiAutorenew,
   mdiBroom,
+  mdiCogOutline,
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
   mdiDotsVertical,
@@ -723,8 +769,10 @@ import {
   mdiGithub,
   mdiIncognito,
   mdiPaperclip,
+  mdiPlus,
   mdiSend,
   mdiSourcePull,
+  mdiStop,
 } from "@mdi/js";
 import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -807,6 +855,8 @@ const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
 ));
 const composerInput = ref(null);
 const composerSendButton = ref(null);
+const composerSettingsOpen = ref(false);
+const composerUsageTarget = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
@@ -916,6 +966,7 @@ const {
   Vibe64OutputControls,
   assistantDirectAllowed,
   agentActive,
+  agentObservationLost,
   agentStopEnabled,
   agentStopVisible,
   answerChoices,
@@ -933,6 +984,7 @@ const {
   chatReloadAvailable,
   chatReloading,
   chatTurns,
+  composerAttachments,
   composerAttachmentsEnabled,
   composerAttachmentsSupported,
   composerCanSubmit,
@@ -942,7 +994,6 @@ const {
   composerPlaceholder,
   composerSending,
   composerSubmitAriaLabel,
-  composerSubmitLabel,
   composerSubmitMode,
   composerSubmitTitle,
   conversationLogVisible,
@@ -1065,12 +1116,6 @@ const composerSuggesting = computed(() => assistantCanRequestMessage.value && [
   "steer",
   "steering"
 ].includes(composerSubmitMode.value));
-const composerSubmitActionLabel = computed(() => {
-  if (!composerSuggesting.value) {
-    return composerSubmitMode.value === "send" ? "Send" : composerSubmitLabel.value;
-  }
-  return "Suggest to owner";
-});
 const composerSubmitActionAriaLabel = computed(() => (
   composerSuggesting.value ? "Request message from workspace owner" : composerSubmitAriaLabel.value
 ));
@@ -1203,8 +1248,17 @@ async function sendComposerMessage() {
   return submitComposerMessage();
 }
 
+async function continueConversation() {
+  composerSettingsOpen.value = false;
+  composerInput.value?.focus?.();
+  if (composerDraft.value.trim() || composerAttachments.value.length) return;
+  composerDraft.value = "Continue.";
+  await nextTick();
+  if (composerCanSubmit.value) await sendComposerMessage();
+}
+
 function focusComposerSendButton() {
-  composerSendButton.value?.focus();
+  composerSendButton.value?.$el?.focus();
 }
 
 function updateComposerAttachmentState(state = {}) {
@@ -1611,19 +1665,42 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.studio-autopilot__composer-tools {
+.studio-autopilot__composer-actions,
+.studio-autopilot__composer-delivery,
+.studio-autopilot__settings-row {
   align-items: center;
   display: flex;
   gap: 0.4rem;
-}
-
-.studio-autopilot__composer-tools {
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
-.studio-autopilot__composer-tools::-webkit-scrollbar {
+.studio-autopilot__composer-actions {
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.studio-autopilot__composer-delivery {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+.studio-autopilot__composer-action {
+  flex-shrink: 0;
+}
+
+.studio-autopilot__composer-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: calc(100vw - 24px);
+}
+
+.studio-autopilot__settings-row {
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.studio-autopilot__settings-row:empty {
   display: none;
 }
 

@@ -66,6 +66,64 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  hintTest("@compact-composer keeps menus and delivery in one row and preserves recovery drafts", async ({ page }) => {
+    const messages: Record<string, unknown>[] = [];
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await mockDirectChat(page, {
+      agentTurn: { active: false, status: "observation_lost" },
+      onMessage: body => { messages.push(body); }
+    });
+    const session = {
+      ...directSession({ agentTurn: { active: false, status: "observation_lost" } }),
+      assistantSelection: { engineId: "codex" }
+    };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, { ok: true, ...session.agentSession }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, { ok: true, status: "available", goal: null }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, {
+      ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 73 }]
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const input = page.getByLabel("Message AI assistant");
+    const settings = page.getByRole("button", { name: "Chat settings: attention required", exact: true });
+    const notice = page.getByRole("status").filter({ hasText: "The assistant stopped because its progress could not be tracked." });
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(input).toBeVisible();
+      await expect(notice).not.toBeVisible();
+      const row = page.locator(".studio-autopilot__composer-actions:visible");
+      const bounds = await row.locator("button").evaluateAll(buttons => buttons.map(button => {
+        const { y, height } = button.getBoundingClientRect();
+        return y + height / 2;
+      }));
+      expect(Math.max(...bounds) - Math.min(...bounds)).toBeLessThan(2);
+      expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`composer-${width}.png`) });
+    }
+    await page.getByRole("button", { name: "Add to message", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Attach files", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await input.fill("Keep my draft");
+    await settings.click();
+    await expect(notice).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose AI", exact: true })).toBeVisible();
+    await expect(page.getByText("Starred files", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Weekly Codex allowance remaining: 73%", exact: true }).click();
+    await expect(page.getByText("Codex plan allowance", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(input).toHaveValue("Keep my draft");
+    expect(messages).toHaveLength(0);
+    await input.fill("");
+    await settings.click();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect.poll(() => messages.length).toBe(1);
+    expect(messages[0].message).toBe("Continue.");
+    expect(errors).toEqual([]);
+  });
+
   test("sends an ordinary chat message without orchestration metadata or a prompts section", async ({ page }) => {
     const messages: Record<string, unknown>[] = [];
     await mockDirectChat(page, {
