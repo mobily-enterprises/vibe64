@@ -47,6 +47,49 @@ test("healthy assistant can receive steering in the built client", async ({ page
   await expect(page.getByLabel("Message AI assistant")).toHaveValue("");
 });
 
+test("long goal keeps Pause and full-goal Close visible on small screens", async ({ page }, info) => {
+  Object.assign(server.state.session, { assistantSelection: { engineId: "codex" } });
+  const objective = "Complete the approved customer configuration plan, preserving existing work and checking each stage. ".repeat(45);
+  const actions: Record<string, unknown>[] = [];
+  const goal = { threadId: "thread-long-goal", status: "active", objective, createdAt: 20, timeUsedSeconds: 390 };
+  await page.route("**/agent-goal", async (route) => {
+    if (route.request().method() === "POST") {
+      const action = route.request().postDataJSON();
+      actions.push(action);
+      goal.status = action.action === "pause" ? "paused" : "active";
+    }
+    await route.fulfill({ json: { ok: true, status: "available", goal } });
+  });
+  await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
+  await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
+  await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+  await openChat(page);
+  for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 420 }, { width: 768, height: 1024 }, { width: 1280, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.getByRole("button", { name: "Goal running", exact: true }).click();
+    const pause = page.getByRole("button", { name: "Pause goal", exact: true });
+    const full = page.getByRole("button", { name: "View full goal", exact: true });
+    await expect(pause).toBeInViewport({ ratio: 1 });
+    await expect(full).toBeInViewport({ ratio: 1 });
+    await expect(page.locator(".assistant-goal__details")).not.toContainText(objective);
+    await page.screenshot({ path: info.outputPath(`goal-${viewport.width}x${viewport.height}.png`), animations: "disabled" });
+    await full.click();
+    const dialog = page.getByRole("dialog", { name: "Full goal", exact: true });
+    await expect(dialog).toContainText(objective);
+    const close = dialog.getByRole("button", { name: "Close", exact: true });
+    await expect(close).toBeInViewport({ ratio: 1 });
+    await expect.poll(() => dialog.locator(".v-card-text").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`full-goal-${viewport.width}x${viewport.height}.png`), animations: "disabled" });
+    await close.click();
+    await expect(dialog).toHaveCount(0);
+    if (await pause.isVisible()) await page.keyboard.press("Escape");
+  }
+  await page.getByRole("button", { name: "Goal running", exact: true }).click();
+  await page.getByRole("button", { name: "Pause goal", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeEnabled();
+  expect(actions).toEqual([expect.objectContaining({ action: "pause", objective })]);
+});
+
 test("a hung initial session read recovers after its deadline", async ({ page }) => {
   test.setTimeout(90_000);
   server.state.detailHandler = (response) => {

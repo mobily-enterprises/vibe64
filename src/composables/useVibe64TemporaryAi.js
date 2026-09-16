@@ -446,6 +446,7 @@ function useVibe64TemporaryAi({
       busy: true,
       draft: "",
       error: "",
+      errorCode: "",
       pendingMessageId: messageId,
       outcomeKind: "",
       // Keep this turn's review separate from diagnostics returned by a later Update.
@@ -532,6 +533,7 @@ function useVibe64TemporaryAi({
         conversationId: error?.conversationExpired === true ? "" : conversationId,
         draft: task.draft,
         error: temporaryAiText(error?.message || error) || "Temporary AI message could not be sent.",
+        errorCode: temporaryAiText(error?.code),
         pendingMessageId: messageId,
         runId: error?.conversationExpired === true ? "" : task.runId,
         status: "failed"

@@ -80,6 +80,10 @@ JSKIT owns the suggestion and working-status presentation, debounced suggestion
 lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
 Vibe64 supplies native state and actions, project-aware suggestion requests,
 connected-provider policies, upload storage, attachment opening, and favourite files.
+The goal popover shows a bounded objective preview beside the existing status
+and Pause/Resume controls. View full goal opens the exact instruction in a
+scrollable dialog with a fixed Close action. Preview truncation affects only
+presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, stays orange while paused, and shows
 elapsed active time when space permits. The application omits goal controls for
 assistants without that capability.

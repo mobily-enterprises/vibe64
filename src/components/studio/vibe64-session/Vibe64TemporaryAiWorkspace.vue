@@ -71,18 +71,20 @@
 
     <template v-if="activeTask">
       <div class="vibe64-temporary-ai__recovery-row">
-        <v-alert
-          v-if="activeTask.recoveryNotice && !activeTaskRecoveryVerified"
+        <div
+          v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
           aria-live="polite"
           class="vibe64-temporary-ai__recovery"
           data-temporary-ai-recovery
-          density="compact"
-          :icon="mdiRobotOutline"
           role="status"
-          :title="activeTaskRecoveryTitle"
-          variant="tonal"
         >
-          <p v-if="activeTaskRecoveryStatus && !activeTask.busy">{{ activeTaskRecoveryStatus }}</p>
+          <div class="vibe64-temporary-ai__recovery-summary">
+            <strong>{{ activeTaskRecoveryTitle }}</strong>
+            <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
+              <summary>Details</summary>
+              <p>{{ activeTaskRecoveryStatus }}</p>
+            </details>
+          </div>
           <v-btn
             v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
             class="vibe64-temporary-ai__check-update"
@@ -96,14 +98,14 @@
           >
             Check Update
           </v-btn>
-        </v-alert>
+        </div>
       </div>
       <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
         :messages="activeTask.messages"
         :working="activeTask.busy"
         :scroll-key="activeTask.id"
-        empty-message="Ask a focused question or investigate a problem without adding it to the main conversation."
+        :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
       >
         <template #message-text="{ message }">
           <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
@@ -124,22 +126,22 @@
         </template>
         <template #hints>
           <div
-            v-if="activeTask.error || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
+            v-if="activeTaskError || actionErrors[activeTask.id] || activeTask.busy || activeTaskRecoveryChecking"
             class="vibe64-temporary-ai__feedback"
           >
             <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
               {{ actionErrors[activeTask.id] }}
             </div>
             <div
-              v-if="activeTask.error"
+              v-if="activeTaskError"
               class="vibe64-temporary-ai__error"
               :class="{ 'vibe64-temporary-ai__error--recovered': activeTaskRecoveryVerified }"
               :role="activeTaskRecoveryVerified ? 'status' : 'alert'"
             >
               <template v-if="activeTaskRecoveryVerified">
-                Temporary AI did not report a clean finish: {{ activeTask.error }} The repair was independently verified.
+                Temporary AI did not report a clean finish: {{ activeTaskError }} The repair was independently verified.
               </template>
-              <template v-else>{{ activeTask.error }}</template>
+              <template v-else>{{ activeTaskError }}</template>
             </div>
             <AssistantComposerSupport
               v-if="activeTask.busy || activeTaskRecoveryChecking"
@@ -154,8 +156,10 @@
             v-show="task.id === activeTask.id"
             :key="task.id"
             :ref="(element) => setTaskPrompt(task.id, element)"
-            :model-value="task.draft"
+            class="vibe64-temporary-ai__composer"
+            :model-value="task.draft && (task.displayMessage || task.draft)"
             aria-label="Message temporary AI"
+            density="compact"
             :attachments-enabled="Boolean(props.sessionId)"
             :disabled="taskInputDisabled(task)"
             placeholder="Ask temporary AI…"
@@ -171,7 +175,7 @@
               <AssistantComposerActions
                 :ref="(element) => setTaskSendButton(task.id, element)"
                 :state="{
-                  canSend: !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit,
+                  canSend: !props.connectionUnavailable && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit,
                   canStop: task.busy,
                   stopDisabled: task.status === 'starting',
                   stopPending: stoppingTaskId === task.id,
@@ -266,7 +270,6 @@ import {
   mdiConsoleNetworkOutline,
   mdiPaperclip,
   mdiPlus,
-  mdiRobotOutline,
 } from "@mdi/js";
 
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
@@ -281,6 +284,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
+  connectionUnavailable: Boolean,
   previewAttachmentState: { type: Object, default: () => ({}) },
   repositoryBusy: Boolean,
   updateDisabled: Boolean,
@@ -335,6 +339,12 @@ const temporary = useVibe64TemporaryAi({
   sessionsApiPath: resolvedSessionsApiPath
 });
 const activeTask = temporary.activeTask;
+const activeTaskError = computed(() => {
+  if (props.connectionUnavailable && activeTask.value?.errorCode === "vibe64_agent_write_mode_busy") {
+    return "";
+  }
+  return activeTask.value?.error;
+});
 const updateRepairVisible = computed(() => temporary.open.value &&
   activeTask.value?.recoveryOperation === "update" && activeTask.value.recoveryOutcome !== "succeeded");
 const closeTitleId = useId();
@@ -498,7 +508,7 @@ function setTaskSendButton(taskId = "", element = null) {
 
 async function sendTask(taskId = "") {
   const currentPrompt = taskPrompt(taskId);
-  if (!taskId || currentPrompt?.attachmentsCanSubmit?.() === false) {
+  if (props.connectionUnavailable || !taskId || currentPrompt?.attachmentsCanSubmit?.() === false) {
     return;
   }
   const sent = await temporary.send(taskId);
@@ -719,22 +729,40 @@ defineExpose({
 }
 
 .vibe64-temporary-ai__recovery {
-  flex: 0 0 auto;
+  align-items: start;
+  display: flex;
   font-size: 0.85rem;
+  gap: 0.5rem;
   overflow-wrap: anywhere;
+  padding: 0.4rem;
 }
 
 .vibe64-temporary-ai__recovery-row:not(:empty) {
+  max-height: min(20dvh, 8rem);
+  overflow-y: auto;
   padding: 0.35rem 0.55rem 0;
 }
 
-.vibe64-temporary-ai__recovery :deep(.v-alert-title) {
+.vibe64-temporary-ai__recovery-summary {
+  flex: 1;
+  min-width: 0;
+}
+
+.vibe64-temporary-ai__recovery strong {
   font-size: 0.95rem;
   line-height: 1.4;
 }
 
+.vibe64-temporary-ai__recovery summary {
+  cursor: pointer;
+}
+
 .vibe64-temporary-ai__check-update {
-  margin-top: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.vibe64-temporary-ai__composer {
+  flex: 0 0 auto;
 }
 
 .vibe64-temporary-ai__return {
@@ -757,7 +785,10 @@ defineExpose({
 }
 
 .vibe64-temporary-ai__feedback {
+  flex: 0 0 auto;
+  max-height: min(12dvh, 6rem);
   min-width: 0;
+  overflow-y: auto;
 }
 
 .vibe64-temporary-ai__error {

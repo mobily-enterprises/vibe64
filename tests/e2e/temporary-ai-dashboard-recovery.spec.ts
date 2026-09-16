@@ -158,7 +158,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         children: Array.from(element.children).map((child) => ({ class: child.className, client: child.clientWidth, scroll: child.scrollWidth }))
       }));
       expect(widths.scroll, JSON.stringify(widths)).toBeLessThanOrEqual(widths.client);
-      expect(await workspace.locator(".vibe64-temporary-ai__messages").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await workspace.getByLabel("Conversation messages", { exact: true }).evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       const composerBox = await workspace.getByLabel("Message temporary AI").boundingBox();
       expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(height);
       expect(composerBox!.x + composerBox!.width).toBeLessThanOrEqual(workspaceBox!.x + workspaceBox!.width + 1);
@@ -175,7 +175,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect.poll(() => updates.length).toBe(2);
       expect(updateInputs[1].reviewedConflictId).toBe("reviewed-conflict");
       updates[1].resolve({ ok: true, status: "updated" });
-      const systemMessage = workspace.locator(".vibe64-ephemeral-conversation__message--system");
+      const systemMessage = workspace.locator(".assistant-transcript__system");
       await expect(systemMessage).toHaveCount(1);
       await expect(systemMessage).toContainText("System");
       await expect(systemMessage).toContainText("Session updated. Your changes were preserved. Nothing was published.");
@@ -409,6 +409,62 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     expect(stops).toBe(2);
     expect(deletes).toBe(2);
     expect(captured.temporaryCreates).toHaveLength(1);
+  });
+
+  test("repair controls stay visible after a failed send, disconnect and long draft", async ({ page }, testInfo) => {
+    const viewports = [
+      { width: 320, height: 640 }, { width: 390, height: 420 },
+      { width: 768, height: 1024 }, { width: 1280, height: 844 }
+    ];
+    const captured = await mockRepositoryRecovery(page, {
+      code: "vibe64_session_update_conflict", diagnostic: "Four files need review."
+    });
+    let failedRequest: Record<string, unknown> | null = null;
+    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1/turns`, async (route) => {
+      if (failedRequest) return route.fallback();
+      failedRequest = requestBodyWithoutOrigin(route.request());
+      await fulfillJson(route, {
+        ok: false, code: "vibe64_agent_write_mode_busy",
+        error: "The assistant is still reconnecting. Wait until it is ready, then try again."
+      });
+    });
+    await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
+    await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+    const input = workspace.getByLabel("Message temporary AI");
+    const send = workspace.getByRole("button", { name: "Send to temporary AI", exact: true });
+    await expect(input).toHaveValue("Fix this repository problem without losing work.");
+    await expect(workspace).not.toContainText("Ask a focused question");
+    server.state.rejectConnections = true;
+    server.forceDisconnect();
+    const banner = page.locator("[data-vibe64-connection-recovery]");
+    await expect(banner).toBeVisible();
+    await expect(workspace.locator("[data-temporary-ai-recovery]")).toHaveCount(0);
+    await expect(workspace).not.toContainText("The assistant is still reconnecting");
+    await expect(send).toBeDisabled();
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await expect(send).toBeInViewport({ ratio: 1 });
+      await expect(input).toBeInViewport({ ratio: 1 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    server.state.rejectConnections = false;
+    await banner.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await expect(send).toBeEnabled();
+    await send.click();
+    await expect.poll(() => captured.temporaryTurns.length).toBe(1);
+    expect(captured.temporaryTurns[0].message).toBe(failedRequest!.message);
+    expect(captured.temporaryTurns[0].messageId).toBe(failedRequest!.messageId);
+    await expect(input).toBeEnabled();
+    await input.fill("Keep my reply and the buttons visible.\n".repeat(80));
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      await expect(send).toBeInViewport({ ratio: 1 });
+      await expect(workspace.getByRole("button", { name: "Check Update", exact: true })).toBeInViewport({ ratio: 1 });
+      await expect.poll(() => input.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`repair-${viewport.width}x${viewport.height}.png`) });
+    }
+    expect(captured.mainChatMessages).toHaveLength(0);
   });
 
   test("Tab then Enter sends one reply, and long progress cannot move the composer offscreen", async ({ page }) => {

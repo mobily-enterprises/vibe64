@@ -151,6 +151,22 @@ it("uses the shared running and paused indicators for native goal state", async 
   mocks.goal = null;
 });
 
+it("previews long goals without changing the exact objective used by Pause", async () => {
+  mocks.buttons = [];
+  const objective = "Complete the approved implementation and verification plan. ".repeat(40);
+  mocks.goal = { status: "available", goal: { threadId: "thread-long", status: "active", objective, createdAt: 20 } };
+  mocks.request.mockResolvedValueOnce({ ok: true });
+  const html = await render(null);
+  expect(html).toContain(`${objective.slice(0, 140).trimEnd()}…`);
+  expect(html).not.toContain(objective);
+  expect(html).toContain("View full goal");
+  await mocks.buttons.find((button) => button.text === "Pause goal").click();
+  expect(mocks.request).toHaveBeenLastCalledWith("/api/projects/fixture/sessions/one/agent-goal", {
+    method: "POST", body: { action: "pause", threadId: "thread-long", objective, createdAt: 20 }
+  });
+  mocks.goal = null;
+});
+
 it("offers goal creation before the first goal and hides it for OpenCode", async () => {
   mocks.goal = { status: "available", threadId: "", goal: null };
   expect(await render(null)).toContain("Goal objective");

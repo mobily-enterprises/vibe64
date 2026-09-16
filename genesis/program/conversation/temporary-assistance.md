@@ -85,6 +85,13 @@ Long progress cannot push Stop or the composer out of view. The temporary
 workspace leaves the project session tabs and shared Save/Update activity
 available above it. Main chat stays outside the horizontally scrolling temporary
 tabs, so selecting or scrolling a task cannot cover the Main chat control.
+Activity notices have a bounded height, and the temporary composer keeps its
+buttons visible while long drafts scroll within the input. Repair details start
+collapsed. The open Update repair replaces the duplicate repository error panel.
+During reconnection the shared connection notice takes precedence over the repair
+status and matching connection error; drafts stay editable and Send waits for
+the connection. A failed generated repair request shows its concise description
+in the composer while retaining the full request and message identity for retry.
 
 Every product-owned repair entry uses the shared Fix it with AI control. It
 opens, selects, and focuses a separate Temporary AI task immediately. That task

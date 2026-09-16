@@ -66,6 +66,12 @@ useRealtimeEvent({
   onEvent: () => { if (!globalThis.document?.hidden) void goalResource.reload(); }
 });
 const goal = computed(() => goalResource.data.value?.goal || null);
+const fullGoalOpen = ref(false);
+const goalPreview = computed(() => {
+  const objective = String(goal.value?.objective || "").trim();
+  return objective.length > 140 ? `${objective.slice(0, 140).trimEnd()}…` : objective;
+});
+watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = false; });
 const goalAvailable = computed(() => !goalResource.loadError.value && goalResource.data.value?.status === "available");
 const changingGoal = ref(false);
 const goalError = ref("");
@@ -125,6 +131,7 @@ const goalState = computed(() => ({
   enabled: enabled.value && Boolean(goalAvailable.value || goalError.value),
   goal: goalAvailable.value && goal.value ? {
     ...goal.value,
+    objective: goalPreview.value,
     elapsedSeconds: goal.value.timeUsedSeconds,
     sampledAt: Number.isFinite(goal.value.updatedAt)
       ? goal.value.updatedAt * (goal.value.updatedAt < 1_000_000_000_000 ? 1000 : 1) : undefined
@@ -138,7 +145,20 @@ const goalState = computed(() => ({
 </script>
 
 <template>
-  <AssistantGoalControl :state="goalState" />
+  <AssistantGoalControl :state="goalState">
+    <v-btn v-if="goal?.objective && goalPreview !== goal.objective" class="mt-2" size="small" variant="text" @click="fullGoalOpen = true">
+      View full goal
+    </v-btn>
+  </AssistantGoalControl>
+  <v-dialog v-if="fullGoalOpen" v-model="fullGoalOpen" max-width="640" scrollable aria-label="Full goal">
+    <v-card>
+      <v-card-title>Full goal</v-card-title>
+      <v-card-text class="codex-plan-usage__goal-text">{{ goal?.objective }}</v-card-text>
+      <v-card-actions>
+        <v-btn @click="fullGoalOpen = false">Close</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-menu v-if="enabled && available" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn
@@ -160,4 +180,5 @@ const goalState = computed(() => ({
 <style scoped>
 .codex-plan-usage { max-width: 100%; font-size: 0.7rem; text-transform: none; }
 .codex-plan-usage__details { white-space: pre-line; margin-block: 0.5rem; }
+.codex-plan-usage__goal-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

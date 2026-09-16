@@ -53,6 +53,13 @@ prompt busy after that confirmation.
 Send and Steer clear submitted text immediately so people can write their next
 message while delivery is pending, with failed messages kept recoverable.
 An interruption failure stays visible without covering the composer or its retry controls.
+Repair conversations keep their input and action buttons visible on small screens.
+Long drafts scroll inside the input; repair details start collapsed, and a shared
+connection notice replaces repeated reconnection warnings. Failed automatic repair
+requests show a short description instead of internal agent instructions.
+The goal popover keeps its status and Pause/Resume controls beside a short
+objective preview. People can open the full wording in a scrollable dialog
+whose Close action stays visible.
 Markdown tables keep words readable and columns sized to their content. Wide
 tables scroll within the message on small screens, including with the keyboard.
 Numbered chat questions and their suggested choices retain the same inline

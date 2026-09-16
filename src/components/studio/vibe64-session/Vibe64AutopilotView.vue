@@ -140,7 +140,7 @@
       <div class="studio-autopilot__activity" aria-label="Session activity">
         <v-sheet
           v-if="connectionRecoveryVisible"
-          class="d-flex flex-wrap align-center justify-space-between ga-2 pa-3"
+          class="studio-autopilot__connection-recovery"
           color="surface-variant"
           rounded="lg"
           role="status"
@@ -150,7 +150,7 @@
             {{ props.agentConnectionStatus === 'disconnected'
               ? 'Connection lost. Reconnecting automatically.'
               : 'Checking the assistant connection.' }}
-            Your draft is kept. Live status may be out of date.
+            Your draft is kept.
           </span>
           <v-btn
             variant="tonal"
@@ -466,6 +466,7 @@
         ref="temporaryAiWorkspace"
         :active="props.active"
         :agent-settings="currentAgentSettings"
+        :connection-unavailable="connectionRecoveryVisible"
         :preview-attachment-state="previewAttachmentState"
         :session-id="sessionId"
         :sessions-api-path="props.sessionsApiPath"
@@ -1103,7 +1104,7 @@ const conversationAssistantLabel = computed(() => (
   props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" : "Codex"
 ));
 const updateHandledInRepair = computed(() => Boolean(
-  saveWorkActivityIsUpdate.value && temporaryAiWorkspace.value?.updateRepairVisible
+  (saveWorkActivityIsUpdate.value || saveWorkError.value) && temporaryAiWorkspace.value?.updateRepairVisible
 ));
 
 const promptHintsBlankConversation = computed(() => chatTurns.value.length < 1);
@@ -1548,7 +1549,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 0.3rem;
   grid-row: 2;
-  max-height: min(44vh, 24rem);
+  max-height: min(24dvh, 12rem);
   min-width: 0;
   overflow: auto;
   padding: 0.35rem 0.5rem;
@@ -1557,6 +1558,22 @@ onBeforeUnmount(() => {
 .studio-autopilot__activity:empty {
   display: none;
   padding: 0;
+}
+
+.studio-autopilot__connection-recovery {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.studio-autopilot__connection-recovery > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-autopilot__connection-recovery > .v-btn {
+  flex: 0 0 auto;
 }
 
 .studio-autopilot__deslop-offer {
