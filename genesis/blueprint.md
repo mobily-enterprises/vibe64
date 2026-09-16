@@ -14,6 +14,10 @@ when returning with cached data. A failed opening offers Retry without requiring
 a browser reload.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
+Current changes uses the full project pane, with the dashboard menu hidden and
+a Back to dashboard action, so file differences have room to read.
+Resizing chat keeps its contents, divider and project pane aligned through the
+smallest supported width.
 Archiving immediately makes a session inactive and selects the previous available
 session. Its gray tab remains while Preview, AI work, and other tools stop and
 its workspace is archived in the background. A visible status beneath the tabs

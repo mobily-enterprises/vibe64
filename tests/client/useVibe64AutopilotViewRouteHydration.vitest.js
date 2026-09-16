@@ -92,6 +92,26 @@ describe("useVibe64AutopilotView route hydration", () => {
   });
   afterEach(() => scope.stop());
 
+  it.each([true, false])("opens Current changes without the dashboard menu (direct link: %s)", async (direct) => {
+    route.path = `/app/project/chat-test/dashboard/${direct ? "changes" : "health"}`;
+    const { useVibe64AutopilotView } = await import(
+      "../../src/composables/useVibe64AutopilotView.js"
+    );
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(viewProps(), vi.fn())));
+    if (!direct) {
+      route.path = "/app/project/chat-test/dashboard/changes";
+      await nextTick();
+    }
+
+    expect(view.rightPaneTab.value).toBe("changes");
+    expect(view.dashboardShellVisible.value).toBe(false);
+    expect(view.dashboardRouteVisible.value).toBe(false);
+    view.backToDashboard();
+    expect(router.push).toHaveBeenCalledExactlyOnceWith(
+      `/app/project/chat-test/dashboard/${direct ? "env" : "health"}`
+    );
+  });
+
   it.each([
     { label: "Files", tool: "editor", segment: "files", component: "Vibe64SessionFiles" },
     { label: "Database", tool: "database", segment: "database", component: "Vibe64DatabaseWorkspace" },

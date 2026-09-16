@@ -498,10 +498,7 @@ const {
 
   .studio-ai-sessions__empty-layout {
     grid-template-columns:
-      minmax(
-        var(--studio-home-chat-column-min-width, 24rem),
-        var(--studio-home-chat-column-width, 30rem)
-      )
+      var(--studio-home-chat-column-width, 24rem)
       minmax(0, 1fr);
   }
 

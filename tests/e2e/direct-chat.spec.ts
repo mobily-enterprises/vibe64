@@ -66,6 +66,53 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  hintTest("keeps chat inside its divider at the minimum resize width", async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockDirectChat(page);
+    const session = { ...directSession(), assistantSelection: { engineId: "codex" } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, {
+      ok: true, status: "available", goal: { objective: "Review the changes", status: "paused", timeUsedSeconds: 73056 }
+    }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, {
+      ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 57 }]
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const input = page.getByLabel("Message AI assistant");
+    await expect(input).toBeVisible();
+    await expect(page.getByRole("button", { name: "Goal paused", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Weekly Codex allowance remaining: 57%", exact: true })).toBeVisible();
+    await input.fill("Keep this draft while resizing");
+    const separator = page.getByRole("separator", { name: "Resize chat" });
+    const handle = await separator.boundingBox();
+    await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(10, handle!.y + 100, { steps: 5 });
+    await page.mouse.up();
+    await expect(separator).toHaveAttribute("aria-valuenow", "320");
+    const chat = page.getByRole("region", { name: "Session chat", exact: true });
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    const chatBounds = await chat.boundingBox();
+    const divider = await separator.boundingBox();
+    expect(chatBounds!.x + chatBounds!.width).toBeLessThanOrEqual(divider!.x + 1);
+    for (const selector of [".studio-autopilot__session-header", ".studio-autopilot__composer", ".studio-autopilot__composer-actions"]) {
+      const element = chat.locator(selector);
+      const box = await element.boundingBox();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(divider!.x + 1);
+      expect(await element.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    }
+    await expect(input).toHaveValue("Keep this draft while resizing");
+    await page.screenshot({ path: testInfo.outputPath("minimum-chat-width.png"), animations: "disabled" });
+    await separator.press("End");
+    await expect.poll(async () => (await chat.boundingBox())!.width)
+      .toBe(Number(await separator.getAttribute("aria-valuemax")));
+    await separator.press("Home");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    await page.reload();
+    await expect(separator).toHaveAttribute("aria-valuenow", "320");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+  });
+
   hintTest("@compact-composer keeps menus and delivery in one row and preserves recovery drafts", async ({ page }) => {
     const messages: Record<string, unknown>[] = [];
     const errors: string[] = [];

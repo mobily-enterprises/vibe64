@@ -2,8 +2,7 @@
   <div
     class="studio-ai-sessions__toolbar"
     :class="{
-      'studio-ai-sessions__toolbar--compact': compact,
-      'studio-ai-sessions__toolbar--closing': closingSessions.length > 0
+      'studio-ai-sessions__toolbar--compact': compact
     }"
   >
     <div class="studio-ai-sessions__tabs">
@@ -576,12 +575,7 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__toolbar--compact {
-  height: 2rem;
   min-height: 2rem;
-}
-
-.studio-ai-sessions__toolbar--compact.studio-ai-sessions__toolbar--closing {
-  height: auto;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {

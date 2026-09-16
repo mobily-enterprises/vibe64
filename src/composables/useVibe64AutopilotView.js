@@ -65,6 +65,7 @@ const DIRECT_SESSION_TOOL_IDS = new Set([
   "ai-terminal"
 ]);
 const STANDALONE_SESSION_TOOL_IDS = new Set([
+  "changes",
   "editor",
   "database",
   "system"
@@ -1792,7 +1793,6 @@ function useVibe64AutopilotView(props, emit, {
   const dashboardRouteVisible = computed(() => [
     "dashboard",
     "info",
-    "changes",
     "repository"
   ].includes(rightPaneTab.value));
   const sessionToolBackPath = computed(() => (

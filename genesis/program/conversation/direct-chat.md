@@ -76,6 +76,9 @@ continuation and loading older history.
 
 ## Public contract
 
+The chat column, empty-session column and divider use the same resize width.
+The resize controller owns its bounds; the layout does not impose another minimum.
+
 JSKIT owns the suggestion and working-status presentation, debounced suggestion
 lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
 Vibe64 supplies native state and actions, project-aware suggestion requests,

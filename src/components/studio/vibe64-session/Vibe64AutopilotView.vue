@@ -558,6 +558,27 @@
       </Vibe64DashboardShell>
 
       <section
+        v-if="props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
+        class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
+        role="tabpanel"
+      >
+        <header class="studio-autopilot__session-tool-header">
+          <v-btn
+            :prepend-icon="mdiArrowLeft"
+            size="x-small"
+            type="button"
+            variant="tonal"
+            @click="backToDashboard"
+          >
+            Back to dashboard
+          </v-btn>
+        </header>
+        <div class="studio-autopilot__right-pane-page">
+          <slot name="dashboard" :dashboard-context="dashboardContext" />
+        </div>
+      </section>
+
+      <section
         v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
@@ -1732,10 +1753,7 @@ onBeforeUnmount(() => {
   .studio-autopilot {
     gap: var(--studio-home-project-gap, 0.75rem);
     grid-template-columns:
-      minmax(
-        var(--studio-home-chat-column-min-width, 24rem),
-        var(--studio-home-chat-column-width, 30rem)
-      )
+      var(--studio-home-chat-column-width, 24rem)
       minmax(0, 1fr);
   }
 

@@ -78,6 +78,41 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
   return { messages };
 }
 
+for (const width of [390, 1280]) {
+  test(`Current changes uses the full project pane at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockFiles(page);
+    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/changes`, (route) => fulfillJson(route, {
+      ok: true,
+      unsaved: true,
+      totalCount: 1,
+      files: [{ path: "src/app.js", status: "M", added: 1, deleted: 1 }],
+      initialDiff: {
+        path: "src/app.js",
+        diff: "diff --git a/src/app.js b/src/app.js\n--- a/src/app.js\n+++ b/src/app.js\n@@ -1 +1 @@\n-export const ready = false;\n+export const ready = true;\n"
+      }
+    }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/updates/check`, (route) => fulfillJson(route, {
+      ok: true, status: "up-to-date"
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/changes`);
+    const changes = page.locator(".vibe64-repository-workspace--changes");
+    await expect(changes.getByRole("heading", { name: "Current changes", exact: true })).toBeVisible();
+    await expect(changes.locator(".d2h-wrapper")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Dashboard sections" })).not.toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Dashboard section" })).not.toBeVisible();
+    const project = await page.locator(".studio-autopilot__project-panel:visible").boundingBox();
+    const review = await changes.boundingBox();
+    expect(review!.width).toBeGreaterThan(project!.width - 32);
+    await page.screenshot({ path: testInfo.outputPath(`current-changes-${width}.png`), animations: "disabled" });
+    await page.getByRole("button", { name: "Back to dashboard", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/env$/u);
+    await expect(width < 760
+      ? page.getByRole("combobox", { name: "Dashboard section" })
+      : page.getByRole("navigation", { name: "Dashboard sections" })).toBeVisible();
+  });
+}
+
 for (const width of [390, 900, 1600]) {
   test(`binary chat links and file selections offer usable downloads at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });

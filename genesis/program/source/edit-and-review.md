@@ -569,6 +569,9 @@ its answer remains available when they return.
 The Repository presents the session's complete current changes against saved project
 work, even when those changes are already committed inside the session. It can
 open an exact changed file without exposing staging mechanics to the user.
+Current changes opens outside the dashboard navigation shell, using the full
+project pane like Files. Back to dashboard restores the last dashboard page;
+a direct link returns to Env when there is no previous dashboard page.
 Current changes refreshes when an assistant turn becomes idle and when Vibe64
 observes editor, Save, or repository-status events, so work completed during a
 turn appears without a manual reload. Arbitrary filesystem writes that produce
