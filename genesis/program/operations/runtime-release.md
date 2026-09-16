@@ -34,7 +34,8 @@ Every external dependency version must already exist in the target registry.
 
 The shared builder discovers installed server providers once at build time and
 compiles their registry. It bundles helper entrypoints as well as the server,
-preserving runtime-relative resource paths. Pure JavaScript already included in
+including the standalone host execution helper and preserving runtime-relative
+resource paths. Pure JavaScript already included in
 the bundles is not declared as an additional complete runtime dependency.
 Package metadata, licenses and non-code assets remain in small bundled packages.
 Native modules and packages with dynamic runtime loading remain explicit pinned

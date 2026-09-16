@@ -7,6 +7,7 @@ const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
 const RUNTIME_ENTRIES = [
   "bin/run.js",
   "bin/server.js",
+  "node_modules/@local/vibe64-execution/src/host/execHelper.js",
   "node_modules/@local/vibe64-genesis/src/server/index.js",
   "node_modules/@local/vibe64-genesis/src/server/promptContext.js",
   "node_modules/@local/vibe64-genesis/bin/genesis",

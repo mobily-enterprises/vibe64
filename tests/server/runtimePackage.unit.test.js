@@ -53,6 +53,9 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const installed = path.join(root, "relocated");
     await rename(staged, installed);
     await verifyRuntime(installed);
+    await assert.rejects(execute(process.execPath, [
+      path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")
+    ]), error => error.code === 2 && /Usage: vibe64-exec-helper execute/u.test(error.stderr));
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
     assert.ok(manifest.dependencies["node-pty"]);
     assert.ok(manifest.dependencies["genesis-compiler"]);
