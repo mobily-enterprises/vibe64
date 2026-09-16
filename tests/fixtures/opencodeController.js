@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp } from "node:fs/promises";
+import { createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";
 import os from "node:os";
 import path from "node:path";
 import { serializeVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/index.js";
@@ -67,6 +68,7 @@ async function controllerHarness({
   zenModelIds = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-opencode-controller-"));
+  const streams = createConversationStreams();
   const sourceRoot = path.join(root, "sessions", "active", "session-1", "source");
   const sessionRoot = path.join(root, "session-state", "session-1");
   await Promise.all([
@@ -116,6 +118,10 @@ async function controllerHarness({
       return { prompt: `GENESIS ${input.task}: ${input.request}` };
     },
     store: {
+      readConversationStream: streams.read,
+      updateConversationStream: streams.update,
+      completeConversationStreamMessage: streams.complete,
+      clearConversationStream: streams.clear,
       async conversationMessageIdExists() {
         return false;
       },

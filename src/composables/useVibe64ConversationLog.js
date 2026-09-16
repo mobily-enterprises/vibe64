@@ -28,13 +28,15 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
-  normalizeThinkingMessageText
+  normalizeThinkingMessageText,
+  mergeConversationStream
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "assistant-stream",
   "integration-setup-skipped",
   "integration-setup-completed",
   "assistant-response-bundle",
@@ -326,7 +328,7 @@ function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId =
   // Action and intent events can persist user, system, or audit turns on the
   // server. Even the originating tab must refetch the durable log; optimistic
   // self-echo suppression belongs outside the canonical conversation query.
-  return !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
+  return Boolean(payload.conversationStream) || !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
 }
 
 function conversationLogRecoveryStateKey(session = {}) {
@@ -412,6 +414,14 @@ function useVibe64ConversationLog({
   let reloadQueued = false;
   let recoveredErrorKey = "";
   let realtimeCompletionKey = "";
+  const conversationStream = shallowRef(null);
+
+  function receiveConversationStream(snapshot) {
+    if (snapshot && (!conversationStream.value || snapshot.revision >= conversationStream.value.revision)) {
+      conversationStream.value = snapshot;
+    }
+  }
+  watch(() => resource.data.value, (data) => receiveConversationStream(data?.conversationStream), { immediate: true });
 
   async function reloadConversationLog() {
     if (reloadInFlight) {
@@ -446,6 +456,7 @@ function useVibe64ConversationLog({
   const realtimeSocket = useRealtimeSocket({ required: false });
   const reconcileConversationAfterRealtimeConnect = () => {
     if (enabled.value) {
+      conversationStream.value = null;
       void reloadConversationLog().catch(() => {
         // The resource retains the failed reconciliation for the mounted session UI.
       });
@@ -488,6 +499,7 @@ function useVibe64ConversationLog({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
     onEvent: ({ payload = {} } = {}) => {
+      receiveConversationStream(payload.conversationStream);
       realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
       vibe64SessionDebugLog("client.conversationLog.realtime", {
         hasPatch: Boolean(conversationLogRealtimePatch(payload)),
@@ -497,6 +509,7 @@ function useVibe64ConversationLog({
       if (applyRealtimeConversationLogPatch(payload)) {
         return null;
       }
+      if (payload.reason === "assistant-stream") return null;
       return reloadConversationLog();
     }
   });
@@ -572,9 +585,12 @@ function useVibe64ConversationLog({
   const hasMoreBefore = computed(() => Boolean(
     normalizeConversationLogPagination(oldestLoadedPage.value?.pagination).hasMoreBefore
   ));
-  const turns = computed(() => normalizeConversationLog(mergeConversationLogPages(loadedPages.value), {
-    pending: sessionIsAwaitingCodex(currentSession.value)
-  }));
+  const turns = computed(() => {
+    const savedTurns = normalizeConversationLog(mergeConversationLogPages(loadedPages.value), {
+      pending: sessionIsAwaitingCodex(currentSession.value)
+    });
+    return mergeConversationStream(savedTurns, conversationStream.value);
+  });
   const visible = computed(() => Boolean(
     resource.isLoading.value ||
     resource.loadError.value ||
@@ -732,6 +748,7 @@ function useVibe64ConversationLog({
   });
 
   watch([sessionId, projectSlug], () => {
+    conversationStream.value = null;
     integrationActionPending.value = null;
     integrationActionError.value = null;
     integrationConnections.value = {};

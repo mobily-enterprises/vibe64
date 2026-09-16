@@ -18,6 +18,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 
 const ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS = new Set([
+  "assistant-stream",
   "opencode-credential-failure",
   "opencode-provider-failure",
   "opencode-server-assistant-message",

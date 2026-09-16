@@ -58,6 +58,38 @@ function renewalHandover() {
 }
 
 
+test("OpenCode streams partial snapshots before saving the final answer and clears them on Stop", { timeout: 5_000 }, async (t) => {
+  const response = { pending: true, text: "Hello " };
+  let receive;
+  let waiting = new Promise((resolve) => { receive = resolve; });
+  const harness = await controllerHarness({ assistantResponses: [response, { pending: true, text: "Next" }],
+    onSessionChanged(_id, event) {
+      if (event.reason === "assistant-stream") receive(event.payload.conversationStream);
+    }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  await harness.controller.sendMessage("session-1", { message: "Answer", messageId: "stream-input" });
+  const first = await waiting;
+  assert.equal(first.messages[0].text, "Hello ");
+  assert.equal(harness.assistantMessages.length, 0);
+  assert.equal(harness.runtime.store.readConversationStream("session-1").messages[0].text, "Hello ");
+  response.text = "Hello world";
+  response.pending = false;
+  await harness.controller.waitForTurn("session-1");
+  assert.equal(harness.assistantMessages.length, 1);
+  assert.equal(harness.assistantMessages[0].messageId, first.messages[0].messageId);
+  assert.equal(harness.assistantMessages[0].text, "Hello world");
+  assert.deepEqual(harness.runtime.store.readConversationStream("session-1").messages, []);
+  waiting = new Promise((resolve) => { receive = resolve; });
+  await harness.controller.sendMessage("session-1", { message: "Again", messageId: "stream-next" });
+  assert.equal((await waiting).messages[0].text, "Next");
+  await harness.controller.interruptTurn("session-1");
+  assert.deepEqual(harness.runtime.store.readConversationStream("session-1").messages, []);
+});
+
 test("OpenCode Stop settles a stalled turn after native abort without waiting for a final answer", async (t) => {
   const harness = await controllerHarness({ assistantResponses: [{ pending: true, text: "" }] });
   t.after(async () => {

@@ -9450,6 +9450,83 @@ test("Codex stops when its notification queue cannot save commentary", async () 
   });
 });
 
+test("Codex streams answer chunks before persistence, replaces the live answer and rejects late output", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store, projectService, runtime }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "stream-work" });
+    const { threadId, turnId } = captures.provider;
+    const snapshots = [];
+    captures.onSessionChanged = (_id, event) => {
+      if (event.payload?.conversationStream) snapshots.push(event.payload.conversationStream);
+    };
+    const params = { threadId, turnId, itemId: "stream-answer" };
+    let hydrations = 0;
+    const createRuntime = projectService.createRuntime;
+    projectService.createRuntime = (...args) => { hydrations += 1; return createRuntime(...args); };
+    emitCodexNotification(captures.subscribers, { method: "item/started", params: {
+      ...params, item: { id: params.itemId, type: "agentMessage", phase: "final_answer" }
+    } });
+    for (const delta of ["Hello", " ", "world"]) {
+      emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta } });
+    }
+    await waitForSessionValue(() => store.readConversationStream(sessionId),
+      (snapshot) => snapshot.messages[0]?.text === "Hello world", "incremental answer");
+    await waitForSessionValue(() => snapshots.at(-1),
+      (snapshot) => snapshot?.messages[0]?.text === "Hello world", "broadcast text");
+    assert.equal(hydrations, 0, "text chunks must not hydrate the session runtime");
+    const reopenedStore = createVibe64SessionStore({ projectContextRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot });
+    assert.equal(reopenedStore.readConversationStream(sessionId).messages[0].text, "Hello world");
+    assert.equal((await store.readConversationLog(sessionId)).some((row) => row.assistant), false);
+    assert.equal(snapshots.at(-1).messages[0].text, "Hello world");
+    const messageId = snapshots.at(-1).messages[0].messageId;
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      ...params, phase: "final_answer", text: "Hello world!"
+    }));
+    const rows = await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "Hello world!"), "saved streamed answer");
+    assert.equal(rows.at(-1).assistant.messageId, messageId);
+    await waitForSessionValue(() => store.readConversationStream(sessionId),
+      (snapshot) => !snapshot.messages.length, "live answer removal");
+    emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "late" } });
+    emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, itemId: "next", delta: "Next" } });
+    await waitForSessionValue(() => store.readConversationStream(sessionId),
+      (snapshot) => snapshot.messages[0]?.text === "Next", "next live answer");
+    assert.equal(store.readConversationStream(sessionId).messages.length, 1);
+    captures.provider.interruptTurn = async () => {
+      captures.provider.status = "idle";
+      return { interrupted: true };
+    };
+    const stopped = await controller.interruptTurn(sessionId, { threadId });
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.deepEqual(store.readConversationStream(sessionId).messages, []);
+    emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, itemId: "after-stop", delta: "Wrong" } });
+    await controller.closeAllForSession(sessionId);
+    assert.deepEqual(store.readConversationStream(sessionId).messages, []);
+    assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length, 1);
+  });
+});
+
+test("Codex streamed commentary disappears after completion even when saved progress is deduplicated", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "stream-commentary" });
+    const { threadId, turnId } = captures.provider;
+    for (const itemId of ["comment-1", "comment-2"]) {
+      const params = { threadId, turnId, itemId };
+      emitCodexNotification(captures.subscribers, { method: "item/started", params: {
+        ...params, item: { id: itemId, type: "agentMessage", phase: "commentary" }
+      } });
+      emitCodexNotification(captures.subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "Checking" } });
+      const live = await waitForSessionValue(() => store.readConversationStream(sessionId),
+        (snapshot) => snapshot.messages[0]?.text === "Checking", "live commentary");
+      assert.equal(live.messages[0].role, "commentary");
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({ ...params, phase: "commentary", text: "Checking" }));
+      await waitForSessionValue(() => store.readConversationStream(sessionId),
+        (snapshot) => !snapshot.messages.length, "completed commentary removal");
+    }
+    const rows = await store.readConversationLog(sessionId);
+    assert.equal(rows.flatMap((row) => row.commentary || []).filter((message) => message.text === "Checking").length, 1);
+  });
+});
+
 test("active-goal steering publishes independent native replies immediately and preserves their rows", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
     await controller.sendMessage(sessionId, { message: "Work", messageId: "goal-work" });

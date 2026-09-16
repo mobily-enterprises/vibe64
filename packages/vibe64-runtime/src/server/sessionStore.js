@@ -1,4 +1,4 @@
-import { createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
+import { createConversationStreams, createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
@@ -174,6 +174,7 @@ const SESSION_LOCK_PROCESS_IDENTITY_PLATFORM = "linux-proc";
 const SESSION_LOCK_PROCESS_IDENTITY_PID_ONLY_PLATFORM = "pid-only";
 const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();
+const conversationStreams = createConversationStreams();
 const sessionMutationContext = new AsyncLocalStorage();
 const sessionExclusiveContext = new AsyncLocalStorage();
 
@@ -2564,6 +2565,22 @@ function createVibe64SessionStore({
     }
   });
 
+  function readConversationStream(sessionId) {
+    return conversationStreams.read(paths(sessionId).sessionRoot);
+  }
+
+  function updateConversationStream(sessionId, message) {
+    return conversationStreams.update(paths(sessionId).sessionRoot, message);
+  }
+
+  function completeConversationStreamMessage(sessionId, messageId) {
+    return conversationStreams.complete(paths(sessionId).sessionRoot, messageId);
+  }
+
+  function clearConversationStream(sessionId) {
+    return conversationStreams.clear(paths(sessionId).sessionRoot);
+  }
+
   async function readManifest(sessionId) {
     return withReadableSessionPaths(sessionId, readManifestFromPaths);
   }
@@ -4685,6 +4702,10 @@ function createVibe64SessionStore({
     readBackgroundTask,
     readBackgroundTasks,
     readConversationLog,
+    readConversationStream,
+    updateConversationStream,
+    completeConversationStreamMessage,
+    clearConversationStream,
     readSessionConversation,
     listSessionConversations,
     writeSessionConversation,

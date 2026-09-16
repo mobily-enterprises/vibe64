@@ -1652,6 +1652,7 @@ function createService({
         const result = await runtime.readConversationLogPage(sessionId, pageOptions);
         return {
           ...conversationPage(result, pageOptions),
+          conversationStream: runtime.store.readConversationStream(sessionId),
           ok: true,
           sessionId
         };

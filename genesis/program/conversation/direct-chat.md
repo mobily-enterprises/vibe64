@@ -111,6 +111,17 @@ locks. Saved files, history ordering, identity, actor metadata and archive
 behavior retain their current format and ownership. No transcript migration or
 second durable history is introduced.
 
+JSKIT's `createConversationStreams` accumulates live Codex deltas and OpenCode's
+existing 250 ms message snapshots outside durable history. Vibe64 admits Codex
+events under the session lock against the current native thread and turn, supplies
+project/session scope and saved message identities, and broadcasts snapshots on
+its existing realtime channel. The history read includes the current snapshot
+for browser reconnects. The client uses JSKIT's `mergeConversationStream` and
+ignores older revisions; chunk events do not refetch history or session details.
+Successful persistence replaces the live item. Stop and verified observation loss
+clear unfinished output. Saved replies retain their recovery authority, and a
+server-process restart relies on native history rather than a second partial log.
+
 The Codex indicator reads the current main conversation goal from `thread/goal/get`
 on its existing provider. Goal controls require assistant access and accept only
 pause/resume on that session's current thread and unchanged objective/creation

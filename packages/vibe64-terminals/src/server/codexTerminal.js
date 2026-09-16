@@ -2124,6 +2124,7 @@ function createCodexTerminalController({
     for (const target of targets) {
       await runWithCodexAppServerProjectContext(target.projectContext, async () => {
         let stoppedRun = null;
+        let conversationStream = null;
         if (target.threadId) {
           const runtime = await createRuntimeForSession();
           stoppedRun = await runtime.store.mutateSession(target.sessionId, async () => {
@@ -2131,7 +2132,7 @@ function createCodexTerminalController({
             if (run?.providerThreadId !== target.threadId) {
               return null;
             }
-            return runtime.store.writeAgentRunEvent(target.sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+            const stopped = await runtime.store.writeAgentRunEvent(target.sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
               event: { kind: "codex-observation-stopped", state: VIBE64_AGENT_RUN_STATE.INTERRUPTED },
               patch: {
                 error: sharedStop ? `${message} Its shared service was stopped, affecting other sessions using it.` : message,
@@ -2139,6 +2140,8 @@ function createCodexTerminalController({
                 state: VIBE64_AGENT_RUN_STATE.INTERRUPTED
               }
             });
+            conversationStream = runtime.store.clearConversationStream(target.sessionId);
+            return stopped;
           });
         }
         // Retain the stop owner until the stopped state is durable. Make the
@@ -2157,7 +2160,7 @@ function createCodexTerminalController({
         }
         if (stoppedRun) {
           await publishSessionChanged(target.sessionId, {
-            payload: codexAppServerAgentRunRealtimePayload(stoppedRun),
+            payload: { ...codexAppServerAgentRunRealtimePayload(stoppedRun), conversationStream },
             reason: "codex-observation-stopped"
           });
         }
@@ -4361,6 +4364,7 @@ function createCodexTerminalController({
     }
     await publishSessionChanged(sessionId, {
       payload: {
+        conversationStream: runtime.store.completeConversationStreamMessage(sessionId, messageId),
         conversationLogPatch: {
           turn: written,
           type: "upsert-turn"
@@ -4776,6 +4780,30 @@ function createCodexTerminalController({
     }
   }
 
+  async function writeCodexAppServerStream(sessionId, classification) {
+    if (!classification.itemId || !classification.turnId) return;
+    const store = await createStoreForSession(sessionId);
+    const conversationStream = await store.mutateSession(sessionId, async () => {
+      const run = await readCodexAppServerAgentRunForSession(store, sessionId);
+      const turn = codexAppServerTurnStateFromAgentRun(run || {});
+      if (!codexAppServerTurnCanReceiveProviderActivity(turn, classification.threadId, classification.turnId)) return null;
+      return store.updateConversationStream(sessionId, {
+        turnId: `${classification.threadId}:${classification.turnId}`,
+        messageId: codexAppServerConversationMessageId(
+          classification.threadId, classification.turnId, "assistant-item", classification.itemId
+        ),
+        role: classification.role,
+        delta: classification.delta
+      });
+    });
+    if (conversationStream) {
+      await publishSessionChanged(sessionId, {
+        payload: { conversationStream },
+        reason: "assistant-stream"
+      });
+    }
+  }
+
   async function writeCodexAppServerLiveProgress(sessionId = "", threadId = "", notification = {}) {
     // Explicit commentary is user-facing progress. Reasoning and ambiguous
     // progress remain thinking; final answers are recorded separately.
@@ -4806,10 +4834,18 @@ function createCodexTerminalController({
       codexAppServerNotificationTurnId(notification) || turn.turnId,
       text
     );
+    const streamMessageId = codexAppServerConversationMessageId(
+      normalizedThreadId, codexAppServerNotificationTurnId(notification),
+      "assistant-item", codexAppServerNotificationItemId(notification)
+    );
     if (
       codexAppServerLiveProgressItems.has(key) ||
       codexAppServerLiveProgressFingerprints.has(fingerprintKey)
     ) {
+      await publishSessionChanged(normalizedSessionId, {
+        payload: { conversationStream: store.completeConversationStreamMessage(normalizedSessionId, streamMessageId) },
+        reason: "assistant-stream"
+      });
       return null;
     }
     codexAppServerLiveProgressItems.add(key);
@@ -4833,15 +4869,15 @@ function createCodexTerminalController({
       if (!written) {
         codexAppServerLiveProgressItems.delete(key);
         codexAppServerLiveProgressFingerprints.delete(fingerprintKey);
-        return null;
+      }
+      const payload = {
+        conversationStream: store.completeConversationStreamMessage(normalizedSessionId, streamMessageId)
+      };
+      if (written) {
+        payload.conversationLogPatch = { turn: written, type: "upsert-turn" };
       }
       await publishSessionChanged(normalizedSessionId, {
-        payload: {
-          conversationLogPatch: {
-            turn: written,
-            type: "upsert-turn"
-          }
-        },
+        payload,
         reason: role === "commentary"
           ? "codex-app-server-commentary"
           : "codex-app-server-live-progress"
@@ -5766,6 +5802,7 @@ function createCodexTerminalController({
     }
     const runtime = await createRuntimeForSession();
     let runPatch = null;
+    let conversationStream = null;
     let wrote = false;
     let stale = null;
     const updatedSession = await runtime.store.mutateSession(normalizedSessionId, async () => {
@@ -5835,6 +5872,9 @@ function createCodexTerminalController({
         },
         patch: runPatch
       });
+      if (!vibe64AgentRunStateIsActive(runPatch.state)) {
+        conversationStream = runtime.store.clearConversationStream(normalizedSessionId);
+      }
       wrote = true;
       return runtime.getSession(normalizedSessionId);
     });
@@ -5849,6 +5889,7 @@ function createCodexTerminalController({
     await publishSessionChanged(normalizedSessionId, {
       payload: {
         ...codexAppServerAgentRunRealtimePayload(runPatch),
+        ...(conversationStream ? { conversationStream } : {}),
         ...(isRecord(publishPayload) ? publishPayload : {})
       },
       reason: publishReason || "codex-app-server-turn-state",
@@ -7226,6 +7267,10 @@ function createCodexTerminalController({
             notification
           );
         });
+      }
+      if (["assistant_started", "assistant_delta"].includes(classification.kind) &&
+          !codexAppServerAutomaticHookThreads.has(normalizedThreadId)) {
+        runCodexAppServerNotificationTask(notificationContext, () => writeCodexAppServerStream(normalizedSessionId, classification));
       }
       if (classification.kind === "final_assistant_result") {
         const event = codexAppServerNotificationEvent(notification);

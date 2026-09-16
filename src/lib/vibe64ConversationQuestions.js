@@ -25,6 +25,7 @@ function latestAssistantMessageAwaitingUserReply(conversationLog = {}) {
           return "";
         }
         if (message?.role === "assistant") {
+          if (message.status === "inProgress") return "";
           return text;
         }
       }
@@ -35,6 +36,7 @@ function latestAssistantMessageAwaitingUserReply(conversationLog = {}) {
     }
     const assistantText = messageText(turn?.assistant?.text);
     if (assistantText) {
+      if (turn.assistant.status === "inProgress") return "";
       return assistantText;
     }
   }

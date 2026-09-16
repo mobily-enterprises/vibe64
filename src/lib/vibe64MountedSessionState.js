@@ -3,6 +3,7 @@ import {
 } from "@/lib/vibe64SessionViewModel.js";
 
 const MOUNTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
+  "assistant-stream",
   "assistant-response-bundle",
   "codex-app-server-commentary",
   "codex-app-server-prompt-injected",

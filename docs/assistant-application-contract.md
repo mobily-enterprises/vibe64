@@ -56,6 +56,12 @@ session. The shared submission helper rechecks the draft, identity and
 availability before calling Vibe64's normal send action. DOM selectors and
 synthetic input/button events are not part of the contract.
 
+Live messages in `turns` carry `status: "inProgress"`; their containing turn is
+pending. Final-answer speech and reply actions must wait for completion. JSKIT
+merges live snapshots with saved history by message identity, so the final saved
+reply replaces the partial text. Vibe64 owns admission, transport, reconnect reads
+and persistence; JSKIT owns accumulation and transcript presentation.
+
 ## Backend and storage
 
 `createConversationTranscript({ storage, clock })` owns duplicate message

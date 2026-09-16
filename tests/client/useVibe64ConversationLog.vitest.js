@@ -1,4 +1,5 @@
 import { effectScope, nextTick, ref } from "vue";
+import { latestAssistantMessageAwaitingUserReply } from "../../src/lib/vibe64ConversationQuestions.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const httpRequest = vi.hoisted(() => vi.fn());
@@ -73,6 +74,53 @@ import {
 } from "../../src/composables/useVibe64ConversationLog.js";
 
 describe("useVibe64ConversationLog", () => {
+  it("receives live text without refetching, ignores older snapshots and replaces it with the saved reply", async () => {
+    const scope = effectScope();
+    const user = { role: "user", messageId: "user", text: "Question" };
+    endpointMocks.resource.data.value = { conversationLog: [{ turnId: "000001", user }] };
+    queryMocks.getQueryData.mockImplementation(() => endpointMocks.resource.data.value);
+    queryMocks.setQueryData.mockImplementation((_key, value) => { endpointMocks.resource.data.value = value; });
+    const model = scope.run(() => useVibe64ConversationLog({ session: ref({ sessionId: "session-1" }) }));
+    const listener = realtimeMocks.events[0];
+    const message = { role: "assistant", messageId: "answer", text: "Hello ", status: "inProgress" };
+    const payload = { sessionId: "session-1", reason: "assistant-stream", conversationStream: { revision: 2, messages: [message] } };
+    expect(listener.matches({ payload })).toBe(true);
+    expect(listener.matches({ payload: { ...payload, sessionId: "other" } })).toBe(false);
+    listener.onEvent({ payload });
+    expect(model.turns.value[0].assistant.text).toBe("Hello ");
+    expect(latestAssistantMessageAwaitingUserReply(model.turns.value)).toBe("");
+    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    endpointMocks.resource.data.value = { ...endpointMocks.resource.data.value,
+      conversationStream: { revision: 1, messages: [{ ...message, text: "H" }] } };
+    await nextTick();
+    expect(model.turns.value[0].assistant.text).toBe("Hello ");
+    const final = { ...message, text: "Hello world", status: "completed" };
+    await listener.onEvent({ payload: { sessionId: "session-1", reason: "assistant-response-bundle",
+      conversationStream: { revision: 3, messages: [] },
+      conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", user, assistant: final } }
+    } });
+    expect(model.turns.value).toHaveLength(1);
+    expect(model.turns.value[0].assistant.text).toBe("Hello world");
+    expect(latestAssistantMessageAwaitingUserReply(model.turns.value)).toBe("Hello world");
+    expect(model.turns.value[0].pending).not.toBe(true);
+    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    scope.stop();
+  });
+
+  it("restores live text from a history read and clears it when the session changes", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    endpointMocks.resource.data.value.conversationStream = { revision: 1, messages: [
+      { role: "assistant", messageId: "answer", text: "Restored partial", status: "inProgress" }
+    ] };
+    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    expect(model.turns.value[0].assistant.text).toBe("Restored partial");
+    session.value = { sessionId: "session-2" };
+    await nextTick();
+    expect(model.turns.value).toHaveLength(0);
+    scope.stop();
+  });
+
   it("recognizes Analytics configuration from chat without executing setup or completing the request", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });

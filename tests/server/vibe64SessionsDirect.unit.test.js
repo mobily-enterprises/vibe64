@@ -454,6 +454,26 @@ test("session publications use the trusted project context and actions do not re
   }
 });
 
+test("conversation history includes the current live snapshot for reconnecting clients", async () => {
+  const conversationStream = { revision: 3, messages: [{ messageId: "answer", role: "assistant", text: "Partial", status: "inProgress" }] };
+  const service = createService({ terminals: {}, project: { async createRuntime() {
+    return {
+      async readConversationLogPage(sessionId) {
+        assert.equal(sessionId, "session-1");
+        return { turns: [], pagination: { totalTurnCount: 0 } };
+      },
+      store: { readConversationStream(sessionId) {
+        assert.equal(sessionId, "session-1");
+        return conversationStream;
+      } }
+    };
+  } } });
+  const result = await service.readSessionConversationLog("session-1");
+  assert.equal(result.ok, true);
+  assert.equal(result.conversationStream, conversationStream);
+  assert.deepEqual(result.conversationLog, []);
+});
+
 test("session detail exposes renewal advice from the current thread and durable history", async () => {
   const session = {
     manifest: { createdAt: "2026-08-23T00:00:00.000Z" },

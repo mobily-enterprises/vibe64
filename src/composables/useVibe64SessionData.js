@@ -50,6 +50,7 @@ import {
 } from "@/lib/vibe64SessionClientRefresh.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
+  "assistant-stream",
   "assistant-response-bundle",
   "codex-app-server-ready",
   "codex-app-server-agent-result",

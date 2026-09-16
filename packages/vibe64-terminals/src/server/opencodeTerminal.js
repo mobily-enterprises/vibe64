@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -339,16 +340,6 @@ function openCodeMessageResultForInput(value = null, inputMessageId = "") {
   };
 }
 
-function assistantMessageText(message = {}) {
-  const values = [
-    text(message.text),
-    ...(Array.isArray(message.content) ? message.content : [])
-      .filter((part) => part?.type === "text")
-      .map((part) => text(part.text))
-  ].filter(Boolean);
-  return [...new Set(values)].join("\n\n");
-}
-
 function openCodeMessageError(message = {}) {
   return text(
     message?.error?.message ||
@@ -429,6 +420,8 @@ async function waitForOpenCodeMessages(client, conversationId = "", inputMessage
       limit: 100,
       order: "desc"
     }, { signal });
+    signal?.throwIfAborted();
+    if (expectedInputMessageId !== text(resolveInputMessageId())) continue;
     if (typeof onMessages === "function") {
       await onMessages(messages, expectedInputMessageId);
     }
@@ -1330,6 +1323,7 @@ function createOpenCodeTerminalController({
     }
     await publishSessionChanged(context.sessionId, {
       payload: {
+        conversationStream: context.runtime.store.readConversationStream(context.sessionId),
         conversationLogPatch: {
           turn,
           type: "upsert-turn"
@@ -1371,7 +1365,7 @@ function createOpenCodeTerminalController({
 
   async function writeConversationProjection(context = {}, messages = null, {
     inputMessageId = "",
-    reasoningOnly = false,
+    streaming = false,
     requireOpenTurn = false
   } = {}) {
     let failure = "";
@@ -1392,17 +1386,31 @@ function createOpenCodeTerminalController({
           value: part.text
         });
       }
-      if (reasoningOnly) {
+      const assistantText = assistantMessageText(message);
+      if (!assistantText) {
         continue;
       }
-      const assistantText = assistantMessageText(message);
-      if (assistantText) {
-        const turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
-          messageId: conversationMessageId(message.id, "assistant"),
+      const messageId = conversationMessageId(message.id, "assistant");
+      if (streaming) {
+        const conversationStream = context.runtime.store.updateConversationStream(context.sessionId, {
+          turnId: inputMessageId,
+          messageId,
           text: assistantText
         });
-        await publishConversationTurn(context, turn, "opencode-server-assistant-message");
+        if (conversationStream) {
+          await publishSessionChanged(context.sessionId, {
+            payload: { conversationStream },
+            reason: "assistant-stream"
+          });
+        }
+        continue;
       }
+      const turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
+        messageId,
+        text: assistantText
+      });
+      context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
+      await publishConversationTurn(context, turn, "opencode-server-assistant-message");
     }
     return { failure, providerApiFailure };
   }
@@ -1469,15 +1477,20 @@ function createOpenCodeTerminalController({
         })
       : (await write(), context.session);
     await publishSessionChanged(context.sessionId, {
-      payload: openCodeRunRealtimePayload(written || {
-        active: vibe64AgentRunStateIsActive(state),
-        error,
-        id: OPENCODE_AGENT_RUN_ID,
-        state,
-        threadId: text(turn.threadId),
-        turnId: text(turn.id),
-        updatedAt: new Date().toISOString()
-      }),
+      payload: {
+        ...(!vibe64AgentRunStateIsActive(state)
+          ? { conversationStream: context.runtime.store.clearConversationStream(context.sessionId) }
+          : {}),
+        ...openCodeRunRealtimePayload(written || {
+          active: vibe64AgentRunStateIsActive(state),
+          error,
+          id: OPENCODE_AGENT_RUN_ID,
+          state,
+          threadId: text(turn.threadId),
+          turnId: text(turn.id),
+          updatedAt: new Date().toISOString()
+        })
+      },
       reason: vibe64AgentRunStateIsActive(state)
         ? "opencode-server-turn-active"
         : "opencode-server-turn-idle",
@@ -1612,7 +1625,7 @@ function createOpenCodeTerminalController({
               messages,
               {
                 inputMessageId,
-                reasoningOnly: true,
+                streaming: true,
                 requireOpenTurn: true
               }
             ),

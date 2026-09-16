@@ -79,7 +79,10 @@ following the input as it grows without shifting the chat when hints change.
 Provider failures reach the conversation even when no assistant answer is created.
 Confirmed Stop releases chat controls without requiring a final provider message.
 Completed assistant replies appear immediately, including answers to steering
-questions while a goal continues. Each reply remains in the conversation;
+questions while a goal continues. Assistant text also appears as it arrives on
+phones and desktops, and becomes one saved reply when complete. Reconnecting
+restores live text while the observing server is running; Stop removes unfinished
+text without recording it as a completed answer. Each reply remains in the conversation;
 showing it does not finish the goal or disable further steering.
 Consecutive reasoning summaries form one collapsible progress group, regardless
 of storage rows or automatic goal turns. The latest group previews current
