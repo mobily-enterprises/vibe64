@@ -553,7 +553,7 @@ function useVibe64AutopilotView(props, emit, {
     ));
   });
   const composerSubmitMode = computed(() => {
-    if (props.agentConnectionStatus === "unavailable") {
+    if (assistantAccountUnavailable.value) {
       return "unavailable";
     }
     if (props.agentConnectionStatus === "initializing") {
