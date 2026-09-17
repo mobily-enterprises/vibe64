@@ -376,8 +376,13 @@ taking the session's agent-write lock or rebuilding its command environment.
 The session-agent manager shares overlapping checks after authorizing each
 caller. A missing, unloaded, or disconnected provider session goes through its
 provider controller's preparation path, which waits up to ten seconds for the
-agent-write lock. Attachment uploads retain that lock so renewal cannot freeze
-and clean up a session while an upload is writing. Provider checks discard late
+agent-write lock. Attachment uploads wait up to sixty seconds for that lock and
+retain it so renewal cannot freeze and clean up a session while an upload is
+writing. Admission rechecks the session after waiting, so renewal or archive
+cannot be bypassed by a queued upload. Vibe64 configures JSKIT's shared attachment
+queue for one upload at a time, matching this storage boundary; selected files
+appear immediately as queued and proceed automatically. Concurrent requests from
+other composers wait at the same server boundary. Provider checks discard late
 responses when their session or connection has closed or changed. Codex helper
 ownership restoration belongs to startup reconciliation and helper operations,
 not main-conversation readiness.

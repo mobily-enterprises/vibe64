@@ -119,7 +119,7 @@ import {
   createSessionPromptHintsService
 } from "./sessionPromptHints.js";
 
-const MAIN_CHAT_AGENT_WRITE_WAIT_MS = 60_000;
+const AGENT_WRITE_WAIT_MS = 60_000;
 
 const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
 const PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -2391,7 +2391,7 @@ function createService({
         }
         const accepted = await store.acceptIntegrationContinuation(sessionId, delivery);
         return { ok: true, integrationSetup: accepted.integrationSetup };
-      }, { operation: "resume-integration-continuation", waitMs: MAIN_CHAT_AGENT_WRITE_WAIT_MS });
+      }, { operation: "resume-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
     },
 
     async sendAgentMessage(sessionId, input = {}, options = {}) {
@@ -2416,7 +2416,7 @@ function createService({
             });
             return delivered;
           },
-          { operation: "send-agent-message", waitMs: MAIN_CHAT_AGENT_WRITE_WAIT_MS }
+          { operation: "send-agent-message", waitMs: AGENT_WRITE_WAIT_MS }
         );
         if (result?.ok === false) {
           logOperationalEvent(logger, "warn", {
@@ -2690,7 +2690,7 @@ function createService({
     uploadAgentAttachment(sessionId, input = {}, options = {}) {
       return runMainAgentWrite(sessionId, options, (context) => (
         sessionAgent.uploadAttachment(sessionId, input, context)
-      ), { operation: "upload-agent-attachment" });
+      ), { operation: "upload-agent-attachment", waitMs: AGENT_WRITE_WAIT_MS });
     },
 
     readAgentAttachment(sessionId, attachmentId) {

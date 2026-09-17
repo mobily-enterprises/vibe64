@@ -180,7 +180,7 @@ describe("useAgentAttachments", () => {
     expect(onUploaded).toHaveBeenNthCalledWith(2, [uploaded[1]]);
   });
 
-  it("publishes the complete retained list when two uploads complete together", async () => {
+  it("publishes the complete retained list as queued uploads complete", async () => {
     const requests = new Map();
     const publishedLists = [];
     let attachments = null;
@@ -202,6 +202,7 @@ describe("useAgentAttachments", () => {
       testFile("two.txt", 34)
     ]);
     requests.get("one.txt").resolve(uploadedAttachment("session-1", testFile("one.txt", 12)));
+    await flushPromises();
     requests.get("two.txt").resolve(uploadedAttachment("session-1", testFile("two.txt", 34)));
 
     await expect(uploading).resolves.toEqual([
@@ -325,7 +326,7 @@ describe("useAgentAttachments", () => {
     expect(row.phase).toBe("ready");
   });
 
-  it("creates rows immediately, uploads two files concurrently, accepts more, and consumes byte progress", async () => {
+  it("shows every row immediately, uploads one file at a time, accepts more, and consumes byte progress", async () => {
     const requests = new Map();
     const onUploaded = vi.fn();
     const uploadAttachment = vi.fn((sessionId, file, options) => {
@@ -352,10 +353,10 @@ describe("useAgentAttachments", () => {
 
     expect(attachments.queueItems.value.map((item) => item.phase)).toEqual([
       "uploading",
-      "uploading",
+      "queued",
       "queued"
     ]);
-    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
     expect(attachments.hasUnresolved.value).toBe(true);
     expect(attachments.canSubmit.value).toBe(false);
 
@@ -364,7 +365,7 @@ describe("useAgentAttachments", () => {
       fileName: "four.txt",
       phase: "queued"
     });
-    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
 
     requests.get("one.txt").options.onProgress({
       bytesSent: 5,
@@ -384,16 +385,18 @@ describe("useAgentAttachments", () => {
 
     requests.get("one.txt").resolve(uploadedAttachment("session-1", testFile("one.txt", 10)));
     await flushPromises();
-    expect(uploadAttachment).toHaveBeenCalledTimes(3);
-    expect(requests.has("three.txt")).toBe(true);
+    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(requests.has("two.txt")).toBe(true);
     expect(onUploaded).toHaveBeenCalledWith([
       expect.objectContaining({ fileName: "one.txt" })
     ]);
 
     requests.get("two.txt").resolve(uploadedAttachment("session-1", testFile("two.txt", 20)));
     await flushPromises();
-    expect(uploadAttachment).toHaveBeenCalledTimes(4);
+    expect(uploadAttachment).toHaveBeenCalledTimes(3);
     requests.get("three.txt").resolve(uploadedAttachment("session-1", testFile("three.txt", 30)));
+    await flushPromises();
+    expect(uploadAttachment).toHaveBeenCalledTimes(4);
     requests.get("four.txt").resolve(uploadedAttachment("session-1", testFile("four.txt", 40)));
 
     expect((await firstBatch).map((attachment) => attachment.fileName)).toEqual([
@@ -432,7 +435,7 @@ describe("useAgentAttachments", () => {
     expect(attachments.queueItems.value).toHaveLength(AGENT_ATTACHMENT_MAX_ITEMS);
     expect(attachments.atCapacity.value).toBe(true);
     expect(attachments.status.value).toContain("at most 10 attachments");
-    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
   });
 
   it("keeps file failures independent and retries only the failed file", async () => {

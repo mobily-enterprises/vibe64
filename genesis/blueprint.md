@@ -353,7 +353,10 @@ It manages project access, credentials, development environments, application pr
 browser identities, and attachments without putting private machine state into
 the project. Chat attachments have readable image or file references for every
 supported assistant. People can open attached images, download files, and return
-to sent attachments throughout the conversation and its archive. Removing a
+to sent attachments throughout the conversation and its archive. Selecting several
+files shows the whole queue immediately and uploads them in order without manual
+retries for ordinary contention. Brief assistant preparation keeps uploads pending;
+typing and cancelling queued files remain available. Removing a
 queued upload removes its unchanged reference; editing the message alone does
 not remove a file. It shows clear status and failures and lets people retry or ask the
 agent for help. When a provider reports exhausted quota or another account

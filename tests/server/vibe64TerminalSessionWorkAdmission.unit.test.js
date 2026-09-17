@@ -1020,6 +1020,92 @@ test("renewal terminal cleanup rejects foreign quiescence and already-renewed pr
   );
 });
 
+test("concurrent attachment uploads wait for one another and all retain their bytes", async (t) => {
+  const waiting = new Set();
+  const batchWaiting = deferred();
+  const logger = {
+    info() {},
+    warn(event) {
+      if (event.operation === "upload-agent-attachment" &&
+          ["vibe64.session_lock.contended", "vibe64.session_lock.rejected"].includes(event.event)) {
+        waiting.add(event.attemptId);
+        if (waiting.size === 5) batchWaiting.resolve();
+      }
+    }
+  };
+  const { service, session } = await terminalServiceFixture(t, { store: {} }, { logger });
+  const started = deferred();
+  const release = deferred();
+  const first = service.uploadAgentAttachment(session.sessionId, {
+    fileName: "file-0.txt",
+    stream: Readable.from((async function *() {
+      started.resolve();
+      yield "file-0";
+      await release.promise;
+    })())
+  });
+  await started.promise;
+  const remaining = Array.from({ length: 5 }, (_, index) => service.uploadAgentAttachment(session.sessionId, {
+    fileName: `file-${index + 1}.txt`,
+    stream: Readable.from([`file-${index + 1}`])
+  }));
+  try {
+    await batchWaiting.promise;
+  } finally {
+    release.resolve();
+  }
+  const results = await Promise.all([first, ...remaining]);
+  for (const [index, result] of results.entries()) {
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(await readFile(result.path, "utf8"), `file-${index}`);
+  }
+  assert.equal(new Set(results.map((result) => result.attachmentId)).size, 6);
+});
+
+test("an upload waiting behind renewal rechecks session admission before writing", async (t) => {
+  const waiting = deferred();
+  const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
+    logger: {
+      info() {},
+      warn(event) {
+        if (event.operation === "upload-agent-attachment" && event.event === "vibe64.session_lock.contended") {
+          waiting.resolve();
+        }
+      }
+    }
+  });
+  const entered = deferred();
+  const release = deferred();
+  const renewal = runVibe64RenewalAgentWriteExclusive(runtime, session.sessionId, async () => {
+    entered.resolve();
+    await release.promise;
+    await runtime.store.quiesceSessionForRenewal({
+      sourceSessionId: session.sessionId,
+      renewalId: "queued-upload-renewal",
+      quiescedAt: "2026-09-17T03:30:00Z"
+    });
+  });
+  await entered.promise;
+  let consumed = false;
+  const uploading = service.uploadAgentAttachment(session.sessionId, {
+    fileName: "queued.txt",
+    stream: Readable.from((async function *() {
+      consumed = true;
+      yield "must not be stored";
+    })())
+  });
+  const rejected = assert.rejects(uploading, { code: "vibe64_session_renewal_quiesced" });
+  try {
+    await waiting.promise;
+    assert.equal(consumed, false);
+  } finally {
+    release.resolve();
+  }
+  await renewal;
+  await rejected;
+  assert.equal(consumed, false);
+});
+
 test("an active attachment upload finishes before renewal can freeze and cleanup the session", async (t) => {
   const lock = agentWriteLockHarness();
   const { runtime, service, session } = await terminalServiceFixture(t, lock);

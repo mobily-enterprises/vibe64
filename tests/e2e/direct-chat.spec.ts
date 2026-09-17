@@ -66,6 +66,70 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  for (const temporary of [false, true]) {
+    hintTest(`@attachment-batch queues six files and completes without retries in ${temporary ? "temporary" : "main"} chat`, async ({ page }, testInfo) => {
+      const release = Promise.withResolvers<void>();
+      const received: string[] = [];
+      const names = [
+        "bookings.HTML", "customers.csv", "daycare_bookings.HTML",
+        "pet_notes.HTML", "products.csv", "staff.csv"
+      ];
+      await mockDirectChat(page);
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-attachments`, async route => {
+        const form = await new globalThis.Response(route.request().postDataBuffer(), {
+          headers: { "Content-Type": route.request().headers()["content-type"] }
+        }).formData();
+        const file = form.get("file") as File;
+        received.push(file.name);
+        if (received.length === 1) await release.promise;
+        await fulfillJson(route, {
+          ok: true,
+          attachmentId: `attachment-${received.length}`,
+          fileName: file.name,
+          path: `/tmp/vibe64-attachments/${file.name}`,
+          size: file.size
+        });
+      });
+      try {
+        await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+        if (temporary) await openTemporaryAiWorkspace(page);
+        const workspace = page.getByRole("region", {
+          name: temporary ? "Temporary AI workspace" : "Session chat",
+          exact: true
+        });
+        const input = workspace.getByLabel(temporary ? "Message temporary AI" : "Message AI assistant");
+        const send = workspace.getByRole("button", {
+          name: temporary ? "Send to temporary AI" : "Send message",
+          exact: true
+        });
+        await input.fill("These are the files.");
+        if (!temporary) await workspace.getByRole("button", { name: "Add to message", exact: true }).click();
+        const chooser = page.waitForEvent("filechooser");
+        await page.getByRole("button", { name: "Attach files", exact: true }).click();
+        await (await chooser).setFiles(names.map(name => ({
+          name, mimeType: "text/plain", buffer: Buffer.from(`Contents of ${name}`)
+        })));
+        const queue = workspace.getByRole("region", { name: "Message attachments" });
+        await expect(queue.locator(".assistant-attachment-queue__item")).toHaveCount(6);
+        await expect(queue.locator(".assistant-attachment-queue__item--queued")).toHaveCount(5);
+        await expect.poll(() => received.length).toBe(1);
+        await expect(input).toBeEnabled();
+        await expect(send).toBeDisabled();
+        release.resolve();
+        await expect(queue.locator(".assistant-attachment-queue__item--ready")).toHaveCount(6);
+        await expect(queue).toContainText("6 of 6 ready");
+        await expect(queue.getByRole("button", { name: /^Retry / })).toHaveCount(0);
+        await expect(send).toBeEnabled();
+        await expect(input).toHaveValue(/These are the files\./);
+        expect(received).toEqual(names);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath(`six-uploads-${temporary ? "temporary" : "main"}.png`) });
+      } finally {
+        release.resolve();
+      }
+    });
+  }
+
   hintTest("@temporary-delivery shows the message before startup and uses shared failure actions to retry it once", async ({ page }) => {
     const creation = Promise.withResolvers<void>();
     const startup = Promise.withResolvers<void>();
