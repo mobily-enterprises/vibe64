@@ -398,6 +398,11 @@ message or requiring an explicit Resume.
 
 The browser coalesces checks for the same
 connection and retries failures after one second, backing off to thirty seconds.
+An unavailable AI connection is a separate account-attention state: it stops
+timed retries, explains that Codex needs sign-in (or that the selected account or
+model is unavailable), and offers Open AI Accounts through the existing account
+dialog. Account-change events recheck readiness, including when they arrive
+during an older check. Drafts remain intact and no message is sent automatically.
 Session detail reads have a twenty-second deadline and honor query cancellation,
 so a hung read cannot trap later recovery attempts. Each complete check has a
 forty-five-second deadline. Disconnecting or leaving the session cancels that

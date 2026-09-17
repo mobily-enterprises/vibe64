@@ -27,6 +27,7 @@ export async function assistantStatusServer() {
     commentary: [{ role: "assistant", text: "I am working on the project.", at: new Date().toISOString() }]
   };
   const state = {
+    assistantAccess: { ok: true, available: true, canUse: true, ownerOnly: false },
     conversationLog: [conversation] as Array<Record<string, unknown>>,
     checks: [] as Handler[],
     checkCount: 0,
@@ -119,7 +120,7 @@ export async function assistantStatusServer() {
       else if (route === "/vibe64/sessions") result = { ok: true, sessions: [session], limits: { openSessionCount: 1 }, creation: { canCreate: true, mode: "direct" } };
       else if (route === "/vibe64/sessions/current") result = { ok: true, sessionId: session.sessionId };
       else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: state.conversationLog, pagination: { count: state.conversationLog.length, totalTurnCount: state.conversationLog.length, hasMoreBefore: false, limit: 20 } };
-      else if (route === `${sessionRoute}/assistant-access`) result = { ok: true, available: true, canUse: true, ownerOnly: false };
+      else if (route === `${sessionRoute}/assistant-access`) result = state.assistantAccess;
       else if (route === `${sessionRoute}/message-suggestions`) result = { ok: true, suggestions: [], canManage: true };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
@@ -159,6 +160,9 @@ export async function assistantStatusServer() {
     state,
     url: `http://127.0.0.1:${(http.address() as { port: number }).port}`,
     publishTurn,
+    connectionsChanged() {
+      io.emit("vibe64.connections.changed", { accountId: "codex" });
+    },
     presence(payload: Record<string, unknown>) {
       io.emit("vibe64.session.presence.changed", payload);
     },

@@ -105,6 +105,42 @@ test("a hung initial session read recovers after its deadline", async ({ page })
 });
 
 for (const viewport of viewports) {
+  test(`disconnected AI account explains sign-in and preserves the draft at ${viewport.width}px`, async ({ page }, info) => {
+    await page.setViewportSize(viewport);
+    server.state.session.assistantSelection = { engineId: "codex" };
+    await page.route("**/agent-goal", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
+    await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
+    await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
+    await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+    await openChat(page);
+    await composer(page).fill("Keep this draft while I sign in.");
+    await expect(steer(page)).toBeEnabled();
+    Object.assign(server.state.assistantAccess, { available: false, canUse: false });
+    server.state.checks.push((response) => json(response, {
+      ok: false, code: "vibe64_assistant_connection_unavailable", error: "The selected AI connection is unavailable."
+    }, 409));
+    server.connectionsChanged();
+    const banner = page.locator("[data-vibe64-connection-recovery]");
+    await expect(banner).toContainText("Codex is not connected. Sign in through AI Accounts to continue.");
+    await expect(warning(page)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Retry connection", exact: true })).toHaveCount(0);
+    const accounts = banner.getByRole("button", { name: "Open AI Accounts", exact: true });
+    await expect(accounts).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("account-disconnected.png"), animations: "disabled" });
+    await accounts.click();
+    await expect(page.getByRole("dialog")).toContainText("Account settings");
+    await page.getByRole("button", { name: "Close account settings", exact: true }).click();
+    expect(server.state.checkCount).toBe(2);
+    Object.assign(server.state.assistantAccess, { available: true, canUse: true });
+    server.connectionsChanged();
+    await expect(banner).toHaveCount(0);
+    await expect(steer(page)).toBeEnabled();
+    await expect(composer(page)).toHaveValue("Keep this draft while I sign in.");
+    expect(server.state.messages).toHaveLength(0);
+    expect(server.state.interrupts).toBe(0);
+  });
+
   test(`busy status recovers with draft and layout intact at ${viewport.width}px`, async ({ page }, info) => {
     const draft = "Do not lose this draft or send it automatically.";
     await page.setViewportSize(viewport);

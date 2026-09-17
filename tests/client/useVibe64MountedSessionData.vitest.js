@@ -424,6 +424,34 @@ describe("useVibe64MountedSessionData", () => {
       expect(httpMocks.request).not.toHaveBeenCalled();
     });
 
+    it.each([false, true])("waits for an account change when the AI connection is unavailable (HTTP error: %s)", async (httpError) => {
+      const failure = { ok: false, code: "vibe64_assistant_connection_unavailable", error: "The selected AI connection is unavailable." };
+      if (httpError) httpMocks.request.mockRejectedValueOnce(Object.assign(new Error(failure.error), { code: failure.code }));
+      else httpMocks.request.mockResolvedValueOnce(failure);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("unavailable");
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      const connectionEvent = realtimeMocks.events.find(({ event }) => event === "vibe64.connections.changed");
+      connectionEvent.onEvent({ payload: { accountId: "codex", reason: "connected" } });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
+
+    it("rechecks an account change that arrives during a failing status check", async () => {
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      realtimeMocks.events.find(({ event }) => event === "vibe64.connections.changed").onEvent({});
+      response.resolve({ ok: false, code: "vibe64_assistant_connection_unavailable" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
+
     it("manual recovery reconnects the socket or rechecks the existing connection", async () => {
       const controller = mountAssistant();
       await vi.advanceTimersByTimeAsync(0);

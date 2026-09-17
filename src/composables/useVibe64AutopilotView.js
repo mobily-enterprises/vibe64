@@ -553,6 +553,9 @@ function useVibe64AutopilotView(props, emit, {
     ));
   });
   const composerSubmitMode = computed(() => {
+    if (props.agentConnectionStatus === "unavailable") {
+      return "unavailable";
+    }
     if (props.agentConnectionStatus === "initializing") {
       return "initializing";
     }
@@ -571,6 +574,7 @@ function useVibe64AutopilotView(props, emit, {
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
   const composerSubmitLabel = computed(() => ({
+    unavailable: "Connect AI",
     initializing: "Loading…",
     reconnecting: props.agentConnectionStatus === "disconnected" ? "Reconnecting…" : "Checking…",
     retry: "Retry",
@@ -580,6 +584,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting…"
   })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
+    unavailable: "Connect your AI account to send messages",
     initializing: "Waiting for the assistant to load",
     reconnecting: "Waiting for the connection to recover",
     retry: "Retry guidance to assistant",
@@ -589,6 +594,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting for the assistant to accept guidance"
   })[composerSubmitMode.value] || "Send message");
   const composerSubmitTitle = computed(() => ({
+    unavailable: "Open AI Accounts to connect your assistant. Your draft is kept.",
     initializing: "Keep typing while the assistant loads",
     reconnecting: "Your draft is kept while the connection recovers",
     retry: "Retry the same guidance without duplicating it",
@@ -619,13 +625,21 @@ function useVibe64AutopilotView(props, emit, {
     !composerSending.value
   ));
   const assistantConnectionReady = computed(() => props.agentConnectionStatus === "connected");
+  const assistantAccountUnavailable = computed(() => props.agentConnectionStatus === "unavailable");
+  const assistantAccountMessage = computed(() => (
+    (props.session?.assistantSelection?.engineId || VIBE64_DEFAULT_AGENT_PROVIDER_ID) === "codex"
+      ? "Codex is not connected. Sign in through AI Accounts to continue."
+      : "The selected AI account or model is unavailable. Check AI Accounts or choose another model."
+  ));
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
-    ["disconnected", "unknown", "reconciling"].includes(props.agentConnectionStatus)
+    ["disconnected", "unknown", "reconciling", "unavailable"].includes(props.agentConnectionStatus)
   ));
   const thinkingVisible = computed(() => Boolean(
-    agentActive.value || composerSending.value ||
-    (!assistantConnectionReady.value && !sessionInteractionDisabled.value)
+    !assistantAccountUnavailable.value && (
+      agentActive.value || composerSending.value ||
+      (!assistantConnectionReady.value && !sessionInteractionDisabled.value)
+    )
   ));
   const thinkingLabel = computed(() => (
     (agentObservationLost.value && agentActive.value ? "Assistant stop not yet confirmed" : "") ||
@@ -1281,6 +1295,9 @@ function useVibe64AutopilotView(props, emit, {
     props.active && sessionId.value
   ));
   const saveWorkTitle = computed(() => {
+    if (assistantAccountUnavailable.value) {
+      return "Connect your AI account before saving or updating";
+    }
     if (!assistantConnectionReady.value) {
       if (props.agentConnectionStatus === "initializing") {
         return "Loading the assistant before saving or updating";
@@ -2184,6 +2201,8 @@ function useVibe64AutopilotView(props, emit, {
     systemReloadVersion,
     thinkingLabel,
     thinkingVisible,
+    assistantAccountMessage,
+    assistantAccountUnavailable,
     connectionRecoveryVisible,
     updateAgentSetting,
     updateComposerAttachments,

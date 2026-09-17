@@ -6,6 +6,8 @@ import {
 } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "@local/vibe64-runtime/shared";
+import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -269,7 +271,7 @@ function useVibe64MountedSessionData({
     const cancelled = new Promise((_resolve, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
     });
-    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling"].includes(agentConnectionStatus.value)
+    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable"].includes(agentConnectionStatus.value)
       ? "reconciling"
       : "initializing";
     const checking = (async () => {
@@ -313,9 +315,10 @@ function useVibe64MountedSessionData({
     })();
     reconciliationInFlight = Promise.race([checking, cancelled]).catch((error) => {
       if (currentConnection()) {
-        agentConnectionStatus.value = "unknown";
-        scheduleReconciliationRetry();
-        console.warn("Vibe64 assistant status check failed; recovery will retry.", {
+        const unavailable = error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE;
+        agentConnectionStatus.value = unavailable ? "unavailable" : "unknown";
+        if (!unavailable) scheduleReconciliationRetry();
+        console.warn("Vibe64 assistant status check failed.", {
           code: String(error?.code || ""),
           message: String(error?.message || ""),
           reason,
@@ -346,6 +349,11 @@ function useVibe64MountedSessionData({
     reconciliationRetryDelay = 1_000;
     void reconcileMountedAgentSession();
   };
+  useRealtimeEvent({
+    enabled: mountedActive,
+    event: VIBE64_CONNECTIONS_CHANGED_EVENT,
+    onEvent: reconcileAfterRealtimeConnect
+  });
   const markRealtimeDisconnected = () => {
     connectionGeneration += 1;
     clearReconciliationRetry();

@@ -146,13 +146,26 @@
           role="status"
           data-vibe64-connection-recovery
         >
-          <span class="text-body-small">
+          <span v-if="assistantAccountUnavailable" class="text-body-small">
+            {{ assistantAccountMessage }} Your draft is kept.
+          </span>
+          <span v-else class="text-body-small">
             {{ props.agentConnectionStatus === 'disconnected'
               ? 'Connection lost. Reconnecting automatically.'
               : 'Checking the assistant connection.' }}
             Your draft is kept.
           </span>
           <v-btn
+            v-if="assistantAccountUnavailable"
+            color="primary"
+            variant="flat"
+            min-height="48"
+            @click="requestVibe64AccountConnectionsDialog({ section: 'ai' })"
+          >
+            Open AI Accounts
+          </v-btn>
+          <v-btn
+            v-else
             variant="tonal"
             min-height="48"
             :disabled="props.agentConnectionStatus === 'reconciling'"
@@ -767,6 +780,7 @@ import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
+import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
@@ -1092,6 +1106,8 @@ const {
   systemReloadVersion,
   thinkingLabel,
   thinkingVisible,
+  assistantAccountMessage,
+  assistantAccountUnavailable,
   connectionRecoveryVisible,
   updateComposerAttachments,
   updatePreviewAttachmentState,

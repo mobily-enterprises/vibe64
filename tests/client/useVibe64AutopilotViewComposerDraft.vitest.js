@@ -431,6 +431,25 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
   });
 
+  it("explains a disconnected AI account without showing connection progress or losing the draft", async () => {
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable" });
+    view.composerDraft.value = "Keep this draft while I sign in.";
+    expect(view.assistantAccountUnavailable.value).toBe(true);
+    expect(view.assistantAccountMessage.value).toBe("Codex is not connected. Sign in through AI Accounts to continue.");
+    expect(view.connectionRecoveryVisible.value).toBe(true);
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.composerSubmitLabel.value).toBe("Connect AI");
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(view.saveWorkTitle.value).toBe("Connect your AI account before saving or updating");
+    await view.submitComposerMessage();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    props.session.assistantSelection = { engineId: "opencode" };
+    expect(view.assistantAccountMessage.value).toContain("account or model is unavailable");
+    props.agentConnectionStatus = "connected";
+    expect(view.connectionRecoveryVisible.value).toBe(false);
+    expect(view.composerDraft.value).toBe("Keep this draft while I sign in.");
+  });
+
   it("shows ordinary loading while keeping the draft editable until the assistant is ready", async () => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: "initializing" });
     view.composerDraft.value = "Keep typing while loading.";
