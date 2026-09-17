@@ -2074,7 +2074,9 @@ function createCodexTerminalController({
     for (const entry of codexAppServerConversations.get(codexTerminalNamespace(sessionId))?.values() || []) {
       if (entry.provider !== provider) continue;
       threads.set(entry.conversationId, entry.runId);
-      if (codexAppServerConversationTurnIsActive(entry.status)) entry.error = pendingMessage;
+      if (codexAppServerConversationTurnIsActive(entry.status) || entry.goal?.status === "active") {
+        entry.error = pendingMessage;
+      }
     }
     // A helper owns only its own threads. Main chat belongs to its managed provider.
     if (managed?.threadId) threads.set(managed.threadId, "");
@@ -2084,11 +2086,13 @@ function createCodexTerminalController({
         const runtime = await createRuntimeForSession();
         const turn = codexAppServerTurnState(await runtime.getSession(sessionId));
         threads.set(managed.threadId, turn.turnId);
-        await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
-          event: { kind: "observation-lost", message: error.message },
-          patch: { providerStatus: "observation_lost", error: pendingMessage }
-        });
-        await publishSessionChanged(sessionId, { reason: "codex-observation-lost" });
+        if (turn.active || codexAppServerTurnOwnsActiveGoal(turn, managed.threadId)) {
+          await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+            event: { kind: "observation-lost", message: error.message },
+            patch: { providerStatus: "observation_lost", error: pendingMessage }
+          });
+          await publishSessionChanged(sessionId, { reason: "codex-observation-lost" });
+        }
       }
       if (!threads.size) throw new Error("The unobserved Codex thread could not be identified.");
       for (const [threadId, turnId] of threads) await provider.stopThreadForObservationLoss(threadId, turnId);
@@ -2109,6 +2113,8 @@ function createCodexTerminalController({
         try {
           await runWithCodexAppServerProjectContext(target.projectContext, async () => {
             const runtime = await createRuntimeForSession();
+            const turn = codexAppServerTurnState(await runtime.getSession(target.sessionId));
+            if (!turn.active && !codexAppServerTurnOwnsActiveGoal(turn, target.threadId)) return;
             await runtime.store.writeAgentRunEvent(target.sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
               event: { kind: "observation-lost", message: error.message },
               patch: { providerStatus: "observation_lost", error: pendingMessage }
@@ -2131,7 +2137,7 @@ function createCodexTerminalController({
           const runtime = await createRuntimeForSession();
           stoppedRun = await runtime.store.mutateSession(target.sessionId, async () => {
             const run = await readCodexAppServerAgentRunForSession(runtime.store, target.sessionId);
-            if (run?.providerThreadId !== target.threadId) {
+            if (run?.providerThreadId !== target.threadId || run.providerStatus !== "observation_lost") {
               return null;
             }
             const stopped = await runtime.store.writeAgentRunEvent(target.sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
@@ -2154,7 +2160,9 @@ function createCodexTerminalController({
           target.provider.observationFailure = null;
         }
         for (const entry of codexAppServerConversations.get(codexTerminalNamespace(target.sessionId))?.values() || []) {
-          if (entry.provider === target.provider) {
+          if (entry.provider === target.provider && (
+            codexAppServerConversationTurnIsActive(entry.status) || entry.goal?.status === "active"
+          )) {
             entry.status = "interrupted";
             entry.error = message;
             entry.watcher?.failNow(error);
@@ -8308,37 +8316,36 @@ function createCodexTerminalController({
     } = context;
     let healthAttempt = null;
     try {
-      const prepared = await withCodexSessionStartupGate({
+      const health = await writeCodexAppServerRunning(runtime, sessionId, {
+        kind: "app_server_started",
+        message: "Preparing Codex app-server for this session."
+      });
+      healthAttempt = health.healthAttempt;
+      // Runtime recovery can await a disconnect callback that writes session
+      // state. Keep that wait outside the session mutation lock; preparation
+      // still holds its agent-write admission lock.
+      const activeProvider = await ensureCodexAppServerProviderForActiveTurn(session, {
+        executionRoot,
+        workdir
+      });
+      let providerOptions = activeProvider?.providerOptions;
+      if (!providerOptions) {
+        const terminalEnv = await codexProjectTerminalEnv({ runtime, session, sessionId });
+        providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+          terminalEnv,
+          runtime,
+          executionRoot,
+          toolHomeSource,
+          workdir
+        });
+      }
+      const provider = activeProvider?.provider || await ensureCodexAppServerDaemonForSession(
+        sessionId,
+        providerOptions,
+        codexThreadIdForWorkdir(session, workdir)
+      );
+      const { currentSession: preparedSession, developerInstructions, thread } = await withCodexSessionStartupGate({
         operation: async (currentSession) => {
-          const health = await writeCodexAppServerRunning(runtime, sessionId, {
-            kind: "app_server_started",
-            message: "Preparing Codex app-server for this session."
-          });
-          healthAttempt = health.healthAttempt;
-          const activeProvider = await ensureCodexAppServerProviderForActiveTurn(currentSession, {
-            executionRoot,
-            workdir
-          });
-          let providerOptions = activeProvider?.providerOptions;
-          if (!providerOptions) {
-            const terminalEnv = await codexProjectTerminalEnv({
-              runtime,
-              session: currentSession,
-              sessionId
-            });
-            providerOptions = await codexAppServerRuntimeOptionsForSession(currentSession, {
-              terminalEnv,
-              runtime,
-              executionRoot,
-              toolHomeSource,
-              workdir
-            });
-          }
-          const provider = activeProvider?.provider || await ensureCodexAppServerDaemonForSession(
-            sessionId,
-            providerOptions,
-            codexThreadIdForWorkdir(currentSession, workdir)
-          );
           const developerInstructions = (await codexAppServerSessionInstructions(
             currentSession,
             { workdir }
@@ -8355,8 +8362,6 @@ function createCodexTerminalController({
           return {
             currentSession,
             developerInstructions,
-            provider,
-            providerOptions,
             thread
           };
         },
@@ -8364,11 +8369,6 @@ function createCodexTerminalController({
         session,
         sessionId
       });
-      const preparedSession = prepared.currentSession;
-      const developerInstructions = prepared.developerInstructions;
-      const provider = prepared.provider;
-      const providerOptions = prepared.providerOptions;
-      const thread = prepared.thread;
       await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {

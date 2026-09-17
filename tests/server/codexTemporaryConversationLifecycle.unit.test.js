@@ -2202,6 +2202,83 @@ test("assistant preparation still takes the session write lock", { timeout: 15_0
   }, { throughTerminalService: true });
 });
 
+test("Codex connection loss during preparation releases the session for recovery", { timeout: 10_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    const provider = captures.provider;
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    provider.isAvailable = () => false;
+    provider.ensureAvailable = async () => {
+      entered.resolve();
+      await release.promise;
+      throw provider.observationFailure;
+    };
+    provider.stopThreadForObservationLoss = async () => {
+      throw new Error("Process has stopped");
+    };
+    const preparing = controller.ensureThread(sessionId);
+    await entered.promise;
+    // The socket callback runs outside the preparation's session mutation.
+    const stopping = provider.failObservation(new Error("Connection closed during startup"));
+    release.resolve();
+    const result = await preparing;
+    assert.equal(result.ok, false);
+    await stopping;
+    assert.equal((await store.readBackgroundTask(sessionId, "codex_app_server")).status, "failed");
+    const exclusive = await store.runSessionExclusive(sessionId, "agent-write-mode", async () => true);
+    assert.equal(exclusive.acquired, true);
+    const recovered = await controller.ensureThread(sessionId);
+    assert.equal(recovered.ok, true, JSON.stringify(recovered));
+    assert.equal((await store.readBackgroundTask(sessionId, "codex_app_server")).status, "ready");
+  });
+});
+
+for (const processStopped of [false, true]) {
+  test(`idle Codex reconnects without interrupting completed work (process stopped: ${processStopped})`, async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      const sent = await controller.sendMessage(sessionId, {
+        message: "Work",
+        messageId: "completed-before-disconnect"
+      });
+      assert.equal(sent.ok, true);
+      const provider = captures.provider;
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: "completed-before-disconnect-answer",
+        phase: "final_answer",
+        text: "Finished before disconnect.",
+        threadId: provider.threadId,
+        turnId: provider.turnId
+      }));
+      provider.status = "completed";
+      emitCodexNotification(captures.subscribers, turnCompleted({
+        threadId: provider.threadId,
+        turnId: provider.turnId
+      }));
+      const completed = await waitForSessionValue(
+        () => store.readAgentRun(sessionId, "codex_app_server"),
+        (run) => run?.state === VIBE64_AGENT_RUN_STATE.COMPLETED,
+        "completed work before losing the idle connection"
+      );
+      provider.stopThreadForObservationLoss = async () => {
+        if (processStopped) throw new Error("Assistant process is gone");
+      };
+      await provider.failObservation(new Error("Idle connection closed"));
+      assert.deepEqual(await store.readAgentRun(sessionId, "codex_app_server"), completed);
+      const recovered = await controller.ensureThread(sessionId);
+      assert.equal(recovered.ok, true, JSON.stringify(recovered));
+      assert.equal(recovered.observationStopped, undefined);
+      assert.equal(captures.providerOptions.length, processStopped ? 2 : 1);
+      assert.equal(captures.turns.length, 1, "Reconnection must not replay the completed user message");
+      assert.equal(captures.threadStarts.length, 1, "Reconnection must preserve the existing conversation");
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+      const conversation = await store.readConversationLog(sessionId);
+      assert.ok(conversation.some((row) => row.assistant?.text === "Finished before disconnect."));
+    });
+  });
+}
+
 const RENEWAL_SOURCE = Object.freeze({
   authority: "github",
   commit: "a".repeat(40),

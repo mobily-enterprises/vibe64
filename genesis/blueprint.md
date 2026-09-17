@@ -99,6 +99,9 @@ Reconnecting preserves the selected model and reasoning effort and requests
 short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
+An idle assistant whose process has stopped reconnects through the ordinary
+connection check, retaining completed replies without asking the person to
+resume finished work. Startup and disconnect cleanup cannot block each other.
 While the Vibe64 server is running, every executing assistant session must remain
 observed by the server and visible in its conversation, including across goal
 continuations and connection replacement. Observation belongs to the session's

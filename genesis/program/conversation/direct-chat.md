@@ -386,6 +386,15 @@ other composers wait at the same server boundary. Provider checks discard late
 responses when their session or connection has closed or changed. Codex helper
 ownership restoration belongs to startup reconciliation and helper operations,
 not main-conversation readiness.
+Codex readiness acquires its provider runtime outside the session mutation lock,
+while retaining preparation's agent-write admission. Disconnect cleanup may need
+to write that same session, so runtime acquisition must not wait for cleanup
+while holding its mutation lock. Thread preparation rechecks the session under
+the startup gate after acquisition. Observation loss still stops and records
+active work and active goals, but preserves completed main and temporary turns.
+Once an idle process has been verified stopped, the next automatic connection
+check can recreate it and resume the existing conversation without replaying a
+message or requiring an explicit Resume.
 
 The browser coalesces checks for the same
 connection and retries failures after one second, backing off to thirty seconds.
