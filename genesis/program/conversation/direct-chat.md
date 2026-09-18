@@ -3,7 +3,7 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 OpenCode waits for its project event connection before sending, allowing cold
-initialization up to 30 seconds. A pre-send connection timeout is retryable.
+initialization up to 60 seconds. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message
 cannot hide a later provider rejection behind the earlier connection failure.
 
