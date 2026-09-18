@@ -102,6 +102,10 @@ requiring a page reload or interrupting the assistant's work.
 An idle assistant whose process has stopped reconnects through the ordinary
 connection check, retaining completed replies without asking the person to
 resume finished work. Startup and disconnect cleanup cannot block each other.
+Startup and connection checks automatically release a stale assistant busy
+record once the assistant confirms that its conversation is idle and has no
+active goal. Save and Update then become available without manual repair;
+unknown or active execution stays protected, and recovery does not resume work.
 When an AI account is disconnected, the conversation explains that sign-in is
 needed and opens AI Accounts directly. It keeps the draft and checks again when
 the account changes, without repeatedly presenting sign-in as a connection check.

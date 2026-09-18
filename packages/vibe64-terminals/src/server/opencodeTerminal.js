@@ -2669,6 +2669,36 @@ function createOpenCodeTerminalController({
         }
         target = prepared;
       }
+      const savedRun = (context.session.agentRuns || []).find(run => run.id === OPENCODE_AGENT_RUN_ID);
+      if (savedRun?.active && savedRun.observationError && !monitors.has(context.key)) {
+        await runVibe64AgentWriteExclusive(context.runtime, sessionId, async () => {
+          context = await contextFor(sessionId, { ...options, session: null });
+          const run = (context.session.agentRuns || []).find(run => run.id === OPENCODE_AGENT_RUN_ID);
+          if (!run?.active || !run.observationError || monitors.has(context.key)) return;
+          const threadId = text(run.threadId) || target.upstreamSessionId;
+          if (threadId !== target.upstreamSessionId) return;
+          const status = await target.server.client.sessionStatus(threadId, {
+            signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+          });
+          if (status?.type !== "idle") return;
+          await context.runtime.store.mutateSession(sessionId, async () => {
+            const latest = await context.runtime.getSession(sessionId, { inspectSource: false });
+            const currentRun = (latest.agentRuns || []).find(value => value.id === OPENCODE_AGENT_RUN_ID);
+            if (JSON.stringify(currentRun) !== JSON.stringify(run)) return;
+            const stopped = {
+              ...turns.get(context.key),
+              ...run,
+              id: text(run.turnId),
+              threadId,
+              active: false,
+              state: VIBE64_AGENT_RUN_STATE.INTERRUPTED,
+              updatedAt: new Date().toISOString()
+            };
+            await writeRun(context, stopped, VIBE64_AGENT_RUN_STATE.INTERRUPTED, run.observationError);
+            turns.set(context.key, stopped);
+          });
+        }, { operation: "recover-opencode-observation", waitMs: 10_000 });
+      }
       return {
         ok: true,
         thread: { id: target.upstreamSessionId },

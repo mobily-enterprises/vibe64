@@ -1972,6 +1972,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
             turnId: provider.turnId
           };
         },
+        async readGoal() { return { goal: null }; },
         async resumeThread(threadId, settings = {}) {
           await providerOptions.beforeResumeThread?.(threadId);
           provider.threadId = threadId;
@@ -2066,6 +2067,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
     ? createTerminalService({
         codexTerminalController: controllerOptions,
         env: controllerOptions.env,
+        publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
         projectService
       })
     : null;
@@ -9391,6 +9393,101 @@ test("a goal event from an old subscribed thread cannot reconcile the replacemen
     assert.equal(run.providerThreadId, "replacement-thread");
     assert.equal(run.providerGoalThreadId, "replacement-thread");
     assert.equal(run.providerGoalStatus, "active");
+  });
+});
+
+for (const recordedThread of [false, true]) {
+  test(`connection checks recover a stale Codex busy record (thread recorded: ${recordedThread})`, async () => {
+    await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
+      assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+      const provider = captures.provider;
+      await store.writeAgentRunEvent(sessionId, "codex_app_server", {
+        event: { kind: "observation-lost" },
+        patch: {
+          state: VIBE64_AGENT_RUN_STATE.STARTING,
+          providerStatus: "observation_lost",
+          ...(recordedThread ? { providerThreadId: provider.threadId } : {})
+        }
+      });
+      const notifications = [];
+      captures.onSessionChanged = (_id, event) => notifications.push(event);
+      provider.resumeThread = async () => { throw new Error("Stale-record recovery must not resume work"); };
+      const stopBeforeGit = new Error("Repository admission recovered.");
+      await assert.rejects(terminalService.updateSessionWork(sessionId, {
+        onRepositoryWriteAcquired() { throw stopBeforeGit; }
+      }), error => error === stopBeforeGit);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const result = await terminalService.ensureAgentSession(sessionId);
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+      }
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.active, false);
+      assert.equal(run.state, VIBE64_AGENT_RUN_STATE.INTERRUPTED);
+      assert.equal(run.providerThreadId, provider.threadId);
+      assert.equal(run.events.filter(event => event.kind === "codex-observation-stop-recovered").length, 1);
+      assert.equal(notifications.filter(event => event.reason === "codex-observation-stop-recovered").length, 1);
+      assert.equal(captures.turns.length, 0);
+      assert.deepEqual(await store.readConversationLog(sessionId), []);
+      await assert.rejects(terminalService.updateSessionWork(sessionId, {
+        onRepositoryWriteAcquired() { throw stopBeforeGit; }
+      }), error => error === stopBeforeGit);
+    }, { throughTerminalService: true });
+  });
+}
+
+for (const condition of ["active turn", "active goal", "unknown goal", "unknown status", "read failure", "newer run"]) {
+  test(`stale Codex recovery preserves the busy record with ${condition}`, async () => {
+    await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
+      assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+      await store.writeAgentRunEvent(sessionId, "codex_app_server", {
+        event: { kind: "observation-lost" },
+        patch: { state: VIBE64_AGENT_RUN_STATE.STARTING, providerStatus: "observation_lost" }
+      });
+      const provider = captures.provider;
+      provider.resumeThread = async () => { throw new Error("Recovery must not resume work"); };
+      if (condition === "active goal") provider.readGoal = async () => ({ goal: { status: "active" } });
+      if (condition === "unknown goal") provider.readGoal = async () => ({});
+      provider.readThreadStatus = async () => {
+        if (condition === "read failure") throw new Error("Status unavailable");
+        if (condition === "newer run") {
+          await store.writeAgentRunEvent(sessionId, "codex_app_server", {
+            patch: { state: VIBE64_AGENT_RUN_STATE.RUNNING, providerStatus: "inProgress", providerThreadId: provider.threadId }
+          });
+        }
+        return { status: condition === "active turn" ? "inProgress" : condition === "unknown status" ? "unknown" : "idle" };
+      };
+      await terminalService.ensureAgentSession(sessionId);
+      const run = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(run.active, true);
+      assert.equal(run.events.some(event => event.kind === "codex-observation-stop-recovered"), false);
+      await assert.rejects(terminalService.updateSessionWork(sessionId), { code: "vibe64_session_update_agent_active" });
+      assert.equal(captures.turns.length, 0);
+    }, { throughTerminalService: true });
+  });
+}
+
+test("startup recovers a stopped Codex busy record without resuming its conversation", async () => {
+  await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    await controller.closeAllForSession(sessionId);
+    await store.writeAgentRunEvent(sessionId, "codex_app_server", {
+      event: { kind: "observation-lost" },
+      patch: { state: VIBE64_AGENT_RUN_STATE.STARTING, providerStatus: "observation_lost" }
+    });
+    captures.onProviderCreated = provider => {
+      provider.status = "notLoaded";
+      provider.resumeThread = async () => { throw new Error("Startup recovery must not resume work"); };
+    };
+    const restarted = createCodexTerminalController(controllerOptions);
+    try {
+      const result = await restarted.reconcileThreads([{ sessionId }]);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+      assert.equal(captures.turns.length, 0);
+    } finally {
+      await restarted.closeAllForSession(sessionId);
+    }
   });
 });
 

@@ -769,10 +769,14 @@ function createService({
   ) {
     const result = await runMainAgentWrite(sessionId, options, async (context) => {
       if (sessionHasActiveAgentRun(context.session)) {
-        const error = new Error(activeMessage);
-        error.code = activeCode;
-        error.retryable = true;
-        throw error;
+        const activityCheck = await sessionAgent.ensureSession(sessionId, context);
+        context.session = await context.runtime.getSession(sessionId, { inspectSource: false });
+        if (sessionHasActiveAgentRun(context.session)) {
+          const error = new Error(activityCheck?.error || activeMessage);
+          error.code = activeCode;
+          error.retryable = true;
+          throw error;
+        }
       }
       await options.onRepositoryWriteAcquired?.();
       return operation(context);

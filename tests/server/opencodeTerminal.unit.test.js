@@ -2173,6 +2173,54 @@ test("OpenCode stops native work when saving its transcript fails", async (t) =>
   assert.equal(harness.promptCalls.length, 1);
 });
 
+for (const condition of ["idle", "missing turn identity", "busy", "unknown", "read failure", "newer run"]) {
+  test(`OpenCode connection checks reconcile stale busy records: ${condition}`, async (t) => {
+    let statusRead = async () => ({ type: "idle" });
+    const harness = await controllerHarness({ sessionStatus: (...args) => statusRead(...args) });
+    t.after(async () => {
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { force: true, recursive: true });
+    });
+    const ready = await harness.controller.ensureSession("session-1");
+    const savedRun = {
+      id: "opencode_server",
+      active: true,
+      state: "active",
+      observationError: "Event connection lost; stop unconfirmed.",
+      updatedAt: "2026-09-16T15:20:24.255Z",
+      ...(condition === "missing turn identity" ? {} : { threadId: ready.thread.id, turnId: "old-turn" })
+    };
+    harness.session.agentRuns = [savedRun];
+    const writeRun = harness.runtime.store.writeAgentRunEvent;
+    harness.runtime.store.writeAgentRunEvent = async (...args) => {
+      const run = await writeRun(...args);
+      harness.session.agentRuns = [run];
+      return run;
+    };
+    statusRead = async () => {
+      if (condition === "read failure") throw new Error("Status unavailable");
+      if (condition === "newer run") {
+        harness.session.agentRuns = [{ ...savedRun, updatedAt: "2026-09-18T15:20:24.255Z" }];
+      }
+      return { type: ["busy", "unknown"].includes(condition) ? condition : "idle" };
+    };
+    if (condition === "read failure") {
+      await assert.rejects(harness.controller.ensureSession("session-1"), /Status unavailable/);
+    } else {
+      assert.equal((await harness.controller.ensureSession("session-1")).ok, true);
+    }
+    const recovered = ["idle", "missing turn identity"].includes(condition);
+    assert.equal(harness.session.agentRuns[0].active, !recovered);
+    assert.equal(harness.agentRunEvents.length, recovered ? 1 : 0);
+    assert.equal(harness.promptCalls.length, 0);
+    if (recovered) {
+      assert.notEqual((await harness.controller.sessionState("session-1")).turn?.active, true);
+      assert.equal((await harness.controller.ensureSession("session-1")).ok, true);
+      assert.equal(harness.agentRunEvents.length, 1);
+    }
+  });
+}
+
 test("OpenCode startup retries an unverified observation stop without restarting the turn", async (t) => {
   const loss = Promise.withResolvers();
   let exited = false;

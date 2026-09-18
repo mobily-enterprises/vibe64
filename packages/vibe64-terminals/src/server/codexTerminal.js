@@ -6785,6 +6785,52 @@ function createCodexTerminalController({
     }
   }
 
+  async function recoverCodexAppServerObservationLoss(runtime, session) {
+    const sessionId = session.sessionId;
+    const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+      const current = await runtime.getSession(sessionId, { inspectSource: false });
+      const turn = codexAppServerTurnState(current);
+      if (turn.status !== "observation_lost" || !turn.active) return current;
+      const threadId = codexThreadIdForWorkdir(current, terminalWorktreePath(current));
+      if (!threadId || (turn.threadId && turn.threadId !== threadId)) return current;
+
+      // Reconnect only to inspect. Resuming a thread could restart its goal.
+      const provider = await ensureCodexAppServerDaemonForSession(sessionId,
+        await codexAppServerRuntimeOptionsForSession(current, { runtime }));
+      const { goal } = await provider.readGoal(threadId);
+      if (goal !== null && !["paused", "complete"].includes(goal?.status)) return current;
+      const status = codexAppServerThreadStatus(await provider.readThreadStatus(threadId));
+      if (!codexAppServerTurnStatusIsSuccessfulComplete(status)) return current;
+
+      const stoppedRun = await runtime.store.mutateSession(sessionId, async () => {
+        const latest = await readCodexAppServerAgentRunForSession(runtime.store, sessionId);
+        if (JSON.stringify(latest) !== JSON.stringify(codexAppServerAgentRun(current))) return null;
+        return runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+          event: { kind: "codex-observation-stop-recovered", message: "Codex confirmed that the conversation is stopped." },
+          patch: {
+            error: "",
+            providerThreadId: threadId,
+            providerGoalThreadId: threadId,
+            providerGoalStatus: goal?.status || "",
+            state: VIBE64_AGENT_RUN_STATE.INTERRUPTED
+          }
+        });
+      });
+      if (stoppedRun) {
+        clearCodexAppServerActiveTimer(sessionId);
+        await publishSessionChanged(sessionId, {
+          payload: {
+            ...codexAppServerAgentRunRealtimePayload(stoppedRun),
+            conversationStream: runtime.store.clearConversationStream(sessionId)
+          },
+          reason: "codex-observation-stop-recovered"
+        });
+      }
+      return runtime.getSession(sessionId, { inspectSource: false });
+    }, { operation: "recover-codex-observation", waitMs: 10_000 });
+    return exclusive.acquired ? exclusive.value : session;
+  }
+
   async function completeCodexAppServerTurn(sessionId = "", threadId = "", turnId = "", {
     provider = null,
     status = "completed",
@@ -8076,6 +8122,16 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
+    if (codexAppServerTurnState(session).status === "observation_lost") {
+      const recovered = await recoverCodexAppServerObservationLoss(runtime, session);
+      const turn = codexAppServerTurnState(recovered);
+      return withCodexState({
+        ok: !turn.active,
+        sessionId: normalizedSessionId,
+        status: turn.active ? "stopUnverified" : "stopped",
+        threadId: turn.threadId
+      }, recovered);
+    }
     const threadId = codexThreadIdForWorkdir(session, workdir);
     if (!threadId) {
       const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
@@ -13534,9 +13590,13 @@ function createCodexTerminalController({
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
         const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
-        const turn = codexAppServerTurnState(session);
+        let session = await runtime.getSession(sessionId, { inspectSource: false });
+        let turn = codexAppServerTurnState(session);
         if (turn.status === "observation_lost") {
+          if (turn.active) {
+            session = await recoverCodexAppServerObservationLoss(runtime, session);
+            turn = codexAppServerTurnState(session);
+          }
           if (!turn.active) {
             const recovered = await submitCodexAppServerAssistantResult(sessionId, turn.threadId, turn.turnId, { recoverFromProvider: true });
             if (recovered.reason === "error") throw new Error(recovered.error);

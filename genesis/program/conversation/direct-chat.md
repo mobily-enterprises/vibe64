@@ -186,6 +186,21 @@ Shared-runtime cancellation includes providers that own only temporary chats.
 Failed stop-state persistence retains the owner for retry; provider retirement
 or release follows that durable write and precedes publication of the stopped
 state. Reconciliation cannot prune an unverified stop owner.
+Startup and ordinary connection checks also reconcile a persisted active
+observation-loss barrier, including one missing its turn identity. Under the
+agent-write lock, the controller uses the session's known conversation to read
+native goal and thread status without resuming it. Only confirmed idle/unloaded
+status with no active goal releases the unchanged record; failed reads, unknown
+status, missing identity and newer state retain the barrier. The recovered stop
+is persisted and broadcast, releasing Save and Update while retaining explicit
+Send/Resume for further assistant work.
+Save and Update share the repository-write guard: when persisted state is busy,
+it calls the selected provider's existing session check and rereads durable
+activity under the agent-write lock before admitting a repository mutation.
+OpenCode's connection check similarly releases an observation-loss record only
+after its native session reports idle and no local monitor owns the turn. It
+retains a changed record or failed/unknown status and updates both durable and
+in-memory activity after recovery. Its startup stop verification remains in use.
 
 OpenCode opens its SSE observer before prompt admission, including temporary
 turns without a UI event callback. Unexpected stream completion, event-handler
