@@ -356,7 +356,10 @@ test("test-target capacity approval resumes the original suite and restores deve
     const commands = await browserCommands(f);
     const original = commands.execute(["--target", "test-app", "test", "--grep", "test database round trip"]);
     const completion = original.then((value) => value, (error) => { throw error; });
-    await waiting.promise;
+    await Promise.race([
+      waiting.promise,
+      completion.then(() => assert.fail("Command ended before resource approval"))
+    ]);
     assert.deepEqual(starts.slice(3), [["test-app", "test"], ["app", "development"]]);
     await assert.rejects(readFile(path.join(f.sourceRoot, "test.json")), { code: "ENOENT" });
     const normal = await f.controller.launchStatus(f.sessionId);

@@ -218,7 +218,7 @@ if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !contr
 }
 
 const require = createRequire(import.meta.url);
-const { chromium } = require(playwrightModulePath);
+const { chromium, request } = require(playwrightModulePath);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
 const pngVisualMetrics = ${pngVisualMetrics.toString()};
@@ -515,13 +515,13 @@ async function ensureBrowser(url = "", {
   return statusPayload();
 }
 
-async function exchangeApplicationIdentity(browserContext, browserPage, grantValue = "") {
+async function exchangeApplicationIdentity(requestContext, targetUrl, grantValue = "") {
   const grant = String(grantValue || "").trim();
   if (!grant) {
     throw new Error("A preview identity grant is required.");
   }
-  const response = await browserContext.request.post(
-    new URL(identityControlPath, browserPage.url()).toString(),
+  const response = await requestContext.post(
+    new URL(identityControlPath, targetUrl).toString(),
     {
       data: { grant },
       failOnStatusCode: false
@@ -550,7 +550,7 @@ async function selectApplicationIdentity(input = {}) {
   });
   let payload;
   try {
-    payload = await exchangeApplicationIdentity(context, page, input.grant);
+    payload = await exchangeApplicationIdentity(context.request, page.url(), input.grant);
   } catch (error) {
     if (error?.signedOut === true) {
       applicationIdentity = {
@@ -599,16 +599,11 @@ async function writePlaywrightStorageState(input = {}) {
   if (!outputPath || !path.isAbsolute(outputPath)) {
     throw new Error("Managed Playwright storage state requires an absolute output path.");
   }
-  await ensureBrowser(input.previewUrl, {
-    instance: input.previewInstance
-  });
-  const storageContext = await browser.newContext();
+  const storageContext = await request.newContext();
   try {
-    const storagePage = await storageContext.newPage();
-    await storagePage.goto(input.previewUrl, {
-      waitUntil: "load"
-    });
-    await exchangeApplicationIdentity(storageContext, storagePage, input.grant);
+    // Establish the host's preview cookie without rendering the application.
+    await storageContext.get(input.previewUrl);
+    await exchangeApplicationIdentity(storageContext, input.previewUrl, input.grant);
     const storageState = await storageContext.storageState();
     try {
       await writeFile(outputPath, JSON.stringify(storageState) + "\\n", {
@@ -629,7 +624,7 @@ async function writePlaywrightStorageState(input = {}) {
       outputPath
     };
   } finally {
-    await storageContext.close().catch(() => null);
+    await storageContext.dispose();
   }
 }
 
