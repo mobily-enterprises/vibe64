@@ -1736,7 +1736,7 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__composer-actions {
   flex-wrap: wrap;
-  column-gap: clamp(0rem, calc(4% - 0.75rem), 0.75rem);
+  column-gap: clamp(0rem, calc(4% - 1.25rem), 0.5rem);
   width: 100%;
 }
 

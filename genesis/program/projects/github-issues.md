@@ -37,8 +37,9 @@ labels and list pagination live in the URL; issue details, tabs and browser
 history retain those filters when returning. The label selector uses repository
 colors and matches every selected label. State and single-label filtering use
 GitHub's repository issue connection, loading 25 issues per page even beyond
-1,000 issues. Text search and multiple labels use GitHub search with safely
-quoted label qualifiers and explain its 1,000-match limit when the result count
+1,000 issues. No selected labels leaves GitHub's label filter unset; an empty
+label array would incorrectly hide every issue. Text search and multiple labels
+use GitHub search with safely quoted label qualifiers and explain its 1,000-match limit when the result count
 exceeds it. Changing any filter returns to the first page.
 Descriptions and comments use the existing safe Markdown renderer. The newest
 25 comments appear in chronological order, with access to older pages.
@@ -83,6 +84,7 @@ The backend rechecks label permissions and rejects unavailable labels before
 writing. Existing issue labels require triage access or higher; GitHub
 requires write access to attach labels during issue creation. Empty selections
 remove existing labels. Repository label definitions are not changed.
-The browser uses the available pane width without the Dashboard frame, with
-the same compact Back control as Changes.
+The browser uses the available pane width without the Dashboard frame. Back to
+dashboard, Refresh and New issue share one toolbar row, without an Issues heading
+or repository subtitle. Issue details replace Back to dashboard with All issues.
 Project boards, AI dispatch and automatic closure are not included.

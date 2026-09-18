@@ -285,7 +285,7 @@ test.describe("direct chat", () => {
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     const input = page.getByLabel("Message AI assistant");
-    const settings = page.getByRole("button", { name: "Chat settings: attention required", exact: true });
+    const settings = page.getByRole("button", { name: "Chat settings for Codex: attention required", exact: true });
     const notice = page.getByRole("status").filter({ hasText: "The assistant stopped because its progress could not be tracked." });
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -332,6 +332,39 @@ test.describe("direct chat", () => {
     await expect.poll(() => messages.length).toBe(1);
     expect(messages[0].message).toBe("Continue.");
     expect(errors).toEqual([]);
+  });
+
+  hintTest("@compact-composer keeps Send beside a companion control in narrow panes", async ({ page }, testInfo) => {
+    await mockDirectChat(page);
+    const session = { ...directSession(), assistantSelection: { engineId: "codex" } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, {
+      ok: true, status: "available", goal: null
+    }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, {
+      ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 35 }]
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const row = page.locator(".studio-autopilot__composer-actions:visible");
+    await expect(row.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+    await expect(row.getByRole("button", { name: "Weekly Codex allowance remaining: 35%", exact: true })).toBeVisible();
+    // Hosted companions add one ordinary icon button through this existing target.
+    await row.evaluate(element => {
+      const companion = element.querySelector('button[aria-label="Add to message"]')!.cloneNode(true) as HTMLButtonElement;
+      companion.setAttribute("aria-label", "Companion");
+      element.querySelector(".studio-autopilot__composer-tools")!.append(companion);
+    });
+    for (const width of [390, 470, 768, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.getByLabel("Message AI assistant").fill("Review issue #35 and suggest the next steps.");
+      const centers = await row.locator("button:visible").evaluateAll(buttons => buttons.map(button => {
+        const box = button.getBoundingClientRect();
+        return box.top + box.height / 2;
+      }));
+      expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
+      expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await row.screenshot({ path: testInfo.outputPath(`companion-composer-${width}.png`) });
+    }
   });
 
   test("sends an ordinary chat message without orchestration metadata or a prompts section", async ({ page }) => {

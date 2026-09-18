@@ -8,6 +8,8 @@ snapshots the assistant selection on a new turn. History preserves that snapshot
 through normalization, and the adapter supplies per-turn labels and hover details
 to the shared transcript. Replies without a saved selection display "agent";
 old history is not backfilled.
+Composer spacing closes in narrow panes so the companion control does not push
+Send onto another row when the controls themselves fit.
 OpenCode waits for its project event connection before sending, allowing cold
 initialization up to two minutes. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message

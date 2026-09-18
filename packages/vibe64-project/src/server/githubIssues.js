@@ -118,7 +118,8 @@ export async function githubIssues(project, input = {}, options = {}) {
               totalCount ${PAGE_INFO} nodes { ${ISSUE_LIST_FIELDS} }
             }
           }
-        }`, variables: { owner, name, cursor, states: state === "all" ? null : [state.toUpperCase()], labels: selectedLabels }
+        }`, variables: { owner, name, cursor, states: state === "all" ? null : [state.toUpperCase()],
+          labels: selectedLabels.length ? selectedLabels : null }
       });
       list = result.data?.repository?.issues;
     } else {

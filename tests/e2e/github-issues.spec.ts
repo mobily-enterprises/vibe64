@@ -67,6 +67,17 @@ for (const viewport of viewports) {
     const limitNotice = panel.getByText(/GitHub returns up to 1,000 matches/u);
 
     await expect(panel.getByRole("link", { name: /An issue beyond the first thousand/u })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Issues", exact: true })).toHaveCount(0);
+    await expect(panel.getByText("example/project", { exact: true })).toHaveCount(0);
+    const toolbar = panel.locator(".issues-panel__toolbar");
+    await expect(toolbar.getByRole("link", { name: "Back to dashboard", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "New issue", exact: true })).toBeVisible();
+    const actionCenters = await toolbar.locator("a, button").evaluateAll((actions) => actions.map((action) => {
+      const box = action.getBoundingClientRect();
+      return box.top + box.height / 2;
+    }));
+    expect(Math.max(...actionCenters) - Math.min(...actionCenters)).toBeLessThan(1);
     await expect(chips.filter({ hasText: "bug" })).toHaveCSS("background-color", "rgb(215, 58, 74)");
     await expect(limitNotice).toHaveCount(0);
     expect(requests.at(-1)?.searchParams.getAll("labels")).toEqual(["bug"]);

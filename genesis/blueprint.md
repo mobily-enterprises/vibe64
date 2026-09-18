@@ -27,7 +27,8 @@ an issue and its paginated comments, add a comment, and close or reopen it when 
 GitHub permissions allow. People can create an issue with a title, Markdown
 description and repository labels, and edit labels on existing issues. Labels
 retain their GitHub colors with readable text in either theme. The issue browser
-uses the available pane width and a compact Back to dashboard control.
+uses the available pane width, with Back to dashboard, Refresh and New issue in
+one toolbar row and no extra heading or repository subtitle.
 GitHub remains the authority; actions use the person's
 connected account. Unsent comments survive navigation within the same browser
 tab. A comment posted through Vibe64 gives other viewers of that project a short
@@ -118,8 +119,9 @@ The Settings cog opens AI model and access controls directly, with recovery
 guidance and pending message requests in the same panel. Optional companion controls sit immediately to the right of the
 Settings cog, followed by the starred-files icon. These controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
-spacing increasing gently as the pane widens. The controls wrap when needed in
-narrow panes so Send remains accessible.
+spacing increasing gently as the pane widens. Gaps close in narrow panes so
+Send stays alongside the icons, goal and allowance whenever those controls fit.
+The controls wrap only when their own widths need another row.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.

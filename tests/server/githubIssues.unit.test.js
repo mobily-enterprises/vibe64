@@ -72,15 +72,21 @@ test("browses repository issues beyond 1,000 without using capped search", async
   assert.deepEqual(result.pageInfo, { hasNextPage: true, endCursor: "after-1025" });
 });
 
-test("all-state browsing includes open and closed issues without a text search", async () => {
-  const f = fixture([success({ data: { repository: { issues: {
-    nodes: [], totalCount: 0, pageInfo: { hasNextPage: false }
-  } } } })]);
-  await githubIssues(project, { vibe64User: user, state: "all" }, f.options);
-  const payload = JSON.parse(f.calls[0].input);
-  assert.equal(payload.variables.states, null);
-  assert.deepEqual(payload.variables.labels, []);
-  assert.doesNotMatch(payload.query, /search\(/u);
+test("unfiltered browsing leaves the GitHub label filter unset in every state", async () => {
+  for (const state of ["open", "closed", "all"]) {
+    for (const labels of [undefined, []]) {
+      const f = fixture([success({ data: { repository: { issues: {
+        nodes: [{ number: 7 }], totalCount: 1, pageInfo: { hasNextPage: false }
+      } } } })]);
+      const result = await githubIssues(project, { vibe64User: user, state, labels }, f.options);
+      const payload = JSON.parse(f.calls[0].input);
+      assert.deepEqual(payload.variables.states, state === "all" ? null : [state.toUpperCase()]);
+      assert.equal(payload.variables.labels, null);
+      assert.doesNotMatch(payload.query, /search\(/u);
+      assert.deepEqual(result.issues, [{ number: 7 }]);
+      assert.equal(result.total, 1);
+    }
+  }
 });
 
 test("multiple labels require every label and disclose the search limit with or without text", async () => {

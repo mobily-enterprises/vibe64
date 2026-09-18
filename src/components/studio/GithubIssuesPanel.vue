@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, shallowRef, watch } from "vue";
-import { mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCommentOutline, mdiGithub,
+import { mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCommentOutline,
   mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
@@ -11,7 +11,7 @@ import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
-const { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
+const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
   draft, pending, commentCursor, navigate, filter, mutate, issueSaved } = useVibe64Issues(computed(() => props.dashboardContext));
 const editorOpen = ref(false);
 const editorIssue = shallowRef(null);
@@ -33,7 +33,7 @@ function date(value) {
 
 <template>
   <section class="issues-panel d-flex flex-column ga-4">
-    <div class="d-flex align-center justify-space-between flex-wrap ga-2">
+    <div class="issues-panel__toolbar d-flex align-center ga-2">
       <v-btn
         :prepend-icon="mdiArrowLeft" variant="tonal" size="x-small"
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
@@ -41,26 +41,22 @@ function date(value) {
       >
         {{ available && number ? 'All issues' : 'Back to dashboard' }}
       </v-btn>
+      <v-spacer />
       <v-btn
         v-if="available"
-        :prepend-icon="mdiRefresh" variant="text" height="48"
+        :prepend-icon="mdiRefresh" variant="text" size="small" height="48"
         :disabled="resource.isFetching.value || Boolean(pending)" @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
+      <v-btn
+        v-if="available" :prepend-icon="mdiPlus" color="primary" variant="tonal"
+        rounded="pill" size="small" height="48" @click="openEditor()"
+      >New issue</v-btn>
     </div>
 
     <v-alert v-if="!available" variant="tonal" type="info">Issues are available only for GitHub projects.</v-alert>
     <template v-else>
-      <header class="d-flex align-center flex-wrap ga-3">
-        <v-avatar color="primary" variant="tonal" rounded="lg" size="48"><v-icon :icon="mdiGithub" /></v-avatar>
-        <div class="issues-panel__heading">
-          <h1 class="text-headline-small ma-0">Issues</h1>
-          <p class="text-body-medium text-medium-emphasis ma-0 issues-panel__repository">{{ repository }}</p>
-        </div>
-        <v-btn :prepend-icon="mdiPlus" color="primary" variant="tonal" rounded="pill" height="48" @click="openEditor()">New issue</v-btn>
-      </header>
-
       <GithubBrowserTabs />
 
       <template v-if="!number">
@@ -246,9 +242,9 @@ function date(value) {
 
 <style scoped>
 .issues-panel { width: 100%; min-width: 0; }
-.issues-panel__heading, .issues-panel__comment-body { min-width: 0; flex: 1; }
+.issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__labels { min-width: 0; }
-.issues-panel__title, .issues-panel__repository, .issues-panel__markdown { overflow-wrap: anywhere; }
+.issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
 </style>
