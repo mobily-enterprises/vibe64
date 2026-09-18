@@ -109,6 +109,11 @@ requests show a short description instead of internal agent instructions.
 The main chat composer keeps Add, Settings, Goal, Codex allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
+The Settings cog shows a tiny Codex or OpenCode label beneath its icon, within
+the existing button height and without a tooltip. New replies retain their
+answering AI when the selection changes: Codex, or OpenCode with its model.
+Hovering a reply's name shows its saved model, provider and thinking choice.
+Older replies without a saved AI identity simply say "agent".
 The Settings cog opens AI model and access controls directly, with recovery
 guidance and pending message requests in the same panel. Optional companion controls sit immediately to the right of the
 Settings cog, followed by the starred-files icon. These controls remain accessible

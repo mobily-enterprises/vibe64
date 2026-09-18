@@ -74,6 +74,14 @@ import {
 } from "../../src/composables/useVibe64ConversationLog.js";
 
 describe("useVibe64ConversationLog", () => {
+  it("preserves saved attribution while normalizing conversation history", () => {
+    const metadata = { assistantSelection: { engineId: "codex", modelId: "gpt-6-astra" } };
+    const [turn] = normalizeConversationLog({ conversationLog: [{
+      turnId: "000001", metadata, assistant: { role: "assistant", text: "Answer" }
+    }] });
+    expect(turn.metadata).toEqual(metadata);
+  });
+
   it("receives live text without refetching, ignores older snapshots and replaces it with the saved reply", async () => {
     const scope = effectScope();
     const user = { role: "user", messageId: "user", text: "Question" };

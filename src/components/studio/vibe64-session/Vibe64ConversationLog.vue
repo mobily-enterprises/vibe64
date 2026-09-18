@@ -213,11 +213,19 @@ const adapter = computed(() => ({
     variant: props.variant,
     visible: props.visible,
     welcomeMessage: props.welcomeMessage,
-    turns: props.turns.map((turn) => ({
-      ...turn,
-      assistant: presentationMessage(turn.assistant),
-      messages: turn.messages?.map(presentationMessage)
-    }))
+    turns: props.turns.map((turn) => {
+      const selection = turn.metadata?.assistantSelection;
+      const engineName = selection?.engineId === "opencode" ? "OpenCode" : "Codex";
+      return {
+        ...turn,
+        assistantLabel: !selection ? "agent" : selection.engineId === "opencode" ? `OpenCode (${selection.modelId})` : "Codex",
+        assistantDetails: selection
+          ? `${engineName}\nModel: ${selection.modelId}\nProvider: ${selection.modelProviderId}\nThinking: ${selection.variantId || "Automatic"}`
+          : undefined,
+        assistant: presentationMessage(turn.assistant),
+        messages: turn.messages?.map(presentationMessage)
+      };
+    })
   },
   actions: {
     loadMore: (value) => emit("load-more", value),

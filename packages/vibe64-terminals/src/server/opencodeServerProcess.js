@@ -24,7 +24,7 @@ import {
 
 import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
 
-const OPENCODE_EXPECTED_VERSION = "1.18.22";
+const OPENCODE_EXPECTED_VERSION = "1.18.31";
 const OPENCODE_ECONOMY_AGENT_ID = "vibe64-economy";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
 const OPENCODE_HOST = "127.0.0.1";

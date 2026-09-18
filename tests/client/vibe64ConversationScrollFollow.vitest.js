@@ -105,6 +105,8 @@ function createHostElement(type) {
     children: [],
     clientHeight: 240,
     focus: vi.fn(),
+    getBoundingClientRect: () => ({ top: 0 }),
+    querySelectorAll: () => [],
     parent: null,
     props: {},
     scrollHeight: 1_200,
@@ -216,6 +218,7 @@ function mountConversation({
   const integrationResumes = [];
   const integrationChecks = [];
   const state = {
+    assistantLabel: ref("Codex"),
     error: ref(error),
     followLatestKey: ref(followLatestKey),
     hasMoreBefore: ref(hasMoreBefore),
@@ -226,6 +229,7 @@ function mountConversation({
   const Root = defineComponent({
     setup() {
       return () => h(Vibe64ConversationLog, {
+        assistantLabel: state.assistantLabel.value,
         sessionId: state.scrollKey.value,
         integrationRequestsEnabled,
         onSkipIntegration: (request) => integrationSkips.push(request),
@@ -337,6 +341,29 @@ describe("Vibe64 conversation scroll following", () => {
     vi.runAllTimers();
     await nextTick();
   }
+
+  it("keeps recorded reply names when the next recipient changes, with agent for old replies", async () => {
+    const mounted = mountConversation({ turns: [
+      agentTurn("old"),
+      { ...agentTurn("codex"), metadata: { assistantSelection: {
+        engineId: "codex", modelId: "gpt-6-astra", modelProviderId: "openai", variantId: "high"
+      } } },
+      { ...agentTurn("opencode"), metadata: { assistantSelection: {
+        engineId: "opencode", modelId: "big-pickle", modelProviderId: "opencode", variantId: ""
+      } } }
+    ] });
+    for (const recipient of ["Codex", "OpenCode"]) {
+      mounted.state.assistantLabel.value = recipient;
+      await flushScrollWork();
+      for (const name of ["agent", "Codex", "OpenCode (big-pickle)"]) {
+        const label = findNode(mounted.container, node => node.type === "span" && nodeText(node).trim() === name);
+        expect(label).not.toBeNull();
+        if (name === "agent") expect(label.props.title).toBeUndefined();
+        if (name === "Codex") expect(label.props.title).toContain("gpt-6-astra");
+      }
+    }
+    mounted.app.unmount();
+  });
 
   it("shows Skip for a saved request and restores its skipped outcome", async () => {
     const turn = { turnId: "000001", integrationSetup: { integrationId: "mail", requestId: "a".repeat(64), outcome: "pending" },

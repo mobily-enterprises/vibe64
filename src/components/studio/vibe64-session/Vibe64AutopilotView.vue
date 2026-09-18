@@ -457,15 +457,18 @@
                   </v-menu>
                   <v-btn
                     ref="composerSettingsButton"
-                    :aria-label="composerAccessHint ? 'Chat settings: attention required' : 'Chat settings'"
+                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint ? ': attention required' : ''}`"
                     aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
-                    title="Chat settings" icon size="small" variant="text"
+                    icon size="small" variant="text"
                     class="studio-autopilot__composer-action"
                     @click="composerSettingsOpen = !composerSettingsOpen"
                   >
-                    <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
-                      <v-icon :icon="mdiCogOutline" />
-                    </v-badge>
+                    <span class="studio-autopilot__assistant-button">
+                      <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
+                        <v-icon :icon="mdiCogOutline" size="20" />
+                      </v-badge>
+                      <span class="studio-autopilot__assistant-button-label">{{ conversationAssistantLabel }}</span>
+                    </span>
                   </v-btn>
                   <Vibe64SessionAssistantMenu
                     v-model="composerSettingsOpen"
@@ -1748,6 +1751,19 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__composer-action {
   flex-shrink: 0;
+}
+
+.studio-autopilot__assistant-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.studio-autopilot__assistant-button-label {
+  font-size: 8px;
+  letter-spacing: 0;
+  line-height: 10px;
+  text-transform: none;
 }
 
 .studio-autopilot__composer-tools {

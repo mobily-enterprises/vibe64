@@ -126,6 +126,7 @@ function normalizeConversationTurn(turn = {}, index = 0) {
     assistant,
     commentary,
     messages: [system, user, ...activity, assistant].filter(Boolean),
+    ...(isRecord(turn.metadata) ? { metadata: turn.metadata } : {}),
     ...(isRecord(turn.integrationSetup) ? { integrationSetup: turn.integrationSetup } : {}),
     ...(system ? { system } : {}),
     thinking,

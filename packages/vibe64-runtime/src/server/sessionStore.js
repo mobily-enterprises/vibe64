@@ -2,6 +2,7 @@ import { createConversationStreams, createConversationTranscript } from "@jskit-
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
+import { defineVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
 import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -2439,6 +2440,7 @@ function createVibe64SessionStore({
       actorDisplayName: normalizeText(value.actorDisplayName),
       actorId: normalizeText(value.actorId),
       ...(["codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
+      ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
       ...(isPlainObject(value.nativeMessageVersions) ? {
         nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
           .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))
@@ -2491,9 +2493,16 @@ function createVibe64SessionStore({
         if (displayAttachments.length) {
           await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_ATTACHMENTS_FILE), displayAttachments);
         }
-        const metadata = turnMetadata
+        const savedMetadata = await readConversationTurnMetadata(sessionPaths, turnId);
+        let metadata = turnMetadata
           ? normalizeConversationTurnMetadata(turnMetadata)
-          : await readConversationTurnMetadata(sessionPaths, turnId);
+          : savedMetadata;
+        if (!savedMetadata && !metadata?.assistantSelection) {
+          const selection = vibe64AssistantSelectionFromMetadata(await readMetadataFromPaths(sessionPaths), { required: false });
+          if (selection && (!metadata?.engineId || metadata.engineId === selection.engineId)) {
+            metadata = normalizeConversationTurnMetadata({ ...metadata, engineId: selection.engineId, assistantSelection: selection });
+          }
+        }
         if (metadata?.engineId && role !== "thinking") {
           const message = { role, text, messageId, at, attachments: displayAttachments };
           // Preserve what the engine originally received/produced even when a

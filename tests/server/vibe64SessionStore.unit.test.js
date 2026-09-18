@@ -1948,6 +1948,33 @@ test("plain session store keeps immutable actor attribution on each user turn", 
   });
 });
 
+test("conversation turns retain their answering AI after selection changes and reload", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    const sessionId = "conversation-assistant-attribution";
+    await store.createSession({ runtimeKind: "genesis", sessionId });
+    await store.writeConversationUserMessage(sessionId, { text: "Old question" });
+    await store.writeConversationAssistantMessage(sessionId, { text: "Old answer" });
+    const codex = {
+      schema: "vibe64.assistant-selection.v1", agentId: "codex",
+      catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+      modelId: "gpt-6-astra", modelProviderId: "openai", variantId: "high"
+    };
+    const opencode = { ...codex, agentId: "build", engineId: "opencode",
+      modelId: "big-pickle", modelProviderId: "opencode", variantId: "" };
+    await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(codex));
+    await store.writeConversationUserMessage(sessionId, { text: "Codex question" });
+    await store.writeConversationAssistantMessage(sessionId, { text: "Codex answer" });
+    await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(opencode));
+    await store.writeConversationUserMessage(sessionId, { text: "OpenCode question" });
+    await store.writeConversationAssistantMessage(sessionId, { text: "OpenCode answer" });
+    const reloaded = await createStore(targetRoot).readConversationLog(sessionId);
+    assert.equal(reloaded[0].metadata?.assistantSelection, undefined);
+    assert.deepEqual(reloaded[1].metadata.assistantSelection, codex);
+    assert.deepEqual(reloaded[2].metadata.assistantSelection, opencode);
+  });
+});
+
 test("plain session store archives sessions into the archive namespace", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);

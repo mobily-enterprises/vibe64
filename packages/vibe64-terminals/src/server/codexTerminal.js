@@ -5001,9 +5001,14 @@ function createCodexTerminalController({
       let turnMetadata = null;
       if (normalizedRole === "user" && typeof store.readConversationLog === "function") {
         const turns = await store.readConversationLog(normalizedSessionId);
-        turnMetadata = [...turns].reverse().find((turn) => (
+        const previousMetadata = turns.findLast((turn) => (
           turn?.user && turn?.metadata
         ))?.metadata || null;
+        turnMetadata = {
+          actorDisplayName: previousMetadata?.actorDisplayName,
+          actorId: previousMetadata?.actorId,
+          engineId: "codex"
+        };
       }
       written = await writer.call(store, normalizedSessionId, {
         messageId: codexAppServerConversationMessageId(
