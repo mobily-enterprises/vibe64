@@ -49,6 +49,79 @@ test("lists only the selected repository's issues with bounded pagination and ac
   assert.equal(payload.variables.cursor, "page-two");
   assert.equal(payload.variables.search, 'repo:example/project is:issue is:open "broken   repo:other/private" in:title,body sort:updated-desc');
   assert.match(payload.query, /first:25/u);
+  assert.equal(result.searchLimit, 1000);
+});
+
+test("browses repository issues beyond 1,000 without using capped search", async () => {
+  const f = fixture([success({ data: { repository: { issues: {
+    nodes: [{ number: 1001 }], totalCount: 1250,
+    pageInfo: { hasNextPage: true, endCursor: "after-1025" }
+  } } } })]);
+  const result = await githubIssues(project, {
+    vibe64User: user, cursor: "after-1000", state: "closed", labels: "help wanted"
+  }, f.options);
+  const payload = JSON.parse(f.calls[0].input);
+  assert.match(payload.query, /issues\(first:25/u);
+  assert.doesNotMatch(payload.query, /search\(/u);
+  assert.deepEqual(payload.variables, {
+    owner: "example", name: "project", cursor: "after-1000", states: ["CLOSED"], labels: ["help wanted"]
+  });
+  assert.equal(result.total, 1250);
+  assert.equal(result.searchLimit, null);
+  assert.deepEqual(result.issues, [{ number: 1001 }]);
+  assert.deepEqual(result.pageInfo, { hasNextPage: true, endCursor: "after-1025" });
+});
+
+test("all-state browsing includes open and closed issues without a text search", async () => {
+  const f = fixture([success({ data: { repository: { issues: {
+    nodes: [], totalCount: 0, pageInfo: { hasNextPage: false }
+  } } } })]);
+  await githubIssues(project, { vibe64User: user, state: "all" }, f.options);
+  const payload = JSON.parse(f.calls[0].input);
+  assert.equal(payload.variables.states, null);
+  assert.deepEqual(payload.variables.labels, []);
+  assert.doesNotMatch(payload.query, /search\(/u);
+});
+
+test("multiple labels require every label and disclose the search limit with or without text", async () => {
+  for (const search of ["", "broken layout"]) {
+    const f = fixture([success({ data: { search: {
+      nodes: [{ number: 7 }], issueCount: 1234, pageInfo: { hasNextPage: true, endCursor: "next" }
+    } } })]);
+    const result = await githubIssues(project, {
+      vibe64User: user, state: "all", labels: ["bug", "help wanted"], search, cursor: "next-25"
+    }, f.options);
+    const payload = JSON.parse(f.calls[0].input);
+    assert.match(payload.query, /search\(/u);
+    assert.match(payload.variables.search, /label:"bug" label:"help wanted"/u);
+    assert.doesNotMatch(payload.variables.search, /is:open|is:closed/u);
+    assert.equal(payload.variables.cursor, "next-25");
+    assert.equal(result.total, 1234);
+    assert.equal(result.searchLimit, 1000);
+    if (search) assert.match(payload.variables.search, /"broken layout" in:title,body/u);
+  }
+});
+
+test("label search values cannot introduce repository or state qualifiers", async () => {
+  const labels = ['needs "review"', 'path\\name repo:other/private'];
+  const f = fixture([success({ data: { search: {
+    nodes: [], issueCount: 0, pageInfo: { hasNextPage: false }
+  } } })]);
+  await githubIssues(project, { vibe64User: user, labels }, f.options);
+  const search = JSON.parse(f.calls[0].input).variables.search;
+  assert.ok(search.startsWith("repo:example/project is:issue is:open "));
+  assert.ok(search.includes('label:"needs \\"review\\""'));
+  assert.ok(search.includes('label:"path\\\\name repo:other/private"'));
+});
+
+test("invalid label filters fail before contacting GitHub", async () => {
+  const f = fixture([]);
+  for (const labels of [{ name: "bug" }, [null], [""], ["   "], ["bug\nrepo:other/private"], Array(101).fill("bug")]) {
+    await assert.rejects(githubIssues(project, { vibe64User: user, labels }, f.options), {
+      code: "vibe64_issue_input_invalid"
+    });
+  }
+  assert.equal(f.calls.length, 0);
 });
 
 test("rejects non-GitHub projects, absent hosted identity and invalid input before executing", async () => {

@@ -11,7 +11,7 @@ import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
-const { available, repository, projectSlug, basePath, list, detail, issue, number, state, searchDraft,
+const { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
   draft, pending, commentCursor, navigate, filter, mutate, issueSaved } = useVibe64Issues(computed(() => props.dashboardContext));
 const editorOpen = ref(false);
 const editorIssue = shallowRef(null);
@@ -82,6 +82,28 @@ function date(value) {
             <template #append-inner><v-btn :icon="mdiArrowRight" variant="text" size="48" aria-label="Search issues" @click="filter()" /></template>
           </v-text-field>
         </form>
+        <div class="issues-panel__labels">
+          <v-skeleton-loader v-if="labelCatalog.isInitialLoading.value" type="list-item" height="80" aria-label="Loading label filters" aria-busy="true" />
+          <v-alert v-else-if="labelCatalog.loadError.value" type="error" variant="tonal" rounded="lg">
+            {{ labelCatalog.loadError.value }}
+            <template #append><v-btn variant="text" height="48" @click="labelCatalog.reload()">Retry labels</v-btn></template>
+          </v-alert>
+          <v-autocomplete
+            v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []"
+            item-title="name" item-value="name" multiple chips closable-chips clearable
+            label="Filter by labels" :prepend-inner-icon="mdiLabelOutline" variant="outlined" rounded="lg"
+            :menu-props="{ maxHeight: 320 }" hint="Match all selected labels." persistent-hint
+            no-data-text="No matching labels" @update:model-value="filter(state, $event)"
+          >
+            <template #chip="{ props: chipProps, item }"><GithubLabelChip v-bind="chipProps" :label="item" /></template>
+            <template #item="{ props: itemProps, item }">
+              <v-list-item v-bind="itemProps" min-height="48">
+                <template #title><GithubLabelChip :label="item" /></template>
+                <template #subtitle>{{ item.description }}</template>
+              </v-list-item>
+            </template>
+          </v-autocomplete>
+        </div>
       </template>
 
       <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" border class="pa-4" aria-label="Loading issues" aria-busy="true">
@@ -93,6 +115,9 @@ function date(value) {
       </v-alert>
 
       <template v-else-if="!number">
+        <p v-if="list.data.value?.searchLimit && list.data.value.total > list.data.value.searchLimit" class="text-body-small text-medium-emphasis ma-0">
+          GitHub returns up to 1,000 matches for text searches or multiple labels. Narrow the filters to see more specific results.
+        </p>
         <div class="d-flex align-center justify-space-between px-2 text-label-large text-medium-emphasis">
           <span>{{ list.data.value?.total || 0 }} {{ list.data.value?.total === 1 ? 'issue' : 'issues' }}</span>
           <span>Recently updated</span>
@@ -223,6 +248,7 @@ function date(value) {
 .issues-panel { width: 100%; min-width: 0; }
 .issues-panel__heading, .issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
+.issues-panel__labels { min-width: 0; }
 .issues-panel__title, .issues-panel__repository, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
 </style>

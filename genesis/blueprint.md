@@ -19,8 +19,11 @@ GitHub-connected projects offer one Issues/PR entry in the project-wide Dashboar
 menu, including when no session is open. Tabs switch between issues and pull
 requests while retaining their filters and selected item. Opening it collapses the Dashboard menu
 to give the list and conversation room, with a direct route back. People can
-filter open, closed or all issues, search titles and descriptions, read an issue
-and its paginated comments, add a comment, and close or reopen it when their
+filter open, closed or all issues and select one or more repository labels to
+match together. Issue lists load 25 at a time and remain browsable beyond 1,000
+issues with state and single-label filters. Title and description search or
+multiple labels explain GitHub's 1,000-match limit when needed. People can read
+an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
 description and repository labels, and edit labels on existing issues. Labels
 retain their GitHub colors with readable text in either theme. The issue browser

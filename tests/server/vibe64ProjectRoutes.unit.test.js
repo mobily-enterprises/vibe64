@@ -26,7 +26,7 @@ function routeHttp(app) {
   return app.http;
 }
 
-test("issue comment routes keep browser origin but use the authenticated GitHub actor", async () => {
+test("issue routes preserve repeated label filters and browser origin with the authenticated GitHub actor", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
@@ -53,6 +53,15 @@ test("issue comment routes keep browser origin but use the authenticated GitHub 
       assert.deepEqual(received, {
         body: "A comment", originId: "tab:writer", operation: "comment", number: "42", vibe64User: user
       });
+      const list = findRegisteredRoute(app, {
+        method: "GET", path: `${apiRouteBase}/vibe64/issues`
+      });
+      const query = {
+        labels: ["bug", "help wanted"], state: "closed", cursor: "after-1000", search: "layout",
+        operation: "set-labels", vibe64User: { id: "forged" }
+      };
+      await list.handler({ query, input: { query }, params: routeProjectParams(), vibe64User: user }, testReply());
+      assert.deepEqual(received, { ...query, operation: "list", vibe64User: user });
     });
   });
 });

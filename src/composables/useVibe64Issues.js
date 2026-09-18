@@ -25,16 +25,26 @@ export function useVibe64Issues(context) {
   const search = computed(() => typeof route.query.issueSearch === "string" ? route.query.issueSearch : "");
   const searchDraft = ref(search.value);
   watch(search, (value) => { searchDraft.value = value; });
+  const selectedLabels = computed(() => {
+    const labels = route.query.issueLabel;
+    return (Array.isArray(labels) ? labels : [labels]).filter((label) => typeof label === "string" && label.trim());
+  });
   const number = computed(() => /^\d+$/u.test(String(route.query.issue || "")) ? String(route.query.issue) : "");
   const commentCursor = ref("");
   watch([basePath, number], () => { commentCursor.value = ""; });
-  const listQuery = computed(() => ({ state: state.value, search: search.value,
+  const listQuery = computed(() => ({ state: state.value, search: search.value, labels: selectedLabels.value,
     ...(route.query.issueCursor ? { cursor: route.query.issueCursor } : {}) }));
   const listKey = computed(() => ["vibe64.issues", basePath.value, listQuery.value]);
   const list = useEndpointResource({
     path: basePath, readQuery: listQuery, queryKey: listKey,
     enabled: computed(() => active.value && !number.value), queryOptions: { retry: false },
     requestRecoveryLabel: "GitHub issues", fallbackLoadError: "Issues could not load."
+  });
+  const labelsPath = computed(() => basePath.value.replace(/\/issues$/u, "/issue-labels"));
+  const labelCatalog = useEndpointResource({
+    path: labelsPath, queryKey: computed(() => ["vibe64.issueLabels", labelsPath.value]),
+    enabled: computed(() => active.value && !number.value), queryOptions: { retry: false },
+    fallbackLoadError: "Labels could not load."
   });
   const detailPath = computed(() => `${basePath.value}/${number.value}`);
   const detail = useEndpointResource({
@@ -53,8 +63,9 @@ export function useVibe64Issues(context) {
   function navigate(changes) {
     return router.push({ query: { ...route.query, ...changes } });
   }
-  function filter(nextState = state.value) {
+  function filter(nextState = state.value, nextLabels = selectedLabels.value) {
     return navigate({ issueState: nextState, issueSearch: String(searchDraft.value || "").trim() || undefined,
+      issueLabel: nextLabels?.length ? nextLabels : undefined,
       issueCursor: undefined, issue: undefined });
   }
   async function issueSaved({ number: issueNumber, basePath: requestBasePath }) {
@@ -87,6 +98,6 @@ export function useVibe64Issues(context) {
       feedback.error(error, kind === "comment" ? "Comment could not be confirmed. Refresh before posting again." : "Issue could not be updated.");
     } finally { pending.value = ""; }
   }
-  return { available, repository, projectSlug, basePath, list, detail, issue, number, state, searchDraft,
+  return { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
     draft, pending, commentCursor, navigate, filter, mutate, issueSaved };
 }

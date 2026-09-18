@@ -32,8 +32,14 @@ Dashboard without opening a session.
 The single Issues/PR menu entry appears only for projects with a GitHub repository.
 It sits above session tools, with tabs between the two browsers that preserve URL
 filters and selection. Both collapse Dashboard navigation while open. Back to dashboard restores
-the ordinary navigation. Open/Closed/All, literal title/body search and list
-pagination live in the URL; issue details retain those filters when returning.
+the ordinary navigation. Open/Closed/All, literal title/body search, selected
+labels and list pagination live in the URL; issue details, tabs and browser
+history retain those filters when returning. The label selector uses repository
+colors and matches every selected label. State and single-label filtering use
+GitHub's repository issue connection, loading 25 issues per page even beyond
+1,000 issues. Text search and multiple labels use GitHub search with safely
+quoted label qualifiers and explain its 1,000-match limit when the result count
+exceeds it. Changing any filter returns to the first page.
 Descriptions and comments use the existing safe Markdown renderer. The newest
 25 comments appear in chronological order, with access to older pages.
 

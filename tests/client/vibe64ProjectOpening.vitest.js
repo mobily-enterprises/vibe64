@@ -138,11 +138,12 @@ function find(node, type) {
 describe("opening a routed project", () => {
   it("refreshes only the notified project's GitHub caches and retains the comment draft and filters", async () => {
     const view = await mountPage();
-    await view.router.replace({ query: { issue: "40", issueState: "closed", issueSearch: "draft" } });
+    const filters = { issue: "40", issueState: "closed", issueSearch: "draft", issueLabel: ["bug", "help wanted"] };
+    await view.router.replace({ query: filters });
     view.issues.draft.value = "An unsent comment";
     const base = "/api/app/dogandgroom/vibe64";
     const keys = [
-      ["vibe64.issues", `${base}/issues`, { state: "closed" }],
+      ["vibe64.issues", `${base}/issues`, { state: "closed", labels: ["bug", "help wanted"] }],
       ["vibe64.issue", `${base}/issues/40`, ""],
       ["vibe64.issue", `${base}/issues/41`, "older-page"],
       ["vibe64.issueLabels", `${base}/issue-labels`],
@@ -161,7 +162,8 @@ describe("opening a routed project", () => {
     for (const key of keys) expect(view.queryClient.getQueryState(key).isInvalidated).toBe(true);
     expect(view.queryClient.getQueryState(unrelated).isInvalidated).toBe(false);
     expect(view.issues.draft.value).toBe("An unsent comment");
-    expect(view.router.currentRoute.value.query).toEqual({ issue: "40", issueState: "closed", issueSearch: "draft" });
+    expect(view.router.currentRoute.value.query).toEqual(filters);
+    expect(view.issues.selectedLabels.value).toEqual(["bug", "help wanted"]);
     mocks.requests[0].resolve(success);
     await flush();
   });
