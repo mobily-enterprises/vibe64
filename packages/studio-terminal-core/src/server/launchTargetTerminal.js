@@ -34,6 +34,7 @@ import {
 } from "./terminalOwnership.js";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
+const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
 const LAUNCH_READY_MARKER_PREFIX = "VIBE64_LAUNCH_READY_V1";
 const PREVIEW_AUTH_SECRET_HASH_PLACEHOLDER = "0".repeat(64);
 const reservedWebLaunchTargetPorts = new Set();
@@ -163,7 +164,7 @@ function tcpReadinessProbeCommand({
   host = "127.0.0.1",
   marker = "",
   port,
-  timeoutSeconds = 90
+  timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
 } = {}) {
   const script = [
     "const net = require('node:net');",
@@ -204,7 +205,7 @@ function httpReadinessProbeCommand({
   href = "",
   marker = "",
   method = "GET",
-  timeoutSeconds = 90
+  timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
 } = {}) {
   const script = [
     "const href = process.argv[1];",
@@ -271,7 +272,7 @@ function commandWithHttpReadiness({
   href = "",
   marker = "",
   method = "GET",
-  timeoutSeconds = 90
+  timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
 } = {}) {
   return [
     "{",
@@ -718,6 +719,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
 
 export {
   DEFAULT_WEB_LAUNCH_TARGET_PORT,
+  WEB_LAUNCH_READINESS_TIMEOUT_SECONDS,
   createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
   reserveAvailableWebLaunchTargetPort,

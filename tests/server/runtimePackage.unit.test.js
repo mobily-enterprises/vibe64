@@ -59,6 +59,10 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
     assert.ok(manifest.dependencies["node-pty"]);
     assert.ok(manifest.dependencies["genesis-compiler"]);
+    for (const driver of ["mysql2", "pg"]) {
+      assert.ok(manifest.dependencies[driver], `${driver} must be installed for Knex's dynamic loading`);
+      assert.ok(!manifest.bundleDependencies.includes(driver));
+    }
     assert.ok(!manifest.bundleDependencies.includes("node-pty"));
     for (const dependency of ["three", "elkjs", "@mdi/js", "vite", "typescript", "openai", "stripe"]) {
       assert.ok(!manifest.dependencies[dependency], `${dependency} must not be installed as a complete package`);

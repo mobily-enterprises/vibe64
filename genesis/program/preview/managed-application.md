@@ -99,6 +99,12 @@ actual server's test identity before destructive tests. A test target's preview
 identity command must select the same data. Provider-neutral session guidance
 explains these requirements, the commands, and the project work needed when a
 test target is absent. See `docs/managed-browser-tests.md` for the portable setup.
+Routine test launchers retain the isolated schema, apply pending migrations and
+reset fixture data. Fresh-schema proofs and production builds are separate from
+ordinary browser checks. Shared guidance asks agents to batch related cases and
+measure slow startup before retrying. The web readiness probe allows five minutes;
+the managed waiter has another thirty seconds to observe its final status and
+cleanup instead of racing the probe's deadline.
 
 Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the

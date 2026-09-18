@@ -387,6 +387,8 @@ and restores the previous Preview when the test command finishes. The project
 owns disposable test data and suppression of external effects. Competing target
 changes are refused while the suite owns Preview, and cleanup failures remain
 visible. The same commands and instructions apply to every assistant.
+Related checks share one suite startup. Shared guidance keeps ordinary browser
+preparation incremental and separates fresh-database proofs from routine checks.
 If another assistant operation briefly blocks automatic preview startup, Preview
 waits and retries without raising an error. Other startup failures appear once
 with a retry action.
@@ -639,4 +641,5 @@ while parser downloads remain cached for later work.
 People install a compact built editor through npm while retaining the frontend,
 terminal, repository and project-understanding features. Maintainers can build
 and test the exact distributable before publishing it; release preparation does
-not remove their installed development tools.
+not remove their installed development tools. The installed editor includes the
+database drivers required by its Database view.

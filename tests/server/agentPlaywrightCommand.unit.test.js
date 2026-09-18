@@ -126,6 +126,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
   previewFailure = "",
   previewUrl = "http://127.0.0.1:4104/home",
   withPreviewTarget = null,
+  launchStatus,
   resourceProvider,
   publishSessionChanged
 } = {}) {
@@ -176,7 +177,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
               id: "managed-preview-terminal"
             };
       },
-      async launchStatus() {
+      launchStatus: launchStatus || async function () {
         return {
           activeTerminal: {
             id: "managed-preview-terminal",
@@ -307,6 +308,61 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
     ...options, env: { ...options.env, PLAYWRIGHT_BASE_URL: "https://production.example" }
   }), /own managed Preview URL/u);
   assert.deepEqual(selected, ["test-app", "test-app"]);
+});
+
+test("managed browser startup and restoration can outlast the launch probe without waiting forever", async (t) => {
+  for (const outcome of ["ready", "timeout", "exited"]) {
+    await t.test(outcome, async (t) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-slow-"));
+      let now = Date.now();
+      t.mock.method(Date, "now", () => now);
+      let polling = false;
+      let polls = 0;
+      let restored = false;
+      const fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
+        async launchStatus() {
+          if (polling) {
+            polls += 1;
+            now += 105_000;
+          }
+          return {
+            activeTerminal: { id: "managed-preview-terminal", status: outcome === "exited" ? "exited" : "running" },
+            lastOutputTarget: { agentHref: "http://127.0.0.1:4104", id: "test-app" },
+            previewTarget: { available: !polling || (outcome === "ready" && polls >= 3), href: "http://127.0.0.1:4104" }
+          };
+        },
+        async withPreviewTarget(_sessionId, _targetId, operation, { waitUntilReady }) {
+          polling = true;
+          try {
+            await waitUntilReady({ id: "managed-preview-terminal" });
+            polling = false;
+            const result = await operation("slow-target-run");
+            polling = true;
+            polls = 0;
+            await waitUntilReady({ id: "managed-preview-terminal" }, { restoring: true });
+            restored = true;
+            return result;
+          } finally {
+            polling = false;
+          }
+        }
+      });
+      t.after(async () => {
+        await fixture.commandService.closeAllForSession("playwright-1.61.1");
+        await rm(root, { recursive: true, force: true });
+      });
+      const completion = execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--target", "test-app", "test"], {
+        cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }, timeout: 10_000
+      });
+      if (outcome === "ready") {
+        assert.equal(JSON.parse((await completion).stdout).baseUrl, "http://127.0.0.1:4104");
+        assert.equal(restored, true);
+      } else {
+        await assert.rejects(completion, outcome === "timeout" ? /Timed out waiting for Preview readiness/u : /Preview failed to become ready/u);
+        assert.equal(fixture.managedCommands.length, 0, "Tests must not execute against an unready application");
+      }
+    });
+  }
 });
 
 function approvalCommand(command, args, options) {

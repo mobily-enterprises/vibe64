@@ -24,6 +24,10 @@ npm installation. The result is `.vibe64-release/build-<id>/vibe64-<version>.tgz
 `npm run smoke:package -- /absolute/path/to/package.tgz` repeats the installation
 proof for an existing artifact. It tests the real server and frontend asset,
 realtime handshake, native terminal, Genesis indexing and catalog, and CLI paths.
+The relocated runtime also instantiates Knex's MySQL and PostgreSQL clients
+without connecting to a database. Their dynamically loaded `mysql2` and `pg`
+drivers remain explicit runtime dependencies even when bundling cannot see the
+loads, so Database inspection works outside the development installation.
 
 `npm run release` keeps its existing token authentication and clean-worktree
 requirements, bumps the version without making a Git tag, then builds and tests

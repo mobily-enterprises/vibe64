@@ -86,6 +86,16 @@ The application launcher must:
    verify the actual server's test identity before sending destructive requests;
    the test runner's own environment and a target named “test” are not proof.
 
+Keep ordinary browser startup incremental. Retain the isolated schema and its
+migration ledger, apply pending migrations, and reset test data deterministically
+before seeding fixtures. Preserve migration-owned baseline data required by the
+application. Fresh-schema migration checks remain a separate test operation.
+Use the development server for routine checks; a production frontend build belongs
+to tests that specifically need the built artifact. Batch related browser cases
+into one managed invocation so they share startup and restoration. If startup is
+slow, measure migrations, fixture preparation, and server startup before retrying
+or extending a deadline.
+
 If login is required, declare the existing Preview identity protocol beneath
 this target. Its application-owned identity executable must select the same test
 database before resolving identities or producing cookies. Do not reuse an

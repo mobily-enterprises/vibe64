@@ -145,6 +145,50 @@ test("HTTP launch readiness requires the declared exact success status", async (
   }
 });
 
+test("HTTP launch readiness allows slow startup and still enforces its deadline", async (t) => {
+  const { createServer } = await import("node:http");
+  for (const ready of [true, false]) {
+    await t.test(ready ? "ready after two minutes" : "unready after five minutes", async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-readiness-clock-"));
+      const clock = path.join(root, "clock");
+      const preload = path.join(root, "clock.cjs");
+      await writeFile(clock, "0");
+      await writeFile(preload, `Date.now = () => Number(require('node:fs').readFileSync(${JSON.stringify(clock)}, 'utf8'));`);
+      let requests = 0;
+      const server = createServer(async (_request, response) => {
+        requests += 1;
+        await writeFile(clock, String(requests * 60_000));
+        response.writeHead(ready && requests >= 3 ? 200 : 503);
+        response.end();
+      });
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      try {
+        const command = httpReadinessProbeCommand({
+          href: `http://127.0.0.1:${server.address().port}/api/health`,
+          marker: "[[SLOW-READY]]"
+        });
+        const completion = execFileAsync("bash", ["-lc", command], {
+          env: { ...process.env, NODE_OPTIONS: `--require=${preload}` }, timeout: 10_000
+        });
+        if (ready) {
+          assert.match((await completion).stdout, /\[\[SLOW-READY\]\]/u);
+          assert.equal(requests, 3);
+        } else {
+          await assert.rejects(completion, (error) => {
+            assert.equal(error.code, 1);
+            assert.match(error.stderr, /did not become ready/u);
+            return true;
+          });
+          assert.equal(requests, 5);
+        }
+      } finally {
+        await new Promise((resolve) => server.close(resolve));
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
 test("HTTP launch readiness stops immediately when the server exits", async () => {
   let markLaunchStarted;
   const launchStarted = new Promise((resolve) => {

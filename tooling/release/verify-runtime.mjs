@@ -20,6 +20,11 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
   try {
     await mkdir(project);
     const require = createRequire(path.join(appRoot, "package.json"));
+    const knex = require("knex");
+    for (const client of ["mysql2", "pg"]) {
+      const database = knex({ client, connection: {}, pool: { min: 0, max: 1 } });
+      await database.destroy();
+    }
     const pty = require("node-pty");
     await new Promise((resolve, reject) => {
       const terminal = pty.spawn(process.execPath, ["-e", "console.log('native-pty-ok')"], { cwd: project });
@@ -79,7 +84,7 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
       });
     });
     assert.equal((await fetch(`${address}/api/health`)).status, 200);
-    console.log("Runtime proof passed: server, frontend asset, realtime handshake, native PTY, Genesis catalog and index, packaged CLI startup.");
+    console.log("Runtime proof passed: database drivers, server, frontend asset, realtime handshake, native PTY, Genesis catalog and index, packaged CLI startup.");
   } finally {
     if (cliProcess && cliProcess.exitCode === null) {
       cliProcess.kill("SIGTERM");

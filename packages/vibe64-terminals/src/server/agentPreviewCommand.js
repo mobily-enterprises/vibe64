@@ -4,6 +4,9 @@ import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
+} from "@local/studio-terminal-core/server/launchTargetTerminal";
+import {
   logOperationalEvent,
   sanitizeLogText
 } from "@local/vibe64-core/server/logging";
@@ -63,7 +66,8 @@ const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
-const DEFAULT_PREVIEW_WAIT_TIMEOUT_MS = 90_000;
+// Let the launch probe finish and publish its result before the command times out.
+const DEFAULT_PREVIEW_WAIT_TIMEOUT_MS = (WEB_LAUNCH_READINESS_TIMEOUT_SECONDS + 30) * 1000;
 const MAX_PREVIEW_LOG_LINES = 5000;
 const PREVIEW_WAIT_POLL_INTERVAL_MS = 500;
 const VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID";
