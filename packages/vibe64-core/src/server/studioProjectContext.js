@@ -267,6 +267,12 @@ async function selectedProjectRecord({
   const repositoryFields = projectRepositoryView(metadata, {
     fallbackMode: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : ""
   });
+  if (sourceRoot && repositoryFields.repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+    const branch = await runGit(sourceRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    if (branch || await runGit(sourceRoot, ["rev-parse", "--is-inside-work-tree"]) === "true") {
+      repositoryFields.repository = { ...repositoryFields.repository, defaultBranch: branch };
+    }
+  }
   const githubRepository = repositoryFields.githubRepository ||
     normalizeProjectGithubRepository(metadata?.derivedGithubRepository);
   return {

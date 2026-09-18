@@ -71,7 +71,8 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
       value.incomingVersionsTruncated === true || behind > incomingVersions.length,
     relationship,
     sessionHead: text(value.sessionHead),
-    updateAvailable: behind > 0,
+    ...(value.historyReview ? { historyReview: value.historyReview } : {}),
+    updateAvailable: Boolean(value.historyReview) || behind > 0,
     updateStrategy: repositoryUpdateStrategy(relationship)
   };
 }

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ACTION_CREATE_PROJECT,
+  ACTION_REPOSITORY_REMOTE,
   ACTION_READ_ENGINEERING_SETTINGS,
   ACTION_READ_ENV,
   ACTION_READ_PROJECT_SETTINGS,
@@ -229,4 +230,20 @@ test("project change publisher emits the shared project refresh contract", async
   assert.deepEqual(published[0].realtime.payload, {
     reason: "project-archived"
   });
+});
+
+
+test("remote actions preserve review inputs and only invalidate projects after mutations", async () => {
+  const input = { action: "pull", review: { branch: "trunk", head: "head", configId: "configuration", upstreamCommit: "remote" }, merge: true };
+  const action = featureAction({ repositoryRemote: async (received) => {
+    assert.deepEqual(received, input);
+    return { ok: true, projectSlug: "local", remoteChanged: true };
+  } }, ACTION_REPOSITORY_REMOTE);
+  const parsed = action.input.schema.patch(input);
+  assert.deepEqual(parsed.errors, {});
+  assert.deepEqual(parsed.validatedObject, input);
+  const result = await action.execute(parsed.validatedObject);
+  const event = await action.events[0]({ context: {}, input, result });
+  assert.deepEqual(event.realtime.payload, { projectSlug: "local", action: "pull" });
+  assert.equal(await action.events[0]({ context: {}, input: { action: "fetch" }, result: { ok: true, remoteChanged: false } }), null);
 });

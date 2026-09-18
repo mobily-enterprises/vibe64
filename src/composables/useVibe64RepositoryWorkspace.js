@@ -509,7 +509,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     return promise;
   }
 
-  async function applyUpdates() {
+  async function applyUpdates(options = {}) {
     const requestUpdateWork = context.value.requestUpdateWork;
     if (
       !sessionId.value ||
@@ -526,7 +526,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     updates.errorCode = "";
     const request = beginRequest("applyUpdates");
     try {
-      const result = await requestUpdateWork();
+      const result = await requestUpdateWork(options);
       if (!requestIsCurrent(request)) {
         return false;
       }

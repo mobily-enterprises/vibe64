@@ -405,6 +405,7 @@ const sessionSaveInputValidator = patchSchema({
 });
 
 const sessionUpdateInputValidator = patchSchema({
+  historyReview: { type: "object", additionalProperties: true },
   ...optionalOrigin,
   ...optionalUser,
   reviewedConflictId: {

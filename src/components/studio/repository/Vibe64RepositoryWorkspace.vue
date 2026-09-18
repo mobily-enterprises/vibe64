@@ -29,10 +29,28 @@
           variant="tonal"
           @click="applyUpdates"
         >
-          Update this session (rebase)
+          {{ updates.payload?.historyReview ? "Review and reconcile session" : "Update this session (rebase)" }}
         </v-btn>
       </div>
     </header>
+    <v-dialog :model-value="Boolean(historyReview)" max-width="620" @update:model-value="!$event && (historyReview = null)">
+      <v-card v-if="historyReview">
+        <v-card-title>Reconcile after rewritten project history</v-card-title>
+        <v-card-text>
+          <p>The project’s Git history changed outside this session. Apply this session’s retained changes to the current project version.</p>
+          <p>Your conversation stays in this session. A checkpoint preserves the current files. Conflicts stop the update before it changes your working files.</p>
+          <p>Previous baseline: <code>{{ historyReview.baseCommit.slice(0, 8) }}</code> · New baseline: <code>{{ historyReview.canonicalCommit.slice(0, 8) }}</code></p>
+          <p class="mt-3">Session changes to reconcile (up to 100 files):</p>
+          <ul class="pl-5"><li v-for="path in historyReview.changedPaths" :key="path" class="text-break">{{ path }}</li></ul>
+          <p v-if="!historyReview.changedPaths?.length">No session file changes. The session will move to the new project version.</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="historyReview = null">Cancel</v-btn>
+          <v-btn @click="reconcileHistory">Reconcile session</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <section class="vibe64-repository-workspace__changes-area">
       <v-sheet
         v-if="view === 'history'"
@@ -86,7 +104,7 @@
             variant="tonal"
             @click="applyUpdates"
           >
-            Update this session (rebase)
+            {{ updates.payload?.historyReview ? "Review and reconcile session" : "Update this session (rebase)" }}
           </v-btn>
           <v-btn
             :color="changes.payload?.unsaved === true ? 'error' : undefined"
@@ -366,7 +384,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiChevronRight,
@@ -394,9 +412,10 @@ const props = defineProps({
 });
 const dashboard = computed(() => props.dashboardContext || {});
 const view = computed(() => props.view === "history" ? "history" : "changes");
+const historyReview = ref(null);
 const versionSheetOpen = ref(false);
 const {
-  applyUpdates,
+  applyUpdates: applyReviewedUpdates,
   changes,
   checkForUpdates,
   currentDiff,
@@ -418,6 +437,22 @@ const {
   versionDiff,
   versionFiles
 } = useVibe64RepositoryWorkspace(dashboard, { view });
+watch([sessionId, view, () => dashboard.value.active], () => {
+  historyReview.value = null;
+}, { flush: "sync" });
+
+function applyUpdates() {
+  if (updates.payload?.historyReview) {
+    historyReview.value = JSON.parse(JSON.stringify(updates.payload.historyReview));
+    return;
+  }
+  return applyReviewedUpdates();
+}
+async function reconcileHistory() {
+  const review = historyReview.value;
+  historyReview.value = null;
+  return applyReviewedUpdates({ historyReview: review });
+}
 
 const versionFileCountLabel = computed(() => {
   const count = Number(versionFiles.payload?.totalCount || 0);
@@ -542,6 +577,7 @@ const repositoryUpdateTitle = computed(() => {
   );
   const ahead = Number(repositoryStatus.value.ahead || 0);
   const behind = Number(repositoryStatus.value.behind || 0);
+  if (updates.payload?.historyReview) return "The local project history was rewritten";
   if (relationship === "diverged") {
     return "This session and the saved project have both changed";
   }
@@ -588,6 +624,7 @@ const repositoryUpdateDetail = computed(() => {
   );
   const ahead = Number(repositoryStatus.value.ahead || 0);
   const behind = Number(repositoryStatus.value.behind || 0);
+  if (updates.payload?.historyReview) return "Review this session’s retained changes before reconciling them with the new project history.";
   const checked = repositoryStatus.value.checkedAt
     ? ` Last checked ${formatVersionDate(repositoryStatus.value.checkedAt)}.`
     : "";

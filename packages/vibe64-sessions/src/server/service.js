@@ -1457,6 +1457,7 @@ function createService({
         let operationStarted = false;
         try {
           const result = await terminals.updateSessionWork(sessionId, {
+            historyReview: input.historyReview,
             conflictRecovery,
             reviewedConflictId,
             onRepositoryWriteAcquired: async () => {

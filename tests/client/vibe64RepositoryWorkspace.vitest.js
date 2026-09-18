@@ -207,6 +207,34 @@ const repositoryRoutes = [
 ];
 
 describe("Vibe64 Repository workspace", () => {
+  it("requires a frozen history review on the ordinary Update and clears it on session changes", async () => {
+    const requestUpdateWork = vi.fn().mockResolvedValue(false);
+    const fixture = mountHistoryWorkspace({ context: { requestUpdateWork } });
+    const review = { baseCommit: "b".repeat(40), canonicalCommit: historyCommit,
+      sessionHead: "c".repeat(40), worktreeTree: "d".repeat(40), changedPaths: ["retained.txt"] };
+    try {
+      await fixture.respond(0, { historySnapshotCommit: historyCommit, ok: true, versions: [] });
+      await fixture.respond(1, { canonicalCommit: historyCommit, ok: true, updateAvailable: true, historyReview: review });
+      fixture.button("Review and reconcile session").props.onClick();
+      await Vue.nextTick();
+      expect(requestUpdateWork).not.toHaveBeenCalled();
+      expect(nodeText(fixture.container)).toContain("retained.txt");
+      fixture.button("Reconcile session").props.onClick();
+      for (let step = 0; step < 10; step += 1) await Promise.resolve();
+      await Vue.nextTick();
+      expect(requestUpdateWork).toHaveBeenCalledExactlyOnceWith({ historyReview: review });
+      expect(findNode(fixture.container, (node) => node.type === "dialog")).toBeNull();
+      fixture.button("Review and reconcile session").props.onClick();
+      await Vue.nextTick();
+      fixture.dashboardContext.sessionId = "different-session";
+      await Vue.nextTick();
+      expect(findNode(fixture.container, (node) => node.type === "dialog")).toBeNull();
+      expect(requestUpdateWork).toHaveBeenCalledTimes(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it.each(repositoryRoutes)("does not mount an initially inactive $label reader or listener", async ({ component }) => {
     const fixture = mountHistoryWorkspace({ component, context: { active: false } });
     try {

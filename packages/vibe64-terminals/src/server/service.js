@@ -1866,6 +1866,7 @@ function createService({
         return updateManagedSessionWork({
           beforeSourceChange: () => invalidateWorkspaceSetup(context),
           commandOptions: execution.commandOptions,
+          historyReview: input.historyReview,
           conflictRecovery: input.conflictRecovery,
           reviewedConflictId: input.reviewedConflictId,
           identity: execution.identity,

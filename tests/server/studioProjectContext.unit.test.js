@@ -1452,3 +1452,20 @@ test("project request context uses registered catalog runtime state", async () =
     });
   });
 });
+
+
+test("local project authority follows the checked-out branch and reports detached HEAD explicitly", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "project");
+    await mkdir(targetRoot);
+    await runGit(targetRoot, ["init", "--initial-branch=trunk"]);
+    await runGit(targetRoot, ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "base"]);
+    const context = createStudioProjectContext({ explicitTargetRoot: targetRoot, home: root,
+      runtimeProfile: { local: true, mode: "local" } });
+    assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "trunk");
+    await runGit(targetRoot, ["checkout", "-b", "topic"]);
+    assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "topic");
+    await runGit(targetRoot, ["checkout", "--detach"]);
+    assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "");
+  });
+});

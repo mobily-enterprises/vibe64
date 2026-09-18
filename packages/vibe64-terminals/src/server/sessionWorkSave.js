@@ -68,6 +68,13 @@ function repositoryContext(session = {}, project = {}) {
   const sessionMetadata = metadata(session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
   const branch = text(project.repository?.defaultBranch);
+  if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE && sessionMetadata.local_source_branch &&
+      text(sessionMetadata.local_source_branch) !== branch) {
+    throw saveError(
+      `This session belongs to ${text(sessionMetadata.local_source_branch)}. Switch the project folder back to that branch before saving or updating it.`,
+      "vibe64_session_local_branch_changed"
+    );
+  }
   const worktreePath = text(session.sourcePath || sessionMetadata.source_path);
   const sessionId = text(session.sessionId || session.id);
   const baseCommit = text(sessionMetadata.base_commit);
@@ -440,7 +447,8 @@ async function sessionWorkComparison(runCommand, context, {
   baseCommit,
   canonicalCommit,
   sessionHead,
-  worktreeTree
+  worktreeTree,
+  reconcileHistory = false
 }, options = {}) {
   const [baseTree, canonicalTree] = await Promise.all([
     commitTree(runCommand, context, baseCommit, options),
@@ -456,7 +464,7 @@ async function sessionWorkComparison(runCommand, context, {
       sessionMatchesCanonical: true
     };
   }
-  const changeBaseCommit = await gitOutput(runCommand, context, [
+  const changeBaseCommit = reconcileHistory ? baseCommit : await gitOutput(runCommand, context, [
     "merge-base",
     canonicalCommit,
     sessionHead
@@ -1043,7 +1051,8 @@ async function mergeTrees(runCommand, context, {
   commandOptions,
   identity,
   project,
-  virtualCommit = ""
+  virtualCommit = "",
+  explicitBase = false
 }) {
   const mergeInputCommit = virtualCommit || await createVirtualCommit(runCommand, context, {
     baseCommit,
@@ -1056,6 +1065,7 @@ async function mergeTrees(runCommand, context, {
   const merged = await git(runCommand, context, [
     "merge-tree",
     "--write-tree",
+    ...(explicitBase ? [`--merge-base=${baseCommit}`] : []),
     "--messages",
     "--name-only",
     "-z",
@@ -1576,12 +1586,18 @@ async function checkSessionUpdatesDirect({
     project,
     required: false
   });
-  if (ancestor?.ok !== true) {
+  const historyRewritten = ancestor?.ok !== true;
+  if (historyRewritten && context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     throw saveError(
       "The saved project history no longer descends from this session's starting version.",
       "vibe64_session_update_history_diverged"
     );
   }
+  const historyReview = historyRewritten ? {
+    baseCommit: context.baseCommit, canonicalCommit, sessionHead, worktreeTree,
+    changedPaths: (await changedPathsBetween(runCommand, context, context.baseCommit, worktreeTree,
+      { commandOptions, project })).slice(0, 100)
+  } : null;
   const [ahead, behind, canonicalInSession, canonicalTree] = await Promise.all([
     countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
       commandOptions,
@@ -1620,13 +1636,14 @@ async function checkSessionUpdatesDirect({
     ...incoming,
     ok: true,
     operationId,
-    reconciled: canonicalInSession,
+    reconciled: !historyRewritten && canonicalInSession,
+    ...(historyReview ? { historyReview } : {}),
     repositoryMode: context.mode,
     relationship,
     sessionCurrent: canonicalInSession,
     sessionHead,
     sessionMatchesCanonical: worktreeTree === canonicalTree,
-    updateAvailable: !canonicalInSession,
+    updateAvailable: historyRewritten || !canonicalInSession,
     updateStrategy: repositoryUpdateStrategy(relationship)
   };
 }
@@ -1733,6 +1750,7 @@ async function applySessionUpdate(runCommand, context, {
 }
 
 async function updateSessionWork({
+  historyReview = null,
   beforeSourceChange = async () => {},
   commandOptions = {},
   conflictRecovery = null,
@@ -1797,17 +1815,27 @@ async function updateSessionWork({
       project,
       required: false
     });
-    if (ancestor?.ok !== true) {
-      throw saveError(
-        "The saved project history no longer descends from this session's starting version.",
-        "vibe64_session_update_history_diverged"
-      );
+    const historyRewritten = ancestor?.ok !== true;
+    if (historyRewritten || historyReview) {
+      if (context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+        throw saveError("The saved project history no longer descends from this session's starting version.",
+          "vibe64_session_update_history_diverged");
+      }
+      const expected = { baseCommit: context.baseCommit, canonicalCommit, sessionHead: oldHead, worktreeTree: checkpoint.tree };
+      const reviewedRepair = reviewedConflictId && conflictRecovery?.reviewId === reviewedConflictId &&
+        conflictRecovery.baseCommit === context.baseCommit && conflictRecovery.canonicalCommit === canonicalCommit &&
+        conflictRecovery.oldHead === oldHead && conflictRecovery.oldIndexTree === oldIndexTree;
+      if (!reviewedRepair && (!historyReview || Object.entries(expected).some(([key, value]) => historyReview[key] !== value))) {
+        throw saveError("The project history was rewritten. Open Repository, check for updates, then review and reconcile this session.",
+          "vibe64_session_history_review_required");
+      }
     }
     const comparison = await sessionWorkComparison(runCommand, context, {
       baseCommit: context.baseCommit,
       canonicalCommit,
       sessionHead: oldHead,
-      worktreeTree: checkpoint.tree
+      worktreeTree: checkpoint.tree,
+      reconcileHistory: historyRewritten
     }, { commandOptions, project });
     const derivedPathSet = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
     const authoredChangedPaths = comparison.changedPaths
@@ -1819,7 +1847,7 @@ async function updateSessionWork({
       oldHead,
       { commandOptions, project }
     );
-    if (canonicalInSession) {
+    if (canonicalInSession && !historyRewritten) {
       return {
         baseCommit: context.baseCommit,
         canonicalCommit,
@@ -1912,6 +1940,7 @@ async function updateSessionWork({
     });
     const mergeResult = await mergeTrees(runCommand, context, {
       baseCommit: comparison.changeBaseCommit,
+      explicitBase: historyRewritten,
       canonicalCommit,
       checkpointTree: checkpointTreeForMerge,
       commandOptions,

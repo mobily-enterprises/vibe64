@@ -11,6 +11,10 @@ Git commands.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-project/src/server/localRepositoryRemote.js`
+- `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
+- `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
 - `packages/vibe64-sessions/src/server/service.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -136,6 +140,39 @@ Deslop of that exact published commit. Accepting sends one ordinary visible
 message through the session's existing assistant path; declining only hides the
 offer and records no preference. A Save that still needs reconciliation does
 not offer cleanup yet.
+
+For standalone local folders, Fetch checks the original project's configured
+upstream and push destination; it never uses a session clone's internal origin.
+The toolbar refreshes while visible, at most once per minute in the background,
+and supports explicit Fetch. Transport failures show unknown counts and retain
+the last successful check time. Native branch upstream and push configuration,
+including a separate push URL, determine the displayed destinations. Missing
+or ambiguous destinations require Remote settings or terminal Git; the UI does
+not guess a remote or branch. Settings change ordinary Git configuration.
+
+Pull requires a clean original folder and a reviewed branch, HEAD, configuration
+and remote commit. It fast-forwards or, after explicit review, merges divergent
+history. Conflicts leave the working files untouched for terminal resolution.
+Push publishes the original folder's saved commits to its exact reviewed push
+branch, never force-pushes, and verifies the remote result. Save remains local;
+unsaved session changes are not pushed. Existing session checks then offer
+Update when the local baseline advances. These controls are unavailable to hosted
+GitHub and managed-Git projects, whose existing publication behavior is unchanged.
+Remote operations use the execution gateway and existing project source lock.
+Logs identify action, project and attempt, without recording remote credentials.
+
+A local history rewrite returns an explicit recovery review: old baseline,
+current canonical commit, session HEAD, complete current tree and up to 100
+changed paths. Reconcile rechecks those identities and applies only the session's
+delta from its old baseline using an explicit merge base. Old baseline commits
+are not replayed. Existing checkpoints, conflict repair, preparation invalidation
+and interrupted Update recovery remain the owners of source changes. An explicit
+repair check may reuse a reviewed conflict while its base, canonical version,
+HEAD and index remain unchanged. A changed baseline requires a new review.
+New local sessions remember their original project branch and refuse to retarget
+when the opened folder switches branches. Legacy sessions without this marker
+continue using verified project authority. Hosted rewritten-history rejection
+is unchanged.
 
 ## Implementation map
 

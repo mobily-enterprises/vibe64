@@ -626,6 +626,7 @@ async function createSessionSource({
   }
   await attachSessionSource(store, sessionId, {
     base_branch: resolvedBaseline.branch,
+    ...(canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE ? { local_source_branch: resolvedBaseline.branch } : {}),
     base_commit: resolvedBaseline.commit,
     canonical_commit: resolvedBaseline.commit,
     branch,

@@ -347,6 +347,17 @@ project, Vibe64's own repository is authoritative. For a standalone local
 project, the folder the person opened is authoritative and Save records the
 session's work there as an ordinary local commit.
 
+Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
+The original folder's checked-out branch and native Git configuration determine
+separate pull and push destinations; Vibe64 never assumes origin or main.
+Fetch reports incoming and outgoing commits without changing working files.
+Pull updates a clean local baseline, with an explicit merge when histories
+have diverged. Push separately publishes saved local commits without force.
+Terminal Git remains available. If it rewrites the baseline, a person can
+review and reconcile an existing session's changes onto the new history,
+keeping its conversation and recoverable work. Hosted source authority and
+its Save and Update workflow remain unchanged.
+
 All hosted editing happens in isolated session checkouts. A hosted project's
 container is never an application checkout and is never used as a source or
 cache. Vibe64 may keep a disposable local mirror of GitHub history solely to

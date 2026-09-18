@@ -518,7 +518,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return result;
   }
 
-  async function updateSessionWork({ reviewedConflictId = "" } = {}) {
+  async function updateSessionWork({ reviewedConflictId = "", historyReview = undefined } = {}) {
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -530,7 +530,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/updates/apply"
       ),
       {
-        body: vibe64RealtimeOriginPayload({ reviewedConflictId }),
+        body: vibe64RealtimeOriginPayload({ reviewedConflictId, ...(historyReview ? { historyReview } : {}) }),
         method: "POST"
       }
     );

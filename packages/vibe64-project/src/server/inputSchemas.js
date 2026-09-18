@@ -15,6 +15,13 @@ const optionalUser = {
   }
 };
 
+const projectRemoteInputValidator = patchSchema({
+  action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure"] },
+  background: { type: "boolean" },
+  merge: { type: "boolean" },
+  review: { type: "object", additionalProperties: true },
+  settings: { type: "object", additionalProperties: true }
+});
 const projectsReadInputValidator = patchSchema({});
 const projectOnboardingInputValidator = patchSchema({
   sessionId: { type: "string", noTrim: false, required: true }
@@ -188,6 +195,7 @@ const previewApplicationIdentitiesInputValidator = patchSchema({
 });
 
 export {
+  projectRemoteInputValidator,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,
   projectCollaborationInputValidator,

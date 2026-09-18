@@ -2,6 +2,7 @@ import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions"
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
+  projectRemoteInputValidator,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,
   projectCollaborationInputValidator,
@@ -19,6 +20,7 @@ import {
   previewApplicationIdentitiesReadInputValidator
 } from "./inputSchemas.js";
 
+const ACTION_REPOSITORY_REMOTE = "vibe64.project.repository.remote";
 const ACTION_CREATE_PROJECT = "vibe64.project.projects.create";
 const ACTION_READ_ONBOARDING = "vibe64.project.onboarding.read";
 const ACTION_APPLY_TEMPLATE = "vibe64.project.templates.apply";
@@ -41,7 +43,7 @@ function projectChangedEvent({ operation = "updated" } = {}) {
     source: "vibe64",
     entity: "project",
     operation,
-    entityId: ({ input, result }) => result?.ok === false
+    entityId: ({ input, result }) => result?.ok === false || result?.remoteChanged === false
       ? null
       : projectSlug(result) || projectSlug(input) || "projects",
     realtime: {
@@ -162,6 +164,13 @@ function createProjectActions({ project } = {}) {
       execute: (input) => project.applyTemplate(input)
     }),
     action({
+      id: ACTION_REPOSITORY_REMOTE,
+      kind: "command",
+      input: projectRemoteInputValidator,
+      events: [projectChangedEvent()],
+      execute: (input) => project.repositoryRemote(input)
+    }),
+    action({
       id: ACTION_LIST_PROJECTS,
       kind: "query",
       input: projectsReadInputValidator,
@@ -251,6 +260,7 @@ function createProjectActions({ project } = {}) {
 }
 
 export {
+  ACTION_REPOSITORY_REMOTE,
   ACTION_READ_ONBOARDING,
   ACTION_APPLY_TEMPLATE,
   ACTION_CREATE_PROJECT,

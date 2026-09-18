@@ -1,4 +1,5 @@
 import path from "node:path";
+import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { createHash } from "node:crypto";
 
 import {
@@ -1292,6 +1293,10 @@ function createService({
         databaseToolEnvironment,
         source: resolved.source,
       };
+    },
+
+    async repositoryRemote(input = {}) {
+      return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
     },
 
     async readCurrentProject() {

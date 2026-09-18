@@ -149,6 +149,7 @@ test("Vibe64 creates an isolated Git source for a session", async () => {
     assert.equal(await git(result.sourcePath, ["branch", "--show-current"]), "vibe64/session-1");
     assert.equal(await git(result.sourcePath, ["rev-parse", "HEAD"]), baseline);
     assert.equal(context.metadata.base_branch, "main");
+    assert.equal(context.metadata.local_source_branch, "main");
     assert.equal(context.metadata.base_commit, baseline);
     assert.equal(context.metadata.canonical_commit, baseline);
     assert.equal(context.metadata.branch, "vibe64/session-1");

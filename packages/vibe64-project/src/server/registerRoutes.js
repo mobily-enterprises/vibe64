@@ -1,4 +1,5 @@
 import {
+  ACTION_REPOSITORY_REMOTE,
   ACTION_READ_ONBOARDING,
   ACTION_APPLY_TEMPLATE,
   ACTION_CREATE_PROJECT,
@@ -16,6 +17,7 @@ import {
   ACTION_SELECT_PROJECT
 } from "./actions.js";
 import {
+  projectRemoteInputValidator,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,
   projectCreateInputValidator,
@@ -46,6 +48,16 @@ function registerRoutes(http, {
     routeRelativePath,
     routeSurface,
     tags: ["studio", "vibe64-project"]
+  });
+
+  routes.serviceRoute("GET", "/repository/remote", {
+    summary: "Read local Git remote configuration and last observed freshness."
+  }, () => project.repositoryRemote());
+  routes.actionRoute("POST", "/repository/remote", {
+    actionId: ACTION_REPOSITORY_REMOTE,
+    body: projectRemoteInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Fetch, pull, push or configure the opened local repository."
   });
 
   routes.actionRoute("GET", "/projects", {

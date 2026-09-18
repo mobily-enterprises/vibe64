@@ -13,6 +13,7 @@ import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import { RouterView } from "vue-router";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
+import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 
@@ -184,6 +185,10 @@ const {
           @ready="handleProjectSelectionReady"
         >
           <template #default="projectSelectionSlotProps">
+            <Vibe64LocalRemoteControls
+              v-if="projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
+              :project="projectSelectionSlotProps.projectSelection.currentProject"
+            />
             <Vibe64SessionPanel
               :chat-collapsed="chatCollapsed"
               :github-actor-teleport-target="githubActorTeleportTarget"
