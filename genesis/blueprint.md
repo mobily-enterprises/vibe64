@@ -509,7 +509,12 @@ Short actions show one compact progress line that a person can dismiss or open
 for full history. The browser remembers a dismissal for that exact attempt
 across reloads, while a new attempt appears normally. Long-running application
 output stays out of the way until opened and remains available after the run
-ends. An interactive AI terminal is launched
+ends. Project agents are instructed to keep full test logs in local artifacts
+and return concise results, preserving failure evidence and Preview-restoration errors without
+repeatedly loading passing output into the conversation.
+Preparing an authenticated test suite obtains temporary cookies without
+launching a second browser or rendering the application before the tests.
+An interactive AI terminal is launched
 explicitly, always matches the kind of assistant chosen when the session began,
 and can be closed independently of the conversation. A project that declares
 no application output remains idle: Preview says there is nothing to run and

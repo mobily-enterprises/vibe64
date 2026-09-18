@@ -126,9 +126,9 @@ function managedPreview(applicationRoot = "", {
   }
   const result = spawnSync(managedNodePath, [
     managedPreviewPath,
-    "ensure",
-    "--wait",
-    "--json"
+    ...(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN
+      ? ["status", "--json"]
+      : ["ensure", "--wait", "--json"])
   ], {
     cwd: applicationRoot,
     encoding: "utf8",

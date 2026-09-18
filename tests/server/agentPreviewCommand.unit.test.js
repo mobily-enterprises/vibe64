@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -135,6 +136,71 @@ async function createFakePlaywrightRuntime(runtimeRoot) {
 const { spawn } = require("node:child_process");
 const screenshotBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==", "base64");
 const identityControlPath = ${JSON.stringify(PREVIEW_IDENTITY_CONTROL_PATH)};
+function identityRequestContext() {
+  let selectedIdentity = null;
+  return {
+    async dispose() {},
+    async get() {},
+    async post(url, options) {
+      if (new URL(url).pathname !== identityControlPath) {
+        throw new Error("Managed browser used the wrong identity control path.");
+      }
+      const grant = String(options?.data?.grant || "");
+      if (grant === "grant:rejected-after-logout") {
+        selectedIdentity = null;
+        return {
+          async json() {
+            return {
+              code: "preview_identity_rejected",
+              error: "The requested preview user does not exist.",
+              ok: false,
+              signedOut: true
+            };
+          },
+          ok() { return false; }
+        };
+      }
+      const identityValue = grant.startsWith("grant:") ? grant.slice("grant:".length) : "";
+      const identityType = identityValue.includes("@") ? "email" : "login";
+      selectedIdentity = identityValue === "guest" ? null : {
+        email: identityType === "email" ? identityValue : "",
+        login: identityType === "login" ? identityValue : "",
+        selector: {
+          type: identityType,
+          value: identityValue
+        },
+        userId: "fake-user-id",
+        username: identityValue.split("@")[0]
+      };
+      return {
+        async json() {
+          return {
+            identity: selectedIdentity,
+            ok: true
+          };
+        },
+        ok() { return true; }
+      };
+    },
+    async storageState() {
+      const identityValue = selectedIdentity?.email || selectedIdentity?.login || "";
+      return {
+        cookies: identityValue ? [{
+          domain: "preview.example.test",
+          expires: -1,
+          httpOnly: true,
+          name: "app_session",
+          path: "/",
+          sameSite: "Lax",
+          secure: true,
+          value: identityValue
+        }] : [],
+        origins: []
+      };
+    }
+  };
+}
+exports.request = { async newContext() { return identityRequestContext(); } };
 let launchCount = 0;
 exports.chromium = {
   async launch() {
@@ -156,69 +222,12 @@ exports.chromium = {
         for (const page of pages) page.closed = true;
       },
       async newContext() {
-        let selectedIdentity = null;
+        const identityRequest = identityRequestContext();
         const context = {
           async close() {},
-          request: {
-            async post(url, options) {
-              if (new URL(url).pathname !== identityControlPath) {
-                throw new Error("Managed browser used the wrong identity control path.");
-              }
-              const grant = String(options?.data?.grant || "");
-              if (grant === "grant:rejected-after-logout") {
-                selectedIdentity = null;
-                return {
-                  async json() {
-                    return {
-                      code: "preview_identity_rejected",
-                      error: "The requested preview user does not exist.",
-                      ok: false,
-                      signedOut: true
-                    };
-                  },
-                  ok() { return false; }
-                };
-              }
-              const identityValue = grant.startsWith("grant:") ? grant.slice("grant:".length) : "";
-              const identityType = identityValue.includes("@") ? "email" : "login";
-              selectedIdentity = identityValue === "guest" ? null : {
-                email: identityType === "email" ? identityValue : "",
-                login: identityType === "login" ? identityValue : "",
-                selector: {
-                  type: identityType,
-                  value: identityValue
-                },
-                userId: "fake-user-id",
-                username: identityValue.split("@")[0]
-              };
-              return {
-                async json() {
-                  return {
-                    identity: selectedIdentity,
-                    ok: true
-                  };
-                },
-                ok() { return true; }
-              };
-            }
-          },
+          request: identityRequest,
           pages() { return [...pages]; },
-          async storageState() {
-            const identityValue = selectedIdentity?.email || selectedIdentity?.login || "";
-            return {
-              cookies: identityValue ? [{
-                domain: "preview.example.test",
-                expires: -1,
-                httpOnly: true,
-                name: "app_session",
-                path: "/",
-                sameSite: "Lax",
-                secure: true,
-                value: identityValue
-              }] : [],
-              origins: []
-            };
-          },
+          storageState: identityRequest.storageState,
           async newPage() {
             const page = {
               closed: false,
@@ -1197,12 +1206,74 @@ test("managed preview writes authenticated Playwright state without changing the
       { env: commandEnv }
     )).stdout);
     assert.equal(browserStatus.applicationIdentity, null);
+    assert.equal(browserStatus.started, false);
+    assert.equal(browserStatus.browserProcessGroupCount, 0);
   } finally {
     await commandService.closeAllForSession(sessionId);
     await rm(root, {
       force: true,
       recursive: true
     });
+  }
+});
+
+test("Playwright state preserves host and application cookies without starting Chromium", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-request-state-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "request-state-session";
+  const outputPath = path.join(root, "storage-state.json");
+  const requests = [];
+  const server = http.createServer(async (request, response) => {
+    requests.push([request.method, request.url]);
+    if (request.method === "GET") {
+      response.writeHead(401, { "Set-Cookie": "preview_session=host; Path=/; HttpOnly" });
+      response.end('<script src="/must-not-load.js"></script>');
+      return;
+    }
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const authorized = request.url === PREVIEW_IDENTITY_CONTROL_PATH &&
+      request.headers.cookie?.includes("preview_session=host") &&
+      JSON.parse(body).grant === "request-state-grant";
+    response.writeHead(authorized ? 200 : 403, {
+      "Content-Type": "application/json",
+      ...(authorized ? { "Set-Cookie": "app_session=ada; Path=/; HttpOnly; SameSite=Lax" } : {})
+    });
+    response.end(JSON.stringify({ ok: authorized }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const previewUrl = `http://127.0.0.1:${server.address().port}/home?vibe64_preview_token=test`;
+  const commandService = createReadyPreviewCommandService({
+    previewUrl,
+    async selectPreviewIdentity() {
+      return { ok: true, grant: "request-state-grant", requestedIdentity: { mode: "identity" } };
+    }
+  });
+  try {
+    const { playwrightModule } = await createFakePlaywrightRuntime(runtimeRoot);
+    const playwrightPath = createRequire(import.meta.url).resolve("playwright");
+    await writeFile(path.join(playwrightModule, "index.js"), `
+exports.request = require(${JSON.stringify(playwrightPath)}).request;
+exports.chromium = { launch() { throw new Error("Storage state must not start Chromium."); } };
+`, "utf8");
+    const prepared = await prepareAgentPreviewCommand({
+      commandService, env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, sessionId,
+      wrapperHostDir: path.join(root, "commands")
+    });
+    await execFileAsync(prepared.hostWrapperPath, ["browser", "storage-state", "default", "--output", outputPath], {
+      env: { ...process.env, ...prepared.env }
+    });
+    const state = JSON.parse(await readFile(outputPath, "utf8"));
+    assert.deepEqual(state.cookies.map(({ name, value, httpOnly }) => ({ name, value, httpOnly })), [
+      { name: "preview_session", value: "host", httpOnly: true },
+      { name: "app_session", value: "ada", httpOnly: true }
+    ]);
+    assert.deepEqual(requests, [["GET", "/home?vibe64_preview_token=test"], ["POST", PREVIEW_IDENTITY_CONTROL_PATH]]);
+    assert.deepEqual(state.origins, []);
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true });
   }
 });
 

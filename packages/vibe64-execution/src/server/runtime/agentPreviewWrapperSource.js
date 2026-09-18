@@ -250,10 +250,12 @@ function screenshotOutputPath(args = []) {
 }
 
 async function previewSession() {
-  const ensured = await remoteCommand(["ensure", "--wait", "--json"]);
-  if (payloadExitCode(ensured) !== 0) {
-    writePayload(ensured);
-    process.exit(payloadExitCode(ensured));
+  const statusResponse = await remoteCommand(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN
+    ? ["status", "--json"]
+    : ["ensure", "--wait", "--json"]);
+  if (payloadExitCode(statusResponse) !== 0) {
+    writePayload(statusResponse);
+    process.exit(payloadExitCode(statusResponse));
   }
   const inspected = await remoteCommand(["inspect-url"]);
   if (payloadExitCode(inspected) !== 0) {
@@ -262,9 +264,12 @@ async function previewSession() {
   }
   let status = {};
   try {
-    status = JSON.parse(String(ensured.stdout || "{}"));
+    status = JSON.parse(String(statusResponse.stdout || "{}"));
   } catch {
     status = {};
+  }
+  if (status.ready !== true) {
+    throw new Error("The managed preview is not ready.");
   }
   const previewUrl = String(inspected.stdout || "").trim();
   if (!previewUrl) {
