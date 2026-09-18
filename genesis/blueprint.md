@@ -317,12 +317,17 @@ AI's declared response capacity rather than assuming every model can produce
 the same size answer.
 The chat's Codex models and thinking choices come from the connected Codex
 service, so newly available models appear without an editor update.
-After Codex login succeeds, temporary assistant cleanup can recover through
-ordinary account status retries without restarting Vibe64 or asking the person
-to sign in again. Confirmed recovery clears the earlier login error; unverified
-runtime shutdown remains a visible failure.
+After Codex login or logout, an unfinished account transition automatically
+retries on the next ordinary account status check, including after a service
+restart. Recovery uses the saved credentials without asking the person to sign
+in again. Confirmed recovery clears the earlier login error; unverified runtime
+shutdown remains a visible failure.
 Completed helper cleanup is acknowledged by its waiting task, so account
 switching does not report a second cleanup failure for an already retired thread.
+Once the old assistant process is confirmed stopped, unfinished helper-history
+cleanup stays recorded for retry without preventing logout or a successful new
+login from becoming available. Unverified process shutdown still blocks the
+account transition.
 AI choices load while the session is open and remain visible during refresh,
 so opening the model menu does not restart its loading screen each time.
 Codex helper tasks accept the installed stable Codex version when it meets the

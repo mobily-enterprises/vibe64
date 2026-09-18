@@ -20,6 +20,7 @@ import {
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
   codexAuthMarkerPath,
+  markCodexAuthReconnecting,
   markCodexReconnectRequired,
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
@@ -1715,6 +1716,65 @@ test("Codex status retries unfinished auth turnover without another login", asyn
     assert.equal(await readCodexAuthStatus(systemRoot), null);
     assert.equal(invalidations, 2);
     await service.getCodexStatus();
+    assert.equal(invalidations, 2);
+  });
+});
+
+for (const connected of [true, false]) {
+  test(`ordinary account reads recover pending Codex ${connected ? "login" : "logout"} after a restart`, async () => {
+    await withTempDir(async (root) => {
+      const systemRoot = path.join(root, "system");
+      await markCodexAuthReconnecting(systemRoot, { reason: connected ? "auth-session-status" : "logout" });
+      let probes = 0;
+      let invalidations = 0;
+      const service = createService({
+        accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+        invalidateAgentRuntimes: async () => {
+          invalidations += 1;
+          return { ok: true, providerCount: 0, stopped: 0 };
+        },
+        runHostToolCommand: async () => {
+          probes += 1;
+          await delay(20);
+          return { ok: connected, output: connected ? "Logged in using ChatGPT" : "Not logged in" };
+        }
+      });
+      const results = await Promise.all([
+        service.getStatus({ accountIds: ["codex"] }),
+        service.getStatus({ accountIds: ["codex"] })
+      ]);
+      for (const result of results) {
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal(result.accounts[0].connected, connected);
+        assert.notEqual(result.accounts[0].status, "reconnecting");
+      }
+      assert.equal(probes, 1, "Concurrent status readers share one recovery probe");
+      assert.equal(invalidations, 1);
+      assert.equal(await readCodexAuthStatus(systemRoot), null);
+      await service.getStatus({ accountIds: ["codex"] });
+      assert.equal(probes, 1, "Settled account reads remain local");
+    });
+  });
+}
+
+test("automatic Codex account recovery preserves an unverified transition and retries later", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await markCodexAuthReconnecting(systemRoot, { reason: "auth-session-status" });
+    let invalidations = 0;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      invalidateAgentRuntimes: async () => ({ ok: ++invalidations > 1 }),
+      runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
+    });
+    const refused = await service.getStatus({ accountIds: ["codex"] });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, "vibe64_codex_auth_runtime_invalidation_failed");
+    assert.equal((await readCodexAuthStatus(systemRoot)).status, "reconnecting");
+    const recovered = await service.getStatus({ accountIds: ["codex"] });
+    assert.equal(recovered.ok, true);
+    assert.equal(recovered.accounts[0].connected, true);
+    assert.equal(await readCodexAuthStatus(systemRoot), null);
     assert.equal(invalidations, 2);
   });
 });

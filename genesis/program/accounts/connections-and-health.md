@@ -54,9 +54,22 @@ an old credential-bearing process to survive silently.
 If isolated temporary runtime removal finishes before thread deletion, cleanup
 reconciles the removed runtime's ownership records without reconnecting to its
 old account. The same reconciliation works on a later status retry in the
-running server. Unremoved runtime storage or an unreadable ownership ledger
-keeps cleanup unsuccessful and retryable. A successful sign-in status refresh
-clears the earlier login error in the browser.
+running server. When the shared process has a verified exit and retained exit
+proof, a helper already durably marked `cleanup_required` can be detached from
+its stopped client without blocking the account transition. Its history and
+ownership record remain for the next connection's ordinary cleanup retry; this
+does not claim deletion or resume the old account's work. An unverified exit or
+failure to persist that cleanup state still fails the transition. A successful
+sign-in status refresh clears the earlier login error in the browser.
+
+An ordinary account read automatically retries a persisted `reconnecting`
+transition through the same live status and runtime-retirement path, including
+after a server restart. Concurrent status readers share that recovery, while
+sign-in completion waits for an existing read before checking the new
+credentials. Failed retirement leaves the transition pending for a later read;
+settled account reads remain local. Recovery happens when account status is
+requested, without adding a background timer. A confirmed `reconnect_required`
+state still requires a new sign-in.
 
 The assistant-capability service can read the complete provider registry from
 the pinned OpenCode runtime without a project or configured provider

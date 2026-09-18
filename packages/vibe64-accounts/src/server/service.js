@@ -1337,6 +1337,7 @@ function createService({
   unsupportedCodexAuthModeMessage = null
 } = {}) {
   const authSessions = new Map();
+  let codexStatusRead = null;
   const resolvedAccountRuntime = accountRuntime || createAccountsRuntime({
     allowedCodexAuthModes,
     canManageCodex,
@@ -1507,44 +1508,59 @@ function createService({
     reason = "codex-status-refresh",
     rotateMarker = false
   } = {}) {
-    authDebug("server.auth.codex_status.live.start", {
-      reason,
-      rotateMarker
-    });
-    const codexContext = codexContextForInput();
-    if (!codexContext.ok) {
-      return codexContext;
+    if (codexStatusRead && !rotateMarker) {
+      return codexStatusRead;
     }
-    const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot);
-    if (existingAuthStatus?.status === "reconnect_required" && !rotateMarker) {
-      const account = await readCodexLocalStatus({
-        systemRoot: resolvedSystemRoot
+    const previousRead = codexStatusRead;
+    const pending = (async () => {
+      await previousRead?.catch(() => null);
+      authDebug("server.auth.codex_status.live.start", {
+        reason,
+        rotateMarker
       });
-      authDebug("server.auth.codex_status.live.reconnect_required", {
+      const codexContext = codexContextForInput();
+      if (!codexContext.ok) {
+        return codexContext;
+      }
+      const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot);
+      if (existingAuthStatus?.status === "reconnect_required" && !rotateMarker) {
+        const account = await readCodexLocalStatus({
+          systemRoot: resolvedSystemRoot
+        });
+        authDebug("server.auth.codex_status.live.reconnect_required", {
+          account: accountDebugSummary(account),
+          reason
+        });
+        return account;
+      }
+      const account = await readCodexStatus({
+        codexContext,
+        runHostToolCommand: accountRunHostCommand
+      });
+      if (account?.status === "reconnect_required") {
+        await markCodexReconnectRequired(resolvedSystemRoot, {
+          reason
+        });
+      }
+      await rememberCodexStatus(account, {
+        reason,
+        rotateMarker
+      });
+      authDebug("server.auth.codex_status.live.done", {
         account: accountDebugSummary(account),
-        reason
+        reason,
+        rotateMarker
       });
       return account;
+    })();
+    codexStatusRead = pending;
+    try {
+      return await pending;
+    } finally {
+      if (codexStatusRead === pending) {
+        codexStatusRead = null;
+      }
     }
-    const account = await readCodexStatus({
-      codexContext,
-      runHostToolCommand: accountRunHostCommand
-    });
-    if (account?.status === "reconnect_required") {
-      await markCodexReconnectRequired(resolvedSystemRoot, {
-        reason
-      });
-    }
-    await rememberCodexStatus(account, {
-      reason,
-      rotateMarker
-    });
-    authDebug("server.auth.codex_status.live.done", {
-      account: accountDebugSummary(account),
-      reason,
-      rotateMarker
-    });
-    return account;
   }
 
   function currentTargetRoot() {
@@ -1669,15 +1685,14 @@ function createService({
       return githubContext;
     }
     const previousGithub = includesGithub ? previousGithubForInput(input) : null;
-    const accounts = await Promise.all(accountIds.map((accountId) => {
+    const accounts = await Promise.all(accountIds.map(async (accountId) => {
       if (accountId === "codex") {
-        return refresh
+        const localAccount = refresh ? null : await readCodexLocalStatus({ systemRoot: resolvedSystemRoot });
+        return refresh || localAccount?.status === "reconnecting"
           ? readLiveCodexStatus({
-              reason: "accounts-status-refresh"
+              reason: refresh ? "accounts-status-refresh" : "accounts-status-recovery"
             })
-          : readCodexLocalStatus({
-              systemRoot: resolvedSystemRoot
-            });
+          : localAccount;
       }
       if (accountId === "github") {
         return refresh

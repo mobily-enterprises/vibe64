@@ -3343,6 +3343,7 @@ function createCodexTerminalController({
       retirement,
       runtimeStop
     ]);
+    let pendingThreadCleanup = [];
     if (
       retired.status === "rejected" &&
       stopped.status === "fulfilled" &&
@@ -3353,6 +3354,24 @@ function createCodexTerminalController({
       [retired] = await Promise.allSettled([
         retireCodexAppServerEconomyThreads({ provider }).then(assertCodexAppServerEconomyThreadsRetired)
       ]);
+    }
+    if (
+      retired.status === "rejected" &&
+      stopped.status === "fulfilled" &&
+      stopped.value?.processExitVerified === true &&
+      stopped.value?.runtimeDirPreserved === true
+    ) {
+      const pending = codexAppServerEconomyThreadRecords({ provider });
+      if (pending.every((thread) => thread.lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED)) {
+        // Shared history survives process shutdown. Keep its durable cleanup
+        // records for the next connection, without retaining the stopped client
+        // as an account-transition blocker or claiming its history was deleted.
+        pendingThreadCleanup = retired.reason.details?.failed || [];
+        for (const thread of pending) {
+          codexAppServerEconomyThreads.delete(codexAppServerEconomyThreadKey(thread));
+        }
+        retired = { status: "fulfilled" };
+      }
     }
     if (
       stopped.status === "fulfilled" &&
@@ -3381,6 +3400,7 @@ function createCodexTerminalController({
     }
     return {
       ...stopped.value,
+      pendingThreadCleanup,
       providerKey,
       stopped: codexAppServerRuntimeStopWasVerified(stopped.value)
     };

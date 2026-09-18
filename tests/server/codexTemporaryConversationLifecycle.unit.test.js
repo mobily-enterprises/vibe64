@@ -6246,6 +6246,86 @@ test("auth turnover retries stale in-memory economy ownership after an earlier r
   });
 });
 
+test("auth turnover defers shared helper cleanup after verified exit and retries it on the next connection", async () => {
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const executionProfile = sourceExplanationEconomyProfile();
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile,
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Keep cleanup recoverable across logout."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    const first = await pending;
+    assert.equal(first.ok, true);
+    captures.failDeletes = 100;
+    captures.stopRuntimeResult = {
+      processExitVerified: true, stopped: true, runtimeDirPreserved: true, runtimeDirRemoved: false
+    };
+
+    const invalidated = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "logout" });
+    captures.failDeletes = 0;
+    assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
+    assert.equal(invalidated.stopped, 1);
+    assert.deepEqual(invalidated.results[0].pendingThreadCleanup.map((failure) => failure.threadId), [first.threadId]);
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const retained = (await ledger.readAll()).records;
+    assert.equal(retained.length, 1);
+    assert.equal(retained[0].lifecycle, "cleanup_required");
+    const retry = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "auth-session-status" });
+    assert.equal(retry.ok, true, JSON.stringify(retry));
+    assert.equal(retry.providerCount, 0, "A stopped provider cannot block the next account transition");
+    assert.deepEqual((await ledger.readAll()).records, retained, "Account refresh must preserve helper history ownership");
+
+    captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
+    await controller.executionProfileModelCatalog("session-1");
+    assert.deepEqual((await ledger.readAll()).records, []);
+    assert.equal(captures.deletes.at(-1), first.threadId);
+    assert.equal(captures.stopRuntimes, 1, "Cleanup must not stop the replacement account's runtime");
+    assert.deepEqual(captures.resumes, []);
+    assert.equal(captures.turns.length, 1, "Cleanup must not resume the previous account's work");
+  });
+});
+
+test("auth turnover still fails when deferred helper cleanup cannot be persisted", async () => {
+  let failWrite = false;
+  await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
+    const pending = controller.runDetachedChatTurn("session-1", {
+      executionProfile: sourceExplanationEconomyProfile(),
+      outputSchema: sourceExplanationOutputSchema(),
+      prompt: "Preserve ownership if cleanup cannot be recorded."
+    });
+    await waitForCapturedTurns(captures, 1);
+    completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
+    assert.equal((await pending).ok, true);
+    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const retained = (await ledger.readAll()).records;
+    failWrite = true;
+    captures.stopRuntimeResult = {
+      processExitVerified: true, stopped: true, runtimeDirPreserved: true, runtimeDirRemoved: false
+    };
+    const failed = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "logout" });
+    failWrite = false;
+    assert.equal(failed.ok, false);
+    assert.equal(failed.failed[0].code, "vibe64_codex_economy_thread_cleanup_failed");
+    assert.deepEqual((await ledger.readAll()).records, retained);
+    const retry = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "auth-session-status" });
+    assert.equal(retry.ok, true, JSON.stringify(retry));
+    assert.deepEqual((await ledger.readAll()).records, []);
+  }, {
+    codexEconomyThreadLedgerFactory(options) {
+      const ledger = createCodexEconomyThreadLedger(options);
+      return {
+        ...ledger,
+        async write(record, options) {
+          if (failWrite) throw new Error("Ownership storage temporarily unavailable.");
+          return ledger.write(record, options);
+        }
+      };
+    }
+  });
+});
+
 test("auth turnover preserves economy ownership when thread deletion and runtime removal are unproven", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
