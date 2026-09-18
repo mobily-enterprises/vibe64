@@ -103,6 +103,10 @@ test("the Genesis boundary reads a shared session checkout without granting unre
         inspectVibe64Outputs({ projectRoot })
       ]);
       assert.equal(environment.resources[0].resource.kind, "mysql");
+      assert.deepEqual(environment.resources[0].resource.optionalBindings, {
+        browserTestDatabase: "BROWSER_TEST_DB_NAME",
+        testDatabase: "TEST_DB_NAME"
+      });
       assert.equal(format.status, "current");
       assert.ok(outputs.contract);
       await assert.rejects(inspectEnvironment({ projectRoot }), { code: "GIT_REPOSITORY_UNTRUSTED" });
