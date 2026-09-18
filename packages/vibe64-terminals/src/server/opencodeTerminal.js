@@ -658,9 +658,11 @@ function createOpenCodeTerminalController({
 
   function sharedRoots() {
     const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
+    const serviceDataRoot = text(projectService.currentServiceDataRoot());
+    if (!serviceDataRoot) throw new TypeError("OpenCode requires a persistent service data root.");
     return {
       cacheRoot: path.join(root, "cache"),
-      dbPath: path.join(root, "opencode.db"),
+      dbPath: path.join(serviceDataRoot, "opencode", "opencode.db"),
       registryPath: path.join(root, "session-environments.json"),
       root,
       workdir: path.join(root, "workspace")

@@ -425,6 +425,9 @@ async function controllerHarness({
       }];
     },
     projectService: {
+      currentServiceDataRoot() {
+        return path.join(root, "services");
+      },
       async createRuntime() {
         runtimeCreateCalls += 1;
         return runtime;

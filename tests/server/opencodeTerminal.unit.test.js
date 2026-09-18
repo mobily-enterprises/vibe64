@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -34,7 +34,12 @@ test("OpenCode retains its generated conversation ID across restarts and engine 
   const first = await controller.ensureSession("session-1");
   assert.match(first.thread.id, /^ses_native_/);
   assert.equal(harness.session.metadata.opencode_conversation_id, first.thread.id);
+  const databasePath = harness.processStarts[0].options.dbPath;
+  await mkdir(path.dirname(databasePath), { recursive: true });
+  await writeFile(databasePath, "native history");
   await controller.closeAllForProject();
+  await rm(path.join(harness.root, "agent-providers"), { recursive: true, force: true });
+  assert.equal(await readFile(databasePath, "utf8"), "native history");
   harness.session.metadata.agent_identity_provider = "codex";
   harness.session.metadata.agent_identity_conversation_id = "codex-native-thread";
   controller = harness.createController();

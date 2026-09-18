@@ -375,6 +375,8 @@ without widening the conversation. Headers and row separators use theme colors.
 OpenCode creates its own native conversation ID. The controller persists it as
 `opencode_conversation_id`, separately from the currently selected application's
 identity, and uses it for resume, event observation, and the system-prompt registry.
+Its native database lives in the persistent service data directory, outside the
+temporary process directory removed by daemon restarts.
 Sessions without this saved identity start a fresh native conversation; old
 caller-supplied IDs are not reused or migrated.
 OpenCode connects its turn event stream before submitting a new prompt, retaining
