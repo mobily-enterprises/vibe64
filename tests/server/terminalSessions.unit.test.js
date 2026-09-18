@@ -518,7 +518,8 @@ test("terminal close deadline kills the PTY process tree without waiting indefin
     command: "bash",
     commandPreview: "bash with held stop hook",
     namespace,
-    async onStop() {
+    async onStop({ setPhase }) {
+      setPhase("held-stop");
       await heldStopHook;
     }
   });
@@ -541,6 +542,10 @@ test("terminal close deadline kills the PTY process tree without waiting indefin
         assert.equal(error instanceof AggregateError, true);
         assert.equal(error.code, "terminal_cleanup_failed");
         assert.equal(error.errors.some((failure) => failure.code === "terminal_stop_hook_timeout"), true);
+        assert.match(error.message, /stop: held-stop/u);
+        assert.equal(error.details.terminalSessionId, session.id);
+        assert.equal(error.details.processExited, true);
+        assert.equal(error.details.cleanupFailures.some((failure) => failure.step === "held-stop"), true);
         return true;
       }
     );
@@ -577,7 +582,8 @@ test("terminal close deadline observes process exit separately from a hanging on
     command: process.execPath,
     commandPreview: "node held close hook",
     namespace,
-    async onClose() {
+    async onClose({ setPhase }) {
+      setPhase("held-finalization");
       await heldCloseHook;
     }
   });
@@ -595,6 +601,8 @@ test("terminal close deadline observes process exit separately from a hanging on
         assert.equal(error instanceof AggregateError, true);
         assert.equal(error.code, "terminal_cleanup_failed");
         assert.equal(error.errors.some((failure) => failure.code === "terminal_close_hook_timeout"), true);
+        assert.match(error.message, /close: held-finalization/u);
+        assert.equal(error.details.cleanupFailures.some((failure) => failure.step === "held-finalization"), true);
         return true;
       }
     );

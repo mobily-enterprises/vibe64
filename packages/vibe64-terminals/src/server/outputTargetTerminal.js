@@ -2184,6 +2184,18 @@ function createOutputTargetTerminalController({
     return run;
   }
 
+  function publishLaunchCleanup(sessionId) {
+    // Process cleanup must not wait for realtime delivery or its access checks.
+    void Promise.resolve().then(() => publishSessionChanged(sessionId, {
+      reason: "output-target-stale-cleared"
+    })).catch((error) => {
+      vibe64SessionDebugLog("server.outputTargetTerminal.cleanupPublication.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      }, { level: "warn" });
+    });
+  }
+
   function launchAdmissionFailure(sessionId = "", session = null) {
     const frozen = sessionAdmissionFailure(sessionId);
     if (frozen?.ok === false) {
@@ -2787,6 +2799,7 @@ function createOutputTargetTerminalController({
                   onClose: async (event) => {
                     try {
                       if (event.reason === "exit" && event.exitCode === 0) {
+                        event.setPhase("output-results");
                         await captureOutputResults({
                           context,
                           outputTarget,
@@ -2798,6 +2811,7 @@ function createOutputTargetTerminalController({
                         });
                       }
                       if (event.reason === "exit") {
+                        event.setPhase("preview-diagnostic");
                         await writePreviewDiagnostic(context.session, {
                           ...diagnosticBase,
                           commandPreview,
@@ -2809,20 +2823,22 @@ function createOutputTargetTerminalController({
                           terminalSessionId: event.id
                         });
                       }
+                      event.setPhase("preview-proxy");
                       await launchPreviewProxies.close({
                         sessionId,
                         terminalSessionId: event.id
                       });
+                      event.setPhase("preview-metadata");
                       const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                       if (metadataCleared) {
-                        await publishSessionChanged(sessionId, {
-                          reason: "output-target-stale-cleared"
-                        });
+                        publishLaunchCleanup(sessionId);
                       }
                       if (typeof spec.onClose === "function") {
+                        event.setPhase("output-finalization");
                         await spec.onClose(event);
                       }
                     } finally {
+                      event.setPhase("workflow-finalization");
                       await finishWorkflow(resourceWorkflow?.workflow?.id, {
                         outcome: event.reason !== "exit" ? "stopped" : event.exitCode === 0 ? "succeeded" : "failed",
                         defer: true
@@ -2830,6 +2846,7 @@ function createOutputTargetTerminalController({
                     }
                   },
                   onStop: async (event) => {
+                    event.setPhase("preview-diagnostic");
                     await writePreviewDiagnostic(context.session, {
                       ...diagnosticBase,
                       commandPreview,
@@ -2840,17 +2857,18 @@ function createOutputTargetTerminalController({
                       status: "stopped",
                       terminalSessionId: event.id
                     });
+                    event.setPhase("preview-proxy");
                     await launchPreviewProxies.close({
                       sessionId,
                       terminalSessionId: event.id
                     });
+                    event.setPhase("preview-metadata");
                     const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                     if (metadataCleared) {
-                      await publishSessionChanged(sessionId, {
-                        reason: "output-target-stale-cleared"
-                      });
+                      publishLaunchCleanup(sessionId);
                     }
                     if (typeof spec.onStop === "function") {
+                      event.setPhase("output-stop");
                       await spec.onStop(event);
                     }
                   },

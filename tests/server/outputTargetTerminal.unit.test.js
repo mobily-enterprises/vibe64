@@ -540,28 +540,16 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     assert.equal(reused.id, realLaunchTerminal.id, JSON.stringify(reused));
     assert.equal(workflowStarts.length, startsBeforeReuse, "reusing the ready preview does not create another accounting group");
 
-    await assert.rejects(
-      closeTerminalSession(realLaunchTerminal.id, {
-        namespace,
-        timeoutMs: 400
-      }),
-      (error) => {
-        assert.equal(error.code, "terminal_cleanup_failed");
-        assert.equal(error.errors.some((failure) => (
-          failure.code === "terminal_stop_hook_timeout" ||
-          failure.code === "terminal_close_hook_timeout"
-        )), true);
-        return true;
-      }
-    );
-    await waitForLaunchTest(() => launchProcessIds.every((pid) => !processIsAlive(pid)));
-
-    releaseLaunchCleanupPublication();
     assert.equal((await closeTerminalSession(realLaunchTerminal.id, {
       namespace,
       timeoutMs: 400
-    })).closed, true);
+    })).closed, true, "a stalled UI notification must not block Preview cleanup");
+    await waitForLaunchTest(() => launchProcessIds.every((pid) => !processIsAlive(pid)));
+    assert.equal(readTerminalSession(realLaunchTerminal.id, { namespace }).ok, false);
     assert.equal(workflowFinishes.some((item) => item.id === "workflow-2" && item.outcome === "stopped" && item.defer), true);
+    const restarted = await controller.startTerminal(sessionId, { outputTargetId: "app" });
+    assert.equal(restarted.ok, true, "Preview can restart before the notification completes");
+    releaseLaunchCleanupPublication();
 
     const declaredStack = await readFile(stackPath, "utf8");
     const stackChanges = [

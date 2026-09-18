@@ -411,6 +411,9 @@ and restores the previous Preview when the test command finishes. The project
 owns disposable test data and suppression of external effects. Competing target
 changes are refused while the suite owns Preview, and cleanup failures remain
 visible. The same commands and instructions apply to every assistant.
+Stopping Preview does not wait for its UI notification to be delivered. A
+cleanup timeout identifies the blocked step and whether the process exited;
+unverified process shutdown still prevents a replacement from starting.
 Related checks share one suite startup. Shared guidance keeps ordinary browser
 preparation incremental and separates fresh-database proofs from routine checks.
 When the host records a process/thread denial during a failed browser command,

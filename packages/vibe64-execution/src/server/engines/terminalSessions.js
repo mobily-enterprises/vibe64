@@ -626,6 +626,9 @@ async function runCloseHook(session, reason) {
       id: session.id,
       output: session.output,
       reason,
+      setPhase(phase) {
+        session.closeHookPhase = String(phase || "").slice(0, 80);
+      },
       status: session.status
     });
     return null;
@@ -661,6 +664,9 @@ async function runStopHook(session, reason) {
       id: session.id,
       output: session.output,
       reason,
+      setPhase(phase) {
+        session.stopHookPhase = String(phase || "").slice(0, 80);
+      },
       status: session.status
     });
     return null;
@@ -722,13 +728,15 @@ function terminalLifecycleTimeout(session, phase) {
     exit: "process exit",
     stop: "stop cleanup"
   };
+  const step = phase === "stop" ? session.stopHookPhase : phase === "close" ? session.closeHookPhase : "";
   const error = new Error(
-    `Terminal ${labels[phase] || phase} did not finish before its close deadline: ${session.id}`
+    `Terminal ${labels[phase] || phase} did not finish before its close deadline: ${session.id}${step ? ` (${step})` : ""}`
   );
   error.code = phase === "exit"
     ? "terminal_exit_timeout"
     : `terminal_${phase}_hook_timeout`;
   error.phase = phase;
+  error.step = step || "";
   return error;
 }
 
@@ -755,14 +763,22 @@ function reportTerminalLifecycleFailure(session, error) {
 }
 
 function terminalCloseAggregateFailure(session, failures = []) {
+  const cleanupFailures = failures.map((failure) => ({
+    code: String(failure?.code || "terminal_cleanup_failed"),
+    phase: String(failure?.phase || ""),
+    step: String(failure?.step || "")
+  }));
+  const steps = cleanupFailures.filter((failure) => failure.step)
+    .map((failure) => `${failure.phase}: ${failure.step}`).join(", ");
   const error = new AggregateError(
     failures,
-    `Terminal session could not close cleanly: ${session.id}`
+    `Terminal session could not close cleanly: ${session.id}${steps ? ` (${steps})` : ""}`
   );
   error.code = failures.some((failure) => String(failure?.code || "").startsWith("terminal_exit_"))
     ? "terminal_exit_unverified"
     : "terminal_cleanup_failed";
   error.terminalSessionId = session.id;
+  error.details = { terminalSessionId: session.id, processExited: session.processExited, cleanupFailures };
   return error;
 }
 

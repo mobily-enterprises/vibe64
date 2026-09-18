@@ -94,6 +94,16 @@ Closing the session suppresses restoration. Host-service termination cannot
 execute an in-process cleanup; after a platform restart inspect Preview and
 explicitly select the normal target before resuming work.
 
+Preview stop and close hooks report their current cleanup step to the terminal
+owner. Timeout errors retain that step, the terminal ID and observed process-exit
+state in the caller's error details and compact message. These observations do
+not replace execution-scope drain checks. Proxy closure, metadata cleanup, port
+release and workflow finalization still complete before terminal retirement.
+The subsequent session-change notification runs independently with logged
+failures, so stalled realtime delivery cannot keep a stopped Preview's terminal
+registered or prevent a replacement. This addresses notification stalls, not
+arbitrary failures in the required cleanup operations.
+
 The scoped runner uses existing finite execution ownership, including the
 assistant parent and descendant cancellation. Other sessions remain independent.
 Target starts, restarts and individual stops are refused while the test owns
