@@ -24,6 +24,10 @@ its workspace is archived in the background. A visible status beneath the tabs
 names the closing session, current stage and elapsed time, including after reload.
 Long waits explicitly state that completion is still unconfirmed. Success removes the tab; failure
 restores its availability with a warning. All open tabs observe the transition.
+Stopping a terminal or replacing Preview waits for confirmed process shutdown
+and required cleanup. Queued or slow cleanup stays visibly closing instead of
+becoming a failure solely because time elapsed. A replacement cannot start
+until that cleanup finishes; realtime notification delivery does not delay it.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.
 Selecting a session shows incoming saved work as soon as its version check

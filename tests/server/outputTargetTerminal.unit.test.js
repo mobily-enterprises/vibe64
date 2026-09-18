@@ -521,7 +521,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
           "child=$!; printf 'SHELL:%s CHILD:%s\\n' \"$$\" \"$child\"; wait \"$child\""
       ],
       command: "bash",
-      commandPreview: "bash launch cleanup deadline",
+      commandPreview: "bash launch cleanup",
       metadata: readyTerminal.metadata,
       namespace,
       onClose: capturedLaunchTerminal.onClose,
@@ -540,15 +540,14 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     assert.equal(reused.id, realLaunchTerminal.id, JSON.stringify(reused));
     assert.equal(workflowStarts.length, startsBeforeReuse, "reusing the ready preview does not create another accounting group");
 
-    assert.equal((await closeTerminalSession(realLaunchTerminal.id, {
-      namespace,
-      timeoutMs: 400
-    })).closed, true, "a stalled UI notification must not block Preview cleanup");
+    assert.equal((await closeTerminalSession(realLaunchTerminal.id, { namespace })).closed, true);
     await waitForLaunchTest(() => launchProcessIds.every((pid) => !processIsAlive(pid)));
-    assert.equal(readTerminalSession(realLaunchTerminal.id, { namespace }).ok, false);
     assert.equal(workflowFinishes.some((item) => item.id === "workflow-2" && item.outcome === "stopped" && item.defer), true);
-    const restarted = await controller.startTerminal(sessionId, { outputTargetId: "app" });
-    assert.equal(restarted.ok, true, "Preview can restart before the notification completes");
+    assert.equal(readTerminalSession(realLaunchTerminal.id, { namespace }).ok, false);
+    // Notification delivery remains held while required cleanup and replacement finish.
+    const replacement = await controller.startTerminal(sessionId, { outputTargetId: "app", forceRestart: true });
+    assert.equal(replacement.ok, true, JSON.stringify(replacement));
+    assert.notEqual(replacement.id, realLaunchTerminal.id);
     releaseLaunchCleanupPublication();
 
     const declaredStack = await readFile(stackPath, "utf8");
