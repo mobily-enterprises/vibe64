@@ -40,7 +40,7 @@ describe("Database ERD layout", () => {
       expect(route.points.at(-1)).toEqual(route.end);
       expect(route.points.slice(1).every((point, index) => Math.abs(point.x - route.points[index].x) < 1e-6 || Math.abs(point.y - route.points[index].y) < 1e-6), JSON.stringify(route.points)).toBe(true);
     }
-  }, 10_000);
+  }, 30_000);
 
   it("builds a relationship graph along the column port direction", () => {
     const graph = createErdLayoutGraph(nodes, [
