@@ -10,8 +10,9 @@ Each session keeps valuable work recoverable and separate from unrelated work.
 Opening a project shows loading while its sessions are being fetched, including
 when restoring the last selected session. It does not imply creation is blocked.
 Opening a project link reopens its runtime before chat and Preview load, including
-when returning with cached data. A failed opening offers Retry without requiring
-a browser reload.
+when returning with cached data. A failed opening or project-data load offers
+Try again without requiring a browser reload. Recovery refreshes the project
+data and retries opening; repeated failures keep the action available.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
 Current changes uses the full project pane, with the dashboard menu hidden and

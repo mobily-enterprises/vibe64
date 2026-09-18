@@ -73,6 +73,12 @@ session, assistant and preview controls, including with cached project data.
 Selecting the current project or following the same project link retries that
 opening without a browser reload. Failed opening offers an inline retry; late
 responses from another project cannot unlock the current project's controls.
+Project-data and opening failures share one inline Try again action. It awaits
+any host-supplied access recheck, reloads the selection, then requests another
+runtime opening. Repeated failures retain the action, concurrent clicks share
+the pending attempt, and clearing an error restores ready state even when the
+refreshed data is unchanged. An already-open session remains mounted while its
+selection refresh reports an error.
 Runtime lifecycle publication uses that same project-event owner. Deletion
 publishes only a catalog refresh hint, so clients can remove a deleted project
 without exposing its former identity to a broader audience.

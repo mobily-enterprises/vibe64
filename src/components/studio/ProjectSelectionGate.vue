@@ -1,32 +1,39 @@
 <template>
   <div class="project-selection-gate">
     <StudioErrorNotice
-      v-if="errorMessage"
-      title="Projects could not load"
-      :error="errorMessage"
+      v-if="displayError"
+      title="Project could not load"
+      :error="displayError"
       compact
-    />
+    >
+      <template #actions>
+        <v-btn
+          color="primary"
+          variant="flat"
+          min-height="48"
+          :disabled="recovering"
+          @click="retryProject"
+        >
+          {{ recovering ? "Checking project…" : "Try again" }}
+        </v-btn>
+      </template>
+    </StudioErrorNotice>
 
     <v-skeleton-loader
-      v-if="selectionInitialLoading || (!runtimeReady && !runtimeError)"
+      v-if="!displayError && (selectionInitialLoading || !runtimeReady)"
       aria-label="Loading project"
       class="project-selection-gate__loading"
       type="article"
     />
 
-    <v-alert v-else-if="runtimeError" type="error" variant="tonal">
-      {{ runtimeError }}
-      <v-btn variant="text" @click="emit('retry-runtime')">Retry opening project</v-btn>
-    </v-alert>
-
     <slot
-      v-else-if="selectedSlotVisible"
+      v-else-if="runtimeReady && selectedSlotVisible"
       :project-selection="projectSelection"
       :reload="loadProjectSelection"
     />
 
     <v-sheet
-      v-else-if="pickerVisible"
+      v-else-if="runtimeReady && pickerVisible"
       class="project-selection-gate__picker"
       rounded="lg"
       border
@@ -84,7 +91,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
@@ -93,6 +100,10 @@ import {
 } from "@/lib/vibe64ProjectScope.js";
 
 const props = defineProps({
+  beforeRetry: {
+    type: Function,
+    default: null
+  },
   runtimeReady: {
     type: Boolean,
     default: true
@@ -117,6 +128,12 @@ const props = defineProps({
 
 const emit = defineEmits(["missing", "ready", "error", "retry-runtime"]);
 const router = useRouter();
+const recovering = ref(false);
+const recoveryError = ref("");
+let disposed = false;
+onBeforeUnmount(() => {
+  disposed = true;
+});
 
 const {
   busy,
@@ -137,8 +154,31 @@ const {
   scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject
 });
 
+const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker);
 const pickerVisible = computed(() => selectionReady.value && (props.forcePicker || !hasSelection.value));
+
+async function retryProject() {
+  if (recovering.value) {
+    return;
+  }
+  recovering.value = true;
+  recoveryError.value = "";
+  try {
+    await props.beforeRetry?.();
+    if (disposed) {
+      return;
+    }
+    await loadProjectSelection();
+    if (!disposed && !errorMessage.value && !props.runtimeReady) {
+      emit("retry-runtime");
+    }
+  } catch (error) {
+    recoveryError.value = String(error?.message || "Project could not load. Try again.");
+  } finally {
+    recovering.value = false;
+  }
+}
 
 async function handleSelectProject(slug = "") {
   const selected = await selectProject(slug);
@@ -157,6 +197,7 @@ async function handleCreateProject() {
 
 <style scoped>
 .project-selection-gate {
+  align-content: start;
   display: grid;
   gap: 0.85rem;
   min-width: 0;

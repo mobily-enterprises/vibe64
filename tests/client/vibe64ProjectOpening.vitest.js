@@ -5,7 +5,7 @@ import * as Vue from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ command: null, requests: [] }));
+const mocks = vi.hoisted(() => ({ command: null, requests: [], selectionReload: vi.fn() }));
 vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent() {} }));
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
@@ -37,10 +37,13 @@ vi.mock("@/composables/useProjectSelectionGate.js", () => ({
     busy: Vue.ref(false), creating: Vue.ref(false), errorMessage: Vue.ref(""),
     hasSelection: Vue.ref(true), projectSelection: Vue.ref({ hasSelection: true }),
     projects: Vue.ref([]), projectsRoot: Vue.ref("/projects"), newProjectName: Vue.ref(""),
-    selectingSlug: Vue.ref(""), selectionInitialLoading: Vue.ref(false), selectionReady: Vue.ref(true)
+    selectingSlug: Vue.ref(""), selectionInitialLoading: Vue.ref(false), selectionReady: Vue.ref(true),
+    loadProjectSelection: mocks.selectionReload
   })
 }));
-vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({ default: { render: () => null } }));
+vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({ default: {
+  setup: (_props, { slots }) => () => Vue.h("aside", slots.actions?.())
+} }));
 vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthrough("button") }));
 vi.mock("vuetify/components/VAlert", () => ({ VAlert: passthrough("aside") }));
 vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: passthrough("div") }));
