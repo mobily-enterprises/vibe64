@@ -9,6 +9,7 @@ import test from "node:test";
 import { createAccountsRuntime, createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";
 import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5_000 });
 
@@ -72,7 +73,13 @@ test("native account logout and credential restoration drain old processes and c
     sessionId: "session-1", status: "active", sourceReady: true,
     metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" }
   };
+  const store = createVibe64SessionStore({
+    projectContextRoot: source,
+    projectRuntimeRoot: path.join(root, "project-state")
+  });
+  await store.createSession({ sessionId: session.sessionId, metadata: session.metadata, runtimeKind: "genesis" });
   const projectService = {
+    createSessionStore: () => store,
     createRuntime: () => ({
       getSession: async () => session,
       projectContextRoot: source,

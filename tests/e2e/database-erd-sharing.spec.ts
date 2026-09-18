@@ -1058,7 +1058,7 @@ test("@data-overview defaults to Overview without SQL and keeps the AI-selected 
   } finally { await context.close(); await server.close(); }
 });
 
-test("@data-overview scoped ERD centres the main table, shares selection, and prevents dragging only in the scoped view", async ({ browser, baseURL }, testInfo) => {
+test("@data-overview scoped ERD centres the main table, shares selection, and keeps dragged positions local", async ({ browser, baseURL }, testInfo) => {
   const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   try {
@@ -1085,8 +1085,8 @@ test("@data-overview scoped ERD centres the main table, shares selection, and pr
     const mainCard = details.locator('[data-id="public.bookings"]');
     const positionBefore = await mainCard.getAttribute("style");
     await dragTable(page, "bookings", 90, 50);
-    await expect(mainCard).toHaveAttribute("style", positionBefore!);
-    await expect(details.locator('.vue-flow__node-table.draggable')).toHaveCount(0);
+    await expect(mainCard).not.toHaveAttribute("style", positionBefore!);
+    await expect(details.locator('.vue-flow__node-table.draggable')).toHaveCount(4);
     await page.getByRole("button", { name: "Fit", exact: true }).click();
     await details.locator('[data-id="public.checklists"] strong').first().click({ timeout: 5000 });
     await expect(details.locator(".database-workspace__table-detail header")).toContainText("checklists");
@@ -1359,7 +1359,7 @@ test("@data-overview dragging actors persists positions, reroutes connections an
     await expect.poll(() => second.locator('[data-id="actor:public.bookings"]').evaluate((node: HTMLElement) => node.style.transform)).toBe(moved);
     await page.getByRole("button", { name: "Explore Bookings", exact: true }).click();
     await expect(page.locator(".database-overview__detail .vue-flow__node-table")).toHaveCount(4);
-    await expect(page.locator(".database-overview__detail .vue-flow__node-table.draggable")).toHaveCount(0);
+    await expect(page.locator(".database-overview__detail .vue-flow__node-table.draggable")).toHaveCount(4);
     await page.getByRole("button", { name: "Close details", exact: true }).click();
     await expect.poll(position).toBe(moved);
     await page.getByRole("button", { name: "Overview options", exact: true }).click();
@@ -1614,7 +1614,7 @@ test("@erd-camera zoom saves after settling and closing cancels a pending camera
     expect(server.saves).toHaveLength(before);
     await expect.poll(() => server.saves.length).toBe(before + 1);
     await page.mouse.wheel(0, 100);
-    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    await page.getByRole("tab", { name: "Preview", exact: true }).click();
     await expect(diagram).toHaveCount(0);
     // Deliberately outwait the camera debounce to catch writes from a closed view.
     await page.waitForTimeout(850);
@@ -1797,7 +1797,7 @@ for (const width of [960, 1600]) {
       await expect(page.locator('.database-workspace__assistant-context')).toHaveText('Table: public.transactions');
       await page.getByPlaceholder('Ask about this table…').fill('Explain this table to me');
       await page.getByRole('button', { name: 'Ask database copilot', exact: true }).click();
-      await expect(page.locator('.database-workspace__messages')).toContainText('Explanation of public.transactions');
+      await expect(page.getByText('Explanation of public.transactions', { exact: true })).toBeVisible();
       expect((server.assistantRequests[0] as any).messages.at(-1)).toMatchObject({ content: 'Explain this table to me', table: 'public.transactions' });
       await page.getByRole('button', { name: 'Collapse database copilot', exact: true }).click();
       await page.getByRole('button', { name: 'Back to Bookings', exact: true }).click();

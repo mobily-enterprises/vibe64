@@ -57,6 +57,7 @@ test.describe("studio startup navigation", () => {
 
     await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await expectSessionsRoute(page);
+    await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
     await expect(page.getByRole("link", { name: "Health", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
   });

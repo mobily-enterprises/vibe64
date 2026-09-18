@@ -95,6 +95,7 @@ import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-sessi
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
+import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
 import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 
@@ -166,7 +167,7 @@ function temporaryAiTestState(startResult) {
     showWorkspace: vi.fn(),
     startTask: vi.fn(() => {
       const task = {
-        agentSettings: {},
+        agentSettings: {}, delivery: createAssistantMessageDelivery(),
         busy: true,
         draft: "",
         error: "",
@@ -305,7 +306,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const temporary = temporaryAiTestState(deferred());
     temporaryProvider.value = temporary;
     temporary.tasks.value = ["one", "two"].map((id) => ({
-      id, conversationId: id, agentSettings: {}, busy: false, draft: "", error: "", messages: [], title: id
+      id, conversationId: id, agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", messages: [], title: id
     }));
     temporary.activeTaskId.value = "one";
     temporary.open.value = true;
@@ -396,7 +397,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const startResult = deferred();
     const temporary = temporaryAiTestState(startResult);
     temporary.tasks.value = [{
-      agentSettings: {},
+      agentSettings: {}, delivery: createAssistantMessageDelivery(),
       busy: true,
       draft: "",
       error: "",
@@ -431,7 +432,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
   it("returns to Main chat after closing only the completed repair, and retains the chat if closing fails", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
-      agentSettings: {}, busy: false, draft: "", error: "", id: "repair",
+      agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "repair",
       messages: [
         { id: "recovery_repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
       ],
@@ -442,7 +443,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.activeTaskId.value = "repair";
     temporary.open.value = true;
     temporary.tasks.value.push({
-      agentSettings: {}, busy: false, draft: "Keep this other draft.", id: "other",
+      agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "Keep this other draft.", id: "other",
       messages: [], title: "Other task"
     });
     temporaryProvider.value = temporary;
@@ -489,7 +490,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
   ])("reports preparation status %s without claiming readiness", async (status, text, canReturn) => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
-      agentSettings: {}, busy: false, draft: "", error: "", id: "repair", runId: "latest",
+      agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "repair", runId: "latest",
       messages: [
         { id: "recovery_earlier", role: "system", text: "Earlier repair verified." },
         { id: "recovery_latest", role: "system", text: "Session updated." }
@@ -518,7 +519,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
   it("keeps thinking in collapsed conversation details and the working status concise", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
-      agentSettings: {},
+      agentSettings: {}, delivery: createAssistantMessageDelivery(),
       busy: true,
       draft: "",
       error: "",
@@ -606,7 +607,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const startResult = deferred();
     const temporary = temporaryAiTestState(startResult);
     temporary.tasks.value = [{
-      agentSettings: {},
+      agentSettings: {}, delivery: createAssistantMessageDelivery(),
       busy: false,
       draft: "",
       error: "Timed out waiting for the provider response.",
@@ -642,7 +643,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
   it("keeps Check Update outside the transcript, disables it during work, and removes it after success", async () => {
     const temporary = temporaryAiTestState(deferred());
     temporary.tasks.value = [{
-      agentSettings: {}, attachments: [], busy: false, draft: "", error: "", id: "repair",
+      agentSettings: {}, delivery: createAssistantMessageDelivery(), attachments: [], busy: false, draft: "", error: "", id: "repair",
       messages: [], recoveryNotice: "Repair this Update.",
       recoveryOperation: "update", outcomeKind: "continue", status: "completed", title: "Resolve Update"
     }];
@@ -686,11 +687,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const temporary = temporaryAiTestState(startResult);
     temporary.tasks.value = [
       {
-        agentSettings: {}, busy: false, draft: "", error: "", id: "first",
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "first",
         messages: [], title: "First"
       },
       {
-        agentSettings: {}, busy: false, draft: "", error: "", id: "second",
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "second",
         messages: [], title: "Second"
       }
     ];
@@ -734,11 +735,11 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const temporary = temporaryAiTestState(startResult);
     temporary.tasks.value = [
       {
-        agentSettings: {}, busy: true, draft: "", error: "", id: "first",
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: true, draft: "", error: "", id: "first",
         messages: [], title: "First"
       },
       {
-        agentSettings: {}, busy: false, draft: "", error: "", id: "second",
+        agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "second",
         messages: [], title: "Second"
       }
     ];

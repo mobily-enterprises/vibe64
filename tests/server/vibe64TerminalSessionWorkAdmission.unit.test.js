@@ -306,10 +306,10 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   projectService.runProjectSourceExclusive = async () => assert.fail("Unavailable skills must not change source.");
 
   await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "AGENT_SKILL_UNAVAILABLE" });
-  // Delivery reaches the provider's own admission; this fixture has no AI account.
+  // Delivery reaches assistant admission; this fixture has no durable selection.
   await assert.rejects(service.sendAgentMessage(session.sessionId,
     { message: "Help repair dependencies." }, { engineId: "opencode" }),
-  { code: "vibe64_opencode_selection_required" });
+  { code: "vibe64_assistant_selection_invalid" });
   assert.equal(session.workspaceSetup.status, "required");
   assert.equal(session.workspaceSetup.recipeHash, "");
   assert.match(session.workspaceSetup.diagnostic, /genesis-compiler/u);
@@ -337,7 +337,7 @@ test("incomplete project contracts defer skill refresh without blocking repair c
   await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "STACK_PROJECT_CONTRACTS_INCOMPLETE" });
   await assert.rejects(service.sendAgentMessage(session.sessionId,
     { message: "Help repair project setup." }, { engineId: "opencode" }),
-  { code: "vibe64_opencode_selection_required" });
+  { code: "vibe64_assistant_selection_invalid" });
   assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: "existing-setup" });
   assert.equal(await readFile(stackPath, "utf8"), stack);
   assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred"), true);

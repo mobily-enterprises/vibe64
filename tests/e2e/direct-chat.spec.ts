@@ -21,8 +21,8 @@ const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
   "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
   "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
   "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files so the user can retry the Vibe64 operation.",
-  "For an overlapping edit, keep the latest saved version's overlapping lines byte-for-byte and preserve this session's additional intent in adjacent non-overlapping content. Do not report success while Git has unmerged index entries or while HEAD/index differ from their initial values."
+  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
+  "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
 
 const hintTest = test.extend<{ hintRealtime: void }>({
@@ -410,7 +410,7 @@ test.describe("direct chat", () => {
 
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await page.addStyleTag({
-      content: ".studio-autopilot-prompt-textarea__input { width: 10rem !important; }"
+      content: ".assistant-prompt-input__input { width: 10rem !important; }"
     });
 
     const composer = page.getByLabel("Message AI assistant");
@@ -498,7 +498,7 @@ test.describe("direct chat", () => {
         return {
           hints: bounds("[data-assistant-composer-support]"),
           composer: bounds(".studio-autopilot__composer"),
-          conversation: bounds(".studio-autopilot__conversation"),
+          conversation: bounds(".assistant-transcript"),
           scrollTop: panel.querySelector(".assistant-transcript__body")!.scrollTop
         };
       });
@@ -685,7 +685,7 @@ test.describe("direct chat", () => {
       const save = page.getByRole("button", { name: "Save selected session work", exact: true });
       await expect(save).toBeVisible();
       await expect(save).toBeDisabled();
-      await expect(page.locator(".assistant-composer-support__assistant-status")).toHaveText("Checking assistant status...");
+      await expect(page.locator(".assistant-composer-support__assistant-status")).toHaveText("Loading assistant…");
       releasePreparation();
       await expect(save).toBeEnabled();
       await save.click();
@@ -973,7 +973,7 @@ test.describe("direct chat", () => {
       await expect(workspace).toBeVisible();
       await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveCount(0);
       await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toBeVisible();
-      expect(temporaryStarts).toHaveLength(1);
+      expect(temporaryStarts).toHaveLength(2);
       expect(temporaryTurns).toHaveLength(1);
       expect(temporaryTurns[0]).toEqual(expect.objectContaining({
         agentSettings: expect.objectContaining({ model: "gpt-5.5", thinking: "high" }),
@@ -1101,7 +1101,12 @@ test.describe("direct chat", () => {
           recovery.promptLead,
           REPOSITORY_RECOVERY_GIT_BOUNDARY,
           ...(recovery.action === "Update" ? [
-            "When your repair is complete, Vibe64 will run Update to verify it and show the result here. If you need a decision, return a continue result instead."
+            [
+              "Review every listed conflict against both the saved and session versions, preserving their intended changes. Leave an already-correct file unchanged. Confirm the content is resolved before reporting completion; valid syntax alone is insufficient.",
+              "Your task is to prepare the file repair, not to run or complete the rebase yourself. Return kind=complete with a factual report as soon as the edits and focused checks are ready for Vibe64 to try Update. Vibe64 then runs Update automatically and returns remaining conflicts to this same conversation.",
+              "Return kind=continue only when you need an actual user decision, and ask that specific question. Do not wait for the user to click Rebase or tell them to open another repair chat.",
+              "Describe progress in terms of the user's features and remaining work. Keep HEAD/index/ref bookkeeping in the technical checks, not routine progress or the final reply. Passing application tests is not proof that Update succeeded."
+            ].join("\n")
           ] : []),
           diagnostic
         ].join("\n\n"),
@@ -1295,10 +1300,11 @@ test.describe("direct chat", () => {
   test("keeps the visible history anchor through a slow older-page response", async ({ page }) => {
     const latestTurns = Array.from({ length: 20 }, (_value, index) => scrollTestTurn(index + 21));
     const olderTurns = Array.from({ length: 20 }, (_value, index) => scrollTestTurn(index + 1));
+    const olderPage = Promise.withResolvers<void>();
     await mockDirectChat(page, {
       async conversationPage({ beforeTurnId }) {
         if (beforeTurnId) {
-          await new Promise((resolve) => setTimeout(resolve, 700));
+          await olderPage.promise;
           return {
             conversationLog: olderTurns,
             pagination: {
@@ -1328,6 +1334,8 @@ test.describe("direct chat", () => {
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
     const body = page.locator(".assistant-transcript__body");
+    await expect(body).toBeVisible();
+    await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(48);
     await body.evaluate((element) => {
       element.dispatchEvent(new WheelEvent("wheel", {
         bubbles: true,
@@ -1340,11 +1348,12 @@ test.describe("direct chat", () => {
       exact: false
     });
     await expect(visibleAnchor).toBeVisible();
+    await expect(page.getByRole("button", { name: "Loading older messages…" })).toBeVisible();
     const anchorBefore = await visibleAnchor.boundingBox();
-    await page.getByRole("button", { name: "Load older messages" }).click();
+    olderPage.resolve();
     await expect(page.getByText("User message 1. A deliberately detailed update", {
       exact: false
-    })).toBeVisible();
+    })).toHaveCount(1);
     const anchorAfter = await visibleAnchor.boundingBox();
     expect(Math.abs((anchorAfter?.y || 0) - (anchorBefore?.y || 0))).toBeLessThanOrEqual(2);
   });

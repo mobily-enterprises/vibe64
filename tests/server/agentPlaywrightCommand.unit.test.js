@@ -440,8 +440,8 @@ test("memory approval retains the original live command across the real wrapper/
         },
         async withPreviewTarget(sessionId, targetId, operation, { startTarget = (start) => start() }) {
           selected.push(targetId);
-          if (selected.length === 1) return { ok: false, code: "vibe64_capacity_rejected", error: "Tight memory.",
-            details: { admission: { id: admissionId, outcome: "tight", actions: ["start-anyway"] } } };
+          if (selected.length === 1) return { ok: false, code: "vibe64_capacity_rejected", error: "Resources unavailable.",
+            details: { admission: { id: admissionId, outcome: "unavailable", actions: ["recheck"] } } };
           await startTarget(() => { approvals += 1; });
           if (action === "start-failure") return { ok: false, exitCode: 1,
             code: "vibe64_command_failed", error: "The approved test target failed to start." };
@@ -491,7 +491,7 @@ test("memory approval retains the original live command across the real wrapper/
         assert.equal(authorized, action === "script-change" ? 0 : 1);
         if (action === "accept") assert.match(result.stdout, /"managed":"1"/u);
         else if (action === "start-failure") {
-          assert.match(result.stdout, /Waiting for memory approval/u);
+          assert.match(result.stdout, /Waiting for resources/u);
           assert.match(result.stderr, /The approved test target failed to start\./u);
           assert.equal(fixture.managedCommands.length, 0, "failed target startup must not run tests");
         }

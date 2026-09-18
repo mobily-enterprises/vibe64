@@ -54,7 +54,7 @@ async function expectVisibleTapTargets(page, {
 }
 
 async function expectSessionHistoryRoute(page) {
-  await expect(page.getByRole("heading", { level: 1, name: "Session History", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Session history", exact: true })).toBeVisible();
 }
 
 export {

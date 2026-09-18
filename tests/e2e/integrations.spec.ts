@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -6,6 +6,13 @@ import { createService } from "../../packages/vibe64-source-editor/src/server/se
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId, viewports } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+
+async function addIntegration(panel: Locator, name: string) {
+  const search = panel.getByRole("textbox", { name: "Search integrations", exact: true });
+  await search.fill(name);
+  await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+  await search.fill("");
+}
 
 const credentialLabels: Record<string, string> = {
   clay: "Public API key reference",
@@ -468,8 +475,7 @@ for (const { viewport, providerBatch } of [
       await expect(panel.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
       if (providerBatch === "google-ads-search") {
         page.setDefaultTimeout(15000);
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("Google Ads");
-        await panel.getByRole("button", { name: "Add Google Ads", exact: true }).click();
+        await addIntegration(panel, "Google Ads");
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-ads-client");
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         await save.click(); await expect(save).toBeDisabled();
@@ -531,8 +537,7 @@ for (const { viewport, providerBatch } of [
         return;
       }
       if (providerBatch === "analytics") {
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("Google Analytics");
-        await panel.getByRole("button", { name: "Add Google Analytics", exact: true }).click();
+        await addIntegration(panel, "Google Analytics");
         await panel.getByRole("textbox", { name: "Measurement ID", exact: true }).fill("G-APP12345");
         await expect(panel.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
         await expect(panel.getByRole("button", { name: "Check connection", exact: true })).toHaveCount(0);
@@ -608,8 +613,7 @@ for (const { viewport, providerBatch } of [
       }
       if (providerBatch === "bigquery") {
         const filePath = path.join(source, "integrations.json");
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("BigQuery");
-        await panel.getByRole("button", { name: "Add BigQuery", exact: true }).click();
+        await addIntegration(panel, "BigQuery");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const project = panel.getByRole("textbox", { name: "Google Cloud project ID", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
@@ -673,7 +677,7 @@ for (const { viewport, providerBatch } of [
         const filePath = path.join(source, "integrations.json");
         const saved = { extensions: undefined };
         for (const provider of [{ id: "aws-s3", name: "AWS S3" }, { id: "aws-athena", name: "AWS Athena" }]) {
-          await panel.getByRole("button", { name: `Add ${provider.name}`, exact: true }).click();
+          await addIntegration(panel, provider.name);
           const key = panel.getByRole("textbox", { name: "Access key ID reference", exact: true });
           const secret = panel.getByRole("textbox", { name: "Secret access key reference", exact: true });
           const session = panel.getByRole("textbox", { name: "Session token reference (optional)", exact: true });
@@ -779,7 +783,7 @@ for (const { viewport, providerBatch } of [
         expect(errors).toEqual([]);
         return;
       }
-      await panel.getByRole("button", { name: "Add Google Calendar" }).click();
+      await addIntegration(panel, "Google Calendar");
       if (providerBatch === "calendar") {
         await panel.getByRole("button", { name: "Set up Google Calendar", exact: true }).click();
         await expect(panel.getByText(/To create, edit or cancel events, select Manage events/)).toBeVisible();
@@ -926,7 +930,7 @@ for (const { viewport, providerBatch } of [
       if (providerBatch === "path-readers") tokenProviders.push(["Telegram", "telegram"], ["KLIPY", "klipy"]);
       if (providerBatch === "public-resources") tokenProviders.push(["Mapbox", "mapbox"], ["Google Maps Platform", "google-maps-platform"], ["Logo.dev", "logo-dev"]);
       for (const [name, id] of tokenProviders) {
-        await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+        await addIntegration(panel, name);
         if (id === "contentful") {
           await panel.getByRole("textbox", { name: "Space ID", exact: true }).fill("space-one");
           await panel.getByRole("textbox", { name: "Environment ID", exact: true }).fill("published-web");
@@ -1454,7 +1458,7 @@ for (const { viewport, providerBatch } of [
         }
       }
       if (providerBatch === "algolia") {
-        await panel.getByRole("button", { name: "Add Algolia", exact: true }).click();
+        await addIntegration(panel, "Algolia");
         const applicationId = panel.getByRole("textbox", { name: "Application ID", exact: true });
         const publicKey = panel.getByRole("textbox", { name: "Public API key reference (optional)", exact: true });
         await panel.getByRole("button", { name: "Save configuration" }).click();
@@ -1493,7 +1497,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.algolia.com/doc/guides/security/api-keys");
       }
       if (providerBatch === "twilio") {
-        await panel.getByRole("button", { name: "Add Twilio", exact: true }).click();
+        await addIntegration(panel, "Twilio");
         const accountSid = panel.getByRole("textbox", { name: "Account SID", exact: true });
         const apiKeySid = panel.getByRole("textbox", { name: "Standard API Key SID", exact: true });
         const secret = panel.getByRole("textbox", { name: "API key secret reference", exact: true });
@@ -1556,7 +1560,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "posthog") {
-        await panel.getByRole("button", { name: "Add PostHog", exact: true }).click();
+        await addIntegration(panel, "PostHog");
         const projectId = panel.getByRole("textbox", { name: "Project ID", exact: true });
         const token = panel.getByRole("textbox", { name: "Project token reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
@@ -1600,7 +1604,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://posthog.com/docs/settings/projects");
       }
       if (providerBatch === "chargebee") {
-        await panel.getByRole("button", { name: "Add Chargebee", exact: true }).click();
+        await addIntegration(panel, "Chargebee");
         const siteName = panel.getByRole("textbox", { name: "Site name", exact: true });
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
@@ -1636,7 +1640,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Creating a hosted checkout URL does not prove payment/)).toBeVisible();
       }
       if (providerBatch === "canva") {
-        await panel.getByRole("button", { name: "Add Canva", exact: true }).click();
+        await addIntegration(panel, "Canva");
         const client = panel.getByRole("textbox", { name: "Client metadata URL", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
@@ -1694,7 +1698,7 @@ for (const { viewport, providerBatch } of [
           { id: "miro", name: "Miro", scope: "Read boards", scopes: ["boards:read", "boards:write"], count: 4,
             guide: "https://developers.miro.com/docs/connecting-to-miro-mcp" }
         ].filter(spec => providerBatch === "design-mcp" || spec.id === providerBatch)) {
-          await panel.getByRole("button", { name: `Add ${spec.name}`, exact: true }).click();
+          await addIntegration(panel, spec.name);
           const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
           const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
           const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -1754,7 +1758,7 @@ for (const { viewport, providerBatch } of [
         }
       }
       if (providerBatch === "atlassian") {
-        await panel.getByRole("button", { name: "Add Atlassian", exact: true }).click();
+        await addIntegration(panel, "Atlassian");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -1811,7 +1815,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://support.atlassian.com/atlassian-ai-gateway/docs/configure-oauth-2-1/");
       }
       if (providerBatch === "wix") {
-        await panel.getByRole("button", { name: "Add Wix", exact: true }).click();
+        await addIntegration(panel, "Wix");
         const account = panel.getByRole("textbox", { name: "Account ID", exact: true });
         const selectable = panel.getByRole("textbox", { name: "Selectable Site IDs", exact: true });
         const site = panel.getByRole("textbox", { name: "Site ID", exact: true });
@@ -1896,7 +1900,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8"))).toEqual(beforeConnection);
       }
       if (providerBatch === "ai") {
-        await panel.getByRole("button", { name: "Add AI", exact: true }).click();
+        await addIntegration(panel, "AI");
         const model = panel.getByRole("combobox", { name: "AI model", exact: true });
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
@@ -1942,7 +1946,7 @@ for (const { viewport, providerBatch } of [
         await page.screenshot({ path: `/tmp/vibe64-integrations-dev/ai-${viewport.name}.png`, fullPage: true });
       }
       if (providerBatch === "wiz") {
-        await panel.getByRole("button", { name: "Add Wiz", exact: true }).click();
+        await addIntegration(panel, "Wiz");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const policies = panel.getByRole("textbox", { name: "CI/CD scan policies", exact: true });
@@ -1991,7 +1995,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://marketplace.visualstudio.com/items?itemName=WizCloud.wiz-task");
       }
       if (providerBatch === "shopify") {
-        await panel.getByRole("button", { name: "Add Shopify", exact: true }).click();
+        await addIntegration(panel, "Shopify");
         const shop = panel.getByRole("textbox", { name: "Shopify store domain", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -2050,7 +2054,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant");
       }
       if (providerBatch === "workday") {
-        await panel.getByRole("button", { name: "Add Workday", exact: true }).click();
+        await addIntegration(panel, "Workday");
         const rest = panel.getByRole("textbox", { name: "Workday REST API Endpoint", exact: true });
         const token = panel.getByRole("textbox", { name: "Token Endpoint", exact: true });
         const authorization = panel.getByRole("textbox", { name: "Authorization Endpoint", exact: true });
@@ -2105,7 +2109,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/For custom reports, select Tenant Non-Configurable and Include Workday Owned Scope/)).toBeVisible();
       }
       if (providerBatch === "gemini-enterprise") {
-        await panel.getByRole("button", { name: "Add Gemini Enterprise", exact: true }).click();
+        await addIntegration(panel, "Gemini Enterprise");
         const project = panel.getByRole("textbox", { name: "GCP project ID", exact: true });
         const engine = panel.getByRole("textbox", { name: "Engine ID", exact: true });
         const location = panel.getByRole("combobox", { name: "Location", exact: true });
@@ -2156,7 +2160,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Grant the connecting Google account discoveryengine.engines.get/)).toBeVisible();
       }
       if (providerBatch === "snowflake") {
-        await panel.getByRole("button", { name: "Add Snowflake", exact: true }).click();
+        await addIntegration(panel, "Snowflake");
         const account = panel.getByRole("textbox", { name: "Account URL", exact: true });
         const role = panel.getByRole("textbox", { name: "Role", exact: true });
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -2242,7 +2246,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "tiktok") {
-        await panel.getByRole("button", { name: "Add TikTok", exact: true }).click();
+        await addIntegration(panel, "TikTok");
         const client = panel.getByRole("textbox", { name: "Client key", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2310,7 +2314,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Use Sandbox with designated test users/)).toBeVisible();
       }
       if (providerBatch === "linkedin") {
-        await panel.getByRole("button", { name: "Add LinkedIn", exact: true }).click();
+        await addIntegration(panel, "LinkedIn");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2372,7 +2376,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "google-ads") {
-        await panel.getByRole("button", { name: "Add Google Ads", exact: true }).click();
+        await addIntegration(panel, "Google Ads");
         const mode = panel.getByRole("combobox", { name: "API access", exact: true });
         const developer = panel.getByRole("textbox", { name: "Developer token reference", exact: true });
         const manager = panel.getByRole("textbox", { name: "Manager customer ID (optional)", exact: true });
@@ -2426,7 +2430,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developers.google.com/google-ads/api/docs/get-started/make-first-call");
       }
       if (providerBatch === "salesforce") {
-        await panel.getByRole("button", { name: "Add Salesforce", exact: true }).click();
+        await addIntegration(panel, "Salesforce");
         const environment = panel.getByRole("combobox", { name: "Environment", exact: true });
         const account = panel.getByRole("textbox", { name: "Account URL", exact: true });
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -2494,7 +2498,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://help.salesforce.com/s/articleView?id=sf.external_client_apps.htm&type=5");
       }
       if (providerBatch === "firebase") {
-        await panel.getByRole("button", { name: "Add Firebase Cloud Messaging", exact: true }).click();
+        await addIntegration(panel, "Firebase Cloud Messaging");
         const project = panel.getByRole("textbox", { name: "Firebase project ID", exact: true });
         const key = panel.getByRole("textbox", { name: "Service-account JSON reference", exact: true });
         const apiKey = panel.getByRole("textbox", { name: "Firebase API key", exact: true });
@@ -2560,7 +2564,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Check connection only reads saved status/)).toBeVisible();
       }
       if (providerBatch === "dbt") {
-        await panel.getByRole("button", { name: "Add dbt Semantic Layer", exact: true }).click();
+        await addIntegration(panel, "dbt Semantic Layer");
         const host = panel.getByRole("textbox", { name: "Semantic Layer host", exact: true });
         const environment = panel.getByRole("textbox", { name: "Environment ID", exact: true });
         const key = panel.getByRole("textbox", { name: "Service token reference", exact: true });
@@ -2606,7 +2610,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/JSON results suit small tables/)).toBeVisible();
       }
       if (providerBatch === "fabric") {
-        await panel.getByRole("button", { name: "Add Microsoft Fabric", exact: true }).click();
+        await addIntegration(panel, "Microsoft Fabric");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2680,7 +2684,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/LIMITATIONS: no automatic table browser/)).toBeVisible();
       }
       if (providerBatch === "databricks") {
-        await panel.getByRole("button", { name: "Add Databricks", exact: true }).click();
+        await addIntegration(panel, "Databricks");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2749,7 +2753,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://docs.databricks.com/aws/en/integrations/enable-disable-oauth");
       }
       if (providerBatch === "lightspeed") {
-        await panel.getByRole("button", { name: "Add Lightspeed", exact: true }).click();
+        await addIntegration(panel, "Lightspeed");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2815,7 +2819,7 @@ for (const { viewport, providerBatch } of [
       }
       if (providerBatch === "confidence") {
         for (const provider of [{ id: "confidence-flags", name: "Confidence Flags", binding: "FLAGS" }, { id: "confidence-exp", name: "Confidence Exp", binding: "EXP" }]) {
-          await panel.getByRole("button", { name: `Add ${provider.name}`, exact: true }).click();
+          await addIntegration(panel, provider.name);
           const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
           const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
           const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2864,7 +2868,7 @@ for (const { viewport, providerBatch } of [
         }
       }
       if (providerBatch === "hex") {
-        await panel.getByRole("button", { name: "Add Hex", exact: true }).click();
+        await addIntegration(panel, "Hex");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2927,7 +2931,7 @@ for (const { viewport, providerBatch } of [
 
       }
       if (providerBatch === "amplitude") {
-        await panel.getByRole("button", { name: "Add Amplitude", exact: true }).click();
+        await addIntegration(panel, "Amplitude");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -2986,7 +2990,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://amplitude.com/docs/amplitude-ai/amplitude-mcp/other-clients");
       }
       if (providerBatch === "inngest") {
-        await panel.getByRole("button", { name: "Add Inngest", exact: true }).click();
+        await addIntegration(panel, "Inngest");
         const signingKey = panel.getByRole("textbox", { name: "Signing Key reference", exact: true });
         const eventKey = panel.getByRole("textbox", { name: "Event Key reference", exact: true });
         const branch = panel.getByRole("textbox", { name: "Branch environment (optional)", exact: true });
@@ -3045,7 +3049,7 @@ for (const { viewport, providerBatch } of [
         await expect(branch).toHaveValue("");
       }
       if (providerBatch === "sanity") {
-        await panel.getByRole("button", { name: "Add Sanity", exact: true }).click();
+        await addIntegration(panel, "Sanity");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const callback = "https://app.example/integrations/sanity/callback";
         await panel.getByRole("textbox", { name: "Suggested callback URL", exact: true }).fill(callback);
@@ -3090,7 +3094,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/The editor coding-assistant attachment is deferred/)).toBeVisible();
       }
       if (providerBatch === "sentry") {
-        await panel.getByRole("button", { name: "Add Sentry", exact: true }).click();
+        await addIntegration(panel, "Sentry");
         await panel.getByRole("textbox", { name: "Sentry organization slug", exact: true }).fill("example");
         await panel.getByRole("textbox", { name: "Sentry project slug (optional)", exact: true }).fill("web-app");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
@@ -3142,7 +3146,7 @@ for (const { viewport, providerBatch } of [
           { id: "n8n", name: "n8n", label: "MCP access token reference", setupUrl: "https://docs.n8n.io/connect/connect-to-n8n-mcp-server" },
           { id: "sanity", name: "Sanity", label: "MCP API token reference", setupUrl: "https://www.sanity.io/docs/ai/mcp-server" }
         ].filter((provider) => providerBatch === "mcp" || provider.id === "n8n")) {
-          await panel.getByRole("button", { name: `Add ${provider.name}`, exact: true }).click();
+          await addIntegration(panel, provider.name);
           if (provider.id === "sanity") {
             await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toBeVisible();
             await panel.getByRole("combobox", { name: "Authentication", exact: true }).press("Enter");
@@ -3196,7 +3200,7 @@ for (const { viewport, providerBatch } of [
         }
       }
       if (providerBatch === "wordpress-com") {
-        await panel.getByRole("button", { name: "Add WordPress.com", exact: true }).click();
+        await addIntegration(panel, "WordPress.com");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -3263,7 +3267,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/It does not create an application login/)).toBeVisible();
       }
       if (providerBatch === "zoho-books") {
-        await panel.getByRole("button", { name: "Add Zoho Books", exact: true }).click();
+        await addIntegration(panel, "Zoho Books");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -3324,7 +3328,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.zoho.com/books/api/v3/oauth/");
       }
       if (providerBatch === "zoho-crm") {
-        await panel.getByRole("button", { name: "Add Zoho CRM", exact: true }).click();
+        await addIntegration(panel, "Zoho CRM");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -3382,7 +3386,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://www.zoho.com/crm/developer/docs/api/v8/register-client.html");
       }
       if (providerBatch === "wave") {
-        await panel.getByRole("button", { name: "Add Wave", exact: true }).click();
+        await addIntegration(panel, "Wave");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -3459,7 +3463,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "granola") {
-        await panel.getByRole("button", { name: "Add Granola", exact: true }).click();
+        await addIntegration(panel, "Granola");
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const owner = panel.getByRole("combobox", { name: "Account used by the application", exact: true });
@@ -3514,7 +3518,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Choose Register client and connect to create the client/)).toBeVisible();
       }
       if (providerBatch === "linear") {
-        await panel.getByRole("button", { name: "Add Linear", exact: true }).click();
+        await addIntegration(panel, "Linear");
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         await key.fill("raw-linear-token"); await save.click();
@@ -3559,7 +3563,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "hubspot") {
-        await panel.getByRole("button", { name: "Add HubSpot", exact: true }).click();
+        await addIntegration(panel, "HubSpot");
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         await key.fill("raw-hubspot-token"); await save.click();
@@ -3607,7 +3611,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "heygen") {
-        await panel.getByRole("button", { name: "Add HeyGen", exact: true }).click();
+        await addIntegration(panel, "HeyGen");
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const owner = panel.getByRole("combobox", { name: "Account used by the application", exact: true });
@@ -3662,7 +3666,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Choose Register client and connect to create the client/)).toBeVisible();
       }
       if (providerBatch === "telegram") {
-        await panel.getByRole("button", { name: "Add Telegram", exact: true }).click();
+        await addIntegration(panel, "Telegram");
         const key = panel.getByRole("textbox", { name: "Bot token reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         await key.fill("raw-telegram-key"); await save.click();
@@ -3695,7 +3699,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8")).extensions).toEqual(saved.extensions);
       }
       if (providerBatch === "tally") {
-        await panel.getByRole("button", { name: "Add Tally", exact: true }).click();
+        await addIntegration(panel, "Tally");
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
         await key.fill("raw-tally-key"); await save.click();
@@ -3728,7 +3732,7 @@ for (const { viewport, providerBatch } of [
         expect(JSON.parse(await readFile(filePath, "utf8")).extensions).toEqual(saved.extensions);
       }
       if (providerBatch === "x-twitter") {
-        await panel.getByRole("button", { name: "Add X (Twitter)", exact: true }).click();
+        await addIntegration(panel, "X (Twitter)");
         const key = panel.getByRole("textbox", { name: "App-only bearer token reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const owner = panel.getByRole("combobox", { name: "Account used by the application", exact: true });
@@ -3787,7 +3791,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Disconnect removes the local connection only/)).toBeVisible();
       }
       if (providerBatch === "semrush") {
-        await panel.getByRole("button", { name: "Add Semrush", exact: true }).click();
+        await addIntegration(panel, "Semrush");
         const key = panel.getByRole("textbox", { name: "V4 API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration" });
         const owner = panel.getByRole("combobox", { name: "Account used by the application", exact: true });
@@ -3846,7 +3850,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText("Separate keys on one account share account capacity. This initial runtime does not implement the captured OAuth connection or individual app-user login.", { exact: true })).toBeVisible();
       }
       if (providerBatch === "xero") {
-        await panel.getByRole("button", { name: "Add Xero", exact: true }).click();
+        await addIntegration(panel, "Xero");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -3903,7 +3907,7 @@ for (const { viewport, providerBatch } of [
 
       }
       if (providerBatch === "redshift") {
-        await panel.getByRole("button", { name: "Add Amazon Redshift", exact: true }).click();
+        await addIntegration(panel, "Amazon Redshift");
         const mode = panel.getByRole("combobox", { name: "Deployment type", exact: true });
         const region = panel.getByRole("combobox", { name: "AWS Region", exact: true });
         const workgroup = panel.getByRole("textbox", { name: "Workgroup name", exact: true });
@@ -3969,7 +3973,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "slack") {
-        await panel.getByRole("button", { name: "Add Slack", exact: true }).click();
+        await addIntegration(panel, "Slack");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -4058,7 +4062,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "twitch") {
-        await panel.getByRole("button", { name: "Add Twitch", exact: true }).click();
+        await addIntegration(panel, "Twitch");
         const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
         const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
         const callback = panel.getByRole("textbox", { name: "Callback URL reference", exact: true });
@@ -4144,7 +4148,7 @@ for (const { viewport, providerBatch } of [
         await expect(connection.getByText("Not connected", { exact: true })).toBeVisible();
       }
       if (providerBatch === "clickhouse") {
-        await panel.getByRole("button", { name: "Add ClickHouse", exact: true }).click();
+        await addIntegration(panel, "ClickHouse");
         const endpoint = panel.getByRole("textbox", { name: "HTTP Interface URL", exact: true });
         const username = panel.getByRole("textbox", { name: "Username (optional)", exact: true });
         const password = panel.getByRole("textbox", { name: "Password reference (optional)", exact: true });
@@ -4202,7 +4206,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Connect account or Verify again/)).toBeVisible();
       }
       if (providerBatch === "prestashop") {
-        await panel.getByRole("button", { name: "Add PrestaShop", exact: true }).click();
+        await addIntegration(panel, "PrestaShop");
         const site = panel.getByRole("textbox", { name: "Store URL", exact: true });
         const key = panel.getByRole("textbox", { name: "Webservice API key reference", exact: true });
         const displayName = panel.getByRole("textbox", { name: "Display name", exact: true });
@@ -4251,7 +4255,7 @@ for (const { viewport, providerBatch } of [
             identity: "editor", invalidIdentity: "user:password", identityError: "Enter a username without colons or control characters.",
             secretLabel: "Application password reference", setupUrl: "https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/" }
         ].filter(provider => providerBatch === "wordpress" || provider.id === providerBatch)) {
-          await panel.getByRole("button", { name: `Add ${provider.name}`, exact: true }).click();
+          await addIntegration(panel, provider.name);
           const site = panel.getByRole("textbox", { name: provider.siteLabel, exact: true });
           const identity = panel.getByRole("textbox", { name: provider.identityLabel, exact: true });
           const secret = panel.getByRole("textbox", { name: provider.secretLabel, exact: true });
@@ -4330,7 +4334,7 @@ for (const { viewport, providerBatch } of [
         }
       }
       if (providerBatch === "gong") {
-        await panel.getByRole("button", { name: "Add Gong", exact: true }).click();
+        await addIntegration(panel, "Gong");
         const accessKey = panel.getByRole("textbox", { name: "Access key", exact: true });
         const apiBaseUrl = panel.getByRole("textbox", { name: "API base URL (optional)", exact: true });
         const secret = panel.getByRole("textbox", { name: "Access key secret reference", exact: true });
@@ -4376,7 +4380,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText(/Linked deal context comes from the CRM data already connected to Gong/)).toBeVisible();
       }
       if (providerBatch === "oura") {
-        await panel.getByRole("button", { name: "Add Oura", exact: true }).click();
+        await addIntegration(panel, "Oura");
         await expect(panel.getByText("Each app user's own account", { exact: true })).toBeVisible();
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-oura-client");
         const permissions = panel.getByRole("button", { name: "Permissions", exact: true });
@@ -4426,8 +4430,7 @@ for (const { viewport, providerBatch } of [
           ["Google Search Console", "google-search-console", "Read Search Console properties", "webmasters.readonly"]
         ];
         for (const [name, id, permission, scope] of googleProviders) {
-          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill(name);
-          await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+          await addIntegration(panel, name);
           await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill(`${id}.apps.googleusercontent.com`);
           if (id === "bigquery") await panel.getByRole("textbox", { name: "Google Cloud project ID", exact: true }).fill("query-project");
           const checkbox = panel.getByRole("checkbox", { name: permission, exact: true });
@@ -4546,8 +4549,7 @@ for (const { viewport, providerBatch } of [
           ["Microsoft OneNote", "microsoft-onenote", "Read your notebooks", "Notes.Read"],
           ["Microsoft SharePoint", "microsoft-sharepoint", "Read items in all site collections", "Sites.Read.All"]
         ].filter(([, id]) => providerBatch === "microsoft" || id === providerBatch)) {
-          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill(name);
-          await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+          await addIntegration(panel, name);
           await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("11111111-2222-3333-4444-555555555555");
           const tenantId = ["microsoft-teams", "microsoft-sharepoint"].includes(id) ? "organizations" : "common";
           await expect(panel.getByRole("textbox", { name: "Directory (tenant) ID", exact: true })).toHaveValue(tenantId);
@@ -4608,8 +4610,7 @@ for (const { viewport, providerBatch } of [
       if (providerBatch === "microsoft-documents") {
         const tenants = ["11111111-2222-3333-4444-555555555555", "consumers"];
         for (const [index, [name, id]] of [["Microsoft Word", "microsoft-word"], ["Microsoft PowerPoint", "microsoft-powerpoint"]].entries()) {
-          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill(name);
-          await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+          await addIntegration(panel, name);
           const tenant = panel.getByRole("textbox", { name: "Directory (tenant) ID", exact: true });
           const client = panel.getByRole("textbox", { name: "Client ID", exact: true });
           const secret = panel.getByRole("textbox", { name: "Client secret reference", exact: true });
@@ -4740,8 +4741,7 @@ for (const { viewport, providerBatch } of [
         expect(setupRequests).toHaveLength(requestsBeforePersonalSave);
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].accountMode).toBe("per-user");
         await showProject.click();
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("Google Sheets");
-        await panel.getByRole("button", { name: "Add Google Sheets", exact: true }).click();
+        await addIntegration(panel, "Google Sheets");
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-sheets-client");
         await panel.getByRole("button", { name: "Save configuration", exact: true }).click();
         const spreadsheet = panel.getByRole("textbox", { name: "Spreadsheet ID (optional)", exact: true });
@@ -4763,8 +4763,7 @@ for (const { viewport, providerBatch } of [
           ["Google Maps Platform", "Verification address", "address", "Verification address fixture", false],
           ["X (Twitter)", "Verification username", "username", "fixture_user", false]
         ] as const) {
-          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill(name);
-          await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+          await addIntegration(panel, name);
           if (oauth) await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-client-id");
           if (name === "PostHog") await panel.getByRole("textbox", { name: "Project ID", exact: true }).fill("12345");
           await panel.getByRole("button", { name: "Save configuration", exact: true }).click();
@@ -4778,8 +4777,7 @@ for (const { viewport, providerBatch } of [
           expect(setupRequests.at(-1)).toMatchObject({ operation: "connect", verificationInput: { [key]: value } });
           expect(await readFile(filePath, "utf8")).not.toContain(value);
         }
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("Gmail");
-        await panel.getByRole("button", { name: "Add Gmail", exact: true }).click();
+        await addIntegration(panel, "Gmail");
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-gmail-client");
         await panel.getByRole("button", { name: "Save configuration", exact: true }).click();
         await panel.getByRole("button", { name: "Connect account", exact: true }).click();
@@ -4792,7 +4790,7 @@ for (const { viewport, providerBatch } of [
         await expect(env).toBeVisible();
         await page.getByRole("button", { name: "Integrations", exact: true }).click();
         await expect(accountLabel).toBeVisible();
-        await panel.getByRole("button", { name: "Add Gmail", exact: true }).click();
+        await addIntegration(panel, "Gmail");
         await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Support mailbox");
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-second-gmail-client");
         await panel.getByRole("button", { name: "Save configuration", exact: true }).click();

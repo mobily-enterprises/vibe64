@@ -197,7 +197,8 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
     expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
     expect(temporaryAiComposable).not.toContain("beforeunload");
-    expect(temporaryAiComposable).toContain("onMounted(() => { void restoreTasks(); });");
+    expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, () => readRefOrGetterValue(assistantReady)]");
+    expect(temporaryAiComposable).toContain("void restoreTasks();\n  }, { immediate: true });");
     expect(temporaryAiComposable).toContain("for (const taskId of saveTimers.keys()) void saveTask(taskId);");
     expect(temporaryAiComposable).toContain("attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)");
     expect(temporaryAiComposable).toContain("restoredAttachments: record.attachments || []");
@@ -205,7 +206,7 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiComposable).toContain("async function startTask(options = {})");
     expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
     expect(temporaryAiComposable).toContain("progressUpdates: temporaryAiProgressUpdates(response.progressUpdates)");
-    expect(temporaryAiComposable).toContain("task.displayMessage || payload.displayMessage");
+    expect(temporaryAiComposable).toContain("task.displayMessage || draftPayload.displayMessage");
     expect(temporaryAiComposable).toContain('status: "failed"');
     expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });

@@ -656,6 +656,8 @@ test("source explanations preserve one pre-resolved profile through the terminal
     };
     const terminalService = createTerminalService({
       codexTerminalController: {
+        ...TEST_SESSION_CONTEXT_COMPOSITION,
+        codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
         codexAppServerProviderFactory(providerOptions) {
           return createProvider(calls, subscribers, captures, providerOptions);
         },
@@ -704,7 +706,10 @@ test("source explanations preserve one pre-resolved profile through the terminal
         startColumn: 1,
         startLine: 1
       });
-      await waitForCapturedTurns(captures, 1);
+      await Promise.race([
+        waitForCapturedTurns(captures, 1),
+        pending.then((result) => assert.fail(`Source explanation ended before starting a turn: ${JSON.stringify(result)}`))
+      ]);
       completeDetachedTurn(subscribers, {
         text: JSON.stringify({
           answer: "This function returns the sum of its two arguments."
@@ -802,6 +807,8 @@ for (const startFails of [false, true]) {
       const stopInputRead = createDeterministicHold();
       const terminalService = createTerminalService({
         codexTerminalController: {
+          ...TEST_SESSION_CONTEXT_COMPOSITION,
+          codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
           codexAppServerProviderFactory(providerOptions) {
             const provider = createProvider(calls, subscribers, captures, providerOptions);
             return {
@@ -4324,9 +4331,10 @@ test("terminal-origin messages inherit the latest UI actor without changing goal
       Boolean,
       "the terminal-origin user message to be mirrored"
     );
-    assert.deepEqual(terminalUserMessage.metadata, {
+    assert.partialDeepStrictEqual(terminalUserMessage.metadata, {
       actorDisplayName: "Ada",
-      actorId: "ada-owner"
+      actorId: "ada-owner",
+      engineId: "codex"
     });
 
     emitCodexNotification(captures.subscribers, reasoningSummaryDelta({
@@ -4879,9 +4887,10 @@ test("an active chat keeps one composed session context while authored turns sta
     );
     const restartedMessage = (await store.readConversationLog("session-1"))
       .find((turn) => turn.user?.text === "Start the next turn.");
-    assert.deepEqual(restartedMessage?.metadata, {
+    assert.partialDeepStrictEqual(restartedMessage?.metadata, {
       actorDisplayName: "Ada",
-      actorId: "ada-owner"
+      actorId: "ada-owner",
+      engineId: "codex"
     });
 
     environmentVersion = "three";

@@ -260,17 +260,16 @@ for (const viewport of viewports) {
     test("checks uncertain continuation directly from chat without another app command", async ({ page }) => {
       confirmSetup = true;
       deliveryUnavailable = true;
-      await page.goto(`${DASHBOARD_PATH}/integrations`);
+      await page.goto(`${DASHBOARD_PATH}/env`);
       const chat = page.locator(".assistant-transcript");
-      await chat.getByRole("button", { name: "Configure", exact: true }).click();
-      if (viewport.name !== "expanded") await page.getByRole("button", { name: "Show chat", exact: true }).click();
       await expect(chat.getByText(/Assistant delivery is not yet confirmed/)).toBeVisible();
       const setupCalls = operations.length;
+      const previousDeliveryRequests = deliveryRequests;
       deliveryUnavailable = false;
       await chat.getByRole("button", { name: "Check continuation", exact: true }).click();
       await expect(chat.getByText("Assistant continuation accepted.", { exact: true })).toBeVisible();
       expect(operations.length).toBe(setupCalls);
-      expect(deliveryRequests).toBe(2);
+      expect(deliveryRequests).toBe(previousDeliveryRequests + 1);
       expect(providerDeliveries).toBe(1);
     });
     test("saves Skip and restores it after reload", async ({ page }) => {

@@ -317,9 +317,9 @@ test("test-target capacity approval resumes the original suite and restores deve
     const waiting = Promise.withResolvers();
     const ends = [];
     let f;
-    const admission = { id: "76cb5cf2-412d-479d-b06c-5ae0cfaa9551", outcome: "tight", code: "project_memory_tight",
+    const admission = { id: "76cb5cf2-412d-479d-b06c-5ae0cfaa9551", outcome: "unavailable", code: "project_memory_unavailable",
       availableBytes: 1600 * 1024 ** 2, typicalBytes: 512 * 1024 ** 2, highBytes: 1536 * 1024 ** 2,
-      actions: ["start-anyway", "manage-resources"] };
+      actions: ["recheck", "manage-resources"] };
     f = await fixture(t, "capacity", {
       resourceProvider: () => ({
         async beginWorkflowApprovalWait() {
@@ -371,7 +371,7 @@ test("test-target capacity approval resumes the original suite and restores deve
       (start) => approvalScope.run(true, start));
     assert.equal(accepted.accepted, true);
     const result = await completion;
-    assert.match(result.stdout, /Waiting for memory approval/u);
+    assert.match(result.stdout, /Waiting for resources/u);
     assert.match(result.stdout, /1 passed/u);
     assert.deepEqual(starts.slice(5), [["test-app", "test"], ["app", "development"]]);
     assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.outputTargetId, "app");

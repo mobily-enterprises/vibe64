@@ -41,10 +41,13 @@ const projectQueryMocks = vi.hoisted(() => ({ route: null }));
 vi.mock("vue-router", () => ({
   RouterView: { render: () => null },
   useRoute: () => projectQueryMocks.route,
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push: vi.fn(), afterEach: vi.fn(() => vi.fn()) })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: () => ({ isRunning: false, message: "", messageType: "", run: vi.fn() })
+  useCommand: () => ({
+    canRun: true, isRunning: false, message: "", messageType: "",
+    run: vi.fn(async () => ({ ok: true, runtime: { open: true } }))
+  })
 }));
 vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@/components/StudioAppShellLayout.vue", () => ({ default: passthroughComponent("section") }));
@@ -413,8 +416,7 @@ describe("Vibe64 project client scope", () => {
 
       fixture.route.params.slug = firstSlug;
       fixture.route.path = projectAppPath(firstSlug);
-      await Vue.nextTick();
-      expect(fixture.renderedProject()).toBe(firstSlug);
+      await vi.waitFor(() => expect(fixture.renderedProject()).toBe(firstSlug));
       expect(fixture.navigationVisible()).toBe(true);
     } finally {
       fixture.close();
@@ -546,7 +548,7 @@ describe("Vibe64 project client scope", () => {
     expect(source).toContain("const selected = await createProject();");
     expect(source).toContain("const selected = await selectProject(slug);");
     expect(source).toContain("router.push(projectAppPath(selected))");
-    expect(source).toContain("v-if=\"selectionInitialLoading\"");
+    expect(source).toContain('v-if="!displayError && (selectionInitialLoading || !runtimeReady)"');
     expect(source).toContain("<v-skeleton-loader");
   });
 });

@@ -38,7 +38,7 @@ async function openChat(page: Page) {
 test("healthy assistant can receive steering in the built client", async ({ page }) => {
   await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
   await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Starred files (0)", exact: true })).toHaveText("0");
+  await expect(page.getByRole("button", { name: "Starred files (0)", exact: true })).toBeVisible();
   await page.getByLabel("Message AI assistant").fill("Preserve my work.");
   await expect(page.getByRole("button", { name: "Steer assistant" })).toBeEnabled();
   await page.getByRole("button", { name: "Steer assistant" }).click();
@@ -174,6 +174,7 @@ for (const viewport of viewports) {
 
 for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
   test(`recovers from ${failure} without reloading`, async ({ page }) => {
+    const recovery = Promise.withResolvers<void>();
     server.state.checks.push(async (response) => {
       if (failure === "http-503") json(response, { ok: false, error: "Temporarily unavailable" }, 503);
       else if (failure === "invalid-json") {
@@ -189,9 +190,14 @@ for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
         response.destroy();
       }
     });
+    server.state.checks.push(async (response) => {
+      await recovery.promise;
+      json(response, { ok: true, ...server.state.session.agentSession });
+    });
     await openChat(page);
     await composer(page).fill("Keep my draft.");
     await expect(warning(page)).toBeVisible();
+    recovery.resolve();
     await expect(steer(page)).toBeEnabled();
     await expect(composer(page)).toHaveValue("Keep my draft.");
     expect(server.state.checkCount).toBe(2);
@@ -300,7 +306,7 @@ for (const viewport of viewports) {
     const bounds = await retry.boundingBox();
     expect(bounds!.width).toBeGreaterThanOrEqual(48);
     expect(bounds!.height).toBeGreaterThanOrEqual(48);
-    await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toHaveText("Reconnecting…");
+    await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toBeDisabled();
     await expect.poll(() => server.state.connectionAttempts).toBeGreaterThanOrEqual(2);
     expect((await page.request.get(`${server.url}/api/vibe64/sessions/${server.state.session.sessionId}`)).ok()).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

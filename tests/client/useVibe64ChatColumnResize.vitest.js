@@ -175,9 +175,9 @@ describe("useVibe64ChatColumnResize", () => {
 
     expect(conversation).toContain("AssistantProgress");
     expect(conversation).toContain("DISPLAY_MESSAGE_CACHE_LIMIT = 500");
-    expect(conversation).toContain(":pending=\"turn.pending\"");
-    expect(conversation).toContain("turn.pending ? 'active' : 'completed'");
-    expect(conversation).toContain('pending: turn.pending === true');
+    expect(conversation).toContain(':pending="isWorking && entry === displayEntries.at(-1)"');
+    expect(conversation).toContain(':key="`${scrollKey}:${entry.key}`"');
+    expect(conversation).toContain("props.working ?? props.turns.some(turn => turn.pending)");
     expect(conversation).toContain("window.requestAnimationFrame(() =>");
     expect(conversation).toContain('scrollToLatestMessageNow({ behavior: "auto" })');
     expect(view).not.toContain("}, { deep: true });");
