@@ -49,6 +49,16 @@ its URL and native application identity and executes the suite. It restores a
 previously running target and waits for readiness, or stops the test Preview
 when there was no running target. Failures and cancellation use the same cleanup;
 restoration failures preserve the test failure and make the command fail.
+Shared agent instructions require focused batches with full stdout/stderr saved
+to local artifacts. Callers report counts, timings, exit status and relevant
+failure excerpts, expanding those artifacts only when needed. Startup, resource
+and restoration errors remain part of the result even when test assertions pass.
+The scoped runner reads the target's ready status rather than repeating startup
+after the target owner has already awaited readiness. Playwright authentication
+uses an isolated request context: it obtains the host's Preview cookie and runs
+the declared identity exchange without rendering extra application pages or
+launching another Chromium process. The test runner receives the same temporary
+cookie state; interactive browser identities remain separate.
 The scoped result retains structured provider refusal details even after
 restoring the normal Preview, including when restoration also fails. An
 explicit retry uses the original test launcher and its isolation/restoration

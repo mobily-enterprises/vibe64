@@ -10,7 +10,7 @@
       "source": "genesis:skills/genesis-program"
     },
     "genesis-project": {
-      "hash": "sha256:afcc061453393f15370553237d7f0ea998fa97b9010a0c127d350fd2e7f6c3a9",
+      "hash": "sha256:4afde6346dbe7996138062df6dbae938287c6bb15f958494256a1e26eb83f7ec",
       "source": "genesis:skills/genesis-project"
     }
   }

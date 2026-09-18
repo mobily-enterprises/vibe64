@@ -123,6 +123,7 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
 }
 
 async function prepareFixture(root, projectVersion, runtimeVersion = projectVersion, {
+  onEnsurePreview = null,
   previewFailure = "",
   previewUrl = "http://127.0.0.1:4104/home",
   withPreviewTarget = null,
@@ -169,6 +170,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
       withPreviewTarget,
       previewTestRunAdmission() { return null; },
       async ensurePreview() {
+        onEnsurePreview?.();
         return previewFailure
           ? {
               error: previewFailure,
@@ -296,6 +298,7 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
   let active = false;
   const selected = [];
   const fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
+    onEnsurePreview() { assert.fail("A scoped target has already completed startup."); },
     async withPreviewTarget(sessionId, targetId, operation, { waitUntilReady }) {
       assert.equal(sessionId, "playwright-1.61.1");
       assert.equal(active, false);
@@ -440,8 +443,8 @@ test("memory approval retains the original live command across the real wrapper/
         },
         async withPreviewTarget(sessionId, targetId, operation, { startTarget = (start) => start() }) {
           selected.push(targetId);
-          if (selected.length === 1) return { ok: false, code: "vibe64_capacity_rejected", error: "Tight memory.",
-            details: { admission: { id: admissionId, outcome: "tight", actions: ["start-anyway"] } } };
+          if (selected.length === 1) return { ok: false, code: "vibe64_capacity_rejected", error: "Resources unavailable.",
+            details: { admission: { id: admissionId, outcome: "unavailable", actions: ["recheck"] } } };
           await startTarget(() => { approvals += 1; });
           if (action === "start-failure") return { ok: false, exitCode: 1,
             code: "vibe64_command_failed", error: "The approved test target failed to start." };
@@ -457,7 +460,10 @@ test("memory approval retains the original live command across the real wrapper/
         cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
       });
       const completion = command.completion;
-      await waiting.promise;
+      await Promise.race([
+        waiting.promise,
+        completion.then((result) => assert.fail(`Command ended before memory approval: ${result.stderr || result.stdout}`))
+      ]);
       assert.equal(fixture.managedCommands.length, 0, "no test preparation or browser starts while waiting");
       const identity = { projectSlug: "example", sessionId, admissionId };
       const wrong = await fixture.commandService.resumeTestApproval({ ...identity, projectSlug: "other" }, () => assert.fail());
@@ -491,7 +497,7 @@ test("memory approval retains the original live command across the real wrapper/
         assert.equal(authorized, action === "script-change" ? 0 : 1);
         if (action === "accept") assert.match(result.stdout, /"managed":"1"/u);
         else if (action === "start-failure") {
-          assert.match(result.stdout, /Waiting for memory approval/u);
+          assert.match(result.stdout, /Waiting for resources/u);
           assert.match(result.stderr, /The approved test target failed to start\./u);
           assert.equal(fixture.managedCommands.length, 0, "failed target startup must not run tests");
         }

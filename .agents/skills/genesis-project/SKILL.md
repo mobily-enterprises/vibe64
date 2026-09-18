@@ -144,8 +144,14 @@ Neither is authority or proof; both may be regenerated with the Genesis
 
 ## Verify and report
 
-After the selected technology's workspace substrate exists, use the Genesis
-`verify` operation for the Stack's declared final checks. An unconfigured result
+During implementation, select the checks relevant to the change. Run the
+Stack's declared final checks through Genesis `verify` when required by the
+project's verification policy or the user's request, after the selected
+technology's workspace substrate exists. Finishing an item or resuming a
+session does not itself require a broad verification run. Keep full output in
+local artifacts, preserve exit status, and read summaries and relevant failure
+excerpts before expanding logs. Do not weaken assertions or omit required
+coverage to save time or tokens. An unconfigured result
 means the declared workspace or checks do not exist yet; it is not a failing
 check. Before reporting completion, compare the requested observable behavior,
 required inputs and resources, declared project operations, and focused evidence
