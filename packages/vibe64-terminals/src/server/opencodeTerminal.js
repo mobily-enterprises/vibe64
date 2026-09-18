@@ -72,7 +72,8 @@ import {
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
 const OPENCODE_MESSAGE_POLL_MS = 250;
-const OPENCODE_EVENT_READY_TIMEOUT_MS = 5_000;
+// A cold project event route initializes OpenCode plugins before replying.
+const OPENCODE_EVENT_READY_TIMEOUT_MS = 30_000;
 const OPENCODE_INTERRUPT_TIMEOUT_MS = 5_000;
 const OPENCODE_REASONING_PROGRESS_MAX_CHARS = 280;
 const OPENCODE_SESSION_PREFIX = "ses_vibe64_";
@@ -1426,7 +1427,8 @@ function createOpenCodeTerminalController({
       messageId: `${reason}-${fingerprint(
         context.sessionId,
         turn.threadId,
-        turn.id
+        turn.id,
+        turn.startedAt
       )}`,
       text: message
     });
@@ -1965,7 +1967,7 @@ function createOpenCodeTerminalController({
           error: text(error?.message) || "OpenCode prompt delivery failed.",
           ok: false,
           refreshRecommended: true,
-          retryable: error?.retryable === true || failureCode === "vibe64_opencode_start_timeout",
+          retryable: error?.retryable === true || ["vibe64_opencode_start_timeout", "vibe64_opencode_events_timeout"].includes(failureCode),
           thread: { id: currentThreadId },
           turn: openCodeTurnSnapshot(turns.get(context.key) || startingTurn, currentThreadId)
         };

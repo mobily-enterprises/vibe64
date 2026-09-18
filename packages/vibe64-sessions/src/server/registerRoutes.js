@@ -10,6 +10,7 @@ import {
   ACTION_ARCHIVE_SESSION,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
+  ACTION_CREATE_PULL_REQUEST,
   ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_SESSION,
@@ -145,6 +146,15 @@ function registerRoutes(http, {
     bodyLimit: 8 * 1024,
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Change the owner-controlled model access for an assistant provider."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/pull-request", {
+    actionId: ACTION_CREATE_PULL_REQUEST,
+    bodyLimit: 300_000,
+    buildInput: (request) => withVibe64User(request, {
+      ...routes.requestBody(request), sessionId: request.params.sessionId
+    }),
+    summary: "Publish session work on a new branch and create a GitHub pull request."
   });
 
   routes.actionRoute("POST", "/sessions", {

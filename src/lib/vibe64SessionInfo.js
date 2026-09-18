@@ -9,6 +9,7 @@ import {
   mdiSourceCommit
 } from "@mdi/js";
 import {
+  vibe64SessionPullRequest,
   shortVibe64SessionId
 } from "@/lib/vibe64SessionViewModel.js";
 
@@ -88,8 +89,17 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
   const turnId = text(agentTurn.id || agentTurn.turnId);
   const createdAt = text(session.manifest?.createdAt || session.createdAt);
   const repository = repositoryFact(session, project);
+  const pullRequest = vibe64SessionPullRequest(session);
 
   return [
+    ...(pullRequest ? [{
+      key: "pull-request", label: pullRequest.number ? `PR #${pullRequest.number}` : "Pull request branch",
+      value: pullRequest.title || pullRequest.headBranch, href: pullRequest.url, icon: mdiGithub,
+      detail: `Save to ${pullRequest.headRepository}:${pullRequest.headBranch}`
+    }, {
+      key: "save-destination", label: "Save destination", value: `${pullRequest.headRepository}:${pullRequest.headBranch}`,
+      icon: mdiSourceBranch, detail: "Save updates this pull request branch"
+    }] : []),
     {
       copyValue: sessionId,
       detail: "Vibe64 session identifier",

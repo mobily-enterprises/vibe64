@@ -3,11 +3,12 @@ import { compile } from "@vue/compiler-dom";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ command: null, requests: [], selectionReload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], selectionReload: vi.fn() }));
 vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
-vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent() {} }));
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent(options) { mocks.realtime.push(options); } }));
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
   useVibe64ProjectsResource: () => ({
     loadError: Vue.ref(""), projects: Vue.ref([]), isLoading: Vue.ref(false),
@@ -52,6 +53,7 @@ vi.mock("vuetify/components/VForm", () => ({ VForm: passthrough("form") }));
 vi.mock("vuetify/components/VTextField", () => ({ VTextField: passthrough("input") }));
 
 import { useVibe64AppPage } from "../../src/composables/useVibe64AppPage.js";
+import { useVibe64Issues } from "../../src/composables/useVibe64Issues.js";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
 
 const filename = new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url).pathname;
@@ -71,6 +73,7 @@ async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
 async function mountPage() {
   mocks.requests = [];
+  mocks.realtime = [];
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: "/app/project/:slug", component: { render: () => null } },
     { path: "/app/project/:slug/dashboard/files", component: { render: () => null } },
@@ -100,10 +103,12 @@ async function mountPage() {
     setText: (node, text) => { node.text = text; }
   });
   let page;
+  let issues;
   const sessionMounted = vi.fn();
   const Session = Vue.defineComponent({ setup() { sessionMounted(); return () => Vue.h("article", "Assistant ready"); } });
   const app = renderer.createApp({ setup() {
     page = useVibe64AppPage();
+    issues = useVibe64Issues(Vue.ref({ active: false }));
     return () => Vue.h(ProjectSelectionGate, {
       runtimeReady: page.projectRuntimeReady.value,
       runtimeError: page.projectRuntimeError.value,
@@ -111,6 +116,8 @@ async function mountPage() {
     }, { default: () => Vue.h(Session) });
   } });
   app.use(router);
+  const queryClient = new QueryClient();
+  app.use(VueQueryPlugin, { queryClient });
   for (const [name, tag] of Object.entries({
     "v-skeleton-loader": "div", "v-alert": "aside", "v-btn": "button",
     "v-text-field": "input", "v-form": "form", "v-sheet": "section"
@@ -120,7 +127,7 @@ async function mountPage() {
   app.mount(root);
   dispose.push(() => app.unmount());
   await flush();
-  return { page, root, router, sessionMounted };
+  return { page, issues, queryClient, root, router, sessionMounted };
 }
 function find(node, type) {
   if (node.type === type) return node;
@@ -129,6 +136,36 @@ function find(node, type) {
 }
 
 describe("opening a routed project", () => {
+  it("refreshes only the notified project's GitHub caches and retains the comment draft and filters", async () => {
+    const view = await mountPage();
+    await view.router.replace({ query: { issue: "40", issueState: "closed", issueSearch: "draft" } });
+    view.issues.draft.value = "An unsent comment";
+    const base = "/api/app/dogandgroom/vibe64";
+    const keys = [
+      ["vibe64.issues", `${base}/issues`, { state: "closed" }],
+      ["vibe64.issue", `${base}/issues/40`, ""],
+      ["vibe64.issue", `${base}/issues/41`, "older-page"],
+      ["vibe64.issueLabels", `${base}/issue-labels`],
+      ["vibe64.pullRequests", `${base}/pull-requests`, { state: "open" }],
+      ["vibe64.pullRequest", `${base}/pull-requests`, "7"]
+    ];
+    const unrelated = ["vibe64.issue", "/api/app/other/vibe64/issues/40", ""];
+    view.queryClient.setQueryData(undefined, { ok: true });
+    for (const key of [...keys, unrelated]) view.queryClient.setQueryData(key, { ok: true });
+    const event = { payload: { projectSlug: "dogandgroom", githubRefresh: true } };
+    const listener = mocks.realtime.find((entry) => entry.matches(event));
+    expect(listener).toBeDefined();
+    expect(listener.matches({ payload: { projectSlug: "other", githubRefresh: true } })).toBe(false);
+    expect(listener.matches({ payload: { projectSlug: "dogandgroom" } })).toBe(false);
+    await listener.onEvent(event);
+    for (const key of keys) expect(view.queryClient.getQueryState(key).isInvalidated).toBe(true);
+    expect(view.queryClient.getQueryState(unrelated).isInvalidated).toBe(false);
+    expect(view.issues.draft.value).toBe("An unsent comment");
+    expect(view.router.currentRoute.value.query).toEqual({ issue: "40", issueState: "closed", issueSearch: "draft" });
+    mocks.requests[0].resolve(success);
+    await flush();
+  });
+
   it("holds cached session content until the direct-link open request succeeds", async () => {
     const view = await mountPage();
     expect(mocks.requests).toHaveLength(1);

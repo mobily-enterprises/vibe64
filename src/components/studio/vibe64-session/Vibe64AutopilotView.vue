@@ -17,6 +17,7 @@
         <span>{{ sessionGithubActor.displayLabel }}</span>
       </div>
     </Teleport>
+    <Vibe64CreatePullRequestDialog v-if="githubProject" v-model="createPullRequestOpen" :dashboard-context="dashboardContext" />
     <section
       ref="mainChat"
       class="studio-autopilot__chat-panel"
@@ -79,6 +80,11 @@
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
               <v-list-item
+                v-if="githubProject && !sessionPullRequest?.number" min-height="48"
+                :prepend-icon="mdiSourcePull" title="Create pull request" subtitle="Publish this session on a new branch"
+                :disabled="sourceOperationsSuspended || !assistantDirectAllowed" @click="createPullRequestOpen = true"
+              />
+              <v-list-item
                 v-if="props.sessionRenewal?.visible"
                 class="studio-autopilot__session-action-item"
                 data-vibe64-session-renew-action
@@ -101,6 +107,11 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
+          <v-btn
+            v-if="githubProject && !sessionPullRequest?.number" :icon="mdiSourcePull" size="48" variant="text"
+            aria-label="Create pull request" title="Create pull request" :disabled="sourceOperationsSuspended || !assistantDirectAllowed"
+            @click="createPullRequestOpen = true"
+          />
           <v-badge
             v-if="props.sessionRenewal?.visible"
             :color="sessionRenewalActionPresentation.color || 'primary'"
@@ -138,6 +149,10 @@
       </header>
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
+        <v-sheet v-if="githubProject && sessionPullRequest" color="surface-light" rounded="lg" class="pa-2 text-body-small" style="overflow-wrap: anywhere">
+          <strong>{{ sessionPullRequest.number ? `PR #${sessionPullRequest.number}` : 'Pull request branch' }}</strong>
+          · Save to {{ sessionPullRequest.headRepository }}:{{ sessionPullRequest.headBranch }}
+        </v-sheet>
         <v-sheet
           v-if="connectionRecoveryVisible"
           class="studio-autopilot__connection-recovery"
@@ -802,6 +817,8 @@ import {
   mdiSourcePull,
   mdiStop,
 } from "@mdi/js";
+import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
+import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
@@ -823,6 +840,7 @@ import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -1252,6 +1270,9 @@ const composerSupportStatusVisible = computed(() => Boolean(
   composerAssistantLabel.value || promptHintsVisible.value
 ));
 
+const createPullRequestOpen = ref(false);
+const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
+const githubProject = computed(() => githubProjectAvailable(props.projectContext));
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,

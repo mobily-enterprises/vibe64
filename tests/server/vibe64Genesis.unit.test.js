@@ -194,6 +194,11 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /vibe64-preview status/u);
   assert.match(session, /vibe64-env status/u);
   assert.match(session, /vibe64-database refresh/u);
+  assert.match(session, /vibe64-github refresh/u);
+  assert.doesNotMatch(vibe64Driver({
+    conversationKind: "main", scope: "session",
+    session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false }
+  }), /vibe64-github/u);
   assert.match(session, /data-overview\.json/u);
   assert.match(session, /vibe64-database overview --json/u);
   assert.match(session, /Preserve authored groupings, classify new tables/u);

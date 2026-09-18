@@ -18,6 +18,7 @@
       "requires": [
         "runtime.actions",
         "runtime.env",
+        "runtime.events",
         "runtime.http"
       ]
     },

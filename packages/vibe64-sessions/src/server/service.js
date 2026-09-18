@@ -447,11 +447,18 @@ function createService({
     const sessions = typeof runtime.listSessionSummaries === "function"
       ? await runtime.listSessionSummaries({ statusGroup: "open" })
       : [];
+    const source = await runtime.getSession(sourceSessionId, { inspectSource: false });
+    const authorityKey = (session) => {
+      const source = JSON.parse(session?.metadata?.github_pull_request || "null");
+      return source ? `${source.headRepository}:${source.headBranch}` : "project";
+    };
+    const sourceAuthority = authorityKey(source);
     const deliveries = await Promise.allSettled(sessions.map(async (candidate) => {
       const candidateId = text(candidate?.sessionId);
       if (!candidateId || candidateId === sourceSessionId) {
         return;
       }
+      if (authorityKey(candidate) !== sourceAuthority) return;
       await runtime.store.writeMetadataValue(
         candidateId,
         "canonical_commit",
@@ -1021,6 +1028,9 @@ function createService({
     async createSession(input = {}) {
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
+        const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
+          number: input.pullRequestNumber, vibe64User
+        });
         const assistantSelection = await resolveAssistantSelection(
           input.assistantSelection,
           vibe64User,
@@ -1047,12 +1057,14 @@ function createService({
           }
           const session = await runtime.createSession({
             metadata: {
+              ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
               [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
                 assistantSelection
               ),
               created_by: text(vibe64User?.username || vibe64User?.name)
             },
             sourceContext: {
+              ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
               vibe64User
             }
           });
@@ -1243,6 +1255,26 @@ function createService({
           session
         });
       }, "Vibe64 could not inspect this changed file.");
+    },
+
+    async createSessionPullRequest(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const vibe64User = trustedAssistantUser(input);
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        await terminals.requireAssistantAccess(sessionId, { runtime, session, vibe64User });
+        try {
+          return await terminals.createSessionPullRequest(sessionId, {
+            title: input.title, body: input.body, draft: input.draft,
+            operationId: crypto.randomUUID(), runtime, session, vibe64User
+          });
+        } finally {
+          await publishSessionChanged(sessionId, {
+            operation: "updated", originId: text(input.originId), reason: "session-pull-request",
+            session: await runtime.getSession(sessionId, { inspectSource: false })
+          });
+        }
+      }, "The pull request could not be confirmed. Retry to check GitHub and continue publishing.");
     },
 
     async saveSessionWork(sessionId, input = {}) {

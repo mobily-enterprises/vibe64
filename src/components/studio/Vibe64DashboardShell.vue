@@ -1,6 +1,7 @@
 <script setup>
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import { computed, provide } from "vue";
+import { useRoute } from "vue-router";
 import SectionContainerShell from "/src/components/SectionContainerShell.vue";
 import {
   activeSessionMobileSectionLinks,
@@ -16,6 +17,9 @@ const props = defineProps({
     type: Object
   }
 });
+
+const route = useRoute();
+const githubBrowserOpen = computed(() => /\/dashboard\/(issues|pull-requests)\/?$/u.test(route.path));
 
 const { dashboardSectionLinks } = useVibe64DashboardPage({
   dashboardContext: () => props.dashboardContext
@@ -33,9 +37,9 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
 </script>
 
 <template>
-  <SectionContainerShell :mobile-section-links="mobileDashboardSectionLinks">
+  <SectionContainerShell :mobile-section-links="mobileDashboardSectionLinks" :navigation-collapsed="githubBrowserOpen">
     <template #tabs>
-      <ShellOutlet target="app-dashboard:primary-menu" />
+      <ShellOutlet target="app-dashboard:primary-menu" :context="dashboardContext" />
       <ShellOutlet
         target="app-dashboard:active-session-menu"
         :context="{ activeSessionNav: activeSessionNav || {} }"

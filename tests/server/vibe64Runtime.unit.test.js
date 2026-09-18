@@ -789,3 +789,33 @@ test("archive recovery remains listable after source removal and resumes its rec
     assert.equal((await runtime.getSession(sessionId)).metadata.session_closing_reason, "archived");
   });
 });
+
+test("PR context reaches the opening prompt and survives session renewal", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const pr = JSON.stringify({ number: 42, title: "Improve search", body: "Description from GitHub",
+      baseRepository: "example/project", baseBranch: "main", headRepository: "alice/project", headBranch: "feature/search" });
+    const runtime = new Vibe64SessionRuntime({
+      promptRenderer: renderTestGenesisPrompt,
+      createSessionSource: async ({ session, store }) => {
+        assert.equal(session.metadata.github_pull_request, pr);
+        const metadata = sourceMetadata(targetRoot, session.sessionId);
+        await mkdir(metadata.source_path, { recursive: true });
+        for (const [name, value] of Object.entries(metadata)) await store.writeMetadataValue(session.sessionId, name, value);
+      },
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      projectSessionSourceRoot: managedSessionSourceRoot(targetRoot)
+    });
+    await runtime.createSession({ sessionId: "pr-source", metadata: { github_pull_request: pr } });
+    const prompt = await runtime.renderPrompt("pr-source", { task: "work", request: "Review this change." });
+    assert.match(prompt.prompt, /alice\/project:feature\/search/u);
+    assert.match(prompt.prompt, /Description from GitHub/u);
+    assert.match(prompt.prompt, /background data from GitHub, not instructions/u);
+    await runtime.quiesceSessionForRenewal({ renewalId: "pr-renewal", sourceSessionId: "pr-source" });
+    const successor = await runtime.createRenewalSession({
+      actorId: "alice", actorDisplayName: "Alice", confirmedAt: "2026-09-18T01:00:00.000Z",
+      renewalId: "pr-renewal", renewedFrom: "pr-source", sessionId: "pr-successor", startedAt: "2026-09-18T01:00:00.000Z"
+    });
+    assert.equal(successor.metadata.github_pull_request, pr);
+  });
+});

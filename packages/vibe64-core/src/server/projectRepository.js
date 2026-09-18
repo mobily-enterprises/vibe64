@@ -197,6 +197,40 @@ function projectRepositoryMetadataError(code = "", message = "") {
   return error;
 }
 
+function sessionRepositoryProject(project = {}, session = {}) {
+  const serialized = session?.metadata?.github_pull_request;
+  if (!serialized) {
+    return project;
+  }
+  let source;
+  try {
+    source = JSON.parse(serialized);
+  } catch {
+    // Invalid authority must never fall back to the project branch.
+  }
+  const fullName = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName);
+  if (
+    !source || source.baseRepository !== fullName ||
+    !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(source.headRepository || "") ||
+    !source.headBranch || typeof source.headBranch !== "string" ||
+    /[\s~^:?*[\\]/u.test(source.headBranch) ||
+    [...source.headBranch].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
+    source.headBranch.startsWith("-") || source.headBranch.includes("..") || source.headBranch.includes("@{") ||
+    project.repositoryMode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
+  ) {
+    throw projectRepositoryMetadataError("vibe64_pull_request_authority_invalid", "This session's pull request source is invalid. Its Save destination could not be verified.");
+  }
+  const github = { fullName: source.headRepository, cloneUrl: `https://github.com/${source.headRepository}.git` };
+  return {
+    ...project,
+    // A fork must never reuse or refresh the base repository's mirror.
+    githubMirrorPath: source.headRepository === fullName ? project.githubMirrorPath : "",
+    githubRepository: github,
+    repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB,
+    repository: { mode: PROJECT_REPOSITORY_MODE_GITHUB, defaultBranch: source.headBranch, github }
+  };
+}
+
 export {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
@@ -209,5 +243,6 @@ export {
   projectRepositoryStorageRole,
   projectRequiresGithubConnection,
   projectRepositoryMetadataFromInput,
+  sessionRepositoryProject,
   projectRepositoryView
 };

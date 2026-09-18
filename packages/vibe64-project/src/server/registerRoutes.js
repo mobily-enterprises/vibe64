@@ -53,6 +53,61 @@ function registerRoutes(http, {
   routes.serviceRoute("GET", "/repository/remote", {
     summary: "Read local Git remote configuration and last observed freshness."
   }, () => project.repositoryRemote());
+
+  routes.serviceRoute("GET", "/issues", {
+    summary: "List GitHub issues for this project."
+  }, (request) => project.githubIssues({
+    ...routes.requestQuery(request), operation: "list", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("POST", "/issues", {
+    bodyLimit: 300_000,
+    summary: "Create a GitHub issue in this project."
+  }, (request) => project.githubIssues({
+    title: routes.requestBody(request).title,
+    body: routes.requestBody(request).body,
+    labels: routes.requestBody(request).labels,
+    operation: "create", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("GET", "/issue-labels", {
+    summary: "Read this repository's GitHub labels and label permissions."
+  }, (request) => project.githubIssues({
+    operation: "labels", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("PUT", "/issues/:number/labels", {
+    summary: "Set the labels on a GitHub issue."
+  }, (request) => project.githubIssues({
+    number: request.params.number, labels: routes.requestBody(request).labels,
+    operation: "set-labels", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("GET", "/pull-requests", {
+    summary: "List GitHub pull requests for this project."
+  }, (request) => project.githubPullRequests({
+    ...routes.requestQuery(request), operation: "list", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("GET", "/pull-requests/:number", {
+    summary: "Read a GitHub pull request."
+  }, (request) => project.githubPullRequests({
+    number: request.params.number, operation: "read", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("GET", "/issues/:number", {
+    summary: "Read a GitHub issue and its comments."
+  }, (request) => project.githubIssues({
+    ...routes.requestQuery(request), number: request.params.number, operation: "read", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("POST", "/issues/:number/comments", {
+    bodyLimit: 300_000,
+    summary: "Comment on this project's GitHub issue."
+  }, (request) => project.githubIssues({
+    body: routes.requestBody(request).body, number: request.params.number,
+    originId: routes.requestBody(request).originId,
+    operation: "comment", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("PATCH", "/issues/:number", {
+    summary: "Close or reopen this project's GitHub issue."
+  }, (request) => project.githubIssues({
+    state: routes.requestBody(request).state, number: request.params.number,
+    operation: "state", vibe64User: request.vibe64User || null
+  }));
   routes.actionRoute("POST", "/repository/remote", {
     actionId: ACTION_REPOSITORY_REMOTE,
     body: projectRemoteInputValidator,

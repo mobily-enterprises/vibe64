@@ -71,7 +71,11 @@ The same authority check returns the verified source mode, repository, branch
 ref and commit to session renewal, so handover creation uses the project
 configuration that Git actually checked.
 Missing configured branch or repository authority fails before Git runs;
-session metadata cannot supply a replacement canonical authority.
+legacy source metadata cannot supply a replacement canonical authority. GitHub
+PR sessions instead use the server-resolved repository and head branch bound at
+creation or PR publishing. Save, Update, history and renewal use that same
+explicit authority. Canonical notifications reach only sessions on that source
+branch. Fork sessions do not refresh the base project's clone cache.
 
 Each Save or Update attempt starts a fresh visible transcript. Retrying after a
 failure does not mix the earlier attempt's errors into the new operation.

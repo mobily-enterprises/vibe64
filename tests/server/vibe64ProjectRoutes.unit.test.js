@@ -26,6 +26,37 @@ function routeHttp(app) {
   return app.http;
 }
 
+test("issue comment routes keep browser origin but use the authenticated GitHub actor", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      let received;
+      registerRoutes(routeHttp(app), {
+        projectContext,
+        project: { async githubIssues(input) { received = input; return { ok: true }; } },
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+      const route = findRegisteredRoute(app, {
+        method: "POST", path: `${apiRouteBase}/vibe64/issues/:number/comments`
+      });
+      const user = { id: "viewer", role: "member" };
+      const body = {
+        body: "A comment", originId: "tab:writer", operation: "create",
+        number: 99, repository: "another/project", vibe64User: { id: "forged" }
+      };
+      const reply = testReply();
+      await route.handler({
+        body, input: { body }, params: routeProjectParams({ number: "42" }), vibe64User: user
+      }, reply);
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(received, {
+        body: "A comment", originId: "tab:writer", operation: "comment", number: "42", vibe64User: user
+      });
+    });
+  });
+});
+
 test("project settings routes own the development database choice outside Env", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {

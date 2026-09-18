@@ -3,7 +3,7 @@ import { defineFeature } from "@jskit-ai/kernel/server/features";
 import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
-import { createProjectActions } from "./actions.js";
+import { createProjectActions, createVibe64ProjectChangedPublisher } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 
@@ -12,6 +12,7 @@ const Vibe64ProjectProvider = defineFeature({
   domain: "vibe64-project",
   requires: {
     env: "runtime.env",
+    events: "runtime.events",
     logger: "runtime.logger",
     http: "runtime.http"
   },
@@ -22,10 +23,11 @@ const Vibe64ProjectProvider = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  setup({ env, http, logger }) {
+  setup({ env, events, http, logger }) {
     const project = createService({
       env,
       logger,
+      publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
       projectContext: getStudioProjectContext()
     });
     registerRoutes(http, {

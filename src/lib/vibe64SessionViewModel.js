@@ -6,6 +6,13 @@ function shortVibe64SessionId(sessionId = "") {
   return text(sessionId).replace(/^\d{4}-/u, "");
 }
 
+function vibe64SessionPullRequest(session = {}) {
+  try {
+    const source = JSON.parse(session?.metadata?.github_pull_request || "null");
+    return source?.headRepository && source?.headBranch ? source : null;
+  } catch { return null; }
+}
+
 function vibe64SessionDisplayTitle(session = {}) {
   const label = text(session.sessionName || session.metadata?.label);
   if (label) {
@@ -45,6 +52,7 @@ export {
   isOpenVibe64Session,
   shortVibe64SessionId,
   vibe64SessionDisplayTitle,
+  vibe64SessionPullRequest,
   vibe64SessionRevision,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel

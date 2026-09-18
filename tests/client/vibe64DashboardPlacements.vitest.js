@@ -5,7 +5,8 @@ import {
   mdiConnection,
   mdiFileCogOutline,
   mdiHeartPulse,
-  mdiHistory
+  mdiHistory,
+  mdiGithub
 } from "@mdi/js";
 
 import getPlacements, {
@@ -28,12 +29,13 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(6);
+    expect(labels).toHaveLength(7);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
       "Health",
       "Integrations",
+      "Issues/PR",
       "Project settings",
       "Session History"
     ]));
@@ -48,7 +50,8 @@ describe("Vibe64 dashboard placements", () => {
       ["Health", mdiHeartPulse],
       ["Integrations", mdiConnection],
       ["Project settings", mdiCogOutline],
-      ["Session History", mdiHistory]
+      ["Session History", mdiHistory],
+      ["Issues/PR", mdiGithub]
     ]));
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);

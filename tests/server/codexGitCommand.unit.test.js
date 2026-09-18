@@ -8,6 +8,9 @@ import { pathToFileURL } from "node:url";
 
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
+import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
+import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/actions.js";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
   currentOsUser
@@ -103,11 +106,13 @@ function githubSession(root = "", sessionId = "github-session") {
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
   metadataReads = null,
+  refreshGithub,
   runGatewayCommand
 } = {}) {
   return createCodexGitCommandService({
     authorizeActorAccess,
     projectService: {
+      refreshGithub,
       async createSessionStore() {
         return {
           async readMetadataValue(sessionId, name) {
@@ -133,6 +138,88 @@ function serviceForSession(session = {}, {
     runGatewayCommand
   });
 }
+
+test("GitHub refresh uses the managed socket and publishes only its bound project", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const events = [];
+    const projects = ["first", "second"].map((slug) => ({ slug, path: path.join(root, slug),
+      githubRepository: { fullName: `owner/${slug}` }, repositoryMode: "local_source" }));
+    const projectService = createProjectService({
+      projectContext: {
+        targetRoot: projects[0].path,
+        requestContextMatchesSelectedProject: () => false,
+        listWorkspaceProjects: async () => ({ projects })
+      },
+      publishProjectChanged: createVibe64ProjectChangedPublisher({ events: { publish: async (event) => events.push(event) } })
+    });
+    const service = serviceForSession(session, {
+      authorizeActorAccess: async ({ actor }) => ({ ok: actor.sessionId === session.sessionId }),
+      refreshGithub: projectService.refreshGithub,
+      runGatewayCommand: async () => { throw new Error("Refresh must not read credentials or execute GitHub commands."); }
+    });
+    const prepared = await runWithProjectRequestContext({ slug: "second", targetRoot: projects[1].path }, () => prepareCodexGitCommand({
+      commandService: service, sessionId: session.sessionId, stateRoot: path.join(root, "state"),
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") }
+    }));
+    const command = path.join(prepared.hostWrapperDir, "vibe64-github");
+    const env = { ...process.env, ...prepared.env };
+    const options = { cwd: session.metadata.source_path, env };
+    const result = await runWithProjectRequestContext({ slug: "first", targetRoot: projects[0].path }, () =>
+      runProcessWithInput(command, ["refresh"], options));
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.stdout, "Vibe64 GitHub refresh requested.\n");
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0].realtime.payload, { projectSlug: "second", githubRefresh: true, reason: "github-refreshed" });
+    for (const override of [
+      { VIBE64_CODEX_GIT_COMMAND_SESSION_ID: "another-session" },
+      { VIBE64_CODEX_GIT_COMMAND_TOKEN: "invalid" },
+      { VIBE64_CODEX_GIT_COMMAND_GENERATION: "stale" }
+    ]) {
+      const rejected = await runProcessWithInput(command, ["refresh"], { ...options, env: { ...env, ...override } });
+      assert.equal(rejected.exitCode, 1);
+      assert.match(rejected.stderr, /vibe64_agent_control_unavailable/u);
+    }
+    const invalid = await runProcessWithInput(command, ["refresh", "--project", "first"], options);
+    assert.equal(invalid.exitCode, 1);
+    assert.match(invalid.stderr, /Usage: vibe64-github refresh/u);
+    assert.equal(events.length, 1);
+  });
+});
+
+test("GitHub refresh rejects non-GitHub sessions and revoked actor access", async () => {
+  await withTemporaryRoot(async (root) => {
+    for (const session of [sessionSource(root), githubSession(root)]) {
+      const service = serviceForSession(session, {
+        authorizeActorAccess: async () => ({ ok: false, error: "Access revoked." }),
+        refreshGithub: async () => { assert.fail("Rejected sessions must not publish a refresh."); }
+      });
+      const result = await service.run({ command: "vibe64-github", args: ["refresh"], sessionId: session.sessionId });
+      assert.equal(result.ok, false);
+      assert.equal(result.statusCode, 403);
+    }
+  });
+});
+
+test("GitHub refresh reports publication failures through the real wrapper", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const prepared = await prepareCodexGitCommand({
+      commandService: serviceForSession(session, {
+        refreshGithub: async () => { throw new Error("Refresh delivery failed."); }
+      }),
+      sessionId: session.sessionId, stateRoot: path.join(root, "state"),
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") }
+    });
+    const result = await runProcessWithInput(path.join(prepared.hostWrapperDir, "vibe64-github"), ["refresh"], {
+      cwd: session.metadata.source_path, env: { ...process.env, ...prepared.env }
+    });
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Refresh delivery failed/u);
+  });
+});
 
 test("Codex runs local Git inside the managed session source", async () => {
   await withTemporaryRoot(async (root) => {

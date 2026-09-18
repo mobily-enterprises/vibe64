@@ -16,6 +16,7 @@ test("project and sessions expose only named Feature capabilities", () => {
   assert.equal(Vibe64ProjectProvider.id, "vibe64.project");
   assert.deepEqual(Vibe64ProjectProvider.requires, {
     env: "runtime.env",
+    events: "runtime.events",
     logger: "runtime.logger",
     http: "runtime.http",
     actionCatalogue: "runtime.actions"
@@ -78,10 +79,11 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.projects.list",
     "vibe64.project.projects.select",
     "vibe64.project.prompt-hints.save",
+    "vibe64.project.repository.remote",
     "vibe64.project.settings.read",
     "vibe64.project.templates.apply"
   ]);
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 1);
+  assert.equal(projectRoutes.length, projectActions[0].actions.length + 11);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,
@@ -156,6 +158,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.message-suggestions.withdraw",
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",
+    "vibe64.sessions.pull-request.create",
     "vibe64.sessions.renewal.cancel",
     "vibe64.sessions.renewal.confirm",
     "vibe64.sessions.renewal.draft.request",

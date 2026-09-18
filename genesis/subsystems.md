@@ -2,7 +2,8 @@
 
 ## `projects` Project definition
 
-Owns project discovery and the portable collaboration, engineering and deployment settings.
+Owns project discovery, the portable collaboration, engineering and deployment
+settings, and the project-wide GitHub issue and pull request workflows.
 
 ### Program
 
@@ -10,6 +11,8 @@ Owns project discovery and the portable collaboration, engineering and deploymen
 - `genesis/program/projects/catalog.md`
 - `genesis/program/projects/collaboration-approach.md`
 - `genesis/program/projects/engineering-approach.md`
+- `genesis/program/projects/github-issues.md`
+- `genesis/program/projects/github-pull-requests.md`
 
 ### Data owned
 

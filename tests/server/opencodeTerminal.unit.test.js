@@ -55,6 +55,63 @@ test("OpenCode changeover delivers one combined prompt, retains authored text, a
   await harness.controller.waitForTurn("session-1");
 });
 
+test("OpenCode waits for a cold event connection before submitting a prompt", { timeout: 10_000 }, async (t) => {
+  let ready = false;
+  const harness = await controllerHarness({
+    async *events(_id, { onReady, signal }) {
+      await new Promise((resolve) => setTimeout(resolve, 5_100));
+      signal.throwIfAborted();
+      ready = true;
+      onReady();
+      yield { data: { type: "server.connected" } };
+      await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+    }
+  });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const pending = harness.controller.sendMessage("session-1", { message: "Hello", messageId: "cold-events" });
+  assert.equal(harness.promptCalls.length, 0);
+  const result = await pending;
+  assert.equal(ready, true);
+  assert.equal(result.delivered, true, JSON.stringify(result));
+  assert.equal(harness.promptCalls.length, 1);
+  await harness.controller.waitForTurn("session-1");
+});
+
+test("OpenCode resend records its provider failure separately from an earlier connection failure", async (t) => {
+  let attempt = 0;
+  const harness = await controllerHarness({
+    assistantError: {
+      name: "APIError",
+      data: { message: "OpenCode's free tier can only be used from within OpenCode" }
+    },
+    async *events(_id, { onReady, signal }) {
+      if (++attempt === 1) {
+        throw Object.assign(new Error("OpenCode's event connection did not become ready. Try sending again."), {
+          code: "vibe64_opencode_events_timeout"
+        });
+      }
+      onReady();
+      yield { data: { type: "server.connected" } };
+      await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+    }
+  });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const input = { message: "Hello! My name is Tony", messageId: "same-message-on-resend" };
+  const first = await harness.controller.sendMessage("session-1", input);
+  assert.equal(first.delivered, false);
+  assert.equal(first.retryable, true);
+  assert.equal(harness.promptCalls.length, 0);
+  assert.equal((await harness.controller.sendMessage("session-1", input)).delivered, true);
+  const result = await harness.controller.waitForTurn("session-1");
+  assert.equal(result.active, false);
+  assert.equal(result.state, "failed");
+  assert.equal(harness.promptCalls.length, 1);
+  assert.equal(harness.systemMessages.length, 2);
+  assert.notEqual(harness.systemMessages[0].messageId, harness.systemMessages[1].messageId,
+    "Transcript deduplication must not discard the resend's failure");
+  assert.match(harness.systemMessages[1].text, /free tier can only be used/);
+});
+
 const renewalSource = Object.freeze({
   authority: "github",
   commit: "a".repeat(40),

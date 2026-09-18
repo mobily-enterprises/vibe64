@@ -4,6 +4,7 @@ const REPOSITORY_STATUS_SESSION_REASONS = new Set([
   "codex-turn-checkpoint-updated",
   "opencode-server-turn-idle",
   "repository-canonical-changed",
+  "session-pull-request",
   "session-repository-checked",
   "session-save-completed",
   "session-save-failed",
@@ -17,6 +18,7 @@ const REPOSITORY_STATUS_SESSION_REASONS = new Set([
 
 const REPOSITORY_CANONICAL_RECHECK_REASONS = new Set([
   "repository-canonical-changed",
+  "session-pull-request",
   "session-save-failed",
   "session-update-failed"
 ]);

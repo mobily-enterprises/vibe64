@@ -1,11 +1,13 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
+import { githubProjectAvailable } from "./lib/vibe64GithubProject.js";
 import {
   mdiAccountKeyOutline,
   mdiCogOutline,
   mdiConnection,
   mdiFileCogOutline,
   mdiHeartPulse,
-  mdiHistory
+  mdiHistory,
+  mdiGithub
 } from "@mdi/js";
 import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
@@ -122,6 +124,21 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
 function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
   return activeSessionNav?.visible === true;
 }
+
+function githubProjectVisible({ projectContext = {} } = {}) {
+  return githubProjectAvailable(projectContext);
+}
+
+addPlacement({
+  id: "vibe64.issues.link", target: "page.section-nav", owner: "app-dashboard", kind: "link",
+  surfaces: ["app"], order: 325,
+  props: {
+    label: "Issues/PR", icon: mdiGithub, surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/issues", unscopedSuffix: "/project/[slug]/dashboard/issues",
+    visibleWhen: githubProjectVisible
+  },
+  when: githubProjectVisible
+});
 
 addPlacement({
   id: "vibe64.project-settings.link",

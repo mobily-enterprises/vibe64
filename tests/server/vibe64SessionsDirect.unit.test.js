@@ -11,6 +11,7 @@ import {
   ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
   ACTION_INSPECT_REPOSITORY_VERSION_FILES,
   ACTION_ARCHIVE_SESSION,
+  ACTION_CREATE_PULL_REQUEST,
   ACTION_CREATE_SESSION,
   ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_INSPECT_ASSISTANT_ACCESS,
@@ -246,6 +247,7 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_INSPECT_SESSION_CHANGES,
     ACTION_INSPECT_SESSION_CHANGE_DIFF,
     ACTION_INSPECT_SESSION_WORK,
+    ACTION_CREATE_PULL_REQUEST,
     ACTION_SAVE_SESSION_WORK,
     ACTION_CHECK_SESSION_UPDATES,
     ACTION_UPDATE_SESSION_WORK,
@@ -3214,5 +3216,20 @@ test("integration setup skip authorizes the actor before changing saved conversa
     assert.equal(events[0][0], "skip-request");
     assert.equal(events[0][1].reason, "integration-setup-skipped");
     assert.equal((await store.readConversationLog("skip-request")).length, 1);
+  });
+});
+
+test("PR session creation binds only the server-resolved source and exact head commit", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    const source = { number: 42, title: "Improve search", body: "GitHub description", headRepository: "alice/project",
+      baseRepository: "example/project", baseBranch: "main", headBranch: "feature/search", headCommit: "a".repeat(40) };
+    let requested;
+    harness.project.resolvePullRequestSource = async (input) => { requested = input.number; return source; };
+    const result = await harness.service.createSession({ pullRequestNumber: 42, headBranch: "main", github_pull_request: "untrusted" });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(requested, 42);
+    assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.github_pull_request), source);
+    assert.equal(harness.creationInputs[0].sourceContext.expectedCommit, source.headCommit);
   });
 });

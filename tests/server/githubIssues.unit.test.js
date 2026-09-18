@@ -1,0 +1,195 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { githubIssues } from "../../packages/vibe64-project/src/server/githubIssues.js";
+import getPlacements from "../../src/placement.js";
+
+const project = { repositoryMode: "github", githubRepository: { fullName: "example/project" } };
+const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
+const issue = { number: 7, state: "OPEN", viewerCanClose: true, viewerCanReopen: true,
+  comments: { nodes: [], totalCount: 0, pageInfo: { hasPreviousPage: false } } };
+const success = (body) => ({ ok: true, stdout: JSON.stringify(body) });
+
+test("Issues is project-wide and both navigation surfaces hide it without GitHub", () => {
+  const placement = getPlacements().find((entry) => entry.id === "vibe64.issues.link");
+  assert.equal(placement.owner, "app-dashboard");
+  assert.equal(placement.target, "page.section-nav");
+  for (const visible of [placement.when, placement.props.visibleWhen]) {
+    assert.equal(visible({}), false);
+    assert.equal(visible({ projectContext: { repositoryMode: "managed_git" } }), false);
+    assert.equal(visible({ projectContext: project }), true);
+    assert.equal(visible({ projectContext: { repositoryMode: "local_source", githubRepository: project.githubRepository } }), true);
+  }
+});
+
+function fixture(replies) {
+  const calls = [];
+  return { calls, options: { env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
+    async runCommand(request) {
+      calls.push(request);
+      assert.ok(replies.length, "Unexpected GitHub request");
+      return replies.shift();
+    }
+  } };
+}
+
+test("lists only the selected repository's issues with bounded pagination and actor credentials", async () => {
+  const f = fixture([success({ data: { search: { nodes: [{ number: 7 }, {}], issueCount: 26,
+    pageInfo: { hasNextPage: true, endCursor: "next" } } } })]);
+  const result = await githubIssues(project, { vibe64User: user, search: 'broken " repo:other/private', cursor: "page-two" }, f.options);
+  assert.deepEqual(result.issues, [{ number: 7 }]);
+  assert.equal(result.pageInfo.endCursor, "next");
+  const request = f.calls[0];
+  assert.equal(request.actor, "named-user");
+  assert.equal(request.userKey, "alice");
+  assert.equal(request.credentialHome.home, "/home/alice");
+  assert.equal(request.cwd, "/home/alice");
+  assert.equal(request.purpose, "github-api");
+  assert.deepEqual(request.args, ["api", "--hostname", "github.com", "graphql", "--method", "POST", "--input", "-"]);
+  const payload = JSON.parse(request.input);
+  assert.equal(payload.variables.cursor, "page-two");
+  assert.equal(payload.variables.search, 'repo:example/project is:issue is:open "broken   repo:other/private" in:title,body sort:updated-desc');
+  assert.match(payload.query, /first:25/u);
+});
+
+test("rejects non-GitHub projects, absent hosted identity and invalid input before executing", async () => {
+  const f = fixture([]);
+  for (const target of [{}, { ...project, repositoryMode: "managed_git" }, { githubRepository: { fullName: "../other/path" } }]) {
+    await assert.rejects(githubIssues(target, { vibe64User: user }, f.options), { code: "vibe64_github_project_required" });
+  }
+  await assert.rejects(githubIssues(project, {}, f.options), { code: "vibe64_os_user_required" });
+  for (const input of [{ operation: "read", number: "../../2" }, { operation: "state", number: 7, state: "all" },
+    { operation: "comment", number: 7, body: " " }, { operation: "comment", number: 7, body: "a".repeat(65537) },
+    { search: "a".repeat(201) }, { cursor: {} }]) {
+    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code: "vibe64_issue_input_invalid" });
+  }
+  assert.equal(f.calls.length, 0);
+});
+
+test("reads latest comments and requests older pages without treating pull requests as issues", async () => {
+  const f = fixture([success({ data: { repository: { issue } } }), success({ data: { repository: { issue: null } } })]);
+  const result = await githubIssues(project, { operation: "read", number: 7, cursor: "older", vibe64User: user }, f.options);
+  assert.equal(result.issue.number, 7);
+  const payload = JSON.parse(f.calls[0].input);
+  assert.deepEqual(payload.variables, { owner: "example", name: "project", number: 7, cursor: "older" });
+  assert.match(payload.query, /comments\(last:25, before:\$cursor\)/u);
+  await assert.rejects(githubIssues(project, { operation: "comment", number: 9, body: "test", vibe64User: user }, f.options),
+    { code: "vibe64_issue_not_found" });
+  assert.equal(f.calls.length, 2);
+});
+
+test("close and reopen respect GitHub viewer permissions before mutating the fixed repository", async () => {
+  for (const state of ["closed", "open"]) {
+    const denied = fixture([success({ data: { repository: { issue: { ...issue, viewerCanClose: false, viewerCanReopen: false } } } })]);
+    await assert.rejects(githubIssues(project, { operation: "state", number: 7, state, vibe64User: user }, denied.options),
+      { code: "vibe64_issue_permission_denied" });
+    assert.equal(denied.calls.length, 1);
+    const f = fixture([success({ data: { repository: { issue } } }), success({ state, state_reason: "completed" })]);
+    const result = await githubIssues(project, { operation: "state", number: 7, state, vibe64User: user }, f.options);
+    assert.equal(result.state, state.toUpperCase());
+    assert.equal(f.calls[1].args[3], "repos/example/project/issues/7");
+    assert.equal(f.calls[1].args[5], "PATCH");
+    assert.deepEqual(JSON.parse(f.calls[1].input), { state, state_reason: state === "closed" ? "completed" : "reopened" });
+  }
+});
+
+test("comments preserve Markdown literally through stdin and never retry an uncertain write", async () => {
+  const body = "A `code` sample, $(literal), @mention\n\nThanks!";
+  const f = fixture([success({ data: { repository: { issue } } }), success({ node_id: "comment-id", body, user: { login: "alice" } })]);
+  const result = await githubIssues(project, { operation: "comment", number: 7, body, vibe64User: user }, f.options);
+  assert.equal(result.comment.body, body);
+  assert.deepEqual(JSON.parse(f.calls[1].input), { body });
+  assert.equal(f.calls[1].args.includes(body), false);
+  const failed = fixture([success({ data: { repository: { issue } } }), { ok: false, stderr: "private raw diagnostics" }]);
+  await assert.rejects(githubIssues(project, { operation: "comment", number: 7, body, vibe64User: user }, failed.options),
+    /Refresh the conversation before posting again/u);
+  assert.equal(failed.calls.length, 2);
+});
+
+test("upstream failures expose an actionable message without raw GitHub output", async () => {
+  for (const result of [{ ok: false, stderr: "HTTP 401 ghp_private" }, success({ errors: [{ message: "private details" }] }),
+    { ok: true, stdout: "not json" }, success({ data: {} })]) {
+    const f = fixture([result]);
+    await assert.rejects(githubIssues(project, { vibe64User: user }, f.options), (error) => {
+      assert.equal(error.code, "vibe64_github_issues_failed");
+      assert.doesNotMatch(error.message, /private|not json/u);
+      return true;
+    });
+  }
+});
+
+const bug = { name: "bug", color: "d73a4a", description: "Something isn't working" };
+const documentation = { name: "documentation", color: "0075ca", description: "Documentation improvements" };
+function labelPage(nodes, viewerPermission = "WRITE", pageInfo = { hasNextPage: false, endCursor: "" }) {
+  return success({ data: { repository: { viewerPermission, labels: { nodes, pageInfo } } } });
+}
+
+test("repository labels retain GitHub colors and include every page", async () => {
+  const f = fixture([
+    labelPage([bug], "TRIAGE", { hasNextPage: true, endCursor: "next-labels" }),
+    labelPage([documentation], "TRIAGE")
+  ]);
+  const result = await githubIssues(project, { operation: "labels", vibe64User: user }, f.options);
+  assert.deepEqual(result.labels, [bug, documentation]);
+  assert.equal(result.canEditLabels, true);
+  assert.equal(result.canCreateWithLabels, false);
+  assert.equal(JSON.parse(f.calls[1].input).variables.cursor, "next-labels");
+  assert.match(JSON.parse(f.calls[0].input).query, /labels\(first:100/u);
+});
+
+test("create issue publishes literal title, Markdown and existing labels in the selected repository", async () => {
+  const title = "Investigate $(literal) and `code`";
+  const body = "## What happened\n\nA description with **Markdown**.";
+  const f = fixture([labelPage([bug]), success({ number: 12, html_url: "https://github.com/example/project/issues/12" })]);
+  const result = await githubIssues(project, { operation: "create", title, body, labels: ["bug"], vibe64User: user }, f.options);
+  assert.equal(result.issue.number, 12);
+  assert.equal(f.calls[1].args[3], "repos/example/project/issues");
+  assert.equal(f.calls[1].args[5], "POST");
+  assert.deepEqual(JSON.parse(f.calls[1].input), { title, body, labels: ["bug"] });
+  assert.equal(f.calls[1].args.includes(title), false);
+});
+
+test("creating without labels is allowed; denied or missing labels never silently disappear", async () => {
+  const unlabelled = fixture([success({ number: 12, html_url: "https://github.com/example/project/issues/12" })]);
+  await githubIssues(project, { operation: "create", title: "New issue", vibe64User: user }, unlabelled.options);
+  assert.deepEqual(JSON.parse(unlabelled.calls[0].input), { title: "New issue", body: "", labels: [] });
+  for (const [permission, labels, code] of [
+    ["READ", ["bug"], "vibe64_issue_permission_denied"],
+    ["TRIAGE", ["bug"], "vibe64_issue_permission_denied"],
+    ["WRITE", ["removed-label"], "vibe64_issue_input_invalid"]
+  ]) {
+    const f = fixture([labelPage([bug], permission)]);
+    await assert.rejects(githubIssues(project, { operation: "create", title: "New issue", labels, vibe64User: user }, f.options), { code });
+    assert.equal(f.calls.length, 1);
+  }
+});
+
+test("triage can replace or clear issue labels; PR numbers and read-only accounts cannot", async () => {
+  for (const labels of [["bug"], []]) {
+    const f = fixture([labelPage([bug], "TRIAGE"), success({ data: { repository: { issue } } }), success([])]);
+    await githubIssues(project, { operation: "set-labels", number: 7, labels, vibe64User: user }, f.options);
+    assert.equal(f.calls[2].args[3], "repos/example/project/issues/7/labels");
+    assert.equal(f.calls[2].args[5], "PUT");
+    assert.deepEqual(JSON.parse(f.calls[2].input), { labels });
+  }
+  const denied = fixture([labelPage([bug], "READ")]);
+  await assert.rejects(githubIssues(project, { operation: "set-labels", number: 7, labels: [], vibe64User: user }, denied.options), { code: "vibe64_issue_permission_denied" });
+  const pr = fixture([labelPage([bug]), success({ data: { repository: { issue: null } } })]);
+  await assert.rejects(githubIssues(project, { operation: "set-labels", number: 9, labels: ["bug"], vibe64User: user }, pr.options), { code: "vibe64_issue_not_found" });
+});
+
+test("invalid new issues and label payloads are rejected before requests; uncertain creation is never retried", async () => {
+  const invalid = fixture([]);
+  for (const input of [
+    { operation: "create", title: " " }, { operation: "create", title: "a".repeat(257) },
+    { operation: "create", title: "Valid", body: "a".repeat(65537) },
+    { operation: "create", title: "Valid", labels: [null] },
+    { operation: "set-labels", number: 7 }, { operation: "set-labels", number: 7, labels: [""] },
+    { operation: "set-labels", number: 7, labels: Array(101).fill("bug") }
+  ]) {
+    await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, invalid.options), { code: "vibe64_issue_input_invalid" });
+  }
+  assert.equal(invalid.calls.length, 0);
+  const failed = fixture([{ ok: false, stderr: "upstream timeout" }]);
+  await assert.rejects(githubIssues(project, { operation: "create", title: "New issue", vibe64User: user }, failed.options), /Refresh the issue list before trying again/u);
+  assert.equal(failed.calls.length, 1);
+});

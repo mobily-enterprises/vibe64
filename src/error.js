@@ -53,8 +53,9 @@ function installJskitErrorConsoleTrail(runtime = null) {
 
     try {
       const severity = String(payload.severity || "").toLowerCase();
-      const consoleMethod = severity === "success" ? "info" : severity === "warning" ? "warn" : "error";
-      const label = severity === "success" ? "JSKIT_FEEDBACK" : severity === "warning" ? "JSKIT_WARNING" : "JSKIT_ERROR";
+      const informational = severity === "success" || severity === "info";
+      const consoleMethod = informational ? "info" : severity === "warning" ? "warn" : "error";
+      const label = informational ? "JSKIT_FEEDBACK" : severity === "warning" ? "JSKIT_WARNING" : "JSKIT_ERROR";
       console[consoleMethod](`[${label}] ${errorConsoleMessage(payload)}`, payload);
       if (reportedError.cause) {
         const cause = errorSummary(reportedError.cause);

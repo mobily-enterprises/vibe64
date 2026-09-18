@@ -1,0 +1,75 @@
+# GitHub pull requests and sessions
+
+People can turn an existing GitHub PR into an isolated session, or publish session
+work as a new PR. GitHub remains the PR store.
+
+## Sources
+
+- `packages/vibe64-project/src/server/githubApi.js`
+- `packages/vibe64-project/src/server/githubPullRequests.js`
+- `packages/vibe64-project/src/server/service.js`
+- `packages/vibe64-project/src/server/registerRoutes.js`
+- `packages/vibe64-core/src/server/projectRepository.js`
+- `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/inputSchemas.js`
+- `packages/vibe64-sessions/src/server/registerRoutes.js`
+- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/repositoryHistory.js`
+- `packages/vibe64-runtime/src/server/runtime.js`
+- `packages/vibe64-runtime/src/server/sessionStore.js`
+- `src/components/studio/GithubPullRequestsPanel.vue`
+- `src/components/studio/GithubBrowserTabs.vue`
+- `src/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue`
+- `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/composables/useVibe64SessionData.js`
+- `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
+- `src/lib/vibe64RepositoryRealtime.js`
+- `src/lib/vibe64SessionInfo.js`
+- `src/lib/vibe64GithubProject.js`
+- `src/placement.js`
+- `tests/server/githubPullRequests.unit.test.js`
+
+## Public contract
+
+All Issues and PR navigation and session actions are hidden without a GitHub
+repository. The backend independently rejects non-GitHub project operations.
+The Issues/PR Dashboard entry opens a browser with Issues and Pull requests tabs,
+retaining each browser's URL filters and selected item. Pull requests is
+project-wide, available without an active session, and collapses
+the Dashboard menu while open. Open, Closed, Merged and All filters, literal
+title/body search, and 25-item pagination use URL state. Descriptions use the
+existing safe Markdown renderer. The source repository and branch, base branch,
+draft state and change counts appear before Open as session.
+
+Opening uses the existing assistant picker and session admission policy. The
+server re-reads the PR with the acting user's GitHub credentials; the browser
+supplies only its number. Closed, merged, deleted-head, archived and unwritable
+source repositories cannot become editable sessions. Writable forks are supported;
+maintainer-only permission to edit another person's fork is not inferred from
+permission to edit PR metadata. The session clones the observed head commit and
+persists the verified PR source outside project source. GitHub command identity
+is initialized before the first assistant message, so Save and Update work
+immediately. The description reaches
+the assistant as background data, not an instruction. PR identity and Save
+destination remain visible in chat and session info.
+
+Create pull request is available in session actions and in the PR browser for
+the selected session. The form preserves its text on failure and defaults to a
+draft. The server serializes publication with the existing assistant/repository
+write lock, checks GitHub write permission, binds a session-specific branch,
+and creates that branch only if absent. The empty Git lease rejects a concurrent
+creator without replacing an existing ref. It supports locally committed
+baselines and publishes captured session changes through the ordinary Save
+implementation. The session stays bound to its branch after a partial failure;
+an explicit retry finds an existing open PR before attempting another creation.
+GitHub mutations are never automatically retried. Saving to a PR branch does
+not merge it or advance the PR base branch.
+
+Save, Update and renewal use the bound source rather than the project's default
+branch. PR authority survives renewal and archive indexing, and canonical-change
+notifications affect only sessions sharing that source. Forks do not use the base
+repository's disposable mirror. UI outcomes use shared command feedback and
+loading failures remain inline.

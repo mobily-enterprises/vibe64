@@ -432,6 +432,10 @@ function useVibe64SessionRepositoryStatusRegistry({
       if (sourceOperationsSuspended(sessionId)) {
         return;
       }
+      if (payload.reason === "session-pull-request") {
+        advanceCanonicalAccessRevision(sessionId);
+        canonicalCheckedAt.delete(sessionId);
+      }
       if (payload.reason === "session-repository-checked") {
         observeCanonicalCheck(sessionId, payload.repositoryUpdateCheck);
         return;

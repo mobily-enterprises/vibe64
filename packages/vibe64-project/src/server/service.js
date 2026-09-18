@@ -1,6 +1,9 @@
 import path from "node:path";
-import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { createHash } from "node:crypto";
+import { requireGithubRepository } from "./githubApi.js";
+import { githubIssues } from "./githubIssues.js";
+import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "./githubPullRequests.js";
+import { localRepositoryRemote } from "./localRepositoryRemote.js";
 
 import {
   Vibe64SessionRuntime
@@ -283,6 +286,7 @@ function createService({
   listTemplates = listGenesisTemplates,
   applyTemplate = applyGenesisTemplate,
   projectContext = null,
+  publishProjectChanged = null,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile,
   targetRoot = ""
@@ -1297,6 +1301,53 @@ function createService({
 
     async repositoryRemote(input = {}) {
       return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
+    },
+
+    async refreshGithub() {
+      const project = await currentProjectState();
+      requireGithubRepository(project);
+      await publishProjectChanged({ projectSlug: project.slug, githubRefresh: true }, { reason: "github-refreshed" });
+      return { ok: true };
+    },
+
+    async githubIssues(input = {}) {
+      return projectResult(async () => {
+        const project = await currentProjectState();
+        const result = await githubIssues(project, input, { env });
+        if (input.operation === "comment") {
+          try {
+            await publishProjectChanged?.({
+              projectSlug: project.slug,
+              originId: input.originId,
+              issueComment: {
+                number: Number(input.number),
+                id: result.comment.id,
+                author: result.comment.author.login
+              }
+            }, { reason: "github-issue-commented" });
+          } catch (error) {
+            logger?.warn?.({ error: String(error?.message || error) }, "Issue comment notification could not be published.");
+          }
+        }
+        return result;
+      });
+    },
+
+    async githubPullRequests(input = {}) {
+      return projectResult(async () => githubPullRequests(await currentProjectState(), input, { env }));
+    },
+
+    async resolvePullRequestSource(input = {}) {
+      const result = await githubPullRequests(await currentProjectState(), { ...input, operation: "read" }, { env });
+      return pullRequestSessionSource(result.pullRequest);
+    },
+
+    async preparePullRequestSource(session, input = {}) {
+      return preparePullRequestSource(await currentProjectState(), session, input, { env });
+    },
+
+    async publishSessionPullRequest(source, input = {}) {
+      return publishSessionPullRequest(source, input, { env });
     },
 
     async readCurrentProject() {

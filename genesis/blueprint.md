@@ -15,6 +15,38 @@ Try again without requiring a browser reload. Recovery refreshes the project
 data and retries opening; repeated failures keep the action available.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
+GitHub-connected projects offer one Issues/PR entry in the project-wide Dashboard
+menu, including when no session is open. Tabs switch between issues and pull
+requests while retaining their filters and selected item. Opening it collapses the Dashboard menu
+to give the list and conversation room, with a direct route back. People can
+filter open, closed or all issues, search titles and descriptions, read an issue
+and its paginated comments, add a comment, and close or reopen it when their
+GitHub permissions allow. People can create an issue with a title, Markdown
+description and repository labels, and edit labels on existing issues. Labels
+retain their GitHub colors with readable text in either theme. The issue browser
+uses the available pane width and a compact Back to dashboard control.
+GitHub remains the authority; actions use the person's
+connected account. Unsent comments survive navigation within the same browser
+tab. A comment posted through Vibe64 gives other viewers of that project a short
+notification and refreshes the issue conversation without clearing their draft.
+This uses the existing realtime connection and shared snackbar; comments posted
+directly on GitHub appear on the next refresh.
+Agents run `vibe64-github refresh` after GitHub changes to refresh that project's
+issues, comments, labels and PRs through the same realtime connection, without
+clearing browser drafts or filters.
+Projects without a GitHub repository do not show Issues/PR,
+PR session actions, or PR publishing controls.
+Pull requests has the same project-wide, full-width Dashboard presentation.
+People can filter and search PRs, read descriptions, and open an open PR with a
+writable source branch as an isolated session. Its exact head commit and
+server-resolved source repository and branch become that session's authority.
+The description is available to the assistant. Save and Update use the PR head
+branch, including writable forks, and the destination stays visible in chat.
+Session actions also offer Create pull request: review the title, description,
+and draft choice, publish work on a new branch, and create the PR. The session
+then keeps saving to that branch. Interrupted publishing retains that destination
+and an explicit retry checks for an existing PR before creating another.
+Neither workflow merges a PR or publishes session work to the PR's base branch.
 Current changes uses the full project pane, with the dashboard menu hidden and
 a Back to dashboard action, so file differences have room to read.
 Resizing chat keeps its contents, divider and project pane aligned through the
@@ -351,7 +383,9 @@ Failed renewals always offer an explicit Retry, including after reopening the
 dialog. Save or Update prerequisites can be corrected in the old session;
 Retry checks the current conditions before continuing the saved renewal.
 Renewal takes its source identity from the project's configured authority and
-verified Git commit. Missing or stale session metadata does not redefine it.
+verified Git commit, or the server-resolved PR authority bound to that session.
+Renewal preserves a PR session's destination. Arbitrary legacy session metadata
+does not redefine authority.
 Retries keep the saved handover without asking the AI to write it again. If the
 source or conversation changed, the existing text returns for review with
 current source details before the person confirms continuation.
@@ -360,7 +394,9 @@ Every project has exactly one source authority. For a GitHub-connected project,
 the configured GitHub branch is authoritative. For a hosted Vibe64-only
 project, Vibe64's own repository is authoritative. For a standalone local
 project, the folder the person opened is authoritative and Save records the
-session's work there as an ordinary local commit.
+session's work there as an ordinary local commit. A PR session has an explicit
+GitHub branch authority of its own; publishing its work does not change the
+project authority or notify sessions that track a different branch.
 
 Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
 The original folder's checked-out branch and native Git configuration determine

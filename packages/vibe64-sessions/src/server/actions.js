@@ -16,6 +16,7 @@ import {
   sessionChangeDiffInputValidator,
   sessionChangesInputValidator,
   sessionCreateInputValidator,
+  sessionPullRequestInputValidator,
   sessionIdInputValidator,
   sessionInspectInputValidator,
   sessionListInputValidator,
@@ -37,6 +38,7 @@ const ACTION_LIST_SESSIONS = "vibe64.sessions.list";
 const ACTION_LIST_ARCHIVED_SESSIONS = "vibe64.sessions.archived.list";
 const ACTION_LIST_ASSISTANT_CAPABILITIES = "vibe64.assistants.capabilities.list";
 const ACTION_UPDATE_ASSISTANT_MODEL_ACCESS = "vibe64.assistants.model-access.update";
+const ACTION_CREATE_PULL_REQUEST = "vibe64.sessions.pull-request.create";
 const ACTION_CREATE_SESSION = "vibe64.sessions.create";
 const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.update";
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
@@ -303,6 +305,12 @@ function createSessionActions({ sessions } = {}) {
       execute: (input) => sessions.inspectSessionWork(input.sessionId)
     }),
     action({
+      id: ACTION_CREATE_PULL_REQUEST,
+      kind: "command",
+      input: sessionPullRequestInputValidator,
+      execute: (input) => sessions.createSessionPullRequest(input.sessionId, withoutSessionId(input))
+    }),
+    action({
       id: ACTION_SAVE_SESSION_WORK,
       kind: "command",
       input: sessionSaveInputValidator,
@@ -430,6 +438,7 @@ export {
   ACTION_ARCHIVE_SESSION,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
+  ACTION_CREATE_PULL_REQUEST,
   ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_SESSION,

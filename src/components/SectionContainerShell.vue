@@ -13,6 +13,7 @@ import {
 } from "@/lib/routeActiveState.js";
 
 const props = defineProps({
+  navigationCollapsed: { type: Boolean, default: false },
   title: {
     type: String,
     default: ""
@@ -104,20 +105,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="section-container-shell" :class="{ 'section-container-shell--with-heading': hasHeading }">
+  <section class="section-container-shell" :class="{ 'section-container-shell--with-heading': hasHeading, 'section-container-shell--collapsed': navigationCollapsed }">
     <header v-if="hasHeading" class="section-container-shell__heading">
       <h1 v-if="resolvedTitle" class="section-container-shell__title">{{ resolvedTitle }}</h1>
       <p v-if="resolvedSubtitle" class="text-body-2 text-medium-emphasis mb-0">{{ resolvedSubtitle }}</p>
     </header>
 
     <v-sheet
-      rounded="lg"
-      border
+      :rounded="navigationCollapsed ? 0 : 'lg'"
+      :border="!navigationCollapsed"
       class="section-container-shell__panel"
     >
       <div class="section-container-shell__body">
         <v-select
-          v-if="mobileSectionsActive"
+          v-if="mobileSectionsActive && !navigationCollapsed"
           :model-value="activeMobileSectionValue"
           :items="mobileSectionLinks"
           item-title="label"
@@ -129,7 +130,7 @@ onBeforeUnmount(() => {
           @update:model-value="selectMobileSection"
         />
         <nav
-          v-if="hasTabs && !mobileSectionsActive"
+          v-if="hasTabs && !mobileSectionsActive && !navigationCollapsed"
           class="section-container-shell__nav"
           aria-label="Dashboard sections"
         >
@@ -232,6 +233,17 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding-left: 0.75rem;
   scrollbar-gutter: stable;
+}
+
+.section-container-shell--collapsed .section-container-shell__body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0;
+}
+
+.section-container-shell--collapsed .section-container-shell__content {
+  border-left: 0;
+  padding-left: 0;
 }
 
 @media (max-width: 760px) {

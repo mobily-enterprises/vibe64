@@ -232,6 +232,23 @@ test("project change publisher emits the shared project refresh contract", async
   });
 });
 
+test("issue comment notifications retain project scope and omit comment contents", async () => {
+  const publish = createVibe64ProjectChangedPublisher({ events: { publish: async (event) => event } });
+  const event = await publish({
+    projectSlug: "catalogue",
+    originId: "tab:writer",
+    issueComment: { number: 42, id: "comment-7", author: "contributor", body: "Private comment" }
+  }, { reason: "github-issue-commented" });
+  assert.equal(event.entityId, "catalogue");
+  assert.equal(event.realtime.event, "vibe64.project.changed");
+  assert.deepEqual(event.realtime.payload, {
+    projectSlug: "catalogue",
+    originId: "tab:writer",
+    issueComment: { number: 42, id: "comment-7", author: "contributor" },
+    reason: "github-issue-commented"
+  });
+});
+
 
 test("remote actions preserve review inputs and only invalidate projects after mutations", async () => {
   const input = { action: "pull", review: { branch: "trunk", head: "head", configId: "configuration", upstreamCommit: "remote" }, merge: true };

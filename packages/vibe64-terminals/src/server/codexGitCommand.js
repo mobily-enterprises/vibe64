@@ -47,7 +47,7 @@ import {
 } from "./unixJsonCommand.js";
 
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
-const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh"]);
+const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-github"]);
 const CODEX_GIT_COMMAND_INPUT_MAX_BYTES = 20 * 1024 * 1024;
 const CODEX_GIT_COMMAND_TIMEOUT_MS = 120_000;
 const CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS = 2000;
@@ -216,7 +216,7 @@ import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 
-const allowedCommands = new Set(["git", "gh"]);
+const allowedCommands = new Set(${JSON.stringify(CODEX_GIT_COMMAND_WRAPPER_NAMES)});
 const command = path.basename(process.argv[1] || "");
 
 function fail(message, code = 1) {
@@ -285,7 +285,7 @@ if (!socketPath || !sessionId || !token || !generationId) {
   fail("vibe64_agent_control_unavailable: Managed Git control identity is unavailable. Reconnect the assistant.");
 }
 
-const inputBase64 = noStdinParentPid === process.ppid
+const inputBase64 = command === "vibe64-github" || noStdinParentPid === process.ppid
   ? ""
   : await readStdinBase64();
 const response = await requestSocket({
@@ -355,9 +355,9 @@ function responseError(message = "", code = "vibe64_codex_git_command_failed", e
 function noGithubGitCommandActorFromSession(session = {}, {
   command = ""
 } = {}) {
-  if (normalizeText(command) === "gh") {
+  if (["gh", "vibe64-github"].includes(normalizeText(command))) {
     return responseError(
-      "GitHub CLI is only available for GitHub repository sessions.",
+      "GitHub commands are only available for GitHub repository sessions.",
       "vibe64_codex_git_command_github_unavailable",
       {
         statusCode: 403
@@ -742,7 +742,7 @@ function createCodexGitCommandService({
       return result;
     };
     if (!CODEX_GIT_COMMAND_WRAPPER_NAMES.includes(command)) {
-      return finish(responseError("Codex only exposes git and gh through this command path.", "vibe64_codex_git_command_invalid"));
+      return finish(responseError("This command path exposes git, gh and vibe64-github.", "vibe64_codex_git_command_invalid"));
     }
     if (!sessionId) {
       return finish(responseError("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
@@ -791,6 +791,17 @@ function createCodexGitCommandService({
           cwd: cwd.cwd
         });
       }
+    }
+    if (command === "vibe64-github") {
+      if (args.length !== 1 || args[0] !== "refresh") {
+        return finish(responseError("Usage: vibe64-github refresh", "vibe64_github_refresh_input_invalid"), actor);
+      }
+      await projectService.refreshGithub();
+      return finish({
+        ok: true,
+        exitCode: 0,
+        stdout: "Vibe64 GitHub refresh requested.\n"
+      }, actor);
     }
     const requiresGithubToken = actor.githubRequired !== false && commandRequiresGithubToken(command, args);
     const toolHome = actor.githubRequired === false || !requiresGithubToken

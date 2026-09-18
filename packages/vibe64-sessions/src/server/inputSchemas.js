@@ -278,7 +278,17 @@ const sessionListInputValidator = patchSchema({
   ...optionalUser
 });
 
+const sessionPullRequestInputValidator = patchSchema({
+  sessionId: { type: "string", required: true },
+  title: { type: "string", required: true, maxLength: 256 },
+  body: { type: "string", required: false, maxLength: 65536, noTrim: true },
+  draft: { type: "boolean", required: false },
+  ...optionalOrigin,
+  ...optionalUser
+});
+
 const sessionCreateInputValidator = patchSchema({
+  pullRequestNumber: { type: "integer", min: 1, required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
@@ -609,6 +619,7 @@ export {
   sessionChangeDiffInputValidator,
   sessionChangesInputValidator,
   sessionCreateInputValidator,
+  sessionPullRequestInputValidator,
   sessionIdInputValidator,
   sessionInspectInputValidator,
   sessionRenewalConfirmationActionInputValidator,

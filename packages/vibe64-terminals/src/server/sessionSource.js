@@ -16,7 +16,8 @@ import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-  normalizeRepositoryMode
+  normalizeRepositoryMode,
+  sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import {
   managedSessionSourcePath,
@@ -483,6 +484,7 @@ async function createSessionSource({
   store,
   vibe64User = null
 } = {}) {
+  project = sessionRepositoryProject(project, session);
   const sessionId = normalizeText(session.sessionId || session.id);
   const projectContextRoot = normalizeText(runtime?.projectContextRoot);
   const managedSessionSourceRoot = normalizeText(runtime?.projectSessionSourceRoot);

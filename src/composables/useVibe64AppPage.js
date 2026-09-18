@@ -6,6 +6,9 @@ import {
   mdiChevronRight
 } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useQueryClient } from "@tanstack/vue-query";
+import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
+import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -59,6 +62,8 @@ function useVibe64AppPage() {
   const lastDashboardRoutePath = ref("");
   let mobilePaneMediaQuery = null;
   const projectSlug = computed(() => projectSlugFromRoute(route));
+  const queryClient = useQueryClient();
+  const feedback = useShellWebErrorRuntime();
   const projectOpenRevision = ref(0);
   const projectOpenKey = computed(() => `${projectSlug.value}:${projectOpenRevision.value}`);
   const openedProjectKey = ref("");
@@ -178,6 +183,49 @@ function useVibe64AppPage() {
     matches: ({ payload = {} } = {}) => projectRuntimeClosedPayloadMatches(payload, projectSlug.value),
     onEvent: ({ payload = {} } = {}) => {
       handleProjectRuntimeClosed(payload);
+    }
+  });
+
+  useRealtimeEvent({
+    event: VIBE64_PROJECT_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.githubRefresh === true,
+    onEvent: async () => {
+      const issuesPath = scopedDevelopmentApiUrl("/api/vibe64/issues", projectSlug.value);
+      const labelsPath = scopedDevelopmentApiUrl("/api/vibe64/issue-labels", projectSlug.value);
+      const prsPath = scopedDevelopmentApiUrl("/api/vibe64/pull-requests", projectSlug.value);
+      await queryClient.invalidateQueries({
+        predicate: ({ queryKey }) => {
+          if (!Array.isArray(queryKey)) return false;
+          const [resource, path] = queryKey;
+          return (resource === "vibe64.issues" && path === issuesPath) ||
+          (resource === "vibe64.issue" && path?.startsWith(`${issuesPath}/`)) ||
+          (resource === "vibe64.issueLabels" && path === labelsPath) ||
+          (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath);
+        }
+      });
+    }
+  });
+
+  useRealtimeEvent({
+    event: VIBE64_PROJECT_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value &&
+      Number.isSafeInteger(payload.issueComment?.number) && payload.issueComment.number > 0 &&
+      !vibe64RealtimePayloadFromCurrentTab(payload),
+    onEvent: async ({ payload }) => {
+      const comment = payload.issueComment;
+      const basePath = scopedDevelopmentApiUrl("/api/vibe64/issues", projectSlug.value);
+      feedback.report({
+        source: "vibe64.issues.activity",
+        message: `${comment.author || 'Someone'} commented on issue #${comment.number}.`,
+        intent: "action-feedback",
+        severity: "info",
+        channel: "snackbar",
+        dedupeKey: `vibe64.issueComment:${payload.projectSlug}:${comment.id}`
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["vibe64.issue", `${basePath}/${comment.number}`] }),
+        queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] })
+      ]);
     }
   });
 

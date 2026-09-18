@@ -85,6 +85,15 @@ function projectRealtimePayload(value = {}) {
     ...(source.runtime ? { runtime: source.runtime } : {}),
     ...(source.runtime?.open === false ? { message: "Project is closed." } : {}),
     ...(source.action ? { action: String(source.action).trim() } : {}),
+    ...(source.githubRefresh === true ? { githubRefresh: true } : {}),
+    ...(source.issueComment ? {
+      issueComment: {
+        number: source.issueComment.number,
+        id: source.issueComment.id,
+        author: source.issueComment.author
+      },
+      originId: String(source.originId || "").trim().slice(0, 200)
+    } : {}),
     ...(typeof source.hasSelection === "boolean" ? { hasSelection: source.hasSelection } : {})
   };
 }

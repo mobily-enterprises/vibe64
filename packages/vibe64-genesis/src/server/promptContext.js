@@ -122,6 +122,7 @@ function sessionDriverOutput(input) {
       : []),
     ...(session.managedGit ? [
       "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
+      "After changing GitHub issues, comments, labels or pull requests, run `vibe64-github refresh` once so Vibe64's Issues/PR view reflects it.",
       "Report authentication or transport failures directly; do not inspect credentials or invent another login path."
     ] : [])
   ];

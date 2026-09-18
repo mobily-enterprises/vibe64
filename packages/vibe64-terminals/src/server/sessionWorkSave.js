@@ -7,7 +7,8 @@ import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-  normalizeRepositoryMode
+  normalizeRepositoryMode,
+  sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import {
   repositoryUpdateRelationship,
@@ -65,6 +66,7 @@ function saveError(message, code = "vibe64_session_save_failed", details = {}) {
 }
 
 function repositoryContext(session = {}, project = {}) {
+  project = sessionRepositoryProject(project, session);
   const sessionMetadata = metadata(session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
   const branch = text(project.repository?.defaultBranch);
@@ -111,6 +113,8 @@ function repositoryContext(session = {}, project = {}) {
     branch,
     lastCanonicalCommit,
     mode,
+    githubMirrorPath: text(project.githubMirrorPath),
+    githubMirrorOptional: Boolean(sessionMetadata.github_pull_request) || project.githubMirrorOptional === true,
     remoteUrl,
     sessionId,
     standaloneSourceRoot,
@@ -209,7 +213,8 @@ function sessionWorkOperationProject(context, project = {}) {
   return {
     ...(context.mode === PROJECT_REPOSITORY_MODE_GITHUB
       ? {
-          githubMirrorPath: text(project.githubMirrorPath),
+          githubMirrorPath: context.githubMirrorPath,
+          githubMirrorOptional: context.githubMirrorOptional,
           githubRepository: { cloneUrl: context.remoteUrl }
         }
       : {}),
@@ -377,6 +382,18 @@ async function incomingVersionsBetween(
     incomingVersions: records.slice(0, INCOMING_VERSION_LIMIT),
     incomingVersionsTruncated: records.length > INCOMING_VERSION_LIMIT
   };
+}
+
+async function prepareSessionPullRequestBranch({ project, session, commandOptions = {}, runCommand = runVibe64Command }) {
+  const context = repositoryContext(session, project);
+  const ref = `refs/heads/${context.branch}`;
+  const options = { commandOptions, project };
+  const existing = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ref], options);
+  if (!existing) {
+    // An empty lease creates only an absent ref, including for locally committed baselines.
+    await git(runCommand, context, ["push", `--force-with-lease=${ref}:`, context.remoteUrl, `${context.baseCommit}:${ref}`], options);
+  }
+  await git(runCommand, context, ["remote", "set-url", "origin", context.remoteUrl], options);
 }
 
 async function optionalGitOutput(runCommand, context, args, options = {}) {
@@ -1462,7 +1479,7 @@ async function refreshVerifiedGithubMirror(
       status: "not_applicable"
     };
   }
-  const mirrorPath = text(project.githubMirrorPath);
+  const mirrorPath = context.githubMirrorPath;
   const retryable = (code, reason) => ({
     attempted: Boolean(mirrorPath),
     branch: context.branch,
@@ -1474,6 +1491,9 @@ async function refreshVerifiedGithubMirror(
     status: "retryable",
     verifiedCommit
   });
+  if (!mirrorPath && context.githubMirrorOptional) {
+    return { attempted: false, kind: "none", retryable: false, status: "not_applicable" };
+  }
   if (!mirrorPath || !path.isAbsolute(mirrorPath)) {
     return retryable(
       "vibe64_session_save_github_mirror_missing",
@@ -2910,6 +2930,7 @@ export {
   inspectSessionWorkDirect,
   parseGitNameStatusZ,
   parseGitNumstatZ,
+  prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage,
   prepareSessionWorkSaveMessageDirect,
   repositoryUpdateRelationship,

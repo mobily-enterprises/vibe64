@@ -96,7 +96,7 @@
           v-if="dashboardProjectActive"
           class="studio-ai-sessions__dashboard-empty-pane"
         >
-          <slot name="dashboard" :dashboard-context="emptyDashboardContext" />
+          <slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
         </div>
         <div
           v-else
@@ -169,7 +169,7 @@
         <template #dashboard="dashboardSlotProps">
           <slot
             name="dashboard"
-            :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
+            :dashboard-context="{ ...(dashboardSlotProps?.dashboardContext || {}), sessionToolbar: toolbar }"
           />
         </template>
       </Vibe64SessionRuntimeHost>

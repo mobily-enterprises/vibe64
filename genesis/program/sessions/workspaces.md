@@ -107,6 +107,9 @@ then reaches the existing editable manual handover and successor AI selection.
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it
 from legacy predecessor metadata or default a missing authority to local source.
+The server-resolved PR source is an explicit session authority and survives
+renewal and archive indexing. A new PR session clones its head commit and gives
+the assistant the description as quoted background data on its opening turn.
 Unchanged retries reuse the exact approved handover. When source identity or
 conversation changes before confirmation or after a failure, renewal retains
 the existing text, refreshes only its canonical source fields, and returns it

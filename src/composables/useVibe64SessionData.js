@@ -235,7 +235,8 @@ function useVibe64SessionData({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
-      assistantSelection: context?.assistantSelection || {}
+      assistantSelection: context?.assistantSelection || {},
+      ...(context?.pullRequestNumber ? { pullRequestNumber: context.pullRequestNumber } : {})
     }),
     fallbackRunError: "Vibe64 session could not be created.",
     messages: {
@@ -562,7 +563,7 @@ function useVibe64SessionData({
 
   let createSessionInFlight = null;
 
-  async function createSession(assistantSelection = {}) {
+  async function createSession(assistantSelection = {}, { pullRequestNumber } = {}) {
     if (createSessionInFlight) {
       return createSessionInFlight;
     }
@@ -572,7 +573,7 @@ function useVibe64SessionData({
     createSessionPending.value = true;
     createSessionInFlight = (async () => {
       try {
-        const response = await createSessionCommand.run({ assistantSelection });
+        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber });
         if (
           !sessionDataDisposed &&
           creationProjectSlug === String(projectSlug.value || "").trim()

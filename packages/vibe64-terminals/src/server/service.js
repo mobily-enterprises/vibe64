@@ -25,6 +25,7 @@ import {
   inspectSessionChangeDiff as inspectManagedSessionChangeDiff,
   inspectSessionChanges as inspectManagedSessionChanges,
   inspectSessionWork as inspectManagedSessionWork,
+  prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage as prepareManagedSessionWorkSaveMessage,
   recoverSessionWorkSave as recoverManagedSessionWorkSave,
   recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
@@ -758,6 +759,111 @@ function createService({
     return exclusive.value;
   }
 
+  async function saveSessionWorkInsideWrite(sessionId, input, context) {
+    const { execution, normalizedSessionId, runtime, session } = await sessionWorkExecution(
+      sessionId,
+      context,
+      "session-save"
+    );
+    const project = await projectService.readCurrentProject();
+    const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
+      commandOptions: execution.commandOptions,
+      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+      limit: 40,
+      operationId: input.operationId,
+      project,
+      runCommand: execution.runCommand,
+      session
+    });
+    await input.onProgress?.({
+      checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
+      checkpointTree: saveMessageInput.checkpoint.checkpointTree,
+      kind: "message",
+      message: "Writing a concise name for this work.",
+      stage: "message-writing"
+    });
+    const agentContext = {
+      runtime,
+      session,
+      vibe64User: input.vibe64User || null
+    };
+    let commitTitle;
+    try {
+      const providerDescription = await sessionAgent.describeProvider(agentContext);
+      commitTitle = await generateSessionSaveCommitMessage({
+        agentContext,
+        changes: saveMessageInput.changes,
+        deleteThread: (threadInput, options) => sessionAgent.deleteDetachedChatThread(
+          normalizedSessionId,
+          threadInput,
+          options
+        ),
+        runAgentTurn: (turnInput, options) => sessionAgent.streamDetachedChatTurn(
+          normalizedSessionId,
+          turnInput,
+          options
+        ),
+        expectedAccountIdentitySignature: providerDescription.accountIdentitySignature
+      });
+    } catch (error) {
+      // Naming is optional. Leave failed thread ownership intact and let the
+      // repository owner enforce the normal checkpoint and publish checks.
+      commitTitle = {
+        executionProfile: null,
+        subject: `Save work ${saveMessageInput.checkpoint.checkpointTree.slice(0, 12)}`
+      };
+      logOperationalEvent(logger, "warn", {
+        code: error.code || "vibe64_session_save_message_failed",
+        component: "vibe64.session_save",
+        event: "vibe64.session_save.message_fallback",
+        operationId: input.operationId,
+        sessionId: normalizedSessionId
+      }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
+      await input.onProgress?.({
+        code: error.code || "vibe64_session_save_message_failed",
+        kind: "message",
+        message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
+        stage: "message-fallback"
+      });
+    }
+    await input.onProgress?.({
+      executionProfile: commitTitle.executionProfile,
+      kind: "message",
+      message: "Version name ready.",
+      stage: "message-ready"
+    });
+    const saved = await saveManagedSessionWork({
+      checkpoint: saveMessageInput.checkpoint,
+      commandOptions: execution.commandOptions,
+      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+      identity: execution.identity,
+      message: commitTitle.subject,
+      onCacheMaintenance(cacheMaintenance = {}) {
+        if (cacheMaintenance.retryable !== true) {
+          return;
+        }
+        logOperationalEvent(logger, "warn", {
+          code: cacheMaintenance.code,
+          component: "vibe64.session_save",
+          event: "vibe64.session_save.cache_maintenance_failed",
+          operationId: input.operationId,
+          reason: cacheMaintenance.reason,
+          sessionId: normalizedSessionId
+        }, cacheMaintenance.message || "Vibe64 Save cache maintenance failed.");
+      },
+      onProgress: input.onProgress,
+      operationId: input.operationId,
+      project,
+      runCommand: execution.runCommand,
+      runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+      session
+    });
+    return {
+      ...saved,
+      commitTitleExecutionProfile: commitTitle.executionProfile
+    };
+  }
+
   async function runSessionRepositoryWrite(
     sessionId = "",
     options = {},
@@ -1482,13 +1588,32 @@ function createService({
         error.code = "vibe64_project_source_lock_unavailable";
         throw error;
       }
-      return projectService.runProjectSourceExclusive(async () => createManagedSessionSource({
-        ...input,
-        env,
-        project: await projectService.readCurrentProject()
-      }), {
-        operation: "session-source-create"
-      });
+      return projectService.runProjectSourceExclusive(async () => {
+        const source = await createManagedSessionSource({
+          ...input,
+          env,
+          project: await projectService.readCurrentProject()
+        });
+        if (input.session?.metadata?.github_pull_request) {
+          const session = input.session.metadata.renewed_from
+            ? await input.store.readSessionForRenewal(input.session.sessionId)
+            : await input.store.readSession(input.session.sessionId);
+          const recorded = await writeSessionGitCommandActor({
+            env,
+            reason: "pull-request-session",
+            runtime: input.runtime,
+            session,
+            sourceRoot: source.sourcePath,
+            workdir: source.sourcePath,
+            threadId: "",
+            vibe64User: input.vibe64User || null
+          });
+          if (recorded?.ok === false) {
+            throw new Error(recorded.error || "Your GitHub identity is unavailable.");
+          }
+        }
+        return source;
+      }, { operation: "session-source-create" });
     },
 
     setDatabaseToolsProvider(provider = null) {
@@ -1732,109 +1857,68 @@ function createService({
         operation: "save-session-work",
         activeCode: "vibe64_session_save_agent_active",
         activeMessage: "Wait for the assistant turn to finish before saving this work."
-      }, async (context) => {
-        const { execution, normalizedSessionId, runtime, session } = await sessionWorkExecution(
-          sessionId,
-          context,
-          "session-save"
-        );
-        const project = await projectService.readCurrentProject();
-        const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
-          commandOptions: execution.commandOptions,
-          derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-          limit: 40,
-          operationId: input.operationId,
-          project,
-          runCommand: execution.runCommand,
-          session
+      }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
+    },
+
+    async createSessionPullRequest(sessionId, input = {}) {
+      if (
+        typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
+        (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)) ||
+        (input.draft != null && typeof input.draft !== "boolean")
+      ) {
+        throw new Error("Enter a pull request title and a description of up to 65,536 characters.");
+      }
+      return runSessionRepositoryWrite(sessionId, input, { operation: "create-pull-request" }, async (context) => {
+        const { runtime } = context;
+        let session = context.session;
+        let source = session.metadata?.github_pull_request
+          ? JSON.parse(session.metadata.github_pull_request)
+          : await projectService.preparePullRequestSource(session, input);
+        if (source.number) {
+          return { ok: true, pullRequest: source };
+        }
+
+        // Bind before any remote write: an interrupted attempt must never send a later Save to main.
+        await runtime.store.mutateSession(sessionId, async () => {
+          await runtime.store.writeMetadataValue(sessionId, "github_pull_request", JSON.stringify(source));
+          await runtime.store.writeMetadataValue(sessionId, "source_remote_url", `https://github.com/${source.headRepository}.git`);
+          await runtime.store.writeMetadataValue(sessionId, "repository_mode", "github");
+          await runtime.store.writeMetadataValue(sessionId, "repository_update_check", "");
         });
-        await input.onProgress?.({
-          checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
-          checkpointTree: saveMessageInput.checkpoint.checkpointTree,
-          kind: "message",
-          message: "Writing a concise name for this work.",
-          stage: "message-writing"
-        });
-        const agentContext = {
+        session = await runtime.getSession(sessionId, { inspectSource: false });
+        const recorded = await writeSessionGitCommandActor({
+          env,
+          reason: "create-pull-request",
           runtime,
           session,
+          sourceRoot: terminalSessionSourceRoot(session),
+          workdir: terminalWorktreePath(session),
+          threadId: session.metadata?.agent_identity_conversation_id || "",
           vibe64User: input.vibe64User || null
-        };
-        let commitTitle;
-        try {
-          const providerDescription = await sessionAgent.describeProvider(agentContext);
-          commitTitle = await generateSessionSaveCommitMessage({
-            agentContext,
-            changes: saveMessageInput.changes,
-            deleteThread: (threadInput, options) => sessionAgent.deleteDetachedChatThread(
-              normalizedSessionId,
-              threadInput,
-              options
-            ),
-            runAgentTurn: (turnInput, options) => sessionAgent.streamDetachedChatTurn(
-              normalizedSessionId,
-              turnInput,
-              options
-            ),
-            expectedAccountIdentitySignature: providerDescription.accountIdentitySignature
-          });
-        } catch (error) {
-          // Naming is optional. Leave failed thread ownership intact and let the
-          // repository owner enforce the normal checkpoint and publish checks.
-          commitTitle = {
-            executionProfile: null,
-            subject: `Save work ${saveMessageInput.checkpoint.checkpointTree.slice(0, 12)}`
-          };
-          logOperationalEvent(logger, "warn", {
-            code: error.code || "vibe64_session_save_message_failed",
-            component: "vibe64.session_save",
-            event: "vibe64.session_save.message_fallback",
-            operationId: input.operationId,
-            sessionId: normalizedSessionId
-          }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
-          await input.onProgress?.({
-            code: error.code || "vibe64_session_save_message_failed",
-            kind: "message",
-            message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
-            stage: "message-fallback"
-          });
+        });
+        if (recorded?.ok === false) {
+          throw new Error(recorded.error || "Your GitHub identity is unavailable.");
         }
-        await input.onProgress?.({
-          executionProfile: commitTitle.executionProfile,
-          kind: "message",
-          message: "Version name ready.",
-          stage: "message-ready"
-        });
-        const saved = await saveManagedSessionWork({
-          checkpoint: saveMessageInput.checkpoint,
+        session = recorded?.session || await runtime.getSession(sessionId, { inspectSource: false });
+        const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
+        await prepareSessionPullRequestBranch({
+          project: await projectService.readCurrentProject(),
+          session,
           commandOptions: execution.commandOptions,
-          derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-          identity: execution.identity,
-          message: commitTitle.subject,
-          onCacheMaintenance(cacheMaintenance = {}) {
-            if (cacheMaintenance.retryable !== true) {
-              return;
-            }
-            logOperationalEvent(logger, "warn", {
-              code: cacheMaintenance.code,
-              component: "vibe64.session_save",
-              event: "vibe64.session_save.cache_maintenance_failed",
-              operationId: input.operationId,
-              reason: cacheMaintenance.reason,
-              sessionId: normalizedSessionId
-            }, cacheMaintenance.message || "Vibe64 Save cache maintenance failed.");
-          },
-          onProgress: input.onProgress,
-          operationId: input.operationId,
-          project,
-          runCommand: execution.runCommand,
-          runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
-          session
+          runCommand: execution.runCommand
         });
-        return {
-          ...saved,
-          commitTitleExecutionProfile: commitTitle.executionProfile
-        };
+
+        const saved = await saveSessionWorkInsideWrite(sessionId, input, { ...context, session });
+        await runtime.store.writeMetadataValue(sessionId, "canonical_commit", saved.saveCommit);
+        if (saved.reconciled === true) {
+          await runtime.store.writeMetadataValue(sessionId, "base_commit", saved.saveCommit);
+        }
+        await runtime.store.writeMetadataValue(sessionId, "base_branch", source.headBranch);
+        await runtime.store.writeMetadataValue(sessionId, "source_default_branch", source.headBranch);
+
+        source = await projectService.publishSessionPullRequest(source, input);
+        await runtime.store.writeMetadataValue(sessionId, "github_pull_request", JSON.stringify(source));
+        return { ok: true, pullRequest: source, saveCommit: saved.saveCommit };
       });
     },
 

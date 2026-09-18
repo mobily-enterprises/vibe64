@@ -4,6 +4,7 @@ import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  sessionRepositoryProject,
   normalizeRepositoryMode
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -53,6 +54,7 @@ function commitObjectId(value = "", errorCode = "vibe64_repository_history_commi
 }
 
 function repositoryReadContext(project = {}, session = null) {
+  project = sessionRepositoryProject(project, session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
   const branch = text(
     project.repository?.defaultBranch ||
