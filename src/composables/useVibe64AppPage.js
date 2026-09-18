@@ -9,6 +9,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
+import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -222,10 +223,7 @@ function useVibe64AppPage() {
         channel: "snackbar",
         dedupeKey: `vibe64.issueComment:${payload.projectSlug}:${comment.id}`
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["vibe64.issue", `${basePath}/${comment.number}`] }),
-        queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] })
-      ]);
+      await invalidateGithubIssueQueries(queryClient, basePath, `${basePath}/${comment.number}`);
     }
   });
 

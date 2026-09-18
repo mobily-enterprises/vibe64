@@ -108,7 +108,9 @@ export async function githubIssues(project, input = {}, options = {}) {
     // Search text is a literal phrase, never a user-supplied repository qualifier.
     const phrase = search.replace(/["\\\r\n]/gu, " ").trim();
     // The repository connection matches labels with OR; search provides ALL matching.
-    if (!phrase && selectedLabels.length < 2) {
+    const useSearch = Boolean(phrase) || selectedLabels.length > 1;
+    let list;
+    if (!useSearch) {
       const result = await api("graphql", {
         query: `query($owner:String!, $name:String!, $cursor:String, $states:[IssueState!], $labels:[String!]) {
           repository(owner:$owner, name:$name) {
@@ -118,29 +120,28 @@ export async function githubIssues(project, input = {}, options = {}) {
           }
         }`, variables: { owner, name, cursor, states: state === "all" ? null : [state.toUpperCase()], labels: selectedLabels }
       });
-      const list = result.data?.repository?.issues;
-      if (!Array.isArray(list?.nodes)) throw vibe64Error("GitHub returned an unreadable issue list.", "vibe64_github_issues_failed");
-      return { ok: true, repository: fullName, issues: list.nodes.filter((issue) => issue?.number),
-        total: list.totalCount, pageInfo: list.pageInfo, searchLimit: null };
+      list = result.data?.repository?.issues;
+    } else {
+      const labels = selectedLabels.map((label) => `label:${JSON.stringify(label)}`).join(" ");
+      const query = [
+        `repo:${fullName} is:issue`, state === "all" ? "" : `is:${state}`,
+        phrase ? `"${phrase}" in:title,body` : "", labels, "sort:updated-desc"
+      ].filter(Boolean).join(" ");
+      const result = await api("graphql", {
+        query: `query($search:String!, $cursor:String) {
+          search(query:$search, type:ISSUE, first:25, after:$cursor) {
+            issueCount ${PAGE_INFO} nodes { ... on Issue {
+              ${ISSUE_LIST_FIELDS}
+            } }
+          }
+        }`, variables: { search: query, cursor }
+      });
+      list = result.data?.search;
     }
-    const labels = selectedLabels.map((label) => `label:${JSON.stringify(label)}`).join(" ");
-    const query = [
-      `repo:${fullName} is:issue`, state === "all" ? "" : `is:${state}`,
-      phrase ? `"${phrase}" in:title,body` : "", labels, "sort:updated-desc"
-    ].filter(Boolean).join(" ");
-    const result = await api("graphql", {
-      query: `query($search:String!, $cursor:String) {
-        search(query:$search, type:ISSUE, first:25, after:$cursor) {
-          issueCount ${PAGE_INFO} nodes { ... on Issue {
-            ${ISSUE_LIST_FIELDS}
-          } }
-        }
-      }`, variables: { search: query, cursor }
-    });
-    const list = result.data?.search;
     if (!Array.isArray(list?.nodes)) throw vibe64Error("GitHub returned an unreadable issue list.", "vibe64_github_issues_failed");
     return { ok: true, repository: fullName, issues: list.nodes.filter((issue) => issue?.number),
-      total: list.issueCount, pageInfo: list.pageInfo, searchLimit: 1000 };
+      total: useSearch ? list.issueCount : list.totalCount,
+      pageInfo: list.pageInfo, searchLimit: useSearch ? 1000 : null };
   }
   const result = await api("graphql", {
     query: `query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
