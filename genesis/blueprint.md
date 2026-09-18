@@ -67,10 +67,14 @@ Long drafts scroll inside the input; repair details start collapsed, and a share
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.
 The main chat composer keeps Add, Settings, Goal, Codex allowance, and icon-only
-Send on one row, with Stop beside Send while needed. Goal and available allowance
+Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
 Settings uses full-width clickable rows with text left and icons right for
-model/access, companion, and bookmarks.
+model/access. Optional companion controls sit immediately to the right of the
+Settings cog, followed by the starred-files icon. These controls remain accessible
+while the menu is closed. Icons sit close together in narrow chat panes, with
+spacing increasing gently as the pane widens. The controls wrap when needed in
+narrow panes so Send remains accessible.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.

@@ -84,14 +84,17 @@ JSKIT owns the suggestion and working-status presentation, debounced suggestion
 lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
 Vibe64 supplies native state and actions, project-aware suggestion requests,
 connected-provider policies, upload storage, attachment opening, and favourite files.
-The main composer has a single non-wrapping row: Add, Settings, Goal, weekly
+The main composer groups Add, Settings, Goal, weekly
 allowance, and icon-only Send, with Stop alongside Send while needed. Goal and
 available allowance stay visible outside the menus. Its empty textbox uses one
 compact row and still grows with entered text. Add contains left-aligned file,
 preview, and diagnostics attachment actions. Settings contains full-width
-model/access, host companion, and starred-file buttons, with text left and icons
-right. Its host target stays mounted while closed so the companion bridge survives
-opening and closing the menu. Recovery guidance appears inside Settings,
+model/access buttons, with text left and icons right. The host tools target sits
+immediately after Settings in the composer row, followed by the icon-only
+starred-files menu, and remains mounted independently of Settings. Composer icon
+spacing grows with the chat pane's width, within a compact upper limit. The
+controls wrap only when space requires it, keeping Send accessible in narrow panes.
+Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;
 an existing draft or attachments are kept for review instead of being sent.
 The goal popover shows a bounded objective preview beside the existing status

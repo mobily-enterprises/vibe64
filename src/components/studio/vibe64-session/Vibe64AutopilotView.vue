@@ -482,10 +482,10 @@
                         :session="props.session"
                         :sessions-api-path="props.sessionsApiPath"
                       />
-                      <div ref="composerToolsTarget" />
-                      <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                     </v-card>
                   </v-menu>
+                  <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
+                  <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                   <Vibe64CodexPlanUsage
                     :active="props.active && !props.sessionSelectionArchived"
                     :session="props.session"
@@ -1703,7 +1703,8 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__composer-actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  column-gap: clamp(0rem, calc(4% - 0.75rem), 0.75rem);
   width: 100%;
 }
 
@@ -1714,6 +1715,15 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__composer-action {
   flex-shrink: 0;
+}
+
+.studio-autopilot__composer-tools {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.studio-autopilot__composer-tools:empty {
+  display: none;
 }
 
 .studio-autopilot__composer-menu {

@@ -16,18 +16,12 @@
         v-bind="activatorProps"
         aria-haspopup="dialog"
         :aria-label="`Starred files (${bookmarks.files.value.length})`"
-        block
-        class="justify-space-between"
+        class="starred-files-menu__trigger"
+        :icon="mdiStarOutline"
         size="small"
         title="Your starred files"
         variant="text"
-      >
-        Starred files
-        <template #append>
-          <v-icon :icon="mdiStarOutline" />
-          <span class="ms-1">{{ bookmarks.files.value.length }}</span>
-        </template>
-      </v-btn>
+      />
     </template>
     <v-card ref="panel" class="starred-files-menu" rounded="lg" @keydown.esc.stop.prevent="dismiss">
       <div class="starred-files-menu__header">
@@ -142,6 +136,13 @@ function openFirstMatch() {
   .starred-files-menu {
     width: 100%;
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (pointer: coarse) {
+  .starred-files-menu__trigger {
+    min-height: 3rem;
+    min-width: 3rem;
   }
 }
 </style>
