@@ -2028,6 +2028,18 @@ function createOutputTargetTerminalController({
   const previewTestRuns = new Map();
   const outputResultWrites = new Map();
 
+  function publishLaunchCleanup(sessionId) {
+    // Process cleanup must not wait for realtime delivery or its access checks.
+    void Promise.resolve().then(() => publishSessionChanged(sessionId, {
+      reason: "output-target-stale-cleared"
+    })).catch((error) => {
+      vibe64SessionDebugLog("server.outputTargetTerminal.cleanupPublication.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      }, { level: "warn" });
+    });
+  }
+
   async function ensureReadyLaunchPreviewProxy(context = {}, terminal = {}, {
     source = "ready"
   } = {}) {
@@ -2815,9 +2827,7 @@ function createOutputTargetTerminalController({
                       });
                       const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                       if (metadataCleared) {
-                        await publishSessionChanged(sessionId, {
-                          reason: "output-target-stale-cleared"
-                        });
+                        publishLaunchCleanup(sessionId);
                       }
                       if (typeof spec.onClose === "function") {
                         await spec.onClose(event);
@@ -2846,9 +2856,7 @@ function createOutputTargetTerminalController({
                     });
                     const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                     if (metadataCleared) {
-                      await publishSessionChanged(sessionId, {
-                        reason: "output-target-stale-cleared"
-                      });
+                      publishLaunchCleanup(sessionId);
                     }
                     if (typeof spec.onStop === "function") {
                       await spec.onStop(event);

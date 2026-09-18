@@ -8,6 +8,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/index.js`
 - `packages/vibe64-execution/src/server/managedExecution.js`
 - `packages/vibe64-execution/src/server/request.js`
+- `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `packages/vibe64-execution/src/server/runtime/runtimePacks.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
@@ -252,3 +253,5 @@ execution has been archived and its group proven empty. This preserves final
 peaks without declaring a still-running group complete. Resource estimates,
 learned profiles, admission policy and user-visible recovery belong to the
 provider, not these generic execution operations.
+Terminal closure awaits these callbacks without an elapsed-time failure, so
+provider queue contention keeps cleanup pending rather than falsely failed.

@@ -503,8 +503,8 @@ test("bulk shutdown stops terminals across namespaces concurrently and idempoten
   }
 });
 
-test("terminal close deadline kills the PTY process tree without waiting indefinitely for onStop", async () => {
-  const namespace = `terminal-stop-deadline-${crypto.randomUUID()}`;
+test("terminal close stops its process tree but stays pending until stop cleanup completes", async () => {
+  const namespace = `terminal-stop-cleanup-${crypto.randomUUID()}`;
   let releaseStopHook = () => null;
   const heldStopHook = new Promise((resolve) => {
     releaseStopHook = resolve;
@@ -530,41 +530,47 @@ test("terminal close deadline kills the PTY process tree without waiting indefin
     const processIds = /SHELL:(\d+) CHILD:(\d+)/u.exec(
       readTerminalSession(session.id, { namespace }).output
     ).slice(1).map(Number);
-    const startedAt = Date.now();
-
-    await assert.rejects(
-      closeTerminalSession(session.id, {
-        namespace,
-        timeoutMs: 400
-      }),
-      (error) => {
-        assert.equal(error instanceof AggregateError, true);
-        assert.equal(error.code, "terminal_cleanup_failed");
-        assert.equal(error.errors.some((failure) => failure.code === "terminal_stop_hook_timeout"), true);
-        return true;
-      }
-    );
-
-    assert.ok(Date.now() - startedAt < 1200);
+    let settled = false;
+    const closing = closeTerminalSession(session.id, { namespace }).finally(() => { settled = true; });
+    const concurrentClose = closeTerminalSession(session.id, { namespace });
     await waitFor(() => processIds.every((pid) => !processIsAlive(pid)));
-    assert.equal(readTerminalSession(session.id, { namespace }).status, "exited");
+    // Exceed the former five-second deadline while required cleanup is held.
+    await new Promise((resolve) => setTimeout(resolve, 5200));
+    assert.equal(settled, false);
+    const pending = readTerminalSession(session.id, { namespace });
+    assert.equal(pending.status, "closing");
+    assert.equal(pending.closeError, "");
+    assert.equal(countRunningTerminalSessions({ namespace }), 1);
 
     releaseStopHook();
-    assert.deepEqual(await closeTerminalSession(session.id, {
-      namespace,
-      timeoutMs: 400
-    }), {
-      closed: true,
-      ok: true
-    });
+    assert.deepEqual(await closing, { closed: true, ok: true });
+    assert.deepEqual(await concurrentClose, { closed: true, ok: true });
   } finally {
     releaseStopHook();
     await closeTerminalSessionsForNamespacePrefix(namespace).catch(() => null);
   }
 });
 
-test("terminal close deadline observes process exit separately from a hanging onClose", async () => {
-  const namespace = `terminal-close-deadline-${crypto.randomUUID()}`;
+test("terminal close escalates signals when the child ignores graceful termination", async () => {
+  const namespace = `terminal-resistant-child-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: ["-e", "process.on('SIGHUP', () => {}); process.on('SIGTERM', () => {}); console.log(`PID:${process.pid}`); setInterval(() => {}, 1000);"],
+    command: process.execPath,
+    namespace
+  });
+  try {
+    await waitFor(() => /PID:\d+/u.test(readTerminalSession(session.id, { namespace }).output));
+    const pid = Number(/PID:(\d+)/u.exec(readTerminalSession(session.id, { namespace }).output)[1]);
+    assert.deepEqual(await closeTerminalSession(session.id, { namespace }), { closed: true, ok: true });
+    assert.equal(processIsAlive(pid), false);
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal close stays pending until finalization completes, with no elapsed-time failure", async () => {
+  const namespace = `terminal-close-cleanup-${crypto.randomUUID()}`;
   let releaseCloseHook = () => null;
   const heldCloseHook = new Promise((resolve) => {
     releaseCloseHook = resolve;
@@ -586,30 +592,18 @@ test("terminal close deadline observes process exit separately from a hanging on
     await waitFor(() => /PID:\d+/u.test(readTerminalSession(session.id, { namespace }).output));
     const pid = Number(/PID:(\d+)/u.exec(readTerminalSession(session.id, { namespace }).output)?.[1]);
 
-    await assert.rejects(
-      closeTerminalSession(session.id, {
-        namespace,
-        timeoutMs: 400
-      }),
-      (error) => {
-        assert.equal(error instanceof AggregateError, true);
-        assert.equal(error.code, "terminal_cleanup_failed");
-        assert.equal(error.errors.some((failure) => failure.code === "terminal_close_hook_timeout"), true);
-        return true;
-      }
-    );
-
-    assert.equal(processIsAlive(pid), false);
-    assert.equal(readTerminalSession(session.id, { namespace }).status, "exited");
+    let settled = false;
+    const closing = closeTerminalSession(session.id, { namespace }).finally(() => { settled = true; });
+    await waitFor(() => !processIsAlive(pid));
+    await new Promise((resolve) => setTimeout(resolve, 5200));
+    assert.equal(settled, false);
+    const pending = readTerminalSession(session.id, { namespace });
+    assert.equal(pending.status, "closing");
+    assert.equal(pending.closeError, "");
+    assert.equal(countRunningTerminalSessions({ namespace }), 1);
 
     releaseCloseHook();
-    assert.deepEqual(await closeTerminalSession(session.id, {
-      namespace,
-      timeoutMs: 400
-    }), {
-      closed: true,
-      ok: true
-    });
+    assert.deepEqual(await closing, { closed: true, ok: true });
   } finally {
     releaseCloseHook();
     await closeTerminalSessionsForNamespacePrefix(namespace).catch(() => null);
@@ -636,8 +630,7 @@ test("terminal close kills the child and reports a rejected stop hook", async ()
     const pid = Number(/PID:(\d+)/u.exec(readTerminalSession(session.id, { namespace }).output)?.[1]);
 
     assert.deepEqual(await closeTerminalSession(session.id, {
-      namespace,
-      timeoutMs: 400
+      namespace
     }), {
       closed: true,
       cleanupErrors: ["stop cleanup rejected"],
@@ -1049,6 +1042,9 @@ test("terminal sessions report exited after close hooks finish", async () => {
     assert.equal(readTerminalSession(session.id, { namespace }).status, "closing");
     assert.equal(messages.some((message) => message.type === "status" && message.status === "exited"), false);
 
+    await new Promise((resolve) => setTimeout(resolve, 5200));
+    assert.equal(readTerminalSession(session.id, { namespace }).status, "closing");
+    assert.equal(messages.some((message) => message.type === "error" || message.status === "exited"), false);
     finishCloseHook();
 
     await waitFor(() => messages.some((message) =>
@@ -1057,6 +1053,7 @@ test("terminal sessions report exited after close hooks finish", async () => {
     assert.equal(readTerminalSession(session.id, { namespace }).status, "exited");
     subscription.unsubscribe();
   } finally {
+    finishCloseHook();
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
 });

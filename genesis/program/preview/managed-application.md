@@ -126,6 +126,13 @@ Terminal completion reports success, failure or deliberate stop, with deferred
 group finalization after execution cleanup. Already-running Preview reuse
 creates no new group. Optional resource estimates come from the same Outputs
 inspection; older projects without that section retain generic fallback.
+Closing waits for process exit, verified process-group drain and both cleanup
+hooks without a wall-clock completion deadline. Pending hooks keep the terminal
+closing and retain its launch slot; concurrent Close requests join the same
+operation. Stop begins process termination independently of the hooks and uses
+the existing TERM/KILL escalation and scope checks. Natural process exit also
+remains closing until cleanup settles. Session-change publication after launch
+metadata cleanup runs independently, with publication errors logged.
 Scoped test targets and the restored normal target have separate accounting
 environments, without changing the application's own data configuration.
 

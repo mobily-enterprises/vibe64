@@ -16,8 +16,6 @@ const MIN_TERMINAL_ROWS = 5;
 const MAX_TERMINAL_COLS = 300;
 const MAX_TERMINAL_ROWS = 120;
 const DEFAULT_QUIET_THRESHOLD_MS = 3000;
-const DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS = 5000;
-const DEFAULT_TERMINAL_STOP_HOOK_GRACE_MS = 1000;
 const MAX_QUIET_THRESHOLD_MS = 10 * 60 * 1000;
 const MAX_DETACHED_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const TERMINAL_KEY_INPUTS = Object.freeze({
@@ -683,63 +681,14 @@ async function runStopHook(session, reason) {
   }
 }
 
-function normalizeTerminalCloseTimeoutMs(value = DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS) {
-  const timeoutMs = Math.floor(Number(value));
-  return Number.isSafeInteger(timeoutMs) && timeoutMs > 0
-    ? timeoutMs
-    : DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS;
-}
-
-function terminalCloseDeadline(timeoutMs = DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS) {
-  return Date.now() + normalizeTerminalCloseTimeoutMs(timeoutMs);
-}
-
-function terminalDeadlineRemainingMs(deadlineAt = 0) {
-  return Math.max(0, Math.floor(Number(deadlineAt) - Date.now()));
-}
-
-async function waitForTerminalLifecyclePromise(promise, deadlineAt, timeoutFailure) {
-  const remainingMs = terminalDeadlineRemainingMs(deadlineAt);
-  if (remainingMs < 1) {
-    throw timeoutFailure();
-  }
-  let timeout;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(timeoutFailure()), remainingMs);
-      })
-    ]);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function terminalLifecycleTimeout(session, phase) {
-  const labels = {
-    close: "finalization",
-    exit: "process exit",
-    stop: "stop cleanup"
-  };
-  const error = new Error(
-    `Terminal ${labels[phase] || phase} did not finish before its close deadline: ${session.id}`
-  );
-  error.code = phase === "exit"
-    ? "terminal_exit_timeout"
-    : `terminal_${phase}_hook_timeout`;
-  error.phase = phase;
-  return error;
-}
-
 function reportTerminalLifecycleFailure(session, error) {
-  const key = `${String(error?.code || "terminal_lifecycle_timeout")}:${String(error?.message || "")}`;
+  const key = `${String(error?.code || "terminal_cleanup_failed")}:${String(error?.message || "")}`;
   session.reportedLifecycleFailures ||= new Set();
   if (session.reportedLifecycleFailures.has(key)) {
     return error;
   }
   session.reportedLifecycleFailures.add(key);
-  const message = String(error?.message || error || "Terminal cleanup timed out.");
+  const message = String(error?.message || error || "Terminal cleanup failed.");
   const chunk = `\r\n[studio] ${message}\r\n`;
   session.closeError = message;
   session.output = trimBuffer(`${session.output}${chunk}`);
@@ -793,18 +742,31 @@ function markTerminalExited(session) {
   });
 }
 
-async function settleTerminalExitStatus(session, deadlineAt) {
+function beginTerminalScopeDrain(session) {
+  if (!session.scopeDrainCompletion) {
+    session.scopeDrainCompletion = (async () => {
+      if (process.platform !== "win32" && !await drainProcessGroup(session.terminal.pid)) {
+        const error = new Error(`Terminal execution scope did not become empty: ${session.id}`);
+        error.code = "terminal_execution_drain_failed";
+        throw error;
+      }
+    })();
+    session.scopeDrainCompletion.catch(() => null);
+  }
+  return session.scopeDrainCompletion;
+}
+
+async function settleTerminalExitStatus(session) {
   try {
     await session.scopeDrainCompletion;
   } catch (error) {
     reportTerminalLifecycleFailure(session, error);
   }
   try {
-    await waitForTerminalLifecyclePromise(
+    await Promise.all([
       beginTerminalCloseHook(session, session.stopReason || "exit"),
-      deadlineAt,
-      () => terminalLifecycleTimeout(session, "close")
-    );
+      session.stopHookCompletion
+    ]);
   } catch (error) {
     reportTerminalLifecycleFailure(session, error);
   }
@@ -903,7 +865,6 @@ function startTerminalSession({
   });
   const session = {
     id,
-    closeDeadlineAt: 0,
     closeHookCompletion: null,
     closePromise: null,
     commandPreview: resolvedCommandPreview,
@@ -938,7 +899,7 @@ function startTerminalSession({
     rows: DEFAULT_TERMINAL_ROWS,
     status: "running",
     stopHookCompletion: null,
-    scopeDrainCompletion: Promise.resolve(),
+    scopeDrainCompletion: null,
     namespace,
     subscribers: new Set(),
     terminal
@@ -979,17 +940,7 @@ function startTerminalSession({
     session.processExited = true;
     session.exitCode = exitCode;
     session.status = "closing";
-    session.scopeDrainCompletion = (async () => {
-      if (
-        process.platform !== "win32" &&
-        !await drainProcessGroup(session.terminal.pid)
-      ) {
-        const error = new Error(`Terminal execution scope did not become empty: ${session.id}`);
-        error.code = "terminal_execution_drain_failed";
-        throw error;
-      }
-    })();
-    session.scopeDrainCompletion.catch(() => null);
+    beginTerminalScopeDrain(session);
     sendToSubscribers(session, {
       exitCode,
       status: session.status,
@@ -997,10 +948,7 @@ function startTerminalSession({
     });
     beginTerminalCloseHook(session, session.stopReason || "exit");
     session.resolveExitCompletion();
-    const finalizationDeadlineAt = session.closeDeadlineAt > Date.now()
-      ? session.closeDeadlineAt
-      : terminalCloseDeadline();
-    void settleTerminalExitStatus(session, finalizationDeadlineAt);
+    void settleTerminalExitStatus(session);
   });
 
   sessions.set(id, session);
@@ -1121,9 +1069,7 @@ function resizeTerminalSession(id, size = {}, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
-async function beginTerminalStop(session, reason = "stop", {
-  deadlineAt = terminalCloseDeadline()
-} = {}) {
+async function beginTerminalStop(session, reason = "stop") {
   if (!session || session.processExited) {
     return {
       failures: []
@@ -1139,23 +1085,9 @@ async function beginTerminalStop(session, reason = "stop", {
     });
   }
   const failures = [];
-  const remainingMs = terminalDeadlineRemainingMs(deadlineAt);
-  const hookDeadlineAt = Math.min(
-    deadlineAt,
-    Date.now() + Math.min(
-      DEFAULT_TERMINAL_STOP_HOOK_GRACE_MS,
-      Math.max(1, Math.floor(remainingMs / 4))
-    )
-  );
-  try {
-    await waitForTerminalLifecyclePromise(
-      beginTerminalStopHook(session, session.stopReason),
-      hookDeadlineAt,
-      () => terminalLifecycleTimeout(session, "stop")
-    );
-  } catch {
-    // Stop cleanup may continue, but it cannot retain ownership of the PTY child.
-  }
+  // Cleanup and process termination have independent completion signals.
+  // A queued hook must neither keep the child alive nor be declared failed.
+  beginTerminalStopHook(session, session.stopReason);
   if (!session.processExited && !session.killStarted) {
     session.killStarted = true;
     try {
@@ -1169,25 +1101,14 @@ async function beginTerminalStop(session, reason = "stop", {
       failures.push(reportTerminalLifecycleFailure(session, failure));
     }
   }
+  try {
+    await beginTerminalScopeDrain(session);
+  } catch (error) {
+    failures.push(reportTerminalLifecycleFailure(session, error));
+  }
   return {
     failures
   };
-}
-
-async function waitForTerminalExit(session, deadlineAt) {
-  if (session?.processExited) {
-    return;
-  }
-  await waitForTerminalLifecyclePromise(
-    session.exitCompletion,
-    deadlineAt,
-    () => terminalLifecycleTimeout(session, "exit")
-  );
-  if (!session.processExited) {
-    const error = new Error(`Terminal process exit could not be verified: ${session.id}`);
-    error.code = "terminal_exit_unverified";
-    throw error;
-  }
 }
 
 function stopTerminalSession(id, { namespace = "default" } = {}) {
@@ -1205,8 +1126,7 @@ function stopTerminalSession(id, { namespace = "default" } = {}) {
 }
 
 async function closeTerminalSession(id, {
-  namespace = "default",
-  timeoutMs = DEFAULT_TERMINAL_CLOSE_TIMEOUT_MS
+  namespace = "default"
 } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
@@ -1220,66 +1140,31 @@ async function closeTerminalSession(id, {
     return session.closePromise;
   }
 
-  const deadlineAt = terminalCloseDeadline(timeoutMs);
-  session.closeDeadlineAt = deadlineAt;
   const closing = (async () => {
     const fatalFailures = [];
-    const cleanupWarnings = [];
     clearDetachedCleanupTimer(session);
     if (!session.processExited) {
-      const stopped = await beginTerminalStop(session, "close", {
-        deadlineAt
-      });
-      cleanupWarnings.push(...stopped.failures);
+      const stopped = await beginTerminalStop(session, "close");
+      if (stopped.failures.length) {
+        throw terminalCloseAggregateFailure(session, stopped.failures);
+      }
     }
     try {
-      await waitForTerminalExit(session, deadlineAt);
+      await session.exitCompletion;
     } catch (error) {
       fatalFailures.push(reportTerminalLifecycleFailure(session, error));
     }
     try {
-      await waitForTerminalLifecyclePromise(
-        session.scopeDrainCompletion,
-        deadlineAt,
-        () => terminalLifecycleTimeout(session, "drain")
-      );
+      await session.scopeDrainCompletion;
     } catch (error) {
       fatalFailures.push(reportTerminalLifecycleFailure(session, error));
     }
 
-    const hooks = [
-      ...(session.stopHookCompletion ? [{
-        phase: "stop",
-        promise: session.stopHookCompletion
-      }] : []),
-      ...(session.closeHookCompletion ? [{
-        phase: "close",
-        promise: session.closeHookCompletion
-      }] : [])
-    ];
-    const hookResults = await Promise.all(hooks.map(async ({ phase, promise }) => {
-      try {
-        return {
-          failure: await waitForTerminalLifecyclePromise(
-            promise,
-            deadlineAt,
-            () => terminalLifecycleTimeout(session, phase)
-          ),
-          timedOut: false
-        };
-      } catch (error) {
-        return {
-          failure: reportTerminalLifecycleFailure(session, error),
-          timedOut: true
-        };
-      }
-    }));
-    for (const result of hookResults) {
-      if (!result.failure) {
-        continue;
-      }
-      (result.timedOut ? fatalFailures : cleanupWarnings).push(result.failure);
-    }
+    const hookResults = await Promise.all([
+      session.stopHookCompletion,
+      session.closeHookCompletion
+    ]);
+    const cleanupWarnings = hookResults.filter(Boolean);
 
     if (session.processExited) {
       markTerminalExited(session);
@@ -1307,9 +1192,6 @@ async function closeTerminalSession(id, {
   } finally {
     if (session.closePromise === closing) {
       session.closePromise = null;
-    }
-    if (session.closeDeadlineAt === deadlineAt) {
-      session.closeDeadlineAt = 0;
     }
   }
 }
