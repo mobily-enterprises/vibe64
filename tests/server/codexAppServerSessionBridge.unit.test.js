@@ -1296,6 +1296,29 @@ test("codex app-server bridge resumes an existing session thread", async () => {
   ]);
 });
 
+test("Codex changeover restores its saved conversation and pauses its goal before native resume", async () => {
+  const runtime = fakeRuntime();
+  const calls = [];
+  const provider = {
+    async ensureRuntime() { return appServerRuntime(); },
+    async readGoal(id) { calls.push(["goal", id]); return { goal: { status: "active" } }; },
+    async setGoalStatus(id, status) { calls.push(["pause", id, status]); },
+    async resumeThread(id) { calls.push(["resume", id]); return { id }; }
+  };
+  const result = await ensureCodexAppServerThreadForSession({ provider, runtime, workdir: "/repo/worktree",
+    observeThread(id) { calls.push(["observe", id]); },
+    session: { sessionId: "session-1", metadata: {
+      agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
+      agent_transport_id: "opencode_server", codex_conversation_id: "original-codex",
+      codex_conversation_workdir: "/repo/worktree", codex_changeover_pause_goal: "yes"
+    } }
+  });
+  assert.equal(result.threadId, "original-codex");
+  assert.deepEqual(calls, [["goal", "original-codex"], ["pause", "original-codex", "paused"],
+    ["observe", "original-codex"], ["resume", "original-codex"]]);
+  assert.ok(runtime.writes.some((write) => write.name === "codex_changeover_pause_goal" && write.value === ""));
+});
+
 test("codex app-server bridge refreshes project hook trust when resuming a thread", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];

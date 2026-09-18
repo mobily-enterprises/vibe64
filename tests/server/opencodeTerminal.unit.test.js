@@ -27,6 +27,34 @@ import {
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 
+test("OpenCode changeover delivers one combined prompt, retains authored text, and reuses native history", async (t) => {
+  const harness = await controllerHarness();
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const sent = [];
+  const send = (id, message, displayMessage) => harness.controller.sendMessage("session-1", {
+    messageId: id, message, displayMessage,
+    onPromptSending({ threadId }) {
+      assert.equal(harness.promptCalls.length, sent.length, "claim must precede the native prompt");
+      sent.push(threadId);
+    }
+  });
+  await send("before-changeover", "Initial task", "Initial task");
+  await harness.controller.waitForTurn("session-1");
+  await harness.controller.closeAllForSession("session-1");
+  const combined = "[Vibe64 conversation changeover]\nCodex changed the plan.\n[End Vibe64 conversation changeover]\n\nUser's message:\nContinue the work";
+  const result = await send("after-changeover", combined, "Continue the work");
+  assert.equal(result.delivered, true, JSON.stringify(result));
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1], sent[0]);
+  assert.equal(harness.promptCalls.length, 2);
+  assert.equal(harness.promptCalls[1].input.prompt.text, combined);
+  assert.equal(harness.userMessages[1].text, "Continue the work");
+  await harness.controller.waitForTurn("session-1");
+});
+
 const renewalSource = Object.freeze({
   authority: "github",
   commit: "a".repeat(40),

@@ -221,6 +221,8 @@ const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
   "codex_context_refresh_turn_id"
 ]);
 const CODEX_STATE_METADATA_NAMES = Object.freeze([
+  "codex_conversation_id",
+  "codex_conversation_workdir",
   "agent_identity_captured_at",
   "agent_identity_conversation_id",
   "agent_identity_error",
@@ -5181,14 +5183,25 @@ function createCodexTerminalController({
     }
     const store = await createStoreForSession(normalizedSessionId);
     const run = await readCodexAppServerAgentRunForSession(store, normalizedSessionId);
-    const ownership = codexAppServerPendingUserMessageOwnership(run, clientId);
+    let ownership = codexAppServerPendingUserMessageOwnership(run, clientId);
+    if (!ownership && clientId && await store.conversationMessageIdExists(normalizedSessionId, clientId)) return;
+    const receiptId = ownership?.clientId || clientId;
+    const pendingMessage = codexAppServerPendingUserMessages.get(
+      `${codexTerminalNamespace(normalizedSessionId)}\0${receiptId}`
+    );
+    let recoveredMessage = null;
+    if (receiptId && !pendingMessage) {
+      const saved = JSON.parse(await store.readMetadataValue(normalizedSessionId, "assistant_changeover") || "null");
+      const pending = saved?.engines?.codex?.pending;
+      if (pending?.messageId === receiptId && pending.threadId === normalizedThreadId) {
+        recoveredMessage = pending;
+        ownership ||= { clientId: receiptId, inputSource: "chat" };
+      }
+    }
     if (ownership) {
       // The provider's user-message receipt precedes its answer notifications.
       // Persist the authored message here so answers cannot overtake it while
       // the original HTTP request is still finishing startup bookkeeping.
-      const pendingMessage = codexAppServerPendingUserMessages.get(
-        `${codexTerminalNamespace(normalizedSessionId)}\0${ownership.clientId}`
-      );
       if (pendingMessage) {
         await writeCodexAppServerDeliveredUserMessage(
           { store },
@@ -5197,6 +5210,11 @@ function createCodexTerminalController({
           ownership.clientId,
           await currentConversationActorMetadata(pendingMessage.vibe64User),
           pendingMessage.attachments
+        );
+      } else if (recoveredMessage) {
+        await writeCodexAppServerDeliveredUserMessage(
+          { store }, normalizedSessionId, recoveredMessage.displayMessage, receiptId,
+          recoveredMessage.turnMetadata, recoveredMessage.displayAttachments
         );
       }
       const turn = codexAppServerTurnStateFromAgentRun(run || {});
@@ -8728,6 +8746,7 @@ function createCodexTerminalController({
         owned: true
       });
       try {
+        await input.onPromptSending?.({ threadId: thread.threadId, displayAttachments: input.displayAttachments, turnMetadata });
         const response = sendCodexAppServerPromptForSession({
           agentSettings,
           clientUserMessageId,
@@ -8747,6 +8766,7 @@ function createCodexTerminalController({
           ? await Promise.race([response, receipt.promise.then((turn) => ({ turn }))])
           : await response;
       } catch (error) {
+        if (Number.isInteger(error?.code) && error.code < 0) await input.onPromptRejected?.();
         await writeCodexAppServerUserMessageOwnership(runtime.store, sessionId, clientUserMessageId, {
           eventKind: "codex-app-server-user-message-released",
           owned: false
@@ -12630,7 +12650,7 @@ function createCodexTerminalController({
         attachments,
         messageId: normalizeText(messageId),
         text: message,
-        turnMetadata
+        turnMetadata: { ...turnMetadata, engineId: "codex" }
       });
       if (!written) {
         return null;
@@ -12966,6 +12986,7 @@ function createCodexTerminalController({
     }
     let result;
     try {
+      await input.onPromptSending?.({ threadId, displayAttachments: input.displayAttachments, turnMetadata });
       const response = provider.steerTurn(
         threadId,
         turnId,
@@ -12983,6 +13004,7 @@ function createCodexTerminalController({
       )?.receipt;
       result = receipt ? await Promise.race([response, receipt.promise]) : await response;
     } catch (error) {
+      if (Number.isInteger(error?.code) && error.code < 0) await input.onPromptRejected?.();
       const recovered = await recoverAfterSteerFailure(error);
       if (recovered) {
         return recovered;
@@ -13096,7 +13118,7 @@ function createCodexTerminalController({
               sessionId: normalizedSessionId
             })
           );
-          providerOptions = renewalCleanup
+          providerOptions = renewalCleanup || options.changeover
             ? codexAppServerRuntimeOptionsFromSessionMetadata(session)
             : await codexAppServerRuntimeOptionsForSession(session, {
                 runtime
@@ -13109,10 +13131,26 @@ function createCodexTerminalController({
           throw error;
         }
         await closeCodexAppServerConversations(normalizedSessionId);
+        if (options.changeover) {
+          const threadId = codexThreadIdForWorkdir(session, terminalWorktreePath(session));
+          for (const [key, provider] of codexAppServerProviders) {
+            if (!threadId || codexAppServerProviderOwners.get(key)?.sessionKey !== sessionKey) continue;
+            try {
+              await provider.stopThreadForObservationLoss(threadId, "");
+            } catch (error) {
+              // If other sessions retain the shared process, closing this
+              // socket alone is not proof that its native goal/work stopped.
+              const shared = [...codexAppServerProviders.keys()].some((other) =>
+                codexAppServerProviderOwners.get(other)?.sessionKey !== sessionKey);
+              if (shared) throw error;
+              // The existing shutdown below must instead prove process exit.
+            }
+          }
+        }
         try {
           unsubscribeResult = await unsubscribeCodexAppServerThreadForSession(
             normalizedSessionId,
-            renewalCleanup
+            renewalCleanup || options.changeover
               ? {
                   providerOptions,
                   runtime,
@@ -13132,7 +13170,7 @@ function createCodexTerminalController({
             normalizedSessionId,
             {
               preserveProcessExitProof,
-              requireStopped: Boolean(renewalCleanup)
+              requireStopped: Boolean(renewalCleanup || options.changeover)
             }
           );
           if (cachedProviders.ok === false) {
@@ -13184,7 +13222,7 @@ function createCodexTerminalController({
               stopped: persistedRuntime?.removed === true || persistedRuntime?.runtimeDirRemoved === true
             });
           }
-          if (renewalCleanup) {
+          if (renewalCleanup || (options.changeover && sessionHasCodexAppServerRuntime(session))) {
             const cachedRuntimeExitVerified = cachedProviders.providerCount > 0 &&
               cachedProviders.results.length === cachedProviders.providerCount &&
               cachedProviders.results.every((result) => (
@@ -13201,9 +13239,13 @@ function createCodexTerminalController({
               (!cachedRuntimeExitVerified && !persistedRuntimeExitVerified)
             ) {
               const error = new Error(
-                "Session renewal could not verify that every Codex process exited."
+                options.changeover
+                  ? "Assistant changeover could not confirm that the previous Codex execution stopped. Try stopping it again."
+                  : "Session renewal could not verify that every Codex process exited."
               );
-              error.code = "vibe64_session_renewal_process_exit_unverified";
+              error.code = options.changeover
+                ? "vibe64_changeover_process_exit_unverified"
+                : "vibe64_session_renewal_process_exit_unverified";
               error.retryable = true;
               error.details = {
                 cachedFailures: cachedProviders.failed,
@@ -13224,7 +13266,7 @@ function createCodexTerminalController({
               projectService,
               normalizedSessionId
             );
-        if (executionRoot && renewalCleanup?.kind !== "predecessor") {
+        if (executionRoot && !options.changeover && renewalCleanup?.kind !== "predecessor") {
           await cleanupCodexAttachments(executionRoot, normalizedSessionId, "", {
             env: codexAttachmentEnv()
           });
@@ -13798,6 +13840,7 @@ function createCodexTerminalController({
           ...started,
           conversationTurn,
           conversationTurns: [conversationTurn],
+          delivered: true,
           deliveryMode: "new_turn",
           newTurnRequired: false
         };

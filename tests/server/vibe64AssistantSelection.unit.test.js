@@ -160,7 +160,7 @@ test("assistant selection round-trips through one durable metadata value", () =>
   assert.equal(vibe64AssistantSelectionFromMetadata({}, { required: false }), null);
 });
 
-test("assistant selection permits between-turn model changes but never engine changes", () => {
+test("assistant selection permits between-turn model and engine changes", () => {
   const current = resolveVibe64AssistantSelection(capabilities(), {});
   const changedModel = {
     ...current,
@@ -169,12 +169,12 @@ test("assistant selection permits between-turn model changes but never engine ch
   };
 
   assert.deepEqual(assertVibe64AssistantSelectionUpdate(current, changedModel), changedModel);
-  assert.throws(
-    () => assertVibe64AssistantSelectionUpdate(current, {
+  assert.equal(
+    assertVibe64AssistantSelectionUpdate(current, {
       ...current,
       engineId: "codex"
-    }),
-    (error) => error.code === VIBE64_ASSISTANT_SELECTION_ERROR_CODES.ENGINE_IMMUTABLE
+    }).engineId,
+    "codex"
   );
   assert.throws(
     () => assertVibe64AssistantSelectionUpdate(current, changedModel, { turnActive: true }),
@@ -200,8 +200,8 @@ test("the session model selector shows only available models and normalizes stal
     import.meta.url
   ), "utf8");
 
-  assert.match(source, /<v-autocomplete[\s\S]*v-if="modelRows\.length > 6"/u);
-  assert.match(source, /v-else-if="modelRows\.length"[\s\S]*v-for="model in modelRows"/u);
+  assert.match(source, /import \{ AssistantModelControl \} from "@jskit-ai\/assistant-core\/client\/conversation"/u);
+  assert.match(source, /<AssistantModelControl[\s\S]*:model-rows="modelRows"/u);
   assert.match(source, /filter\(\(model\) => model\.status === "available"\)/u);
   assert.match(source, /watch\(\[menuOpen, modelProvider, modelRows\]/u);
   assert.match(source, /model\.id === provider\.defaultModelId/u);

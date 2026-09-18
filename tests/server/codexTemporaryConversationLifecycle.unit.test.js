@@ -65,6 +65,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createSessionPromptHintsService } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
+import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 const TEST_AUTH_STATE_SIGNATURE = `v1:${"b".repeat(24)}`;
@@ -2906,6 +2907,85 @@ test("an idle message does not replace a thread for an unrelated invalid request
     assert.match(result.error, /invalid thread\/read configuration/u);
     assert.equal(captures.turns.length, 0);
     assert.equal(captures.threadStarts.length, 1);
+  });
+});
+
+test("Codex changeover resumes its original thread and sends one combined normal prompt", async () => {
+  await withAgentMessageController(async ({ captures, controllerOptions, terminalService, runtime, sessionId, store }) => {
+    const originalSelection = (await store.readSession(sessionId)).metadata.assistant_selection;
+    const first = await terminalService.sendAgentMessage(sessionId, { message: "Original Codex task", messageId: "changeover-first" });
+    assert.equal(first.delivered, true, JSON.stringify(first));
+    const originalThread = captures.turns[0].threadId;
+    completeAgentMessageHarnessTurn(captures, captures.provider, "turn-1", "Original Codex answer");
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.active === false, "the first changeover turn to complete");
+    const context = { runtime, session: await store.readSession(sessionId) };
+    const authFile = path.join(controllerOptions.codexToolHomeSource, ".codex", "auth.json");
+    const auth = await readFile(authFile);
+    await rm(authFile);
+    const stoppedThreads = [];
+    captures.provider.stopThreadForObservationLoss = async (id) => { stoppedThreads.push(id); };
+    const closed = await terminalService.prepareAssistantChangeover(sessionId, context);
+    assert.equal(closed.ok, true, JSON.stringify(closed));
+    assert.deepEqual(stoppedThreads, [originalThread]);
+    await writeFile(authFile, auth);
+    const otherSelection = { agentId: "build", engineId: "opencode", modelId: "deepseek-chat",
+      modelProviderId: "deepseek", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+    await store.writeMetadataValue(sessionId, "assistant_selection", serializeVibe64AssistantSelection(otherSelection));
+    await store.writeMetadataValue(sessionId, "agent_identity_provider", "opencode");
+    await store.writeMetadataValue(sessionId, "agent_identity_conversation_id", "ses_opencode_original");
+    await store.writeMetadataValue(sessionId, "agent_transport_id", "opencode_server");
+    await sendWithAssistantChangeover(sessionId, { message: "The other engine changed the plan", messageId: "changeover-other" },
+      { runtime, session: await store.readSession(sessionId) }, {
+        async sendMessage(_id, input) {
+          await input.onPromptSending({ threadId: "ses_opencode_original" });
+          await store.writeConversationUserMessage(sessionId, {
+            messageId: input.messageId, text: input.displayMessage, turnMetadata: { engineId: "opencode" }
+          });
+          await store.writeConversationAssistantMessage(sessionId, { text: "The new plan uses blue", messageId: "changeover-other-answer" });
+          return { ok: true, delivered: true };
+        }
+      });
+    await store.writeMetadataValue(sessionId, "assistant_selection", originalSelection);
+    const blockedGoal = await terminalService.updateAgentGoal(sessionId, { action: "resume" });
+    assert.equal(blockedGoal.code, "vibe64_changeover_message_required");
+    assert.equal(captures.turns.length, 1);
+    const returning = await terminalService.sendAgentMessage(sessionId, { message: "Continue with that plan", messageId: "changeover-return" });
+    assert.equal(returning.delivered, true, JSON.stringify(returning));
+    assert.equal(captures.threadStarts.length, 1, "returning must not create a replacement Codex thread");
+    assert.equal(captures.turns.length, 2, "there must be no separate handover turn");
+    assert.equal(captures.turns[1].threadId, originalThread);
+    assert.equal(captures.turns[1].input.length, 1);
+    assert.match(captures.turns[1].input[0], /The new plan uses blue/);
+    assert.ok(captures.turns[1].input[0].endsWith("User's message:\nContinue with that plan"));
+    assert.equal((await store.readConversationLog(sessionId)).at(-1).user.text, "Continue with that plan");
+  }, { throughTerminalService: true });
+});
+
+test("Codex changeover restores authored text from a durable claim on a late native receipt", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.ensureThread(sessionId);
+    const threadId = captures.provider.threadId;
+    const messageId = "changeover-late-receipt";
+    await store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify({
+      lastEngine: "opencode", engines: { codex: { seen: {}, pending: {
+        messageId, threadId, attempted: true, displayMessage: "Only the authored request",
+        turnMetadata: { actorId: "owner", actorDisplayName: "Owner" }, displayAttachments: []
+      } } }
+    }));
+    const notification = { method: "item/completed", params: { threadId, turnId: "late-turn", item: {
+      type: "userMessage", id: "late-native-item", clientId: messageId,
+      content: [{ type: "text", text: "[Vibe64 conversation changeover]\nPrivate catchup text\nOnly the authored request" }]
+    } } };
+    emitCodexNotification(captures.subscribers, notification);
+    const turns = await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (value) => value.some((turn) => turn.user?.messageId === messageId), "late changeover receipt");
+    assert.equal(turns.at(-1).user.text, "Only the authored request");
+    assert.equal(turns.at(-1).metadata.actorId, "owner");
+    emitCodexNotification(captures.subscribers, notification);
+    await controller.closeAllForSession(sessionId);
+    assert.equal((await store.readConversationLog(sessionId)).filter((turn) => turn.user).length, 1);
+    assert.equal(captures.turns.length, 0, "receipt recovery must not send a turn");
   });
 });
 

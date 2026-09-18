@@ -1255,6 +1255,8 @@ function codexAppServerIdentityMetadata({
       }).command
     : "";
   return {
+    codex_conversation_id: normalizedThreadId,
+    codex_conversation_workdir: normalizedWorkdir,
     agent_identity_captured_at: capturedAt,
     agent_identity_conversation_id: normalizedThreadId,
     agent_identity_error: "",
@@ -1960,6 +1962,10 @@ async function startFreshCodexAppServerThreadForSession({
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
+  if (metadata.agent_identity_provider === "opencode" && metadata.codex_conversation_id && normalizeWorkdir(workdir) &&
+      normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)) {
+    return normalizeAgentText(metadata.codex_conversation_id);
+  }
   if (metadata.agent_transport_id !== CODEX_APP_SERVER_PROVIDER_ID) {
     return "";
   }
@@ -2223,11 +2229,21 @@ async function ensureCodexAppServerThreadForSession({
   let thread = null;
   stageStartedAt = Date.now();
   if (existingThreadId) {
+    if (session.metadata?.codex_changeover_pause_goal === "yes") {
+      const { goal } = await provider.readGoal(existingThreadId);
+      if (goal?.status === "active") await provider.setGoalStatus(existingThreadId, "paused");
+    }
     // Resuming can immediately start an active goal before the RPC returns.
     await observeThread(existingThreadId);
     try {
       thread = await provider.resumeThread(existingThreadId, threadSettings);
+      if (session.metadata?.codex_changeover_pause_goal === "yes") {
+        await runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", "");
+      }
     } catch (error) {
+      // A changeover must never run the legacy standalone recovery prompt.
+      // Keep the saved conversation and let the ordinary Send fail visibly.
+      if (session.metadata?.codex_changeover_pause_goal === "yes") throw error;
       if (
         !codexAppServerRequestIsInvalid(error, "thread/resume") ||
         await codexAppServerThreadHasReadableHistory(provider, existingThreadId)

@@ -1926,6 +1926,7 @@ function createOpenCodeTerminalController({
         turns.get(context.key).abortController.signal
       ]);
       signal.throwIfAborted();
+      await input.onPromptSending?.({ threadId: target.upstreamSessionId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata });
       admitted = await target.server.client.prompt(target.upstreamSessionId, {
         agent: context.selection.agentId,
         delivery: currentMonitor ? "steer" : "queue",
@@ -1936,6 +1937,9 @@ function createOpenCodeTerminalController({
         resume: true
       }, { signal });
     } catch (error) {
+      if (error?.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408) {
+        await input.onPromptRejected?.();
+      }
       admission?.reject(error);
       if (admission) await monitors.get(context.key);
       if (startingTurn && !admission && !monitors.has(context.key)) {

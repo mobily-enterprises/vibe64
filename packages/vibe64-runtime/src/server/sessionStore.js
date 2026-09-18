@@ -1116,6 +1116,17 @@ function nextConversationTurnId(turnIds = []) {
   return String(latest + 1).padStart(6, "0");
 }
 
+function conversationMessageIdentity(turnId, message) {
+  return `${turnId}/${message.role}/${["user", "assistant", "system"].includes(message.role)
+    ? "" : message.messageId || message.at}`;
+}
+
+function conversationMessageVersion(message) {
+  return createHash("sha256").update(JSON.stringify({
+    role: message.role, text: message.text, attachments: message.attachments || []
+  })).digest("hex");
+}
+
 function createVibe64SessionStore({
   clock = undefined,
   logger = null,
@@ -2425,7 +2436,12 @@ function createVibe64SessionStore({
     }
     return {
       actorDisplayName: normalizeText(value.actorDisplayName),
-      actorId: normalizeText(value.actorId)
+      actorId: normalizeText(value.actorId),
+      ...(["codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
+      ...(isPlainObject(value.nativeMessageVersions) ? {
+        nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
+          .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))
+      } : {})
     };
   }
 
@@ -2474,10 +2490,20 @@ function createVibe64SessionStore({
         if (displayAttachments.length) {
           await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_ATTACHMENTS_FILE), displayAttachments);
         }
-        if (turnMetadata) {
+        const metadata = turnMetadata
+          ? normalizeConversationTurnMetadata(turnMetadata)
+          : await readConversationTurnMetadata(sessionPaths, turnId);
+        if (metadata?.engineId && role !== "thinking") {
+          const message = { role, text, messageId, at, attachments: displayAttachments };
+          // Preserve what the engine originally received/produced even when a
+          // bubble is edited before the next Send or the first engine switch.
+          metadata.nativeMessageVersions = { ...metadata.nativeMessageVersions,
+            [conversationMessageIdentity(turnId, message)]: conversationMessageVersion(message) };
+        }
+        if (metadata) {
           await writeJsonFile(
             path.join(turnRoot, CONVERSATION_TURN_METADATA_FILE),
-            normalizeConversationTurnMetadata(turnMetadata)
+            metadata
           );
         }
         await writeTextFile(path.join(turnRoot, conversationMessageFileName(role, toDate(at), messageId)), `${text}\n`);
@@ -2489,6 +2515,13 @@ function createVibe64SessionStore({
           (name) => name.startsWith("assistant.") && CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
         );
         const assistantFile = assistantFiles[0] || conversationMessageFileName("assistant", toDate(at));
+        const metadata = await readConversationTurnMetadata(sessionPaths, turnId) || {};
+        const key = conversationMessageIdentity(turnId, { role: "assistant" });
+        if (assistantFiles.length && !metadata.nativeMessageVersions?.[key]) {
+          const original = await readConversationMessage(sessionPaths, turnId, assistantFile);
+          metadata.nativeMessageVersions = { ...metadata.nativeMessageVersions, [key]: conversationMessageVersion(original) };
+          await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_METADATA_FILE), metadata);
+        }
         await writeTextFile(path.join(turnRoot, assistantFile), `${text}\n`);
         await Promise.all(assistantFiles.slice(1).map((name) => rm(path.join(turnRoot, name), { force: true })));
       }
@@ -4766,6 +4799,8 @@ export {
   VIBE64_SESSION_STATUS,
   assertVibe64SessionStatus,
   assertValidVibe64SessionId,
+  conversationMessageIdentity,
+  conversationMessageVersion,
   createVibe64SessionStore,
   isValidVibe64SessionId,
   normalizeVibe64AgentRunState,

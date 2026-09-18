@@ -1,0 +1,245 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+
+function selection(engineId) {
+  return { engineId, agentId: engineId === "codex" ? "codex" : "build",
+    modelProviderId: engineId === "codex" ? "openai" : "deepseek",
+    modelId: engineId === "codex" ? "gpt-6-astra" : "deepseek-chat",
+    variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+}
+
+async function harness(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-changeover-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const makeStore = () => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  let store = makeStore();
+  const sessionId = "changeover";
+  await store.createSession({ runtimeKind: "genesis", sessionId });
+  await store.writeMetadataValue(sessionId, "assistant_selection", serializeVibe64AssistantSelection(selection("codex")));
+  const calls = [];
+  const receipts = new Set();
+  const logs = [];
+  let serial = 0;
+  const api = {
+    get store() { return store; },
+    calls, logs, receipts, failure: "", inspectUnknown: false,
+    async context() { return { runtime: { store }, session: await store.readSession(sessionId) }; },
+    async select(engineId) {
+      const context = await api.context();
+      const old = JSON.parse(context.session.metadata.assistant_selection).engineId;
+      if (old !== engineId) await rememberAssistantBeforeChangeover(context, old);
+      await store.writeMetadataValue(sessionId, "assistant_selection", serializeVibe64AssistantSelection(selection(engineId)));
+    },
+    async send(message, messageId = `message-${++serial}`) {
+      return sendWithAssistantChangeover(sessionId, { message, messageId }, await api.context(), agent, (entry) => logs.push(entry));
+    },
+    async restart() { store = makeStore(); },
+    async history() { return store.readConversationLog(sessionId); },
+    async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
+  };
+  const agent = {
+    async inspectMessageAdmission(_id, { messageId, threadId }) {
+      return { admission: !api.inspectUnknown && receipts.has(`${threadId}/${messageId}`) ? "accepted" : "unknown" };
+    },
+    async sendMessage(_id, input, context) {
+      const engineId = JSON.parse(context.session.metadata.assistant_selection).engineId;
+      const threadId = `${engineId}-original-thread`;
+      if (api.failure === "preflight") return { ok: false, delivered: false };
+      await input.onPromptSending?.({ threadId });
+      calls.push({ engineId, threadId, messageId: input.messageId, message: input.message });
+      if (api.failure === "rejected") {
+        await input.onPromptRejected?.();
+        return { ok: false, delivered: false };
+      }
+      receipts.add(`${threadId}/${input.messageId}`);
+      if (api.failure === "lost-response") throw new Error("connection lost after native acceptance");
+      await store.writeConversationUserMessage(sessionId, {
+        messageId: input.messageId, text: input.displayMessage || input.message, turnMetadata: { engineId }
+      });
+      await store.writeConversationAssistantMessage(sessionId, {
+        messageId: `reply-${input.messageId}`, text: `${engineId} answer to ${input.displayMessage || input.message}`
+      });
+      if (api.failure === "lost-after-persist") throw new Error("local delivery state was lost");
+      return { ok: true, delivered: true, threadId };
+    }
+  };
+  return api;
+}
+
+test("changeover accompanies the normal user prompt and keeps the authored bubble clean", async (t) => {
+  const h = await harness(t);
+  await h.send("Build a clock");
+  assert.equal(h.calls[0].message, "Build a clock");
+  await h.select("opencode");
+  assert.equal(h.calls.length, 1, "selection must not send a prompt");
+  await h.send("Make it blue");
+  assert.equal(h.calls.length, 2);
+  assert.match(h.calls[1].message, /Build a clock/);
+  assert.ok(h.calls[1].message.endsWith("User's message:\nMake it blue"));
+  assert.equal((await h.history()).at(-1).user.text, "Make it blue");
+  assert.equal((await h.history()).at(-1).metadata.engineId, "opencode");
+  await h.select("codex");
+  await h.send("Now add seconds");
+  assert.equal(h.calls[2].threadId, h.calls[0].threadId);
+  assert.match(h.calls[2].message, /Make it blue/);
+  assert.doesNotMatch(h.calls[2].message, /Build a clock/);
+  assert.equal(h.logs.filter((entry) => entry.event === "accepted").length, 2);
+  assert.ok(h.logs.every((entry) => !Object.hasOwn(entry, "message")));
+});
+
+test("switching repeatedly without sending never acknowledges missed history", async (t) => {
+  const h = await harness(t);
+  await h.send("Start here");
+  await h.select("opencode");
+  await h.select("codex");
+  await h.send("Still here");
+  assert.equal(h.calls.at(-1).message, "Still here");
+  await h.select("opencode");
+  await h.send("Continue there");
+  assert.match(h.calls.at(-1).message, /Start here/);
+  assert.match(h.calls.at(-1).message, /Still here/);
+});
+
+test("old bubble edits survive repeated engine changes and server restarts", async (t) => {
+  const h = await harness(t);
+  await h.send("Original request");
+  const firstTurn = (await h.history())[0].turnId;
+  for (let round = 1; round <= 12; round += 1) {
+    await h.editAnswer(firstTurn, `Corrected answer ${round}`);
+    await h.select(round % 2 ? "opencode" : "codex");
+    await h.restart();
+    await h.send(`Continue ${round}`);
+    assert.match(h.calls.at(-1).message, new RegExp(`Corrected answer ${round}`));
+    if (round > 1) assert.match(h.calls.at(-1).message, /"corrected":true/);
+    assert.ok(h.calls.at(-1).message.endsWith(`Continue ${round}`));
+  }
+  assert.equal(h.calls.length, 13);
+  assert.equal(new Set(h.calls.map((call) => call.threadId)).size, 2);
+});
+
+test("editing a bubble within the same engine sends a correction once", async (t) => {
+  const h = await harness(t);
+  await h.send("First");
+  await h.send("Second");
+  await h.editAnswer((await h.history())[0].turnId, "The corrected decision");
+  await h.send("Use that decision");
+  assert.match(h.calls.at(-1).message, /The corrected decision/);
+  await h.send("Next task");
+  assert.equal(h.calls.at(-1).message, "Next task");
+});
+
+test("an answer edited before the next send or first switch is never mistaken for native history", async (t) => {
+  const h = await harness(t);
+  await h.send("First answer");
+  await h.editAnswer((await h.history())[0].turnId, "Corrected immediately");
+  await h.select("opencode");
+  await h.send("See that correction");
+  await h.select("codex");
+  await h.send("Return to the correction");
+  assert.match(h.calls.at(-1).message, /Corrected immediately/);
+  assert.match(h.calls.at(-1).message, /"corrected":true/);
+});
+
+test("an edited legacy answer retains its original version before changeover is initialized", async (t) => {
+  const h = await harness(t);
+  await h.store.writeConversationUserMessage("changeover", { text: "Legacy request", messageId: "legacy-request" });
+  const answer = await h.store.writeConversationAssistantMessage("changeover", { text: "Legacy answer", messageId: "legacy-answer" });
+  await h.editAnswer(answer.turnId, "Corrected legacy answer");
+  await h.send("Use the correction");
+  assert.match(h.calls.at(-1).message, /Corrected legacy answer/);
+  assert.match(h.calls.at(-1).message, /"corrected":true/);
+});
+
+test("a new engine gets 30 recent bubbles; a returning engine gets all missed bubbles", async (t) => {
+  const h = await harness(t);
+  for (let i = 0; i < 20; i += 1) await h.send(`Earlier ${i}`);
+  await h.select("opencode");
+  await h.send("Switch now");
+  assert.doesNotMatch(h.calls.at(-1).message, /Earlier 0"/);
+  assert.match(h.calls.at(-1).message, /Earlier 19/);
+  for (let i = 0; i < 20; i += 1) await h.send(`Missed ${i}`);
+  await h.select("codex");
+  await h.send("Return now");
+  assert.match(h.calls.at(-1).message, /Missed 0/);
+  assert.match(h.calls.at(-1).message, /Missed 19/);
+});
+
+test("preflight failure can be edited and retried without losing the preamble", async (t) => {
+  const h = await harness(t);
+  await h.send("Background");
+  await h.select("opencode");
+  h.failure = "preflight";
+  await h.send("First draft", "draft-one");
+  h.failure = "";
+  await h.send("Edited draft", "draft-two");
+  assert.match(h.calls.at(-1).message, /Background/);
+  assert.match(h.calls.at(-1).message, /You are joining an existing Vibe64 session/);
+  assert.ok(h.calls.at(-1).message.endsWith("Edited draft"));
+  assert.doesNotMatch(h.calls.at(-1).message, /First draft/);
+});
+
+test("an explicit native rejection retries the same frozen prompt", async (t) => {
+  const h = await harness(t);
+  await h.send("Background");
+  await h.select("opencode");
+  h.failure = "rejected";
+  await h.send("Continue", "retry-message");
+  const rejected = h.calls.at(-1).message;
+  h.failure = "";
+  await h.send("Continue", "retry-message");
+  assert.equal(h.calls.at(-1).message, rejected);
+  assert.equal((await h.history()).at(-1).user.text, "Continue");
+});
+
+test("lost receipt plus restart checks acceptance and never resends or exposes the preamble", async (t) => {
+  const h = await harness(t);
+  await h.send("Background");
+  await h.select("opencode");
+  h.failure = "lost-response";
+  await assert.rejects(h.send("Continue", "lost-message"), /connection lost/);
+  await h.restart();
+  h.failure = "";
+  const result = await h.send("Continue", "lost-message");
+  assert.equal(result.delivered, true);
+  assert.equal(h.calls.length, 2);
+  assert.equal((await h.history()).at(-1).user.text, "Continue");
+  await h.send("Continue", "lost-message");
+  assert.equal(h.calls.length, 2);
+});
+
+test("a saved authored bubble confirms acceptance even when native receipt inspection is unavailable", async (t) => {
+  const h = await harness(t);
+  await h.send("Background");
+  await h.select("opencode");
+  h.failure = "lost-after-persist";
+  await assert.rejects(h.send("Continue", "saved-message"));
+  await h.restart();
+  h.inspectUnknown = true;
+  h.failure = "";
+  assert.equal((await h.send("Continue", "saved-message")).delivered, true);
+  assert.equal(h.calls.length, 2);
+  await h.send("Next request");
+  assert.equal(h.calls.length, 3);
+});
+
+test("uncertain receipt blocks replay but permits switching to another engine", async (t) => {
+  const h = await harness(t);
+  await h.send("Background");
+  await h.select("opencode");
+  h.failure = "lost-response";
+  await assert.rejects(h.send("Continue", "lost-message"));
+  h.failure = "";
+  h.inspectUnknown = true;
+  await h.restart();
+  assert.equal((await h.send("Continue", "lost-message")).code, "vibe64_changeover_delivery_unconfirmed");
+  assert.equal(h.calls.length, 2);
+  await h.select("codex");
+  assert.equal((await h.send("Use this AI instead")).delivered, true);
+  assert.equal(h.calls.length, 3);
+});

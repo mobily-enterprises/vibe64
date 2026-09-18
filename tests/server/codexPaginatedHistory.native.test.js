@@ -12,6 +12,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   CodexAppServerAgentProvider,
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { ensureCodexAppServerThreadForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
 const codexVersion = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 
@@ -87,6 +88,14 @@ test("native paginated conversations accept their first message and survive reco
   };
   const provider = new CodexAppServerAgentProvider({});
   provider.activeClient = async () => client;
+  // The production bridge resumes with the user's configured default provider.
+  // Keep that default local too, instead of relying only on per-thread overrides.
+  await writeFile(path.join(toolHome, "config.toml"), [
+    'model_provider = "probe"', 'check_for_update_on_startup = false',
+    '[model_providers.probe]', 'name = "probe"',
+    `base_url = ${JSON.stringify(config.model_providers.probe.base_url)}`,
+    'wire_api = "responses"', 'requires_openai_auth = false', 'supports_websockets = false', ''
+  ].join("\n"));
 
   async function connectClient() {
     client = new CodexAppServerJsonRpcClient({ endpoint: `unix://${socketPath}`, requestTimeoutMs: 10000 });
@@ -249,6 +258,54 @@ test("native paginated conversations accept their first message and survive reco
       .map((turn) => ({ id: turn.id, items: turn.items })), originalAnswers);
     assert.equal((await provider.readGoal(threadId)).goal.status, "paused");
     assert.equal(requestCount, 7, "read-only recovery must not start another model request");
+  });
+  await t.test("changeover restores the original native conversation without a separate model request", async () => {
+    holdResponses = false;
+    const before = requestCount;
+    const writes = [];
+    const previousEnsure = provider.ensureAvailable;
+    provider.ensureAvailable = async () => ({ runtime: {
+      endpoint: `unix://${socketPath}`, runtimeDir: root, socketPath, transport: "unix"
+    } });
+    try {
+      const resumed = await ensureCodexAppServerThreadForSession({
+        agentSettings: { model: "gpt-5.6-luna", thinking: "low" },
+        provider, workdir, observeThread() {},
+        runtime: { store: {
+          async mutateSession(_id, operation) { return operation(); },
+          async writeMetadataValue(_id, name, value) { writes.push({ name, value }); }
+        } },
+        session: { sessionId: "native-changeover", metadata: {
+          agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
+          agent_transport_id: "opencode_server", codex_conversation_id: threadId,
+          codex_conversation_workdir: workdir, codex_changeover_pause_goal: "yes"
+        } }
+      });
+      assert.equal(resumed.threadId, threadId);
+      assert.equal(requestCount, before, "resuming for changeover must not send an acknowledgement or restart a goal");
+      assert.ok(writes.some((write) => write.name === "codex_changeover_pause_goal" && write.value === ""));
+      const combined = '[Vibe64 conversation changeover]\n{"messages":[{"role":"user","text":"OpenCode changed the plan"}]}\n[End Vibe64 conversation changeover]\n\nUser\'s message:\nContinue with that plan';
+      const completed = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { unsubscribe(); reject(new Error(`Changeover turn timed out: ${stderr}`)); }, 10000);
+        const unsubscribe = client.subscribe((event) => {
+          if (event.method === "turn/completed" && event.params.threadId === threadId) {
+            clearTimeout(timer); unsubscribe(); resolve(event.params.turn);
+          }
+        });
+      });
+      const sent = await provider.sendTurn(threadId, [combined], {
+        cwd: workdir, model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "readOnly" },
+        clientUserMessageId: "native-changeover-message"
+      });
+      assert.equal((await completed).id, sent.id);
+      assert.equal(requestCount, before + 1);
+      const latest = await provider.listThreadTurns(threadId, { limit: 1, sortDirection: "desc", itemsView: "full" });
+      const user = latest.data[0].items.find((item) => item.type === "userMessage");
+      assert.equal(user.content[0].text, combined);
+      assert.equal(user.clientId, "native-changeover-message");
+    } finally {
+      provider.ensureAvailable = previousEnsure;
+    }
   });
   await t.test("explicit deletion removes the stopped conversation and preserves project edits", async () => {
     const editedFile = path.join(workdir, "keep.txt");

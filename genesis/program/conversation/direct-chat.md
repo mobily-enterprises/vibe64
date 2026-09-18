@@ -50,6 +50,7 @@ continuation and loading older history.
 - `packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/sessionPromptHints.js`
 - `src/composables/useVibe64AssistantCatalog.js`
@@ -593,8 +594,8 @@ compatible conversation agent automatically, and offers the selected model's
 thinking choices when present. If a saved model is no longer available, the
 draft shown in the cog moves to that provider's available default, then its
 first available model, for the person to apply explicitly. If the saved provider
-itself is unavailable, the draft offers a connected provider within the same
-session engine and explains that Apply is required to reconnect. It never saves
+itself is unavailable, the draft offers another connected application/provider
+and explains that Apply is required to reconnect. It never saves
 that replacement merely because the picker opened. Up to six models
 remain immediate buttons; a longer provider list becomes one searchable
 autocomplete so the selector stays compact. When a host
@@ -605,6 +606,37 @@ a session whose prior model was already relocked can still recover because the
 target selection is checked independently. A provider-default thinking choice
 delegates that setting to the provider instead of substituting another listed
 choice.
+Applying an engine change checks destination access, stops the old controller
+under the existing session write lock, and preserves native history. It does
+not need the old account to authorize a new prompt. Codex retains its thread id
+and workdir independently of the currently selected engine; OpenCode keeps its
+existing deterministic native session id. Returning Codex goals are paused
+before native resume, which can otherwise start a goal automatically. After
+work in another engine, an ordinary Send must catch Codex up before Goal can
+start or resume work.
+
+The ordinary Send path reads the canonical stored bubbles and prepends the
+changeover context to that same user request. A new engine receives the latest
+30 visible messages; a returning engine receives every missed or corrected
+message and the identities of removed messages. User messages, answers,
+commentary and system notices supply the context; there is no separate summary
+or acknowledgement turn. The visible user bubble retains the authored text and
+attachments. The filesystem transcript preserves engine attribution and the
+original content fingerprints at message creation, so even an immediate edit
+before the engine's next Send is detectable. Corrections preserve those original
+fingerprints; existing answers acquire one before their first correction. One
+`assistant_changeover` metadata record tracks each engine's received content
+fingerprints. Edits to older bubbles therefore remain detectable across any
+number of switches and server restarts.
+
+While delivering a changeover request, that record freezes its message id,
+prompt, attachments and history snapshot. Each adapter records the native
+thread immediately before sending. An explicit native rejection permits retry;
+an uncertain receipt is checked against the native message id without replay.
+Unconfirmed delivery remains a visible error and does not prevent selecting
+another engine. Receipt recovery restores the authored bubble and advances only
+the snapshot actually delivered. Operational logs record preparation, acceptance
+and uncertainty with engine/thread/message ids and counts, never prompt text.
 Hosts may mark account-wide access controls as management-only; only their
 enabled model results appear in the cog, while the control itself remains on
 the host's account-management surface.

@@ -10,14 +10,17 @@
   <AssistantModelControl
     v-model="menuOpen"
     :target="trigger?.$el" :activator-props="{ class: 'd-none' }"
-    :provider-rows="providerRows" :model-rows="modelRows" :variant-rows="variantRows"
-    :model-provider-id="modelProviderId" :model-id="modelId" :variant-id="variantId"
+    :provider-rows="connectionRows" :model-rows="modelRows" :variant-rows="variantRows"
+    :model-provider-id="connectionId" :model-id="modelId" :variant-id="variantId"
     :selection-summary="selectionSummary" :button-title="buttonTitle" :changes-disabled="changesDisabled"
     :saving="saving" :can-save="canSave" :catalog-loading="catalogLoading" :catalog-error="catalogError"
-    @select-provider="selectProvider" @select-model="selectModel" @select-variant="selectVariant"
-    @apply="save" @reload="catalog.reload()"
+    @select-provider="selectConnection" @select-model="selectModel" @select-variant="selectVariant"
+    @apply="save" @reload="reloadCatalog"
   >
     <template #before-choices>
+      <p v-if="engineId !== assistantSelection?.engineId" class="text-body-small" role="status">
+        Your conversation and files stay here. This AI will receive the recent or missed messages with your next message.
+      </p>
       <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
         This session's saved AI connection is unavailable. Choose an available model and Apply to reconnect.
       </p>
@@ -188,7 +191,7 @@ const agentId = ref("");
 const variantId = ref("");
 const emptyText = ref("");
 const assistantSelection = computed(() => props.session?.assistantSelection || null);
-const engineId = computed(() => String(assistantSelection.value?.engineId || ""));
+const engineId = ref("");
 const accessLabel = computed(() => String(props.accessLabel || "").trim());
 const catalogActive = computed(() => Boolean(
   props.session?.sessionId && engineId.value
@@ -202,7 +205,21 @@ const catalog = useVibe64AssistantCatalog({
   providerCursor: emptyText,
   providerSearch: emptyText
 });
-const overviewLoading = catalog.overview.isInitialLoading;
+const connections = useVibe64AssistantCatalog({ active: catalogActive, configuredOnly: true });
+const connectionRows = computed(() => connections.engines.value
+  .filter((engine) => engine.health?.status === "ready")
+  .flatMap((engine) => (engine.modelProviders || [])
+    .filter((provider) => provider.connected)
+    .map((provider) => ({
+      ...provider,
+      id: `${engine.engineId}/${provider.id}`,
+      engineId: engine.engineId,
+      modelProviderId: provider.id,
+      label: `${engine.label || engine.engineId} · ${provider.label || provider.id}`
+    }))
+  ));
+const connectionId = computed(() => `${engineId.value}/${modelProviderId.value}`);
+const overviewLoading = computed(() => connections.overview.isInitialLoading.value || catalog.overview.isInitialLoading.value);
 const providerLoading = computed(() => engineId.value === "opencode" && (
   catalog.providerPage.isInitialLoading.value
 ));
@@ -211,6 +228,7 @@ const modelLoading = computed(() => Boolean(modelProviderId.value) && (
 ));
 const catalogLoading = computed(() => overviewLoading.value || providerLoading.value || modelLoading.value);
 const catalogError = computed(() => String(
+  connections.overview.loadError.value ||
   catalog.overview.loadError.value ||
   catalog.providerPage.loadError.value ||
   catalog.modelPage.loadError.value ||
@@ -227,10 +245,12 @@ const selectedProvider = computed(() => providerRows.value.find((provider) => (
 )) || null);
 const savedProviderUnavailable = computed(() => Boolean(
   assistantSelection.value?.modelProviderId &&
-  !providerRows.value.some((provider) => provider.id === assistantSelection.value.modelProviderId)
+  !connectionRows.value.some((provider) => provider.id === `${assistantSelection.value.engineId}/${assistantSelection.value.modelProviderId}`)
 ));
+const currentModelEngine = computed(() => catalog.modelEngine.value?.engineId === engineId.value
+  ? catalog.modelEngine.value : null);
 const modelProvider = computed(() => (
-  catalog.modelEngine.value?.modelProviders?.find((provider) => (
+  currentModelEngine.value?.modelProviders?.find((provider) => (
     provider.id === modelProviderId.value && provider.connected === true
   )) || null
 ));
@@ -255,7 +275,7 @@ const selectedModel = computed(() => modelRows.value.find((model) => (
   model.id === modelId.value
 )) || null);
 const compatibleAgents = computed(() => (
-  (catalog.modelEngine.value?.agents || []).filter((agent) => (
+  (currentModelEngine.value?.agents || []).filter((agent) => (
     ["all", "primary"].includes(agent.mode) &&
     (!agent.modelProviderId || agent.modelProviderId === modelProviderId.value) &&
     (!agent.modelId || agent.modelId === modelId.value)
@@ -271,7 +291,7 @@ const variantRows = computed(() => [
 const selectedVariant = computed(() => variantRows.value.find((variant) => (
   variant.id === variantId.value
 )) || null);
-const selectionRevision = computed(() => String(catalog.modelEngine.value?.revision || ""));
+const selectionRevision = computed(() => String(currentModelEngine.value?.revision || ""));
 const draftSelection = computed(() => ({
   agentId: agentId.value,
   catalogRevision: selectionRevision.value,
@@ -358,10 +378,23 @@ const modelAccessCommand = useCommand({
 
 function hydrateSelection() {
   const selection = assistantSelection.value || {};
+  engineId.value = String(selection.engineId || "");
   modelProviderId.value = String(selection.modelProviderId || "");
   modelId.value = String(selection.modelId || "");
   agentId.value = String(selection.agentId || "");
   variantId.value = String(selection.variantId || "");
+}
+
+async function reloadCatalog() {
+  await Promise.all([connections.reload(), catalog.reload()]);
+}
+
+function selectConnection(value) {
+  if (props.changesDisabled) return;
+  const connection = connectionRows.value.find((row) => row.id === value);
+  if (!connection) return;
+  engineId.value = connection.engineId;
+  selectProvider(connection.modelProviderId);
 }
 
 function selectProvider(value = "") {
@@ -390,7 +423,7 @@ function selectionForModel(model = null) {
   if (!model || model.status !== "available" || !selectionRevision.value) {
     return null;
   }
-  const agents = (catalog.modelEngine.value?.agents || []).filter((agent) => (
+  const agents = (currentModelEngine.value?.agents || []).filter((agent) => (
     ["all", "primary"].includes(agent.mode) &&
     (!agent.modelProviderId || agent.modelProviderId === modelProviderId.value) &&
     (!agent.modelId || agent.modelId === model.id)
@@ -515,10 +548,15 @@ watch(assistantSelection, hydrateSelection, { immediate: true });
 watch(menuOpen, (open) => {
   if (open) {
     hydrateSelection();
-    void catalog.reload().catch(() => null);
+    void reloadCatalog().catch(() => null);
   } else {
     void nextTick(() => trigger.value?.$el?.focus());
   }
+});
+
+watch([menuOpen, connectionRows, connections.overview.isInitialLoading], ([open, rows, loading]) => {
+  if (!open || loading || rows.some((row) => row.id === connectionId.value)) return;
+  if (rows.length) selectConnection(rows[0].id);
 });
 
 watch([menuOpen, providerRows, overviewLoading, providerLoading], ([open, providers, loadingOverview, loadingProviders]) => {

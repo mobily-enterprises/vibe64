@@ -2608,6 +2608,45 @@ test("assistant selection can recover from an unavailable current choice before 
   assert.deepEqual(metadataWrites, []);
 });
 
+test("assistant selection changes engines only after destination access and successful shutdown", async () => {
+  for (const failure of ["active", "shutdown", ""]) {
+    const lock = agentWriteLockHarness();
+    const operations = [];
+    const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+      modelId: VIBE64_CODEX_DEFAULT_MODEL, modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
+    const next = { ...current, agentId: "build", engineId: "opencode", modelProviderId: "deepseek", modelId: "deepseek-chat" };
+    const session = { sessionId: "session-1", status: "active", metadata: { assistant_selection: JSON.stringify(current) } };
+    const runtime = { async getSession() { return session; }, store: { ...lock.store,
+      async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
+    } };
+    const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+      async resolveAssistantSelection() { return next; },
+      async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
+      async requireAssistantSelectionAccess(value) { assert.equal(value.engineId, "opencode"); operations.push("access"); },
+      async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" } }; },
+      async prepareAssistantChangeover(id, context) {
+        assert.equal(id, session.sessionId);
+        assert.equal(context.session, session);
+        operations.push("shutdown");
+        return failure === "shutdown" ? { ok: false, code: "stop-failed" } : { ok: true };
+      }
+    } });
+    const result = await service.updateAssistantSelection(session.sessionId, {
+      assistantSelection: next, vibe64User: { role: "owner", username: "owner" }
+    });
+    if (failure) {
+      assert.equal(result.ok, false, JSON.stringify(result));
+      assert.equal(JSON.parse(session.metadata.assistant_selection).engineId, "codex");
+      assert.ok(!operations.includes("write"));
+      if (failure === "active") assert.ok(!operations.includes("shutdown"));
+    } else {
+      assert.notEqual(result.ok, false, JSON.stringify(result));
+      assert.equal(JSON.parse(session.metadata.assistant_selection).engineId, "opencode");
+      assert.deepEqual(operations, ["access", "state", "shutdown", "write"]);
+    }
+  }
+});
+
 test("assistant model-access updates delegate the authenticated owner to the host seam", async () => {
   const calls = [];
   const service = createService({

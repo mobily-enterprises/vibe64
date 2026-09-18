@@ -1,5 +1,6 @@
 import { createCodexTerminalController } from "./codexTerminal.js";
 import { createSessionConversations } from "./sessionConversations.js";
+import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import {
   createSessionAgentManager
@@ -2357,10 +2358,10 @@ function createService({
         let delivered = false;
         if (claim.changed) {
           try {
-            const result = await sessionAgent.sendMessage(sessionId, {
+            const result = await sendWithAssistantChangeover(sessionId, {
               messageId: saved.continuationMessageId,
               message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
-            }, context);
+            }, context, sessionAgent);
             delivered = result.ok !== false && result.delivered === true;
             if (!delivered) {
               logOperationalEvent(logger, "warn", {
@@ -2413,7 +2414,12 @@ function createService({
               sessionId
             });
             await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-            const delivered = await sessionAgent.sendMessage(sessionId, input, context);
+            const delivered = await sendWithAssistantChangeover(sessionId, input, context, sessionAgent, (event) => {
+              logOperationalEvent(logger, "info", {
+                ...event, event: `vibe64.assistant_changeover.${event.event}`,
+                component: "vibe64.agent_message", sessionId
+              }, "Assistant changeover delivery.");
+            });
             vibe64SessionDebugLog("server.terminals.agentMessage.providerDone", {
               durationMs: Date.now() - startedAt,
               messageId: input.messageId,
@@ -2460,9 +2466,15 @@ function createService({
 
     async updateAgentGoal(sessionId, input = {}) {
       if (["set", "resume"].includes(input.action)) {
-        return runMainAgentWrite(sessionId, input, (context) => (
-          sessionAgent.updateGoal(sessionId, input, context)
-        ), { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
+        return runMainAgentWrite(sessionId, input, (context) => {
+          const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
+          const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+          if (changeover && changeover.lastEngine !== engineId) {
+            return { ok: false, code: "vibe64_changeover_message_required",
+              error: "Send a message to catch this AI up before starting or resuming its goal." };
+          }
+          return sessionAgent.updateGoal(sessionId, input, context);
+        }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
       }
       return sessionAgent.updateGoal(sessionId, input, await assistantSessionOptions(sessionId, input));
     },
@@ -2558,6 +2570,27 @@ function createService({
 
     agentSessionState(sessionId, options = {}) {
       return sessionAgent.sessionState(sessionId, options);
+    },
+
+    // Called inside the selection writer's existing session lock. Closing a
+    // controller stops observation/execution, never deletes native history.
+    async prepareAssistantChangeover(sessionId, context) {
+      const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+      const metadata = context.session.metadata;
+      if (engineId === "codex" && metadata.agent_identity_provider === "codex" && metadata.agent_identity_conversation_id) {
+        await context.runtime.store.writeMetadataValue(sessionId, "codex_conversation_id", metadata.agent_identity_conversation_id);
+        await context.runtime.store.writeMetadataValue(sessionId, "codex_conversation_workdir", metadata.agent_identity_workdir);
+        // Resuming a Codex thread can resume an active native goal. Pause it
+        // before that resume so only the user's next Send starts work.
+        await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
+      }
+      const closed = await sessionAgent.closeSession(sessionId, { ...context, changeover: true });
+      if (closed?.ok === false) return closed;
+      await rememberAssistantBeforeChangeover(context, engineId);
+      logOperationalEvent(logger, "info", {
+        event: "vibe64.assistant_changeover.previous_stopped", component: "vibe64.agent_message", sessionId, engineId
+      }, "Previous assistant stopped; its conversation is retained.");
+      return { ok: true };
     },
 
     globalCodexTerminalState() {

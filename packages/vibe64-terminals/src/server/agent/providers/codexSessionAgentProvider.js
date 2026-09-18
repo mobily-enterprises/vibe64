@@ -522,6 +522,7 @@ function createCodexSessionAgentProvider({
     },
     async closeSession(context) {
       return controller.closeAllForSession(context.sessionId, {
+        changeover: context.changeover === true,
         preserveProcessExitProof: context.preserveProcessExitProof === true,
         renewalCleanup: context.renewalCleanup,
         runtime: context.runtime,

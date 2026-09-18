@@ -437,19 +437,12 @@ function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue 
 function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {}, {
   turnActive = false
 } = {}) {
-  const current = defineVibe64AssistantSelection(currentValue);
+  defineVibe64AssistantSelection(currentValue);
   const next = defineVibe64AssistantSelection(nextValue);
   if (turnActive === true) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.TURN_ACTIVE,
       "Wait for the active assistant turn to finish before changing its selection."
-    );
-  }
-  if (current.engineId !== next.engineId) {
-    throw selectionError(
-      VIBE64_ASSISTANT_SELECTION_ERROR_CODES.ENGINE_IMMUTABLE,
-      "A session cannot switch assistant engines because its native history belongs to the engine that created it.",
-      { currentEngineId: current.engineId, requestedEngineId: next.engineId }
     );
   }
   return next;

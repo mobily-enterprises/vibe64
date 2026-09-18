@@ -573,6 +573,7 @@ function createSessionAgentManager({
     const id = normalizeText(sessionId);
     const provider = bindSession(id, options);
     const context = {
+      changeover: options.changeover === true,
       preserveProcessExitProof: options.preserveProcessExitProof === true,
       providerId: provider.id,
       renewalCleanup: options.renewalCleanup || null,

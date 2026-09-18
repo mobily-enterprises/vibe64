@@ -1992,6 +1992,12 @@ function createService({
           const next = assertVibe64AssistantSelectionUpdate(current, resolved, {
             turnActive: agentSession?.turn?.active === true
           });
+          if (current.engineId !== next.engineId) {
+            const changeover = await terminals.prepareAssistantChangeover(sessionId, {
+              runtime, session, vibe64User
+            });
+            if (changeover?.ok === false) return changeover;
+          }
           await runtime.store.writeMetadataValue(
             sessionId,
             VIBE64_ASSISTANT_SELECTION_METADATA,
@@ -2005,6 +2011,7 @@ function createService({
         if (!exclusive.acquired) {
           return exclusive.value;
         }
+        if (exclusive.value?.ok === false) return exclusive.value;
         await publishSessionChanged(sessionId, {
           operation: "updated",
           originId: text(input.originId),

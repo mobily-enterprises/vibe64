@@ -300,8 +300,13 @@ plans from the same provider. The chat selector shows only models the host
 currently permits, while a host model-access policy can expose one recommended
 recovery model and give the owner a warned switch for broader access. Starting
 a session presents the configured list promptly without waiting for an AI
-provider to start or discover models. A session stays within
-the assistant application that owns its conversation. Leaving a model's
+provider to start or discover models. People can switch the assistant application,
+provider or model between turns without replacing the session or its files.
+Returning to an application reuses its previous native conversation. The next
+ordinary message carries recent history for a new application, or missed and
+corrected messages for a returning one, before the person's request. Choosing
+an AI alone sends nothing. An unavailable old connection does not prevent
+choosing a connected replacement. Leaving a model's
 thinking choice at its provider default leaves that choice to the provider
 instead of silently selecting another listed option. Vibe64 also respects each
 AI's declared response capacity rather than assuming every model can produce
