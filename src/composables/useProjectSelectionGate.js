@@ -126,9 +126,13 @@ function useProjectSelectionGate(emit, {
     ""
   ));
 
-  watch(projectSelection, (selection) => {
+  watch([projectSelection, errorMessage], ([selection, error]) => {
     if (selection && Object.keys(selection).length > 0) {
       cachedProjectSelections.set(projectSlug.value, selection);
+    }
+    if (error) {
+      emit("error", error);
+      return;
     }
     if (selection?.hasSelection === true) {
       emit("ready", selection);
@@ -137,12 +141,6 @@ function useProjectSelectionGate(emit, {
     emit("missing", selection || {});
   }, {
     immediate: true
-  });
-
-  watch(errorMessage, (message) => {
-    if (message) {
-      emit("error", message);
-    }
   });
 
   return {
