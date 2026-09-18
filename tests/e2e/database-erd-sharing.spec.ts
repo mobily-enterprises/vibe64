@@ -1598,7 +1598,7 @@ test("@erd-controls saved views, groups, filters and fullscreen remain usable fr
   } finally { await context.close().catch(() => {}); await server.close(); }
 });
 
-test("@erd-camera zoom saves after settling and closing cancels a pending camera save", async ({ browser, baseURL }) => {
+test("@erd-camera zoom saves after settling and closing the page cancels a pending camera save", async ({ browser, baseURL }) => {
   const server = await sharedDiagramServer(baseURL!);
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   try {
@@ -1613,11 +1613,14 @@ test("@erd-camera zoom saves after settling and closing cancels a pending camera
     await waitForDiagramViewport(page);
     expect(server.saves).toHaveLength(before);
     await expect.poll(() => server.saves.length).toBe(before + 1);
+    const camera = diagram.locator(".vue-flow__transformationpane");
+    const savedCamera = await camera.getAttribute("style");
     await page.mouse.wheel(0, 100);
-    await page.getByRole("tab", { name: "Preview", exact: true }).click();
-    await expect(diagram).toHaveCount(0);
+    await expect(camera).not.toHaveAttribute("style", savedCamera!);
+    expect(server.saves).toHaveLength(before + 1);
+    await page.close();
     // Deliberately outwait the camera debounce to catch writes from a closed view.
-    await page.waitForTimeout(850);
+    await new Promise(resolve => setTimeout(resolve, 850));
     expect(server.saves).toHaveLength(before + 1);
   } finally { await context.close(); await server.close(); }
 });

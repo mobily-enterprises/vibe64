@@ -175,6 +175,9 @@ async function terminalServiceFixture(t, lock, {
     }
   };
   const projectService = {
+    currentServiceDataRoot() {
+      return path.join(root, "service-data");
+    },
     createSessionStore() {
       return {};
     },
@@ -383,6 +386,7 @@ test("integration continuation recovers provider acceptance after local write fa
     resolveConnection: provider.controllerOptions.resolveConnection,
     listConnections: provider.controllerOptions.listConnections
   });
+  await service.ensureAgentSession(session.sessionId);
   runtime.renderPrompt = async (_sessionId, input) => ({ prompt: input.request });
   await runtime.store.writeConversationUserMessage(session.sessionId, { text: "Configure mail." });
   const turn = await runtime.store.writeConversationAssistantMessage(session.sessionId, {

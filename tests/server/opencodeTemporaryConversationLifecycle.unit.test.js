@@ -10,8 +10,8 @@ test("temporary OpenCode uses the main agent and project commands while keeping 
   const harness = await controllerHarness({
     withCommandBoundary: true,
     helperResponse: "Project edited.",
-    beforePrompt({ directory, id }) {
-      if (id.startsWith("ses_detached_")) {
+    beforePrompt({ directory, input }) {
+      if (input.prompt.text.includes("Edit the project.")) {
         execFileSync("sh", ["-c", "printf 'Temporary command edit' > temporary-edit.txt"], { cwd: directory });
       }
     }

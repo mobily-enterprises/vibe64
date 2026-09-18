@@ -377,7 +377,7 @@ test("signal shutdown reaches Fastify close when capability shutdown fails", asy
   ]);
 });
 
-test("signal shutdown kills a terminal child even when its stop cleanup never settles", async () => {
+test("signal shutdown kills a terminal child and forces exit while stop cleanup is pending", async () => {
   const namespace = `server-shutdown-held-stop-${process.pid}`;
   let releaseStopHook = () => null;
   const heldStopHook = new Promise((resolve) => {
@@ -406,6 +406,7 @@ test("signal shutdown kills a terminal child even when its stop cleanup never se
   assert.equal(processIds.every((pid) => Number.isSafeInteger(pid) && pid > 1), true);
 
   const events = [];
+  let timeoutCallback;
   const handler = createSignalShutdownHandler({
     app: {
       async close() {
@@ -415,30 +416,39 @@ test("signal shutdown kills a terminal child even when its stop cleanup never se
     },
     closeRuntimeTerminals() {
       return closeTerminalSession(session.id, {
-        namespace,
-        timeoutMs: 400
+        namespace
       });
     },
     exitProcess(code) {
       events.push(`exit:${code}`);
     },
+    setTimeoutFn(callback) {
+      timeoutCallback = callback;
+      return { unref() {} };
+    },
     shutdownTimeoutMs: 2000
   });
 
+  const closing = handler("SIGTERM");
   try {
-    await handler("SIGTERM");
+    for (let attempt = 0; attempt < 80 && processIds.some(processIsAlive); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
 
     assert.equal(processIds.every((pid) => !processIsAlive(pid)), true);
     assert.equal(events.includes("fastify"), true);
-    assert.equal(events.includes("error:Failed to stop vibe64 server cleanly."), true);
+    assert.equal(events.some((event) => event.startsWith("exit:")), false);
+    timeoutCallback();
+    assert.equal(events.includes("error:Vibe64 server shutdown timed out; forcing process exit."), true);
     assert.deepEqual(events.slice(-1), ["exit:1"]);
   } finally {
     releaseStopHook();
+    await closing;
     await closeTerminalSession(session.id, {
-      namespace,
-      timeoutMs: 400
+      namespace
     }).catch(() => null);
   }
+  assert.deepEqual(events.filter((event) => event.startsWith("exit:")), ["exit:1"]);
 });
 
 test("signal shutdown stops runtime terminals before a stalled Fastify close", async () => {
@@ -490,17 +500,12 @@ test("signal shutdown stops runtime terminals before a stalled Fastify close", a
   }
 
   assert.equal(closeStarted, true);
-  assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
-  let childAlive = true;
-  for (let attempt = 0; attempt < 80 && childAlive; attempt += 1) {
-    try {
-      process.kill(childPid, 0);
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    } catch {
-      childAlive = false;
-    }
+  for (let attempt = 0; attempt < 80 &&
+    (processIsAlive(childPid) || readTerminalSession(session.id, { namespace }).ok); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  assert.equal(childAlive, false);
+  assert.equal(processIsAlive(childPid), false);
+  assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
   timeoutCallback();
   assert.deepEqual(exits, [1]);
 });
