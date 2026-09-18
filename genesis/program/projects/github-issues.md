@@ -30,8 +30,9 @@ Dashboard without opening a session.
 ## Public contract
 
 The single Issues/PR menu entry appears only for projects with a GitHub repository.
-It sits above session tools, with tabs between the two browsers that preserve URL
-filters and selection. Both collapse Dashboard navigation while open. Back to dashboard restores
+It sits above session tools, with tabs that return to the respective lists,
+clearing the destination's selected item while preserving URL filters and pagination.
+Both collapse Dashboard navigation while open. Back to dashboard restores
 the ordinary navigation. Open/Closed/All, literal title/body search, selected
 labels and list pagination live in the URL; issue details, tabs and browser
 history retain those filters when returning. The label selector uses repository
@@ -87,4 +88,7 @@ remove existing labels. Repository label definitions are not changed.
 The browser uses the available pane width without the Dashboard frame. Back to
 dashboard, Refresh and New issue share one toolbar row, without an Issues heading
 or repository subtitle. Issue details replace Back to dashboard with All issues.
+Toolbar, tabs and filters use compact spacing; the shared tabs use Vuetify's
+compact density. Compact issue rows place labels beside the title in a wrapping
+row, followed by issue metadata. Repeated tab clicks keep the project mounted.
 Project boards, AI dispatch and automatic closure are not included.

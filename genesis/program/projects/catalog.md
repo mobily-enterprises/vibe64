@@ -70,8 +70,10 @@ remains separate from the global catalog, whose selected project may differ
 from the current browser route.
 Opening a project URL confirms that its runtime has reopened before mounting
 session, assistant and preview controls, including with cached project data.
-Selecting the current project or following the same project link retries that
-opening without a browser reload. Failed opening offers an inline retry; late
+Selecting the current project retries that opening without a browser reload.
+Duplicate navigation retries opening only when the current opening has failed;
+clicking an already-active dashboard tab leaves the project and chat mounted.
+Failed opening offers an inline retry; late
 responses from another project cannot unlock the current project's controls.
 Project-data and opening failures share one inline Try again action. It awaits
 any host-supplied access recheck, reloads the selection, then requests another

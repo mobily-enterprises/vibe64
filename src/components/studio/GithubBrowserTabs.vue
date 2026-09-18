@@ -10,16 +10,16 @@ const selected = computed(() => route.path.endsWith('/pull-requests') ? 'pull-re
 </script>
 
 <template>
-  <v-tabs :model-value="selected" color="primary" height="48" aria-label="Issues and pull requests">
+  <v-tabs :model-value="selected" color="primary" density="compact" aria-label="Issues and pull requests">
     <v-tab
       value="issues" :prepend-icon="mdiRecordCircleOutline"
-      :to="{ path: projectAppPath(projectSlug, '/dashboard/issues'), query: route.query }"
+      :to="{ path: projectAppPath(projectSlug, '/dashboard/issues'), query: { ...route.query, issue: undefined } }"
     >
       Issues
     </v-tab>
     <v-tab
       value="pull-requests" :prepend-icon="mdiSourcePull"
-      :to="{ path: projectAppPath(projectSlug, '/dashboard/pull-requests'), query: route.query }"
+      :to="{ path: projectAppPath(projectSlug, '/dashboard/pull-requests'), query: { ...route.query, pr: undefined, createPullRequest: undefined } }"
     >
       Pull requests
     </v-tab>

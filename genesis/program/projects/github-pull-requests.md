@@ -37,12 +37,17 @@ work as a new PR. GitHub remains the PR store.
 All Issues and PR navigation and session actions are hidden without a GitHub
 repository. The backend independently rejects non-GitHub project operations.
 The Issues/PR Dashboard entry opens a browser with Issues and Pull requests tabs,
-retaining each browser's URL filters and selected item. Pull requests is
+returning to each browser's list while retaining its URL filters and pagination.
+Pull requests is
 project-wide, available without an active session, and collapses
 the Dashboard menu while open. Open, Closed, Merged and All filters, literal
 title/body search, and 25-item pagination use URL state. Descriptions use the
 existing safe Markdown renderer. The source repository and branch, base branch,
 draft state and change counts appear before Open as session.
+The browser keeps Back to dashboard, Refresh and Create from session in its
+toolbar without a separate title/repository header. Compact tabs sit close to
+the toolbar and filters. List rows use compact spacing and place branch details
+beside metadata when space permits, wrapping at narrower widths.
 
 Opening uses the existing assistant picker and session admission policy. The
 server re-reads the PR with the acting user's GitHub credentials; the browser

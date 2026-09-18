@@ -13,11 +13,13 @@ Opening a project link reopens its runtime before chat and Preview load, includi
 when returning with cached data. A failed opening or project-data load offers
 Try again without requiring a browser reload. Recovery refreshes the project
 data and retries opening; repeated failures keep the action available.
+Clicking an already-selected dashboard tab keeps the conversation and dashboard
+mounted; repeating navigation retries opening only after an opening failure.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
 GitHub-connected projects offer one Issues/PR entry in the project-wide Dashboard
-menu, including when no session is open. Tabs switch between issues and pull
-requests while retaining their filters and selected item. Opening it collapses the Dashboard menu
+menu, including when no session is open. Tabs return to the issue or pull request
+list while retaining its filters and pagination. Opening it collapses the Dashboard menu
 to give the list and conversation room, with a direct route back. People can
 filter open, closed or all issues and select one or more repository labels to
 match together. Issue lists load 25 at a time and remain browsable beyond 1,000
@@ -28,7 +30,10 @@ GitHub permissions allow. People can create an issue with a title, Markdown
 description and repository labels, and edit labels on existing issues. Labels
 retain their GitHub colors with readable text in either theme. The issue browser
 uses the available pane width, with Back to dashboard, Refresh and New issue in
-one toolbar row and no extra heading or repository subtitle.
+one toolbar row and no extra heading or repository subtitle. Both browsers keep
+the toolbar, underlined tabs and filters close together, with compact list rows.
+Issue labels sit beside their title when space permits and wrap when needed.
+Pull request branch details share the metadata row when space permits.
 GitHub remains the authority; actions use the person's
 connected account. Unsent comments survive navigation within the same browser
 tab. A comment posted through Vibe64 gives other viewers of that project a short

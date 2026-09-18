@@ -32,7 +32,7 @@ function date(value) {
 </script>
 
 <template>
-  <section class="issues-panel d-flex flex-column ga-4">
+  <section class="issues-panel d-flex flex-column ga-2">
     <div class="issues-panel__toolbar d-flex align-center ga-2">
       <v-btn
         :prepend-icon="mdiArrowLeft" variant="tonal" size="x-small"
@@ -118,24 +118,24 @@ function date(value) {
           <span>{{ list.data.value?.total || 0 }} {{ list.data.value?.total === 1 ? 'issue' : 'issues' }}</span>
           <span>Recently updated</span>
         </div>
-        <v-list v-if="list.data.value?.issues?.length" class="pa-0" lines="two" rounded="xl" border slim aria-label="GitHub issues">
+        <v-list v-if="list.data.value?.issues?.length" class="pa-0" density="compact" lines="two" rounded="xl" border slim aria-label="GitHub issues">
           <template v-for="(item, index) in list.data.value.issues" :key="item.number">
             <v-divider v-if="index" />
-            <v-list-item class="py-3" :active="false" :to="{ query: { ...$route.query, issue: String(item.number) } }">
+            <v-list-item class="py-2" :active="false" :to="{ query: { ...$route.query, issue: String(item.number) } }">
               <template #prepend>
                 <v-icon
                   :icon="item.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck"
                   :color="item.state === 'OPEN' ? 'success' : 'primary'" :aria-label="item.state === 'OPEN' ? 'Open' : 'Closed'"
                 />
               </template>
-              <v-list-item-title class="text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
+              <div class="d-flex flex-wrap align-center ga-1">
+                <v-list-item-title class="issues-panel__item-title text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
+                <GithubLabelChip v-for="label in item.labels?.nodes || []" :key="label.name" :label="label" />
+                <span v-if="item.labels?.totalCount > item.labels?.nodes?.length" class="text-label-small">+{{ item.labels.totalCount - item.labels.nodes.length }}</span>
+              </div>
               <v-list-item-subtitle class="text-body-small mt-1">
                 #{{ item.number }} · {{ item.state === 'OPEN' ? 'Open' : 'Closed' }} · {{ date(item.updatedAt) }}
               </v-list-item-subtitle>
-              <div v-if="item.labels?.nodes?.length" class="d-flex flex-wrap ga-1 mt-2">
-                <GithubLabelChip v-for="label in item.labels.nodes" :key="label.name" :label="label" />
-                <span v-if="item.labels.totalCount > item.labels.nodes.length" class="text-label-small align-self-center">+{{ item.labels.totalCount - item.labels.nodes.length }}</span>
-              </div>
               <template #append>
                 <span
                   class="d-flex align-center ga-1 ml-3 text-label-medium text-medium-emphasis"
@@ -245,6 +245,7 @@ function date(value) {
 .issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__labels { min-width: 0; }
+.issues-panel__item-title { min-width: 0; overflow-wrap: anywhere; }
 .issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
 </style>

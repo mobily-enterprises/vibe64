@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { mdiArrowLeft, mdiArrowRight, mdiGithub, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
+import { mdiArrowLeft, mdiArrowRight, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
   mdiSourceBranch, mdiSourceMerge, mdiSourcePull, mdiCloseCircleOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
@@ -94,8 +94,8 @@ async function published(source) {
 </script>
 
 <template>
-  <section class="pull-requests d-flex flex-column ga-5">
-    <div class="d-flex align-center justify-space-between flex-wrap ga-2">
+  <section class="pull-requests d-flex flex-column ga-2">
+    <div class="d-flex align-center flex-wrap ga-2">
       <v-btn
         :prepend-icon="mdiArrowLeft" variant="tonal" size="x-small"
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
@@ -103,28 +103,22 @@ async function published(source) {
       >
         {{ available && number ? 'All pull requests' : 'Back to dashboard' }}
       </v-btn>
+      <v-spacer />
       <v-btn
-        v-if="available" :prepend-icon="mdiRefresh" variant="text" height="48" :disabled="resource.isFetching.value"
+        v-if="available" :prepend-icon="mdiRefresh" variant="text" size="small" height="48" :disabled="resource.isFetching.value"
         @click="resource.reload()"
       >
         {{ resource.isFetching.value ? 'Refreshing…' : 'Refresh' }}
       </v-btn>
+      <v-btn
+        v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" height="48" :prepend-icon="mdiPlus"
+        :disabled="dashboardContext.sourceOperationsSuspended || dashboardContext.assistantDirectAllowed === false" @click="createDialog = true"
+      >
+        Create from session
+      </v-btn>
     </div>
     <v-alert v-if="!available" type="info" variant="tonal">Pull requests are available only for GitHub projects.</v-alert>
     <template v-else>
-      <header class="d-flex align-center flex-wrap ga-3 px-2">
-        <v-avatar size="48" rounded="lg" color="primary" variant="tonal"><v-icon :icon="mdiGithub" /></v-avatar>
-        <div class="pull-requests__heading">
-          <h1 class="text-headline-small ma-0">Pull requests</h1>
-          <p class="text-body-medium text-medium-emphasis ma-0">{{ repository }}</p>
-        </div>
-        <v-btn
-          v-if="createAvailable" color="primary" variant="tonal" rounded="pill" height="48" :prepend-icon="mdiPlus"
-          :disabled="dashboardContext.sourceOperationsSuspended || dashboardContext.assistantDirectAllowed === false" @click="createDialog = true"
-        >
-          Create from session
-        </v-btn>
-      </header>
       <GithubBrowserTabs />
       <form v-if="!number" class="d-flex flex-wrap align-center ga-3" @submit.prevent="filter()">
         <v-btn-toggle
@@ -151,14 +145,16 @@ async function published(source) {
         <div class="d-flex justify-space-between px-2 text-label-large text-medium-emphasis">
           <span>{{ list.data.value?.total || 0 }} pull requests</span><span>Recently updated</span>
         </div>
-        <v-list v-if="list.data.value?.pullRequests?.length" class="pa-0" rounded="xl" border slim aria-label="GitHub pull requests">
+        <v-list v-if="list.data.value?.pullRequests?.length" class="pa-0" density="compact" rounded="xl" border slim aria-label="GitHub pull requests">
           <template v-for="(item, index) in list.data.value.pullRequests" :key="item.number">
             <v-divider v-if="index" />
-            <v-list-item class="py-3" :active="false" :to="{ query: { ...$route.query, pr: String(item.number) } }">
+            <v-list-item class="py-2" :active="false" :to="{ query: { ...$route.query, pr: String(item.number) } }">
               <template #prepend><v-icon :icon="icon(item)" :color="color(item)" /></template>
               <v-list-item-title class="text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
-              <div class="text-body-small text-medium-emphasis mt-1">#{{ item.number }} · {{ status(item) }} · {{ item.author?.login }} · {{ date(item.updatedAt) }}</div>
-              <div class="text-body-small text-medium-emphasis mt-1 pull-requests__branch">{{ item.headRefName }} → {{ item.baseRefName }}</div>
+              <div class="d-flex flex-wrap ga-2 text-body-small text-medium-emphasis mt-1">
+                <span>#{{ item.number }} · {{ status(item) }} · {{ item.author?.login }} · {{ date(item.updatedAt) }}</span>
+                <span class="pull-requests__branch">{{ item.headRefName }} → {{ item.baseRefName }}</span>
+              </div>
             </v-list-item>
           </template>
         </v-list>
@@ -225,7 +221,6 @@ async function published(source) {
 
 <style scoped>
 .pull-requests { width: 100%; min-width: 0; padding-bottom: 1rem; }
-.pull-requests__heading { flex: 1; min-width: 12rem; overflow-wrap: anywhere; }
 .pull-requests__search { flex: 1 1 16rem; min-width: 0; }
 .pull-requests__branch, .pull-requests__description { min-width: 0; overflow-wrap: anywhere; }
 .pull-requests__description { overflow: auto; }

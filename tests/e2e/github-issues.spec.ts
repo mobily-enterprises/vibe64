@@ -16,6 +16,13 @@ const issue = {
   comments: { totalCount: 0, nodes: [], pageInfo: { hasPreviousPage: false } },
   labels: { totalCount: 2, nodes: labels }, viewerCanClose: true, viewerCanReopen: true
 };
+const pullRequest = {
+  number: 7, title: "Keep project tabs stable", state: "OPEN", isDraft: false,
+  body: "Preserve the workspace when changing tabs.",
+  url: "https://github.com/example/project/pull/7", author: { login: "alice" },
+  updatedAt: "2026-09-18T00:00:00Z", headRefName: "fix-tabs", baseRefName: "main",
+  headRepository: { nameWithOwner: "example/project" }, changedFiles: 1, additions: 2, deletions: 1
+};
 
 async function mockGithubIssues(page: Page) {
   const requests: URL[] = [];
@@ -45,10 +52,65 @@ async function mockGithubIssues(page: Page) {
   });
   await routeApiEndpoint(page, "/vibe64/issues/1001", (route) => fulfillJson(route, { ok: true, issue }));
   await routeApiEndpoint(page, "/vibe64/pull-requests", (route) => fulfillJson(route, {
-    ok: true, repository: "example/project", pullRequests: [], total: 0, pageInfo: { hasNextPage: false }
+    ok: true, repository: "example/project", pullRequests: [pullRequest], total: 1, pageInfo: { hasNextPage: false }
   }));
+  await routeApiEndpoint(page, "/vibe64/pull-requests/7", (route) => fulfillJson(route, { ok: true, pullRequest }));
   return requests;
 }
+
+test("GitHub tabs return to lists and keep the project mounted when clicked again", async ({ page }) => {
+  await mockGithubIssues(page);
+  let projectOpens = 0;
+  await routeApiEndpoint(page, "/vibe64/project-runtime/open", async (route) => {
+    projectOpens += 1;
+    await fulfillJson(route, { ok: true, runtime: { open: true } });
+  });
+  await page.goto(`${DASHBOARD_PATH}/issues?issue=1001&pr=7&issueLabel=bug&prState=closed&prCursor=next-pr-page`);
+  await expect(page.getByText(issue.body, { exact: true })).toBeVisible();
+  const project = await page.locator(".studio-ai-sessions").elementHandle();
+  const comment = page.getByRole("textbox", { name: "Add a comment", exact: true });
+  await comment.fill("Keep this unfinished comment.");
+
+  for (const name of ["Issues", "Pull requests", "Pull requests", "Issues", "Issues"]) {
+    await page.getByRole("tab", { name, exact: true }).click();
+    await expect(page.getByRole("tab", { name, exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel(name === "Issues" ? "GitHub issues" : "GitHub pull requests", { exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.has(name === "Issues" ? "issue" : "pr")).toBe(false);
+    expect(await project!.evaluate((element) => element.isConnected)).toBe(true);
+    await expect(page.getByLabel("Loading project", { exact: true })).toHaveCount(0);
+    expect(projectOpens).toBe(1);
+  }
+  await page.getByRole("tab", { name: "Pull requests", exact: true }).click();
+  await page.getByRole("link", { name: /Keep project tabs stable/u }).click();
+  await expect(page.getByText(pullRequest.body, { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Pull requests", exact: true }).click();
+  await expect(page.getByLabel("GitHub pull requests", { exact: true })).toBeVisible();
+  expect(new URL(page.url()).searchParams.has("pr")).toBe(false);
+  expect(new URL(page.url()).searchParams.get("prState")).toBe("closed");
+  expect(new URL(page.url()).searchParams.get("prCursor")).toBe("next-pr-page");
+  await page.getByRole("tab", { name: "Issues", exact: true }).click();
+  expect(new URL(page.url()).searchParams.getAll("issueLabel")).toEqual(["bug"]);
+  await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
+  await expect(comment).toHaveValue("Keep this unfinished comment.");
+  expect(await project!.evaluate((element) => element.isConnected)).toBe(true);
+  expect(projectOpens).toBe(1);
+});
+
+test("Repeated dashboard navigation retries a failed project opening", async ({ page }) => {
+  await mockGithubIssues(page);
+  let projectOpens = 0;
+  await routeApiEndpoint(page, "/vibe64/project-runtime/open", async (route) => {
+    projectOpens += 1;
+    await fulfillJson(route, projectOpens === 1
+      ? { ok: false, error: "Opening failed. Try again." }
+      : { ok: true, runtime: { open: true } });
+  });
+  await page.goto(`${DASHBOARD_PATH}/issues`);
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
+  await expect(page.getByRole("link", { name: /An issue beyond the first thousand/u })).toBeVisible();
+  expect(projectOpens).toBe(2);
+});
 
 for (const viewport of viewports) {
   test(`GitHub issue filters preserve labels and page context at ${viewport.name} width`, async ({ page }, testInfo) => {
@@ -117,6 +179,10 @@ for (const viewport of viewports) {
     await expect(chips).toHaveCount(2);
 
     await panel.getByRole("tab", { name: "Pull requests", exact: true }).click();
+    const pullRequestsPanel = page.locator(".pull-requests");
+    await expect(pullRequestsPanel.getByRole("link", { name: /Keep project tabs stable/u })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await pullRequestsPanel.screenshot({ path: testInfo.outputPath(`pull-requests-${viewport.name}.png`) });
     await page.getByRole("tab", { name: "Issues", exact: true }).click();
     await expect(page).toHaveURL(filteredUrl);
     await expect(chips).toHaveCount(2);

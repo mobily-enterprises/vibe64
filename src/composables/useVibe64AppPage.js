@@ -248,7 +248,8 @@ function useVibe64AppPage() {
     { immediate: true }
   );
   const removeProjectNavigation = router.afterEach((to, _from, failure) => {
-    if (isNavigationFailure(failure, NavigationFailureType.duplicated) &&
+    if (projectRuntimeError.value &&
+        isNavigationFailure(failure, NavigationFailureType.duplicated) &&
         projectSlugFromRoute(to) === projectSlug.value) {
       retryProjectRuntime();
     }
