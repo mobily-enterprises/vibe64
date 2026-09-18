@@ -76,7 +76,6 @@ const OPENCODE_MESSAGE_POLL_MS = 250;
 const OPENCODE_EVENT_READY_TIMEOUT_MS = 30_000;
 const OPENCODE_INTERRUPT_TIMEOUT_MS = 5_000;
 const OPENCODE_REASONING_PROGRESS_MAX_CHARS = 280;
-const OPENCODE_SESSION_PREFIX = "ses_vibe64_";
 const OPENCODE_RENEWAL_TIMEOUT_MS = 3 * 60 * 1000;
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
@@ -106,10 +105,6 @@ function safeSessionId(value = "") {
 
 function fingerprint(...values) {
   return createHash("sha256").update(values.map((value) => String(value ?? "")).join("\0")).digest("hex");
-}
-
-function upstreamSessionId(runtimeRoot = "", sessionId = "") {
-  return `${OPENCODE_SESSION_PREFIX}${fingerprint(runtimeRoot, sessionId).slice(0, 40)}`;
 }
 
 function upstreamMessageId(value = "") {
@@ -655,6 +650,12 @@ function createOpenCodeTerminalController({
     };
   }
 
+  function storedUpstreamSessionId(context) {
+    const metadata = context.session?.metadata || {};
+    return text(metadata.opencode_conversation_id) ||
+      text(processes.get(context.key)?.upstreamSessionId);
+  }
+
   function sharedRoots() {
     const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
     return {
@@ -1088,7 +1089,7 @@ function createOpenCodeTerminalController({
         projectContextRoot: path.resolve(context.runtime.projectContextRoot),
         promptContext: promptContext("main", context.assistantScope),
         sessionId: context.sessionId,
-        upstreamSessionId: upstreamSessionId(context.runtime.stateRoot, context.sessionId),
+        upstreamSessionId: storedUpstreamSessionId(context),
         workdir: context.workdir
       });
       await writeSessionEnvironmentRegistry();
@@ -1099,6 +1100,11 @@ function createOpenCodeTerminalController({
         [genesisCommandShimDirectory()]
       );
       const current = processes.get(context.key);
+      const nativeId = storedUpstreamSessionId(context);
+      if (current && current.upstreamSessionId !== nativeId) {
+        current.upstreamSessionId = nativeId;
+        current.upstream = null;
+      }
       if (
         current && !current.abortController.signal.aborted &&
         current.canonicalUrl === connection.canonicalUrl &&
@@ -1118,7 +1124,7 @@ function createOpenCodeTerminalController({
         abortController: new AbortController(),
         key: context.key,
         sessionId: context.sessionId,
-        upstreamSessionId: upstreamSessionId(context.runtime.stateRoot, context.sessionId)
+        upstreamSessionId: storedUpstreamSessionId(context)
       };
       Object.assign(created, {
         canonicalUrl: connection.canonicalUrl,
@@ -1166,40 +1172,33 @@ function createOpenCodeTerminalController({
         sameOpenCodeSelection(target.upstreamSelection, context.selection)
       ) ? target.upstream : null;
       if (!upstream) {
-        try {
+        if (target.upstreamSessionId) {
           upstream = await target.server.client.readSession(target.upstreamSessionId);
-        } catch (error) {
-          if (error?.statusCode !== 404) {
-            throw error;
-          }
-        }
-        if (!upstream) {
+          await target.server.client.switchModel(target.upstreamSessionId, openCodeModel(context.selection));
+          await target.server.client.switchAgent(target.upstreamSessionId, context.selection.agentId);
+        } else {
           upstream = await target.server.client.createSession({
             agent: context.selection.agentId,
-            id: target.upstreamSessionId,
             location: { directory: context.workdir },
             model: openCodeModel(context.selection)
           });
-        } else {
-          await target.server.client.switchModel(
-            target.upstreamSessionId,
-            openCodeModel(context.selection)
-          );
-          await target.server.client.switchAgent(
-            target.upstreamSessionId,
-            context.selection.agentId
-          );
         }
       }
+      const nativeId = text(upstream?.id);
+      if (!nativeId) {
+        throw openCodeError("vibe64_opencode_session_id_invalid", "OpenCode did not return a native conversation ID.");
+      }
       if (
-        text(context.session?.metadata?.agent_identity_conversation_id) !== target.upstreamSessionId ||
+        text(context.session?.metadata?.opencode_conversation_id) !== nativeId ||
+        text(context.session?.metadata?.agent_identity_conversation_id) !== nativeId ||
         text(context.session?.metadata?.agent_identity_provider) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
         text(context.session?.metadata?.agent_transport_id) !== "opencode_server"
       ) {
         const capturedAt = new Date().toISOString();
         await writeSessionMetadata(context, {
+          opencode_conversation_id: nativeId,
           agent_identity_captured_at: capturedAt,
-          agent_identity_conversation_id: target.upstreamSessionId,
+          agent_identity_conversation_id: nativeId,
           agent_identity_provider: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
           agent_identity_resume_strategy: "provider-native",
           agent_identity_status: "ready",
@@ -1208,9 +1207,13 @@ function createOpenCodeTerminalController({
           agent_transport_id: "opencode_server",
           agent_transport_kind: "loopback-http"
         });
+        Object.assign(context.session.metadata, { opencode_conversation_id: nativeId });
       }
+      target.upstreamSessionId = nativeId;
       target.upstream = upstream;
       target.upstreamSelection = { ...context.selection };
+      sessionEnvironments.get(context.key).upstreamSessionId = nativeId;
+      await writeSessionEnvironmentRegistry();
       return target;
     });
     target.upstreamStart = start;
@@ -1307,7 +1310,7 @@ function createOpenCodeTerminalController({
         runtime: context.runtime,
         session: context.session,
         sourceRoot: terminalSessionSourceRoot(context.session),
-        threadId: target?.upstreamSessionId || upstreamSessionId(context.runtime.stateRoot, context.sessionId),
+        threadId: target?.upstreamSessionId || storedUpstreamSessionId(context),
         vibe64User: options.vibe64User || null,
         workdir: context.workdir
       });
@@ -1761,7 +1764,7 @@ function createOpenCodeTerminalController({
       throw openCodeError("vibe64_opencode_message_id_required", "Admission inspection requires a message ID.");
     }
     const context = await contextFor(sessionId, options);
-    const threadId = upstreamSessionId(context.runtime.stateRoot, context.sessionId);
+    const threadId = storedUpstreamSessionId(context);
     if (text(input.threadId) !== threadId) {
       throw openCodeError("vibe64_opencode_thread_mismatch", "Admission inspection requires the original assistant thread.");
     }
@@ -1801,7 +1804,7 @@ function createOpenCodeTerminalController({
         delivered: true,
         duplicate: true,
         ok: true,
-        thread: { id: currentTurn?.threadId || upstreamSessionId(context.runtime.stateRoot, context.sessionId) },
+        thread: { id: currentTurn?.threadId || storedUpstreamSessionId(context) },
         turn: currentTurn
       };
     }
@@ -1817,7 +1820,7 @@ function createOpenCodeTerminalController({
       await writeRun(context, currentTurn, VIBE64_AGENT_RUN_STATE.INTERRUPTED, currentTurn.observationError);
     }
     const currentMonitor = monitors.get(context.key);
-    const currentThreadId = upstreamSessionId(context.runtime.stateRoot, context.sessionId);
+    let currentThreadId = storedUpstreamSessionId(context);
     const ownershipMatchesTurn = Boolean(
       currentMonitor &&
       options.turnOwnership &&
@@ -1886,6 +1889,8 @@ function createOpenCodeTerminalController({
         throw new Error(actorFailure.error);
       }
       target = await ensureUpstreamSession(context, options);
+      currentThreadId = target.upstreamSessionId;
+      if (startingTurn) startingTurn.threadId = currentThreadId;
       actorMetadata = await conversationActorMetadata({
         vibe64User: options.vibe64User || null
       });
@@ -2728,7 +2733,7 @@ function createOpenCodeTerminalController({
         return {
           interrupted: false,
           ok: true,
-          thread: { id: upstreamSessionId(context.runtime.stateRoot, context.sessionId) },
+          thread: { id: storedUpstreamSessionId(context) },
           turn: openCodeTurnSnapshot(turn)
         };
       }
@@ -2864,7 +2869,7 @@ function createOpenCodeTerminalController({
       const context = await contextFor(sessionId, options);
       const target = processes.get(context.key);
       const threadId = target?.upstreamSessionId ||
-        upstreamSessionId(context.runtime.stateRoot, context.sessionId);
+        storedUpstreamSessionId(context);
       return {
         ok: true,
         terminal: terminalSnapshot(context.sessionId, target?.terminalSessionId),
@@ -2940,6 +2945,5 @@ export {
   OPENCODE_AGENT_RUN_ID,
   OPENCODE_CATALOG_CACHE_MS,
   createOpenCodeTerminalController,
-  upstreamMessageId,
-  upstreamSessionId
+  upstreamMessageId
 };

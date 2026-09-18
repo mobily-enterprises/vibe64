@@ -106,8 +106,8 @@ requests show a short description instead of internal agent instructions.
 The main chat composer keeps Add, Settings, Goal, Codex allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
-Settings uses full-width clickable rows with text left and icons right for
-model/access. Optional companion controls sit immediately to the right of the
+The Settings cog opens AI model and access controls directly, with recovery
+guidance and pending message requests in the same panel. Optional companion controls sit immediately to the right of the
 Settings cog, followed by the starred-files icon. These controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. The controls wrap when needed in
@@ -126,6 +126,7 @@ An explanation after a question does not suppress its answer field.
 The hints row always reserves its height immediately above the message input,
 following the input as it grows without shifting the chat when hints change.
 Provider failures reach the conversation even when no assistant answer is created.
+Resending after a connection failure shows any new failure beside that attempt.
 Confirmed Stop releases chat controls without requiring a final provider message.
 Completed assistant replies appear immediately, including answers to steering
 questions while a goal continues. Assistant text also appears as it arrives on
@@ -343,7 +344,9 @@ recovery model and give the owner a warned switch for broader access. Starting
 a session presents the configured list promptly without waiting for an AI
 provider to start or discover models. People can switch the assistant application,
 provider or model between turns without replacing the session or its files.
-Returning to an application reuses its previous native conversation. The next
+Returning to an application reuses its previous native conversation. OpenCode
+creates its own conversation IDs; Vibe64 saves them across restarts and application
+switches. The next
 ordinary message carries recent history for a new application, or missed and
 corrected messages for a returning one, before the person's request. Choosing
 an AI alone sends nothing. An unavailable old connection does not prevent

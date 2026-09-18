@@ -2,6 +2,10 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+OpenCode waits for its project event connection before sending, allowing cold
+initialization up to 30 seconds. A pre-send connection timeout is retryable.
+Each attempt retains its own failure notice, so resending the same message
+cannot hide a later provider rejection behind the earlier connection failure.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
 User messages, commentary, answers and system messages separate progress groups.
@@ -88,8 +92,9 @@ The main composer groups Add, Settings, Goal, weekly
 allowance, and icon-only Send, with Stop alongside Send while needed. Goal and
 available allowance stay visible outside the menus. Its empty textbox uses one
 compact row and still grows with entered text. Add contains left-aligned file,
-preview, and diagnostics attachment actions. Settings contains full-width
-model/access buttons, with text left and icons right. The host tools target sits
+preview, and diagnostics attachment actions. The Settings cog opens the
+model/access selector directly, including recovery guidance and pending message
+requests even while its catalogue is unavailable. The host tools target sits
 immediately after Settings in the composer row, followed by the icon-only
 starred-files menu, and remains mounted independently of Settings. Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
@@ -367,6 +372,11 @@ prose at word boundaries, and preserves declared column alignment. Table cells
 override the inline renderer's arbitrary word breaking; long identifiers remain
 bounded. Wide tables scroll inside a labelled, keyboard-focusable container
 without widening the conversation. Headers and row separators use theme colors.
+OpenCode creates its own native conversation ID. The controller persists it as
+`opencode_conversation_id`, separately from the currently selected application's
+identity, and uses it for resume, event observation, and the system-prompt registry.
+Sessions without this saved identity start a fresh native conversation; old
+caller-supplied IDs are not reused or migrated.
 OpenCode connects its turn event stream before submitting a new prompt, retaining
 failures raised before a native assistant message exists. An error event does
 not by itself prove execution stopped: native idle state or a completed response

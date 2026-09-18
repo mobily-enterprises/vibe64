@@ -294,7 +294,7 @@ test.describe("direct chat", () => {
       const row = page.locator(".studio-autopilot__composer-actions:visible");
       await expect(row.getByRole("button", { name: "Goal paused", exact: true })).toBeVisible();
       await expect(row.getByRole("button", { name: "Weekly Codex allowance remaining: 73%", exact: true })).toBeVisible();
-      const bounds = await row.locator("button").evaluateAll(buttons => buttons.map(button => {
+      const bounds = await row.locator("button:visible").evaluateAll(buttons => buttons.map(button => {
         const { y, height } = button.getBoundingClientRect();
         return y + height / 2;
       }));
@@ -312,18 +312,16 @@ test.describe("direct chat", () => {
     await input.fill("Keep my draft");
     await settings.click();
     await expect(notice).toBeVisible();
-    const modelRow = page.getByRole("button", { name: "Choose AI", exact: true });
-    await expect(modelRow).toContainText("AI model and access");
-    await modelRow.click({ position: { x: 12, y: 16 } });
+    await expect(page.getByRole("button", { name: "Choose AI", exact: true })).not.toBeVisible();
     await expect(page.getByLabel("AI session selector", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(modelRow).toBeFocused();
+    await expect(settings).toBeFocused();
     const starredRow = page.getByRole("button", { name: "Starred files (0)", exact: true });
-    await expect(starredRow).toContainText("Starred files");
     await starredRow.click({ position: { x: 12, y: 16 } });
     await expect(page.getByLabel("Find a starred file", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close starred files", exact: true }).click();
     await expect(starredRow).toBeFocused();
+    await settings.click();
     await page.screenshot({ path: test.info().outputPath("settings-menu.png") });
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(input).toHaveValue("Keep my draft");

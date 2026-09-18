@@ -1,15 +1,8 @@
 <template>
-  <v-btn
-    ref="trigger" aria-label="Choose AI" aria-haspopup="menu" :aria-expanded="menuOpen"
-    :append-icon="mdiCogOutline" block class="justify-space-between" size="small"
-    :title="buttonTitle" variant="text" @click="menuOpen = !menuOpen"
-  >
-    AI model and access
-  </v-btn>
   <!-- The shared control forwards these public VMenu props; it has no custom activator slot. -->
   <AssistantModelControl
     v-model="menuOpen"
-    :target="trigger?.$el" :activator-props="{ class: 'd-none' }"
+    :target="target" :activator-props="{ class: 'd-none' }"
     :provider-rows="connectionRows" :model-rows="modelRows" :variant-rows="variantRows"
     :model-provider-id="connectionId" :model-id="modelId" :variant-id="variantId"
     :selection-summary="selectionSummary" :button-title="buttonTitle" :changes-disabled="changesDisabled"
@@ -84,6 +77,7 @@
       </section>
     </template>
     <template #footer>
+      <slot name="access" />
       <v-btn
         v-if="canConfigure"
         :disabled="changesDisabled"
@@ -133,7 +127,6 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { AssistantModelControl } from "@jskit-ai/assistant-core/client/conversation";
 import {
-  mdiCogOutline,
   mdiCreditCardOutline,
   mdiLockOutline,
   mdiShieldCheckOutline
@@ -154,6 +147,10 @@ import {
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
+  target: {
+    default: null,
+    type: Object
+  },
   accessLoading: {
     default: false,
     type: Boolean
@@ -180,8 +177,7 @@ const props = defineProps({
   }
 });
 
-const menuOpen = ref(false);
-const trigger = ref(null);
+const menuOpen = defineModel({ type: Boolean, default: false });
 const saving = ref(false);
 const modelAccessUpdating = ref(false);
 const unlockConfirmOpen = ref(false);
@@ -550,7 +546,7 @@ watch(menuOpen, (open) => {
     hydrateSelection();
     void reloadCatalog().catch(() => null);
   } else {
-    void nextTick(() => trigger.value?.$el?.focus());
+    void nextTick(() => props.target?.focus());
   }
 });
 

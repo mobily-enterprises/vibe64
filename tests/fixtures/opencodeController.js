@@ -198,6 +198,7 @@ async function controllerHarness({
   const commandEnvironmentCalls = [];
   const catalogReadCalls = [];
   const createdSessions = [];
+  const createdSessionInputs = [];
   const createdSessionDirectories = [];
   const promptCalls = [];
   const promptDirectories = [];
@@ -238,8 +239,9 @@ async function controllerHarness({
         return agents;
       },
       async createSession(input = {}) {
-        const id = input.id || `ses_detached_${nextSession++}`;
+        const id = `ses_native_${nextSession++}`;
         const created = { ...input, id };
+        createdSessionInputs.push(input);
         createdSessions.push(created);
         createdSessionDirectories.push({ directory, id });
         upstreamSessions.set(id, created);
@@ -308,9 +310,9 @@ async function controllerHarness({
           throw error;
         }
         await beforePrompt?.({ directory, id, input });
-        outputs.set(id, id.startsWith("ses_detached_")
-          ? helperResponse
-          : queuedAssistantResponses.shift() || "Main turn complete");
+        outputs.set(id, id === session.metadata.opencode_conversation_id
+          ? queuedAssistantResponses.shift() || "Main turn complete"
+          : helperResponse);
         return { admittedSeq: promptCalls.length, id: input.id };
       },
       async providers() {
@@ -469,6 +471,7 @@ async function controllerHarness({
     controller,
     createdSessionDirectories,
     createdSessions,
+    createdSessionInputs,
     failHealth() {
       failNextHealth = true;
     },

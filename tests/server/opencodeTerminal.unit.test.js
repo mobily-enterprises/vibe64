@@ -27,6 +27,41 @@ import {
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 
+test("OpenCode retains its generated conversation ID across restarts and engine changeover", async (t) => {
+  const harness = await controllerHarness();
+  let controller = harness.controller;
+  t.after(async () => { await controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const first = await controller.ensureSession("session-1");
+  assert.match(first.thread.id, /^ses_native_/);
+  assert.equal(harness.session.metadata.opencode_conversation_id, first.thread.id);
+  await controller.closeAllForProject();
+  harness.session.metadata.agent_identity_provider = "codex";
+  harness.session.metadata.agent_identity_conversation_id = "codex-native-thread";
+  controller = harness.createController();
+  const resumed = await controller.ensureSession("session-1");
+  assert.equal(resumed.thread.id, first.thread.id);
+  assert.equal(harness.createdSessions.length, 1);
+  assert.equal(Object.hasOwn(harness.createdSessionInputs[0], "id"), false);
+});
+
+test("OpenCode starts fresh when only an old caller-supplied conversation ID exists", async (t) => {
+  const harness = await controllerHarness();
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  const oldId = "ses_vibe64_previous";
+  harness.session.metadata.agent_identity_provider = "opencode";
+  harness.session.metadata.agent_identity_conversation_id = oldId;
+  harness.upstreamSessions.set(oldId, { id: oldId });
+  const sent = await harness.controller.sendMessage("session-1", { message: "Hello", messageId: "native-session-start" });
+  await harness.controller.waitForTurn("session-1");
+  assert.notEqual(sent.thread.id, oldId);
+  assert.equal(sent.turn.threadId, sent.thread.id);
+  assert.equal(harness.promptCalls[0].id, sent.thread.id);
+  assert.equal(harness.readSessionCalls(), 0);
+  assert.equal(Object.hasOwn(harness.createdSessionInputs[0], "id"), false);
+  const registry = JSON.parse(await readFile(path.join(harness.root, "agent-providers", "opencode", "session-environments.json"), "utf8"));
+  assert.equal(registry.sessions[0].upstreamSessionId, sent.thread.id);
+});
+
 test("OpenCode changeover delivers one combined prompt, retains authored text, and reuses native history", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {
@@ -895,7 +930,7 @@ test("OpenCode reuses an established session without repeating setup or model sw
   assert.equal(harness.listConnectionCalls(), 1);
   assert.equal(harness.agentCatalogCalls(), 0);
   assert.equal(harness.providerCatalogCalls(), 0);
-  assert.equal(harness.readSessionCalls(), 1);
+  assert.equal(harness.readSessionCalls(), 0);
   assert.equal(harness.createdSessions.length, 1);
   assert.deepEqual(harness.switchedModels, []);
   assert.deepEqual(harness.switchedAgents, []);
@@ -1047,7 +1082,7 @@ test("OpenCode rechecks its native session after recovering an unhealthy server"
   assert.equal(recovered.thread.id, first.thread.id);
   assert.equal(harness.processStarts.length, 2);
   assert.equal(harness.processStops.length, 1);
-  assert.equal(harness.readSessionCalls(), 2);
+  assert.equal(harness.readSessionCalls(), 1);
   assert.equal(harness.createdSessions.length, 1);
   assert.equal(harness.switchedModels.length, 1);
   assert.equal(harness.switchedAgents.length, 1);
@@ -2127,7 +2162,8 @@ test("OpenCode starts its interactive terminal by attaching to the session's nat
     "source"
   ));
   assert.match(harness.terminalStarts[0].namespace, /vibe64-opencode.*session-1/u);
-  assert.match(harness.terminalStarts[0].upstreamSessionId, /^ses_vibe64_/u);
+  assert.equal(harness.terminalStarts[0].upstreamSessionId, harness.session.metadata.opencode_conversation_id);
+  assert.doesNotMatch(harness.terminalStarts[0].upstreamSessionId, /^ses_vibe64_/u);
 });
 
 test("OpenCode reuses its terminal without creating prompt actor state", async (t) => {

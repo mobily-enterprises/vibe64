@@ -455,50 +455,57 @@
                       </v-btn>
                     </v-card>
                   </v-menu>
-                  <v-menu v-model="composerSettingsOpen" eager location="top start" :close-on-content-click="false">
-                    <template #activator="{ props: menuProps }">
-                      <v-btn
-                        v-bind="menuProps" :aria-label="composerAccessHint ? 'Chat settings: attention required' : 'Chat settings'"
-                        title="Chat settings" icon size="small" variant="text"
-                        class="studio-autopilot__composer-action"
+                  <v-btn
+                    ref="composerSettingsButton"
+                    :aria-label="composerAccessHint ? 'Chat settings: attention required' : 'Chat settings'"
+                    aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
+                    title="Chat settings" icon size="small" variant="text"
+                    class="studio-autopilot__composer-action"
+                    @click="composerSettingsOpen = !composerSettingsOpen"
+                  >
+                    <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
+                      <v-icon :icon="mdiCogOutline" />
+                    </v-badge>
+                  </v-btn>
+                  <Vibe64SessionAssistantMenu
+                    v-model="composerSettingsOpen"
+                    :target="composerSettingsButton?.$el"
+                    :access-label="assistantAccessLabel"
+                    :access-loading="assistantAccessLoading"
+                    :can-configure="assistantSuggestionsCanManage"
+                    :changes-disabled="composerSending || agentActive"
+                    :session="props.session"
+                    :sessions-api-path="props.sessionsApiPath"
+                  >
+                    <template #access>
+                      <div
+                        v-if="composerAccessHint || assistantAccessError || assistantSuggestionsError || assistantPendingSuggestions.length"
+                        class="studio-autopilot__settings-access"
                       >
-                        <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
-                          <v-icon :icon="mdiCogOutline" />
-                        </v-badge>
-                      </v-btn>
-                    </template>
-                    <v-card class="studio-autopilot__composer-menu pa-3" width="300" aria-label="Chat settings">
-                      <div v-if="composerAccessHint" class="text-body-small" role="status">
-                        {{ composerAccessHint }}
-                        <v-btn
-                          v-if="agentObservationLost && !agentActive" size="small" variant="text"
-                          :disabled="composerDisabled || composerSending" @click="continueConversation"
-                        >
-                          Continue
-                        </v-btn>
+                        <div v-if="composerAccessHint" class="text-body-small" role="status">
+                          {{ composerAccessHint }}
+                          <v-btn
+                            v-if="agentObservationLost && !agentActive" size="small" variant="text"
+                            :disabled="composerDisabled || composerSending" @click="continueConversation"
+                          >
+                            Continue
+                          </v-btn>
+                        </div>
+                        <Vibe64AssistantAccessPanel
+                          :access-error="assistantAccessError"
+                          :action-is-pending="assistantActionIsPending"
+                          :can-manage="assistantSuggestionsCanManage"
+                          :pending-action="assistantPendingAction"
+                          :pending-suggestions="assistantPendingSuggestions"
+                          :suggestions-error="assistantSuggestionsError"
+                          @approve="approveAssistantSuggestion"
+                          @discard="discardAssistantSuggestion"
+                          @reload="reloadAssistantAccess"
+                          @withdraw="withdrawAssistantSuggestion"
+                        />
                       </div>
-                      <Vibe64AssistantAccessPanel
-                        :access-error="assistantAccessError"
-                        :action-is-pending="assistantActionIsPending"
-                        :can-manage="assistantSuggestionsCanManage"
-                        :pending-action="assistantPendingAction"
-                        :pending-suggestions="assistantPendingSuggestions"
-                        :suggestions-error="assistantSuggestionsError"
-                        @approve="approveAssistantSuggestion"
-                        @discard="discardAssistantSuggestion"
-                        @reload="reloadAssistantAccess"
-                        @withdraw="withdrawAssistantSuggestion"
-                      />
-                      <Vibe64SessionAssistantMenu
-                        :access-label="assistantAccessLabel"
-                        :access-loading="assistantAccessLoading"
-                        :can-configure="assistantSuggestionsCanManage"
-                        :changes-disabled="composerSending || agentActive"
-                        :session="props.session"
-                        :sessions-api-path="props.sessionsApiPath"
-                      />
-                    </v-card>
-                  </v-menu>
+                    </template>
+                  </Vibe64SessionAssistantMenu>
                   <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
                   <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                   <Vibe64CodexPlanUsage
@@ -902,6 +909,7 @@ const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
 const composerInput = ref(null);
 const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
+const composerSettingsButton = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
@@ -1732,6 +1740,10 @@ onBeforeUnmount(() => {
 .studio-autopilot__composer-delivery {
   margin-inline-start: auto;
   flex-shrink: 0;
+}
+
+.studio-autopilot__settings-access {
+  grid-column: 1 / -1;
 }
 
 .studio-autopilot__composer-action {

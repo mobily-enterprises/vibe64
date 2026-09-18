@@ -300,11 +300,12 @@ describe("useVibe64AssistantAccess", () => {
     ), "utf8");
     const footerStart = autopilot.indexOf('<template #footer="{ attachmentState }">');
     const accessControl = autopilot.indexOf("<Vibe64AssistantAccessPanel");
-    const assistantMenu = autopilot.indexOf("<Vibe64SessionAssistantMenu", accessControl);
+    const assistantMenu = autopilot.indexOf("<Vibe64SessionAssistantMenu", footerStart);
 
     expect(footerStart).toBeGreaterThan(-1);
     expect(accessControl).toBeGreaterThan(footerStart);
-    expect(accessControl).toBeLessThan(assistantMenu);
+    expect(accessControl).toBeGreaterThan(assistantMenu);
+    expect(assistantMenuSource).toContain('<slot name="access" />');
     expect(panel).toContain('<v-dialog v-model="queueOpen"');
     expect(panel).toContain('@click="queueOpen = true"');
     expect(panel).toContain('v-if="accessError || suggestionsRelevant"');
@@ -337,7 +338,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(modelControlSource).toContain('aria-label="Model"');
     expect(modelControlSource).toContain('aria-label="Thinking"');
     expect(assistantMenuSource).toContain('watch(assistantSelection, hydrateSelection, { immediate: true });');
-    expect(assistantMenuSource).toContain('void catalog.reload().catch(() => null);');
+    expect(assistantMenuSource).toContain('void reloadCatalog().catch(() => null);');
     expect(assistantMenuSource).not.toContain('<v-select');
     expect(assistantMenuSource).not.toContain('label="Agent"');
     expect(assistantMenuSource).toContain('v-if="canConfigure"');
