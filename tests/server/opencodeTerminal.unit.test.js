@@ -30,16 +30,22 @@ import { agents, controllerHarness, providerDefinition } from "../fixtures/openc
 test("OpenCode retains its generated conversation ID across restarts and engine changeover", async (t) => {
   const harness = await controllerHarness();
   let controller = harness.controller;
-  t.after(async () => { await controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  t.after(async () => {
+    await controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+
   const first = await controller.ensureSession("session-1");
   assert.match(first.thread.id, /^ses_native_/);
   assert.equal(harness.session.metadata.opencode_conversation_id, first.thread.id);
+
   const databasePath = harness.processStarts[0].options.dbPath;
   await mkdir(path.dirname(databasePath), { recursive: true });
   await writeFile(databasePath, "native history");
   await controller.closeAllForProject();
   await rm(path.join(harness.root, "agent-providers"), { recursive: true, force: true });
   assert.equal(await readFile(databasePath, "utf8"), "native history");
+
   harness.session.metadata.agent_identity_provider = "codex";
   harness.session.metadata.agent_identity_conversation_id = "codex-native-thread";
   controller = harness.createController();
@@ -51,19 +57,29 @@ test("OpenCode retains its generated conversation ID across restarts and engine 
 
 test("OpenCode starts fresh when only an old caller-supplied conversation ID exists", async (t) => {
   const harness = await controllerHarness();
-  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+
   const oldId = "ses_vibe64_previous";
   harness.session.metadata.agent_identity_provider = "opencode";
   harness.session.metadata.agent_identity_conversation_id = oldId;
   harness.upstreamSessions.set(oldId, { id: oldId });
-  const sent = await harness.controller.sendMessage("session-1", { message: "Hello", messageId: "native-session-start" });
+
+  const sent = await harness.controller.sendMessage("session-1", {
+    message: "Hello",
+    messageId: "native-session-start"
+  });
   await harness.controller.waitForTurn("session-1");
   assert.notEqual(sent.thread.id, oldId);
   assert.equal(sent.turn.threadId, sent.thread.id);
   assert.equal(harness.promptCalls[0].id, sent.thread.id);
   assert.equal(harness.readSessionCalls(), 0);
   assert.equal(Object.hasOwn(harness.createdSessionInputs[0], "id"), false);
-  const registry = JSON.parse(await readFile(path.join(harness.root, "agent-providers", "opencode", "session-environments.json"), "utf8"));
+
+  const registryPath = path.join(harness.root, "agent-providers", "opencode", "session-environments.json");
+  const registry = JSON.parse(await readFile(registryPath, "utf8"));
   assert.equal(registry.sessions[0].upstreamSessionId, sent.thread.id);
 });
 

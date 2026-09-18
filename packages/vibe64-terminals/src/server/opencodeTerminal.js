@@ -651,15 +651,16 @@ function createOpenCodeTerminalController({
   }
 
   function storedUpstreamSessionId(context) {
-    const metadata = context.session?.metadata || {};
-    return text(metadata.opencode_conversation_id) ||
+    return text(context.session?.metadata?.opencode_conversation_id) ||
       text(processes.get(context.key)?.upstreamSessionId);
   }
 
   function sharedRoots() {
     const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
     const serviceDataRoot = text(projectService.currentServiceDataRoot());
-    if (!serviceDataRoot) throw new TypeError("OpenCode requires a persistent service data root.");
+    if (!serviceDataRoot) {
+      throw new TypeError("OpenCode requires a persistent service data root.");
+    }
     return {
       cacheRoot: path.join(root, "cache"),
       dbPath: path.join(serviceDataRoot, "opencode", "opencode.db"),
@@ -1126,7 +1127,7 @@ function createOpenCodeTerminalController({
         abortController: new AbortController(),
         key: context.key,
         sessionId: context.sessionId,
-        upstreamSessionId: storedUpstreamSessionId(context)
+        upstreamSessionId: nativeId
       };
       Object.assign(created, {
         canonicalUrl: connection.canonicalUrl,
@@ -1173,18 +1174,16 @@ function createOpenCodeTerminalController({
         target.upstream &&
         sameOpenCodeSelection(target.upstreamSelection, context.selection)
       ) ? target.upstream : null;
-      if (!upstream) {
-        if (target.upstreamSessionId) {
-          upstream = await target.server.client.readSession(target.upstreamSessionId);
-          await target.server.client.switchModel(target.upstreamSessionId, openCodeModel(context.selection));
-          await target.server.client.switchAgent(target.upstreamSessionId, context.selection.agentId);
-        } else {
-          upstream = await target.server.client.createSession({
-            agent: context.selection.agentId,
-            location: { directory: context.workdir },
-            model: openCodeModel(context.selection)
-          });
-        }
+      if (!upstream && target.upstreamSessionId) {
+        upstream = await target.server.client.readSession(target.upstreamSessionId);
+        await target.server.client.switchModel(target.upstreamSessionId, openCodeModel(context.selection));
+        await target.server.client.switchAgent(target.upstreamSessionId, context.selection.agentId);
+      } else if (!upstream) {
+        upstream = await target.server.client.createSession({
+          agent: context.selection.agentId,
+          location: { directory: context.workdir },
+          model: openCodeModel(context.selection)
+        });
       }
       const nativeId = text(upstream?.id);
       if (!nativeId) {
@@ -1209,7 +1208,7 @@ function createOpenCodeTerminalController({
           agent_transport_id: "opencode_server",
           agent_transport_kind: "loopback-http"
         });
-        Object.assign(context.session.metadata, { opencode_conversation_id: nativeId });
+        context.session.metadata.opencode_conversation_id = nativeId;
       }
       target.upstreamSessionId = nativeId;
       target.upstream = upstream;
@@ -1892,7 +1891,9 @@ function createOpenCodeTerminalController({
       }
       target = await ensureUpstreamSession(context, options);
       currentThreadId = target.upstreamSessionId;
-      if (startingTurn) startingTurn.threadId = currentThreadId;
+      if (startingTurn) {
+        startingTurn.threadId = currentThreadId;
+      }
       actorMetadata = await conversationActorMetadata({
         vibe64User: options.vibe64User || null
       });
