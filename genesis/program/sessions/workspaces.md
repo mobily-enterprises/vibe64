@@ -42,6 +42,10 @@ and preserves the read-only history needed to recover its conversation and
 understand what happened. Session History reads lightweight archive indexes and
 shows the most recently archived session first.
 
+Routine session-detail refreshes read session and agent state without launching
+Git source inspections. Source operations retain their explicit health checks;
+chat updates do not need a new managed Git process to report activity.
+
 Archive confirmation immediately selects the preceding available tab and leaves
 the requested session gray and unavailable while its existing request runs.
 Archive state and feedback belong to the project panel. With no selection, the

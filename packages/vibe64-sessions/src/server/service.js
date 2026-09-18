@@ -1129,8 +1129,9 @@ function createService({
 
     async inspectSession(sessionId) {
       return sessionResult(async () => {
-        const runtime = await project.createRuntime();
-        const session = await runtime.getSession(sessionId);
+        // Realtime chat refreshes read state; source operations own their Git checks.
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
         const [agentSession, conversation] = await Promise.all([
           typeof terminals.agentSessionState === "function"
             ? terminals.agentSessionState(sessionId, {

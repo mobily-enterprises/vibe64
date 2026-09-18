@@ -74,7 +74,11 @@ import {
   createVibe64SessionStore
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import {
+  Vibe64SessionRuntime
+} from "../../packages/vibe64-runtime/src/server/runtime.js";
+import {
   projectRuntimeRoot,
+  sourceMetadata,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
@@ -519,6 +523,52 @@ test("session detail exposes renewal advice from the current thread and durable 
   assert.equal(result.renewalAdvisory.signals.contextUsage.usedTokens, 232560);
   assert.equal(result.renewalAdvisory.signals.conversationTurnCount, 57);
   assert.equal(Object.hasOwn(result, "uiSync"), false);
+});
+
+test("session status refreshes do not inspect Git and explicit source health checks remain enforced", async () => {
+  const session = {
+    manifest: { runtimeKind: "genesis" },
+    metadata: sourceMetadata("/workspace", "session-1"),
+    sessionId: "session-1",
+    status: "active"
+  };
+  let runtime;
+  const service = createService({
+    project: {
+      async createRuntime(options = {}) {
+        runtime = new Vibe64SessionRuntime({
+          inspectSourceByDefault: options.inspectSource !== false,
+          sourceInspectionAvailable: false,
+          store: {
+            async readSession() { return session; },
+            async readConversationLogPage() {
+              return { pagination: { totalTurnCount: 3 }, turns: [] };
+            }
+          }
+        });
+        return runtime;
+      }
+    },
+    terminals: {
+      async agentSessionState(sessionId, context) {
+        // Status consumers sharing this runtime must also avoid source inspection.
+        const reread = await context.runtime.getSession(sessionId);
+        assert.equal(reread.sourceInspection, null);
+        return { ok: true, status: "running" };
+      }
+    }
+  });
+
+  for (let refresh = 0; refresh < 2; refresh += 1) {
+    const result = await service.inspectSession(session.sessionId);
+    assert.equal(result.ok, true);
+    assert.equal(result.sourceInspection, null);
+    assert.equal(result.sourceReady, true);
+    assert.equal(result.agentSession.status, "running");
+    await assert.rejects(runtime.assertSourceHealthy(session), {
+      code: "vibe64_source_inspection_unavailable"
+    });
+  }
 });
 
 test("assistant messages use the plain message contract", async () => {
