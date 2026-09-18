@@ -111,7 +111,7 @@ Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;
 an existing draft or attachments are kept for review instead of being sent.
 The goal popover shows a bounded objective preview beside the existing status
-and Pause/Resume controls. View full goal opens the exact instruction in a
+and Pause/Resume/Cancel controls. View full goal opens the exact instruction in a
 scrollable dialog with a fixed Close action. Preview truncation affects only
 presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, stays orange while paused, and shows
@@ -150,12 +150,16 @@ server-process restart relies on native history rather than a second partial log
 
 The Codex indicator reads the current main conversation goal from `thread/goal/get`
 on its existing provider. Goal controls require assistant access and accept only
-pause/resume on that session's current thread and unchanged objective/creation
+pause/resume/cancel on that session's current thread and unchanged objective/creation
 identity. Status-only `thread/goal/set` preserves Codex-owned objective, budget
 and usage history. Pause prevents further automatic turns without interrupting
 the current turn or releasing its write ownership; Stop still interrupts work.
 Resume uses Codex's native goal scheduler. Completed goals and exhausted token
-budgets are not restarted by this control. Goal notifications invalidate the
+budgets are not restarted by this control. Cancel uses `thread/goal/clear` for
+any unfinished goal, including blocked and budget-limited goals. It removes the
+goal without resuming the thread, marking the objective complete, interrupting
+the current turn, or deleting conversation history. The existing goal-cleared
+reconciliation updates run state and lets the UI offer a new goal. Goal notifications invalidate the
 protected read endpoint without broadcasting the objective. The same square
 retains weekly allowance and exposes goal controls independently of plan data.
 

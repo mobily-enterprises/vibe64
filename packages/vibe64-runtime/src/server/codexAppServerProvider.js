@@ -3443,6 +3443,14 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async clearGoal(threadId = "") {
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/goal/clear", { threadId: normalizeAgentText(threadId) }),
+      "codex-app-server-goal-clear"
+    );
+  }
+
   async readThread(threadId = "") {
     const client = await this.activeClient();
     const response = await this.runRequest(

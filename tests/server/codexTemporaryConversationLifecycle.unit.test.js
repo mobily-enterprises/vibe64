@@ -9380,6 +9380,59 @@ test("goal UI controls reject stale goals and pause without interrupting the cur
   });
 });
 
+for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimited"]) {
+  test(`cancelling an unfinished goal (${status}) preserves its conversation`, async () => {
+    await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => {
+      assert.equal((await controller.sendMessage(sessionId, {
+        message: "Exercise goal cancellation", messageId: "goal-cancel-test"
+      })).ok, true);
+      const provider = captures.provider;
+      const input = { action: "cancel", threadId: provider.threadId, objective: "Finish fixture", createdAt: 10 };
+      let goal = { ...input, status };
+      const calls = [];
+      provider.isEconomyProvider = () => false;
+      provider.readGoal = async () => ({ goal });
+      provider.clearGoal = async (threadId) => {
+        calls.push(threadId);
+        goal = null;
+        return { cleared: true };
+      };
+      provider.setGoalStatus = async () => assert.fail("Cancel must not resume or mark the goal complete");
+      provider.resumeThread = async () => assert.fail("Cancel must not resume the conversation");
+      provider.interruptTurn = async () => assert.fail("Cancel must preserve the current ordinary turn");
+      const before = await runtime.store.readConversationLog(sessionId);
+      for (const stale of [{ threadId: "another-thread" }, { objective: "Older goal" }, { createdAt: 9 }]) {
+        assert.equal((await controller.updateGoal(sessionId, { ...input, ...stale })).ok, false);
+      }
+      assert.deepEqual(calls, []);
+      const cancelled = await controller.updateGoal(sessionId, input);
+      assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+      assert.equal(cancelled.goal, null);
+      assert.equal((await controller.readGoal(sessionId)).goal, null);
+      assert.deepEqual(calls, [input.threadId]);
+      assert.deepEqual(await runtime.store.readConversationLog(sessionId), before);
+      const run = (await runtime.getSession(sessionId)).agentRuns[0];
+      assert.equal(run.active, true, "Clearing a goal must not release an executing turn's ownership");
+      assert.equal(run.providerGoalStatus, "");
+    });
+  });
+}
+
+test("failed goal cancellation preserves the goal for retry", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+    assert.equal((await controller.sendMessage(sessionId, {
+      message: "Exercise cancellation failure", messageId: "goal-cancel-failure"
+    })).ok, true);
+    const provider = captures.provider;
+    provider.isEconomyProvider = () => false;
+    const goal = { threadId: provider.threadId, status: "blocked", objective: "Finish fixture", createdAt: 10 };
+    provider.readGoal = async () => ({ goal });
+    provider.clearGoal = async () => { throw new Error("Codex unavailable"); };
+    await assert.rejects(controller.updateGoal(sessionId, { ...goal, action: "cancel" }), /Codex unavailable/);
+    assert.deepEqual((await controller.readGoal(sessionId)).goal, goal);
+  });
+});
+
 test("goal Resume respects Save admission and protects the gap before a native turn starts", async () => {
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
     assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);

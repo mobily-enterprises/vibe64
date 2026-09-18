@@ -13442,8 +13442,8 @@ function createCodexTerminalController({
     },
 
     async updateGoal(sessionId, input = {}, options = {}) {
-      if (!["set", "pause", "resume"].includes(input.action)) {
-        return { ok: false, error: "Choose set, pause, or resume." };
+      if (!["set", "pause", "resume", "cancel"].includes(input.action)) {
+        return { ok: false, error: "Choose set, pause, resume, or cancel." };
       }
       if (input.action === "set" && (typeof input.objective !== "string" || !input.objective.trim() ||
           (input.tokenBudget !== undefined && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget <= 0)))) {
@@ -13488,6 +13488,16 @@ function createCodexTerminalController({
         const { goal } = await context.provider.readGoal(threadId);
         if (!goal || goal.status === "complete" || goal.createdAt !== input.createdAt || goal.objective !== input.objective) {
           return { ok: false, error: "The Codex goal changed. Refresh it before trying again." };
+        }
+        if (input.action === "cancel") {
+          subscribeCodexAppServerEvents(sessionId, context.provider, threadId, context.providerOptions);
+          await context.provider.clearGoal(threadId);
+          await reconcileCodexAppServerGoalUpdated(sessionId, context.provider, threadId, {
+            method: "thread/goal/cleared",
+            params: { threadId }
+          });
+          await publishSessionChanged(sessionId, { reason: "codex-goal" });
+          return { ok: true, status: "available", threadId, goal: null };
         }
         if (input.action === "pause" && !["active", "paused"].includes(goal.status)) {
           return { ok: false, error: "This goal is already stopped. Refresh its details." };

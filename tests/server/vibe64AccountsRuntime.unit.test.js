@@ -1456,6 +1456,66 @@ test("cached GitHub status preserves proven invalid and logout states until live
   });
 });
 
+test("Codex status exposes only the current account email without rotating auth or starting a runtime", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const daemonHome = path.join(root, "daemon");
+    const authPath = path.join(daemonHome, ".codex", "auth.json");
+    await mkdir(path.dirname(authPath), { recursive: true });
+    await writeReadyCodexMarker(systemRoot);
+    const markerBefore = await readFile(codexAuthMarkerPath(systemRoot), "utf8");
+    const commands = [];
+    const invalidations = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome, requireExplicitRoots: true, systemRoot }),
+      projectService: { currentTargetRoot: () => "" },
+      invalidateAgentRuntimes: async (input) => { invalidations.push(input); return { ok: true }; },
+      runHostToolCommand: async (args) => {
+        commands.push(args);
+        return { ok: true, output: "Logged in using ChatGPT" };
+      }
+    });
+    for (const [claims, expected] of [
+      [{ email: "tony@example.com" }, "tony@example.com"],
+      [{ "https://api.openai.com/profile": { email: "changed@example.com" } }, "changed@example.com"],
+      [{ email: { unexpected: true } }, ""]
+    ]) {
+      const token = `header.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
+      await writeFile(authPath, JSON.stringify({
+        auth_mode: "chatgpt",
+        tokens: { id_token: token, access_token: "private-access-token", refresh_token: "private-refresh-token" }
+      }));
+      const local = await service.getStatus({ accountIds: ["codex"] });
+      assert.equal(local.accounts[0].username, expected);
+      assert.equal(local.accounts[0].connected, true);
+      assert.equal(commands.length, 0);
+      assert.doesNotMatch(JSON.stringify(local), /private-access-token|private-refresh-token|header\./u);
+    }
+    await writeFile(authPath, JSON.stringify({
+      tokens: { id_token: `header.${Buffer.from(JSON.stringify({ email: "live@example.com" })).toString("base64url")}.signature` }
+    }));
+    assert.equal((await service.getCodexStatus()).account.username, "live@example.com");
+    assert.equal(commands.length, 1);
+    for (const contents of [
+      JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "private-api-key" }),
+      JSON.stringify({ auth_mode: "chatgpt", tokens: { id_token: "invalid" } }),
+      "{invalid json"
+    ]) {
+      await writeFile(authPath, contents);
+      const status = await service.getStatus({ accountIds: ["codex"] });
+      assert.equal(status.accounts[0].username, "");
+      assert.equal(status.accounts[0].connected, true);
+      assert.doesNotMatch(JSON.stringify(status), /private-api-key/u);
+    }
+    await rm(authPath);
+    assert.equal((await service.getStatus({ accountIds: ["codex"] })).accounts[0].username, "");
+    assert.deepEqual(invalidations, []);
+    assert.equal(await readFile(codexAuthMarkerPath(systemRoot), "utf8"), markerBefore);
+    await rm(codexAuthMarkerPath(systemRoot));
+    assert.equal((await service.getStatus({ accountIds: ["codex"] })).accounts[0].connected, false);
+  });
+});
+
 test("proven invalid Codex auth stays reconnect-required until a login session finalizes", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

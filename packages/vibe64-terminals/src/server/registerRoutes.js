@@ -322,7 +322,7 @@ function registerRoutes(
   ));
 
   routes.serviceRoute("POST", "/sessions/:sessionId/agent-goal", {
-    summary: "Pause or resume the selected Codex conversation goal."
+    summary: "Set, pause, resume, or cancel the selected Codex conversation goal."
   }, (request) => terminalService().updateAgentGoal(
     request.params.sessionId, withVibe64User(request, routes.requestBody(request))
   ));

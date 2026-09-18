@@ -46,7 +46,13 @@ repeated failures back off instead of keeping the browser in a tight retry
 loop.
 
 Account sign-in and sign-out are account-wide operations and do not require a
-selected project. When Codex authentication changes, Vibe64 retires active and
+selected project. Connected Codex status includes the ChatGPT email from the
+selected account's local identity token when available, without exposing tokens,
+starting a runtime, or changing the authentication generation. Missing identity
+metadata and API-key connections remain usable without an email. The connection
+surface shows a Disconnect action for connected accounts and sign-in choices for
+disconnected accounts.
+When Codex authentication changes, Vibe64 retires active and
 detached owned Codex runtimes before accepting the new account state. It reports
 success only after process exit is verified; a runtime that cannot be proven
 stopped leaves the account transition visibly unsuccessful rather than allowing

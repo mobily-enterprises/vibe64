@@ -146,9 +146,19 @@ const goalState = computed(() => ({
 
 <template>
   <AssistantGoalControl :state="goalState">
+    <v-btn
+      v-if="goalAvailable && goal && goal.status !== 'complete'"
+      class="mt-2" color="error" size="small" variant="text"
+      :disabled="changingGoal" @click="changeGoal('cancel')"
+    >
+      Cancel goal
+    </v-btn>
     <v-btn v-if="goal?.objective && goalPreview !== goal.objective" class="mt-2" size="small" variant="text" @click="fullGoalOpen = true">
       View full goal
     </v-btn>
+    <p v-if="goalAvailable && goal && goal.status !== 'complete'" class="text-body-small mt-2">
+      Cancel removes this goal. Use Stop to interrupt a turn already running.
+    </p>
   </AssistantGoalControl>
   <v-dialog v-if="fullGoalOpen" v-model="fullGoalOpen" max-width="640" scrollable aria-label="Full goal">
     <v-card>

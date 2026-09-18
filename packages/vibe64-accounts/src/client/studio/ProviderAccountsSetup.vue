@@ -1,15 +1,17 @@
 <template>
   <section class="accounts-setup">
     <header class="accounts-setup__header">
-      <div>
-        <h1 class="accounts-setup__title">{{ title }}</h1>
-        <p class="accounts-setup__lede">
-          {{ lede }}
-        </p>
+      <div class="accounts-setup__heading">
+        <h1 class="text-headline-small ma-0">{{ title }}</h1>
+        <slot name="close" />
       </div>
+      <p class="accounts-setup__lede">
+        {{ lede }}
+      </p>
       <div class="accounts-setup__header-actions">
         <v-chip
           :color="statusReady ? 'success' : 'warning'"
+          size="small"
           variant="tonal"
         >
           {{ statusReady ? readyLabel : neededLabel }}
@@ -26,7 +28,7 @@
           :aria-busy="accountsLoading ? 'true' : undefined"
           color="primary"
           :disabled="accountsLoading"
-          variant="tonal"
+          variant="text"
           :prepend-icon="mdiRefresh"
           @click="refreshStatus"
         >
@@ -64,12 +66,9 @@
       {{ actionsDisabledMessage }}
     </v-alert>
 
-    <v-progress-linear
+    <v-skeleton-loader
       v-if="accountsLoading && accountRows.length < 1"
-      color="primary"
-      height="6"
-      indeterminate
-      rounded
+      type="list-item-avatar-two-line, actions"
     />
 
     <div class="accounts-setup__items">
@@ -154,6 +153,7 @@
             />
           </div>
           <v-btn
+            v-if="account.id !== 'codex' || !account.connected"
             :aria-busy="primaryAuthPending(account) ? 'true' : undefined"
             class="accounts-setup__pending-action"
             color="primary"
@@ -168,14 +168,14 @@
             :disabled="!accountsReadyForActions"
           />
           <v-btn
+            v-if="account.connected"
             :aria-busy="logoutAccountId === account.id ? 'true' : undefined"
-            class="accounts-setup__pending-action"
-            color="warning"
-            variant="tonal"
+            color="error"
+            variant="text"
             :disabled="!accountsReadyForActions || authBusy || authStartBusy || logoutAccountId === account.id || !account.connected"
             @click="logoutAccount(account.id)"
           >
-            {{ logoutAccountId === account.id ? "Logging out…" : "Logout" }}
+            {{ logoutAccountId === account.id ? "Disconnecting…" : "Disconnect" }}
           </v-btn>
           <v-btn
             v-if="accountSupportsApiKeyAuth(account)"
@@ -508,7 +508,12 @@ const {
 }
 
 .accounts-setup__header {
-  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.accounts-setup__heading {
+  align-items: center;
   display: flex;
   gap: 1rem;
   justify-content: space-between;
@@ -539,14 +544,6 @@ const {
   max-width: 42rem;
 }
 
-.accounts-setup__title {
-  font-size: clamp(1.2rem, 1.7vw, 1.55rem);
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.05;
-  margin: 0 0 0.15rem;
-}
-
 .accounts-setup__lede,
 .accounts-setup__item-message,
 .accounts-setup__identity,
@@ -565,20 +562,17 @@ const {
 }
 
 .accounts-setup__item {
-  border-left: 4px solid transparent;
   display: grid;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
+  gap: 1.25rem;
+  padding: 1.25rem;
 }
 
 .accounts-setup__item--connected {
-  background: rgba(var(--v-theme-success), 0.04);
-  border-left-color: rgb(var(--v-theme-success));
+  background: rgb(var(--v-theme-surface-container-low));
 }
 
 .accounts-setup__item--missing {
-  background: rgba(var(--v-theme-warning), 0.04);
-  border-left-color: rgb(var(--v-theme-warning));
+  background: rgb(var(--v-theme-surface));
 }
 
 .accounts-setup__item-main {
@@ -602,6 +596,7 @@ const {
   letter-spacing: 0;
   line-height: 1.2;
   margin: 0 0 0.2rem;
+  overflow-wrap: anywhere;
 }
 
 .accounts-setup__identity {
@@ -754,11 +749,6 @@ const {
 }
 
 @media (max-width: 760px) {
-  .accounts-setup__header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .accounts-setup__identity-fields {
     grid-template-columns: 1fr;
   }

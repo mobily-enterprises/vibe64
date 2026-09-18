@@ -4228,11 +4228,13 @@ test("Codex goal controls preserve objective and budget while changing status", 
     await provider.setGoalStatus("thread-one", "paused");
     await provider.setGoalStatus("thread-one", "active");
     await assert.rejects(provider.setGoalStatus("thread-one", "complete"), /Invalid Codex goal status/);
+    await provider.clearGoal("thread-one");
     assert.deepEqual(calls, [
       { method: "thread/goal/set", params: { threadId: "thread-one", objective: "Finish the report", status: "active", tokenBudget: 1000 } },
       { method: "thread/goal/get", params: { threadId: "thread-one" } },
       { method: "thread/goal/set", params: { threadId: "thread-one", status: "paused" } },
-      { method: "thread/goal/set", params: { threadId: "thread-one", status: "active" } }
+      { method: "thread/goal/set", params: { threadId: "thread-one", status: "active" } },
+      { method: "thread/goal/clear", params: { threadId: "thread-one" } }
     ]);
   } finally { await provider.close(); }
 });

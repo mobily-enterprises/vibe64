@@ -125,7 +125,7 @@ The controls wrap only when their own widths need another row.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.
-The goal popover keeps its status and Pause/Resume controls beside a short
+The goal popover keeps its status and Pause/Resume/Cancel controls beside a short
 objective preview. People can open the full wording in a scrollable dialog
 whose Close action stays visible.
 Markdown tables keep words readable and columns sized to their content. Wide
@@ -346,7 +346,10 @@ The chat selector stays focused on choosing among AIs that are already
 configured and connected. A host may contribute an always-available built-in
 OpenCode connection and identify one connected provider as the preferred
 new-session default. Workspace owners manage account credentials and add
-further connections in the separate account-management area. Each distinct
+further connections in the separate account-management area. A connected
+Codex account shows its ChatGPT email when available; API-key access
+does not invent an account identity. Connected accounts offer Disconnect.
+Each distinct
 connected OpenCode provider route remains its own choice, including separate
 plans from the same provider. The chat selector shows only models the host
 currently permits, while a host model-access policy can expose one recommended
@@ -671,6 +674,9 @@ People can set an objective with an optional token budget, including before the
 first chat message. They can open its details and pause or resume an unfinished goal without
 losing its objective or usage history. Pause prevents further automatic turns;
 the current turn continues until it finishes or the person presses Stop.
+Cancel removes an unfinished goal, including a blocked or budget-limited one,
+so another goal can be set. It preserves the conversation and project work;
+an already running turn still uses Stop for interruption.
 Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
 

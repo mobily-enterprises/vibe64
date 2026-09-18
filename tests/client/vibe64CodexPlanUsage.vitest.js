@@ -118,12 +118,14 @@ it("shows a goal and its controls even without plan allowance", async () => {
     const html = await render({ status: "unsupported", windows: [] });
     expect(html).toContain("Finish the migration");
     expect(html).toContain(label);
+    expect(html).toContain("Cancel goal");
     expect(html).not.toContain("Codex plan allowance");
   }
   mocks.goal = { status: "available", goal: { status: "complete", objective: "Finished" } };
   const complete = await render(null);
   expect(complete).not.toContain("Resume goal");
   expect(complete).not.toContain("Pause goal");
+  expect(complete).not.toContain("Cancel goal");
   mocks.goal = null;
 });
 
@@ -145,9 +147,25 @@ it("uses the shared running and paused indicators for native goal state", async 
     mocks.goal = { status: "available", goal: { status, objective: "Finish migration" } };
     const html = await render({ status: "available", windows: [{ remainingPercent: 1, windowDurationMins: 10080 }] });
     expect(html.includes("Pause goal")).toBe(status === "active");
+    expect(html.includes("Cancel goal")).toBe(status !== "complete");
     expect(html.includes("assistant-goal__light--running")).toBe(status === "active");
     expect(html.includes("assistant-goal__light--paused")).toBe(status === "paused");
   }
+  mocks.goal = null;
+});
+
+it("cancels the exact displayed goal without sending a resume action", async () => {
+  mocks.buttons = [];
+  const objective = "Finish the approved implementation. ".repeat(20);
+  mocks.goal = { status: "available", goal: { threadId: "thread-blocked", status: "blocked", objective, createdAt: 30 } };
+  mocks.request.mockClear();
+  mocks.request.mockResolvedValueOnce({ ok: true, status: "available", goal: null });
+  await render(null);
+  await mocks.buttons.find((button) => button.text.trim() === "Cancel goal").click();
+  expect(mocks.request).toHaveBeenCalledExactlyOnceWith("/api/projects/fixture/sessions/one/agent-goal", {
+    method: "POST", body: { action: "cancel", threadId: "thread-blocked", objective, createdAt: 30 }
+  });
+  expect(mocks.goalResource.reload).toHaveBeenCalledOnce();
   mocks.goal = null;
 });
 

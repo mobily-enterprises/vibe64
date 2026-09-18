@@ -574,7 +574,26 @@ function accountConnected({
   };
 }
 
+async function readCodexUsername(codexContext = null) {
+  if (!codexContext?.toolHomeSource) return "";
+  try {
+    const auth = await readOptionalJson(path.join(codexContext.toolHomeSource, ".codex", "auth.json"));
+    if (auth?.OPENAI_API_KEY || (auth?.auth_mode && auth.auth_mode !== "chatgpt")) return "";
+    const token = auth?.tokens?.id_token;
+    if (typeof token !== "string") return "";
+    const parts = token.split(".");
+    if (parts.length !== 3 || parts.some((part) => !part)) return "";
+    // Display metadata only; Codex and the existing auth state still determine readiness.
+    const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const email = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;
+    return typeof email === "string" ? email.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 async function readCodexLocalStatus({
+  codexContext = null,
   systemRoot = ""
 } = {}) {
   const authStatus = await readCodexAuthStatus(systemRoot);
@@ -608,7 +627,8 @@ async function readCodexLocalStatus({
       label: "Codex",
       message: "Codex is authenticated for the shared Vibe64 app account.",
       observed: "Local Codex authentication marker is present.",
-      scope: APP_CREDENTIAL_SCOPE
+      scope: APP_CREDENTIAL_SCOPE,
+      username: await readCodexUsername(codexContext)
     });
   }
 
@@ -1089,7 +1109,8 @@ async function readCodexStatus({
     label: "Codex",
     message: "Codex is authenticated for the shared Vibe64 app account.",
     observed: result.output,
-    scope: APP_CREDENTIAL_SCOPE
+    scope: APP_CREDENTIAL_SCOPE,
+    username: await readCodexUsername(codexContext)
   });
 }
 
@@ -1687,7 +1708,10 @@ function createService({
     const previousGithub = includesGithub ? previousGithubForInput(input) : null;
     const accounts = await Promise.all(accountIds.map(async (accountId) => {
       if (accountId === "codex") {
-        const localAccount = refresh ? null : await readCodexLocalStatus({ systemRoot: resolvedSystemRoot });
+        const localAccount = refresh ? null : await readCodexLocalStatus({
+          codexContext: codexContextForInput(),
+          systemRoot: resolvedSystemRoot
+        });
         return refresh || localAccount?.status === "reconnecting"
           ? readLiveCodexStatus({
               reason: refresh ? "accounts-status-refresh" : "accounts-status-recovery"

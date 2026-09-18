@@ -103,7 +103,7 @@ describe("Vibe64 terminal consumers", () => {
     expect(provider).not.toContain("Show login output");
     expect(provider).not.toContain("View terminal");
     expect(provider).toContain('accountsLoading ? "Refreshing…" : "Refresh"');
-    expect(provider).toContain('logoutAccountId === account.id ? "Logging out…" : "Logout"');
+    expect(provider).toContain('logoutAccountId === account.id ? "Disconnecting…" : "Disconnect"');
     expect(provider).toContain("logoutAccountId === account.id || !account.connected");
     expect(provider).toContain("Use this only if the login asks for terminal input.");
   });

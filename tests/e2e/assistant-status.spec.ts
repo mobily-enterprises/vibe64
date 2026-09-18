@@ -68,8 +68,10 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
     await page.setViewportSize(viewport);
     await page.getByRole("button", { name: "Goal running", exact: true }).click();
     const pause = page.getByRole("button", { name: "Pause goal", exact: true });
+    const cancel = page.getByRole("button", { name: "Cancel goal", exact: true });
     const full = page.getByRole("button", { name: "View full goal", exact: true });
     await expect(pause).toBeInViewport({ ratio: 1 });
+    await expect(cancel).toBeInViewport({ ratio: 1 });
     await expect(full).toBeInViewport({ ratio: 1 });
     await expect(page.locator(".assistant-goal__details")).not.toContainText(objective);
     await page.screenshot({ path: info.outputPath(`goal-${viewport.width}x${viewport.height}.png`), animations: "disabled" });
@@ -88,6 +90,57 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
   await page.getByRole("button", { name: "Pause goal", exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeEnabled();
   expect(actions).toEqual([expect.objectContaining({ action: "pause", objective })]);
+});
+
+test("a blocked goal can be cancelled without resuming and stays cleared after reload", async ({ page }, info) => {
+  server.state.session.assistantSelection = { engineId: "codex" };
+  const objective = "Complete the approved customer configuration plan. ".repeat(30);
+  let goal: Record<string, unknown> | null = {
+    threadId: "thread-blocked", status: "blocked", objective, createdAt: 30, timeUsedSeconds: 400
+  };
+  const actions: Record<string, unknown>[] = [];
+  const cancelReceived = Promise.withResolvers<void>();
+  const releaseCancel = Promise.withResolvers<void>();
+  await page.route("**/agent-goal", async (route) => {
+    if (route.request().method() === "POST") {
+      actions.push(route.request().postDataJSON());
+      cancelReceived.resolve();
+      await releaseCancel.promise;
+      goal = null;
+    }
+    await route.fulfill({ json: { ok: true, status: "available", goal } });
+  });
+  await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
+  await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
+  await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
+  await openChat(page);
+  await composer(page).fill("Keep my unsent draft.");
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.getByRole("button", { name: "Goal blocked", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath(`blocked-goal-${width}.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+  }
+  await page.getByRole("button", { name: "Goal blocked", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel goal", exact: true }).click();
+  await cancelReceived.promise;
+  try {
+    await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toBeDisabled();
+  } finally {
+    releaseCancel.resolve();
+  }
+  await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+  expect(actions).toEqual([{ action: "cancel", threadId: "thread-blocked", objective, createdAt: 30 }]);
+  await expect(composer(page)).toHaveValue("Keep my unsent draft.");
+  expect(server.state.messages).toEqual([]);
+  expect(server.state.interrupts).toBe(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Set goal", exact: true }).click();
+  await expect(page.getByLabel("Goal objective")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toHaveCount(0);
 });
 
 test("a hung initial session read recovers after its deadline", async ({ page }) => {
