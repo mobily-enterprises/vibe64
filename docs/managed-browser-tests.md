@@ -45,6 +45,17 @@ vibe64-preview ensure --target app --wait --json
 This command deliberately leaves its chosen target running. Use the scoped
 `vibe64-playwright --target ...` command when automatic restoration is wanted.
 
+## Resource failures during a browser test
+
+A host may report that the kernel refused new processes or threads during the
+failed command. Preserve that diagnostic and its incident ID alongside the
+Playwright error. A configured task limit counts OS threads as well as processes;
+`--workers=1` does not restrict Chromium to one OS task. Have the platform operator
+inspect the recorded limit evidence and actual browser demand before retrying.
+Increasing browser timeouts or weakening assertions does not address task denials.
+The reported configured maximum alone does not prove which ancestor limit bound
+the operation. A generic timeout without resource evidence remains undiagnosed.
+
 ## Application setup
 
 Keep the normal target as the default. Add another web target to the existing

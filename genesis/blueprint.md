@@ -404,6 +404,9 @@ changes are refused while the suite owns Preview, and cleanup failures remain
 visible. The same commands and instructions apply to every assistant.
 Related checks share one suite startup. Shared guidance keeps ordinary browser
 preparation incremental and separates fresh-database proofs from routine checks.
+When the host records a process/thread denial during a failed browser command,
+the caller sees the resource diagnostic and incident reference for investigation
+before retrying.
 If another assistant operation briefly blocks automatic preview startup, Preview
 waits and retries without raising an error. Other startup failures appear once
 with a retry action.

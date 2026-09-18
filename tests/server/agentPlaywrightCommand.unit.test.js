@@ -128,7 +128,8 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
   withPreviewTarget = null,
   launchStatus,
   resourceProvider,
-  publishSessionChanged
+  publishSessionChanged,
+  browserFailure
 } = {}) {
   const runtimeRoot = path.join(root, "runtime-packs");
   const projectRoot = path.join(root, "project");
@@ -198,6 +199,10 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     readSessionUiState: () => null,
     runManagedCommand(input = {}) {
       managedCommands.push(input);
+      if (browserFailure && input.execution?.kind === "browser") {
+        input.onOutput?.("Playwright: locator.click timed out\n");
+        return Promise.resolve(browserFailure);
+      }
       return new Promise((resolve, reject) => {
         const child = spawn(input.command, input.args, {
           cwd: input.cwd,
@@ -256,6 +261,35 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     runtimeRoot
   };
 }
+
+test("browser task-denial diagnostics survive the real wrappers and target restoration", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-task-denial-"));
+  const message = "The kernel refused new processes or threads during this activity. Configured browser limit: 512 processes/threads. Open Resources for incident browser-failure. Inspect task demand before retrying.";
+  let restored = 0;
+  const fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
+    browserFailure: { ok: false, exitCode: 1, code: "vibe64_execution_tasks_denied", error: message, stderr: message },
+    async withPreviewTarget(sessionId, targetId, operation) {
+      try { return await operation("fixture-target-run"); }
+      finally { restored += 1; }
+    }
+  });
+  t.after(async () => {
+    await fixture.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, { recursive: true, force: true });
+  });
+  for (const args of [["test"], ["--target", "test-app", "test"]]) {
+    await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
+      cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+    }), (error) => {
+      assert.equal(error.code, 1);
+      const output = error.stdout + error.stderr;
+      assert.match(output, /Playwright: locator.click timed out/u);
+      assert.ok(output.includes(message), "The caller receives the host diagnostic after the test output.");
+      return true;
+    });
+  }
+  assert.equal(restored, 1, "Resource failure still restores the original Preview.");
+});
 
 test("managed Playwright target selection crosses the real wrapper/socket boundary before test preparation", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-target-"));

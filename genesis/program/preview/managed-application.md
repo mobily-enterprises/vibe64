@@ -105,6 +105,9 @@ ordinary browser checks. Shared guidance asks agents to batch related cases and
 measure slow startup before retrying. The web readiness probe allows five minutes;
 the managed waiter has another thirty seconds to observe its final status and
 cleanup instead of racing the probe's deadline.
+Host resource diagnostics also reach the browser command caller after a failed
+test. Shared guidance retains task-denial evidence and its incident ID, and asks
+for an operator capacity review before retrying or changing test timeouts.
 
 Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the
