@@ -215,7 +215,7 @@ const {
 
 <style scoped>
 :global(body.studio-home-shell-active) {
-  --studio-home-chat-column-width: 24rem;
+  --studio-home-chat-column-width: 32rem;
   --studio-home-project-gap: 0.75rem;
   --studio-control-bg: #ffffff;
   --studio-control-rest-bg: #f7f7f8;

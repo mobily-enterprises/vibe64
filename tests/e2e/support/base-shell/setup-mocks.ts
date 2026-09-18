@@ -17,6 +17,8 @@ async function mockAuthenticatedApp(page) {
       ok: true,
       setupRequired: false,
       user: {
+        uid: "test-owner",
+        username: "test-owner",
         email: "owner@example.com",
         gravatarUrl: "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=identicon",
         role: "owner"

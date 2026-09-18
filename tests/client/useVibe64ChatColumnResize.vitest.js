@@ -13,15 +13,15 @@ describe("useVibe64ChatColumnResize", () => {
   it("keeps both sides useful across practical desktop widths", () => {
     expect(vibe64ChatColumnBounds(1_600)).toEqual({
       max: 720,
-      min: 320
+      min: 512
     });
     expect(vibe64ChatColumnBounds(1_000)).toEqual({
-      max: 508,
-      min: 320
+      max: 512,
+      min: 512
     });
     expect(vibe64ChatColumnBounds(700)).toEqual({
-      max: 320,
-      min: 320
+      max: 512,
+      min: 512
     });
   });
 
@@ -32,7 +32,7 @@ describe("useVibe64ChatColumnResize", () => {
     expect(constrainVibe64ChatColumnWidth("500")).toBe(
       VIBE64_CHAT_COLUMN_DEFAULT_WIDTH_PX
     );
-    expect(constrainVibe64ChatColumnWidth(100)).toBe(320);
+    expect(constrainVibe64ChatColumnWidth(100)).toBe(512);
     expect(constrainVibe64ChatColumnWidth(900)).toBe(720);
     expect(VIBE64_CHAT_COLUMN_STORAGE_KEY).toBe(
       "vibe64:studio-chat-column-width"
@@ -41,15 +41,15 @@ describe("useVibe64ChatColumnResize", () => {
 
   it("supports precise keyboard resizing without crossing the current bounds", () => {
     const bounds = {
-      max: 508,
-      min: 320
+      max: 620,
+      min: 512
     };
 
-    expect(vibe64ChatColumnWidthForKey("ArrowLeft", 400, bounds)).toBe(384);
-    expect(vibe64ChatColumnWidthForKey("ArrowRight", 500, bounds)).toBe(508);
-    expect(vibe64ChatColumnWidthForKey("Home", 400, bounds)).toBe(320);
-    expect(vibe64ChatColumnWidthForKey("End", 400, bounds)).toBe(508);
-    expect(vibe64ChatColumnWidthForKey("Enter", 400, bounds)).toBeNull();
+    expect(vibe64ChatColumnWidthForKey("ArrowLeft", 600, bounds)).toBe(584);
+    expect(vibe64ChatColumnWidthForKey("ArrowRight", 610, bounds)).toBe(620);
+    expect(vibe64ChatColumnWidthForKey("Home", 600, bounds)).toBe(512);
+    expect(vibe64ChatColumnWidthForKey("End", 600, bounds)).toBe(620);
+    expect(vibe64ChatColumnWidthForKey("Enter", 600, bounds)).toBeNull();
   });
 
   it("keeps the active separator style scoped away from the page body", () => {

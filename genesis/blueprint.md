@@ -121,7 +121,9 @@ Settings cog, followed by the starred-files icon. These controls remain accessib
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send stays alongside the icons, goal and allowance whenever those controls fit.
-The controls wrap only when their own widths need another row.
+The desktop chat pane stops at 512 pixels so Send and Stop stay on the same row
+as the other controls. Narrow screens use the full-width chat and may wrap
+controls when needed.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.

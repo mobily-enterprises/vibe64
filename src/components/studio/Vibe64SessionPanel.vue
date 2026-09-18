@@ -291,7 +291,7 @@ const {
   background: transparent;
   bottom: 0;
   cursor: col-resize;
-  left: var(--studio-home-chat-column-width, 24rem);
+  left: var(--studio-home-chat-column-width, 32rem);
   outline: none;
   position: absolute;
   top: 0;
@@ -498,7 +498,7 @@ const {
 
   .studio-ai-sessions__empty-layout {
     grid-template-columns:
-      var(--studio-home-chat-column-width, 24rem)
+      var(--studio-home-chat-column-width, 32rem)
       minmax(0, 1fr);
   }
 

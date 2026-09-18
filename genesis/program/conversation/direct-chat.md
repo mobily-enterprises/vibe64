@@ -90,7 +90,9 @@ continuation and loading older history.
 ## Public contract
 
 The chat column, empty-session column and divider use the same resize width.
-The resize controller owns its bounds; the layout does not impose another minimum.
+The resize controller owns the 512-pixel desktop minimum and default. Dragging,
+keyboard resizing and restoring older saved widths all respect that minimum;
+the layout does not impose another minimum.
 
 JSKIT owns the suggestion and working-status presentation, debounced suggestion
 lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
@@ -106,7 +108,9 @@ requests even while its catalogue is unavailable. The host tools target sits
 immediately after Settings in the composer row, followed by the icon-only
 starred-files menu, and remains mounted independently of Settings. Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
-controls wrap only when space requires it, keeping Send accessible in narrow panes.
+desktop minimum keeps Send and Stop on the same row as the other controls,
+including the host avatar, goal timer and allowance. On narrow screens the chat
+uses the full available width and controls can wrap to remain accessible.
 Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;
 an existing draft or attachments are kept for review instead of being sent.

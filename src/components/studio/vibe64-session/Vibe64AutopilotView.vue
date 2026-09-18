@@ -1829,7 +1829,7 @@ onBeforeUnmount(() => {
   .studio-autopilot {
     gap: var(--studio-home-project-gap, 0.75rem);
     grid-template-columns:
-      var(--studio-home-chat-column-width, 24rem)
+      var(--studio-home-chat-column-width, 32rem)
       minmax(0, 1fr);
   }
 

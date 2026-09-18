@@ -216,32 +216,44 @@ test.describe("direct chat", () => {
     await expect(page.getByText(/Temporary chats could not be restored:/)).not.toBeVisible();
   });
 
-  hintTest("keeps chat inside its divider at the minimum resize width", async ({ page }, testInfo) => {
+  hintTest("@chat-minimum-width keeps Send on the toolbar row at the resize limit", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await mockDirectChat(page);
-    const session = { ...directSession(), assistantSelection: { engineId: "codex" } };
+    await page.addInitScript(() => {
+      if (localStorage.getItem("vibe64:studio-chat-column-width") === null) {
+        localStorage.setItem("vibe64:studio-chat-column-width", "320");
+      }
+    });
+    const agentTurn = { active: false, id: "", state: "idle" };
+    await mockDirectChat(page, { agentTurn });
+    const session = { ...directSession({ agentTurn }), assistantSelection: { engineId: "codex" } };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, {
+      ok: true, ...session.agentSession
+    }));
+    let goal: Record<string, unknown> | null = null;
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-goal`, route => fulfillJson(route, {
-      ok: true, status: "available", goal: { objective: "Review the changes", status: "paused", timeUsedSeconds: 73056 }
+      ok: true, status: "available", goal
     }));
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, {
-      ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 57 }]
+      ok: true, status: "available", windows: [{ windowDurationMins: 10080, remainingPercent: 100 }]
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     const input = page.getByLabel("Message AI assistant");
     await expect(input).toBeVisible();
-    await expect(page.getByRole("button", { name: "Goal paused", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Weekly Codex allowance remaining: 57%", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Weekly Codex allowance remaining: 100%", exact: true })).toBeVisible();
     await input.fill("Keep this draft while resizing");
     const separator = page.getByRole("separator", { name: "Resize chat" });
+    await expect(separator).toHaveAttribute("aria-valuenow", "512");
+    await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
     const handle = await separator.boundingBox();
     await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + 100);
     await page.mouse.down();
     await page.mouse.move(10, handle!.y + 100, { steps: 5 });
     await page.mouse.up();
-    await expect(separator).toHaveAttribute("aria-valuenow", "320");
+    await expect(separator).toHaveAttribute("aria-valuenow", "512");
     const chat = page.getByRole("region", { name: "Session chat", exact: true });
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
     const chatBounds = await chat.boundingBox();
     const divider = await separator.boundingBox();
     expect(chatBounds!.x + chatBounds!.width).toBeLessThanOrEqual(divider!.x + 1);
@@ -251,16 +263,48 @@ test.describe("direct chat", () => {
       expect(box!.x + box!.width).toBeLessThanOrEqual(divider!.x + 1);
       expect(await element.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     }
+    for (const active of [false, true]) {
+      if (active) {
+        goal = { objective: "Review the changes", status: "active", timeUsedSeconds: 73056 };
+        Object.assign(agentTurn, { active: true, id: "resize-turn", state: "inProgress" });
+        await page.reload();
+        await expect(page.getByRole("button", { name: "Goal running", exact: true })).toBeVisible();
+        await expect(chat.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+        await input.fill("Keep this draft while resizing");
+      }
+      const actions = chat.locator(".studio-autopilot__composer-actions");
+      await expect.poll(() => actions.evaluate(node => {
+        const buttons = [...node.querySelectorAll("button")].filter(button => button.offsetWidth);
+        const centers = buttons.map(button => {
+          const rect = button.getBoundingClientRect();
+          return rect.y + rect.height / 2;
+        });
+        return Math.max(...centers) - Math.min(...centers);
+      })).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: testInfo.outputPath(active ? "minimum-chat-working.png" : "minimum-chat-idle.png"), animations: "disabled" });
+    }
     await expect(input).toHaveValue("Keep this draft while resizing");
-    await page.screenshot({ path: testInfo.outputPath("minimum-chat-width.png"), animations: "disabled" });
     await separator.press("End");
     await expect.poll(async () => (await chat.boundingBox())!.width)
       .toBe(Number(await separator.getAttribute("aria-valuemax")));
     await separator.press("Home");
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vibe64:studio-chat-column-width")!))).toBe(512);
     await page.reload();
-    await expect(separator).toHaveAttribute("aria-valuenow", "320");
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    await expect(separator).toHaveAttribute("aria-valuenow", "512");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
+    for (const viewportWidth of [981, 980, 390]) {
+      await page.setViewportSize({ width: viewportWidth, height: 900 });
+      await expect.poll(() => chat.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      await expect(chat.locator(".studio-autopilot__composer-delivery")).toBeVisible();
+      if (viewportWidth > 980) {
+        await expect.poll(async () => (await chat.locator(".studio-autopilot__composer-actions").boundingBox())!.height)
+          .toBe((await chat.locator(".studio-autopilot__composer-delivery").boundingBox())!.height);
+      } else {
+        await expect(separator).toBeHidden();
+        await expect.poll(async () => (await chat.boundingBox())!.width).toBeLessThanOrEqual(viewportWidth);
+      }
+    }
   });
 
   hintTest("@compact-composer keeps menus and delivery in one row and preserves recovery drafts", async ({ page }) => {
