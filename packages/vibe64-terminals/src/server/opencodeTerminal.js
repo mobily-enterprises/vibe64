@@ -1405,7 +1405,7 @@ function createOpenCodeTerminalController({
     const rows = inputMessageId
       ? openCodeAssistantRowsForInput(messages, inputMessageId)
       : openCodeMessageRows(messages).filter((message) => message?.type === "assistant");
-    for (const message of rows) {
+    for (const [index, message] of rows.entries()) {
       failure ||= openCodeMessageError(message);
       providerApiFailure ||= openCodeProviderApiFailure(message.error);
       const reasoningParts = Array.isArray(message.content)
@@ -1413,7 +1413,19 @@ function createOpenCodeTerminalController({
         : [];
       const assistantText = assistantMessageText(message);
       const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
-      if (streaming && assistantText) {
+      const inFlight = streaming && index === rows.length - 1;
+      if (streaming && assistantText && !inFlight) {
+        // A completed round persists as soon as the next one starts, so
+        // superseded narration never evaporates from the transcript.
+        const turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
+          messageId,
+          text: assistantText
+        });
+        context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
+        await publishConversationTurn(context, turn, "opencode-server-assistant-message");
+        continue;
+      }
+      if (inFlight && assistantText) {
         const conversationStream = context.runtime.store.updateConversationStream(context.sessionId, {
           turnId: inputMessageId,
           messageId,
