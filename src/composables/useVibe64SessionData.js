@@ -48,6 +48,9 @@ import {
 import {
   vibe64SessionListRefreshRequested
 } from "@/lib/vibe64SessionClientRefresh.js";
+import {
+  mountedSessionRealtimeShouldRefresh
+} from "@/lib/vibe64MountedSessionState.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "assistant-stream",
@@ -380,8 +383,9 @@ function useVibe64SessionData({
     readMethod: "GET",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => (
-        String(payload?.sessionId || "").trim() === selectionRenewalPredecessorId.value
+      matches: ({ payload = {} } = {}) => mountedSessionRealtimeShouldRefresh(
+        { payload },
+        selectionRenewalPredecessorId.value
       )
     },
     requestRecoveryLabel: "Selected session renewal"
