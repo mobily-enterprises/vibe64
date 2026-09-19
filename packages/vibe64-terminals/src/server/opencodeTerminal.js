@@ -339,13 +339,18 @@ function openCodeMessageError(message = {}) {
       const diagnostic = JSON.parse(hook[1]);
       const scope = ["session", "turn"].includes(diagnostic.scope) ? diagnostic.scope : "context";
       const seconds = Number.isFinite(diagnostic.elapsedMs) ? (diagnostic.elapsedMs / 1000).toFixed(1) : "unknown";
-      const reason = diagnostic.outcome === "timeout" ? "timed out" :
-        diagnostic.outcome === "unavailable" ? "could not start because the Genesis executable was unavailable" : "failed";
-      const detail = [diagnostic.code != null ? `exit/code ${String(diagnostic.code).slice(0, 60)}` : "",
-        diagnostic.signal ? `signal ${String(diagnostic.signal).slice(0, 30)}` : ""].filter(Boolean).join(", ");
-      return `Project guidance could not load: the Genesis ${scope} hook ${reason} after ${seconds}s${detail ? ` (${detail})` : ""}.` +
-        `${text(diagnostic.stderr) ? `\n\n${text(diagnostic.stderr).slice(0, 1500)}` : "\n\nThe command returned no diagnostic output."}` +
-        "\n\nThe assistant stopped before it could continue. Check the project's Genesis hook and installed runtime, then send your message again.";
+      let reason = "failed";
+      if (diagnostic.outcome === "timeout") reason = "timed out";
+      else if (diagnostic.outcome === "unavailable") reason = "could not start because the Genesis executable was unavailable";
+      const detail = [
+        diagnostic.code != null ? `exit/code ${String(diagnostic.code).slice(0, 60)}` : "",
+        diagnostic.signal ? `signal ${String(diagnostic.signal).slice(0, 30)}` : ""
+      ].filter(Boolean).join(", ");
+      return [
+        `Project guidance could not load: the Genesis ${scope} hook ${reason} after ${seconds}s${detail ? ` (${detail})` : ""}.`,
+        text(diagnostic.stderr).slice(0, 1500) || "The command returned no diagnostic output.",
+        "The assistant stopped before it could continue. Check the project's Genesis hook and installed runtime, then send your message again."
+      ].join("\n\n");
     } catch {
       // Preserve the ordinary provider failure when no valid hook diagnostic exists.
     }
@@ -1512,8 +1517,8 @@ function createOpenCodeTerminalController({
         await writeReasoningMessage(context, entry, openCodeReasoningHeadline(entry.value));
         continue;
       }
-      const headline = openCodeReasoningHeadline(entry.value);
-      if (entry.queued || !(complete || part.time?.end || /[.!?…]$/u.test(headline))) continue;
+      const partialHeadline = openCodeReasoningHeadline(entry.value);
+      if (entry.queued || !(complete || part.time?.end || /[.!?…]$/u.test(partialHeadline))) continue;
       entry.queued = true;
       state.completion = state.completion.then(async () => {
         if (state.closed || entry.written) return;

@@ -45,6 +45,10 @@ async function sessionEnvironmentForUpstreamSession(sessionId = "", client = nul
   return null;
 }
 
+function isSelectedEconomyAgent(agent, selected) {
+  return Boolean(selected?.economyModelId && agent === `vibe64-economy-${selected.modelProviderId}`);
+}
+
 function shellQuote(value = "") {
   return `'${String(value ?? "").replaceAll("'", `'"'"'`)}'`;
 }
@@ -109,7 +113,7 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
   "chat.message": async (input = {}, output = {}) => {
     if (!text(input.agent).startsWith("vibe64-economy-")) return;
     const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
-    if (!selected?.economyModelId || input.agent !== `vibe64-economy-${selected.modelProviderId}`) {
+    if (!isSelectedEconomyAgent(input.agent, selected)) {
       throw new Error("This helper is not available through the session's selected AI account.");
     }
     output.message.model = { providerID: selected.modelProviderId, modelID: selected.economyModelId };
@@ -119,11 +123,11 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
     if (selected?.modelProviderId && input.model?.providerID !== selected.modelProviderId) {
       throw new Error("Assistants must use the session's selected AI account.");
     }
-    if (text(input.agent).startsWith("vibe64-economy-")) {
-      if (!selected?.economyModelId || input.agent !== `vibe64-economy-${selected.modelProviderId}` ||
-          input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.economyModelId) {
-        throw new Error("This helper is not available through the session's selected AI account.");
-      }
+    if (text(input.agent).startsWith("vibe64-economy-") && (
+      !isSelectedEconomyAgent(input.agent, selected) ||
+      input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.economyModelId
+    )) {
+      throw new Error("This helper is not available through the session's selected AI account.");
     }
     const advertisedOutputTokenLimit = input.model?.limit?.output;
     const supportedOutputTokenLimit = (
@@ -203,7 +207,7 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
     if (input.tool === "task") {
       const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
       if (text(output.args?.subagent_type).startsWith("vibe64-economy-") &&
-          (!selected?.economyModelId || output.args.subagent_type !== `vibe64-economy-${selected.modelProviderId}`)) {
+          !isSelectedEconomyAgent(output.args.subagent_type, selected)) {
         throw new Error("Choose the helper belonging to this session's selected AI account.");
       }
       if (text(output.args?.task_id)) {
