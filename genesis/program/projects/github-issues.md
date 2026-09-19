@@ -18,6 +18,7 @@ Dashboard without opening a session.
 - `src/lib/vibe64GithubProject.js`
 - `src/components/studio/GithubIssuesPanel.vue`
 - `src/components/studio/GithubIssueEditorDialog.vue`
+- `src/components/studio/GithubMentionTextarea.vue`
 - `src/components/studio/GithubLabelChip.vue`
 - `src/components/studio/GithubBrowserTabs.vue`
 - `src/components/studio/Vibe64DashboardShell.vue`
@@ -26,6 +27,7 @@ Dashboard without opening a session.
 - `src/pages/app/project/[slug]/dashboard/issues/index.vue`
 - `tests/server/githubIssues.unit.test.js`
 - `tests/server/vibe64ProjectActions.unit.test.js`
+- `tests/e2e/github-issues.spec.ts`
 
 ## Public contract
 
@@ -44,6 +46,17 @@ use GitHub search with safely quoted label qualifiers and explain its 1,000-matc
 exceeds it. Changing any filter returns to the first page.
 Descriptions and comments use the existing safe Markdown renderer. The newest
 25 comments appear in chronological order, with access to older pages.
+
+New issue descriptions and comment drafts suggest @usernames from repository
+collaborators; comments also include the issue's participants across all pages,
+independently of the visible comment page. The existing actor-scoped GitHub API
+loads both lists through `/issue-mentions`, deduplicating logins. The shared
+textarea preloads suggestions when opened and filters usernames and names locally
+as the person types. Arrow keys select, Enter or Tab inserts, Escape dismisses,
+and pointer selection retains the draft and caret. Email addresses do not trigger
+suggestions. Missing or restricted lists show an inline retry in the suggestion
+popup while available people and ordinary typing remain usable. Project and issue
+changes scope the cache; comment and GitHub refresh events invalidate it.
 
 GitHub remains the only issue store. Each server request resolves the project's
 repository and the acting person's existing GitHub credential context, then uses

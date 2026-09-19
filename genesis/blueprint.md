@@ -27,8 +27,12 @@ issues with state and single-label filters. Title and description search or
 multiple labels explain GitHub's 1,000-match limit when needed. People can read
 an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
-description and repository labels, and edit labels on existing issues. Labels
-retain their GitHub colors with readable text in either theme. The issue browser
+description and repository labels, and edit labels on existing issues. Descriptions
+and comments support immediate @username suggestions from repository collaborators
+and everyone participating in that issue. New issue descriptions suggest
+collaborators too; keyboard or pointer selection inserts the username while
+preserving the surrounding draft. Unavailable suggestions never block typing.
+Labels retain their GitHub colors with readable text in either theme. The issue browser
 uses the available pane width, with Back to dashboard, Refresh and New issue in
 one toolbar row and no extra heading or repository subtitle. Both browsers keep
 the toolbar, underlined tabs and filters close together, with compact list rows.

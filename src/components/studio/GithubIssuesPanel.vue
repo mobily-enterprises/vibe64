@@ -9,6 +9,7 @@ import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
+import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
@@ -211,10 +212,11 @@ function date(value) {
         <v-divider />
         <form class="d-flex flex-column ga-3" @submit.prevent="mutate('comment')">
           <p v-if="issue.locked" class="text-body-small text-medium-emphasis ma-0">This conversation is locked. GitHub limits comments to permitted collaborators.</p>
-          <v-textarea
+          <GithubMentionTextarea
             v-model="draft" label="Add a comment" placeholder="Share an update or ask a question…" variant="outlined" rounded="lg"
             rows="4" auto-grow :disabled="Boolean(pending)" :counter="draft.length > 65000 ? 65536 : undefined"
-            :error-messages="draft.length > 65536 ? 'Keep your comment under 65,536 characters.' : []" hint="Markdown supported" persistent-hint
+            :error-messages="draft.length > 65536 ? 'Keep your comment under 65,536 characters.' : []"
+            :base-path="basePath" :issue="issue" :enabled="dashboardContext.active !== false"
           />
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">
             <v-btn

@@ -4,6 +4,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { mdiClose, mdiLabelOutline, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
+import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -85,9 +86,9 @@ async function submit() {
         <p v-if="editing" class="text-body-medium ma-0">#{{ issue.number }} · {{ issue.title }}</p>
         <template v-else>
           <v-text-field v-model="title" label="Title" variant="outlined" maxlength="256" :disabled="pending" hide-details autofocus />
-          <v-textarea
+          <GithubMentionTextarea
             v-model="body" label="Description" placeholder="What needs to happen?" variant="outlined" rows="5"
-            auto-grow maxlength="65536" hint="Markdown supported" persistent-hint :disabled="pending"
+            auto-grow maxlength="65536" :base-path="basePath" :enabled="modelValue" :disabled="pending"
           />
         </template>
         <v-skeleton-loader v-if="catalog.isInitialLoading.value" type="list-item-two-line,button" min-height="152" aria-label="Loading labels" aria-busy="true" />

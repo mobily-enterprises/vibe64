@@ -10,6 +10,47 @@ const PAGE_INFO = "pageInfo { hasNextPage endCursor }";
 const LABEL_WRITE_PERMISSIONS = ["ADMIN", "MAINTAIN", "WRITE"];
 const LABEL_EDIT_PERMISSIONS = [...LABEL_WRITE_PERMISSIONS, "TRIAGE"];
 
+async function issueMentionUsers(api, owner, name, number) {
+  const fields = `nodes { login name } ${PAGE_INFO}`;
+  const users = new Map();
+  const unavailable = [];
+  let loaded = false;
+  for (const source of number ? ["participants", "collaborators"] : ["collaborators"]) {
+    const participants = source === "participants";
+    const selection = participants
+      ? `issue(number:$number) { participants(first:100, after:$cursor) { ${fields} } }`
+      : `collaborators(first:100, after:$cursor, affiliation:ALL) { ${fields} }`;
+    const query = `query($owner:String!, $name:String!, $cursor:String${participants ? ", $number:Int!" : ""}) {
+      repository(owner:$owner, name:$name) { ${selection} }
+    }`;
+    let cursor = null;
+    try {
+      do {
+        const result = await api("graphql", {
+          query,
+          variables: { owner, name, cursor, ...(participants ? { number } : {}) }
+        });
+        const repository = result.data?.repository;
+        const page = participants ? repository?.issue?.participants : repository?.collaborators;
+        if (!Array.isArray(page?.nodes) || !page.pageInfo ||
+            (page.pageInfo.hasNextPage && (!page.pageInfo.endCursor || page.pageInfo.endCursor === cursor))) {
+          throw vibe64Error("Mention suggestions could not load.", "vibe64_github_issues_failed");
+        }
+        for (const user of page.nodes) {
+          if (user?.login) users.set(user.login.toLowerCase(), { login: user.login, name: user.name || "" });
+        }
+        loaded = true;
+        cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+      } while (cursor);
+    } catch (error) {
+      unavailable.push({ source, error });
+    }
+  }
+  if (!loaded) throw unavailable[0].error;
+  return { ok: true, users: [...users.values()], warning: unavailable.length
+    ? `Some ${unavailable.map(({ source }) => source).join(" and ")} could not load. You can still type any @username.` : "" };
+}
+
 async function repositoryLabels(api, owner, name) {
   const labels = [];
   let cursor = null;
@@ -45,11 +86,12 @@ async function repositoryLabels(api, owner, name) {
 export async function githubIssues(project, input = {}, options = {}) {
   const fullName = requireGithubRepository(project, "Issues");
   const operation = input.operation || "list";
-  if (!["list", "read", "comment", "state", "create", "labels", "set-labels"].includes(operation)) {
+  if (!["list", "read", "comment", "state", "create", "labels", "set-labels", "mentions"].includes(operation)) {
     throw vibe64Error("Unknown issue action.", "vibe64_issue_input_invalid");
   }
   const number = Number(input.number);
-  if (["read", "comment", "state", "set-labels"].includes(operation) && (!Number.isSafeInteger(number) || number < 1)) {
+  if ((["read", "comment", "state", "set-labels"].includes(operation) || (operation === "mentions" && input.number != null)) &&
+      (!Number.isSafeInteger(number) || number < 1)) {
     throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
   }
   const state = input.state || "open";
@@ -83,6 +125,7 @@ export async function githubIssues(project, input = {}, options = {}) {
       : operation === "create" ? "Issue creation could not be confirmed. Refresh the issue list before trying again." : ""
   });
   const [owner, name] = fullName.split("/");
+  if (operation === "mentions") return issueMentionUsers(api, owner, name, input.number == null ? null : number);
   if (operation === "labels" || operation === "set-labels" || (operation === "create" && selectedLabels.length)) {
     const catalog = await repositoryLabels(api, owner, name);
     if (operation === "labels") return { ok: true, ...catalog };

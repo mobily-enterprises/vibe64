@@ -147,6 +147,7 @@ describe("opening a routed project", () => {
       ["vibe64.issue", `${base}/issues/40`, ""],
       ["vibe64.issue", `${base}/issues/41`, "older-page"],
       ["vibe64.issueLabels", `${base}/issue-labels`],
+      ["vibe64.issueMentions", `${base}/issue-mentions`, 40],
       ["vibe64.pullRequests", `${base}/pull-requests`, { state: "open" }],
       ["vibe64.pullRequest", `${base}/pull-requests`, "7"]
     ];

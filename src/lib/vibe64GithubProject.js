@@ -9,7 +9,8 @@ function githubProjectAvailable(project) {
 function invalidateGithubIssueQueries(queryClient, basePath, issuePath) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ["vibe64.issue", issuePath] }),
-    queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] })
+    queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] }),
+    queryClient.invalidateQueries({ queryKey: ["vibe64.issueMentions", basePath.replace(/\/issues$/u, "/issue-mentions")] })
   ]);
 }
 

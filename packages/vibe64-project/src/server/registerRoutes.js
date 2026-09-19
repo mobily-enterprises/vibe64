@@ -73,6 +73,11 @@ function registerRoutes(http, {
   }, (request) => project.githubIssues({
     operation: "labels", vibe64User: request.vibe64User || null
   }));
+  routes.serviceRoute("GET", "/issue-mentions", {
+    summary: "Read repository collaborators and issue participants for mentions."
+  }, (request) => project.githubIssues({
+    operation: "mentions", number: routes.requestQuery(request).number, vibe64User: request.vibe64User || null
+  }));
   routes.serviceRoute("PUT", "/issues/:number/labels", {
     summary: "Set the labels on a GitHub issue."
   }, (request) => project.githubIssues({

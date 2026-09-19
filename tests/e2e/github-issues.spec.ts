@@ -39,6 +39,10 @@ async function mockGithubIssues(page: Page) {
   await routeApiEndpoint(page, "/vibe64/issue-labels", (route) => fulfillJson(route, {
     ok: true, labels, canEditLabels: false, canCreateWithLabels: false
   }));
+  await routeApiEndpoint(page, "/vibe64/issue-mentions", (route) => fulfillJson(route, {
+    ok: true, users: [{ login: "alice" }, { login: "tamiastewart123", name: "Tamia Stewart" },
+      ...(new URL(route.request().url()).searchParams.has("number") ? [{ login: "early-commenter", name: "Early participant" }] : [])]
+  }));
   await routeApiEndpoint(page, "/vibe64/settings", (route) => fulfillJson(route, { ok: true }));
   await routeApiEndpoint(page, "/vibe64/sessions/current", (route) => fulfillJson(route, { ok: true }));
   await routeApiEndpoint(page, "/vibe64/issues", async (route) => {
@@ -57,6 +61,101 @@ async function mockGithubIssues(page: Page) {
   await routeApiEndpoint(page, "/vibe64/pull-requests/7", (route) => fulfillJson(route, { ok: true, pullRequest }));
   return requests;
 }
+
+for (const viewport of viewports) {
+  test(`issue mention autocomplete preserves drafts and supports keyboard and pointer at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockGithubIssues(page);
+    const mentionRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.endsWith("/issue-mentions")) mentionRequests.push(request.url());
+    });
+    await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
+    await showProjectPaneIfNeeded(page);
+    const comment = page.getByRole("textbox", { name: "Add a comment", exact: true });
+    await expect(comment).toBeVisible();
+    await expect.poll(() => mentionRequests.length).toBe(1);
+    await comment.fill("Please ask @ta about this.");
+    await comment.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(14, 14));
+    await comment.press("ArrowLeft");
+    await comment.press("ArrowRight");
+    const tamia = page.getByRole("option", { name: /@tamiastewart123/u });
+    await expect(tamia).toBeVisible();
+    await expect(comment).toBeFocused();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`mention-${viewport.name}.png`) });
+    await comment.press("Enter");
+    await expect(comment).toHaveValue("Please ask @tamiastewart123 about this.");
+    await expect(comment).toBeFocused();
+    expect(await comment.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(28);
+    await expect(tamia).not.toBeVisible();
+
+    await comment.fill("Thanks @early");
+    await page.getByRole("option", { name: /@early-commenter/u }).click();
+    await expect(comment).toHaveValue("Thanks @early-commenter ");
+    await comment.fill("Thanks @");
+    await expect(page.getByRole("option")).toHaveCount(3);
+    await comment.press("ArrowDown");
+    await comment.press("Tab");
+    await expect(comment).toHaveValue("Thanks @early-commenter ");
+    await comment.fill("@TAM");
+    await expect(tamia).toBeVisible();
+    await comment.press("Escape");
+    await expect(tamia).not.toBeVisible();
+    await expect(comment).toHaveValue("@TAM");
+    await comment.press("Enter");
+    await expect(comment).toHaveValue("@TAM\n");
+    await comment.fill("person@tamiastewart123.com");
+    await expect(page.getByRole("listbox", { name: "Mention suggestions" })).not.toBeVisible();
+    expect(mentionRequests).toHaveLength(1);
+
+    await page.getByRole("button", { name: "All issues", exact: true }).click();
+    await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
+    await expect(comment).toHaveValue("person@tamiastewart123.com");
+    await comment.fill("@early");
+    await expect(page.getByRole("option", { name: /@early-commenter/u })).toBeVisible();
+    await comment.press("Escape");
+    expect(mentionRequests).toHaveLength(1);
+
+    await page.getByRole("button", { name: "New issue", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    const description = dialog.getByRole("textbox", { name: "Description", exact: true });
+    await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
+    await description.fill("Please review @tam");
+    await expect(tamia).toBeVisible();
+    await tamia.click();
+    await expect(description).toHaveValue("Please review @tamiastewart123 ");
+    await expect(description).toBeFocused();
+    await description.fill("@early");
+    await expect(page.getByText("No matching people", { exact: true })).toBeVisible();
+    await description.press("Escape");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
+test("mention loading failure retains local authors and typing, and Retry restores suggestions", async ({ page }) => {
+  await mockGithubIssues(page);
+  let unavailable = true;
+  await routeApiEndpoint(page, "/vibe64/issue-mentions", async (route) => {
+    if (unavailable) await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Suggestions unavailable" }) });
+    else await fulfillJson(route, { ok: true, users: [{ login: "tamiastewart123" }] });
+  });
+  await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
+  const comment = page.getByRole("textbox", { name: "Add a comment", exact: true });
+  await comment.fill("Hello @");
+  await expect(page.getByRole("option", { name: "@alice", exact: true })).toBeVisible();
+  const retry = page.getByRole("button", { name: "Retry", exact: true });
+  await expect(retry).toBeVisible();
+  unavailable = false;
+  await retry.click();
+  await expect(page.getByRole("option", { name: /@tamiastewart123/u })).toBeVisible();
+  await expect(comment).toHaveValue("Hello @");
+  await comment.fill("Hello @t");
+  await comment.press("Tab");
+  await expect(comment).toHaveValue("Hello @tamiastewart123 ");
+});
 
 test("GitHub tabs return to lists and keep the project mounted when clicked again", async ({ page }) => {
   await mockGithubIssues(page);

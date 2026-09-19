@@ -32,6 +32,73 @@ function fixture(replies) {
   } };
 }
 
+test("mention suggestions paginate participants and collaborators using the acting account and deduplicate logins", async () => {
+  const page = (nodes, cursor = null) => ({ nodes, pageInfo: { hasNextPage: Boolean(cursor), endCursor: cursor } });
+  const f = fixture([
+    success({ data: { repository: { issue: { participants: page([{ login: "alice" }, null], "older-people") } } } }),
+    success({ data: { repository: { issue: { participants: page([{ login: "early-commenter", name: "Early commenter" }]) } } } }),
+    success({ data: { repository: { collaborators: page([{ login: "Alice" }], "more-collaborators") } } }),
+    success({ data: { repository: { collaborators: page([{ login: "tamiastewart123", name: "Tamia" }]) } } })
+  ]);
+  const result = await githubIssues(project, { operation: "mentions", number: 7, vibe64User: user }, f.options);
+  assert.deepEqual(result.users, [
+    { login: "Alice", name: "" }, { login: "early-commenter", name: "Early commenter" }, { login: "tamiastewart123", name: "Tamia" }
+  ]);
+  assert.equal(result.warning, "");
+  const queries = f.calls.map((call) => JSON.parse(call.input));
+  assert.deepEqual(queries.map(({ variables }) => variables.cursor), [null, "older-people", null, "more-collaborators"]);
+  assert.equal(queries[0].variables.number, 7);
+  assert.match(queries[0].query, /participants\(first:100/u);
+  assert.match(queries[2].query, /collaborators\(first:100, after:\$cursor, affiliation:ALL\)/u);
+  for (const [index, call] of f.calls.entries()) {
+    assert.equal(call.actor, "named-user");
+    assert.equal(call.userKey, "alice");
+    assert.equal(queries[index].variables.owner, "example");
+    assert.equal(queries[index].variables.name, "project");
+  }
+});
+
+test("new issue mentions load collaborators without an issue, and validate supplied issue numbers", async () => {
+  const f = fixture([success({ data: { repository: { collaborators: {
+    nodes: [{ login: "tamiastewart123" }], pageInfo: { hasNextPage: false }
+  } } } })]);
+  const result = await githubIssues(project, { operation: "mentions", vibe64User: user }, f.options);
+  assert.equal(result.users[0].login, "tamiastewart123");
+  assert.doesNotMatch(JSON.parse(f.calls[0].input).query, /participants|\$number/u);
+  const invalid = fixture([]);
+  for (const number of [0, -1, "", "../../7", 1.5]) {
+    await assert.rejects(githubIssues(project, { operation: "mentions", number, vibe64User: user }, invalid.options),
+      { code: "vibe64_issue_input_invalid" });
+  }
+  assert.equal(invalid.calls.length, 0);
+});
+
+test("restricted collaborator lists retain issue participants with a warning; total failure remains retryable", async () => {
+  const denied = { ok: false, stderr: "403 Resource not accessible" };
+  const f = fixture([
+    success({ data: { repository: { issue: { participants: { nodes: [{ login: "early-commenter" }], pageInfo: { hasNextPage: false } } } } } }),
+    denied
+  ]);
+  const result = await githubIssues(project, { operation: "mentions", number: 7, vibe64User: user }, f.options);
+  assert.deepEqual(result.users, [{ login: "early-commenter", name: "" }]);
+  assert.match(result.warning, /collaborators could not load/u);
+  const failed = fixture([denied, denied]);
+  await assert.rejects(githubIssues(project, { operation: "mentions", number: 7, vibe64User: user }, failed.options),
+    { code: "vibe64_github_issues_failed" });
+  assert.equal(failed.calls.length, 2);
+});
+
+test("mention pagination stops on an invalid cursor and preserves already loaded people with a warning", async () => {
+  const f = fixture([
+    success({ data: { repository: { collaborators: { nodes: [{ login: "alice" }], pageInfo: { hasNextPage: true, endCursor: "same" } } } } }),
+    success({ data: { repository: { collaborators: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "same" } } } } })
+  ]);
+  const result = await githubIssues(project, { operation: "mentions", vibe64User: user }, f.options);
+  assert.deepEqual(result.users, [{ login: "alice", name: "" }]);
+  assert.match(result.warning, /collaborators could not load/u);
+  assert.equal(f.calls.length, 2);
+});
+
 test("lists only the selected repository's issues with bounded pagination and actor credentials", async () => {
   const f = fixture([success({ data: { search: { nodes: [{ number: 7 }, {}], issueCount: 26,
     pageInfo: { hasNextPage: true, endCursor: "next" } } } })]);
