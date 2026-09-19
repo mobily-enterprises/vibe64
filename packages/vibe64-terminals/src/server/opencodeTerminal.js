@@ -1408,22 +1408,12 @@ function createOpenCodeTerminalController({
     for (const message of rows) {
       failure ||= openCodeMessageError(message);
       providerApiFailure ||= openCodeProviderApiFailure(message.error);
-      const parts = Array.isArray(message.content) ? message.content : [];
-      for (const part of parts.filter((candidate) => candidate?.type === "reasoning" && text(candidate.text))) {
-        await writeReasoningMessages(context, {
-          at: message.time?.created ? new Date(message.time.created).toISOString() : "",
-          messageId: message.id,
-          partId: part.id,
-          requireOpenTurn,
-          value: part.text
-        });
-      }
+      const reasoningParts = Array.isArray(message.content)
+        ? message.content.filter((candidate) => candidate?.type === "reasoning" && text(candidate.text))
+        : [];
       const assistantText = assistantMessageText(message);
-      if (!assistantText) {
-        continue;
-      }
-      const messageId = conversationMessageId(message.id, "assistant");
-      if (streaming) {
+      const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
+      if (streaming && assistantText) {
         const conversationStream = context.runtime.store.updateConversationStream(context.sessionId, {
           turnId: inputMessageId,
           messageId,
@@ -1437,12 +1427,24 @@ function createOpenCodeTerminalController({
         }
         continue;
       }
-      const turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
-        messageId,
-        text: assistantText
-      });
-      context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
-      await publishConversationTurn(context, turn, "opencode-server-assistant-message");
+      let turn = null;
+      if (assistantText) {
+        turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
+          messageId,
+          text: assistantText
+        });
+        context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
+        await publishConversationTurn(context, turn, "opencode-server-assistant-message");
+      }
+      for (const part of reasoningParts) {
+        await writeReasoningMessages(context, {
+          at: message.time?.created ? new Date(message.time.created).toISOString() : "",
+          messageId: message.id,
+          partId: part.id,
+          requireOpenTurn,
+          value: part.text
+        });
+      }
     }
     return { failure, providerApiFailure };
   }

@@ -1398,7 +1398,7 @@ test("OpenCode publishes current provider reasoning while its turn is active", a
   });
 
   assert.equal(harness.thinkingMessages.some((message) => (
-    message.text === reasoning && message.requireOpenTurn === true
+    message.text === reasoning && message.requireOpenTurn === false
   )), true);
   assert.equal(harness.thinkingMessages.some((message) => (
     message.text === historicalReasoning

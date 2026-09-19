@@ -745,7 +745,8 @@ These helpers carry the session's ordinary tool guardrails; they add no
 permissions the main model lacks.
 OpenCode progress broadcasts coalesce to at most one per second per session,
 with the first state published immediately, and each reasoning block becomes
-one short headline entry derived from its first sentence; full provider
+one short headline entry derived from its first sentence, persisted after the
+assistant reply so the progress group renders below it; full provider
 reasoning text is not persisted. This keeps long turns readable and prevents
 per-event session refreshes from flooding browsers.
 
