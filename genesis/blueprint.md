@@ -727,6 +727,10 @@ The installation-wide choice is separate from each session's chat model and
 is used by new hints, commit naming and other bounded helper tasks. Recommended
 uses Vibe64's default; explicit choices must support the helper's low thinking
 profile. Changing the setting does not interrupt running work.
+OpenCode sessions additionally receive one visible low-cost helper subagent per
+connected provider, pinned to that provider's designated economy model, so the
+session's model can delegate simple, inexpensive work to a cheap same-family
+helper without per-project configuration.
 
 When declared environment resources are missing, the project shows a setup
 explanation and a direct route to Env, with missing variable names available on

@@ -737,6 +737,12 @@ running. OpenCode and Codex shell commands and any descendants they leave
 running are attributed to the originating project session through their
 ordinary provider command boundaries, and closing that session drains those
 descendants.
+The injected OpenCode configuration also exposes each connected provider's
+designated economy model to the assistant as a visible low-cost subagent pinned
+to that provider, so a session's main model can delegate simple, inexpensive
+work to a cheap same-family helper without any per-project configuration.
+These helpers carry the session's ordinary tool guardrails; they add no
+permissions the main model lacks.
 
 Tool-free economy turns run without the session source lock, while provider
 thread ownership and terminal admission still protect cleanup and renewal.

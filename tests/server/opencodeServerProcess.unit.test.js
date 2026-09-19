@@ -322,6 +322,30 @@ test("OpenCode uses native provider routes when no URL override is supplied", ()
   assert.equal(JSON.stringify(native).includes("not-written-to-config"), false);
 });
 
+test("OpenCode injects one low-cost subagent per configured provider economy model", () => {
+  const config = JSON.parse(openCodeInlineConfig({
+    providerConnections: [
+      { economyModelId: "glm-5.3-flash", modelProviderId: "zai-coding-plan" },
+      { economyModelId: "deepseek-v4-flash", modelProviderId: "deepseek" },
+      { modelProviderId: "anthropic" }
+    ]
+  }));
+
+  assert.deepEqual(config.agent["vibe64-economy-zai-coding-plan"], {
+    description: "Vibe64 low-cost helper on the zai-coding-plan connection for delegating simple, inexpensive work.",
+    mode: "subagent",
+    model: "zai-coding-plan/glm-5.3-flash"
+  });
+  assert.deepEqual(config.agent["vibe64-economy-deepseek"], {
+    description: "Vibe64 low-cost helper on the deepseek connection for delegating simple, inexpensive work.",
+    mode: "subagent",
+    model: "deepseek/deepseek-v4-flash"
+  });
+  assert.equal(config.agent["vibe64-economy-anthropic"], undefined);
+  assert.equal(config.agent[OPENCODE_ECONOMY_AGENT_ID].hidden, true);
+  assert.equal(Object.keys(config.agent).length, 4);
+});
+
 test("OpenCode route configuration contains one provider and no inherited provider keys", () => {
   const env = safeOpenCodeEnvironment({
     ANTHROPIC_API_KEY: "must-not-leak",
