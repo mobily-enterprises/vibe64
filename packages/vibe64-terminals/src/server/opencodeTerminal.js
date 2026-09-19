@@ -120,11 +120,11 @@ function conversationMessageId(...values) {
 }
 
 function openCodeReasoningHeadline(value = "") {
-  const text = String(value ?? "").replace(/\r\n?/gu, " ").replace(/\s+/gu, " ").trim();
-  if (!text) {
+  const normalized = String(value ?? "").replace(/\r\n?/gu, " ").replace(/\s+/gu, " ").trim();
+  if (!normalized) {
     return "";
   }
-  const sentence = text.split(/(?<=[.!?])\s+/u)[0] || text;
+  const sentence = normalized.split(/(?<=[.!?])\s+/u)[0] || normalized;
   if (sentence.length <= OPENCODE_REASONING_HEADLINE_MAX_CHARS) {
     return sentence;
   }
@@ -1905,6 +1905,10 @@ function createOpenCodeTerminalController({
         monitors.delete(context.key);
       }
       reasoningMessages.delete(context.key);
+      progressPublishedAt.delete(context.key);
+      reasoningHeadlineKeys.delete(context.key);
+      reasoningSummaryChains.delete(context.key);
+      summaryConversations.delete(context.key);
     });
     monitors.set(context.key, monitor);
     void monitor.catch((error) => {
