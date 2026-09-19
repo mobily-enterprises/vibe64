@@ -743,6 +743,11 @@ to that provider, so a session's main model can delegate simple, inexpensive
 work to a cheap same-family helper without any per-project configuration.
 These helpers carry the session's ordinary tool guardrails; they add no
 permissions the main model lacks.
+OpenCode progress broadcasts coalesce to at most one per second per session,
+with the first state published immediately, and each reasoning block becomes
+one short headline entry derived from its first sentence; full provider
+reasoning text is not persisted. This keeps long turns readable and prevents
+per-event session refreshes from flooding browsers.
 
 Tool-free economy turns run without the session source lock, while provider
 thread ownership and terminal admission still protect cleanup and renewal.

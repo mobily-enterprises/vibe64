@@ -76,6 +76,7 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-message-delivered",
   "codex-prompt-injected",
   "codex-context-replaced",
+  "opencode-server-progress",
   "agent-terminal-started",
   "agent-terminal-closed",
   "output-target-started",

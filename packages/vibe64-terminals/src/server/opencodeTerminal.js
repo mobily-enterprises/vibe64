@@ -75,7 +75,8 @@ const OPENCODE_MESSAGE_POLL_MS = 250;
 // A cold project event route initializes OpenCode plugins before replying.
 const OPENCODE_EVENT_READY_TIMEOUT_MS = 120_000;
 const OPENCODE_INTERRUPT_TIMEOUT_MS = 5_000;
-const OPENCODE_REASONING_PROGRESS_MAX_CHARS = 280;
+const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
+const OPENCODE_REASONING_HEADLINE_MAX_CHARS = 120;
 const OPENCODE_RENEWAL_TIMEOUT_MS = 3 * 60 * 1000;
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
@@ -115,32 +116,18 @@ function conversationMessageId(...values) {
   return `oc_${fingerprint(...values).slice(0, 48)}`;
 }
 
-function openCodeReasoningSegments(value = "") {
-  const lines = String(value ?? "")
-    .replace(/\r\n?/gu, "\n")
-    .split(/\n+/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const segments = [];
-  for (const line of lines) {
-    const sentences = line.split(/(?<=[.!?])\s+(?=[\p{L}\p{N}"'([{`])/u);
-    for (const sentence of sentences) {
-      const words = sentence.trim().split(/\s+/u).filter(Boolean);
-      let segment = "";
-      for (const word of words) {
-        if (segment && segment.length + word.length + 1 > OPENCODE_REASONING_PROGRESS_MAX_CHARS) {
-          segments.push(segment);
-          segment = word;
-        } else {
-          segment = segment ? `${segment} ${word}` : word;
-        }
-      }
-      if (segment) {
-        segments.push(segment);
-      }
-    }
+function openCodeReasoningHeadline(value = "") {
+  const text = String(value ?? "").replace(/\r\n?/gu, " ").replace(/\s+/gu, " ").trim();
+  if (!text) {
+    return "";
   }
-  return segments;
+  const sentence = text.split(/(?<=[.!?])\s+/u)[0] || text;
+  if (sentence.length <= OPENCODE_REASONING_HEADLINE_MAX_CHARS) {
+    return sentence;
+  }
+  const words = sentence.slice(0, OPENCODE_REASONING_HEADLINE_MAX_CHARS).split(/\s+/u);
+  words.pop();
+  return words.length ? `${words.join(" ")}…` : sentence;
 }
 
 function openCodeModel(selection = {}, executionProfile = null) {
@@ -571,6 +558,46 @@ function createOpenCodeTerminalController({
   let sharedProcess = null;
   let sharedProcessStart = null;
   let sharedProcessStop = null;
+  const progressPublishes = new Map();
+  const progressPublishedAt = new Map();
+
+  function publishOpenCodeProgress(sessionId, summary) {
+    const now = Date.now();
+    const last = progressPublishedAt.get(sessionId) || 0;
+    if (!progressPublishes.has(sessionId) && now - last >= OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS) {
+      progressPublishedAt.set(sessionId, now);
+      void publishSessionChanged(sessionId, {
+        payload: { assistantProgress: summary },
+        reason: "opencode-server-progress"
+      }).catch(() => {});
+      return;
+    }
+    if (progressPublishes.has(sessionId)) {
+      progressPublishes.get(sessionId).summary = summary;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const pending = progressPublishes.get(sessionId);
+      progressPublishes.delete(sessionId);
+      if (pending) {
+        progressPublishedAt.set(sessionId, Date.now());
+        void publishSessionChanged(sessionId, {
+          payload: { assistantProgress: pending.summary },
+          reason: "opencode-server-progress"
+        }).catch(() => {});
+      }
+    }, OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS - (now - last));
+    progressPublishes.set(sessionId, { summary, timer });
+  }
+
+  function dropOpenCodeProgress(sessionId) {
+    const pending = progressPublishes.get(sessionId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      progressPublishes.delete(sessionId);
+    }
+    progressPublishedAt.delete(sessionId);
+  }
 
   function promptContext(conversationKind = "main", assistantScope = null) {
     if (assistantScope) {
@@ -1345,27 +1372,27 @@ function createOpenCodeTerminalController({
     requireOpenTurn = false,
     value = ""
   } = {}) {
-    const written = [];
+    const headline = openCodeReasoningHeadline(value);
+    if (!headline || !/[.!?…]/u.test(headline.slice(-1))) {
+      return [];
+    }
+    const id = conversationMessageId(messageId, partId, "reasoning");
     const current = reasoningMessages.get(context.key) || new Map();
     reasoningMessages.set(context.key, current);
-    for (const [index, segment] of openCodeReasoningSegments(value).entries()) {
-      const id = index === 0
-        ? conversationMessageId(messageId, partId, "reasoning")
-        : conversationMessageId(messageId, partId, "reasoning", index);
-      if (current.get(id) === segment) {
-        continue;
-      }
-      const turn = await context.runtime.store.writeConversationThinkingMessage(context.sessionId, {
-        at,
-        messageId: id,
-        requireOpenTurn,
-        text: segment
-      });
-      await publishConversationTurn(context, turn, "opencode-server-reasoning");
-      current.set(id, segment);
-      written.push(turn);
+    if (current.get(id) === headline) {
+      return [];
     }
-    return written;
+    const turn = await context.runtime.store.writeConversationThinkingMessage(context.sessionId, {
+      at,
+      messageId: id,
+      requireOpenTurn,
+      text: headline
+    });
+    current.set(id, headline);
+    if (turn) {
+      await publishConversationTurn(context, turn, "opencode-server-reasoning");
+    }
+    return turn ? [turn] : [];
   }
 
   async function writeConversationProjection(context = {}, messages = null, {
@@ -1512,40 +1539,41 @@ function createOpenCodeTerminalController({
     publish = true,
     signal
   } = {}) {
-    for await (const event of target.server.client.events(target.upstreamSessionId, {
-      onReady,
-      signal
-    })) {
-      signal?.throwIfAborted();
-      const summary = eventSummary(event);
-      const current = !turn || Number(summary.at) >= Number(turn.eventStartedAt);
-      if (
-        current && summary.type === "session.error" &&
-        text(event.data?.properties?.sessionID) === target.upstreamSessionId &&
-        typeof onError === "function"
-      ) {
-        const failure = record(event.data?.properties?.error);
-        onError(Object.assign(new Error(openCodeMessageError({ error: failure }) || "OpenCode turn failed."), {
-          name: text(failure.name) || "Error"
-        }));
+    try {
+      for await (const event of target.server.client.events(target.upstreamSessionId, {
+        onReady,
+        signal
+      })) {
+        signal?.throwIfAborted();
+        const summary = eventSummary(event);
+        const current = !turn || Number(summary.at) >= Number(turn.eventStartedAt);
+        if (
+          current && summary.type === "session.error" &&
+          text(event.data?.properties?.sessionID) === target.upstreamSessionId &&
+          typeof onError === "function"
+        ) {
+          const failure = record(event.data?.properties?.error);
+          onError(Object.assign(new Error(openCodeMessageError({ error: failure }) || "OpenCode turn failed."), {
+            name: text(failure.name) || "Error"
+          }));
+        }
+        if (summary.type && current && typeof onEvent === "function") {
+          await onEvent({
+            ...summary,
+            threadId: target.upstreamSessionId,
+            turnId: turns.get(context.key)?.id || ""
+          });
+        }
+        if (summary.type && current && publish) {
+          publishOpenCodeProgress(context.sessionId, summary);
+        }
       }
-      if (summary.type && current && typeof onEvent === "function") {
-        await onEvent({
-          ...summary,
-          threadId: target.upstreamSessionId,
-          turnId: turns.get(context.key)?.id || ""
-        });
-      }
-      if (summary.type && current && publish) {
-        await publishSessionChanged(context.sessionId, {
-          payload: { assistantProgress: summary },
-          reason: "opencode-server-progress"
-        });
-      }
+    } catch (error) {
+      dropOpenCodeProgress(context.sessionId);
+      throw error;
     }
-    if (!signal?.aborted) {
-      throw openCodeError("vibe64_opencode_observation_lost", "OpenCode's event connection ended before observation was closed.", {}, 503);
-    }
+    dropOpenCodeProgress(context.sessionId);
+    throw openCodeError("vibe64_opencode_observation_lost", "OpenCode's event connection ended before observation was closed.", {}, 503);
   }
 
   async function stopUnobservedOpenCodeSession(target, threadId) {

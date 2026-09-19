@@ -1487,7 +1487,7 @@ test("OpenCode presents long provider reasoning as compact progress and omits to
     message.messageId,
     message.text
   ]));
-  assert.deepEqual([...latestById.values()], [first, second, third]);
+  assert.deepEqual([...latestById.values()], [first]);
   assert.equal(harness.thinkingMessages.some((message) => message.text === reasoning), false);
   assert.deepEqual(harness.commentaryMessages, []);
   assert.equal(harness.publishedSessionChanges.some(([, payload]) => (
