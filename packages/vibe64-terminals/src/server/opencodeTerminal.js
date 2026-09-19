@@ -77,6 +77,9 @@ const OPENCODE_EVENT_READY_TIMEOUT_MS = 120_000;
 const OPENCODE_INTERRUPT_TIMEOUT_MS = 5_000;
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
 const OPENCODE_REASONING_HEADLINE_MAX_CHARS = 120;
+const OPENCODE_REASONING_SUMMARY_TIMEOUT_MS = 12_000;
+const OPENCODE_REASONING_SUMMARY_MAX_INPUT_CHARS = 1_200;
+const OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS = 40;
 const OPENCODE_RENEWAL_TIMEOUT_MS = 3 * 60 * 1000;
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
@@ -560,6 +563,75 @@ function createOpenCodeTerminalController({
   let sharedProcessStop = null;
   const progressPublishes = new Map();
   const progressPublishedAt = new Map();
+  const connectionEconomyModels = new Map();
+  const summaryConversations = new Map();
+  const reasoningSummaryChains = new Map();
+  const reasoningHeadlineKeys = new Set();
+
+  function reasoningSummaryInstruction(value = "") {
+    const trimmed = String(value ?? "").trim().slice(0, OPENCODE_REASONING_SUMMARY_MAX_INPUT_CHARS);
+    return [
+      "Summarize the assistant's private reasoning below as ONE short present-tense sentence",
+      "(at most 12 words) describing what it is doing or concluded.",
+      "Reply with only that sentence and no quotation marks.",
+      "",
+      "Reasoning:",
+      trimmed
+    ].join("\n");
+  }
+
+  async function reasoningSummaryTarget(context) {
+    const cached = summaryConversations.get(context.key);
+    if (cached) {
+      return cached;
+    }
+    const providerId = text(context.selection?.modelProviderId);
+    const economyModelId = connectionEconomyModels.get(providerId) || "";
+    if (!providerId || !economyModelId) {
+      return null;
+    }
+    const target = await ensureProcess(context, {});
+    const created = await target.server.client.createSession({
+      agent: OPENCODE_ECONOMY_AGENT_ID,
+      location: { directory: target.workdir },
+      model: { id: economyModelId, providerID: providerId }
+    });
+    const entry = { conversationId: created.id, economyModelId, providerId, target };
+    summaryConversations.set(context.key, entry);
+    return entry;
+  }
+
+  async function requestReasoningSummary(context, value = "") {
+    const summaryTarget = await reasoningSummaryTarget(context);
+    if (!summaryTarget) {
+      return "";
+    }
+    const promptId = upstreamMessageId(
+      `summary:${summaryTarget.conversationId}:${Date.now()}:${value.length}`
+    );
+    const signal = AbortSignal.timeout(OPENCODE_REASONING_SUMMARY_TIMEOUT_MS);
+    await summaryTarget.target.server.client.prompt(summaryTarget.conversationId, {
+      agent: OPENCODE_ECONOMY_AGENT_ID,
+      delivery: "queue",
+      id: promptId,
+      model: { id: summaryTarget.economyModelId, providerID: summaryTarget.providerId },
+      prompt: { text: reasoningSummaryInstruction(value) }
+    }, { signal });
+    while (!signal.aborted) {
+      await wait(400);
+      const messages = await summaryTarget.target.server.client.messages(
+        summaryTarget.conversationId,
+        { limit: 10, order: "desc" },
+        { signal: AbortSignal.timeout(2_000) }
+      );
+      const replyRows = openCodeAssistantRowsForInput(messages, promptId);
+      const replyText = replyRows.map((row) => assistantMessageText(row)).filter(Boolean).at(-1) || "";
+      if (replyText) {
+        return replyText;
+      }
+    }
+    return "";
+  }
 
   function publishOpenCodeProgress(sessionId, summary) {
     const now = Date.now();
@@ -751,6 +823,11 @@ function createOpenCodeTerminalController({
         return null;
       }
     }));
+    for (const connection of resolved) {
+      if (connection?.modelProviderId && connection.economyModelId) {
+        connectionEconomyModels.set(connection.modelProviderId, connection.economyModelId);
+      }
+    }
     return resolved.filter(Boolean);
   }
 
@@ -1372,7 +1449,17 @@ function createOpenCodeTerminalController({
     requireOpenTurn = false,
     value = ""
   } = {}) {
-    const headline = openCodeReasoningHeadline(value);
+    let headline = "";
+    if (text(value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
+      try {
+        headline = openCodeReasoningHeadline(await requestReasoningSummary(context, value));
+      } catch {
+        headline = "";
+      }
+    }
+    if (!headline) {
+      headline = openCodeReasoningHeadline(value);
+    }
     if (!headline || !/[.!?…]/u.test(headline.slice(-1))) {
       return [];
     }
@@ -1405,26 +1492,43 @@ function createOpenCodeTerminalController({
     const rows = inputMessageId
       ? openCodeAssistantRowsForInput(messages, inputMessageId)
       : openCodeMessageRows(messages).filter((message) => message?.type === "assistant");
+    const pendingHeadlines = [];
+    const queueReasoningHeadline = (descriptor) => {
+      const seenKey = `${context.key}\0${descriptor.messageId}\0${descriptor.partId}`;
+      if (reasoningHeadlineKeys.has(seenKey)) {
+        return;
+      }
+      reasoningHeadlineKeys.add(seenKey);
+      const previous = reasoningSummaryChains.get(context.key) || Promise.resolve();
+      const next = previous.catch(() => {}).then(() => writeReasoningMessages(context, descriptor));
+      reasoningSummaryChains.set(context.key, next);
+    };
     for (const [index, message] of rows.entries()) {
       failure ||= openCodeMessageError(message);
       providerApiFailure ||= openCodeProviderApiFailure(message.error);
       const reasoningParts = Array.isArray(message.content)
         ? message.content.filter((candidate) => candidate?.type === "reasoning" && text(candidate.text))
         : [];
+      const headlineDescriptors = reasoningParts.map((part) => ({
+        at: message.time?.created ? new Date(message.time.created).toISOString() : "",
+        messageId: message.id,
+        partId: part.id,
+        requireOpenTurn,
+        value: part.text
+      }));
       const assistantText = assistantMessageText(message);
       const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
       const inFlight = streaming && index === rows.length - 1;
-      // Codex-order persistence: reasoning headlines persist as they arrive,
-      // so they appear immediately and chronologically; the reply lands
-      // after them, and a replayed projection is a no-op per message id.
-      for (const part of reasoningParts) {
-        await writeReasoningMessages(context, {
-          at: message.time?.created ? new Date(message.time.created).toISOString() : "",
-          messageId: message.id,
-          partId: part.id,
-          requireOpenTurn,
-          value: part.text
-        });
+      if (streaming) {
+        // Headlines queue as the reasoning arrives — live, in order, without
+        // blocking the event observation loop. The serialized per-session
+        // chain summarizes through the economy model with a mechanical
+        // fallback, and a replayed projection is a no-op per part key.
+        for (const descriptor of headlineDescriptors) {
+          queueReasoningHeadline(descriptor);
+        }
+      } else {
+        pendingHeadlines.push(...headlineDescriptors);
       }
       if (streaming && assistantText && !inFlight) {
         // A completed round persists as soon as the next one starts, so
@@ -1459,6 +1563,9 @@ function createOpenCodeTerminalController({
         context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
         await publishConversationTurn(context, turn, "opencode-server-assistant-message");
       }
+    }
+    for (const headline of pendingHeadlines) {
+      await writeReasoningMessages(context, headline);
     }
     return { failure, providerApiFailure };
   }

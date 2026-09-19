@@ -1141,9 +1141,12 @@ test("OpenCode recovers a reasoning-only completion into a final answer", async 
   });
 
   assert.equal(completed.state, "completed");
-  assert.equal(harness.promptCalls.length, 2);
+  const turnPrompts = harness.promptCalls.filter((entry) => (
+    entry.input?.agent !== "vibe64-economy"
+  ));
+  assert.equal(turnPrompts.length, 2);
   assert.match(
-    harness.promptCalls[1].input.prompt.text,
+    turnPrompts[1].input.prompt.text,
     /previous response ended without a user-facing final answer/u
   );
   assert.equal(harness.userMessages.length, 1);
@@ -1187,7 +1190,10 @@ test("OpenCode fails explicitly after two reasoning-only completions", async (t)
     session: harness.session
   });
 
-  assert.equal(harness.promptCalls.length, 2);
+  const turnPrompts = harness.promptCalls.filter((entry) => (
+    entry.input?.agent !== "vibe64-economy"
+  ));
+  assert.equal(turnPrompts.length, 2);
   assert.equal(completed.state, "failed");
   assert.equal(
     completed.error,
