@@ -8,7 +8,7 @@
             "type": "command",
             "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session'])\"; fi",
             "commandWindows": "genesis hook session",
-            "timeout": 5,
+            "timeout": 30,
             "statusMessage": "Loading Genesis guidance",
             "additionalContextLimit": 4000
           }
@@ -22,7 +22,7 @@
             "type": "command",
             "command": "if command -v genesis >/dev/null 2>&1; then genesis hook turn; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','turn'])\"; fi",
             "commandWindows": "genesis hook turn",
-            "timeout": 5,
+            "timeout": 30,
             "additionalContextLimit": 512
           }
         ]
