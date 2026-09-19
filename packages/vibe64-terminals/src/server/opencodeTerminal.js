@@ -1414,6 +1414,18 @@ function createOpenCodeTerminalController({
       const assistantText = assistantMessageText(message);
       const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
       const inFlight = streaming && index === rows.length - 1;
+      // Codex-order persistence: reasoning headlines persist as they arrive,
+      // so they appear immediately and chronologically; the reply lands
+      // after them, and a replayed projection is a no-op per message id.
+      for (const part of reasoningParts) {
+        await writeReasoningMessages(context, {
+          at: message.time?.created ? new Date(message.time.created).toISOString() : "",
+          messageId: message.id,
+          partId: part.id,
+          requireOpenTurn,
+          value: part.text
+        });
+      }
       if (streaming && assistantText && !inFlight) {
         // A completed round persists as soon as the next one starts, so
         // superseded narration never evaporates from the transcript.
@@ -1425,7 +1437,7 @@ function createOpenCodeTerminalController({
         await publishConversationTurn(context, turn, "opencode-server-assistant-message");
         continue;
       }
-      if (inFlight && assistantText) {
+      if (streaming && assistantText && inFlight) {
         const conversationStream = context.runtime.store.updateConversationStream(context.sessionId, {
           turnId: inputMessageId,
           messageId,
@@ -1439,23 +1451,13 @@ function createOpenCodeTerminalController({
         }
         continue;
       }
-      let turn = null;
-      if (assistantText) {
-        turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
+      if (assistantText && !streaming) {
+        const turn = await context.runtime.store.writeConversationAssistantMessage(context.sessionId, {
           messageId,
           text: assistantText
         });
         context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
         await publishConversationTurn(context, turn, "opencode-server-assistant-message");
-      }
-      for (const part of reasoningParts) {
-        await writeReasoningMessages(context, {
-          at: message.time?.created ? new Date(message.time.created).toISOString() : "",
-          messageId: message.id,
-          partId: part.id,
-          requireOpenTurn,
-          value: part.text
-        });
       }
     }
     return { failure, providerApiFailure };
@@ -1689,6 +1691,12 @@ function createOpenCodeTerminalController({
           !completion.result?.error &&
           !text(completion.result?.text)
         ) {
+          // The recovery prompt replaces the input, so the reasoning-only
+          // completion falls outside later projections. Persist its
+          // headlines now; a replayed write is a no-op.
+          await writeConversationProjection(context, completion.messages, {
+            inputMessageId: turn.inputMessageId
+          });
           const recoveryMessageId = upstreamMessageId(`${turn.id}:final-response`);
           const admitted = await target.server.client.prompt(target.upstreamSessionId, {
             agent: context.selection.agentId,
