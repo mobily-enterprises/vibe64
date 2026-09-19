@@ -327,12 +327,33 @@ function openCodeMessageResultForInput(value = null, inputMessageId = "") {
 }
 
 function openCodeMessageError(message = {}) {
-  return text(
+  const failure = text(
     message?.error?.message ||
     message?.error?.data?.message ||
     message?.error?.name ||
     message?.error
   );
+  const hook = /GENESIS_HOOK_FAILURE (\{[^\n]*\})/u.exec(failure);
+  if (hook) {
+    try {
+      const diagnostic = JSON.parse(hook[1]);
+      const scope = ["session", "turn"].includes(diagnostic.scope) ? diagnostic.scope : "context";
+      const seconds = Number.isFinite(diagnostic.elapsedMs) ? (diagnostic.elapsedMs / 1000).toFixed(1) : "unknown";
+      const reason = diagnostic.outcome === "timeout" ? "timed out" :
+        diagnostic.outcome === "unavailable" ? "could not start because the Genesis executable was unavailable" : "failed";
+      const detail = [diagnostic.code != null ? `exit/code ${String(diagnostic.code).slice(0, 60)}` : "",
+        diagnostic.signal ? `signal ${String(diagnostic.signal).slice(0, 30)}` : ""].filter(Boolean).join(", ");
+      return `Project guidance could not load: the Genesis ${scope} hook ${reason} after ${seconds}s${detail ? ` (${detail})` : ""}.` +
+        `${text(diagnostic.stderr) ? `\n\n${text(diagnostic.stderr).slice(0, 1500)}` : "\n\nThe command returned no diagnostic output."}` +
+        "\n\nThe assistant stopped before it could continue. Check the project's Genesis hook and installed runtime, then send your message again.";
+    } catch {
+      // Preserve the ordinary provider failure when no valid hook diagnostic exists.
+    }
+  }
+  if (/Command failed: genesis hook (?:turn|session)\b/u.test(failure)) {
+    return "Project guidance could not load: the Genesis hook command failed. This hook version did not report an exit code, termination signal or stderr, so a timeout is unconfirmed. Update the project's Genesis guidance adapter and check the installed runtime, then send your message again.";
+  }
+  return failure;
 }
 
 function openCodeCredentialFailure(value = "") {
@@ -538,6 +559,7 @@ function createOpenCodeTerminalController({
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
   projectService,
   publishSessionChanged = async () => null,
+  readAssistantAccess = null,
   readCatalogCommand = readOpenCodeCatalog,
   readZenModelsCommand = readOpenCodeZenModelIds,
   recordGitActor = recordSessionGitCommandActor,
@@ -550,7 +572,6 @@ function createOpenCodeTerminalController({
   const processes = new Map();
   const processStarts = new Map();
   const monitors = new Map();
-  const reasoningMessages = new Map();
   const turns = new Map();
   const temporaryConversations = new Map();
   const processExitProofs = new Map();
@@ -563,10 +584,6 @@ function createOpenCodeTerminalController({
   let sharedProcessStop = null;
   const progressPublishes = new Map();
   const progressPublishedAt = new Map();
-  const connectionEconomyModels = new Map();
-  const summaryConversations = new Map();
-  const reasoningSummaryChains = new Map();
-  const reasoningHeadlineKeys = new Set();
 
   function reasoningSummaryInstruction(value = "") {
     const trimmed = String(value ?? "").trim().slice(0, OPENCODE_REASONING_SUMMARY_MAX_INPUT_CHARS);
@@ -580,57 +597,66 @@ function createOpenCodeTerminalController({
     ].join("\n");
   }
 
-  async function reasoningSummaryTarget(context) {
-    const cached = summaryConversations.get(context.key);
-    if (cached) {
-      return cached;
+  async function requestReasoningSummary(state, value = "") {
+    const target = state.target;
+    if (!target.economyModelId) return "";
+    const signal = AbortSignal.any([
+      target.abortController.signal,
+      state.abortController.signal,
+      AbortSignal.timeout(OPENCODE_REASONING_SUMMARY_TIMEOUT_MS)
+    ]);
+    signal.throwIfAborted();
+    if (!state.conversationId) {
+      const created = await target.server.client.createSession({
+        agent: OPENCODE_ECONOMY_AGENT_ID,
+        location: { directory: target.workdir },
+        model: { id: target.economyModelId, providerID: target.modelProviderId }
+      }, { signal });
+      state.conversationId = created.id;
     }
-    const providerId = text(context.selection?.modelProviderId);
-    const economyModelId = connectionEconomyModels.get(providerId) || "";
-    if (!providerId || !economyModelId) {
-      return null;
+    const promptId = upstreamMessageId(randomUUID());
+    state.active = true;
+    try {
+      await target.server.client.prompt(state.conversationId, {
+        agent: OPENCODE_ECONOMY_AGENT_ID,
+        delivery: "queue",
+        id: promptId,
+        model: { id: target.economyModelId, providerID: target.modelProviderId },
+        prompt: { text: reasoningSummaryInstruction(value) }
+      }, { signal });
+      const { result } = await waitForOpenCodeMessages(
+        target.server.client, state.conversationId, promptId, { signal }
+      );
+      state.active = false;
+      if (result?.error) throw new Error(result.error);
+      return text(result?.text);
+    } catch (error) {
+      await stopUnobservedOpenCodeSession(target, state.conversationId);
+      state.active = false;
+      throw error;
     }
-    const target = await ensureProcess(context, {});
-    const created = await target.server.client.createSession({
-      agent: OPENCODE_ECONOMY_AGENT_ID,
-      location: { directory: target.workdir },
-      model: { id: economyModelId, providerID: providerId }
-    });
-    const entry = { conversationId: created.id, economyModelId, providerId, target };
-    summaryConversations.set(context.key, entry);
-    return entry;
   }
 
-  async function requestReasoningSummary(context, value = "") {
-    const summaryTarget = await reasoningSummaryTarget(context);
-    if (!summaryTarget) {
-      return "";
-    }
-    const promptId = upstreamMessageId(
-      `summary:${summaryTarget.conversationId}:${Date.now()}:${value.length}`
-    );
-    const signal = AbortSignal.timeout(OPENCODE_REASONING_SUMMARY_TIMEOUT_MS);
-    await summaryTarget.target.server.client.prompt(summaryTarget.conversationId, {
-      agent: OPENCODE_ECONOMY_AGENT_ID,
-      delivery: "queue",
-      id: promptId,
-      model: { id: summaryTarget.economyModelId, providerID: summaryTarget.providerId },
-      prompt: { text: reasoningSummaryInstruction(value) }
-    }, { signal });
-    while (!signal.aborted) {
-      await wait(400);
-      const messages = await summaryTarget.target.server.client.messages(
-        summaryTarget.conversationId,
-        { limit: 10, order: "desc" },
-        { signal: AbortSignal.timeout(2_000) }
-      );
-      const replyRows = openCodeAssistantRowsForInput(messages, promptId);
-      const replyText = replyRows.map((row) => assistantMessageText(row)).filter(Boolean).at(-1) || "";
-      if (replyText) {
-        return replyText;
+  function disposeReasoningSummary(state) {
+    if (state.disposal) return state.disposal;
+    state.closed = true;
+    state.abortController.abort();
+    state.disposal = Promise.resolve().then(async () => {
+      await state.completion;
+      if (state.active) {
+        await stopUnobservedOpenCodeSession(state.target, state.conversationId);
+        state.active = false;
       }
-    }
-    return "";
+      if (state.conversationId) {
+        await state.target.server.client.deleteSession(state.conversationId, {
+          signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
+        });
+        state.conversationId = "";
+      }
+      state.entries.clear();
+      temporaryConversations.delete(state.key);
+    }).finally(() => { state.disposal = null; });
+    return state.disposal;
   }
 
   function publishOpenCodeProgress(sessionId, summary) {
@@ -823,11 +849,6 @@ function createOpenCodeTerminalController({
         return null;
       }
     }));
-    for (const connection of resolved) {
-      if (connection?.modelProviderId && connection.economyModelId) {
-        connectionEconomyModels.set(connection.modelProviderId, connection.economyModelId);
-      }
-    }
     return resolved.filter(Boolean);
   }
 
@@ -1144,6 +1165,11 @@ function createOpenCodeTerminalController({
     await closeTerminalSessionsForNamespace(
       opencodeTerminalNamespace(target.sessionId)
     );
+    for (const entry of temporaryConversations.values()) {
+      if (entry.reasoningSummary && entry.target?.abortController === target.abortController) {
+        await disposeReasoningSummary(entry);
+      }
+    }
     const activeThreads = new Set();
     if (turns.get(target.key)?.active) activeThreads.add(target.upstreamSessionId);
     for (const entry of temporaryConversations.values()) {
@@ -1189,8 +1215,19 @@ function createOpenCodeTerminalController({
     }
     const projectContextRoot = path.resolve(context.runtime.projectContextRoot);
     const start = Promise.resolve().then(async () => {
+      const access = readAssistantAccess ? await readAssistantAccess({
+        assistantSelection: context.selection,
+        engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
+        modelProviderId: context.selection.modelProviderId,
+        session: context.session,
+        sessionId: context.sessionId,
+        vibe64User: options.vibe64User || null
+      }) : connection;
+      const economyModelId = access?.available === false ? "" : text(access?.economyModelId);
       const commands = await managedCommandEnvironment(context);
       sessionEnvironments.set(context.key, {
+        economyModelId,
+        modelProviderId: context.selection.modelProviderId,
         env: commands.env,
         pathEntries: commands.shimDirs,
         projectContextRoot: path.resolve(context.runtime.projectContextRoot),
@@ -1223,6 +1260,7 @@ function createOpenCodeTerminalController({
         text(current.selection?.catalogRevision) === text(context.selection.catalogRevision) &&
         sameOpenCodeSelection(current.selection, context.selection)
       ) {
+        current.economyModelId = economyModelId;
         current.server = openCodeServerForDirectory(shared.server, context.workdir);
         return current;
       }
@@ -1234,6 +1272,7 @@ function createOpenCodeTerminalController({
         upstreamSessionId: nativeId
       };
       Object.assign(created, {
+        economyModelId,
         canonicalUrl: connection.canonicalUrl,
         connectionFingerprint: connection.fingerprint,
         endpointCode: connection.endpointCode,
@@ -1442,94 +1481,84 @@ function createOpenCodeTerminalController({
     });
   }
 
-  async function writeReasoningMessages(context = {}, {
-    at = "",
-    messageId = "",
-    partId = "",
-    requireOpenTurn = false,
-    value = ""
-  } = {}) {
-    let headline = "";
-    if (text(value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
-      try {
-        headline = openCodeReasoningHeadline(await requestReasoningSummary(context, value));
-      } catch {
-        headline = "";
+  async function writeReasoningMessage(context, entry, headline) {
+    if (entry.writing) return entry.writing;
+    if (entry.written || !headline) return;
+    entry.writing = Promise.resolve().then(async () => {
+      const turn = await context.runtime.store.writeConversationThinkingMessage(context.sessionId, {
+        at: entry.at,
+        messageId: entry.id,
+        text: headline
+      });
+      entry.written = true;
+      if (turn) await publishConversationTurn(context, turn, "opencode-server-reasoning");
+    }).finally(() => { entry.writing = null; });
+    return entry.writing;
+  }
+
+  async function projectReasoning(context, message, { complete = false, flush = false } = {}) {
+    const state = turns.get(context.key)?.reasoning;
+    if (!state || state.closed) return;
+    for (const part of (message.content || []).filter((part) => part.type === "reasoning" && text(part.text))) {
+      const id = conversationMessageId(message.id, part.id, "reasoning");
+      let entry = state.entries.get(id);
+      if (!entry) {
+        entry = { id, at: message.time?.created ? new Date(message.time.created).toISOString() : "", written: false, queued: false };
+        state.entries.set(id, entry);
       }
+      entry.value = part.text;
+      if (entry.written) continue;
+      if (flush) {
+        await writeReasoningMessage(context, entry, openCodeReasoningHeadline(entry.value));
+        continue;
+      }
+      const headline = openCodeReasoningHeadline(entry.value);
+      if (entry.queued || !(complete || part.time?.end || /[.!?…]$/u.test(headline))) continue;
+      entry.queued = true;
+      state.completion = state.completion.then(async () => {
+        if (state.closed || entry.written) return;
+        let headline = "";
+        if (text(entry.value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
+          try {
+            headline = openCodeReasoningHeadline(await requestReasoningSummary(state, entry.value));
+          } catch (error) {
+            if (!state.abortController.signal.aborted) {
+              vibe64SessionDebugLog("server.opencode.reasoning-summary.error", {
+                error: vibe64SessionDebugError(error), sessionId: context.sessionId
+              });
+            }
+          }
+        }
+        if (!state.closed) {
+          await writeReasoningMessage(context, entry, headline || openCodeReasoningHeadline(entry.value));
+        }
+      }).catch((error) => {
+        vibe64SessionDebugLog("server.opencode.reasoning-summary.error", {
+          error: vibe64SessionDebugError(error), sessionId: context.sessionId
+        });
+      });
     }
-    if (!headline) {
-      headline = openCodeReasoningHeadline(value);
-    }
-    if (!headline || !/[.!?…]/u.test(headline.slice(-1))) {
-      return [];
-    }
-    const id = conversationMessageId(messageId, partId, "reasoning");
-    const current = reasoningMessages.get(context.key) || new Map();
-    reasoningMessages.set(context.key, current);
-    if (current.get(id) === headline) {
-      return [];
-    }
-    const turn = await context.runtime.store.writeConversationThinkingMessage(context.sessionId, {
-      at,
-      messageId: id,
-      requireOpenTurn,
-      text: headline
-    });
-    current.set(id, headline);
-    if (turn) {
-      await publishConversationTurn(context, turn, "opencode-server-reasoning");
-    }
-    return turn ? [turn] : [];
   }
 
   async function writeConversationProjection(context = {}, messages = null, {
     inputMessageId = "",
-    streaming = false,
-    requireOpenTurn = false
+    streaming = false
   } = {}) {
     let failure = "";
     let providerApiFailure = false;
     const rows = inputMessageId
       ? openCodeAssistantRowsForInput(messages, inputMessageId)
       : openCodeMessageRows(messages).filter((message) => message?.type === "assistant");
-    const pendingHeadlines = [];
-    const queueReasoningHeadline = (descriptor) => {
-      const seenKey = `${context.key}\0${descriptor.messageId}\0${descriptor.partId}`;
-      if (reasoningHeadlineKeys.has(seenKey)) {
-        return;
-      }
-      reasoningHeadlineKeys.add(seenKey);
-      const previous = reasoningSummaryChains.get(context.key) || Promise.resolve();
-      const next = previous.catch(() => {}).then(() => writeReasoningMessages(context, descriptor));
-      reasoningSummaryChains.set(context.key, next);
-    };
     for (const [index, message] of rows.entries()) {
       failure ||= openCodeMessageError(message);
       providerApiFailure ||= openCodeProviderApiFailure(message.error);
-      const reasoningParts = Array.isArray(message.content)
-        ? message.content.filter((candidate) => candidate?.type === "reasoning" && text(candidate.text))
-        : [];
-      const headlineDescriptors = reasoningParts.map((part) => ({
-        at: message.time?.created ? new Date(message.time.created).toISOString() : "",
-        messageId: message.id,
-        partId: part.id,
-        requireOpenTurn,
-        value: part.text
-      }));
       const assistantText = assistantMessageText(message);
       const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
       const inFlight = streaming && index === rows.length - 1;
-      if (streaming) {
-        // Headlines queue as the reasoning arrives — live, in order, without
-        // blocking the event observation loop. The serialized per-session
-        // chain summarizes through the economy model with a mechanical
-        // fallback, and a replayed projection is a no-op per part key.
-        for (const descriptor of headlineDescriptors) {
-          queueReasoningHeadline(descriptor);
-        }
-      } else {
-        pendingHeadlines.push(...headlineDescriptors);
-      }
+      await projectReasoning(context, message, {
+        complete: !inFlight || Boolean(message.time?.completed || message.finish),
+        flush: !streaming || Boolean(assistantText && !inFlight)
+      });
       if (streaming && assistantText && !inFlight) {
         // A completed round persists as soon as the next one starts, so
         // superseded narration never evaporates from the transcript.
@@ -1563,9 +1592,6 @@ function createOpenCodeTerminalController({
         context.runtime.store.completeConversationStreamMessage(context.sessionId, messageId);
         await publishConversationTurn(context, turn, "opencode-server-assistant-message");
       }
-    }
-    for (const headline of pendingHeadlines) {
-      await writeReasoningMessages(context, headline);
     }
     return { failure, providerApiFailure };
   }
@@ -1746,6 +1772,20 @@ function createOpenCodeTerminalController({
       threadId: target.upstreamSessionId,
       updatedAt: startedAt
     };
+    const helperWorkdir = sharedRoots().workdir;
+    const reasoning = {
+      abortController: new AbortController(),
+      active: false,
+      closed: false,
+      completion: Promise.resolve(),
+      conversationId: "",
+      entries: new Map(),
+      key: `${context.key}\0reasoning:${turn.id}`,
+      reasoningSummary: true,
+      target: { ...target, server: openCodeServerForDirectory(target.server, helperWorkdir), workdir: helperWorkdir }
+    };
+    turn.reasoning = reasoning;
+    temporaryConversations.set(reasoning.key, reasoning);
     turns.set(context.key, turn);
     const signal = AbortSignal.any([target.abortController.signal, turn.abortController.signal]);
     const monitor = Promise.resolve().then(async () => {
@@ -1782,8 +1822,7 @@ function createOpenCodeTerminalController({
               messages,
               {
                 inputMessageId,
-                streaming: true,
-                requireOpenTurn: true
+                streaming: true
               }
             ),
             readFailure: () => eventFailure,
@@ -1904,11 +1943,11 @@ function createOpenCodeTerminalController({
       if (monitors.get(context.key) === monitor) {
         monitors.delete(context.key);
       }
-      reasoningMessages.delete(context.key);
-      progressPublishedAt.delete(context.key);
-      reasoningHeadlineKeys.delete(context.key);
-      reasoningSummaryChains.delete(context.key);
-      summaryConversations.delete(context.key);
+      void disposeReasoningSummary(reasoning).catch((error) => {
+        vibe64SessionDebugLog("server.opencode.reasoning-cleanup.error", {
+          error: vibe64SessionDebugError(error), sessionId: context.sessionId
+        });
+      });
     });
     monitors.set(context.key, monitor);
     void monitor.catch((error) => {
@@ -2885,7 +2924,7 @@ function createOpenCodeTerminalController({
     hasActiveTemporaryConversation(sessionId = "") {
       const id = safeSessionId(sessionId);
       return [...temporaryConversations.values()].some((entry) => (
-        entry.active === true && entry.target?.sessionId === id
+        !entry.reasoningSummary && entry.active === true && entry.target?.sessionId === id
       ));
     },
     async interruptTurn(sessionId, input = {}, options = {}) {

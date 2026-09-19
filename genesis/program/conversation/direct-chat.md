@@ -14,6 +14,10 @@ OpenCode waits for its project event connection before sending, allowing cold
 initialization up to two minutes. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message
 cannot hide a later provider rejection behind the earlier connection failure.
+Existing assistant status and message-delivery diagnostics include the requesting
+user's authenticated username when supplied by the host. Request context takes
+precedence over operation options; background work without an actor records
+`username: null`. Logs do not include the user's credentials or message text.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
 User messages, commentary, answers and system messages separate progress groups.
@@ -61,6 +65,7 @@ continuation and loading older history.
 - `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
+- `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
@@ -549,14 +554,21 @@ person's message or copy them into the turn-context lane.
 
 The Vibe64 Genesis hook executable grants Git trust only to the registered
 OpenCode provider session's exact working directory when invoked from that
-directory. Unregistered sessions and other worktrees keep Genesis's ordinary
+directory. Native children carry verified parent ids from the Genesis adapter
+so the same registered worktree remains trusted. Unregistered sessions and other worktrees keep Genesis's ordinary
 ownership checks. This uses the same scoped compiler trust operation as
 Vibe64's in-process inspections, without global Git configuration or ownership
 changes.
 The OpenCode runtime plugin imports only the prompt formatter from the Genesis
 boundary, so formatting host context does not load the compiler's native source
 parsers into OpenCode's Bun process. Genesis hooks still run through the separate
-Node executable.
+Node executable. Hosted OpenCode explicitly disables the unused Genesis turn
+lane with `GENESIS_TURN_CONTEXT_ENABLED=0`. Idle session preparation refreshes
+the generated OpenCode adapter through Genesis's scoped synchronization API
+under source-write admission, independently of authored project migration.
+An already-loaded older adapter takes the same disabled-lane fast exit in the
+managed command shim before compiler loading or Git inspection. The refreshed
+adapter itself becomes active on the next provider instance load.
 
 Non-project, tool-free conversations have no Genesis project plugin. OpenCode's
 host plugin therefore installs their validated, host-supplied context directly
@@ -737,18 +749,23 @@ running. OpenCode and Codex shell commands and any descendants they leave
 running are attributed to the originating project session through their
 ordinary provider command boundaries, and closing that session drains those
 descendants.
-The injected OpenCode configuration also exposes each connected provider's
-designated economy model to the assistant as a visible low-cost subagent pinned
-to that provider, so a session's main model can delegate simple, inexpensive
-work to a cheap same-family helper without any per-project configuration.
-These helpers carry the session's ordinary tool guardrails; they add no
-permissions the main model lacks.
+The shared OpenCode configuration defines economy subagents for connected
+providers, while task admission and native chat/model hooks restrict use to the
+registered parent's selected provider and configured Helper model. Resuming a
+helper from another parent is rejected. The plugin resolves native child
+`parentID` ancestry for command control, history unwrapping and host capabilities;
+unknown or unverifiable ancestry fails closed. Helpers gain no extra account or
+command permissions.
 OpenCode progress broadcasts coalesce to at most one per second per session,
-with the first state published immediately, and each reasoning block becomes
-one short headline entry derived from its first sentence, persisted after the
-assistant reply so the progress group renders below it; full provider
-reasoning text is not persisted. This keeps long turns readable and prevents
-per-event session refreshes from flooding browsers.
+with the first state published immediately. A meaningful reasoning sentence or
+completed part can queue one bounded, tool-free summary through the selected
+Helper model. Streaming and final projection share turn-owned entries, so
+replayed parts never submit duplicate requests and initial partial words do not
+consume a part. The existing completion reader waits for the helper's finished
+answer. Main completion persists any missing mechanical headlines before its
+answer without waiting for a model request. Turn closure cancels outstanding
+summaries and deletes the native helper session; failed deletion remains tracked
+for retry on session closure. Full provider reasoning is not persisted.
 
 Tool-free economy turns run without the session source lock, while provider
 thread ownership and terminal admission still protect cleanup and renewal.
@@ -791,6 +808,10 @@ account-management route. Existing conversation and project changes remain
 available for either failure, and the person can retry after the account is
 recovered. Other OpenCode turn failures preserve their readable error in a
 durable conversation notice without sending the person to account settings.
+Genesis hook failures format their structured scope, timeout/exit/signal,
+elapsed time and bounded stderr into that notice, with a runtime-repair/retry
+instruction. Legacy hook failures identify the missing diagnostics and leave
+timeout unconfirmed, instead of displaying a Bun stack.
 
 When Codex reports its exact structured usage-limit condition, the durable turn
 outcome links directly to Codex usage and billing while preserving completed

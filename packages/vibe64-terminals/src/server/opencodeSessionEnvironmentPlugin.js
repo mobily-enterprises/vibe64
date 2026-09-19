@@ -29,14 +29,20 @@ async function sessionEnvironment(cwd = "") {
     .sort((left, right) => path.resolve(right.workdir).length - path.resolve(left.workdir).length)[0] || null;
 }
 
-async function sessionEnvironmentForUpstreamSession(sessionId = "") {
-  const normalizedSessionId = text(sessionId);
-  if (!normalizedSessionId) {
-    return null;
+async function sessionEnvironmentForUpstreamSession(sessionId = "", client = null) {
+  const environments = await sessionEnvironments();
+  const visited = new Set();
+  let id = text(sessionId);
+  while (id && !visited.has(id) && visited.size < 32) {
+    const selected = environments.find((entry) => text(entry?.upstreamSessionId) === id);
+    if (selected) return selected;
+    if (!client) return null;
+    visited.add(id);
+    const result = await client.session.get({ path: { id } });
+    if (result.error) throw new Error("Vibe64 could not verify the subagent's parent session.");
+    id = text(result.data?.parentID);
   }
-  return (await sessionEnvironments()).find((entry) => (
-    text(entry?.upstreamSessionId) === normalizedSessionId
-  )) || null;
+  return null;
 }
 
 function shellQuote(value = "") {
@@ -85,15 +91,40 @@ function sessionCommand(command = "", selected = null) {
   ].join(" ");
 }
 
-export const Vibe64SessionEnvironment = async () => ({
+export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
   "experimental.chat.system.transform": async (input = {}, output = {}) => {
-    const selected = await sessionEnvironmentForUpstreamSession(input.sessionID || input.sessionId);
+    const selected = await sessionEnvironmentForUpstreamSession(input.sessionID || input.sessionId, client);
+    if (selected?.promptContext?.scope === "session" &&
+        selected.upstreamSessionId !== (input.sessionID || input.sessionId)) {
+      // Genesis resolves the registered parent; native children inherit the
+      // same managed capabilities through their verified ancestry here.
+      const context = vibe64Driver(selected.promptContext);
+      if (!output.system.includes(context)) output.system.push(context);
+    }
     if (selected?.promptContext?.scope !== "ephemeral") return;
     // Non-project conversations have no Genesis project plugin. Their supplied
     // context replaces the coding-agent defaults, without changing user text.
     output.system.splice(0, output.system.length, vibe64Driver(selected.promptContext));
   },
+  "chat.message": async (input = {}, output = {}) => {
+    if (!text(input.agent).startsWith("vibe64-economy-")) return;
+    const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
+    if (!selected?.economyModelId || input.agent !== `vibe64-economy-${selected.modelProviderId}`) {
+      throw new Error("This helper is not available through the session's selected AI account.");
+    }
+    output.message.model = { providerID: selected.modelProviderId, modelID: selected.economyModelId };
+  },
   "chat.params": async (input = {}, output = {}) => {
+    const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
+    if (selected?.modelProviderId && input.model?.providerID !== selected.modelProviderId) {
+      throw new Error("Assistants must use the session's selected AI account.");
+    }
+    if (text(input.agent).startsWith("vibe64-economy-")) {
+      if (!selected?.economyModelId || input.agent !== `vibe64-economy-${selected.modelProviderId}` ||
+          input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.economyModelId) {
+        throw new Error("This helper is not available through the session's selected AI account.");
+      }
+    }
     const advertisedOutputTokenLimit = input.model?.limit?.output;
     const supportedOutputTokenLimit = (
       Number.isSafeInteger(advertisedOutputTokenLimit) && advertisedOutputTokenLimit > 0
@@ -111,10 +142,10 @@ export const Vibe64SessionEnvironment = async () => ({
     const output = hookArguments[1] || {};
     const messages = Array.isArray(output.messages) ? output.messages : [];
     const environments = await sessionEnvironments();
-    output.messages = messages.map((message) => {
+    output.messages = await Promise.all(messages.map(async (message) => {
       const selected = environments.find((entry) => (
         text(entry?.upstreamSessionId) === text(message?.info?.sessionID)
-      ));
+      )) || await sessionEnvironmentForUpstreamSession(message?.info?.sessionID, client);
       if (!selected || !Array.isArray(message?.parts)) {
         return message;
       }
@@ -144,7 +175,7 @@ export const Vibe64SessionEnvironment = async () => ({
         };
       });
       return changed ? { ...message, parts } : message;
-    });
+    }));
   },
   "shell.env": async (input = {}, output = {}) => {
     const selected = await sessionEnvironment(input.cwd);
@@ -169,6 +200,19 @@ export const Vibe64SessionEnvironment = async () => ({
     ].filter(Boolean).join(path.delimiter);
   },
   "tool.execute.before": async (input = {}, output = {}) => {
+    if (input.tool === "task") {
+      const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
+      if (text(output.args?.subagent_type).startsWith("vibe64-economy-") &&
+          (!selected?.economyModelId || output.args.subagent_type !== `vibe64-economy-${selected.modelProviderId}`)) {
+        throw new Error("Choose the helper belonging to this session's selected AI account.");
+      }
+      if (text(output.args?.task_id)) {
+        const resumed = await sessionEnvironmentForUpstreamSession(output.args.task_id, client);
+        if (!selected || resumed?.upstreamSessionId !== selected.upstreamSessionId) {
+          throw new Error("This helper conversation does not belong to the current session.");
+        }
+      }
+    }
     if (!["bash", "shell"].includes(text(input.tool).toLowerCase())) {
       return;
     }
@@ -179,7 +223,7 @@ export const Vibe64SessionEnvironment = async () => ({
       return;
     }
     const selected = await sessionEnvironmentForUpstreamSession(
-      input.sessionID || input.sessionId
+      input.sessionID || input.sessionId, client
     );
     args.command = selected
       ? sessionCommand(args.command, selected)

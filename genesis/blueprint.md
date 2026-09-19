@@ -727,10 +727,15 @@ The installation-wide choice is separate from each session's chat model and
 is used by new hints, commit naming and other bounded helper tasks. Recommended
 uses Vibe64's default; explicit choices must support the helper's low thinking
 profile. Changing the setting does not interrupt running work.
-OpenCode sessions additionally receive one visible low-cost helper subagent per
-connected provider, pinned to that provider's designated economy model, so the
-session's model can delegate simple, inexpensive work to a cheap same-family
-helper without per-project configuration.
+OpenCode can delegate inexpensive work through the session's selected AI
+account and its configured Helper model. Helpers inherit their parent session's
+command control and cannot switch to another connected account. Compact
+reasoning summaries use that same Helper preference. Incomplete fragments do
+not suppress later reasoning, and finishing the main answer never waits for a
+summary model. Temporary summary conversations are stopped and deleted.
+A project-guidance hook failure reports its timing, exit or signal and bounded
+diagnostic output when available, with a retry instruction and preserved project
+changes. Older hooks explicitly report when the cause is unknown.
 
 When declared environment resources are missing, the project shows a setup
 explanation and a direct route to Env, with missing variable names available on

@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 
 import { readFile, realpath } from "node:fs/promises";
-import { withTrustedGitRepository } from "genesis-compiler";
-import { runCli } from "genesis-compiler/cli";
+
+// Already-loaded older OpenCode adapters still spawn this command for every
+// message projection. A host-disabled lane needs no compiler or Git setup.
+if (process.argv[2] === "hook" && process.argv[3] === "turn" &&
+    process.env.GENESIS_TURN_CONTEXT_ENABLED === "0") {
+  process.exit(0);
+}
+
+const { withTrustedGitRepository } = await import("genesis-compiler");
+const { runCli } = await import("genesis-compiler/cli");
 
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 
@@ -26,8 +34,9 @@ let trustedWorktree = "";
 if (argv[0] === "hook" && registryPath) {
   const input = JSON.parse(process.env.GENESIS_HOST_CONTEXT_INPUT || "{}");
   const registry = JSON.parse(await readFile(registryPath, "utf8"));
+  const nativeSessionIds = [input.sessionId, ...(Array.isArray(input.parentSessionIds) ? input.parentSessionIds : [])];
   const session = registry.sessions?.find((entry) => (
-    input.sessionId && entry.upstreamSessionId === input.sessionId
+    entry.upstreamSessionId && nativeSessionIds.includes(entry.upstreamSessionId)
   ));
   if (session?.workdir) {
     const worktree = await realpath(session.workdir);

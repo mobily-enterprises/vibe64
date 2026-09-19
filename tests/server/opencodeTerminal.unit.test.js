@@ -1404,7 +1404,7 @@ test("OpenCode publishes current provider reasoning while its turn is active", a
   });
 
   assert.equal(harness.thinkingMessages.some((message) => (
-    message.text === reasoning && message.requireOpenTurn === true
+    message.text === reasoning
   )), true);
   assert.equal(harness.thinkingMessages.some((message) => (
     message.text === historicalReasoning
@@ -2408,3 +2408,27 @@ test("OpenCode startup retries an unverified observation stop without restarting
   assert.equal(harness.agentRunEvents.at(-1).run.active, false);
   assert.equal(harness.promptCalls.length, 1);
 });
+
+for (const [label, failure, expected] of [
+  ["timeout", `GENESIS_HOOK_FAILURE ${JSON.stringify({ scope: "turn", outcome: "timeout", elapsedMs: 5005, timeoutMs: 5000, code: null, signal: "SIGTERM", stderr: "" })}`, /Genesis turn hook timed out after 5\.0s \(signal SIGTERM\)/u],
+  ["nonzero exit", `GENESIS_HOOK_FAILURE ${JSON.stringify({ scope: "session", outcome: "failed", elapsedMs: 92, timeoutMs: 5000, code: 7, signal: null, stderr: "Project resolver configuration is invalid." })}`, /Genesis session hook failed after 0\.1s \(exit\/code 7\)/u],
+  ["missing executable", `GENESIS_HOOK_FAILURE ${JSON.stringify({ scope: "turn", outcome: "unavailable", elapsedMs: 2, timeoutMs: 5000, code: "ENOENT", signal: null, stderr: "" })}`, /Genesis executable was unavailable/u],
+  ["legacy hook", "Command failed: genesis hook turn --project-root /workspace/source at genericNodeError (node:child_process:998:22) at Plugin.trigger (/$bunfs/root/chunk.js:1:5)", /timeout is unconfirmed/u]
+]) {
+  test(`OpenCode reports a Genesis hook ${label} without a raw runtime stack or credential advice`, async (t) => {
+    const harness = await controllerHarness({ assistantError: { name: "UnknownError", data: { message: `Error: ${failure}\n at Plugin.trigger (/$bunfs/root/chunk.js:1:5)` } } });
+    t.after(async () => {
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { recursive: true, force: true });
+    });
+    await harness.controller.sendMessage("session-1", { message: "Continue", messageId: `hook-${label}` });
+    const result = await harness.controller.waitForTurn("session-1");
+    assert.equal(result.state, "failed");
+    const notice = harness.systemMessages[0].text;
+    assert.match(notice, expected);
+    assert.match(notice, /Saved project changes remain/u);
+    assert.match(notice, /send your message again/u);
+    assert.doesNotMatch(notice, /Plugin\.trigger|\$bunfs|GENESIS_HOOK_FAILURE|Manage AI accounts/u);
+    if (label === "nonzero exit") assert.match(notice, /Project resolver configuration is invalid\./u);
+  });
+}

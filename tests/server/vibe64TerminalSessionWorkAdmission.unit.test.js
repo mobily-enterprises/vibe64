@@ -15,6 +15,7 @@ import { Readable } from "node:stream";
 import test from "node:test";
 import { promisify } from "node:util";
 import { controllerHarness } from "../fixtures/opencodeController.js";
+import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -270,6 +271,9 @@ for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"}
   });
   const projectRoot = session.metadata.source_path;
   const { skillPath, expected } = await outdatedSkillFixture(projectRoot);
+  const pluginPath = path.join(projectRoot, ".opencode/plugins/genesis-project-guidance.js");
+  const expectedPlugin = await readFile(pluginPath, "utf8");
+  await writeFile(pluginPath, "// Outdated generated adapter\n");
   const customPath = path.join(projectRoot, ".agents/skills/genesis-program/SKILL.md");
   const custom = `${await readFile(customPath, "utf8")}\nKeep the project's custom rule.\n`;
   await writeFile(customPath, custom);
@@ -288,6 +292,7 @@ for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"}
   await send().catch(() => null);
   assert.equal(sourceWrites, 1);
   assert.equal(await readFile(skillPath, "utf8"), expected);
+  assert.equal(await readFile(pluginPath, "utf8"), expectedPlugin);
   assert.equal(await readFile(customPath, "utf8"), custom);
   assert.equal(events.some((event) => event.reason === "agent-skills-updated"), true);
   await send().catch(() => null);
@@ -585,21 +590,61 @@ test("assistant reconciliation retains structured failure diagnostics", async (t
     logger: { warn(fields) { warnings.push(fields); } }
   });
   runtime.store.runSessionExclusive = async () => ({ acquired: false });
-  const busy = await service.ensureAgentSession(session.sessionId);
+  const busy = await service.ensureAgentSession(session.sessionId, {
+    vibe64User: { username: "matt", role: "member", password: "never-log-this" }
+  });
   assert.equal(busy.code, "vibe64_agent_write_mode_busy");
   assert.equal(warnings[0].event, "vibe64.agent_session.reconciliation_failed");
   assert.equal(warnings[0].code, busy.code);
   assert.equal(warnings[0].sessionId, session.sessionId);
+  assert.equal(warnings[0].username, "matt");
   assert.equal(typeof warnings[0].durationMs, "number");
 
   const failure = Object.assign(new Error("Provider connection failed"), { code: "provider_unavailable" });
   runtime.store.runSessionExclusive = async () => { throw failure; };
-  const failed = await service.ensureAgentSession(session.sessionId);
+  const failed = await runWithProjectRequestContext({ vibe64User: { username: "merc", role: "owner" } }, () => (
+    service.ensureAgentSession(session.sessionId, { vibe64User: { username: "matt" } })
+  ));
   assert.equal(failed.ok, false);
   assert.equal(failed.code, failure.code);
   assert.equal(failed.error, failure.message);
   assert.equal(warnings[1].code, failure.code);
   assert.equal(warnings[1].event, "vibe64.agent_session.reconciliation_failed");
+  assert.equal(warnings[1].username, "merc");
+
+  await service.ensureAgentSession(session.sessionId);
+  assert.equal(warnings[2].username, null);
+  assert.doesNotMatch(JSON.stringify(warnings), /never-log-this|password/u);
+});
+
+test("assistant reconciliation identifies the member rejected by an owner-only connection", async (t) => {
+  const warnings = [];
+  const { service, session } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    logger: { warn(fields) { warnings.push(fields); } }
+  });
+  service.configureAssistantRuntime({ readAssistantAccess: async () => ({ ownerOnly: true }) });
+  await assert.rejects(service.ensureAgentSession(session.sessionId, {
+    engineId: "opencode",
+    vibe64User: { username: "matt", role: "member" }
+  }), { code: "vibe64_assistant_owner_required" });
+  assert.equal(warnings[0].code, "vibe64_assistant_owner_required");
+  assert.equal(warnings[0].username, "matt");
+});
+
+test("message failure logs identify the authenticated actor without copying message input", async (t) => {
+  const warnings = [];
+  const { service, runtime, session } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    logger: { warn(fields) { warnings.push(fields); } }
+  });
+  runtime.store.runSessionExclusive = async () => ({ acquired: false });
+  await runWithProjectRequestContext({ vibe64User: { username: "matt", role: "member" } }, () => (
+    service.sendAgentMessage(session.sessionId, {
+      message: "private-message-text", username: "spoofed-user"
+    }, { vibe64User: { username: "merc" } })
+  ));
+  const event = warnings.find((entry) => entry.event === "vibe64.agent_message.delivery_failed");
+  assert.equal(event.username, "matt");
+  assert.doesNotMatch(JSON.stringify(event), /private-message-text|spoofed-user/u);
 });
 
 for (const method of ["saveSessionWork", "updateSessionWork"]) {

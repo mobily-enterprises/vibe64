@@ -222,6 +222,7 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
   }, {
     cacheRoot: "/private/cache",
     dbPath: "/state/opencode.sqlite",
+    hostContextResolver: "/managed/vibe64-genesis-host-context",
     managedEnv: {
       PATH: "/must/not/replace/path",
       VIBE64_AGENT_ENV_SOCKET: "/run/vibe64/agent.sock",
@@ -234,6 +235,8 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
   });
 
   assert.equal(env.ANTHROPIC_API_KEY, undefined);
+  assert.equal(env.GENESIS_TURN_CONTEXT_ENABLED, "0");
+  assert.equal(env.GENESIS_SESSION_CONTEXT_INSTALLED, undefined);
   assert.equal(env.DEEPSEEK_API_KEY, undefined);
   assert.equal(env.RANDOM_APPLICATION_SECRET, undefined);
   assert.equal(env.LANG, "en_AU.UTF-8");

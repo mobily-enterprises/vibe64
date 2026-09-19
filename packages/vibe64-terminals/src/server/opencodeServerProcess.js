@@ -273,6 +273,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
             ...(text(hostContextResolver)
               ? {
                   GENESIS_HOST_CONTEXT_RESOLVER: path.resolve(hostContextResolver),
+                  GENESIS_TURN_CONTEXT_ENABLED: "0",
                   GENESIS_HOST_CONTEXT_RESOLVER_DATA: JSON.stringify({
                     registryPath: path.resolve(sessionEnvironmentRegistry)
                   })

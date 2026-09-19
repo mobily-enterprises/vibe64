@@ -57,6 +57,7 @@ const {
   inspectEngineering,
   inspectEnvironment,
   inspectProject,
+  inspectOpenCodePlugin,
   inspectSkills,
   inspectStackSection,
   inspectSubsystems,
@@ -65,6 +66,7 @@ const {
   parserEnvironment,
   setCollaboration,
   setEngineeringProfile,
+  syncOpenCodePlugin,
   syncSkills,
   withTrustedGitRepository
 } = genesisCompiler;
@@ -181,6 +183,14 @@ function inspectGenesisSkills(options = {}) {
 
 function syncGenesisSkills(options = {}) {
   return runGenesisOperation(syncSkills, options);
+}
+
+function syncGenesisOpenCodePlugin(options = {}) {
+  return runGenesisOperation(syncOpenCodePlugin, options);
+}
+
+function inspectGenesisOpenCodePlugin(options = {}) {
+  return runGenesisOperation(inspectOpenCodePlugin, options);
 }
 
 function inspectGenesisSubsystems(options = {}) {
@@ -455,6 +465,7 @@ export {
   inspectGenesisEngineering,
   inspectGenesisProjectFormat,
   inspectGenesisProject,
+  inspectGenesisOpenCodePlugin,
   inspectGenesisSkills,
   listGenesisTemplates,
   inspectGenesisStackSection,
@@ -472,6 +483,7 @@ export {
   renderGenesisPrompt,
   setGenesisCollaboration,
   setGenesisEngineeringProfile,
+  syncGenesisOpenCodePlugin,
   syncGenesisSkills,
   vibe64Driver,
   vibe64HostContextResolverPath,

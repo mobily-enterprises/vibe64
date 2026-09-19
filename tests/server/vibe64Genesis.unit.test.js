@@ -146,6 +146,11 @@ test("the Genesis hook shim trusts only the registered provider session worktree
       shim, "hook", "turn", "--project-root", target
     ], { cwd: projectRoot, env, ...options });
     await run();
+    const childEnv = { ...env, GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({
+      sessionId: "child-session", parentSessionIds: ["nested-child", "provider-session"]
+    }) };
+    await run(projectRoot, { env: childEnv });
+    await assert.rejects(run(otherRoot, { env: childEnv }), /GIT_REPOSITORY_UNTRUSTED/u);
     await assert.rejects(run(otherRoot), /GIT_REPOSITORY_UNTRUSTED/u);
     await assert.rejects(run(projectRoot, {
       env: { ...env, GENESIS_HOST_CONTEXT_INPUT: '{"sessionId":"unknown"}' }
@@ -825,5 +830,25 @@ test("the temporary onboarding gate preserves the installed PostgreSQL Stack pie
     const stack = await readFile(path.join(projectRoot, "genesis", "stack.md"), "utf8");
     assert.match(stack, /- `jskit-postgresql`/u);
     assert.match(stack, /- `postgresql`/u);
+  });
+});
+
+test("already-loaded older OpenCode turn adapters skip the compiler when the host disables the lane", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    const loader = path.join(projectRoot, "no-compiler.mjs");
+    await writeFile(loader, `import { registerHooks } from "node:module";
+      registerHooks({ resolve(specifier, context, next) {
+        if (specifier.startsWith("genesis-compiler")) throw new Error("The disabled hook loaded the compiler.");
+        return next(specifier, context);
+      } });`);
+    const result = await execFileAsync(process.execPath, [
+      "--import", loader, path.join(genesisCommandShimDirectory(), "genesis"),
+      "hook", "turn", "--project-root", projectRoot
+    ], { cwd: projectRoot, env: {
+      ...process.env, GENESIS_TURN_CONTEXT_ENABLED: "0",
+      VIBE64_OPENCODE_SESSION_ENV_REGISTRY: "/unavailable-registry"
+    } });
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "");
   });
 });

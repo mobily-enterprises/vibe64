@@ -7,21 +7,45 @@ const execute = promisify(execFile);
 
 const HOST_CONTEXT_INPUT_ENV = "GENESIS_HOST_CONTEXT_INPUT";
 
-async function renderContext(projectRoot, sessionId, scope) {
-  const { stdout } = await execute(
-    "genesis",
-    ["hook", scope, "--project-root", projectRoot],
-    {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        [HOST_CONTEXT_INPUT_ENV]: JSON.stringify({ sessionId })
-      },
-      maxBuffer: 256 * 1024,
-      timeout: 5_000
+async function renderContext(projectRoot, sessionId, scope, parentSessionIds = []) {
+  if (scope === "turn" && process.env.GENESIS_TURN_CONTEXT_ENABLED === "0") return "";
+  const started = Date.now();
+  const timeoutMs = 5_000;
+  try {
+    const { stdout } = await execute(
+      "genesis",
+      ["hook", scope, "--project-root", projectRoot],
+      {
+        cwd: projectRoot,
+        env: {
+          ...process.env,
+          [HOST_CONTEXT_INPUT_ENV]: JSON.stringify({ sessionId, parentSessionIds })
+        },
+        maxBuffer: 256 * 1024,
+        timeout: timeoutMs
+      }
+    );
+    return stdout.trimEnd();
+  } catch (error) {
+    let stderr = String(error.stderr || "");
+    for (const [name, value] of Object.entries(process.env)) {
+      if (value && /(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|DSN|DATABASE_URL)/iu.test(name)) {
+        stderr = stderr.replaceAll(value, "[redacted]");
+      }
     }
-  );
-  return stdout.trimEnd();
+    const elapsedMs = Date.now() - started;
+    const details = {
+      scope,
+      outcome: error.killed && error.signal === "SIGTERM" && elapsedMs >= timeoutMs ? "timeout" :
+        error.code === "ENOENT" ? "unavailable" : "failed",
+      elapsedMs,
+      timeoutMs,
+      code: error.code ?? null,
+      signal: error.signal || null,
+      stderr: stderr.trim().slice(0, 1_500)
+    };
+    throw new Error(`GENESIS_HOOK_FAILURE ${JSON.stringify(details)}`);
+  }
 }
 
 function eventSessionId(event = {}) {
@@ -30,14 +54,26 @@ function eventSessionId(event = {}) {
   ).trim();
 }
 
-export const GenesisProjectGuidance = async ({ directory, worktree } = {}) => {
+export const GenesisProjectGuidance = async ({ client, directory, worktree } = {}) => {
   const projectRoot = path.resolve(directory || worktree || process.cwd());
   const contexts = new Map();
+  const turnContexts = new Map();
 
   function contextForSession(sessionId) {
     let context = contexts.get(sessionId);
     if (!context) {
-      context = renderContext(projectRoot, sessionId, "session");
+      context = Promise.resolve().then(async () => {
+        const parents = [];
+        let id = sessionId;
+        while (client && id && parents.length < 32) {
+          const result = await client.session.get({ path: { id } });
+          if (result.error) throw new Error("Genesis could not read the native session ancestry.");
+          id = String(result.data?.parentID || "").trim();
+          if (!id || id === sessionId || parents.includes(id)) break;
+          parents.push(id);
+        }
+        return renderContext(projectRoot, sessionId, "session", parents);
+      });
       contexts.set(sessionId, context);
       context.catch(() => {
         if (contexts.get(sessionId) === context) contexts.delete(sessionId);
@@ -50,7 +86,10 @@ export const GenesisProjectGuidance = async ({ directory, worktree } = {}) => {
     event: async ({ event } = {}) => {
       if (!["session.compacted", "session.deleted"].includes(event?.type)) return;
       const sessionId = eventSessionId(event);
-      if (sessionId) contexts.delete(sessionId);
+      if (sessionId) {
+        contexts.delete(sessionId);
+        turnContexts.delete(sessionId);
+      }
     },
     "experimental.chat.system.transform": async (input = {}, output = {}) => {
       const sessionId = String(input.sessionID || input.sessionId || "").trim();
@@ -67,7 +106,15 @@ export const GenesisProjectGuidance = async ({ directory, worktree } = {}) => {
       const sessionId = String(message.info?.sessionID || "").trim();
       const messageId = String(message.info?.id || "").trim();
       if (!sessionId || !messageId || !Array.isArray(message.parts)) return;
-      const context = await renderContext(projectRoot, sessionId, "turn");
+      let current = turnContexts.get(sessionId);
+      if (current?.messageId !== messageId) {
+        current = { messageId, context: renderContext(projectRoot, sessionId, "turn") };
+        turnContexts.set(sessionId, current);
+        current.context.catch(() => {
+          if (turnContexts.get(sessionId) === current) turnContexts.delete(sessionId);
+        });
+      }
+      const context = await current.context;
       if (!context || message.parts.some((part) => part?.synthetic === true && part?.text === context)) {
         return;
       }

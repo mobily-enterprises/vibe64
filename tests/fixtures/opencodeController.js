@@ -48,6 +48,7 @@ async function controllerHarness({
   beforeMessages = null,
   beforePrompt = null,
   beforeReadSession = null,
+  beforeDeleteSession = null,
   catalogProviders = providerResult,
   commandEnvironmentGate = null,
   gitActorFailure = null,
@@ -248,6 +249,7 @@ async function controllerHarness({
         return created;
       },
       async deleteSession(id) {
+        await beforeDeleteSession?.(id);
         upstreamSessions.delete(id);
         return true;
       },
@@ -301,7 +303,7 @@ async function controllerHarness({
           ]
         };
       },
-      async prompt(id, input = {}) {
+      async prompt(id, input = {}, options = {}) {
         promptCalls.push({ id, input });
         promptDirectories.push({ directory, id });
         if (failNextPrompt) {
@@ -309,7 +311,7 @@ async function controllerHarness({
           failNextPrompt = false;
           throw error;
         }
-        await beforePrompt?.({ directory, id, input });
+        await beforePrompt?.({ directory, id, input, signal: options.signal });
         outputs.set(id, id === session.metadata.opencode_conversation_id
           ? queuedAssistantResponses.shift() || "Main turn complete"
           : helperResponse);

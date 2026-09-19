@@ -51,8 +51,10 @@ import {
   GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   inspectGenesisProjectFormat,
+  inspectGenesisOpenCodePlugin,
   inspectGenesisSkills,
   refreshGenesisCities,
+  syncGenesisOpenCodePlugin,
   syncGenesisSkills
 } from "@local/vibe64-genesis/server";
 import {
@@ -505,6 +507,7 @@ function createService({
     command: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode",
     env,
     listConnections: (context) => assistantRuntime.listConnections(context),
+    readAssistantAccess: (context) => assistantRuntime.readAssistantAccess(context),
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
     resolveConnection: (context) => assistantRuntime.resolveConnection(context)
@@ -619,9 +622,15 @@ function createService({
       }, "Project skill refresh requires workspace preparation.");
       return;
     }
-    if (!["missing", "outdated"].includes(inspection.status)) return;
+    const guidance = await inspectGenesisOpenCodePlugin({ projectRoot });
+    const refreshSkills = ["missing", "outdated"].includes(inspection.status);
+    if (!refreshSkills && guidance.status === "current") return;
     const result = await projectService.runProjectSourceExclusive(
-      () => syncGenesisSkills({ projectRoot }),
+      async () => {
+        const plugin = await syncGenesisOpenCodePlugin({ projectRoot });
+        const skills = refreshSkills ? await syncGenesisSkills({ projectRoot }) : { changedFiles: [] };
+        return { changedFiles: [...plugin.changedFiles, ...skills.changedFiles] };
+      },
       { operation: "sync-agent-skills" }
     );
     if (result.changedFiles.length > 0) {
@@ -2486,6 +2495,7 @@ function createService({
 
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       const startedAt = Date.now();
+      const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
       try {
         const result = await runMainAgentWrite(
@@ -2501,7 +2511,7 @@ function createService({
             const delivered = await sendWithAssistantChangeover(sessionId, input, context, sessionAgent, (event) => {
               logOperationalEvent(logger, "info", {
                 ...event, event: `vibe64.assistant_changeover.${event.event}`,
-                component: "vibe64.agent_message", sessionId
+                component: "vibe64.agent_message", sessionId, username
               }, "Assistant changeover delivery.");
             });
             vibe64SessionDebugLog("server.terminals.agentMessage.providerDone", {
@@ -2520,6 +2530,7 @@ function createService({
             durationMs: Date.now() - startedAt,
             error: result.error || result.errors?.[0]?.message,
             event: "vibe64.agent_message.delivery_failed",
+            username,
             messageId: input.messageId,
             operationOutcome: result.operationOutcome,
             refreshRecommended: result.refreshRecommended,
@@ -2537,6 +2548,7 @@ function createService({
           durationMs: Date.now() - startedAt,
           error,
           event: "vibe64.agent_message.delivery_failed",
+          username,
           messageId: input.messageId,
           sessionId
         }, "Vibe64 assistant message delivery failed.");
@@ -2569,11 +2581,13 @@ function createService({
 
     async ensureAgentSession(sessionId, options = {}) {
       const startedAt = Date.now();
+      const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
       const logFailure = (fields) => logOperationalEvent(logger, "warn", {
         ...fields,
         component: "vibe64.agent_session",
         durationMs: Date.now() - startedAt,
         event: "vibe64.agent_session.reconciliation_failed",
+        username,
         sessionId
       }, "Vibe64 assistant status could not be verified.");
 

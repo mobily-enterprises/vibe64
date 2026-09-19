@@ -222,3 +222,78 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
     await rm(temporaryRoot, { force: true, recursive: true });
   }
 });
+
+test("native child helpers inherit only their registered parent's account, command control, and Helper preference", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-opencode-child-boundary-"));
+  const registryPath = path.join(root, "sessions.json");
+  const previous = process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY;
+  t.after(async () => {
+    if (previous === undefined) delete process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY;
+    else process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY = previous;
+    await rm(root, { recursive: true, force: true });
+  });
+  const sessions = [{
+    upstreamSessionId: "shared-parent", modelProviderId: "deepseek", economyModelId: "chosen-helper",
+    promptContext: { scope: "session", conversationKind: "main", session: {
+      managedGit: true, managedPreview: false, managedEnvironment: false, managedDatabaseRefresh: false
+    } },
+    env: { VIBE64_WRAPPER: "/managed/shared-session-wrapper" }
+  }, {
+    upstreamSessionId: "owner-parent", modelProviderId: "zai-coding-plan", economyModelId: "glm-5-flash",
+    env: { VIBE64_WRAPPER: "/managed/owner-session-wrapper" }
+  }];
+  await writeFile(registryPath, JSON.stringify({ sessions }));
+  process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY = registryPath;
+  const parents = { child: "shared-parent", grandchild: "child", "owner-child": "owner-parent", loop: "loop" };
+  let reads = 0;
+  const plugin = await Vibe64SessionEnvironment({ client: { session: {
+    async get({ path: { id } }) {
+      reads += 1;
+      if (id === "broken") return { error: new Error("Unavailable") };
+      return { data: { id, parentID: parents[id] } };
+    }
+  } } });
+  for (const sessionID of ["shared-parent", "child", "grandchild"]) {
+    const command = { args: { command: "git status --short" } };
+    await plugin["tool.execute.before"]({ sessionID, tool: "bash" }, command);
+    assert.equal(command.args.command, wrappedCommand(sessions[0].env.VIBE64_WRAPPER, "git status --short"));
+    await plugin["tool.execute.before"]({ sessionID, tool: "bash" }, command);
+    assert.equal(command.args.command, wrappedCommand(sessions[0].env.VIBE64_WRAPPER, "git status --short"));
+    const history = { messages: [{ info: { sessionID }, parts: [{ type: "tool", tool: "bash", state: { input: command.args } }] }] };
+    await plugin["experimental.chat.messages.transform"]({}, history);
+    assert.equal(history.messages[0].parts[0].state.input.command, "git status --short");
+    await plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek" } });
+    const output = { message: { model: { providerID: "deepseek", modelID: "old-default" } } };
+    await plugin["chat.message"]({ sessionID, agent: "vibe64-economy-deepseek" }, output);
+    assert.deepEqual(output.message.model, { providerID: "deepseek", modelID: "chosen-helper" });
+    await plugin["chat.params"]({ sessionID, agent: "vibe64-economy-deepseek", model: { providerID: "deepseek", id: "chosen-helper" } }, {});
+    // Task filtering alone is insufficient: native @mentions can bypass it.
+    await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-economy-zai-coding-plan" } }), /selected AI account/u);
+    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-economy-zai-coding-plan" }, { message: {} }), /selected AI account/u);
+    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-economy-zai-coding-plan", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
+    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-economy-deepseek", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
+  }
+  await plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek", task_id: "grandchild" } });
+  const inherited = { system: ["Project guidance"] };
+  await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
+  await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
+  assert.equal(inherited.system.length, 2);
+  assert.match(inherited.system[1], /managed `git` and `gh` commands/u);
+  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek", task_id: "owner-child" } }), /does not belong/u);
+  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "general", task_id: "owner-child" } }), /does not belong/u);
+  await assert.rejects(plugin["chat.params"]({ sessionID: "grandchild", agent: "general", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
+  const owner = { message: {} };
+  await plugin["chat.message"]({ sessionID: "owner-child", agent: "vibe64-economy-zai-coding-plan" }, owner);
+  assert.equal(owner.message.model.providerID, "zai-coding-plan");
+  for (const sessionID of ["unknown", "loop"]) {
+    const output = { args: { command: "pwd" } };
+    await plugin["tool.execute.before"]({ sessionID, tool: "bash" }, output);
+    assert.match(output.args.command, /exit 126/u);
+    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-economy-deepseek" }, { message: {} }), /selected AI account/u);
+  }
+  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "broken", tool: "bash" }, { args: { command: "pwd" } }), /could not verify/u);
+  assert.ok(reads < 100, "Parent cycles must terminate");
+  sessions[0].economyModelId = "";
+  await writeFile(registryPath, JSON.stringify({ sessions }));
+  await assert.rejects(plugin["chat.message"]({ sessionID: "child", agent: "vibe64-economy-deepseek" }, { message: {} }), /selected AI account/u);
+});
