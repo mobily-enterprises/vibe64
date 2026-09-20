@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -106,12 +108,14 @@ function githubSession(root = "", sessionId = "github-session") {
 
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
+  logger = null,
   metadataReads = null,
   refreshGithub,
   runGatewayCommand
 } = {}) {
   return createCodexGitCommandService({
     authorizeActorAccess,
+    logger,
     projectService: {
       refreshGithub,
       async createSessionStore() {
@@ -392,6 +396,251 @@ test("Codex Git wrapper transports the complete command request", async () => {
     assert.equal(directChild.fallbackEndedInput, false);
     assert.equal(calls.length, 2);
     assert.equal(calls[1].inputBase64, "");
+  });
+});
+
+test("managed Git waits past five seconds and the executor stops work at its 30-second budget", { timeout: 60_000 }, async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = sessionSource(root, "command-deadline");
+    const cwd = session.metadata.source_path;
+    await mkdir(cwd, { recursive: true });
+    const calls = [];
+    const events = [];
+    let script = "setTimeout(() => process.stdout.write('slow success'), 6000)";
+    const service = serviceForSession(session, {
+      logger: { info: (fields) => events.push(fields), warn: (fields) => events.push(fields) },
+      runGatewayCommand(request) {
+        calls.push(request);
+        return runVibe64Command({ ...request, command: process.execPath, args: ["-e", script] });
+      }
+    });
+    const prepared = await prepareCodexGitCommand({
+      commandService: service,
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+      sessionId: session.sessionId,
+      stateRoot: root
+    });
+    const command = path.join(prepared.hostWrapperDir, "git");
+    const options = { cwd, env: { ...process.env, ...prepared.env } };
+    const slow = await runProcessWithInput(command, ["status"], options);
+    assert.equal(slow.exitCode, 0, slow.stderr);
+    assert.equal(slow.stdout, "slow success");
+    assert.equal(slow.stderr, "", "Successful output must not gain diagnostics");
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].timeout > 29_000 && calls[0].timeout <= 30_000);
+
+    script = "process.stdout.write(String(process.pid)); process.stderr.write('partial stderr'); setInterval(() => {}, 1000)";
+    const started = performance.now();
+    const timedOut = await runProcessWithInput(command, ["status"], options);
+    assert.ok(performance.now() - started >= 29_000, "The command gets the requested budget, not a five-second socket cutoff");
+    assert.equal(timedOut.exitCode, 1);
+    assert.match(timedOut.stderr, /partial stderr/u);
+    assert.match(timedOut.stderr, /vibe64_command_capture_timed_out: Managed Git command timed out/u);
+    assert.match(timedOut.stderr, /Check the result before retrying a write/u);
+    assert.doesNotMatch(timedOut.stderr, /Reconnect|auth.*unavailable/u);
+    const pid = Number(timedOut.stdout);
+    assert.ok(pid > 0);
+    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, "The process must be gone before the wrapper returns");
+    assert.equal(events.at(-1).stage, "command");
+    assert.equal(events.at(-1).timedOut, true);
+    assert.equal(events.at(-1).errorCode, "vibe64_command_capture_timed_out");
+    assert.ok(events.at(-1).executionId);
+    const diagnostic = JSON.parse(timedOut.stderr.match(/Managed Git diagnostic: (.+)\n/u)[1]);
+    assert.equal(diagnostic.stage, "command");
+    assert.equal(diagnostic.budgetMs, 30_000);
+    assert.equal(diagnostic.commandSubmitted, true);
+    assert.equal(diagnostic.executionId, events.at(-1).executionId);
+    assert.ok(diagnostic.elapsedMs >= 29_000);
+    assert.match(timedOut.stderr, /effects are unconfirmed/u);
+
+    script = "process.stdout.write('still connected')";
+    const next = await runProcessWithInput(command, ["status"], options);
+    assert.equal(next.exitCode, 0, next.stderr);
+    assert.equal(next.stdout, "still connected");
+    assert.equal(calls.length, 3, "No command is retried automatically");
+  });
+});
+
+test("GitHub credential lookup shares the budget and timeouts are not reported as missing authentication", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root, "shared-deadline");
+    await mkdir(session.metadata.source_path, { recursive: true });
+    let now = 0;
+    t.mock.method(performance, "now", () => now);
+    let tokenDuration = 6000;
+    let tokenTimedOut = false;
+    const calls = [];
+    const events = [];
+    const service = serviceForSession(session, {
+      logger: { info: (fields) => events.push(fields), warn: (fields) => events.push(fields) },
+      async runGatewayCommand(request) {
+        calls.push(request);
+        if (request.args[0] === "auth") {
+          now += tokenDuration;
+          return tokenTimedOut
+            ? { ok: false, timedOut: true, code: "vibe64_command_capture_timed_out", stdout: "partial-secret", execution: { id: "token-execution" } }
+            : { ok: true, stdout: "test-token" };
+        }
+        return { ok: true, exitCode: 0, stdout: "done" };
+      }
+    });
+    const input = { command: "gh", args: ["issue", "view", "43"], sessionId: session.sessionId };
+    assert.equal((await service.run(input)).ok, true);
+    assert.deepEqual(calls.map(({ timeout }) => timeout), [30_000, 24_000]);
+
+    calls.length = 0;
+    tokenDuration = 30_000;
+    const exhausted = await service.run(input);
+    assert.equal(exhausted.timedOut, true);
+    assert.equal(exhausted.code, "vibe64_codex_git_command_timed_out");
+    assert.equal(exhausted.diagnostic.commandSubmitted, false);
+    assert.equal(exhausted.diagnostic.stage, "command");
+    assert.equal(exhausted.diagnostic.budgetMs, 30_000);
+    assert.equal(exhausted.diagnostic.executionId, null);
+    assert.equal(calls.length, 1, "An expired budget must not start the requested command");
+
+    calls.length = 0;
+    tokenTimedOut = true;
+    const failedToken = await service.run(input);
+    assert.equal(failedToken.timedOut, true);
+    assert.equal(failedToken.code, "vibe64_command_capture_timed_out");
+    assert.equal(calls.length, 1);
+    assert.equal(events.at(-1).stage, "github-token");
+    assert.equal(events.at(-1).executionId, "token-execution");
+    assert.doesNotMatch(JSON.stringify([failedToken, events]), /partial-secret|test-token/u);
+  });
+});
+
+test("model-visible Git failures retain their stage, budget, execution reference and submission state", async () => {
+  await withTemporaryRoot(async (root) => {
+    const scenarios = [
+      { name: "token-timeout", stage: "github-token", commandSubmitted: false, callCount: 1 },
+      { name: "auth-rejected", stage: "github-token", commandSubmitted: false, callCount: 1 },
+      { name: "command-timeout", stage: "command", commandSubmitted: true, callCount: 2 },
+      { name: "access-revoked", stage: "authorization", commandSubmitted: false, callCount: 0 }
+    ];
+    for (const { name: scenario, stage, commandSubmitted, callCount } of scenarios) {
+      const session = githubSession(root, scenario);
+      await mkdir(session.metadata.source_path, { recursive: true });
+      const calls = [];
+      const service = serviceForSession(session, {
+        authorizeActorAccess: async () => scenario === "access-revoked"
+          ? { ok: false, error: "Project access was revoked." }
+          : { ok: true },
+        async runGatewayCommand(request) {
+          calls.push(request);
+          const tokenLookup = request.args[0] === "auth";
+          if (tokenLookup && scenario === "command-timeout") return { ok: true, stdout: "private-test-token" };
+          return {
+            ok: false,
+            exitCode: 1,
+            timedOut: scenario !== "auth-rejected",
+            code: scenario === "auth-rejected" ? "token_access_denied" : "vibe64_command_capture_timed_out",
+            stdout: tokenLookup ? "private-test-token" : "partial command output",
+            stderr: tokenLookup ? "Credential lookup was denied." : "partial command stderr",
+            execution: { id: `${scenario}-execution` }
+          };
+        }
+      });
+      const prepared = await prepareCodexGitCommand({
+        commandService: service,
+        env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+        sessionId: session.sessionId,
+        stateRoot: root
+      });
+      const result = await runProcessWithInput(path.join(prepared.hostWrapperDir, "gh"), ["issue", "comment", "43"], {
+        cwd: session.metadata.source_path,
+        env: { ...process.env, ...prepared.env }
+      });
+      assert.equal(result.exitCode, 1, scenario);
+      const diagnostic = JSON.parse(result.stderr.match(/Managed Git diagnostic: (.+)\n/u)[1]);
+      assert.equal(diagnostic.budgetMs, 30_000);
+      assert.ok(diagnostic.elapsedMs >= 0);
+      assert.equal(diagnostic.executionId, scenario === "access-revoked" ? null : `${scenario}-execution`);
+      assert.equal(diagnostic.stage, stage);
+      assert.equal(diagnostic.commandSubmitted, commandSubmitted);
+      assert.equal(calls.length, callCount);
+      assert.doesNotMatch(result.stderr + result.stdout, /private-test-token|Reconnect/u);
+      if (scenario === "command-timeout") {
+        assert.match(result.stderr, /Managed Git command timed out/u);
+        assert.match(result.stderr, /effects are unconfirmed.*Check the result before retrying a write/u);
+        assert.match(result.stderr, /partial command stderr/u);
+        assert.equal(result.stdout, "partial command output");
+      } else {
+        assert.match(result.stderr, /The requested command was not submitted/u);
+        assert.doesNotMatch(result.stderr, /effects are unconfirmed/u);
+        assert.equal(result.stdout, "");
+      }
+      if (scenario === "token-timeout") {
+        assert.match(result.stderr, /GitHub credential lookup timed out/u);
+        assert.doesNotMatch(result.stderr, /github_auth_unavailable|Credential lookup was denied/u);
+      }
+      if (scenario === "auth-rejected") {
+        assert.match(result.stderr, /vibe64_codex_git_command_github_auth_unavailable: Credential lookup was denied/u);
+        assert.equal(diagnostic.code, "token_access_denied");
+      }
+    }
+  });
+});
+
+test("Git wrapper distinguishes absent control, stale identity and a lost command response", async () => {
+  await withTemporaryRoot(async (root) => {
+    const prepared = await prepareCodexGitCommand({
+      commandService: { run: async () => ({ ok: true, exitCode: 0, stdout: "connected" }) },
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+      sessionId: "transport-diagnostics",
+      stateRoot: root
+    });
+    const command = path.join(prepared.hostWrapperDir, "gh");
+    const options = { cwd: root, env: { ...process.env, ...prepared.env } };
+    const refusedSocket = path.join(root, "not-a-socket");
+    await writeFile(refusedSocket, "not a socket");
+    for (const [override, expected] of [
+      [{ VIBE64_CODEX_GIT_COMMAND_SOCKET: path.join(root, "missing.sock") }, /connection failed \(ENOENT\)/u],
+      [{ VIBE64_CODEX_GIT_COMMAND_SOCKET: refusedSocket }, /connection failed \((?:ECONNREFUSED|ENOTSOCK)\)/u],
+      [{ VIBE64_CODEX_GIT_COMMAND_TOKEN: "" }, /identity is unavailable/u],
+      [{ VIBE64_CODEX_GIT_COMMAND_GENERATION: "stale" }, /generation is no longer current/u]
+    ]) {
+      const result = await runProcessWithInput(command, ["issue", "view", "43"], { ...options, env: { ...options.env, ...override } });
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, expected);
+      assert.match(result.stderr, /The requested command was not submitted/u);
+      assert.doesNotMatch(result.stderr, /command timed out/u);
+    }
+    let calls = 0;
+    const server = http.createServer((request, response) => {
+      calls += 1;
+      request.resume();
+      if (calls === 1) request.socket.destroy();
+      else if (calls === 2) response.end(JSON.stringify({ ok: true, exitCode: 0, stdout: "recovered" }));
+      else response.end(calls === 3 ? "invalid response" : "{}");
+    });
+    const socketPath = path.join(root, "dropped.sock");
+    server.listen(socketPath);
+    await once(server, "listening");
+    try {
+      options.env.VIBE64_CODEX_GIT_COMMAND_SOCKET = socketPath;
+      const lost = await runProcessWithInput(command, ["issue", "view", "43"], options);
+      assert.equal(lost.exitCode, 1);
+      assert.match(lost.stderr, /vibe64_codex_git_command_transport_lost.*ECONNRESET/u);
+      assert.match(lost.stderr, /outcome is unknown/u);
+      assert.doesNotMatch(lost.stderr, /Reconnect/u);
+      assert.equal(calls, 1);
+      const recovered = await runProcessWithInput(command, ["issue", "view", "43"], options);
+      assert.equal(recovered.exitCode, 0, recovered.stderr);
+      assert.equal(recovered.stdout, "recovered");
+      for (const expected of [/unreadable response/u, /incomplete response/u]) {
+        const invalid = await runProcessWithInput(command, ["issue", "view", "43"], options);
+        assert.equal(invalid.exitCode, 1);
+        assert.match(invalid.stderr, /vibe64_codex_git_command_response_invalid/u);
+        assert.match(invalid.stderr, expected);
+        assert.match(invalid.stderr, /outcome is unknown.*Check the result before retrying a write/u);
+        assert.doesNotMatch(invalid.stderr, /not submitted|Reconnect/u);
+      }
+      assert.equal(calls, 4, "Invalid responses must not trigger automatic retries");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
 
@@ -689,6 +938,8 @@ test("Codex reports the underlying GitHub token lookup failure", async () => {
         return {
           exitCode: 2,
           ok: false,
+          code: "vibe64_command_capture_failed",
+          execution: { id: "failed-token-lookup" },
           stderr: "GitHub token lookup failed in the user home."
         };
       }
@@ -702,6 +953,8 @@ test("Codex reports the underlying GitHub token lookup failure", async () => {
 
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_codex_git_command_github_auth_unavailable");
+    assert.equal(result.errorCode, "vibe64_command_capture_failed");
+    assert.equal(result.executionId, "failed-token-lookup");
     assert.equal(result.error, "GitHub token lookup failed in the user home.");
   });
 });

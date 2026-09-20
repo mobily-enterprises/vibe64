@@ -49,7 +49,7 @@ import {
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
 const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-github"]);
 const CODEX_GIT_COMMAND_INPUT_MAX_BYTES = 20 * 1024 * 1024;
-const CODEX_GIT_COMMAND_TIMEOUT_MS = 120_000;
+const CODEX_GIT_COMMAND_TIMEOUT_MS = 30_000;
 const CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS = 2000;
 const CODEX_LOCAL_GIT_OPERATIONS = new Set([
   "add",
@@ -238,6 +238,7 @@ function readStdinBase64() {
 function requestSocket({ body, socketPath }) {
   const requestBody = JSON.stringify(body);
   return new Promise((resolve, reject) => {
+    let connected = false;
     const request = http.request({
       headers: {
         "Content-Length": Buffer.byteLength(requestBody),
@@ -245,8 +246,7 @@ function requestSocket({ body, socketPath }) {
       },
       method: "POST",
       path: "/codex-git-command/run",
-      socketPath,
-      timeout: 5000
+      socketPath
     }, (response) => {
       let text = "";
       response.setEncoding("utf8");
@@ -257,12 +257,31 @@ function requestSocket({ body, socketPath }) {
         statusCode: response.statusCode,
         text
       }));
+      response.once("error", rejectTransport);
     });
-    request.once("error", reject);
-    request.once("timeout", () => {
-      const error = new Error("Managed Git control timed out.");
+    // Only connection establishment has a transport deadline. The executor
+    // owns the command budget and must finish cleanup before returning a result.
+    const connectionTimer = setTimeout(() => {
+      const error = new Error("Managed Git control connection timed out.");
       error.code = "ETIMEDOUT";
       request.destroy(error);
+    }, ${CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS});
+    function rejectTransport(error) {
+      clearTimeout(connectionTimer);
+      error.controlConnected = connected;
+      reject(error);
+    }
+    request.once("error", rejectTransport);
+    request.once("socket", (socket) => {
+      const onConnect = () => {
+        connected = true;
+        clearTimeout(connectionTimer);
+      };
+      if (socket.connecting) {
+        socket.once("connect", onConnect);
+      } else {
+        onConnect();
+      }
     });
     request.end(requestBody);
   });
@@ -282,7 +301,7 @@ const noStdinParentPid = Number.parseInt(
 );
 
 if (!socketPath || !sessionId || !token || !generationId) {
-  fail("vibe64_agent_control_unavailable: Managed Git control identity is unavailable. Reconnect the assistant.");
+  fail("vibe64_agent_control_unavailable: Managed Git control identity is unavailable. The requested command was not submitted. Reconnect the assistant.");
 }
 
 const inputBase64 = command === "vibe64-github" || noStdinParentPid === process.ppid
@@ -300,8 +319,12 @@ const response = await requestSocket({
     token
   }
 }).catch((error) => {
-  if (["ECONNREFUSED", "ENOENT", "ENOTSOCK", "ETIMEDOUT"].includes(String(error?.code || ""))) {
-    fail("vibe64_agent_control_unavailable: Managed Git control is unavailable. Reconnect the assistant.");
+  const code = String(error?.code || "UNKNOWN");
+  if (error.controlConnected) {
+    fail("vibe64_codex_git_command_transport_lost: Managed Git command response was lost (" + code + "). Its outcome is unknown. Check the result before retrying a write.");
+  }
+  if (["ECONNREFUSED", "ENOENT", "ENOTSOCK", "ETIMEDOUT"].includes(code)) {
+    fail("vibe64_agent_control_unavailable: Managed Git control connection failed (" + code + "). The requested command was not submitted. Reconnect the assistant.");
   }
   fail(error?.message || error || "Codex git command request failed.");
 });
@@ -310,7 +333,10 @@ let payload = {};
 try {
   payload = JSON.parse(response.text || "{}");
 } catch {
-  fail(response.text || "Codex git command returned invalid JSON.");
+  fail("vibe64_codex_git_command_response_invalid: Managed Git returned an unreadable response. Its outcome is unknown. Check the result before retrying a write.");
+}
+if (!payload || typeof payload !== "object" || Array.isArray(payload) || typeof payload.ok !== "boolean") {
+  fail("vibe64_codex_git_command_response_invalid: Managed Git returned an incomplete response. Its outcome is unknown. Check the result before retrying a write.");
 }
 
 if (payload.stdout) {
@@ -319,11 +345,23 @@ if (payload.stdout) {
 if (payload.stderr) {
   process.stderr.write(Buffer.from(String(payload.stderr), payload.outputEncoding === "base64" ? "base64" : "utf8"));
 }
-if (payload.ok === false && !payload.stderr && payload.error && payload.code !== "vibe64_codex_git_command_failed") {
-  const prefix = payload.code === "vibe64_agent_control_unavailable"
-    ? "vibe64_agent_control_unavailable: "
-    : "";
+const timedOut = payload.timedOut === true;
+const hasPlatformFailure = payload.ok === false && (timedOut || payload.code !== "vibe64_codex_git_command_failed");
+if (timedOut) {
+  process.stderr.write(String(payload.code || "vibe64_codex_git_command_timed_out") + ": " + String(payload.error || "Managed Git command timed out.") + "\\n");
+} else if (hasPlatformFailure && !payload.stderr && payload.error) {
+  const prefix = payload.code ? String(payload.code) + ": " : "";
   process.stderr.write(prefix + String(payload.error) + "\\n");
+}
+if (hasPlatformFailure) {
+  if (payload.diagnostic) {
+    process.stderr.write("Managed Git diagnostic: " + JSON.stringify(payload.diagnostic) + "\\n");
+  }
+  if (payload.diagnostic?.commandSubmitted === false) {
+    process.stderr.write("The requested command was not submitted.\\n");
+  } else if (timedOut) {
+    process.stderr.write("The command's effects are unconfirmed. Check the result before retrying a write.\\n");
+  }
 }
 
 const exitCode = Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
@@ -579,13 +617,20 @@ async function readGithubToken({
     timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
     userKey
   });
+  if (result?.timedOut === true) {
+    return responseError(
+      "GitHub credential lookup timed out.",
+      result.code || "vibe64_codex_git_command_timed_out",
+      { exitCode: 1, signal: result.signal || "", timedOut: true, executionId: result.execution?.id }
+    );
+  }
   const token = result?.ok === true ? normalizeText(result.stdout) : "";
   if (!token) {
     const error = normalizeText(result?.stderr || result?.error);
     return responseError(
       error || "GitHub authentication is not ready for this Vibe64 account.",
       "vibe64_codex_git_command_github_auth_unavailable",
-      { statusCode: 403 }
+      { statusCode: 403, errorCode: result?.code, executionId: result?.execution?.id }
     );
   }
   return {
@@ -609,6 +654,7 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
     cwd: normalizeText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
     errorCode: normalizeText(result?.errorCode || result?.code),
+    executionId: normalizeText(result?.executionId),
     event: "vibe64.codex_git_command.finished",
     exitCode: Number(result?.exitCode ?? (ok ? 0 : 1)),
     outputTail,
@@ -618,6 +664,7 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
     signal: normalizeText(result?.signal),
     source: normalizeText(fields.actorSource),
     sourceRoot: normalizeText(fields.workdir || fields.cwd),
+    stage: normalizeText(fields.stage),
     stderrTail,
     stdoutTail,
     timedOut: result?.timedOut === true,
@@ -724,6 +771,9 @@ function createCodexGitCommandService({
 
   async function run(input = {}) {
     const startedAtMs = Date.now();
+    const startedAt = performance.now();
+    let stage = "session";
+    let commandSubmitted = false;
     const command = normalizeText(input.command);
     let args = Array.isArray(input.args) ? input.args.map((arg) => String(arg)) : [];
     const sessionId = normalizeText(input.sessionId);
@@ -737,9 +787,36 @@ function createCodexGitCommandService({
       logGitCommandResult(logger, result, {
         ...baseFields,
         ...fields,
+        stage,
         durationMs: Date.now() - startedAtMs
       });
-      return result;
+      if (result.ok !== false) {
+        return result;
+      }
+      return {
+        ...result,
+        diagnostic: {
+          stage,
+          ...(command === "vibe64-github" ? {} : { budgetMs: CODEX_GIT_COMMAND_TIMEOUT_MS, commandSubmitted }),
+          elapsedMs: Math.round(performance.now() - startedAt),
+          code: normalizeText(result.errorCode || result.code),
+          executionId: normalizeText(result.executionId) || null
+        }
+      };
+    };
+    const runWithinBudget = (request) => {
+      const timeout = Math.floor(CODEX_GIT_COMMAND_TIMEOUT_MS - (performance.now() - startedAt));
+      if (timeout <= 0) {
+        return Promise.resolve(responseError(
+          "Managed Git command exhausted its 30-second execution budget.",
+          "vibe64_codex_git_command_timed_out",
+          { exitCode: 1, timedOut: true }
+        ));
+      }
+      if (stage === "command") {
+        commandSubmitted = true;
+      }
+      return gatewayCommandRunner({ ...request, timeout });
     };
     if (!CODEX_GIT_COMMAND_WRAPPER_NAMES.includes(command)) {
       return finish(responseError("This command path exposes git, gh and vibe64-github.", "vibe64_codex_git_command_invalid"));
@@ -773,6 +850,7 @@ function createCodexGitCommandService({
         ? projectService.authorizeCodexGitActorAccess.bind(projectService)
         : null;
     if (actor.githubRequired !== false && authorize) {
+      stage = "authorization";
       const access = await authorize({
         actor,
         session,
@@ -793,6 +871,7 @@ function createCodexGitCommandService({
       }
     }
     if (command === "vibe64-github") {
+      stage = "github-helper";
       const usage = "Usage: vibe64-helper github refresh";
       if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
         return finish({ ok: true, exitCode: 0, stdout: `${usage}\n` }, actor);
@@ -808,6 +887,7 @@ function createCodexGitCommandService({
       }, actor);
     }
     const requiresGithubToken = actor.githubRequired !== false && commandRequiresGithubToken(command, args);
+    stage = "github-account";
     const toolHome = actor.githubRequired === false || !requiresGithubToken
       ? localGitCommandToolHome()
       : await resolveGithubHomeForStoredActor({
@@ -818,10 +898,11 @@ function createCodexGitCommandService({
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
     }
+    stage = "github-token";
     const githubToken = requiresGithubToken
       ? await readGithubToken({
           actor,
-          gatewayCommandRunner,
+          gatewayCommandRunner: runWithinBudget,
           session,
           toolHome
         })
@@ -833,7 +914,8 @@ function createCodexGitCommandService({
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
-    const result = await gatewayCommandRunner({
+    stage = "command";
+    const result = await runWithinBudget({
       actor: "app",
       allowedRoots: [
         actor.sourceRoot
@@ -867,12 +949,18 @@ function createCodexGitCommandService({
         sessionId,
         sourcePath: actor.sourceRoot
       },
-      timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
       userKey: gatewayUserKey
     });
+    let error = "";
+    if (result.timedOut && commandSubmitted) {
+      error = "Managed Git command timed out.";
+    } else if (!result.ok) {
+      error = commandOutput(result);
+    }
     return finish({
       code: result.ok ? "" : result.code || "vibe64_codex_git_command_failed",
-      error: result.ok ? "" : commandOutput(result),
+      error,
+      executionId: result.execution?.id,
       exitCode: Number(result.exitCode ?? (result.ok ? 0 : 1)),
       ok: result.ok === true,
       outputEncoding: result.outputEncoding || "utf8",
@@ -945,7 +1033,8 @@ async function replaceCodexGitCommandServer({
         ) {
           sendJsonCommandResponse(response, 409, responseError(
             "Managed Git control generation is no longer current. Reconnect the assistant.",
-            "vibe64_agent_control_unavailable"
+            "vibe64_agent_control_unavailable",
+            { diagnostic: { stage: "control", commandSubmitted: false, executionId: null } }
           ));
           return;
         }

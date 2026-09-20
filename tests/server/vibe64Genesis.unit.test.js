@@ -225,6 +225,27 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   );
 });
 
+test("managed Git reporting rules distinguish confirmed work, unattempted actions and unknown effects", () => {
+  for (const conversationKind of ["main", "temporary"]) {
+    const input = {
+      conversationKind,
+      scope: "session",
+      session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: true, managedPreview: false }
+    };
+    const context = vibe64Driver(input);
+    assert.match(context, /which requested action failed, which earlier work is confirmed complete, what remains undone or unconfirmed, and the next safe action/u);
+    assert.match(context, /failure stage, execution budget and execution reference/u);
+    assert.match(context, /does not establish invalid authentication, exhausted AI quota, a GitHub outage or a suspension problem/u);
+    assert.match(context, /Separate recorded facts from hypotheses; say the cause is unknown/u);
+    assert.match(context, /Recommend reconnection only when the reported error explicitly calls for it/u);
+    assert.match(context, /commandSubmitted=false, the requested Git\/GitHub action was not attempted/u);
+    assert.match(context, /read-only check.*before repeating any write/u);
+    assert.match(context, /Never claim that a comment was posted or not posted/u);
+    assert.match(context, /If verification is unavailable, report the outcome as unknown and stop/u);
+    assert.doesNotMatch(vibe64Driver({ ...input, session: { ...input.session, managedGit: false } }), /commandSubmitted|which requested action failed/u);
+  }
+});
+
 test("Genesis initialization creates its complete technology-neutral project", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await initializeGit(projectRoot);
@@ -285,6 +306,9 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(composed.output, /temporary conversation in the selected session worktree/u);
     assert.match(composed.output, /vibe64-helper env set/u);
     assert.match(composed.output, /vibe64-helper database refresh/u);
+    assert.match(composed.output, /which earlier work is confirmed complete/u);
+    assert.match(composed.output, /commandSubmitted=false/u);
+    assert.match(composed.output, /Separate recorded facts from hypotheses/u);
     assert.doesNotMatch(composed.output, /do not edit files or run state-changing commands|only for inspection/u);
   });
 });

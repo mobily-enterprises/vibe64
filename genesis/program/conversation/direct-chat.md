@@ -383,6 +383,41 @@ logs decode the transport without changing the returned streams. Display-only
 combined output may still be trimmed. Genesis verification therefore remains
 current across repeated checks until relevant source or its contract changes.
 
+Managed `git` and `gh` share a thirty-second budget across credential lookup and
+the requested command. The command service deducts elapsed preparation and lookup
+time before each gateway call and refuses to start the next call after expiry.
+The existing execution gateway owns termination and verified cleanup; admission
+and cleanup can extend wall-clock response time. The Unix socket wrapper limits
+connection establishment to the existing two-second health budget, with no
+competing response-inactivity timeout. An executor timeout stays a timeout,
+including during credential lookup. Missing control preserves its transport
+errno, stale identity remains distinct, and a lost connected response explicitly
+leaves the command outcome unknown. No command is retried automatically. Timeout
+diagnostics are appended even when a failed command emitted stderr. The existing
+completion event records the stage, timeout flag, underlying failure code and
+execution identity when available; credential output is never returned or logged.
+Platform-failure stderr also carries a bounded diagnostic with that stage,
+underlying code, thirty-second budget, elapsed time and execution reference
+(explicitly null when none exists). `commandSubmitted=false` proves the requested
+Git/gh action never reached the executor; true records submission, not successful
+startup or completion. Credential-lookup timeouts retain their specific message.
+Expired pre-submission budgets likewise report that the requested command was not
+submitted. Execution timeouts and lost, unreadable or incomplete responses leave
+effects unconfirmed and require a read-only state check before repeating a write.
+Malformed response envelopes cannot become successful empty command results.
+Success and ordinary Git nonzero exits retain their original byte streams;
+platform failures append the diagnostic without replacing captured output.
+
+The provider-neutral managed Git session instructions require user-facing
+reports to name the failed action, earlier confirmed work, remaining undone or
+unconfirmed work and the next safe step. They retain supplied diagnostic references
+and distinguish facts from hypotheses, without inferring an authentication,
+quota, GitHub-service or suspension cause from a timeout. Reconnection is suggested
+only when the reported error calls for it. Main and temporary chats receive the
+same rule through their existing context lifecycle; no extra model turn or
+automatic retry is introduced. Contract tests verify the supplied instructions,
+not that every generated model reply will follow them.
+
 The conversation accepts messages, structured answers, attachments, and
 steering guidance. It streams commentary and the final response, persists the
 conversation in order, restores it after reconnection, and lets the person

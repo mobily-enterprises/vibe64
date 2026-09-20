@@ -465,6 +465,15 @@ can create a session.
 
 Vibe64 preserves the exact output of managed Git commands so file discovery,
 binary content, and verification checks see the same data as ordinary Git.
+Managed Git and GitHub commands share a thirty-second execution budget with
+their credential lookup. A slow command is not reported as a disconnected
+assistant. Vibe64 waits for execution cleanup before returning its result,
+distinguishes connection failures from timeouts, and never automatically repeats
+a write whose result is unknown.
+When such work fails, the assistant identifies the affected action, confirmed
+completed work, what remains undone or unconfirmed, and the next safe step.
+It distinguishes an action that was never attempted from one whose effects
+need checking, and does not present an unproven cause as a diagnosis.
 It manages project access, credentials, development environments, application processes, previews,
 browser identities, and attachments without putting private machine state into
 the project. Chat attachments have readable image or file references for every

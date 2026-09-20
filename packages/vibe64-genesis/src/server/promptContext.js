@@ -126,7 +126,10 @@ function sessionDriverOutput(input) {
     ...(session.managedGit ? [
       "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
       "After changing GitHub issues, comments, labels or pull requests, run `vibe64-helper github refresh` once so Vibe64's Issues/PR view reflects it.",
-      "Report authentication or transport failures directly; do not inspect credentials or invent another login path."
+      "Report authentication or transport failures directly; do not inspect credentials or invent another login path.",
+      "When a managed Git/GitHub command fails, tell the user which requested action failed, which earlier work is confirmed complete, what remains undone or unconfirmed, and the next safe action. Retain the reported failure stage, execution budget and execution reference when provided; do not expose credentials or dump raw output unnecessarily.",
+      "A timeout or transport failure does not establish invalid authentication, exhausted AI quota, a GitHub outage or a suspension problem. Separate recorded facts from hypotheses; say the cause is unknown when it is unproven. Recommend reconnection only when the reported error explicitly calls for it.",
+      "If the diagnostic says commandSubmitted=false, the requested Git/GitHub action was not attempted. After an execution timeout, lost response or unreadable response, its effects remain unconfirmed: use a read-only check of the affected Git/GitHub state before repeating any write. Never claim that a comment was posted or not posted, or that a push succeeded or failed, solely from those errors. If verification is unavailable, report the outcome as unknown and stop; do not repeat the write or claim it was safely rolled back."
     ] : [])
   ];
   return lines.join("\n");
