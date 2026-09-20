@@ -1,9 +1,10 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 
-const ISSUE_FIELDS = `number title body url state stateReason createdAt updatedAt
-  author { login } viewerCanClose viewerCanReopen locked
+const ISSUE_FIELDS = `id number title body url state stateReason createdAt updatedAt
+  author { login } viewerCanClose viewerCanReopen viewerCanUpdate locked
   labels(first:100) { nodes { name color description } }`;
+const COMMENT_FIELDS = "id body createdAt author { login } viewerCanUpdate";
 const ISSUE_LIST_FIELDS = `number title url state updatedAt author { login } comments { totalCount }
   labels(first:10) { totalCount nodes { name color description } }`;
 const PAGE_INFO = "pageInfo { hasNextPage endCursor }";
@@ -60,7 +61,7 @@ async function repositoryLabels(api, owner, name) {
       query: `query($owner:String!, $name:String!, $cursor:String) {
         repository(owner:$owner, name:$name) {
           viewerPermission labels(first:100, after:$cursor, orderBy:{field:NAME, direction:ASC}) {
-            nodes { name color description } ${PAGE_INFO}
+            nodes { id name color description } ${PAGE_INFO}
           }
         }
       }`,
@@ -86,11 +87,11 @@ async function repositoryLabels(api, owner, name) {
 export async function githubIssues(project, input = {}, options = {}) {
   const fullName = requireGithubRepository(project, "Issues");
   const operation = input.operation || "list";
-  if (!["list", "read", "comment", "state", "create", "labels", "set-labels", "mentions"].includes(operation)) {
+  if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "set-labels", "mentions"].includes(operation)) {
     throw vibe64Error("Unknown issue action.", "vibe64_issue_input_invalid");
   }
   const number = Number(input.number);
-  if ((["read", "comment", "state", "set-labels"].includes(operation) || (operation === "mentions" && input.number != null)) &&
+  if ((["read", "comment", "edit-comment", "edit", "state", "set-labels"].includes(operation) || (operation === "mentions" && input.number != null)) &&
       (!Number.isSafeInteger(number) || number < 1)) {
     throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
   }
@@ -100,12 +101,19 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (!["open", "closed", "all"].includes(state) || search.length > 200 ||
       (cursor !== null && (typeof cursor !== "string" || cursor.length > 500)) ||
       (operation === "state" && !["open", "closed"].includes(input.state)) ||
-      (operation === "comment" && (typeof input.body !== "string" || !input.body.trim() || input.body.length > 65536))) {
+      (["comment", "edit-comment"].includes(operation) && (typeof input.body !== "string" || !input.body.trim() || input.body.length > 65536))) {
     throw vibe64Error("Check the issue filters or comment and try again.", "vibe64_issue_input_invalid");
   }
-  if (operation === "create" && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
+  if (["create", "edit"].includes(operation) && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)))) {
     throw vibe64Error("Enter an issue title and a description of up to 65,536 characters.", "vibe64_issue_input_invalid");
+  }
+  if (operation === "edit-comment" && (typeof input.commentId !== "string" || !input.commentId.trim() || input.commentId.length > 256)) {
+    throw vibe64Error("Choose a valid comment.", "vibe64_issue_input_invalid");
+  }
+  const labelMode = input.labelMode ?? "replace";
+  if (operation === "set-labels" && !["replace", "add", "remove"].includes(labelMode)) {
+    throw vibe64Error("Choose whether to add, remove or replace labels.", "vibe64_issue_input_invalid");
   }
   let selectedLabels = input.labels;
   if (["create", "list"].includes(operation)) selectedLabels ??= [];
@@ -126,6 +134,7 @@ export async function githubIssues(project, input = {}, options = {}) {
   });
   const [owner, name] = fullName.split("/");
   if (operation === "mentions") return issueMentionUsers(api, owner, name, input.number == null ? null : number);
+  let labelIds;
   if (operation === "labels" || operation === "set-labels" || (operation === "create" && selectedLabels.length)) {
     const catalog = await repositoryLabels(api, owner, name);
     if (operation === "labels") return { ok: true, ...catalog };
@@ -137,6 +146,7 @@ export async function githubIssues(project, input = {}, options = {}) {
     if (selectedLabels.some((label) => !names.has(label))) {
       throw vibe64Error("A selected label is no longer available. Reload the labels and try again.", "vibe64_issue_input_invalid");
     }
+    labelIds = catalog.labels.filter((label) => selectedLabels.includes(label.name)).map((label) => label.id);
   }
   if (operation === "create") {
     const created = await api(`repos/${fullName}/issues`, {
@@ -203,11 +213,31 @@ export async function githubIssues(project, input = {}, options = {}) {
       total: useSearch ? list.issueCount : list.totalCount,
       pageInfo: list.pageInfo, searchLimit: useSearch ? 1000 : null };
   }
+  if (operation === "edit-comment") {
+    const result = await api("graphql", {
+      query: `query($id:ID!) { node(id:$id) { ... on IssueComment {
+        viewerCanUpdate issue { number repository { nameWithOwner } }
+      } } }`, variables: { id: input.commentId }
+    });
+    const comment = result.data?.node;
+    if (comment?.issue?.number !== number || comment.issue.repository?.nameWithOwner?.toLowerCase() !== fullName.toLowerCase()) {
+      throw vibe64Error("This comment is unavailable on this issue.", "vibe64_issue_not_found");
+    }
+    if (!comment.viewerCanUpdate) {
+      throw vibe64Error("Your GitHub account cannot edit this comment.", "vibe64_issue_permission_denied");
+    }
+    const updated = await api("graphql", {
+      query: `mutation($input:UpdateIssueCommentInput!) {
+        updateIssueComment(input:$input) { issueComment { ${COMMENT_FIELDS} } }
+      }`, variables: { input: { id: input.commentId, body: input.body } }
+    });
+    return { ok: true, comment: updated.data.updateIssueComment.issueComment };
+  }
   const result = await api("graphql", {
     query: `query($owner:String!, $name:String!, $number:Int!, $cursor:String) {
       repository(owner:$owner, name:$name) { viewerPermission issue(number:$number) {
         ${ISSUE_FIELDS} comments(last:25, before:$cursor) {
-          totalCount pageInfo { hasPreviousPage startCursor } nodes { id body createdAt author { login } }
+          totalCount pageInfo { hasPreviousPage startCursor } nodes { ${COMMENT_FIELDS} }
         }
       } }
     }`, variables: { owner, name, number, cursor }
@@ -219,7 +249,23 @@ export async function githubIssues(project, input = {}, options = {}) {
     return { ok: true, repository: fullName, issue: { ...issue, canEditLabels } };
   }
   if (operation === "set-labels") {
-    await api(`repos/${fullName}/issues/${number}/labels`, { labels: selectedLabels }, "PUT");
+    if (labelMode === "replace") {
+      await api(`repos/${fullName}/issues/${number}/labels`, { labels: selectedLabels }, "PUT");
+    } else if (labelIds.length) {
+      const mutation = labelMode === "add" ? "addLabelsToLabelable" : "removeLabelsFromLabelable";
+      const inputType = labelMode === "add" ? "AddLabelsToLabelableInput" : "RemoveLabelsFromLabelableInput";
+      await api("graphql", {
+        query: `mutation($input:${inputType}!) { ${mutation}(input:$input) { clientMutationId } }`,
+        variables: { input: { labelableId: issue.id, labelIds } }
+      });
+    }
+    return { ok: true, issue: { number } };
+  }
+  if (operation === "edit") {
+    if (!issue.viewerCanUpdate) {
+      throw vibe64Error("Your GitHub account cannot edit this issue.", "vibe64_issue_permission_denied");
+    }
+    await api(`repos/${fullName}/issues/${number}`, { title: input.title.trim(), body: input.body || "" }, "PATCH");
     return { ok: true, issue: { number } };
   }
   if (operation === "state") {

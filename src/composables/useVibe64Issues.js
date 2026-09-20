@@ -89,8 +89,11 @@ export function useVibe64Issues(context) {
       issueLabel: nextLabels?.length ? nextLabels : undefined,
       issueCursor: undefined, issue: undefined });
   }
+  function issueUpdated({ number: issueNumber, basePath: requestBasePath }) {
+    return invalidateGithubIssueQueries(queryClient, requestBasePath, `${requestBasePath}/${issueNumber}`);
+  }
   async function issueSaved({ number: issueNumber, basePath: requestBasePath }) {
-    await invalidateGithubIssueQueries(queryClient, requestBasePath, `${requestBasePath}/${issueNumber}`);
+    await issueUpdated({ number: issueNumber, basePath: requestBasePath });
     if (basePath.value === requestBasePath) await navigate({ issue: String(issueNumber) });
   }
   async function mutate(kind) {
@@ -153,5 +156,5 @@ export function useVibe64Issues(context) {
     return sendComment(comment, basePath.value, detailPath.value);
   }
   return { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-    draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, retryComment };
+    draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment };
 }

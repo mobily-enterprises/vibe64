@@ -66,6 +66,32 @@ test("issue routes preserve repeated label filters and browser origin with the a
   });
 });
 
+test("issue editing routes bind identifiers and credentials to the authorized request", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      let received;
+      registerRoutes(routeHttp(app), {
+        projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+        project: { async githubIssues(input) { received = input; return { ok: true }; } }
+      });
+      const user = { id: "viewer", role: "member" };
+      for (const [method, path, body, expected] of [
+        ["PUT", "/issues/:number", { title: "Revised", body: "Description" }, { operation: "edit", title: "Revised", body: "Description" }],
+        ["PATCH", "/issues/:number/comments/:commentId", { body: "Revised comment" }, { operation: "edit-comment", commentId: "IC_actual", body: "Revised comment" }],
+        ["PUT", "/issues/:number/labels", { labels: ["bug"], labelMode: "add" }, { operation: "set-labels", labels: ["bug"], labelMode: "add" }]
+      ]) {
+        const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${path}` });
+        const payload = { ...body, number: 999, commentId: "forged", operation: "create", vibe64User: { id: "forged" } };
+        const reply = testReply();
+        await route.handler({ body: payload, input: { body: payload }, params: routeProjectParams({ number: "42", commentId: "IC_actual" }), vibe64User: user }, reply);
+        assert.equal(reply.statusCode, 200);
+        assert.deepEqual(received, { ...expected, number: "42", vibe64User: user });
+      }
+    });
+  });
+});
+
 test("project settings routes own the development database choice outside Env", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {

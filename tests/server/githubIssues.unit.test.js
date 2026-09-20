@@ -5,7 +5,7 @@ import getPlacements from "../../src/placement.js";
 
 const project = { repositoryMode: "github", githubRepository: { fullName: "example/project" } };
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
-const issue = { number: 7, state: "OPEN", viewerCanClose: true, viewerCanReopen: true,
+const issue = { id: "I_seven", number: 7, state: "OPEN", viewerCanClose: true, viewerCanReopen: true,
   comments: { nodes: [], totalCount: 0, pageInfo: { hasPreviousPage: false } } };
 const success = (body) => ({ ok: true, stdout: JSON.stringify(body) });
 
@@ -306,7 +306,7 @@ test("upstream failures expose an actionable message without raw GitHub output",
   }
 });
 
-const bug = { name: "bug", color: "d73a4a", description: "Something isn't working" };
+const bug = { id: "LA_bug", name: "bug", color: "d73a4a", description: "Something isn't working" };
 const documentation = { name: "documentation", color: "0075ca", description: "Documentation improvements" };
 function labelPage(nodes, viewerPermission = "WRITE", pageInfo = { hasNextPage: false, endCursor: "" }) {
   return success({ data: { repository: { viewerPermission, labels: { nodes, pageInfo } } } });
@@ -381,4 +381,79 @@ test("invalid new issues and label payloads are rejected before requests; uncert
   const failed = fixture([{ ok: false, stderr: "upstream timeout" }]);
   await assert.rejects(githubIssues(project, { operation: "create", title: "New issue", vibe64User: user }, failed.options), /Refresh the issue list before trying again/u);
   assert.equal(failed.calls.length, 1);
+});
+
+
+test("issue editing checks the acting viewer and updates only title and description", async () => {
+  const f = fixture([
+    success({ data: { repository: { issue: { ...issue, viewerCanUpdate: true } } } }), success({ number: 7 })
+  ]);
+  const result = await githubIssues(project, {
+    operation: "edit", number: 7, title: "  Revised title  ", body: "", labels: ["unrelated"], vibe64User: user
+  }, f.options);
+  assert.equal(result.issue.number, 7);
+  assert.equal(f.calls[1].args[3], "repos/example/project/issues/7");
+  assert.equal(f.calls[1].args[5], "PATCH");
+  assert.deepEqual(JSON.parse(f.calls[1].input), { title: "Revised title", body: "" });
+  assert.match(JSON.parse(f.calls[0].input).query, /viewerCanUpdate/u);
+  const denied = fixture([success({ data: { repository: { issue: { ...issue, viewerCanUpdate: false } } } })]);
+  await assert.rejects(githubIssues(project, {
+    operation: "edit", number: 7, title: "Revised", body: "Description", vibe64User: user
+  }, denied.options), { code: "vibe64_issue_permission_denied" });
+  assert.equal(denied.calls.length, 1);
+});
+
+test("comment editing verifies its repository, issue and viewer even for older comment pages", async () => {
+  const commentId = "IC_older_comment";
+  const body = "Updated **Markdown** and @alice";
+  const parent = { number: 7, repository: { nameWithOwner: "example/project" } };
+  const updated = { id: commentId, body, viewerCanUpdate: true };
+  const f = fixture([
+    success({ data: { node: { viewerCanUpdate: true, issue: parent } } }),
+    success({ data: { updateIssueComment: { issueComment: updated } } })
+  ]);
+  const result = await githubIssues(project, { operation: "edit-comment", number: 7, commentId, body, vibe64User: user }, f.options);
+  assert.deepEqual(result.comment, updated);
+  assert.deepEqual(JSON.parse(f.calls[0].input).variables, { id: commentId });
+  assert.deepEqual(JSON.parse(f.calls[1].input).variables, { input: { id: commentId, body } });
+  assert.equal(f.calls[1].userKey, "alice");
+  for (const [node, code] of [
+    [null, "vibe64_issue_not_found"],
+    [{ issue: { ...parent, number: 8 }, viewerCanUpdate: true }, "vibe64_issue_not_found"],
+    [{ issue: { ...parent, repository: { nameWithOwner: "other/project" } }, viewerCanUpdate: true }, "vibe64_issue_not_found"],
+    [{ issue: parent, viewerCanUpdate: false }, "vibe64_issue_permission_denied"]
+  ]) {
+    const denied = fixture([success({ data: { node } })]);
+    await assert.rejects(githubIssues(project, { operation: "edit-comment", number: 7, commentId, body, vibe64User: user }, denied.options), { code });
+    assert.equal(denied.calls.length, 1);
+  }
+});
+
+test("add and remove labels use catalog ids and leave unrelated issue labels untouched", async () => {
+  for (const labelMode of ["add", "remove"]) {
+    const f = fixture([
+      labelPage([bug, { id: "LA_other", name: "other" }], "TRIAGE"),
+      success({ data: { repository: { issue } } }), success({ data: {} })
+    ]);
+    await githubIssues(project, { operation: "set-labels", number: 7, labels: ["bug"], labelMode, vibe64User: user }, f.options);
+    const payload = JSON.parse(f.calls[2].input);
+    assert.match(payload.query, new RegExp(`${labelMode}Labels${labelMode === "add" ? "To" : "From"}Labelable`));
+    assert.deepEqual(payload.variables, { input: { labelableId: "I_seven", labelIds: ["LA_bug"] } });
+    assert.equal(f.calls[2].args[3], "graphql");
+    assert.equal(f.calls[2].userKey, "alice");
+  }
+});
+
+test("invalid edit inputs and bulk label modes make no GitHub calls", async () => {
+  const f = fixture([]);
+  for (const input of [
+    { operation: "edit", number: 7, title: " " },
+    { operation: "edit", number: 7, title: "a".repeat(257) },
+    { operation: "edit", number: 7, title: "Title", body: "a".repeat(65537) },
+    { operation: "edit-comment", number: 7, commentId: "", body: "Text" },
+    { operation: "edit-comment", number: 7, commentId: "id", body: " " },
+    { operation: "edit-comment", number: 7, commentId: "id", body: "a".repeat(65537) },
+    { operation: "set-labels", number: 7, labelMode: "unknown", labels: [] }
+  ]) await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code: "vibe64_issue_input_invalid" });
+  assert.equal(f.calls.length, 0);
 });

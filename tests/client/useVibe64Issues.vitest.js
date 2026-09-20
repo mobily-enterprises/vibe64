@@ -137,3 +137,13 @@ it("does not duplicate a confirmed comment when realtime delivers it before the 
   await sending;
   expect(model.comments.value).toEqual([saved]);
 });
+
+it("refreshes an edited comment's original issue without navigating away from the current issue", async () => {
+  const originalBasePath = model.basePath.value;
+  mocks.route.query.issue = "44";
+  detail.data.value = { issue: issue(44) };
+  await nextTick();
+  await model.issueUpdated({ number: 43, basePath: originalBasePath });
+  expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["vibe64.issue", `${originalBasePath}/43`] });
+  expect(mocks.push).not.toHaveBeenCalled();
+});

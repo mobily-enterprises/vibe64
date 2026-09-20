@@ -31,7 +31,12 @@ multiple labels explain GitHub's 1,000-match limit when needed. Entering an issu
 number, with or without #, finds that exact issue within the selected filters.
 People can read an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
-description and repository labels, and edit labels on existing issues. Descriptions
+description and repository labels, edit issue titles and descriptions, and edit
+comments when GitHub permits. Failed edits keep their inputs. Existing issue
+labels can be edited individually or in bulk: select rows or all issues on the
+current page, then add or remove labels while preserving other labels. Selection
+clears when changing pages or filters. Partial failures retain only the failed
+issues for an explicit retry. Descriptions
 and comments support immediate @username suggestions from repository collaborators
 and everyone participating in that issue. New issue descriptions suggest
 collaborators too; keyboard or pointer selection inserts the username while

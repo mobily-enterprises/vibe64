@@ -383,3 +383,146 @@ for (const viewport of viewports) {
     expect(errors).toEqual([]);
   });
 }
+
+for (const viewport of viewports) {
+  test(`edit issues and comments and reopen at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockGithubIssues(page);
+    const comment = { id: "IC_edit", body: "Original comment", author: { login: "alice" }, createdAt: issue.createdAt, viewerCanUpdate: true };
+    const current = { ...issue, state: "CLOSED", viewerCanUpdate: true,
+      comments: { ...issue.comments, totalCount: 1, nodes: [comment] } };
+    let issueAttempts = 0;
+    let commentAttempts = 0;
+    await routeApiEndpoint(page, "/vibe64/issues/1001", async (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        issueAttempts++;
+        expect(request.postDataJSON()).toEqual({ title: "Revised issue", body: "Revised description" });
+        if (issueAttempts === 1) return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "GitHub refused this edit." }) });
+        Object.assign(current, request.postDataJSON());
+      } else if (request.method() === "PATCH") {
+        expect(request.postDataJSON()).toEqual({ state: "open" });
+        current.state = "OPEN";
+      }
+      await fulfillJson(route, { ok: true, issue: current });
+    });
+    await routeApiEndpoint(page, "/vibe64/issues/1001/comments/IC_edit", async (route) => {
+      expect(route.request().method()).toBe("PATCH");
+      expect(route.request().postDataJSON()).toEqual({ body: "Revised comment" });
+      commentAttempts++;
+      if (commentAttempts === 1) return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "GitHub refused this comment edit." }) });
+      comment.body = "Revised comment";
+      await fulfillJson(route, { ok: true, comment });
+    });
+    await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
+    await showProjectPaneIfNeeded(page);
+    const panel = page.locator(".issues-panel");
+    await expect(panel.getByRole("button", { name: "Edit labels", exact: true })).toHaveCount(0);
+    await panel.getByRole("button", { name: "Edit issue", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(issue.title);
+    await expect(dialog.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(issue.body);
+    await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Revised issue");
+    await dialog.getByRole("textbox", { name: "Description", exact: true }).fill("Revised description");
+    await dialog.getByRole("button", { name: "Save issue", exact: true }).click();
+    await expect(page.getByText("GitHub refused this edit.", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("textbox", { name: "Description", exact: true })).toHaveValue("Revised description");
+    await dialog.screenshot({ path: testInfo.outputPath(`issue-edit-${viewport.name}.png`) });
+    await dialog.getByRole("button", { name: "Save issue", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(panel.getByRole("heading", { name: "Revised issue", exact: true })).toBeVisible();
+    await expect(panel.getByText("Revised description", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Edit comment", exact: true }).click();
+    const commentInput = panel.getByRole("textbox", { name: "Edit comment", exact: true });
+    await expect(commentInput).toHaveValue("Original comment");
+    await commentInput.fill("Revised comment");
+    await panel.getByRole("button", { name: "Save comment", exact: true }).click();
+    await expect(page.getByText("GitHub refused this comment edit.", { exact: true })).toBeVisible();
+    await expect(commentInput).toHaveValue("Revised comment");
+    await panel.getByRole("button", { name: "Save comment", exact: true }).click();
+    await expect(commentInput).toHaveCount(0);
+    await expect(panel.getByText("Revised comment", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Reopen issue", exact: true }).click();
+    await expect(panel.getByRole("button", { name: "Close issue", exact: true })).toBeEnabled();
+    expect(issueAttempts).toBe(2);
+    expect(commentAttempts).toBe(2);
+    await expectNoHorizontalOverflow(page);
+    await panel.screenshot({ path: testInfo.outputPath(`issue-edited-${viewport.name}.png`) });
+  });
+
+  test(`bulk issue selector adds and removes labels and retries only failures at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockGithubIssues(page);
+    await routeApiEndpoint(page, "/vibe64/issue-labels", (route) => fulfillJson(route, {
+      ok: true, labels, canEditLabels: true, canCreateWithLabels: true
+    }));
+    await routeApiEndpoint(page, "/vibe64/issues", (route) => fulfillJson(route, {
+      ok: true, issues: [issue, { ...issue, number: 1002, title: "Second issue" }], total: 30,
+      pageInfo: { hasNextPage: true, endCursor: "next" }
+    }));
+    const writes: { number: number; labelMode: string; labels: string[] }[] = [];
+    let failSecond = true;
+    for (const number of [1001, 1002]) {
+      await routeApiEndpoint(page, `/vibe64/issues/${number}/labels`, async (route) => {
+        expect(route.request().method()).toBe("PUT");
+        writes.push({ number, ...route.request().postDataJSON() });
+        if (number === 1002 && failSecond) {
+          failSecond = false;
+          return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "GitHub refused this label change." }) });
+        }
+        await fulfillJson(route, { ok: true, issue: { number } });
+      });
+    }
+    await page.goto(`${DASHBOARD_PATH}/issues`);
+    await showProjectPaneIfNeeded(page);
+    const panel = page.locator(".issues-panel");
+    const all = panel.getByRole("checkbox", { name: "Select all on this page", exact: true });
+    const first = panel.getByRole("checkbox", { name: "Select issue #1001", exact: true });
+    const second = panel.getByRole("checkbox", { name: "Select issue #1002", exact: true });
+    await first.check();
+    await expect(panel.getByText("1 selected", { exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.has("issue")).toBe(false);
+    await all.check();
+    await expect(second).toBeChecked();
+    await expect(panel.getByText("2 selected", { exact: true })).toBeVisible();
+    await panel.screenshot({ path: testInfo.outputPath(`bulk-selector-${viewport.name}.png`) });
+    await panel.getByRole("button", { name: "Bulk edit labels", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).fill("bug");
+    await page.getByRole("option", { name: "bug", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).press("Escape");
+    await dialog.getByRole("button", { name: "Apply labels", exact: true }).click();
+    await expect(dialog.getByText("#1002: GitHub refused this label change.", { exact: true })).toBeVisible();
+    await expect(first).not.toBeChecked();
+    await expect(second).toBeChecked();
+    await dialog.screenshot({ path: testInfo.outputPath(`bulk-retry-${viewport.name}.png`) });
+    await dialog.getByRole("button", { name: "Retry failed issues", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(writes).toEqual([
+      { number: 1001, labelMode: "add", labels: ["bug"] },
+      { number: 1002, labelMode: "add", labels: ["bug"] },
+      { number: 1002, labelMode: "add", labels: ["bug"] }
+    ]);
+    await expect(panel.getByText("0 selected", { exact: true })).toBeVisible();
+    await first.check();
+    await panel.getByRole("button", { name: "Bulk edit labels", exact: true }).click();
+    await dialog.getByRole("button", { name: "Remove labels", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).fill("bug");
+    await page.getByRole("option", { name: "bug", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Labels to change", exact: true }).press("Escape");
+    await dialog.getByRole("button", { name: "Apply labels", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(writes.at(-1)).toEqual({ number: 1001, labelMode: "remove", labels: ["bug"] });
+    await all.check();
+    await panel.getByRole("button", { name: "Clear selection", exact: true }).click();
+    await expect(first).not.toBeChecked();
+    await expect(second).not.toBeChecked();
+    await all.check();
+    await panel.getByRole("button", { name: "Next page", exact: true }).click();
+    await expect(panel.getByText("0 selected", { exact: true })).toBeVisible();
+    await all.check();
+    await panel.getByRole("button", { name: "Closed", exact: true }).click();
+    await expect(panel.getByText("0 selected", { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+}

@@ -18,6 +18,8 @@ Dashboard without opening a session.
 - `src/lib/vibe64GithubProject.js`
 - `src/components/studio/GithubIssuesPanel.vue`
 - `src/components/studio/GithubIssueEditorDialog.vue`
+- `src/components/studio/GithubCommentEditor.vue`
+- `src/components/studio/GithubBulkLabelsDialog.vue`
 - `src/components/studio/GithubMentionTextarea.vue`
 - `src/components/studio/GithubLabelChip.vue`
 - `src/components/studio/GithubBrowserTabs.vue`
@@ -27,6 +29,7 @@ Dashboard without opening a session.
 - `src/pages/app/project/[slug]/dashboard/issues/index.vue`
 - `tests/server/githubIssues.unit.test.js`
 - `tests/server/vibe64ProjectActions.unit.test.js`
+- `tests/server/vibe64ProjectRoutes.unit.test.js`
 - `tests/e2e/github-issues.spec.ts`
 
 ## Public contract
@@ -108,8 +111,14 @@ secondary link. Issues in other repositories retain GitHub links. Genesis
 composes this Vibe64-owned guidance; provider adapters do not duplicate it.
 New provider conversations receive the rule through their normal context lifecycle.
 New issue opens a title, Markdown description and label form; successful creation
-opens the resulting issue. The same dialog edits labels on an existing issue.
-Both forms preserve their inputs after failure and use explicit submissions.
+opens the resulting issue. The same dialog edits either an existing issue's title
+and description or its labels. Content editing and label editing have separate
+permissions; issue authors need not have label permissions to edit their content.
+Comments offer an inline editor when GitHub's `viewerCanUpdate` permits it, including
+on older pages. The backend rechecks that permission and verifies that the comment
+belongs to the selected repository and issue before updating its node id. Issue
+editing also rechecks `viewerCanUpdate`; only title and body are written. Editing
+forms keep their inputs after failure and use explicit submissions.
 An uncertain creation asks the person to refresh the list before retrying.
 Repository labels load across every page, retain GitHub names and colors, and
 use Vuetify foreground contrast. Labels appear in the list and issue details.
@@ -117,6 +126,16 @@ The backend rechecks label permissions and rejects unavailable labels before
 writing. Existing issue labels require triage access or higher; GitHub
 requires write access to attach labels during issue creation. Empty selections
 remove existing labels. Repository label definitions are not changed.
+People with label permissions can select individual issue rows or every issue on
+the current page, see the selected count, clear the selection, and bulk add or
+remove repository labels. Page, filter, project and detail navigation clear the
+selection. The bulk form sends one issue at a time through the existing labels
+route with an explicit add/remove mode. GitHub's native label mutations target
+only the selected labels, preserving unrelated labels without a read/replace race.
+Each issue rechecks repository label permissions and catalog membership. Successful
+issues are deselected and their caches refreshed; failed issues remain selected
+with individual messages and an explicit retry that only targets those failures.
+A refresh failure never makes an already confirmed write eligible for retry.
 The browser uses the available pane width without the Dashboard frame. Back to
 dashboard, Refresh and New issue share one toolbar row, without an Issues heading
 or repository subtitle. Issue details replace Back to dashboard with All issues.

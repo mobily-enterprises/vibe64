@@ -1,23 +1,44 @@
 <script setup>
 import { computed, ref, shallowRef, watch } from "vue";
+import { useRoute } from "vue-router";
 import { mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCommentOutline,
-  mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline } from "@mdi/js";
+  mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline, mdiPencilOutline } from "@mdi/js";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
+import GithubCommentEditor from "./GithubCommentEditor.vue";
+import GithubBulkLabelsDialog from "./GithubBulkLabelsDialog.vue";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-  draft, pending, comments: issueComments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
+  draft, pending, comments: issueComments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
+const route = useRoute();
+const bulkOpen = ref(false);
+const selectedNumbers = ref([]);
+const visibleNumbers = computed(() => (list.data.value?.issues || []).map((item) => item.number));
+const allSelected = computed(() => visibleNumbers.value.length > 0 && visibleNumbers.value.every((value) => selectedNumbers.value.includes(value)));
+watch(() => [basePath.value, number.value, route.query.issueSearch, route.query.issueState, route.query.issueCursor, route.query.issueLabel], () => {
+  selectedNumbers.value = [];
+  bulkOpen.value = false;
+}, { deep: true });
+function labelsApplied({ number: issueNumber, basePath: requestBasePath }) {
+  if (basePath.value === requestBasePath) selectedNumbers.value = selectedNumbers.value.filter((value) => value !== issueNumber);
+}
 const editorOpen = ref(false);
+const editorMode = ref("create");
 const editorIssue = shallowRef(null);
-watch(projectSlug, () => { editorOpen.value = false; editorIssue.value = null; });
-function openEditor(selectedIssue = null) {
+watch([basePath, number], () => {
+  editorOpen.value = false;
+  editorIssue.value = null;
+  editorMode.value = "create";
+});
+function openEditor(selectedIssue = null, mode = "create") {
+  editorMode.value = mode;
   editorIssue.value = selectedIssue;
   editorOpen.value = true;
 }
@@ -119,31 +140,47 @@ function date(value) {
           <span>{{ list.data.value?.total || 0 }} {{ list.data.value?.total === 1 ? 'issue' : 'issues' }}</span>
           <span>Recently updated</span>
         </div>
+        <div v-if="labelCatalog.data.value?.canEditLabels && visibleNumbers.length" class="d-flex flex-wrap align-center ga-2">
+          <v-checkbox-btn
+            :model-value="allSelected" :indeterminate="selectedNumbers.length > 0 && !allSelected"
+            label="Select all on this page" class="issues-panel__select-all" min-height="48"
+            @update:model-value="selectedNumbers = $event ? [...visibleNumbers] : []"
+          />
+          <span class="text-label-large" role="status">{{ selectedNumbers.length }} selected</span>
+          <v-btn variant="tonal" height="48" :disabled="!selectedNumbers.length" @click="bulkOpen = true">Bulk edit labels</v-btn>
+          <v-btn v-if="selectedNumbers.length" variant="text" height="48" @click="selectedNumbers = []">Clear selection</v-btn>
+        </div>
         <v-list v-if="list.data.value?.issues?.length" class="pa-0" density="compact" lines="two" rounded="xl" border slim aria-label="GitHub issues">
           <template v-for="(item, index) in list.data.value.issues" :key="item.number">
             <v-divider v-if="index" />
-            <v-list-item class="py-2" :active="false" :to="{ query: { ...$route.query, issue: String(item.number) } }">
-              <template #prepend>
-                <v-icon
-                  :icon="item.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck"
-                  :color="item.state === 'OPEN' ? 'success' : 'primary'" :aria-label="item.state === 'OPEN' ? 'Open' : 'Closed'"
-                />
-              </template>
-              <div class="d-flex flex-wrap align-center ga-1">
-                <v-list-item-title class="issues-panel__item-title text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
-                <GithubLabelChip v-for="label in item.labels?.nodes || []" :key="label.name" :label="label" />
-                <span v-if="item.labels?.totalCount > item.labels?.nodes?.length" class="text-label-small">+{{ item.labels.totalCount - item.labels.nodes.length }}</span>
-              </div>
-              <v-list-item-subtitle class="text-body-small mt-1">
-                #{{ item.number }} · {{ item.state === 'OPEN' ? 'Open' : 'Closed' }} · {{ date(item.updatedAt) }}
-              </v-list-item-subtitle>
-              <template #append>
-                <span
-                  class="d-flex align-center ga-1 ml-3 text-label-medium text-medium-emphasis"
-                  :aria-label="`${item.comments.totalCount} comments`"
-                ><v-icon :icon="mdiCommentOutline" size="18" />{{ item.comments.totalCount }}</span>
-              </template>
-            </v-list-item>
+            <div class="d-flex align-center">
+              <v-checkbox-btn
+                v-if="labelCatalog.data.value?.canEditLabels" v-model="selectedNumbers" :value="item.number"
+                :aria-label="`Select issue #${item.number}`" class="flex-grow-0 ml-2" min-width="48" min-height="48"
+              />
+              <v-list-item class="py-2 flex-grow-1" :active="false" :to="{ query: { ...$route.query, issue: String(item.number) } }">
+                <template #prepend>
+                  <v-icon
+                    :icon="item.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck"
+                    :color="item.state === 'OPEN' ? 'success' : 'primary'" :aria-label="item.state === 'OPEN' ? 'Open' : 'Closed'"
+                  />
+                </template>
+                <div class="d-flex flex-wrap align-center ga-1">
+                  <v-list-item-title class="issues-panel__item-title text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
+                  <GithubLabelChip v-for="label in item.labels?.nodes || []" :key="label.name" :label="label" />
+                  <span v-if="item.labels?.totalCount > item.labels?.nodes?.length" class="text-label-small">+{{ item.labels.totalCount - item.labels.nodes.length }}</span>
+                </div>
+                <v-list-item-subtitle class="text-body-small mt-1">
+                  #{{ item.number }} · {{ item.state === 'OPEN' ? 'Open' : 'Closed' }} · {{ date(item.updatedAt) }}
+                </v-list-item-subtitle>
+                <template #append>
+                  <span
+                    class="d-flex align-center ga-1 ml-3 text-label-medium text-medium-emphasis"
+                    :aria-label="`${item.comments.totalCount} comments`"
+                  ><v-icon :icon="mdiCommentOutline" size="18" />{{ item.comments.totalCount }}</span>
+                </template>
+              </v-list-item>
+            </div>
           </template>
         </v-list>
         <v-sheet v-else rounded="xl" color="surface-light" class="pa-8 text-center">
@@ -175,6 +212,7 @@ function date(value) {
             </v-chip>
             <span class="text-label-large text-medium-emphasis">#{{ issue.number }}</span>
             <v-spacer />
+            <v-btn v-if="issue.viewerCanUpdate" :prepend-icon="mdiPencilOutline" variant="text" height="48" @click="openEditor(issue, 'content')">Edit issue</v-btn>
             <v-btn :href="issue.url" target="_blank" rel="noopener noreferrer" :append-icon="mdiOpenInNew" variant="text" height="48">GitHub</v-btn>
           </div>
           <h2 class="text-title-large mb-2 issues-panel__title">{{ issue.title }}</h2>
@@ -182,7 +220,7 @@ function date(value) {
           <div class="d-flex align-center flex-wrap ga-2 mt-3">
             <GithubLabelChip v-for="label in issue.labels?.nodes || []" :key="label.name" :label="label" />
             <span v-if="!issue.labels?.nodes?.length" class="text-body-small text-medium-emphasis">No labels</span>
-            <v-btn v-if="issue.canEditLabels" :prepend-icon="mdiLabelOutline" variant="text" height="48" @click="openEditor(issue)">Edit labels</v-btn>
+            <v-btn v-if="issue.canEditLabels" :prepend-icon="mdiLabelOutline" variant="text" height="48" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
           </div>
         </div>
 
@@ -210,7 +248,9 @@ function date(value) {
               <span class="text-label-large">{{ comment.author?.login || 'Deleted user' }}</span>
               <time class="text-body-small text-medium-emphasis" :datetime="comment.createdAt">{{ date(comment.createdAt) }}</time>
             </div>
-            <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown"><LongTextPreviewBlocks :blocks="comment.blocks" /></v-sheet>
+            <GithubCommentEditor :key="`${basePath}:${issue.number}:${comment.id}`" :comment="comment" :issue="issue" :base-path="basePath" @saved="issueUpdated">
+              <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown"><LongTextPreviewBlocks :blocks="comment.blocks" /></v-sheet>
+            </GithubCommentEditor>
             <div v-if="comment.delivery && comment.delivery !== 'sent'" class="d-flex flex-wrap align-center ga-2 mt-1" aria-live="polite">
               <span v-if="comment.delivery === 'sending'" class="text-body-small text-medium-emphasis">Posting…</span>
               <template v-else>
@@ -247,14 +287,19 @@ function date(value) {
         </form>
       </template>
     </template>
+    <GithubBulkLabelsDialog
+      v-if="available" :key="basePath" v-model="bulkOpen" :base-path="basePath" :numbers="selectedNumbers"
+      :labels="labelCatalog.data.value?.labels || []" @applied="labelsApplied"
+    />
     <GithubIssueEditorDialog
-      v-if="available" v-model="editorOpen" :base-path="basePath" :issue="editorIssue" @saved="issueSaved"
+      v-if="available" v-model="editorOpen" :base-path="basePath" :issue="editorIssue" :mode="editorMode" @saved="issueSaved"
     />
   </section>
 </template>
 
 <style scoped>
 .issues-panel { width: 100%; min-width: 0; }
+.issues-panel__select-all { flex: 0 0 auto; }
 .issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__labels { min-width: 0; }

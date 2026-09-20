@@ -81,7 +81,7 @@ function registerRoutes(http, {
   routes.serviceRoute("PUT", "/issues/:number/labels", {
     summary: "Set the labels on a GitHub issue."
   }, (request) => project.githubIssues({
-    number: request.params.number, labels: routes.requestBody(request).labels,
+    number: request.params.number, labels: routes.requestBody(request).labels, labelMode: routes.requestBody(request).labelMode,
     operation: "set-labels", vibe64User: request.vibe64User || null
   }));
   routes.serviceRoute("GET", "/pull-requests", {
@@ -112,6 +112,20 @@ function registerRoutes(http, {
   }, (request) => project.githubIssues({
     state: routes.requestBody(request).state, number: request.params.number,
     operation: "state", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("PUT", "/issues/:number", {
+    bodyLimit: 300_000,
+    summary: "Edit this project's GitHub issue title and description."
+  }, (request) => project.githubIssues({
+    title: routes.requestBody(request).title, body: routes.requestBody(request).body, number: request.params.number,
+    operation: "edit", vibe64User: request.vibe64User || null
+  }));
+  routes.serviceRoute("PATCH", "/issues/:number/comments/:commentId", {
+    bodyLimit: 300_000,
+    summary: "Edit a comment on this project's GitHub issue."
+  }, (request) => project.githubIssues({
+    body: routes.requestBody(request).body, number: request.params.number, commentId: request.params.commentId,
+    operation: "edit-comment", vibe64User: request.vibe64User || null
   }));
   routes.actionRoute("POST", "/repository/remote", {
     actionId: ACTION_REPOSITORY_REMOTE,
