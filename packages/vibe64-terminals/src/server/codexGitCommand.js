@@ -1,7 +1,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -43,6 +43,7 @@ import {
   removeDeadUnixJsonCommandSocket,
   sendJsonCommandResponse,
   shortCommandHash,
+  unixCommandSocketPath,
   unixJsonCommandServerIsHealthy
 } from "./unixJsonCommand.js";
 
@@ -184,12 +185,8 @@ function commandSocketHostPath({
   sessionId = "",
   stateRoot = ""
 } = {}) {
-  const owner = typeof process.getuid === "function" ? process.getuid() : "user";
-  const socketRoot = path.resolve(normalizeText(env.TMPDIR) || tmpdir());
-  return path.join(
-    socketRoot,
-    `v64-git-${owner}-${attachmentRuntimeKey({ sessionId, stateRoot })}.sock`
-  );
+  const hostDir = commandHostDir({ env, sessionId, stateRoot });
+  return unixCommandSocketPath(path.join(hostDir, "git-command.sock"), { env });
 }
 
 function wrapperHostPath(options = {}, command = "") {

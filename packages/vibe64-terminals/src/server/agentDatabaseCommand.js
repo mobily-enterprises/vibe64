@@ -20,7 +20,8 @@ import {
 import {
   readJsonCommandRequest,
   sendJsonCommandResponse,
-  shortCommandHash
+  shortCommandHash,
+  unixCommandSocketPath
 } from "./unixJsonCommand.js";
 import {
   writeExecutableFileIfChanged
@@ -46,7 +47,7 @@ function wrapperHostPath(wrapperHostDir = "") {
 }
 
 function commandSocketHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_SOCKET_NAME);
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_SOCKET_NAME));
 }
 
 function usageText() {

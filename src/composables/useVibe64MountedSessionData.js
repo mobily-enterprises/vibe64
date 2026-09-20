@@ -65,6 +65,7 @@ function useVibe64MountedSessionData({
   const detailRecord = ref(null);
   const agentTurnOverlay = ref(null);
   const agentConnectionStatus = ref("initializing");
+  const agentConnectionError = ref("");
   const mountedActive = computed(() => readRefOrGetterValue(active) === true);
   const activeSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const activeSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
@@ -271,7 +272,7 @@ function useVibe64MountedSessionData({
     const cancelled = new Promise((_resolve, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
     });
-    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable"].includes(agentConnectionStatus.value)
+    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(agentConnectionStatus.value)
       ? "reconciling"
       : "initializing";
     const checking = (async () => {
@@ -304,6 +305,7 @@ function useVibe64MountedSessionData({
       }
       if (currentConnection() && !controller.signal.aborted) {
         agentConnectionStatus.value = "connected";
+        agentConnectionError.value = "";
         reconciliationRetryDelay = 1_000;
         // Provider verification has succeeded. A failed display refresh must
         // not turn that success into an unknown provider status.
@@ -315,9 +317,15 @@ function useVibe64MountedSessionData({
     })();
     reconciliationInFlight = Promise.race([checking, cancelled]).catch((error) => {
       if (currentConnection()) {
-        const unavailable = error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE;
-        agentConnectionStatus.value = unavailable ? "unavailable" : "unknown";
-        if (!unavailable) scheduleReconciliationRetry();
+        agentConnectionError.value = String(error?.message || "The assistant could not be started. Please retry.");
+        if (error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE) {
+          agentConnectionStatus.value = "unavailable";
+        } else if (error?.code === "vibe64_agent_control_path_too_long") {
+          agentConnectionStatus.value = "failed";
+        } else {
+          agentConnectionStatus.value = "unknown";
+          scheduleReconciliationRetry();
+        }
         console.warn("Vibe64 assistant status check failed.", {
           code: String(error?.code || ""),
           message: String(error?.message || ""),
@@ -448,6 +456,7 @@ function useVibe64MountedSessionData({
 
   return {
     acceptSessionResponse,
+    agentConnectionError,
     agentConnectionStatus,
     detailState,
     reconcileMountedAgentSession,

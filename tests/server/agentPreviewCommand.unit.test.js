@@ -882,7 +882,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.ok, true);
     assert.equal((await stat(path.join(root, AGENT_PREVIEW_COMMAND_NAME))).isFile(), true);
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
-    assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "10");
 
@@ -1283,7 +1283,7 @@ exports.chromium = { launch() { throw new Error("Storage state must not start Ch
   }
 });
 
-test("agent preview wrapper captures the authenticated page with managed Playwright", async () => {
+test("agent preview wrapper captures the authenticated page from a long workspace path", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-screenshot-"));
   const runtimeRoot = path.join(root, "runtime-packs");
   const blockedPlaywright = path.join(root, "guard-bin", "playwright");
@@ -1308,7 +1308,7 @@ test("agent preview wrapper captures the authenticated page with managed Playwri
         VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
       },
       sessionId,
-      wrapperHostDir: root
+      wrapperHostDir: path.join(root, "workspace-path-".repeat(8), "wrappers")
     });
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [

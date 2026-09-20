@@ -43,6 +43,7 @@ import {
   requestUnixJsonCommand,
   sendJsonCommandResponse,
   shortCommandHash,
+  unixCommandSocketPath,
   unixCommandSocketIsPresent,
   unixJsonCommandServerIsHealthy
 } from "./unixJsonCommand.js";
@@ -107,7 +108,7 @@ function browserWorkerHostPath(wrapperHostDir = "") {
 }
 
 function browserSocketHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME);
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_SOCKET_NAME));
 }
 
 function browserMetadataHostPath(wrapperHostDir = "") {
@@ -115,7 +116,7 @@ function browserMetadataHostPath(wrapperHostDir = "") {
 }
 
 function commandSocketHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME);
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME));
 }
 
 async function readRequestJson(request) {
@@ -1918,6 +1919,7 @@ async function prepareAgentPreviewCommand({
     "node_modules",
     "playwright"
   );
+  const browserSocketPath = browserSocketHostPath(normalizedWrapperHostDir);
   await writeWrapper({
     agentPlaywrightSource: agentPlaywrightCommandSource({
       managedNodePath,
@@ -1933,6 +1935,7 @@ async function prepareAgentPreviewCommand({
       playwrightModulePath
     }),
     previewWrapperSource: agentPreviewWrapperSource({
+      browserSocketPath,
       contractVersion: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
       managedNodePath,
       workerScriptPath
@@ -1967,7 +1970,7 @@ async function prepareAgentPreviewCommand({
     metadataPath: browserMetadataHostPath(normalizedWrapperHostDir),
     project: isRecord(project) ? project : {},
     runtimeRoot: packRoot,
-    socketPath: browserSocketHostPath(normalizedWrapperHostDir),
+    socketPath: browserSocketPath,
     token,
     workerScriptPath,
     worktreePath: normalizedWorktreePath

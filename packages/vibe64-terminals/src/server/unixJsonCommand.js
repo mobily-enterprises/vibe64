@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import { rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const DEAD_UNIX_COMMAND_SOCKET_CODES = new Set([
   "ECONNREFUSED",
@@ -23,6 +25,20 @@ function shortCommandHash(value = "") {
     .update(String(value || ""))
     .digest("hex")
     .slice(0, 16);
+}
+
+function unixCommandSocketPath(identity, { env = process.env } = {}) {
+  const owner = typeof process.getuid === "function" ? process.getuid() : "user";
+  const root = path.resolve(String(env.TMPDIR || "").trim() || tmpdir());
+  const socketPath = path.join(root, `v64-${owner}-${shortCommandHash(identity)}.sock`);
+  const maxBytes = process.platform === "darwin" ? 103 : 107;
+  if (Buffer.byteLength(socketPath, "utf8") > maxBytes) {
+    throw commandRequestError({
+      code: "vibe64_agent_control_path_too_long",
+      message: "The assistant cannot start because the server's temporary directory path is too long. Ask the workspace administrator to shorten TMPDIR, then retry."
+    });
+  }
+  return socketPath;
 }
 
 async function unixCommandSocketIsPresent(socketPath = "") {
@@ -225,6 +241,7 @@ export {
   requestUnixJsonCommand,
   sendJsonCommandResponse,
   shortCommandHash,
+  unixCommandSocketPath,
   unixCommandSocketIsPresent,
   unixJsonCommandServerIsHealthy
 };

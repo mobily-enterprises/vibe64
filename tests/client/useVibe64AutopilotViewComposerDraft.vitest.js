@@ -450,6 +450,21 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerDraft.value).toBe("Keep this draft while I sign in.");
   });
 
+  it("keeps a startup failure retryable without presenting it as connection progress", async () => {
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "failed" });
+    view.composerDraft.value = "Keep this while the server is repaired.";
+    expect(view.connectionRecoveryVisible.value).toBe(true);
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.composerDisabled.value).toBe(false);
+    expect(view.composerSubmitLabel.value).toBe("Unavailable");
+    expect(view.composerCanSubmit.value).toBe(false);
+    await view.submitComposerMessage();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    props.agentConnectionStatus = "connected";
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerDraft.value).toBe("Keep this while the server is repaired.");
+  });
+
   it("shows ordinary loading while keeping the draft editable until the assistant is ready", async () => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: "initializing" });
     view.composerDraft.value = "Keep typing while loading.";
@@ -2003,14 +2018,14 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOutput.value).toBe("");
   });
 
-  it.each(["initializing", "reconciling", "disconnected", "unknown"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
+  it.each(["initializing", "reconciling", "disconnected", "unknown", "failed"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
     const { props, view } = await createViewWithProps({
       agentConnectionStatus: connectionStatus,
       workState: { unsaved: true }
     });
     expect(view.saveWorkDisabled.value).toBe(true);
-    expect(view.thinkingVisible.value).toBe(true);
-    expect(view.thinkingLabel.value).not.toBe("");
+    expect(view.thinkingVisible.value).toBe(connectionStatus !== "failed");
+    if (connectionStatus !== "failed") expect(view.thinkingLabel.value).not.toBe("");
     expect(view.requestSaveWork()).toBe(false);
     await expect(view.confirmSaveWork()).resolves.toBe(false);
     expect(props.saveSessionWork).not.toHaveBeenCalled();

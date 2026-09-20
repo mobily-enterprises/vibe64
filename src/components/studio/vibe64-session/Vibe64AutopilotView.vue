@@ -167,7 +167,7 @@
           <span v-else class="text-body-small">
             {{ props.agentConnectionStatus === 'disconnected'
               ? 'Connection lost. Reconnecting automatically.'
-              : 'Checking the assistant connection.' }}
+              : props.agentConnectionError || 'Checking the assistant connection.' }}
             Your draft is kept.
           </span>
           <v-btn

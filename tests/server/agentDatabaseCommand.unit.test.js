@@ -196,7 +196,7 @@ test("agent database wrapper authenticates to its session socket", async () => {
     assert.equal((await stat(path.join(root, AGENT_DATABASE_COMMAND_NAME))).isFile(), true);
     assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV], sessionId);
     assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV], "1");
-    assert.match(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV], /database-command\.sock$/u);
+    assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
     assert.match(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
 
     const executed = await run(prepared.hostWrapperPath, ["refresh"], {

@@ -318,6 +318,7 @@ describe("useVibe64MountedSessionData", () => {
     await vi.waitFor(() => {
       expect(controller.agentConnectionStatus.value).toBe("unknown");
     });
+    expect(controller.agentConnectionError.value).toBe("Provider unavailable.");
 
     scope.stop();
   });
@@ -437,6 +438,26 @@ describe("useVibe64MountedSessionData", () => {
       connectionEvent.onEvent({ payload: { accountId: "codex", reason: "connected" } });
       await vi.advanceTimersByTimeAsync(0);
       expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([false, true])("keeps a permanent startup error until an explicit retry succeeds (HTTP error: %s)", async (httpError) => {
+      const failure = {
+        ok: false,
+        code: "vibe64_agent_control_path_too_long",
+        error: "The assistant cannot start. Ask the workspace administrator to shorten TMPDIR, then retry."
+      };
+      if (httpError) httpMocks.request.mockRejectedValueOnce(Object.assign(new Error(failure.error), { code: failure.code }));
+      else httpMocks.request.mockResolvedValueOnce(failure);
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("failed");
+      expect(controller.agentConnectionError.value).toBe(failure.error);
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      await controller.retryAgentConnection();
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
       expect(httpMocks.request).toHaveBeenCalledTimes(2);
     });
 

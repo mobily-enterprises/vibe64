@@ -663,6 +663,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
 
   return {
+    agentConnectionError: mounted.agentConnectionError,
     agentConnectionStatus: mounted.agentConnectionStatus,
     retryAgentConnection: mounted.retryAgentConnection,
     agentTerminal,

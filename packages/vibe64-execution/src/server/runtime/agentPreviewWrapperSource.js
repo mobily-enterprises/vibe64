@@ -1,4 +1,5 @@
 function agentPreviewWrapperSource({
+  browserSocketPath = "",
   contractVersion = "1",
   managedNodePath = "",
   workerScriptPath = ""
@@ -13,8 +14,7 @@ const commandName = path.basename(process.argv[1] || "");
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
 const managedNodePath = ${JSON.stringify(String(managedNodePath || ""))};
 const workerScriptPath = ${JSON.stringify(String(workerScriptPath || ""))};
-const wrapperDir = path.dirname(process.argv[1] || "");
-const browserSocketPath = path.join(wrapperDir, "preview-browser.sock");
+const browserSocketPath = ${JSON.stringify(String(browserSocketPath || ""))};
 const controlSocketPath = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SOCKET || "").trim();
 const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
 const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION || "").trim();

@@ -53,6 +53,11 @@ continuation and loading older history.
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/result.js`
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
+- `packages/vibe64-terminals/src/server/unixJsonCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentEnvCommand.js`
+- `packages/vibe64-terminals/src/server/agentDatabaseCommand.js`
+- `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentHelperCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
@@ -505,6 +510,15 @@ message or requiring an explicit Resume.
 
 The browser coalesces checks for the same
 connection and retries failures after one second, backing off to thirty seconds.
+It retains the reported failure in the connection notice until a successful
+check. A control-socket path configuration error stops timed retries and shows
+the repair instruction beside explicit Retry, preserving the draft.
+Git, Env, database, preview and browser command sockets use compact,
+process-user-scoped names in the server temporary directory. Their identities
+include the full wrapper path and control kind, keeping projects and sessions
+separate without placing a long workspace path in the socket address. The shared
+path builder checks the OS byte limit before binding; an oversized configured
+temporary root reports `vibe64_agent_control_path_too_long` with a repair action.
 An unavailable AI connection is a separate account-attention state: it stops
 timed retries, explains that Codex needs sign-in (or that the selected account or
 model is unavailable), and offers Open AI Accounts through the existing account

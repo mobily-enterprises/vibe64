@@ -106,6 +106,10 @@ const vibe64AutopilotViewProps = {
     default: true,
     type: Boolean
   },
+  agentConnectionError: {
+    default: "",
+    type: String
+  },
   agentConnectionStatus: {
     default: "connected",
     type: String
@@ -246,7 +250,7 @@ function agentConnectionThinkingLabel({
   active = false,
   status = "connected"
 } = {}) {
-  if (!active || status === "connected") {
+  if (!active || status === "connected" || status === "failed") {
     return "";
   }
   if (status === "initializing") {
@@ -559,6 +563,9 @@ function useVibe64AutopilotView(props, emit, {
     if (props.agentConnectionStatus === "initializing") {
       return "initializing";
     }
+    if (props.agentConnectionStatus === "failed") {
+      return "failed";
+    }
     if (props.agentConnectionStatus !== "connected") {
       return "reconnecting";
     }
@@ -574,6 +581,7 @@ function useVibe64AutopilotView(props, emit, {
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
   const composerSubmitLabel = computed(() => ({
+    failed: "Unavailable",
     unavailable: "Connect AI",
     initializing: "Loading…",
     reconnecting: props.agentConnectionStatus === "disconnected" ? "Reconnecting…" : "Checking…",
@@ -584,6 +592,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting…"
   })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
+    failed: "Assistant unavailable",
     unavailable: "Connect your AI account to send messages",
     initializing: "Waiting for the assistant to load",
     reconnecting: "Waiting for the connection to recover",
@@ -594,6 +603,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting for the assistant to accept guidance"
   })[composerSubmitMode.value] || "Send message");
   const composerSubmitTitle = computed(() => ({
+    failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
     unavailable: "Open AI Accounts to connect your assistant. Your draft is kept.",
     initializing: "Keep typing while the assistant loads",
     reconnecting: "Your draft is kept while the connection recovers",
@@ -633,12 +643,12 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
-    ["disconnected", "unknown", "reconciling", "unavailable"].includes(props.agentConnectionStatus)
+    ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(props.agentConnectionStatus)
   ));
   const thinkingVisible = computed(() => Boolean(
     !assistantAccountUnavailable.value && (
       agentActive.value || composerSending.value ||
-      (!assistantConnectionReady.value && !sessionInteractionDisabled.value)
+      (!assistantConnectionReady.value && props.agentConnectionStatus !== "failed" && !sessionInteractionDisabled.value)
     )
   ));
   const thinkingLabel = computed(() => (

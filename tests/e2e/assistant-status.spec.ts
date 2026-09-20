@@ -35,6 +35,35 @@ async function openChat(page: Page) {
   await expect(composer(page)).toBeVisible();
 }
 
+test("startup failure explains the cause and preserves the draft through manual recovery", async ({ page }, info) => {
+  const error = "The assistant cannot start because the server's temporary directory path is too long. Ask the workspace administrator to shorten TMPDIR, then retry.";
+  server.state.session.agentSession.turn.active = false;
+  server.state.checks.push((response) => json(response, { ok: false, code: "vibe64_agent_control_path_too_long", error }, 400));
+  await openChat(page);
+  const banner = page.locator("[data-vibe64-connection-recovery]");
+  const retry = page.getByRole("button", { name: "Retry connection", exact: true });
+  await expect(banner).toContainText(error);
+  const draft = "Keep this draft while the workspace is repaired.";
+  await composer(page).fill(draft);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1280, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await expect(banner).toBeVisible();
+    await expect(retry).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(composer(page)).toHaveValue(draft);
+    await page.screenshot({ path: info.outputPath(`startup-failed-${viewport.width}.png`) });
+  }
+  await page.clock.fastForward(90_000);
+  expect(server.state.checkCount).toBe(1);
+  await expect(warning(page)).toHaveCount(0);
+  await retry.click();
+  await expect(banner).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
+  await expect(composer(page)).toHaveValue(draft);
+  expect(server.state.messages).toHaveLength(0);
+  expect(server.state.interrupts).toBe(0);
+});
+
 test("healthy assistant can receive steering in the built client", async ({ page }) => {
   await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
   await expect(page.getByLabel("Message AI assistant")).toBeVisible();
