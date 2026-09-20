@@ -13,9 +13,12 @@ const server = net.createServer((socket) => {
   if (connected) return socket.destroy();
   connected = true;
   server.close();
-  child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"], env: {
-    ...process.env, VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID: String(process.pid)
-  } });
+  // Claude's own Git probes leave stdin open. Identify Claude itself as their
+  // parent; exec preserves this PID while keeping Bash tool pipelines intact.
+  child = spawn("/bin/sh", ["-c",
+    'export VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID=$$; exec "$@"',
+    "vibe64-claude", command, ...args
+  ], { stdio: ["pipe", "pipe", "inherit"], env: process.env });
   child.on("error", () => socket.destroy());
   child.stdin.on("error", () => socket.destroy());
   child.stdout.pipe(socket);
@@ -37,4 +40,4 @@ server.listen(socketPath, async () => {
 });
 setTimeout(() => {
   if (!connected) process.exit(1);
-}, 60_000).unref();
+}, 30_000).unref();

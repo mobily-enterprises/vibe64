@@ -1205,7 +1205,8 @@ watch(agentActive, (active) => {
   }
 }, { flush: "sync", immediate: true });
 const conversationAssistantLabel = computed(() => (
-  props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" : "Codex"
+  props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :
+    props.session?.assistantSelection?.engineId === "claude" ? "Claude" : "Codex"
 ));
 const updateHandledInRepair = computed(() => Boolean(
   (saveWorkActivityIsUpdate.value || saveWorkError.value) && temporaryAiWorkspace.value?.updateRepairVisible

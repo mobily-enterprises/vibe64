@@ -110,16 +110,32 @@ continuation and loading older history.
 ## Public contract
 
 Claude Code uses the unmodified pinned CLI and a bounded streaming JSON reader
-inside the existing managed execution owner. Native admission acknowledgements
+inside the existing managed execution owner. Control replies bypass ordered,
+bounded chat-event persistence so streaming output cannot block an interrupt
+acknowledgement. Claude request and admission waits use a 30-second deadline;
+the duration of an assistant task is governed separately. Native admission acknowledgements
 and message IDs prevent duplicate sends. Steer interrupts generation before
 continuing the same native conversation with the new instruction. Stop verifies
 that the owned process scope exited; the next Send resumes native history.
 Account identity is persisted with conversation ownership, so a restart preserves
 the binding and another signed-in account cannot adopt it. Native terminal and
-JSON chat have one writer at a time. Exposed thinking and answers use the shared
+JSON chat have one writer at a time. JSON sessions explicitly request native
+thinking summaries with `--thinking-display summarized`; newer models otherwise
+return empty thinking text. Exposed thinking and answers use the shared
 transcript; tool commands enter the existing session command broker.
+Older session snapshots reuse the already-owned main Claude conversation.
+The launcher identifies Claude's own PID for startup Git probes that leave stdin
+open, so those probes cannot stall session preparation or the first prompt.
+Shell-tool pipelines still forward their input through the normal Git broker.
+The chat control labels Claude by name.
+If Claude cannot produce a renewal handover, the shared renewal flow opens its
+editable manual handover instead. The original conversation stays intact while
+the user reviews the context to carry into the successor session.
 
-Claude uses the shared in-chat model and effort selector. The chat toolbar also
+Claude uses the shared in-chat model and effort selector. Idle conversations
+apply model and effort changes through native JSON controls without restarting
+the process. A rejected settings change retires the process before another Send.
+The chat toolbar also
 shows native goals and subscription allowance. Goals use `/goal` commands,
 structured history markers, and `active_goal` refresh events. Pause stops the
 current turn while retaining the goal; Resume starts native goal work again.
@@ -128,7 +144,8 @@ because the CLI does not provide Codex's hard token-budget control. The pinned
 CLI's experimental `get_usage` JSON control supplies current five-hour, weekly,
 and available model-specific windows. Missing or expired data is never presented
 as a refreshed allowance. Both controls retain the assistant's access boundary;
-plan allowance is owner-only.
+plan allowance is owner-only. Passive goal and allowance lookup failures stay
+local to those controls and do not report an app-wide network outage.
 
 The shared command environment installs `vibe64-helper` beside the existing
 session executables for Codex and OpenCode. Its fixed groups are `preview`,

@@ -318,7 +318,8 @@ function createClaudeSessionAgentProvider({
   async function entryFor(context, conversationId = "", { create = false } = {}) {
     const ctx = await contextFor(context);
     const main = !conversationId || conversationId === ctx.session?.metadata?.claude_conversation_id;
-    const id = conversationId || text(ctx.session?.metadata?.claude_conversation_id) || randomUUID();
+    const id = conversationId || text(ctx.session?.metadata?.claude_conversation_id) ||
+      [...entries.values()].find((entry) => entry.main && entry.context.key === ctx.key)?.id || randomUUID();
     requireClaudeSessionId(id);
     const key = `${ctx.key}\0${id}`;
     if (entries.has(key)) {
@@ -388,9 +389,12 @@ function createClaudeSessionAgentProvider({
     accountProcessStops.delete(native);
   }
 
-  async function readAccountProcess(read) {
+  async function readAccountProcess(identity, read) {
     if (closing) throw error("Claude is reconnecting.");
     for (const native of accountProcessStops) await stopAccountProcess(native);
+    const owned = [...entries.values()].find((entry) =>
+      entry.process && !entry.stopping && entry.accountIdentity === identity);
+    if (owned) return read(owned.process);
     const native = await createProcess({ command, commandRunner, stopExecution, credentialHome, env,
       workdir: credentialHome.home, toolFree: true, onEvent: async () => {} });
     try {
@@ -425,6 +429,20 @@ function createClaudeSessionAgentProvider({
     if (entry.process && !entry.stopping && entry.turn?.active) throw error("Stop the current Claude turn before changing its settings.");
     if (starts.has(entry.key)) return starts.get(entry.key);
     const start = (async () => {
+      if (entry.process && !entry.stopping && !profile && !entry.profile &&
+          entry.outputSchemaIdentity === JSON.stringify(input.outputSchema)) {
+        try {
+          await entry.process.client.request({ subtype: "set_model", model: selection.modelId });
+          await entry.process.client.request({ subtype: "apply_flag_settings", settings: {
+            effortLevel: selection.variantId || null
+          } });
+          entry.identity = identity;
+          return entry.process;
+        } catch (failure) {
+          await stopEntry(entry, failure.message);
+          throw failure;
+        }
+      }
       if (entry.process || entry.executionId) await stopEntry(entry, "Claude's previous process was stopped before reconnecting.");
       const ctx = entry.context;
       let prepared = { env: ctx.assistantScope?.environment || {}, shimDirs: [] };
@@ -437,6 +455,7 @@ function createClaudeSessionAgentProvider({
       entry.stopping = false;
       entry.profile = profile;
       entry.identity = identity;
+      entry.outputSchemaIdentity = JSON.stringify(input.outputSchema);
       entry.process = await createProcess({ command, commandRunner, stopExecution, credentialHome,
         env: { ...env, ...prepared.env }, shimDirs: prepared.shimDirs, workdir: entry.nativeWorkdir,
         sessionId: entry.id, resume: entry.sent, model: profile?.model || selection.modelId,
@@ -489,7 +508,7 @@ function createClaudeSessionAgentProvider({
         await Promise.all([native.client.interrupt(), Promise.race([
           entry.steerBarrier.promise,
           new Promise((_, reject) => {
-            timer = setTimeout(() => reject(error("Claude did not confirm the interrupted generation.")), 5_000);
+            timer = setTimeout(() => reject(error("Claude did not confirm the interrupted generation.")), 30_000);
           })
         ])]);
       } catch (failure) {
@@ -544,7 +563,7 @@ function createClaudeSessionAgentProvider({
       }
       await publishRun(entry, RUN.ACTIVE);
     } });
-    const timer = setTimeout(() => admitted.reject(error("Claude has not acknowledged this prompt. Its delivery is uncertain.", "vibe64_claude_admission_unknown")), 60_000);
+    const timer = setTimeout(() => admitted.reject(error("Claude has not acknowledged this prompt. Its delivery is uncertain.", "vibe64_claude_admission_unknown")), 30_000);
     try {
       await input.onPromptSending?.({ threadId: entry.id, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata });
       await Promise.all([native.client.send(prompt, { messageId: uuid, sessionId: entry.id }), admitted.promise]);
@@ -651,12 +670,12 @@ function createClaudeSessionAgentProvider({
       if (accepted) {
         result = { text: history.messages.filter((message) => message.userId === uuid && message.role === "assistant").map((message) => message.text).join("\n"),
           threadId: entry.id, turnId: uuid, reconciled: true };
-        if (!result.text) throw error("The accepted Claude renewal turn has no readable result; it will not be submitted again.");
+        if (!result.text) throw error("The accepted Claude renewal turn has no readable result; it will not be submitted again.", "vibe64_session_renewal_turn_unreadable");
       } else {
         if (entry.turn?.active && entry.process) throw error("Stop the current turn before renewing this conversation.");
         await send(entry, { message: prompt, messageId: clientMessageId, outputSchema }, { renewal: true });
         result = await waitForConversationTurn(context, { conversationId: entry.id, timeoutMs: 180_000 });
-        if (result.status !== "completed") throw error(result.error || "Claude did not complete the renewal turn.");
+        if (result.status !== "completed") throw error(result.error || "Claude did not complete the renewal turn.", "vibe64_session_renewal_turn_failed");
       }
       return { ...result, clientMessageId, operationId, source: input.source,
         freshThread: history.userIds.length === 0, processExitProof: await stopEntry(entry) };
@@ -677,7 +696,7 @@ function createClaudeSessionAgentProvider({
       const identity = await accountIdentity(context);
       if (!catalog || catalog.identity !== identity || Date.now() - catalog.at > 600_000) {
         catalogStart ||= (async () => {
-          const value = await readAccountProcess((native) => native.initialization);
+          const value = await readAccountProcess(identity, (native) => native.initialization);
           if (identity !== await accountIdentity(context)) throw error("The signed-in Claude account changed. Refresh the model list.");
           catalog = { at: Date.now(), identity, value };
         })().finally(() => { catalogStart = null; });
@@ -708,8 +727,8 @@ function createClaudeSessionAgentProvider({
       if (planUsage?.identity === identity && Date.now() - planUsage.checkedAt < 60_000) return planUsage;
       if (planUsagePending) return planUsagePending;
       planUsagePending = (async () => {
-        const value = await readAccountProcess((native) => native.client.request(
-          { subtype: "get_usage", skip_behaviors: true }, { timeoutMs: 10_000 }));
+        const value = await readAccountProcess(identity, (native) => native.client.request(
+          { subtype: "get_usage", skip_behaviors: true }));
         if (identity !== await accountIdentity(context)) return { status: "unavailable", windows: [] };
         planUsage = { ...claudePlanUsage(value), identity };
         return planUsage;

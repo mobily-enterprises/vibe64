@@ -75,16 +75,13 @@
           >
             <span class="vibe64-assistant-dialog__choice-icon">
               <v-icon
-                :icon="choice.engineId === 'codex' ? mdiCreationOutline : mdiCodeBraces"
+                :icon="['codex', 'claude'].includes(choice.engineId) ? mdiCreationOutline : mdiCodeBraces"
                 size="22"
               />
             </span>
             <span class="vibe64-assistant-dialog__choice-copy">
               <span class="vibe64-assistant-dialog__choice-heading">
                 <strong>{{ choice.label }}</strong>
-                <v-chip v-if="choice.preferred" color="success" size="x-small" variant="tonal">
-                  Recommended
-                </v-chip>
               </span>
               <small>{{ choice.description }}</small>
             </span>
@@ -190,11 +187,13 @@ function configuredChoice(engine = {}, provider = {}) {
   return {
     description: engine.engineId === "codex"
       ? `OpenAI account · ${model.label}`
-      : [provider.label, provider.description].filter(Boolean).join(" · "),
+      : engine.engineId === "claude"
+        ? `Claude account · ${model.label}`
+        : [provider.label, provider.description].filter(Boolean).join(" · "),
     domId: id.replace(/[^a-z0-9_-]+/giu, "-"),
     engineId: engine.engineId,
     id,
-    label: engine.engineId === "codex" ? "Codex" : model.label,
+    label: engine.engineId === "codex" ? "Codex" : engine.engineId === "claude" ? "Claude" : model.label,
     preferred: provider.preferred === true,
     selection: {
       agentId: agent.id,

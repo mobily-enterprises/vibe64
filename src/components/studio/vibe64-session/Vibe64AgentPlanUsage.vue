@@ -29,8 +29,9 @@ const usage = useEndpointResource({
   queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value]),
   fallbackLoadError: "Plan allowance is unavailable.",
   queryOptions: {
+    meta: { jskit: { requestRecovery: false } },
     queryFn: ({ signal }) => getHttpWebClient().request(path.value, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)])
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)])
     }),
     retry: false,
     refetchOnMount: "always",
@@ -52,8 +53,9 @@ const goalResource = useEndpointResource({
   queryKey: computed(() => ["vibe64-agent-goal", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value]),
   fallbackLoadError: "Goal status is unavailable.",
   queryOptions: {
+    meta: { jskit: { requestRecovery: false } },
     queryFn: ({ signal }) => getHttpWebClient().request(goalPath.value, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)])
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)])
     }),
     retry: false,
     refetchOnMount: "always",

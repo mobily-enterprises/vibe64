@@ -16,7 +16,7 @@ function claudeCodeArguments({
   outputSchema, terminal = false, systemPrompt, appendSystemPrompt
 } = {}) {
   const args = terminal ? [] : ["--print", "--input-format", "stream-json", "--output-format", "stream-json",
-    "--verbose", "--include-partial-messages", "--replay-user-messages"];
+    "--verbose", "--include-partial-messages", "--replay-user-messages", "--thinking-display", "summarized"];
   if (sessionId) args.push(resume ? "--resume" : "--session-id", sessionId);
   if (systemPrompt) args.push("--system-prompt", systemPrompt);
   if (appendSystemPrompt) args.push("--append-system-prompt", appendSystemPrompt);

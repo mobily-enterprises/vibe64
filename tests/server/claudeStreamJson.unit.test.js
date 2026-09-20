@@ -62,6 +62,47 @@ test("Claude controls correlate out-of-order replies and events apply backpressu
   await client.completion;
 });
 
+test("Claude control replies bypass slow event persistence while events remain ordered", async () => {
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const observed = [];
+  const stream = fakeStream((frame, socket) => socket.push(`${JSON.stringify({
+    type: "control_response", response: { subtype: "success", request_id: frame.request_id, response: {} }
+  })}\n`));
+  const client = createClaudeJsonClient({ stream, onEvent: async (frame) => {
+    if (frame.number === 1) { entered.resolve(); await release.promise; }
+    observed.push(frame.number);
+  } });
+  stream.push('{"type":"event","number":1}\n{"type":"event","number":2}\n');
+  await entered.promise;
+  try {
+    await client.request({ subtype: "interrupt" }, { timeoutMs: 100 });
+    assert.deepEqual(observed, []);
+    release.resolve();
+    stream.push(null);
+    await client.completion;
+    assert.deepEqual(observed, [1, 2]);
+  } finally {
+    release.resolve();
+    client.close();
+  }
+});
+
+test("Claude interrupt uses the common 30-second control deadline", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const client = createClaudeJsonClient({ stream: fakeStream(() => {}) });
+  const pending = client.interrupt();
+  let settled = false;
+  const rejected = assert.rejects(pending, /interrupt timed out/u).then(() => { settled = true; });
+  t.mock.timers.tick(29_999);
+  await Promise.resolve();
+  assert.equal(settled, false);
+  t.mock.timers.tick(1);
+  await rejected;
+  client.close();
+  await client.completion;
+});
+
 test("Claude control timeouts and pipe closure reject pending work promptly", async () => {
   const stream = fakeStream(() => {});
   const client = createClaudeJsonClient({ stream, timeoutMs: 10 });
@@ -76,6 +117,8 @@ test("Claude subscription launch preserves native auth and makes helper tools un
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });
   assert.ok(args.includes("--resume"));
   assert.ok(args.includes("stream-json"));
+  assert.equal(args[args.indexOf("--thinking-display") + 1], "summarized");
+  assert.equal(claudeCodeArguments({ terminal: true }).includes("--thinking-display"), false);
   assert.equal(args.includes("--bare"), false);
   assert.equal(args[args.indexOf("--tools") + 1], "");
   assert.equal(args.includes("bypassPermissions"), false);
@@ -170,6 +213,18 @@ test("Claude stop requires process exit proof and resume keeps the native conver
   assert.equal(f.processes[1].options.resume, true);
 });
 
+test("Claude reuses its main conversation when callers hold older session snapshots", async (t) => {
+  const f = await fixture(t);
+  const staleSession = structuredClone(f.context.session);
+  const first = await f.provider.ensureSession(f.context);
+  const staleContext = { ...f.context, session: staleSession };
+  const state = await f.provider.sessionState(staleContext);
+  const sent = await f.provider.sendMessage(staleContext, { message: "Hello", messageId: "hello" });
+  assert.equal(state.thread.id, first.thread.id);
+  assert.equal(sent.thread.id, first.thread.id);
+  assert.equal(f.processes.length, 1);
+});
+
 test("Claude observation failure stops native work before publishing idle", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });
@@ -184,6 +239,9 @@ test("Claude managed bridge carries JSON and provides a verified scope stop", as
   const command = path.join(root, "claude-fixture");
   await writeFile(command, `#!/usr/bin/env node
 const readline = require('node:readline');
+if (Number(process.env.VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID) !== process.pid) {
+  throw new Error('Native Git probes would wait forever for stdin.');
+}
 readline.createInterface({ input: process.stdin }).on('line', line => {
   const frame = JSON.parse(line);
   if (frame.type === 'control_request') process.stdout.write(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id, response: { models: [{ value: 'fixture' }] } } }) + '\\n');
@@ -287,9 +345,26 @@ test("Claude renewal uses the main native history and verifies the approved fres
   assert.equal(successor.written.length, 0);
 });
 
+test("Claude renewal failures allow the shared manual handover recovery without losing the old conversation", async (t) => {
+  const f = await fixture(t);
+  const source = { authority: "github", ref: "refs/heads/main", commit: "a".repeat(40) };
+  const ready = await f.provider.ensureSession(f.context);
+  f.behavior.afterSend = (native) => native.options.onEvent({
+    type: "result", subtype: "error_during_execution", is_error: true,
+    errors: ["Start a new session to continue."], uuid: "refused"
+  });
+  await assert.rejects(f.provider.generateSessionRenewalHandover(f.context, { operationId: "renew-refused", source }), {
+    code: "vibe64_session_renewal_turn_failed"
+  });
+  assert.equal(f.processes[0].stopped, true);
+  assert.equal(f.context.session.metadata.claude_conversation_id, ready.thread.id);
+  assert.equal(f.written.length, 0);
+});
+
 test("Claude status reads native JSON and returns only public account details", async () => {
   const status = await readClaudeCodeAuthStatus({ credentialHome: { home: "/home/fixture" }, commandRunner: async (input) => {
     assert.deepEqual(input.args, ["auth", "status", "--json"]);
+    assert.equal(input.timeout, 30_000);
     assert.equal(input.credentialHome.home, "/home/fixture");
     return { ok: true, stdout: JSON.stringify({ loggedIn: true, email: "owner@example.test", authMethod: "claude.ai", subscriptionType: "max", accessToken: "not-public" }) };
   } });
@@ -319,6 +394,52 @@ test("Claude signed-out JSON is normal while failed and malformed status respons
     assert.equal(status.loggedIn, false);
     assert.ok(status.error);
   }
+});
+
+test("Claude status shares concurrent reads and invalidates when native account files change", async (t) => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "claude-auth-status-"));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const configRoot = path.join(home, ".claude");
+  await mkdir(configRoot);
+  let calls = 0;
+  let email = "first@example.test";
+  const input = { env: { CLAUDE_CONFIG_DIR: configRoot }, credentialHome: { home }, commandRunner: async () => {
+    calls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { ok: true, stdout: JSON.stringify({ loggedIn: true, email, authMethod: "claude.ai" }) };
+  } };
+  const statuses = await Promise.all(Array.from({ length: 8 }, () => readClaudeCodeAuthStatus(input)));
+  assert.equal(calls, 1);
+  assert.ok(statuses.every((status) => status.email === email));
+  if (process.platform !== "darwin") {
+    await readClaudeCodeAuthStatus(input);
+    assert.equal(calls, 1);
+  }
+  for (const file of [path.join(configRoot, ".credentials.json"), path.join(home, ".claude.json"), path.join(configRoot, ".claude.json")]) {
+    email = `${calls}@example.test`;
+    // Deliberately not JSON: the wrapper must never parse native credentials.
+    await writeFile(file, "native-account-changed");
+    assert.equal((await readClaudeCodeAuthStatus(input)).email, email);
+    await rm(file);
+    const before = calls;
+    await readClaudeCodeAuthStatus(input);
+    assert.equal(calls, before + 1);
+  }
+});
+
+test("Claude status failures do not poison later reads or share across credential homes", async () => {
+  let calls = 0;
+  const commandRunner = async () => {
+    calls += 1;
+    return calls === 1 ? { ok: false, error: "Temporary failure" }
+      : { ok: true, stdout: JSON.stringify({ loggedIn: false }) };
+  };
+  const input = { env: {}, credentialHome: { home: "/home/fixture" }, commandRunner };
+  assert.equal((await readClaudeCodeAuthStatus(input)).error, "Temporary failure");
+  assert.equal((await readClaudeCodeAuthStatus(input)).error, undefined);
+  assert.equal(calls, 2);
+  await readClaudeCodeAuthStatus({ ...input, credentialHome: { home: "/home/another" } });
+  assert.equal(calls, 3);
 });
 
 
@@ -365,6 +486,61 @@ test("Claude plan usage retains real windows and never invents an allowance afte
   assert.deepEqual(usage.windows.map(({ id, remainingPercent }) => ({ id, remainingPercent })), [
     { id: "five_hour", remainingPercent: 75 }, { id: "seven_day", remainingPercent: 0 }
   ]);
+});
+
+test("Claude changes model and effort through native controls without restarting the conversation", async (t) => {
+  const f = await fixture(t);
+  const first = await f.provider.ensureSession(f.context);
+  const native = f.processes[0];
+  const requests = [];
+  native.client.request = async (request) => { requests.push(request); return {}; };
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  const second = await f.provider.ensureSession(f.context);
+  assert.equal(second.thread.id, first.thread.id);
+  assert.deepEqual(requests, [
+    { subtype: "set_model", model: "haiku" },
+    { subtype: "apply_flag_settings", settings: { effortLevel: null } }
+  ]);
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "sonnet", variantId: "low" };
+  await f.provider.ensureSession(f.context);
+  assert.deepEqual(requests.at(-1), { subtype: "apply_flag_settings", settings: { effortLevel: "low" } });
+  assert.equal(f.processes.length, 1);
+  assert.equal(native.stopped, false);
+  await f.provider.sendMessage(f.context, { message: "Continue", messageId: "switched" });
+  assert.equal(f.processes.length, 1);
+  assert.equal(requests.length, 4);
+});
+
+test("Claude retires a process when its settings change is only partially accepted", async (t) => {
+  const f = await fixture(t);
+  await f.provider.ensureSession(f.context);
+  const native = f.processes[0];
+  native.client.request = async (request) => {
+    if (request.subtype === "apply_flag_settings") throw new Error("Settings rejected");
+    return {};
+  };
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  await assert.rejects(f.provider.ensureSession(f.context), /Settings rejected/u);
+  assert.equal(native.stopped, true);
+  await f.provider.sendMessage(f.context, { message: "Retry", messageId: "retry-settings" });
+  assert.equal(f.processes.length, 2);
+  assert.equal(f.processes[1].options.model, "haiku");
+});
+
+test("Claude reads account capabilities and allowance through an already owned process", async (t) => {
+  const f = await fixture(t);
+  await f.provider.ensureSession(f.context);
+  const native = f.processes[0];
+  native.client.request = async (request) => {
+    assert.equal(request.subtype, "get_usage");
+    return { rate_limits_available: true, rate_limits: { seven_day: { utilization: 25 } } };
+  };
+  assert.equal((await f.provider.capabilities(f.context)).modelProviders[0].models.length, 2);
+  assert.equal((await f.provider.readPlanUsage(f.context)).windows[0].remainingPercent, 75);
+  assert.equal(f.processes.length, 1);
+  assert.equal(native.stopped, false);
+  await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" });
+  assert.equal(native.stopped, true);
 });
 
 test("Claude retains failed catalog cleanup and retries it before another query or account change", async (t) => {

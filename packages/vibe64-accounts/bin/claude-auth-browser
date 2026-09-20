@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { writeFile, rename } from "node:fs/promises";
 
-// Claude invokes BROWSER with its authorization URL. Only transport the URL;
-// the unmodified CLI owns OAuth, code exchange, and credential storage.
+// Use the pinned CLI's manual-code callback for a browser on another machine.
+// The unmodified CLI owns OAuth, code exchange, and credential storage.
 const destination = process.env.VIBE64_CLAUDE_AUTH_HANDOFF;
 const url = new URL(process.argv.at(-1));
 if (!destination || url.protocol !== "https:" ||
@@ -10,6 +10,7 @@ if (!destination || url.protocol !== "https:" ||
     !["/oauth/authorize", "/cai/oauth/authorize"].includes(url.pathname)) {
   throw new Error("Claude returned an unsupported sign-in link.");
 }
+url.searchParams.set("redirect_uri", "https://platform.claude.com/oauth/code/callback");
 const temporary = `${destination}.tmp`;
 await writeFile(temporary, JSON.stringify({ authUrl: url.href }), { mode: 0o600 });
 await rename(temporary, destination);

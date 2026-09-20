@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   realtime: null,
   goal: null,
   goalResource: null,
+  goalOptions: null,
   buttons: [],
   request: vi.fn()
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource(options) {
     if (options.path.value.endsWith("/agent-goal")) {
+      mocks.goalOptions = options;
       mocks.goalResource = { data: ref(mocks.goal), loadError: ref(""), reload: vi.fn() };
       return mocks.goalResource;
     }
@@ -89,6 +91,25 @@ it("resolves the reactive sessions path used by the live chat", async () => {
   sessionsApiPath.value = "/api/app/next/vibe64/sessions";
   expect(mocks.options.path.value).toBe("/api/app/next/vibe64/sessions/one/agent-plan-usage");
   expect(mocks.options.queryKey.value).toContain(sessionsApiPath.value);
+});
+
+it("keeps passive allowance and goal lookup failures out of app-wide network recovery", async () => {
+  await render(null);
+  expect(mocks.options.queryOptions.meta.jskit.requestRecovery).toBe(false);
+  expect(mocks.goalOptions.queryOptions.meta.jskit.requestRecovery).toBe(false);
+});
+
+it("gives both passive status requests the agreed 30-second deadline", async () => {
+  const controller = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+  try {
+    await render(null);
+    await mocks.options.queryOptions.queryFn({ signal: controller.signal });
+    await mocks.goalOptions.queryOptions.queryFn({ signal: controller.signal });
+    expect(timeout.mock.calls).toEqual([[30_000], [30_000]]);
+  } finally {
+    timeout.mockRestore();
+  }
 });
 
 it("never invents a refreshed allowance after the reset deadline", async () => {

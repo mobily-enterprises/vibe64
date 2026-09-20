@@ -757,7 +757,7 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
       assert.equal(grace.ok, true);
       assert.equal(reusedAda.ok, true);
       assert.equal(reusedAda.id, ada.id);
-      assert.equal(terminalStarts.length, 3);
+      assert.equal(terminalStarts.length, 2, "reusing Ada's login must not launch another managed execution");
       assert.equal(typeof terminalStarts[0].terminal.runningLimitFilter, "function");
     } finally {
       await closeTerminalSessionsForNamespacePrefix("vibe64-accounts");
@@ -1881,10 +1881,14 @@ test("Claude authentication is owner-only and launches native login after runtim
 test("Claude login receives its browser link as JSON and accepts code input only from the owner", async () => {
   await withTempDir(async (root) => {
     let request;
-    const authUrl = "https://claude.com/cai/oauth/authorize?state=fixture";
+    let launches = 0;
+    const authUrl = "https://claude.com/cai/oauth/authorize?code=true&redirect_uri=http%3A%2F%2Flocalhost%3A46237%2Fcallback&state=fixture&code_challenge=fixture-challenge&code_challenge_method=S256";
+    const manualUrl = new URL(authUrl);
+    manualUrl.searchParams.set("redirect_uri", "https://platform.claude.com/oauth/code/callback");
     const service = createService({
       daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
       runAuthTerminalCommand: async (input) => {
+        launches += 1;
         request = input;
         return startGatewayAuthTestTerminal(input, {
           command: process.execPath,
@@ -1908,15 +1912,27 @@ test("Claude login receives its browser link as JSON and accepts code input only
         if (session.authUrl) break;
         await delay(10);
       }
-      assert.equal(session.authUrl, authUrl);
+      assert.equal(session.authUrl, manualUrl.href);
       assert.equal(session.output.includes(authUrl), false);
       assert.equal(session.status, "authenticating");
       assert.equal((await service.readAuthSession({ sessionId: started.id, vibe64User: member })).ok, false);
       assert.equal(service.writeAuthTerminal({ sessionId: started.id, vibe64User: member }, "secret-code\r").ok, false);
       assert.equal(service.writeAuthTerminal({ sessionId: started.id, vibe64User: owner }, "secret-code\r").ok, true);
+      const resumed = await service.startAuth({ accountId: "claude", vibe64User: owner });
+      assert.equal(resumed.id, started.id);
+      assert.equal(resumed.authUrl, manualUrl.href);
+      assert.equal(launches, 1, "reusing login must not reserve another managed execution");
     } finally {
       await service.cancelAuthSession({ sessionId: started.id, vibe64User: owner });
     }
     await assert.rejects(readFile(request.env.VIBE64_CLAUDE_AUTH_HANDOFF), { code: "ENOENT" });
+    const restarted = await service.startAuth({ accountId: "claude", vibe64User: owner });
+    try {
+      assert.equal(restarted.ok, true);
+      assert.notEqual(restarted.id, started.id);
+      assert.equal(launches, 2);
+    } finally {
+      await service.cancelAuthSession({ sessionId: restarted.id, vibe64User: owner });
+    }
   });
 });

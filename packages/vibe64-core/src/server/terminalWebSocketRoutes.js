@@ -26,6 +26,7 @@ function registerTerminalWebSocketRoute(
   fastify,
   {
     projectContext = null,
+    projectScoped = true,
     routePath,
     resize,
     service,
@@ -74,17 +75,21 @@ function registerTerminalWebSocketRoute(
       void (async () => {
         let projectContextValue;
         try {
-          projectContextValue = await resolveProjectRequestContext({
-            projectContext,
-            request
-          });
+          if (projectScoped) {
+            projectContextValue = await resolveProjectRequestContext({
+              projectContext,
+              request
+            });
+          }
         } catch (error) {
           closeWithError(1008, String(error?.message || error || "Vibe64 project request failed."));
           return;
         }
 
         const withProjectContext = (operation) => {
-          return runWithProjectRequestContext(projectContextValue, operation);
+          return projectScoped
+            ? runWithProjectRequestContext(projectContextValue, operation)
+            : operation();
         };
 
         const routeParams = request.params || {};

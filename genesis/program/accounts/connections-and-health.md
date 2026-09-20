@@ -13,6 +13,8 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
 - `packages/vibe64-accounts/src/server/service.js`
+- `packages/vibe64-accounts/src/server/registerRoutes.js`
+- `packages/vibe64-core/src/server/terminalWebSocketRoutes.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
@@ -26,13 +28,16 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/studio-health/src/server/service.js`
 - `src/components/studio/StudioHealthScreen.vue`
+- `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
 ## Public contract
 
 The owner can connect a Claude subscription through the existing Accounts flow.
 The unmodified CLI runs `claude auth login --claudeai`. Its browser-opener
 invocation writes an atomic private JSON handoff, giving the UI a Continue to
-Claude button without parsing terminal prose. The user pastes the browser's
+Claude button without parsing terminal prose. The handoff uses the pinned CLI's
+hosted manual-code callback, so a browser on another machine never needs to
+reach the VPS through localhost. The user pastes the browser's
 authorization code into the guided form, which forwards it to the owned login
 terminal. Claude performs the exchange and stores its own credentials. Realtime
 completion rereads `claude auth status --json`; a failed login offers Try again,
@@ -40,13 +45,26 @@ and the native terminal remains available for recovery. Vibe64 neither reads
 OAuth tokens nor implements a replacement OAuth client. Login and logout retire
 the account's owned Claude processes before changing authentication.
 The CLI's signed-out JSON response is a normal disconnected state even though
-its exit code is nonzero. Temporary model and allowance queries publish cached
-results only after verified process exit. Failed cleanup stays owned for retry
+its exit code is nonzero.
+Account status reads share one native query and reuse its public result for up
+to 30 seconds while native credential and account-file metadata is unchanged.
+Changes invalidate the result immediately; failures are not cached. The wrapper
+does not read those files' contents. On macOS, where credentials can live in the
+keychain, only concurrent reads are shared.
+Model and allowance reads reuse a running process owned by the current account.
+When no such process exists, a temporary query publishes cached results only
+after verified process exit. Failed cleanup stays owned for retry
 before another query or authentication change; a failed query whose process
 stopped does not block switching accounts.
+Starting sign-in again returns the existing matching login session before
+requesting another managed execution. A closing login reports that it is still
+finishing, so retries cannot wait for a resource scope that was never launched.
 
 The Accounts surface reports required providers, guides supported sign-in, and
-keeps credentials in host-owned storage. Studio health performs read-only checks
+keeps credentials in host-owned storage. The session picker names Codex and
+Claude explicitly, with their model in the description. Connected choices have
+no recommendation badge; the preferred choice still controls initial selection.
+Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
 managed browser runtime. Failures identify the concrete host capability that is
 missing without attempting project-specific repairs.
@@ -66,7 +84,9 @@ repeated failures back off instead of keeping the browser in a tight retry
 loop.
 
 Account sign-in and sign-out are account-wide operations and do not require a
-selected project. Connected Codex status includes the ChatGPT email from the
+selected project. The login terminal uses the same workspace scope as its HTTP
+routes, including code submission and terminal recovery, while preserving the
+signed-in user's account access checks. Connected Codex status includes the ChatGPT email from the
 selected account's local identity token when available, without exposing tokens,
 starting a runtime, or changing the authentication generation. Missing identity
 metadata and API-key connections remain usable without an email. The connection

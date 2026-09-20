@@ -61,11 +61,13 @@ async function* readClaudeJsonFrames(stream, { maxFrameBytes = CLAUDE_JSON_MAX_F
   if (length && !allowIncompleteTail) throw claudeProtocolError("Claude JSON stream ended in an incomplete frame.");
 }
 
-function createClaudeJsonClient({ stream, onEvent = async () => {}, onFailure = async () => {}, timeoutMs = 60_000 } = {}) {
+function createClaudeJsonClient({ stream, onEvent = async () => {}, onFailure = async () => {}, timeoutMs = 30_000 } = {}) {
   const requests = new Map();
   let failure = null;
   let closed = false;
   let writes = Promise.resolve();
+  let events = Promise.resolve();
+  let queuedEventBytes = 0;
 
   function fail(error) {
     failure ||= error;
@@ -133,14 +135,29 @@ function createClaudeJsonClient({ stream, onEvent = async () => {}, onFailure = 
             error: "This control request requires the native Claude Code terminal."
           } });
         } else {
-          await onEvent(frame);
+          const bytes = Buffer.byteLength(JSON.stringify(frame));
+          queuedEventBytes += bytes;
+          if (queuedEventBytes > 2 * CLAUDE_JSON_MAX_FRAME_BYTES) {
+            throw claudeProtocolError("Claude event processing exceeded its queue limit.");
+          }
+          // Persist events in order without blocking control replies behind
+          // disk writes or realtime subscribers. Bound the queued payload too.
+          events = events.then(async () => {
+            try {
+              if (!closed && !failure) await onEvent(frame);
+            } finally {
+              queuedEventBytes -= bytes;
+            }
+          });
+          void events.catch(fail);
         }
       }
+      await events;
       if (!closed) throw claudeProtocolError("Claude event connection ended unexpectedly.", "vibe64_claude_observation_lost");
     } catch (error) {
       if (!closed) {
         fail(error);
-        await onFailure(error);
+        await onFailure(failure);
       }
     } finally {
       fail(failure || claudeProtocolError("Claude connection is closed."));
@@ -153,7 +170,7 @@ function createClaudeJsonClient({ stream, onEvent = async () => {}, onFailure = 
   return Object.freeze({
     completion,
     initialize: () => request({ subtype: "initialize" }),
-    interrupt: () => request({ subtype: "interrupt" }, { timeoutMs: 5_000 }),
+    interrupt: () => request({ subtype: "interrupt" }),
     request,
     send(message, { messageId = randomUUID(), sessionId = "" } = {}) {
       return write({ type: "user", uuid: messageId, session_id: sessionId,

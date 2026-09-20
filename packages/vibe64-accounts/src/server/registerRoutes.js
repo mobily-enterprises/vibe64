@@ -109,6 +109,7 @@ function registerRoutes(
 
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
+    projectScoped,
     resize(service, { cols, request, rows, terminalSessionId }) {
       return service.resizeAuthTerminal(withVibe64User(request, {
         sessionId: terminalSessionId

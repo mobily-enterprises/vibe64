@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 
 import {
   ACTION_READ_ACCOUNTS,
@@ -8,6 +10,7 @@ import {
   ACTION_SAVE_PERSONAL_AI_PROFILE
 } from "../../packages/vibe64-accounts/src/server/actions.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import {
   findRegisteredRoute,
   routeProjectParams,
@@ -39,6 +42,76 @@ function testAccountRouteRuntime() {
     registeredRoutes
   };
 }
+
+test("workspace account terminal accepts authorization input without a selected project", async () => {
+  const runtime = testAccountRouteRuntime();
+  const calls = [];
+  const vibe64User = { email: "owner@example.test", role: "owner" };
+  const input = { sessionId: "claude-login", vibe64User };
+  const denied = { ok: false, error: "Account access denied." };
+  let allowAccess = true;
+  runtime.accounts = {
+    subscribeAuthTerminal(received, subscriber) {
+      assert.deepEqual(received, input);
+      assert.equal(currentProjectScopeKey(), "global");
+      if (!allowAccess) return denied;
+      subscriber({ type: "output", data: "Paste code here if prompted > " });
+      return { id: received.sessionId, status: "running", unsubscribe() { calls.push("unsubscribe"); } };
+    },
+    writeAuthTerminal(received, data) {
+      assert.deepEqual(received, input);
+      assert.equal(currentProjectScopeKey(), "global");
+      calls.push(["write", data]);
+      return { ok: true };
+    },
+    resizeAuthTerminal(received, size) {
+      assert.deepEqual(received, input);
+      calls.push(["resize", size]);
+      return { ok: true };
+    }
+  };
+  registerRoutes(runtime.http, {
+    accounts: runtime.accounts,
+    fastify: runtime.fastify,
+    projectScoped: false,
+    routeRelativePath: "vibe64/accounts",
+    routeSurface: "app"
+  });
+  const route = findRegisteredRoute(runtime, {
+    method: "GET",
+    path: "/api/vibe64/accounts/auth/:terminalSessionId/ws"
+  });
+  assert.ok(route);
+  const sent = [];
+  const socket = new EventEmitter();
+  socket.readyState = 1;
+  socket.send = (payload) => sent.push(JSON.parse(payload));
+  socket.close = (code) => calls.push(["close", code]);
+  const request = {
+    headers: { host: "studio.example.test", origin: "https://studio.example.test" },
+    ip: "10.0.0.8",
+    params: { terminalSessionId: input.sessionId },
+    vibe64User
+  };
+  route.handler(socket, request);
+  await setImmediate();
+  assert.deepEqual(sent, [
+    { type: "output", data: "Paste code here if prompted > " },
+    { type: "snapshot", session: { id: input.sessionId, status: "running" } }
+  ]);
+  socket.emit("message", Buffer.from(JSON.stringify({ type: "input", data: "test-code\r" })));
+  socket.emit("message", Buffer.from(JSON.stringify({ type: "resize", cols: 100, rows: 30 })));
+  await setImmediate();
+  socket.emit("close");
+  assert.deepEqual(calls, [["write", "test-code\r"], ["resize", { cols: 100, rows: 30 }], "unsubscribe"]);
+
+  allowAccess = false;
+  sent.length = 0;
+  route.handler(socket, request);
+  await setImmediate();
+  assert.deepEqual(sent, [{ type: "error", error: denied.error }]);
+  assert.deepEqual(calls.at(-1), ["close", 1008]);
+});
 
 test("accounts read route omits signed-in user in local editor mode", async () => {
   await withLocalRequestBypass(async () => {

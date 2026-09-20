@@ -2082,6 +2082,16 @@ function createService({
   }
 
   async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
+    const reuseRunning = canReuseAuthTerminal(accountId, mode, githubContext);
+    for (const sessionId of authSessions.keys()) {
+      const session = readTerminalSession(sessionId, { namespace: ACCOUNT_AUTH_NAMESPACE });
+      if (session.ok === false || !["running", "closing"].includes(session.status) || !reuseRunning(session)) continue;
+      if (session.status === "closing") {
+        return authError("account_auth_session_closing", "The previous sign-in is still closing. Try again shortly.");
+      }
+      // Reuse before the gateway reserves a new execution that would never start.
+      return session;
+    }
     const actorId = String(options.actorId || "");
     const providerContext = authCredentialContext(accountId, githubContext);
     await ensureToolHomeSource(providerContext);
@@ -2149,7 +2159,7 @@ function createService({
             });
           },
           runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
-          reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
+          reuseRunning
         },
         userKey: credentialHome.username
       });
