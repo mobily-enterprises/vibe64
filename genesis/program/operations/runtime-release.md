@@ -6,6 +6,8 @@ Building a package leaves the development dependency installation intact.
 
 ## Sources
 
+- `index.html`
+- `src/main.js`
 - `tooling/release/server-build.mjs`
 - `tooling/release/runtime-package.mjs`
 - `tooling/release/pack-release.mjs`
@@ -16,6 +18,11 @@ Building a package leaves the development dependency installation intact.
 - `tests/server/runtimePackage.unit.test.js`
 
 ## Public contract
+
+The initial HTML contains a lightweight, responsive loading shell with inline
+styles and a reload link. Vue replaces it when bootstrap and initial routing
+finish; a bootstrap failure changes its status to a retry explanation. The
+document remains useful while JavaScript downloads or is unavailable.
 
 `npm run build` builds the frontend for local source execution. `npm run
 pack:release` verifies package boundaries, builds the frontend, assembles a

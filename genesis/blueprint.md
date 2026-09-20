@@ -3,6 +3,10 @@
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+The initial document shows a lightweight loading shell before the editor's
+JavaScript starts. It remains visible during initialization, offers a page reload,
+and explains a failed initialization instead of leaving a blank page.
+
 People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
 application, environment, and the system's explained structure in one place.

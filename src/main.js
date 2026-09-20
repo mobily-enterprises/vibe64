@@ -98,4 +98,8 @@ void bootstrapClientShellApp({
   fallbackRoute
 }).catch((error) => {
   console.error("Failed to bootstrap client app.", error);
+  const status = document.getElementById("startup-status");
+  if (status) {
+    status.textContent = "Vibe64 could not open. Reload the page to try again.";
+  }
 });
