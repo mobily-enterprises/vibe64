@@ -3,8 +3,9 @@ import test from "node:test";
 import viteConfig from "../../vite.config.mjs";
 
 test("Vite preserves xterm identifiers until xtermjs issue 5800 is fixed", () => {
-  assert.equal(viteConfig.esbuild?.minifyIdentifiers, false);
-  assert.equal(viteConfig.esbuild?.minifySyntax, false);
+  const minify = viteConfig.build?.rolldownOptions?.output?.minify;
+  assert.equal(minify?.mangle, false);
+  assert.equal(minify?.compress, false);
 });
 
 test("Vite sends only the local app entry route through the backend", () => {

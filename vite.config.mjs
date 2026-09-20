@@ -36,13 +36,6 @@ const clientEntry = (() => {
 })();
 
 export default defineConfig({
-  esbuild: {
-    // Work around xtermjs/xterm.js#5800: @xterm/xterm 6.0.0 ships already
-    // minified ESM that breaks when esbuild compresses and mangles it again.
-    // Remove this after that issue is fixed and Vibe64 upgrades to the fix.
-    minifyIdentifiers: false,
-    minifySyntax: false
-  },
   resolve: {
     preserveSymlinks: true,
     alias: {
@@ -86,7 +79,14 @@ export default defineConfig({
     ]
   },
   build: {
-    chunkSizeWarningLimit: 700
+    chunkSizeWarningLimit: 700,
+    rolldownOptions: {
+      output: {
+        // Preserve the xtermjs/xterm.js#5800 workaround when using Vite 8's
+        // minifier: do not recompress or mangle xterm's already minified ESM.
+        minify: { mangle: false, compress: false }
+      }
+    }
   },
   server: {
     port: devPort,

@@ -20,9 +20,9 @@ import type {
 
 declare module 'vue-router' {
   interface TypesConfig {
-    ParamParsers:
-      | never
+    _ParamParsers: {}
     RouteNamedMap: import('vue-router/auto-routes').RouteNamedMap
+    _RouteFileInfoMap: import('vue-router/auto-routes')._RouteFileInfoMap
   }
 }
 
@@ -87,8 +87,8 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/[sessionTool]': RouteRecordInfo<
       '/app/project/[slug]/dashboard/[sessionTool]',
       '/app/project/:slug/dashboard/:sessionTool',
-      { slug: ParamValue<true>, sessionTool: ParamValue<true> },
-      { slug: ParamValue<false>, sessionTool: ParamValue<false> },
+      { sessionTool: ParamValue<true>, slug: ParamValue<true> },
+      { sessionTool: ParamValue<false>, slug: ParamValue<false> },
       | never
     >,
     '/app/project/[slug]/dashboard/access/': RouteRecordInfo<
@@ -129,8 +129,8 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/history/[sessionId]': RouteRecordInfo<
       '/app/project/[slug]/dashboard/history/[sessionId]',
       '/app/project/:slug/dashboard/history/:sessionId',
-      { slug: ParamValue<true>, sessionId: ParamValue<true> },
-      { slug: ParamValue<false>, sessionId: ParamValue<false> },
+      { sessionId: ParamValue<true>, slug: ParamValue<true> },
+      { sessionId: ParamValue<false>, slug: ParamValue<false> },
       | never
     >,
     '/app/project/[slug]/dashboard/integrations/': RouteRecordInfo<
@@ -193,11 +193,15 @@ declare module 'vue-router/auto-routes' {
         | '/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/index.vue': {
       routes:
         | '/app/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug].vue': {
@@ -219,6 +223,8 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/settings/'
       views:
         | 'default'
+      pathParamNames:
+        | 'slug'
     }
     'src/pages/app/project/[slug]/dashboard.vue': {
       routes:
@@ -238,17 +244,23 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/settings/'
       views:
         | 'default'
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/[sessionTool].vue': {
       routes:
         | '/app/project/[slug]/dashboard/[sessionTool]'
       views:
         | never
+      pathParamNames:
+        | 'sessionTool'
     }
     'src/pages/app/project/[slug]/dashboard/access/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/access/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug]/dashboard/changes/index.vue': {
@@ -256,11 +268,15 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/changes/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/env/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/env/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug]/dashboard/health/index.vue': {
@@ -268,11 +284,15 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/health/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/history/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/history/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug]/dashboard/history/[sessionId].vue': {
@@ -280,11 +300,15 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/history/[sessionId]'
       views:
         | never
+      pathParamNames:
+        | 'sessionId'
     }
     'src/pages/app/project/[slug]/dashboard/integrations/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/integrations/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug]/dashboard/issues/index.vue': {
@@ -292,11 +316,15 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/issues/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/pull-requests/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/pull-requests/'
       views:
+        | never
+      pathParamNames:
         | never
     }
     'src/pages/app/project/[slug]/dashboard/repository/index.vue': {
@@ -304,17 +332,23 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/repository/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/session/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/session/'
       views:
         | never
+      pathParamNames:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/settings/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/settings/'
       views:
+        | never
+      pathParamNames:
         | never
     }
   }
