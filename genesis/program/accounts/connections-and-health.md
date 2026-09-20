@@ -7,6 +7,8 @@ and see whether the Studio host is ready to support them.
 
 - `packages/vibe64-core/src/server/codexHelperModel.js`
 - `packages/vibe64-accounts/src/client/studio/HelperModelSettings.vue`
+- `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
+- `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
 - `packages/vibe64-accounts/src/server/service.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
@@ -52,6 +54,16 @@ starting a runtime, or changing the authentication generation. Missing identity
 metadata and API-key connections remain usable without an email. The connection
 surface shows a Disconnect action for connected accounts and sign-in choices for
 disconnected accounts.
+Codex device sign-in uses a single-column Prepare / Connect flow. The code
+and adjacent Copy action share a responsive surface; Continue to ChatGPT is
+the primary authorization action. Each step keeps its reference screenshot
+behind an optional help disclosure. Copy feedback is announced in place,
+code preparation reserves a skeleton region, and Previous step remains secondary.
+The settings link and continue action share a wrapping row. Cancel login sits
+beside the overall sign-in status, and the terminal uses its existing surface-class
+seam for a distinct themed background. Active sign-in replaces disconnected warning chrome
+with a neutral status; the existing session polling, authorization URL, API-key
+choice and terminal recovery continue to own authentication.
 When Codex authentication changes, Vibe64 retires active and
 detached owned Codex runtimes before accepting the new account state. It reports
 success only after process exit is verified; a runtime that cannot be proven
