@@ -38,7 +38,8 @@ function claudeMessageBlocks(frame) {
   if (frame.type !== "assistant" || frame.parent_tool_use_id) return [];
   const content = frame.message?.content;
   if (!Array.isArray(content)) return [];
-  const messageId = frame.message.id || frame.uuid;
+  // Native frames split one API message into blocks with distinct UUIDs.
+  const messageId = frame.uuid || frame.message.id;
   if (!messageId) return [];
   const commentary = content.some((block) => block.type === "tool_use");
   return content.flatMap((block, index) => {

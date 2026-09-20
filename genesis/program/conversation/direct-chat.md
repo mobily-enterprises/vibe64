@@ -122,7 +122,9 @@ the binding and another signed-in account cannot adopt it. Native terminal and
 JSON chat have one writer at a time. JSON sessions explicitly request native
 thinking summaries with `--thinking-display summarized`; newer models otherwise
 return empty thinking text. Exposed thinking and answers use the shared
-transcript; tool commands enter the existing session command broker.
+transcript. Native frame UUIDs keep thinking and answer blocks distinct when
+they share an API message ID, including after history reload. Tool commands
+enter the existing session command broker.
 Older session snapshots reuse the already-owned main Claude conversation.
 The launcher identifies Claude's own PID for startup Git probes that leave stdin
 open, so those probes cannot stall session preparation or the first prompt.

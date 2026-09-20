@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createClaudeJsonClient, readClaudeJsonFrames } from "../../packages/vibe64-runtime/src/server/claudeStreamJson.js";
 import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
+import { readClaudeHistory } from "../../packages/vibe64-terminals/src/server/claudeConversationHistory.js";
 import { claudeCapabilities, claudePlanUsage, createClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { createNativeHelperModelStore } from "../../packages/vibe64-core/src/server/nativeHelperModel.js";
@@ -211,6 +212,40 @@ test("Claude stop requires process exit proof and resume keeps the native conver
   await f.provider.sendMessage(f.context, { message: "Continue", messageId: "continue" });
   assert.equal(f.processes[1].options.sessionId, initial.thread.id);
   assert.equal(f.processes[1].options.resume, true);
+});
+
+test("Claude split native frames retain thinking and answers across streaming and history", async (t) => {
+  const f = await fixture(t);
+  const completedStreams = [];
+  f.context.runtime.store.completeConversationStreamMessage = (_id, messageId) => completedStreams.push(messageId);
+  const sent = await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });
+  const event = f.processes[0].options.onEvent;
+  const content = [{ type: "thinking", thinking: "Exposed summary." }, { type: "text", text: "Done." }];
+  const nativeFrames = content.map((block, index) => ({
+    type: "assistant", uuid: `block-${index}`, message: { id: "shared-api-id", content: [block] }
+  }));
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "shared-api-id" } } });
+  for (const [index, block] of content.entries()) {
+    await event({ type: "stream_event", event: { type: "content_block_start", index, content_block: { type: block.type } } });
+    await event({ type: "stream_event", event: { type: "content_block_delta", index,
+      delta: block.type === "thinking" ? { thinking: block.thinking } : { text: block.text } } });
+    await event({ type: "stream_event", event: { type: "content_block_stop", index } });
+    await event(nativeFrames[index]);
+  }
+  await event({ type: "result", subtype: "success", result: "Done." });
+  const live = await f.provider.readConversation(f.context);
+  assert.deepEqual(live.messages.map(({ role, text }) => ({ role, text })), [
+    { role: "thinking", text: "Exposed summary." }, { role: "assistant", text: "Done." }
+  ]);
+  assert.equal(new Set(live.messages.map((message) => message.id)).size, 2);
+  assert.equal(new Set(f.written.filter((message) => message.role !== "user").map((message) => message.messageId)).size, 2);
+  assert.ok(completedStreams.includes("claude_shared-api-id_1"));
+  await writeHistory(f, sent.thread.id, nativeFrames.map((frame, apiBlockIndex) => ({ ...frame, apiBlockIndex })));
+  const history = await readClaudeHistory({ configRoot: path.join(f.root, "config"),
+    workdir: f.context.session.metadata.source_path, conversationId: sent.thread.id });
+  assert.deepEqual(history.messages.map((message) => message.id), live.messages.map((message) => message.id));
+  assert.deepEqual(history.messages.map((message) => message.text), ["Exposed summary.", "Done."]);
+  assert.equal((await f.provider.readConversation(f.context)).messages.length, 2);
 });
 
 test("Claude reuses its main conversation when callers hold older session snapshots", async (t) => {

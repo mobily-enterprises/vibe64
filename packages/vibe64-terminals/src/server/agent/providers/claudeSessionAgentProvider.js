@@ -282,6 +282,11 @@ function createClaudeSessionAgentProvider({
           await publishMessage(entry, block);
           await entry.onEvent?.({ type: block.role === "thinking" ? "thinking" : "text", text: delta, threadId: entry.id });
         }
+      } else if (event.type === "content_block_stop") {
+        entry.messages.delete(id);
+        if (entry.main && !entry.renewal) {
+          entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, id);
+        }
       }
     } else if (frame.type === "assistant") {
       for (const block of claudeMessageBlocks(frame)) {
