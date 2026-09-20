@@ -653,7 +653,7 @@ function createSessionAgentManager({
     async readPlanUsage(sessionId, options = {}) {
       const provider = bindSession(sessionId, options);
       const access = await accessFor(provider, sessionId, options);
-      if (provider.id !== "codex" || !access.canUse || !access.ownerOnly) {
+      if (typeof provider.readPlanUsage !== "function" || !access.canUse || !access.ownerOnly) {
         return { status: "unsupported", windows: [] };
       }
       return provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session });
@@ -661,7 +661,7 @@ function createSessionAgentManager({
     async readGoal(sessionId, options = {}) {
       const provider = bindSession(sessionId, options);
       const access = await accessFor(provider, sessionId, options);
-      if (provider.id !== "codex" || !access.canUse) {
+      if (typeof provider.readGoal !== "function" || !access.canUse) {
         return { status: "unsupported", goal: null };
       }
       return provider.readGoal({ sessionId, runtime: options.runtime, session: options.session });
@@ -669,8 +669,8 @@ function createSessionAgentManager({
     async updateGoal(sessionId, input = {}, options = {}) {
       const provider = bindSession(sessionId, options);
       await requireAccessFor(provider, sessionId, options);
-      if (provider.id !== "codex") {
-        throw new TypeError("Goal controls require Codex.");
+      if (typeof provider.updateGoal !== "function") {
+        throw new TypeError("This assistant does not support goal controls.");
       }
       return provider.updateGoal({ sessionId, runtime: options.runtime, session: options.session }, input);
     },

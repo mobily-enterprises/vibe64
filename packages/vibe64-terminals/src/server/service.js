@@ -1,3 +1,6 @@
+import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
+import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
+import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createCodexTerminalController } from "./codexTerminal.js";
 import { createSessionConversations } from "./sessionConversations.js";
 import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover } from "./assistantChangeover.js";
@@ -415,6 +418,7 @@ function createService({
   }
 
   const assistantRuntime = {
+    claudeConnectionStatus: async () => (await readClaudeCodeAuthStatus({ env })).loggedIn === true,
     codexConnectionStatus: async () => true,
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
@@ -430,7 +434,7 @@ function createService({
     if (typeof publisher === "function") {
       await publisher(sessionId, payload);
     }
-    if (!["codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
+    if (!["claude-stream-turn-idle", "codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
       String(payload?.reason || "").trim()
     )) {
       return;
@@ -480,16 +484,14 @@ function createService({
     logger,
     projectService
   });
+  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
   const codex = createCodexTerminalController({
     ...codexTerminalController,
     agentDatabaseCommand,
     agentEnvCommand,
     agentPreviewCommand,
     agentSessionCommand,
-    codexAppServerProviderOptions: selfTargetCodexAppServerProviderOptions({
-      codexTerminalController,
-      env
-    }),
+    codexAppServerProviderOptions: codexProviderOptions,
     codexToolHomeRequired: codexTerminalController.codexToolHomeRequired ?? true,
     codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
     codexGitCommand,
@@ -517,6 +519,12 @@ function createService({
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
     providers: [
+      createClaudeSessionAgentProvider({
+        env, projectService, publishSessionChanged: publishAgentSessionChanged,
+        systemRoot: codexProviderOptions.systemRoot,
+        codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+        connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
+      }),
       createCodexSessionAgentProvider({
         connectionStatus: (context) => assistantRuntime.codexConnectionStatus(context),
         controller: codex
@@ -526,6 +534,10 @@ function createService({
       })
     ],
     async readAssistantAccess(context) {
+      if (context.engineId === "claude") {
+        return { available: await assistantRuntime.claudeConnectionStatus(context), ownerOnly: true,
+          economyModelId: await createNativeHelperModelStore({ systemRoot: codexProviderOptions.systemRoot, providerId: "claude" }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL };
+      }
       if (context.engineId !== "codex") {
         return assistantRuntime.readAssistantAccess(context);
       }
@@ -1576,6 +1588,7 @@ function createService({
     ...sessionConversations,
     configureAssistantRuntime(input = {}) {
       for (const name of [
+        "claudeConnectionStatus",
         "codexConnectionStatus",
         "listConnections",
         "readAssistantAccess",

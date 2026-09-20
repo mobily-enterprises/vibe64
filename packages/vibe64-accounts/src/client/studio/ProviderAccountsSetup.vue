@@ -163,7 +163,7 @@
               />
             </div>
             <v-btn
-              v-if="account.id !== 'codex' || !account.connected"
+              v-if="!['codex', 'claude'].includes(account.id) || !account.connected"
               :aria-busy="primaryAuthPending(account) ? 'true' : undefined"
               class="accounts-setup__pending-action"
               color="primary"
@@ -174,7 +174,9 @@
               {{ primaryAuthLabel(account) }}
             </v-btn>
             <HelperModelSettings
-              v-if="account.id === 'codex' && account.connected"
+              v-if="['codex', 'claude'].includes(account.id) && account.connected"
+              :provider-id="account.id"
+              :account-label="account.id === 'claude' ? 'Claude Code' : 'Codex'"
               :disabled="!accountsReadyForActions"
             />
             <v-btn
@@ -311,6 +313,59 @@
               </v-expansion-panels>
             </div>
 
+            <div v-else-if="account.id === 'claude'" class="accounts-setup__instruction-copy">
+              <h2 class="text-title-large ma-0">Connect your Claude plan</h2>
+              <template v-if="session.status !== 'failed'">
+                <p class="text-body-medium ma-0">1. Sign in with the Claude account that has your subscription.</p>
+                <v-btn
+                  class="accounts-setup__authorize-action"
+                  color="primary"
+                  :disabled="!accountsReadyForActions || !session.authUrl"
+                  :append-icon="mdiOpenInNew"
+                  variant="flat"
+                  @click="openAuthUrl(session)"
+                >
+                  {{ session.authUrl ? "Continue to Claude" : "Preparing sign-in…" }}
+                </v-btn>
+                <p class="text-body-medium ma-0">2. Copy the authorization code from Claude and paste it here.</p>
+                <form class="d-flex flex-column ga-3" @submit.prevent="submitClaudeCode(session)">
+                  <v-text-field
+                    v-model="claudeCode"
+                    autocomplete="one-time-code"
+                    autocapitalize="off"
+                    :spellcheck="false"
+                    label="Authorization code"
+                    placeholder="Paste the code from Claude"
+                    type="password"
+                    variant="outlined"
+                    hide-details="auto"
+                    :disabled="!accountsReadyForActions || !session.authUrl || claudeCodeChecking"
+                  />
+                  <v-btn
+                    class="align-self-start"
+                    color="primary"
+                    type="submit"
+                    variant="flat"
+                    :aria-busy="claudeCodeChecking ? 'true' : undefined"
+                    :disabled="!accountsReadyForActions || !claudeCode.trim() || claudeCodeChecking"
+                  >
+                    {{ claudeCodeChecking ? "Checking sign-in…" : "Connect Claude" }}
+                  </v-btn>
+                </form>
+              </template>
+              <p class="text-body-medium text-medium-emphasis ma-0" role="status">{{ statusMessage }}</p>
+              <v-btn
+                v-if="session.status === 'failed'"
+                class="align-self-start"
+                color="primary"
+                variant="flat"
+                :disabled="!accountsReadyForActions || authStartBusy"
+                @click="retryAccountAuth(account, session)"
+              >
+                Try again
+              </v-btn>
+            </div>
+
             <div v-else class="accounts-setup__instruction-copy">
               <v-sheet
                 v-if="userCode || authorizeStep"
@@ -386,7 +441,7 @@
             >
               <Vibe64Terminal
                 :collapsible="true"
-                :command-preview="authTerminal.terminalCommandPreview"
+                :command-preview="authTerminal.terminalCommandPreview.value"
                 :error="authTerminalError(session)"
                 :expanded="authTerminalExpanded"
                 mobile-takeover
@@ -395,8 +450,8 @@
                 show-copy
                 surface-class="bg-surface-light"
                 :stage="authTerminalStage"
-                :status="authTerminal.terminalStatus"
-                subtitle="Use this only if the login asks for terminal input."
+                :status="authTerminal.terminalStatus.value"
+                :subtitle="account.id === 'claude' ? 'Open for sign-in details or to respond to Claude directly.' : 'Use this only if the login asks for terminal input.'"
                 :terminal="authTerminal"
                 :title="authTerminalTitle"
                 :visible="true"
@@ -504,6 +559,8 @@ const {
   authTerminalTitle,
   authTerminalVisible,
   cancelSession,
+  claudeCode,
+  claudeCodeChecking,
   codexAuthorizeStepVisible,
   codexSettingsStepVisible,
   copyAuthCode,
@@ -516,10 +573,12 @@ const {
   primaryAuthPending,
   requiresGitIdentity,
   refreshStatus,
+  retryAccountAuth,
   sessionStatusMessage,
   setCodexAuthStep,
   startAccountApiKeyAuth,
   startAccountAuth,
+  submitClaudeCode,
   statusReady,
   toggleApiKeyForm,
   updateAuthTerminalExpanded

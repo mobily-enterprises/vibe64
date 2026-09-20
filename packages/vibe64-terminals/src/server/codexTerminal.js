@@ -1,4 +1,4 @@
-import { createCodexHelperModelStore } from "@local/vibe64-core/server/codexHelperModel";
+import { createNativeHelperModelStore } from "@local/vibe64-core/server/nativeHelperModel";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   createCodexAppServerDetachedTurnWatcher,
@@ -13368,7 +13368,7 @@ function createCodexTerminalController({
     },
 
     readHelperModel() {
-      return createCodexHelperModelStore({ systemRoot: codexAppServerProviderOptions.systemRoot }).read();
+      return createNativeHelperModelStore({ systemRoot: codexAppServerProviderOptions.systemRoot }).read();
     },
 
     assistantAccess() {

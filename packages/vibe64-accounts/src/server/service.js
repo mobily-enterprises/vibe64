@@ -1,14 +1,17 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 import stripAnsi from "strip-ansi";
 
 import {
   CODEX_RECOMMENDED_HELPER_MODEL,
-  createCodexHelperModelStore,
+  CLAUDE_RECOMMENDED_HELPER_MODEL,
+  createNativeHelperModelStore,
   normalizeHelperModelId
-} from "@local/vibe64-core/server/codexHelperModel";
+} from "@local/vibe64-core/server/nativeHelperModel";
 
 import {
   closeTerminalSession,
@@ -55,6 +58,7 @@ import {
   resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  appCredentialContext,
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
@@ -64,12 +68,15 @@ import {
   shellQuote
 } from "@local/vibe64-execution/server";
 import {
+  STUDIO_MANAGED_CLAUDE_COMMAND,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   codexRuntimeContext
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
+
+import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -100,6 +107,7 @@ const ALL_CODEX_AUTH_MODES = Object.freeze([
 ]);
 
 const ACCOUNT_DEFINITIONS = Object.freeze({
+  claude: Object.freeze({ id: "claude", label: "Claude Code", required: false, scope: APP_CREDENTIAL_SCOPE }),
   codex: Object.freeze({
     id: "codex",
     label: "Codex",
@@ -113,7 +121,7 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
     scope: USER_CREDENTIAL_SCOPE
   })
 });
-const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "github"]);
+const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "claude", "github"]);
 
 function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -379,12 +387,14 @@ function codexApiKeyLoginCommandArgs() {
 }
 
 function logoutCommandArgs(accountId) {
+  if (accountId === "claude") return [STUDIO_MANAGED_CLAUDE_COMMAND, "auth", "logout"];
   return accountId === "github"
     ? ["gh", "auth", "logout", "--hostname", "github.com"]
     : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
 }
 
 function terminalArgsForAuth(accountId, mode, hostCommandOptions = {}, gitIdentity = {}) {
+  if (accountId === "claude") return buildTerminalArgs([STUDIO_MANAGED_CLAUDE_COMMAND, "auth", "login", "--claudeai"], hostCommandOptions);
   if (accountId === "github") {
     return buildTerminalArgs(ghLoginCommandArgs(gitIdentity), hostCommandOptions);
   }
@@ -493,6 +503,7 @@ function parseAuthOutput({
   mode,
   output
 } = {}) {
+  if (accountId === "claude") return { authUrl: "", userCode: "" };
   if (accountId === "github") {
     const userCode = parseGithubUserCode(output);
     return {
@@ -1294,6 +1305,14 @@ function createAccountsRuntime({
   }
 
   return Object.freeze({
+    claudeContext() {
+      return appCredentialContext({
+        home: daemonHome || undefined,
+        gid: daemonGid ?? undefined,
+        uid: daemonUid ?? undefined,
+        username: daemonUsername
+      });
+    },
     codexContext() {
       return codexRuntimeContext({
         env,
@@ -1358,6 +1377,7 @@ function createService({
   unsupportedCodexAuthModeMessage = null
 } = {}) {
   const authSessions = new Map();
+  const claudeBrowserFiles = new Map();
   let codexStatusRead = null;
   const resolvedAccountRuntime = accountRuntime || createAccountsRuntime({
     allowedCodexAuthModes,
@@ -1389,6 +1409,32 @@ function createService({
         fallback: runHostToolCommand
       })
     : runHostToolCommand;
+
+  function claudeManagementError(input = {}) {
+    return input.vibe64User && input.vibe64User.role !== "owner"
+      ? authError("vibe64_owner_required", "Only the workspace owner can manage Claude Code.") : null;
+  }
+
+  async function prepareClaudeAuthChange(input) {
+    const failure = claudeManagementError(input);
+    if (failure) return failure;
+    const stopped = await invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
+    return stopped?.ok === false ? stopped : null;
+  }
+
+  function authCredentialContext(accountId, githubContext) {
+    if (accountId === "github") return githubContext;
+    if (accountId === "claude") return resolvedAccountRuntime.claudeContext();
+    return codexContextForInput();
+  }
+
+  async function readClaudeStatus() {
+    const status = await readClaudeCodeAuthStatus({ env, credentialHome: resolvedAccountRuntime.claudeContext() });
+    return { ...ACCOUNT_DEFINITIONS.claude, connected: status.loggedIn,
+      username: status.email || "", authMethod: status.authMethod || "", subscriptionType: status.subscriptionType || "",
+      status: status.loggedIn ? "connected" : "not_connected",
+      message: status.loggedIn ? "Connected through Claude Code." : status.error || "Sign in to Claude Code with your Claude plan." };
+  }
 
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
@@ -1674,6 +1720,7 @@ function createService({
       });
       return account;
     }
+    if (accountId === "claude") return readClaudeStatus();
     if (accountId === "codex") {
       account = await readLiveCodexStatus({
         reason: codexMarkerReason || "codex-status-refresh",
@@ -1707,6 +1754,7 @@ function createService({
     }
     const previousGithub = includesGithub ? previousGithubForInput(input) : null;
     const accounts = await Promise.all(accountIds.map(async (accountId) => {
+      if (accountId === "claude") return readClaudeStatus();
       if (accountId === "codex") {
         const localAccount = refresh ? null : await readCodexLocalStatus({
           codexContext: codexContextForInput(),
@@ -1749,6 +1797,7 @@ function createService({
       blockedReason: ready ? "" : blockedReason(accounts),
       ok: true,
       credentialScopes: {
+        claude: APP_CREDENTIAL_SCOPE,
         codex: APP_CREDENTIAL_SCOPE,
         github: USER_CREDENTIAL_SCOPE
       },
@@ -1766,6 +1815,7 @@ function createService({
   }
 
   function sessionVisibleToInput(input = {}, metadata = {}) {
+    if (metadata.accountId === "claude") return !claudeManagementError(input);
     if (metadata.accountId === "codex") {
       return !codexManagementError(input);
     }
@@ -1818,19 +1868,20 @@ function createService({
       return terminal;
     }
 
-    const parsed = parseAuthOutput({
+    const parsed = await authSessionHandoff({
+      sessionId,
       accountId: metadata.accountId,
       mode: metadata.mode,
       output: terminal.output
     });
     authDebug("server.auth.read.terminal", {
       accountId: metadata.accountId,
-      authUrl: parsed.authUrl || "",
+      authUrlPresent: Boolean(parsed.authUrl),
       exitCode: terminal.exitCode,
       inputVersion: terminal.inputVersion || 0,
       mode: metadata.mode,
       outputLength: cleanOutput(terminal.output).length,
-      outputTail: sanitizedAuthOutputTail(terminal.output),
+      outputTail: metadata.accountId === "claude" ? "" : sanitizedAuthOutputTail(terminal.output),
       outputVersion: terminal.outputVersion || 0,
       sessionId,
       terminalStatus: terminal.status,
@@ -1870,12 +1921,26 @@ function createService({
     });
   }
 
-  function authSessionSnapshot({
+  async function authSessionHandoff({ sessionId, accountId, mode, output }) {
+    if (accountId !== "claude") return parseAuthOutput({ accountId, mode, output });
+    const filename = claudeBrowserFiles.get(sessionId);
+    if (!filename) return { authUrl: "", userCode: "" };
+    try {
+      const { authUrl } = JSON.parse(await readFile(filename, "utf8"));
+      return { authUrl, userCode: "" };
+    } catch (error) {
+      if (error.code === "ENOENT") return { authUrl: "", userCode: "" };
+      throw error;
+    }
+  }
+
+  async function authSessionSnapshot({
     account = null,
     metadata = {},
     terminal = {}
   } = {}) {
-    const parsed = parseAuthOutput({
+    const parsed = await authSessionHandoff({
+      sessionId: terminal.id,
       accountId: metadata.accountId,
       mode: metadata.mode,
       output: terminal.output
@@ -1897,7 +1962,7 @@ function createService({
     if (!metadata?.accountId || !terminal?.id) {
       return null;
     }
-    const session = authSessionSnapshot({
+    const session = await authSessionSnapshot({
       account,
       metadata,
       terminal
@@ -2018,7 +2083,7 @@ function createService({
 
   async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
     const actorId = String(options.actorId || "");
-    const providerContext = accountId === "github" ? githubContext : codexContextForInput();
+    const providerContext = authCredentialContext(accountId, githubContext);
     await ensureToolHomeSource(providerContext);
     const hostCommandOptions = hostCommandOptionsForCredentialContext(providerContext);
     const args = terminalArgsForAuth(accountId, mode, hostCommandOptions, gitIdentity);
@@ -2028,6 +2093,11 @@ function createService({
     }
     const authCwd = accountAuthWorkingDirectory(providerContext, currentTargetRoot() || process.cwd());
     const credentialHome = authTerminalCredentialHome(providerContext);
+    const browserRoot = accountId === "claude" ? await mkdtemp(path.join(os.tmpdir(), "v64-claude-auth-")) : "";
+    const browserFile = browserRoot ? path.join(browserRoot, "handoff.json") : "";
+    const cleanupBrowser = async () => {
+      if (browserRoot) await rm(browserRoot, { recursive: true, force: true });
+    };
     authDebug("server.auth.terminal.start", {
       accountId,
       credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
@@ -2036,43 +2106,59 @@ function createService({
       toolHomeSource: providerContext?.toolHomeSource || "",
       userKey: accountId === "github" ? String(githubContext?.userKey || "") : ""
     });
-    const terminal = await runAuthTerminalCommand({
-      actor: accountCommandActor(hostCommandOptions),
-      allowedRoots: [
-        authCwd
-      ],
-      args: args.slice(1),
-      command,
-      credentialHome,
-      cwd: authCwd,
-      env: authSecrets,
-      envPolicy: "auth",
-      mode: "pty",
-      purpose: authTerminalPurpose(accountId),
-      runtimes: accountCommandRuntimes(command),
-      terminal: {
-        commandPreview: authCommandPreview(args),
-        helperPayloadRoot: resolvedSystemRoot,
-        maxRunning: 1,
-        metadata: authTerminalMetadata(accountId, mode, githubContext, actorId),
-        namespace: ACCOUNT_AUTH_NAMESPACE,
-        onClose: createAuthTerminalCloseHandler({
-          accountId,
-          githubContext,
-          previousGithub: options.previousGithub || null
-        }),
-        onOutput: ({ session } = {}) => {
-          publishAuthTerminalOutput({
-            metadata: authTerminalMetadata(accountId, mode, githubContext, actorId),
-            terminal: session
-          });
+    let terminal;
+    try {
+      terminal = await runAuthTerminalCommand({
+        actor: accountCommandActor(hostCommandOptions),
+        allowedRoots: [
+          authCwd
+        ],
+        args: args.slice(1),
+        command,
+        credentialHome,
+        cwd: authCwd,
+        env: { ...authSecrets, ...(browserFile ? {
+          BROWSER: fileURLToPath(import.meta.resolve("@local/vibe64-accounts/bin/claude-auth-browser")),
+          VIBE64_CLAUDE_AUTH_HANDOFF: browserFile,
+          DISABLE_AUTOUPDATER: "1"
+        } : {}) },
+        envPolicy: "auth",
+        mode: "pty",
+        purpose: authTerminalPurpose(accountId),
+        runtimes: accountCommandRuntimes(command),
+        terminal: {
+          commandPreview: authCommandPreview(args),
+          helperPayloadRoot: resolvedSystemRoot,
+          maxRunning: 1,
+          metadata: authTerminalMetadata(accountId, mode, githubContext, actorId),
+          namespace: ACCOUNT_AUTH_NAMESPACE,
+          onClose: async (event) => {
+            try {
+              await createAuthTerminalCloseHandler({ accountId, githubContext,
+                previousGithub: options.previousGithub || null })(event);
+            } finally {
+              claudeBrowserFiles.delete(event.id);
+              await cleanupBrowser();
+            }
+          },
+          onOutput: ({ session } = {}) => {
+            if (browserFile && session?.id) claudeBrowserFiles.set(session.id, browserFile);
+            publishAuthTerminalOutput({
+              metadata: authTerminalMetadata(accountId, mode, githubContext, actorId),
+              terminal: session
+            });
+          },
+          runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
+          reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
         },
-        runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
-        reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
-      },
-      userKey: credentialHome.username
-    });
+        userKey: credentialHome.username
+      });
+    } catch (error) {
+      await cleanupBrowser();
+      throw error;
+    }
     if (terminal.ok === false) {
+      await cleanupBrowser();
       authDebug("server.auth.terminal.start_failed", {
         accountId,
         code: terminal.code || "",
@@ -2080,6 +2166,11 @@ function createService({
         mode
       });
       return terminal;
+    }
+
+    if (browserFile) {
+      if (authSessions.has(terminal.id)) await cleanupBrowser();
+      else claudeBrowserFiles.set(terminal.id, browserFile);
     }
 
     if (!authSessions.has(terminal.id)) {
@@ -2104,26 +2195,28 @@ function createService({
 
   async function readHelperModel(input = {}) {
     return accountsResult(async () => {
-      const managementError = codexManagementError(input);
+      const providerId = input.providerId || "codex";
+      if (!["codex", "claude"].includes(providerId)) throw new Error("Unknown native assistant.");
+      const managementError = providerId === "claude" ? claudeManagementError(input) : codexManagementError(input);
       if (managementError) {
         return managementError;
       }
-      const result = await listAssistantCapabilities({ engineId: "codex" });
+      const result = await listAssistantCapabilities({ engineId: providerId });
       if (result?.ok === false) {
-        throw new Error(result.error || "Codex models could not be loaded.");
+        throw new Error(result.error || "Helper models could not be loaded.");
       }
-      const engine = result.engines?.find((item) => item.engineId === "codex");
+      const engine = result.engines?.find((item) => item.engineId === providerId);
       if (!engine) {
-        throw new Error("Codex models could not be loaded.");
+        throw new Error("Helper models could not be loaded.");
       }
       const models = (engine.modelProviders || []).flatMap((provider) => provider.models || [])
-        .filter((model) => model.status === "available" && model.variants?.some((variant) => variant.id === "low"))
+        .filter((model) => model.status === "available" && ((providerId === "claude" && !model.variants?.length) || model.variants?.some((variant) => variant.id === "low")))
         .map(({ id, label }) => ({ id, label }));
-      const modelId = await createCodexHelperModelStore({ systemRoot: resolvedSystemRoot }).read();
+      const modelId = await createNativeHelperModelStore({ systemRoot: resolvedSystemRoot, providerId }).read();
       return {
         ok: true,
         modelId,
-        recommendedModelId: CODEX_RECOMMENDED_HELPER_MODEL,
+        recommendedModelId: providerId === "claude" ? CLAUDE_RECOMMENDED_HELPER_MODEL : CODEX_RECOMMENDED_HELPER_MODEL,
         models
       };
     });
@@ -2134,6 +2227,10 @@ function createService({
       return accountsResult(async () => {
         return accountsStatus(input);
       });
+    },
+
+    async getClaudeStatus() {
+      return accountsResult(async () => ({ account: await readClaudeStatus(), ok: true }));
     },
 
     async getCodexStatus() {
@@ -2168,6 +2265,10 @@ function createService({
         });
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
+        }
+        if (accountId === "claude") {
+          const failure = await prepareClaudeAuthChange(input);
+          if (failure) return failure;
         }
         if (accountId === "codex") {
           const managementError = codexManagementError(input);
@@ -2264,7 +2365,8 @@ function createService({
 
     async saveHelperModel(input = {}) {
       return accountsResult(async () => {
-        const managementError = codexManagementError(input);
+        const providerId = input.providerId || "codex";
+        const managementError = providerId === "claude" ? claudeManagementError(input) : codexManagementError(input);
         if (managementError) {
           return managementError;
         }
@@ -2276,8 +2378,8 @@ function createService({
         if (modelId && !current.models.some((model) => model.id === modelId)) {
           throw new Error("This helper model is unavailable or does not support low thinking. Refresh the model list.");
         }
-        await createCodexHelperModelStore({ systemRoot: resolvedSystemRoot }).write(modelId);
-        await publishAccountChanged("codex", { reason: "helper-model-updated" });
+        await createNativeHelperModelStore({ systemRoot: resolvedSystemRoot, providerId }).write(modelId);
+        await publishAccountChanged(providerId, { reason: "helper-model-updated" });
         return { ...current, modelId };
       });
     },
@@ -2317,6 +2419,10 @@ function createService({
         if (!accountId) {
           return authError("unknown_account", "Unknown account.");
         }
+        if (accountId === "claude") {
+          const failure = await prepareClaudeAuthChange(input);
+          if (failure) return failure;
+        }
         if (accountId === "codex") {
           const managementError = codexManagementError(input);
           if (managementError) {
@@ -2328,7 +2434,7 @@ function createService({
         if (githubContext && !githubContext.ok) {
           return githubContext;
         }
-        const providerContext = accountId === "github" ? githubContext : codexContextForInput();
+        const providerContext = authCredentialContext(accountId, githubContext);
         await ensureToolHomeSource(providerContext);
         const result = await accountRunHostCommand(logoutCommandArgs(accountId), {
           ...hostCommandOptionsForCredentialContext(providerContext),
@@ -2386,6 +2492,10 @@ function createService({
         const result = await closeTerminalSession(id, {
           namespace: ACCOUNT_AUTH_NAMESPACE
         });
+        if (result.ok === false) {
+          cancelledAuthSessions.delete(id);
+          return result;
+        }
         authSessions.delete(id);
         return {
           ...result,

@@ -59,6 +59,7 @@ import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
 } from "../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js";
 import {
+  STUDIO_MANAGED_CLAUDE_COMMAND,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -1836,5 +1837,86 @@ test("automatic Codex account recovery preserves an unverified transition and re
     assert.equal(recovered.accounts[0].connected, true);
     assert.equal(await readCodexAuthStatus(systemRoot), null);
     assert.equal(invalidations, 2);
+  });
+});
+
+
+test("Claude authentication is owner-only and launches native login after runtime cleanup", async () => {
+  await withTempDir(async (root) => {
+    const requests = [];
+    const invalidations = [];
+    let cleanupAllowed = true;
+    const service = createService({
+      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      invalidateAgentRuntimes: async (input) => {
+        invalidations.push(input);
+        return { ok: cleanupAllowed, code: cleanupAllowed ? "" : "cleanup_unconfirmed" };
+      },
+      runAuthTerminalCommand: async (input) => {
+        requests.push(input);
+        return { ok: false, code: "fixture_terminal", error: "Captured native login request." };
+      }
+    });
+    const member = { role: "user", username: "member" };
+    assert.equal((await service.startAuth({ accountId: "claude", vibe64User: member })).code, "vibe64_owner_required");
+    assert.equal((await service.logout({ accountId: "claude", vibe64User: member })).code, "vibe64_owner_required");
+    assert.equal(requests.length, 0);
+    assert.equal(invalidations.length, 0);
+    const owner = { role: "owner", username: "owner" };
+    const result = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
+    assert.equal(result.code, "fixture_terminal");
+    assert.deepEqual(invalidations, [{ provider: "claude", reason: "claude-auth-change" }]);
+    assert.equal(requests[0].command, STUDIO_MANAGED_CLAUDE_COMMAND);
+    assert.deepEqual(requests[0].args, ["auth", "login", "--claudeai"]);
+    assert.equal(requests[0].mode, "pty");
+    assert.equal(requests[0].credentialHome.home, path.join(root, "home"));
+    assert.equal(requests[0].terminal.metadata.accountId, "claude");
+    cleanupAllowed = false;
+    assert.equal((await service.startAuth({ accountId: "claude", vibe64User: owner })).code, "cleanup_unconfirmed");
+    assert.equal(requests.length, 1);
+  });
+});
+
+
+test("Claude login receives its browser link as JSON and accepts code input only from the owner", async () => {
+  await withTempDir(async (root) => {
+    let request;
+    const authUrl = "https://claude.com/cai/oauth/authorize?state=fixture";
+    const service = createService({
+      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      runAuthTerminalCommand: async (input) => {
+        request = input;
+        return startGatewayAuthTestTerminal(input, {
+          command: process.execPath,
+          args: ["--input-type=module", "-e", `
+            import { execFileSync } from 'node:child_process';
+            execFileSync(process.env.BROWSER, [${JSON.stringify(authUrl)}], { env: process.env });
+            process.stdout.write('Ready to sign in.');
+            process.stdin.resume();
+          `]
+        });
+      }
+    });
+    const owner = { role: "owner", username: "owner" };
+    const member = { role: "user", username: "member" };
+    const started = await service.startAuth({ accountId: "claude", vibe64User: owner });
+    assert.equal(started.ok, true);
+    try {
+      let session;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        session = await service.readAuthSession({ sessionId: started.id, vibe64User: owner });
+        if (session.authUrl) break;
+        await delay(10);
+      }
+      assert.equal(session.authUrl, authUrl);
+      assert.equal(session.output.includes(authUrl), false);
+      assert.equal(session.status, "authenticating");
+      assert.equal((await service.readAuthSession({ sessionId: started.id, vibe64User: member })).ok, false);
+      assert.equal(service.writeAuthTerminal({ sessionId: started.id, vibe64User: member }, "secret-code\r").ok, false);
+      assert.equal(service.writeAuthTerminal({ sessionId: started.id, vibe64User: owner }, "secret-code\r").ok, true);
+    } finally {
+      await service.cancelAuthSession({ sessionId: started.id, vibe64User: owner });
+    }
+    await assert.rejects(readFile(request.env.VIBE64_CLAUDE_AUTH_HANDOFF), { code: "ENOENT" });
   });
 });

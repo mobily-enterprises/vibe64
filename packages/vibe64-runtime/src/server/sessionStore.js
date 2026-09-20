@@ -2293,7 +2293,7 @@ function createVibe64SessionStore({
     if (!isPlainObject(value)) return false;
     if (value.status === "pending") return Object.keys(value).length === 1;
     return Object.keys(value).length === 3 && ["sending", "accepted"].includes(value.status) &&
-      ["codex", "opencode"].includes(value.engineId) &&
+      ["claude", "codex", "opencode"].includes(value.engineId) &&
       typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
   }
 
@@ -2439,7 +2439,7 @@ function createVibe64SessionStore({
     return {
       actorDisplayName: normalizeText(value.actorDisplayName),
       actorId: normalizeText(value.actorId),
-      ...(["codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
+      ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
       ...(isPlainObject(value.nativeMessageVersions) ? {
         nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)

@@ -58,6 +58,10 @@ function useProviderAccountsSetup(props) {
   const authStartBusy = computed(() => Boolean(authStartAccountId.value));
   const authTerminalSessionId = ref("");
   const authTerminalExpanded = ref(false);
+  const claudeCode = ref("");
+  const claudeCodePending = ref(false);
+  const claudeCodeSubmitted = ref(false);
+  const claudeCodeChecking = computed(() => claudeCodePending.value || claudeCodeSubmitted.value);
   const authTerminal = useVibe64Terminal({
     driver: createWebSocketTerminalDriver({
       webSocketUrl: accountAuthTerminalWebSocketUrl
@@ -344,6 +348,8 @@ function useProviderAccountsSetup(props) {
     }
     if (authTerminalSessionId.value !== session.id) {
       authTerminalExpanded.value = false;
+      claudeCode.value = "";
+      claudeCodeSubmitted.value = false;
     }
     authTerminalSessionId.value = session.id;
     await authTerminal.attachTerminal(session, {
@@ -353,6 +359,8 @@ function useProviderAccountsSetup(props) {
   }
 
   function closeAuthTerminal() {
+    claudeCode.value = "";
+    claudeCodeSubmitted.value = false;
     authTerminalSessionId.value = "";
     authTerminal.hideTerminal({ manual: true });
     authTerminal.disposeTerminalDisplay();
@@ -360,6 +368,34 @@ function useProviderAccountsSetup(props) {
 
   function updateAuthTerminalExpanded(value) {
     authTerminalExpanded.value = Boolean(value);
+  }
+
+  async function submitClaudeCode(session) {
+    const code = claudeCode.value.trim();
+    if (session?.account?.id !== "claude" || session.status !== "authenticating" ||
+        !accountsReadyForActions.value || claudeCodePending.value || !code) return;
+    if (/[\s\p{Cc}]/u.test(code) || code.length > 4096) {
+      localError.value = "Paste only the authorization code from Claude.";
+      return;
+    }
+    claudeCodePending.value = true;
+    localError.value = "";
+    try {
+      if (!authTerminalVisible(session)) await openAuthTerminal(session);
+      if (!await authTerminal.sendTerminalData(`${code}\r`)) {
+        throw new Error("The sign-in connection was interrupted. Try submitting the code again.");
+      }
+      claudeCode.value = "";
+      claudeCodeSubmitted.value = true;
+    } catch (error) {
+      localError.value = error.message;
+    } finally {
+      claudeCodePending.value = false;
+    }
+  }
+
+  async function retryAccountAuth(account, session) {
+    if (await cancelSession(session)) await startAccountAuth(account);
   }
 
   function cleanAuthOutput(output = "") {
@@ -393,6 +429,11 @@ function useProviderAccountsSetup(props) {
   function sessionStatusMessage(session = {}) {
     if (session.status === "connected") {
       return `${session.account?.label || "Account"} is connected.`;
+    }
+    if (session.account?.id === "claude") {
+      if (session.status === "failed") return "Claude sign-in did not finish. Try again, or open the login terminal for details.";
+      if (claudeCodeSubmitted.value) return "Checking your sign-in. This screen will update when Claude confirms the connection.";
+      return session.authUrl ? "Sign in in the browser, then return here to finish connecting." : "Preparing your Claude sign-in link…";
     }
     if (authSessionNeedsTerminalAttention(session)) {
       return "Codex needs attention in the terminal. Review the terminal output and respond there.";
@@ -523,6 +564,8 @@ function useProviderAccountsSetup(props) {
     authTerminalTitle,
     authTerminalVisible,
     cancelSession,
+    claudeCode,
+    claudeCodeChecking,
     codexAuthorizeStepVisible,
     codexSettingsStepVisible,
     copyAuthCode,
@@ -535,10 +578,12 @@ function useProviderAccountsSetup(props) {
     primaryAuthPending,
     requiresGitIdentity,
     refreshStatus,
+    retryAccountAuth,
     sessionStatusMessage,
     setCodexAuthStep,
     startAccountApiKeyAuth,
     startAccountAuth,
+    submitClaudeCode,
     statusReady,
     toggleApiKeyForm,
     updateAuthTerminalExpanded

@@ -1,9 +1,11 @@
 const VIBE64_ASSISTANT_ENGINE_IDS = Object.freeze({
+  CLAUDE: "claude",
   CODEX: "codex",
   OPENCODE: "opencode"
 });
 
 const VIBE64_ASSISTANT_TRANSPORT_IDS = Object.freeze({
+  CLAUDE_STREAM_JSON: "claude_stream_json",
   CODEX_APP_SERVER: "codex_app_server",
   OPENCODE_SERVER: "opencode_server"
 });

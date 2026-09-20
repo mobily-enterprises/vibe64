@@ -9,7 +9,7 @@ async function readInput() {
   for await (const chunk of process.stdin) {
     size += chunk.length;
     if (size > INPUT_MAX_BYTES) {
-      throw new Error("Codex shell hook input is too large.");
+      throw new Error("Agent shell hook input is too large.");
     }
     chunks.push(chunk);
   }

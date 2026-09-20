@@ -188,10 +188,16 @@ function useAccountAuthSessions(
     if (!session.id) {
       return;
     }
-    await accounts.cancelAuthSession(session.id).catch(() => null);
-    forgetSession(session);
-    await refreshStatus();
-    stopPollingIfIdle();
+    try {
+      await accounts.cancelAuthSession(session.id);
+      forgetSession(session);
+      await refreshStatus();
+      stopPollingIfIdle();
+      return true;
+    } catch (error) {
+      localError.value = String(error?.message || error || "Login could not be cancelled. Try again.");
+      return false;
+    }
   }
 
   async function copyAuthUrl(session = {}) {
@@ -362,6 +368,7 @@ function useAccountAuthSessions(
   }
 
   function authSessionNeedsTerminalAttention(session = {}) {
+    if (authSessionAccountId(session) === "claude") return Boolean(session.id) && session.status !== "connected";
     return codexAuthSessionNeedsTerminalAttention(session);
   }
 
@@ -432,12 +439,12 @@ function authSessionDebugFields(session = {}) {
   const normalizedSession = plainAuthSession(session);
   return {
     accountId: normalizedSession.account?.id || normalizedSession.account || "",
-    authUrl: normalizedSession.authUrl || "",
+    authUrlPresent: Boolean(normalizedSession.authUrl),
     exitCode: normalizedSession.exitCode ?? null,
     hasOutput: Boolean(normalizedSession.output),
     mode: normalizedSession.mode || "",
     outputLength: String(normalizedSession.output || "").length,
-    outputTail: sanitizedAuthOutputTail(normalizedSession.output),
+    outputTail: authSessionAccountId(normalizedSession) === "claude" ? "" : sanitizedAuthOutputTail(normalizedSession.output),
     sessionId: normalizedSession.id || "",
     status: normalizedSession.status || "",
     terminalStatus: normalizedSession.terminalStatus || "",

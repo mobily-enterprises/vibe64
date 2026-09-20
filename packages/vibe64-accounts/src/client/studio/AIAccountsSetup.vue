@@ -35,6 +35,7 @@ const props = defineProps({
     default: null,
     type: Object
   },
+  providerId: { default: "codex", type: String },
   backLabel: {
     default: "",
     type: String
@@ -74,19 +75,22 @@ const statusLoaded = computed(() => {
 });
 const aiAccountRows = computed(() => {
   const rows = Array.isArray(accounts.status.value?.accounts) ? accounts.status.value.accounts : [];
-  const codex = rows.find((account) => String(account.id || "") === "codex");
+  const account = rows.find((account) => String(account.id || "") === props.providerId);
   return [
-    aiProviderRow(codex || {
+    aiProviderRow(account || {
       connected: false,
-      id: "codex",
-      label: "Codex",
-      message: "Codex status has not loaded yet.",
+      id: props.providerId,
+      label: props.providerId === "claude" ? "Claude Code" : "Codex",
+      message: "Account status has not loaded yet.",
       status: "unknown"
     })
   ];
 });
 
 function aiProviderRow(account = {}) {
+  if (account.id === "claude") {
+    return { ...account, authLabel: "Sign in with Claude", authMode: "browser", deviceAuth: false };
+  }
   return {
     ...account,
     authLabel: "Login with ChatGPT",

@@ -11,6 +11,7 @@ const vibe64UserInputSchema = {
 
 const accountsReadInputValidator = deepFreeze({
   schema: createSchema({
+    providerId: { type: "string", enum: ["codex", "claude"], required: false },
     ...vibe64UserInputSchema,
     refresh: {
       type: "boolean",
@@ -75,6 +76,7 @@ const gitIdentityInputValidator = deepFreeze({
 
 const helperModelInputValidator = deepFreeze({
   schema: createSchema({
+    providerId: { type: "string", enum: ["codex", "claude"], required: false },
     ...vibe64UserInputSchema,
     modelId: {
       type: "string",

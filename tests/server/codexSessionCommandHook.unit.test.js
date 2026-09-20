@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const hookPath = fileURLToPath(new URL(
-  "../../packages/vibe64-runtime/src/server/codexSessionCommandHook.js",
+  "../../packages/vibe64-runtime/src/server/agentSessionCommandHook.js",
   import.meta.url
 ));
 

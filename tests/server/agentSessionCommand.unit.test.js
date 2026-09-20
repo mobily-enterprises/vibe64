@@ -130,7 +130,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
 
     await mkdir(sourceRoot, { recursive: true });
     const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId, wrapperHostDir });
-    const hookPath = new URL("../../packages/vibe64-runtime/src/server/codexSessionCommandHook.js", import.meta.url);
+    const hookPath = new URL("../../packages/vibe64-runtime/src/server/agentSessionCommandHook.js", import.meta.url);
     for (const original of [
       command,
       "  printf '%s\\n' \"$HOME\" '`id`' '$(id)' | cat; # café\n\n",

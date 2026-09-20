@@ -6,6 +6,9 @@ session history.
 
 ## Sources
 
+- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-core/src/server/nativeHelperModel.js`
+
 - `packages/vibe64-runtime/src/server/codexAppServerProvider.js`
 - `packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
@@ -38,7 +41,7 @@ session history.
 
 Each temporary task has its own model settings, attachments and message stream.
 User-facing temporary chats have the same capabilities, tools and project access
-as main chat in both Codex and OpenCode. They use normal execution settings and
+as main chat in Codex, Claude Code, and OpenCode. They use normal execution settings and
 the same session write coordination and skill preparation. There is no temporary
 permission mode or R/O–R/W toggle. Preview screenshots and console/network
 diagnostics attach to the selected conversation through the normal upload path.
@@ -280,7 +283,13 @@ changing them preserves the prompt draft. Vibe64 supplies each provider's allowe
 parameters and passes the applied configuration through the normal temporary
 conversation endpoint.
 
-Bounded Codex economy tasks resolve the connection's saved helper model before
+Bounded Codex and Claude economy tasks resolve the connection's saved helper model before
 starting. Recommended selects the default; explicit models must remain available
 and support low thinking. An unavailable choice does not fall back to the main
 chat model. The resolved execution profile retains the model for that task.
+
+Claude Recommended selects Haiku. A chosen Claude model must be present in the
+live native catalogue and either support low effort or have no effort control.
+Its tool-free process uses the account's private home, without the project's
+command environment, Genesis prompt or driver. Changing the saved preference
+only affects new tasks; the selected model stays captured in an existing profile.

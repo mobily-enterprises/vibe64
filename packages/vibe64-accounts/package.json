@@ -10,7 +10,8 @@
     "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",
     "./server/githubCliAuth": "./src/server/githubCliAuth.js",
     "./server/registerRoutes": "./src/server/registerRoutes.js",
-    "./server/service": "./src/server/service.js"
+    "./server/service": "./src/server/service.js",
+    "./bin/claude-auth-browser": "./bin/claude-auth-browser"
   },
   "jskit": {
     "kind": "runtime",

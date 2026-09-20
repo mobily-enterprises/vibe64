@@ -51,8 +51,8 @@
           :visible="tabActive"
           @session-update="agentTerminal.sessionUpdate"
         />
-        <Vibe64OpenCodeSession
-          v-else-if="selectedAssistantEngineId === 'opencode'"
+        <Vibe64NativeAgentSession
+          v-else-if="['claude', 'opencode'].includes(selectedAssistantEngineId)"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -83,7 +83,7 @@
 import { computed } from "vue";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64CodexSession from "@/components/studio/Vibe64CodexSession.vue";
-import Vibe64OpenCodeSession from "@/components/studio/Vibe64OpenCodeSession.vue";
+import Vibe64NativeAgentSession from "@/components/studio/Vibe64NativeAgentSession.vue";
 import Vibe64SessionRenewalDialog from "@/components/studio/vibe64-session/Vibe64SessionRenewalDialog.vue";
 import {
   useVibe64SessionRuntimeHost

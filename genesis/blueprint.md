@@ -138,12 +138,12 @@ Repair conversations keep their input and action buttons visible on small screen
 Long drafts scroll inside the input; repair details start collapsed, and a shared
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.
-The main chat composer keeps Add, Settings, Goal, Codex allowance, and icon-only
+The main chat composer keeps Add, Settings, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
-The Settings cog shows a tiny Codex or OpenCode label beneath its icon, within
+The Settings cog shows a tiny Codex, Claude Code or OpenCode label beneath its icon, within
 the existing button height and without a tooltip. New replies retain their
-answering AI when the selection changes: Codex, or OpenCode with its model.
+answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
 The Settings cog opens AI model and access controls directly, with recovery
@@ -715,13 +715,13 @@ bills the selected account directly. Tracking/billing readiness is confirmed by
 the operator; account provisioning and other campaign types remain outside this
 first Search path.
 
-When Codex uses a ChatGPT plan, authorized account users can see the remaining
+When Codex uses a ChatGPT plan or Claude uses a subscription, authorized account users can see the remaining
 weekly allowance as a single percentage on the bottom chat row, with its
 label, known reset times, and the five-hour allowance in the hover/tap details. Allowance is account-wide, distinct
-from conversation context usage. API-key connections and other assistants do
+from conversation context usage. API-key connections and unsupported assistants do
 not show a plan meter; unavailable readings never imply unused allowance.
 
-The bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
+For Codex, the bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
 orange light for a paused goal. Elapsed running time appears beside the light
 when the chat pane has room and remains available in its details. Paused time
 does not accumulate. Reduced-motion settings keep the running light steady.
@@ -736,9 +736,19 @@ an already running turn still uses Stop for interruption.
 Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
 
+Claude Code uses the same chat, model selector, Send, Steer, Stop and native
+terminal surfaces. The owner signs in to their Claude subscription through a
+guided browser-and-code flow in AI Accounts. The official CLI owns credentials,
+and Vibe64 confirms the connected account automatically. Native Claude goals
+appear in the chat toolbar: Pause stops the current turn and preserves the goal,
+Resume continues it, and Cancel clears it. Claude goals have no token-budget
+field. Each account also has a separate configurable Economy/helper model in
+AI Accounts; Claude Recommended uses Haiku. New helper tasks capture that choice
+without changing main chat or tasks already running.
+
 Main conversation, temporary assistance, and database copilot share the same
 conversation presentation. User-facing temporary chats have main chat's tools,
-capabilities and project access in Codex and OpenCode, without separate permission
+capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
 modes. The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
 returning restores the same chats. A server restart retains their history and

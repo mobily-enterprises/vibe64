@@ -1,13 +1,13 @@
 <template>
   <div
-    class="vibe64-opencode-session"
-    :class="{ 'vibe64-opencode-session--headless': displayMode === 'headless' }"
+    class="vibe64-native-agent-session"
+    :class="{ 'vibe64-native-agent-session--headless': displayMode === 'headless' }"
     :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
   >
     <Vibe64InteractiveTerminal
       :command-preview="terminalCommandPreview"
       :error="terminalError"
-      error-title="OpenCode terminal needs attention"
+      :error-title="`${assistantLabel} terminal needs attention`"
       fill
       height="100%"
       :presentation="terminalPresentation"
@@ -16,45 +16,45 @@
       :status="terminalStatus"
       :subtitle="terminalSubtitle"
       :terminal="terminalController"
-      title="OpenCode terminal"
+      :title="`${assistantLabel} terminal`"
       :visible="terminalStreamActive"
       @clean-exit="closeTerminal"
       @close="closeTerminal"
     >
       <template #overlay>
-        <div v-if="showStartPanel" class="vibe64-opencode-session__start-panel">
+        <div v-if="showStartPanel" class="vibe64-native-agent-session__start-panel">
           <v-sheet
-            class="vibe64-opencode-session__start-card"
+            class="vibe64-native-agent-session__start-card"
             elevation="4"
             role="status"
             rounded="lg"
           >
-            <div class="vibe64-opencode-session__start-icon">
+            <div class="vibe64-native-agent-session__start-icon">
               <v-icon :icon="terminalExited ? mdiRestart : mdiPlayCircleOutline" size="30" />
             </div>
-            <div class="vibe64-opencode-session__start-copy">
-              <strong>{{ terminalExited ? "OpenCode terminal exited" : "OpenCode terminal is off" }}</strong>
-              <span>{{ sourcePending ? "The terminal can start after the session source is ready." : "Start an interactive OpenCode terminal for this session." }}</span>
+            <div class="vibe64-native-agent-session__start-copy">
+              <strong>{{ terminalExited ? `${assistantLabel} terminal exited` : `${assistantLabel} terminal is off` }}</strong>
+              <span>{{ sourcePending ? "The terminal can start after the session source is ready." : `Start an interactive ${assistantLabel} terminal for this session.` }}</span>
             </div>
             <v-btn
               v-if="!sourcePending"
               :aria-busy="terminalStarting ? 'true' : undefined"
-              class="vibe64-opencode-session__start-action"
+              class="vibe64-native-agent-session__start-action"
               color="primary"
               :disabled="terminalStarting"
               :prepend-icon="terminalExited ? mdiRestart : mdiPlayCircleOutline"
               variant="flat"
               @click="restartTerminal"
             >
-              {{ terminalStarting ? "Starting OpenCode…" : terminalExited ? "Restart OpenCode" : "Start OpenCode" }}
+              {{ terminalStarting ? `Starting ${assistantLabel}…` : terminalExited ? `Restart ${assistantLabel}` : `Start ${assistantLabel}` }}
             </v-btn>
           </v-sheet>
         </div>
       </template>
 
       <template #footer="{ commandPreview, status }">
-        <span class="vibe64-opencode-session__command">
-          {{ commandPreview || "OpenCode is not running." }}
+        <span class="vibe64-native-agent-session__command">
+          {{ commandPreview || `${assistantLabel} is not running.` }}
         </span>
         <v-chip v-if="status" size="x-small" variant="tonal">
           {{ status }}
@@ -104,6 +104,7 @@ const props = defineProps({
 
 const emit = defineEmits(["session-update"]);
 const terminalCommands = useVibe64TerminalCommands();
+const assistantLabel = computed(() => props.session?.assistantSelection?.engineId === "claude" ? "Claude Code" : "OpenCode");
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
 const displayActive = computed(() => props.visible && props.displayMode !== "headless");
@@ -222,7 +223,7 @@ async function startTerminal() {
   try {
     const session = await terminalCommands.startAgentTerminal(sessionId.value);
     if (session?.ok === false || !session?.id) {
-      throw new Error(vibe64TerminalErrorMessage(session, "OpenCode terminal failed to start."));
+      throw new Error(vibe64TerminalErrorMessage(session, `${assistantLabel.value} terminal failed to start.`));
     }
     await applyTerminalSession(session, {
       fallbackStatus: "running",
@@ -231,7 +232,7 @@ async function startTerminal() {
     emitTerminalState();
     return await connectTerminalSocket();
   } catch (error) {
-    terminalError.value = vibe64TerminalErrorMessage(error, "OpenCode terminal failed to start.");
+    terminalError.value = vibe64TerminalErrorMessage(error, `${assistantLabel.value} terminal failed to start.`);
     return false;
   } finally {
     terminalStarting.value = false;
@@ -297,21 +298,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.vibe64-opencode-session {
+.vibe64-native-agent-session {
   block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
   position: relative;
 }
 
-.vibe64-opencode-session--headless {
+.vibe64-native-agent-session--headless {
   block-size: 0;
   inline-size: 0;
   overflow: hidden;
   position: absolute;
 }
 
-.vibe64-opencode-session__start-panel {
+.vibe64-native-agent-session__start-panel {
   align-items: center;
   display: flex;
   inset: 0;
@@ -320,7 +321,7 @@ onBeforeUnmount(() => {
   position: absolute;
 }
 
-.vibe64-opencode-session__start-card {
+.vibe64-native-agent-session__start-card {
   align-items: center;
   display: grid;
   gap: 0.9rem;
@@ -330,7 +331,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.vibe64-opencode-session__start-icon {
+.vibe64-native-agent-session__start-icon {
   align-items: center;
   background: rgb(var(--v-theme-secondary-container));
   border-radius: 50%;
@@ -341,23 +342,23 @@ onBeforeUnmount(() => {
   width: 3.25rem;
 }
 
-.vibe64-opencode-session__start-copy {
+.vibe64-native-agent-session__start-copy {
   display: grid;
   gap: 0.2rem;
 }
 
-.vibe64-opencode-session__start-copy span,
-.vibe64-opencode-session__command {
+.vibe64-native-agent-session__start-copy span,
+.vibe64-native-agent-session__command {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.82rem;
 }
 
 @media (max-width: 600px) {
-  .vibe64-opencode-session__start-card {
+  .vibe64-native-agent-session__start-card {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .vibe64-opencode-session__start-action {
+  .vibe64-native-agent-session__start-action {
     grid-column: 1 / -1;
   }
 }

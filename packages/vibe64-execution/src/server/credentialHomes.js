@@ -95,7 +95,7 @@ function currentUserCredentialContext() {
   };
 }
 
-function codexCredentialContext({
+function appCredentialContext({
   home = os.homedir(),
   gid = typeof process.getgid === "function" ? process.getgid() : null,
   uid = typeof process.getuid === "function" ? process.getuid() : null,
@@ -104,7 +104,7 @@ function codexCredentialContext({
   const resolvedHome = normalizeHome(home);
   const resolvedUsername = normalizeOsUsername(username || currentOsUser().username);
   if (!resolvedHome) {
-    return credentialHomeRequiredError("Codex");
+    return credentialHomeRequiredError("application");
   }
   return {
     home: resolvedHome,
@@ -116,6 +116,10 @@ function codexCredentialContext({
     username: resolvedUsername,
     userKey: resolvedUsername || APP_CREDENTIAL_SCOPE
   };
+}
+
+function codexCredentialContext(options = {}) {
+  return appCredentialContext(options);
 }
 
 function githubCredentialContext(input = {}, {
@@ -300,6 +304,7 @@ function logGithubCredentialHomeResolution(logger, result = {}, {
 }
 
 export {
+  appCredentialContext,
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,

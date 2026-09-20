@@ -15,7 +15,7 @@ const longRunningTerminalPath = path.resolve(
   "src/components/studio/Vibe64LongRunningTerminal.vue"
 );
 const openCodeTerminalConsumerPath = path.resolve(
-  "src/components/studio/Vibe64OpenCodeSession.vue"
+  "src/components/studio/Vibe64NativeAgentSession.vue"
 );
 const temporaryActionTerminalPath = path.resolve(
   "src/components/studio/Vibe64TemporaryActionTerminal.vue"
@@ -87,9 +87,9 @@ describe("Vibe64 terminal consumers", () => {
     expect(temporaryAction).toContain("if (active && !previousActive)");
 
     expect(runtimeHost).toContain("selectedAssistantEngineId === 'codex'");
-    expect(runtimeHost).toContain("selectedAssistantEngineId === 'opencode'");
+    expect(runtimeHost).toContain("['claude', 'opencode'].includes(selectedAssistantEngineId)");
     expect(runtimeHost).not.toContain('engineId || "codex"');
-    expect(runtimeHost).not.toMatch(/<Vibe64OpenCodeSession\s+v-else(?:\s|>)/u);
+    expect(runtimeHost).not.toMatch(/<Vibe64NativeAgentSession\s+v-else(?:\s|>)/u);
     expect(autopilotState).not.toContain("assistantEngineId === 'codex'");
     expect(autopilotState).not.toContain("assistantEngineId.value");
 

@@ -43,6 +43,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT } from "../lib/accountsGateApi.js";
 
 const props = defineProps({
+  providerId: { type: String, default: "codex" },
   accountLabel: { type: String, default: "Codex" },
   disabled: { type: Boolean, default: false },
   endpoint: { type: String, default: `${ACCOUNTS_ENDPOINT}/helper-model` },
@@ -53,8 +54,8 @@ const modelId = ref("");
 const saving = ref(false);
 const resource = useEndpointResource({
   enabled: computed(() => open.value && !props.disabled),
-  path: computed(() => props.endpoint),
-  queryKey: computed(() => ["vibe64", "helper-model", props.endpoint]),
+  path: computed(() => props.providerId === "claude" ? `${props.endpoint}?providerId=claude` : props.endpoint),
+  queryKey: computed(() => ["vibe64", "helper-model", props.endpoint, props.providerId]),
   queryOptions: { refetchOnMount: "always", retry: false, staleTime: 0 },
   realtime: { event: props.changedEvent },
   fallbackLoadError: "Helper models could not be loaded.",
@@ -85,7 +86,7 @@ const command = useCommand({
   access: "never",
   apiSuffix: "/vibe64/accounts/helper-model",
   buildCommandOptions: () => ({ method: "PATCH", path: props.endpoint }),
-  buildRawPayload: () => ({ modelId: modelId.value }),
+  buildRawPayload: () => ({ modelId: modelId.value, ...(props.providerId === "claude" ? { providerId: "claude" } : {}) }),
   onRunSuccess(response) {
     if (response?.ok !== true) throw new Error(response?.error || "Helper model could not be saved.");
   },

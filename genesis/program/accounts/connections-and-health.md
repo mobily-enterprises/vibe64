@@ -5,7 +5,9 @@ and see whether the Studio host is ready to support them.
 
 ## Sources
 
-- `packages/vibe64-core/src/server/codexHelperModel.js`
+- `packages/vibe64-core/src/server/nativeHelperModel.js`
+- `packages/vibe64-accounts/bin/claude-auth-browser`
+- `packages/studio-terminal-core/src/server/claudeRuntime.js`
 - `packages/vibe64-accounts/src/client/studio/HelperModelSettings.vue`
 - `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
@@ -26,6 +28,22 @@ and see whether the Studio host is ready to support them.
 - `src/components/studio/StudioHealthScreen.vue`
 
 ## Public contract
+
+The owner can connect a Claude subscription through the existing Accounts flow.
+The unmodified CLI runs `claude auth login --claudeai`. Its browser-opener
+invocation writes an atomic private JSON handoff, giving the UI a Continue to
+Claude button without parsing terminal prose. The user pastes the browser's
+authorization code into the guided form, which forwards it to the owned login
+terminal. Claude performs the exchange and stores its own credentials. Realtime
+completion rereads `claude auth status --json`; a failed login offers Try again,
+and the native terminal remains available for recovery. Vibe64 neither reads
+OAuth tokens nor implements a replacement OAuth client. Login and logout retire
+the account's owned Claude processes before changing authentication.
+The CLI's signed-out JSON response is a normal disconnected state even though
+its exit code is nonzero. Temporary model and allowance queries publish cached
+results only after verified process exit. Failed cleanup stays owned for retry
+before another query or authentication change; a failed query whose process
+stopped does not block switching accounts.
 
 The Accounts surface reports required providers, guides supported sign-in, and
 keeps credentials in host-owned storage. Studio health performs read-only checks
@@ -146,8 +164,10 @@ the submitted secret, and the temporary credential state is removed on every
 outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
 
-Codex helper-model preferences belong to the connection, outside project source,
-at `<systemRoot>/ai-connections/codex-helper-model.json`. An empty model ID means
+Native helper-model preferences belong to the connection, outside project source,
+at `<systemRoot>/ai-connections/<provider>-helper-model.json` for Codex and Claude.
+Claude's Recommended choice is Haiku. Both use the same Helper model dialog;
+Claude also accepts models without a thinking control. An empty model ID means
 Recommended and resolves the code default at execution time. Account management
 authorization also protects reads and writes of this preference. The account
 API offers live models supporting low thinking, rejects unavailable choices,

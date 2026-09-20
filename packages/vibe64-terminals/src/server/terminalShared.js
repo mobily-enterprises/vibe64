@@ -55,6 +55,10 @@ function outputTargetTerminalNamespace(sessionId) {
   return terminalNamespace(OUTPUT_TARGET_TERMINAL_NAMESPACE, sessionId);
 }
 
+function claudeTerminalNamespace(sessionId) {
+  return terminalNamespace("vibe64-claude", sessionId);
+}
+
 function opencodeTerminalNamespace(sessionId) {
   return terminalNamespace(OPENCODE_TERMINAL_NAMESPACE, sessionId);
 }
@@ -128,6 +132,7 @@ async function ensureTerminalSessionSourceGitSelfContained({
 
 export {
   vibe64Result,
+  claudeTerminalNamespace,
   codexTerminalNamespace,
   commandInvocation,
   directoryExists,

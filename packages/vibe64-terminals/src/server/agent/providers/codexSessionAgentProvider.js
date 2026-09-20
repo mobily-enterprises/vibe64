@@ -1,4 +1,4 @@
-import { CODEX_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/codexHelperModel";
+import { CODEX_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { createHash } from "node:crypto";
 
 import {

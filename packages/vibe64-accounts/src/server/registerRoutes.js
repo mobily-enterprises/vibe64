@@ -54,14 +54,15 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/helper-model", {
     actionId: ACTION_READ_HELPER_MODEL,
-    buildInput: (request) => withVibe64User(request, {}),
-    summary: "Read the Codex helper model preference and available models."
+    buildInput: (request) => withVibe64User(request, { providerId: request.query?.providerId || "codex" }),
+    query: accountsReadInputValidator,
+    summary: "Read the native assistant helper model preference and available models."
   });
   routes.actionRoute("PATCH", "/helper-model", {
     actionId: ACTION_SAVE_HELPER_MODEL,
     body: helperModelInputValidator,
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
-    summary: "Save the Codex helper model preference."
+    summary: "Save the native assistant helper model preference."
   });
 
   routes.actionRoute("POST", "/auth", {

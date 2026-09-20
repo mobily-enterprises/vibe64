@@ -215,10 +215,10 @@ const adapter = computed(() => ({
     welcomeMessage: props.welcomeMessage,
     turns: props.turns.map((turn) => {
       const selection = turn.metadata?.assistantSelection;
-      const engineName = selection?.engineId === "opencode" ? "OpenCode" : "Codex";
+      const engineName = selection?.engineId === "claude" ? "Claude Code" : selection?.engineId === "opencode" ? "OpenCode" : "Codex";
       return {
         ...turn,
-        assistantLabel: !selection ? "agent" : selection.engineId === "opencode" ? `OpenCode (${selection.modelId})` : "Codex",
+        assistantLabel: !selection ? "agent" : selection.engineId === "codex" ? "Codex" : `${engineName} (${selection.modelId})`,
         assistantDetails: selection
           ? `${engineName}\nModel: ${selection.modelId}\nProvider: ${selection.modelProviderId}\nThinking: ${selection.variantId || "Automatic"}`
           : undefined,

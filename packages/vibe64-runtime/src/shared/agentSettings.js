@@ -105,10 +105,10 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     ])
   }),
   Object.freeze({
-    executionProfiles: Object.freeze([]),
+    executionProfiles: Object.freeze([VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY]),
     id: VIBE64_AGENT_PROVIDER_IDS.CLAUDE,
-    implemented: false,
-    label: "Claude",
+    implemented: true,
+    label: "Claude Code",
     parameters: Object.freeze([])
   }),
   Object.freeze({

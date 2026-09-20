@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const CODEX_RECOMMENDED_HELPER_MODEL = "gpt-5.6-luna";
+const CLAUDE_RECOMMENDED_HELPER_MODEL = "haiku";
 
 function normalizeHelperModelId(value) {
   if (typeof value !== "string" || value.length > 200 || /\s/u.test(value) ||
@@ -12,9 +13,10 @@ function normalizeHelperModelId(value) {
   return value;
 }
 
-function createCodexHelperModelStore({ systemRoot } = {}) {
-  if (!systemRoot) throw new Error("Codex helper settings require the Vibe64 system root.");
-  const filePath = path.join(systemRoot, "ai-connections", "codex-helper-model.json");
+function createNativeHelperModelStore({ systemRoot, providerId = "codex" } = {}) {
+  if (!["codex", "claude"].includes(providerId)) throw new Error("Unknown native assistant.");
+  if (!systemRoot) throw new Error("Native assistant helper settings require the Vibe64 system root.");
+  const filePath = path.join(systemRoot, "ai-connections", `${providerId}-helper-model.json`);
   return {
     async read() {
       try {
@@ -40,4 +42,4 @@ function createCodexHelperModelStore({ systemRoot } = {}) {
   };
 }
 
-export { CODEX_RECOMMENDED_HELPER_MODEL, createCodexHelperModelStore, normalizeHelperModelId };
+export { CODEX_RECOMMENDED_HELPER_MODEL, CLAUDE_RECOMMENDED_HELPER_MODEL, createNativeHelperModelStore, normalizeHelperModelId };

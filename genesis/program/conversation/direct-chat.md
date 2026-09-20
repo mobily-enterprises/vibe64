@@ -30,7 +30,12 @@ continuation and loading older history.
 
 - `src/App.vue`
 - `tests/server/inAppLinks.unit.test.js`
-- `src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue`
+- `src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue`
+- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-terminals/src/server/claudeCodeProcess.js`
+- `packages/vibe64-terminals/src/server/claudeConversationHistory.js`
+- `packages/vibe64-terminals/src/server/claudeStdioBridge.js`
+- `packages/vibe64-runtime/src/server/claudeStreamJson.js`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
@@ -47,7 +52,7 @@ continuation and loading older history.
 - `packages/vibe64-runtime/src/server/minimumCodexVersion.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
-- `packages/vibe64-runtime/src/server/codexSessionCommandHook.js`
+- `packages/vibe64-runtime/src/server/agentSessionCommandHook.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/runVibe64Command.js`
@@ -86,7 +91,7 @@ continuation and loading older history.
 - `src/composables/useVibe64PromptHints.js`
 - `src/components/studio/Vibe64CodexSession.vue`
 - `src/components/studio/Vibe64InteractiveTerminal.vue`
-- `src/components/studio/Vibe64OpenCodeSession.vue`
+- `src/components/studio/Vibe64NativeAgentSession.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
@@ -101,6 +106,27 @@ continuation and loading older history.
 - `vite.config.mjs`
 
 ## Public contract
+
+Claude Code uses the unmodified pinned CLI and a bounded streaming JSON reader
+inside the existing managed execution owner. Native admission acknowledgements
+and message IDs prevent duplicate sends. Steer interrupts generation before
+continuing the same native conversation with the new instruction. Stop verifies
+that the owned process scope exited; the next Send resumes native history.
+Account identity is persisted with conversation ownership, so a restart preserves
+the binding and another signed-in account cannot adopt it. Native terminal and
+JSON chat have one writer at a time. Exposed thinking and answers use the shared
+transcript; tool commands enter the existing session command broker.
+
+Claude uses the shared in-chat model and effort selector. The chat toolbar also
+shows native goals and subscription allowance. Goals use `/goal` commands,
+structured history markers, and `active_goal` refresh events. Pause stops the
+current turn while retaining the goal; Resume starts native goal work again.
+Cancel stops work and clears the native goal. Claude's form omits token budgets
+because the CLI does not provide Codex's hard token-budget control. The pinned
+CLI's experimental `get_usage` JSON control supplies current five-hour, weekly,
+and available model-specific windows. Missing or expired data is never presented
+as a refreshed allowance. Both controls retain the assistant's access boundary;
+plan allowance is owner-only.
 
 The shared command environment installs `vibe64-helper` beside the existing
 session executables for Codex and OpenCode. Its fixed groups are `preview`,

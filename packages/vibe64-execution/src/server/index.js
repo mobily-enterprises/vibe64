@@ -9,6 +9,7 @@ export {
   resolveOsUser
 } from "./osUserIdentity.js";
 export {
+  appCredentialContext,
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,

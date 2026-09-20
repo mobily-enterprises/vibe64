@@ -41,11 +41,13 @@ function providerCapabilities(engineId, transportId, {
 }
 
 test("session agent manager gates admission inspection with assistant access", async () => {
-  for (const engineId of ["codex", "opencode"]) {
+  for (const [engineId, transportId] of [
+    ["codex", "codex_app_server"], ["opencode", "opencode_server"], ["claude", "claude_stream_json"]
+  ]) {
     const calls = [];
     const manager = createSessionAgentManager({
       readAssistantAccess: async () => ({ ownerOnly: true }),
-      providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
+      providers: [{ id: engineId, transportId,
         async inspectMessageAdmission(context, input) {
           calls.push({ context, input });
           return { ok: true, admission: "unknown" };
@@ -1334,21 +1336,21 @@ test("session agent manager treats input to an authorized terminal as bound tran
   assert.equal(result.providerId, "opencode");
 });
 
-test("plan allowance is private to authorized Codex plan users", async () => {
-  for (const engineId of ["codex", "opencode"]) {
+test("plan allowance is private to authorized native plan users", async () => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
     for (const ownerOnly of [true, false]) {
       for (const role of ["owner", "user"]) {
         let reads = 0;
         const manager = createSessionAgentManager({
           readAssistantAccess: async () => ({ ownerOnly }),
-          providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
-            async readPlanUsage() { reads += 1; return { status: "available", windows: [] }; }
+          providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : engineId === "claude" ? "claude_stream_json" : "opencode_server",
+            readPlanUsage: engineId === "opencode" ? undefined : async () => { reads += 1; return { status: "available", windows: [] }; }
           }]
         });
         const result = await manager.readPlanUsage("session-1", {
           agentSettings: { providerId: engineId }, vibe64User: { role }
         });
-        const allowed = engineId === "codex" && ownerOnly && role === "owner";
+        const allowed = engineId !== "opencode" && ownerOnly && role === "owner";
         assert.equal(reads, allowed ? 1 : 0);
         assert.equal(result.status, allowed ? "available" : "unsupported");
       }
@@ -1356,20 +1358,20 @@ test("plan allowance is private to authorized Codex plan users", async () => {
   }
 });
 
-test("goal status and controls require the selected Codex account's assistant access", async () => {
-  for (const engineId of ["codex", "opencode"]) {
+test("goal status and controls require the selected assistant account's assistant access", async () => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
     for (const role of ["owner", "user"]) {
       let reads = 0;
       let writes = 0;
       const manager = createSessionAgentManager({
         readAssistantAccess: async () => ({ ownerOnly: true }),
-        providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server",
-          readGoal: async () => { reads += 1; return { status: "available", goal: null }; },
-          updateGoal: async () => { writes += 1; return { ok: true }; }
+        providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : engineId === "claude" ? "claude_stream_json" : "opencode_server",
+          readGoal: engineId === "opencode" ? undefined : async () => { reads += 1; return { status: "available", goal: null }; },
+          updateGoal: engineId === "opencode" ? undefined : async () => { writes += 1; return { ok: true }; }
         }]
       });
       const options = { agentSettings: { providerId: engineId }, vibe64User: { role } };
-      const allowed = engineId === "codex" && role === "owner";
+      const allowed = engineId !== "opencode" && role === "owner";
       await manager.readGoal("session-1", options);
       if (allowed) await manager.updateGoal("session-1", { action: "pause" }, options);
       else await assert.rejects(manager.updateGoal("session-1", { action: "pause" }, options));

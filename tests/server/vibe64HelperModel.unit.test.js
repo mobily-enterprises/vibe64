@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createCodexHelperModelStore } from "../../packages/vibe64-core/src/server/codexHelperModel.js";
+import { createNativeHelperModelStore } from "../../packages/vibe64-core/src/server/nativeHelperModel.js";
 import { createService } from "../../packages/vibe64-accounts/src/server/service.js";
 
 async function fixture(t, options = {}) {
@@ -30,7 +30,7 @@ test("Codex helper choice persists across service instances and Recommended clea
   const result = await service.saveHelperModel({ modelId: "chosen" });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.models, [{ id: "chosen", label: "Chosen" }]);
-  const store = createCodexHelperModelStore({ systemRoot: root });
+  const store = createNativeHelperModelStore({ systemRoot: root });
   assert.equal(await store.read(), "chosen");
   assert.equal(events.length, 1);
   assert.equal((await service.saveHelperModel({ modelId: "" })).ok, true);
@@ -62,4 +62,28 @@ test("corrupt helper settings stay visible and are not overwritten", async (t) =
   assert.equal((await service.readHelperModel()).ok, false);
   assert.equal((await service.saveHelperModel({ modelId: "" })).ok, false);
   assert.equal(await readFile(file, "utf8"), "broken");
+});
+
+
+test("Claude owners can select an economy model independently of Codex and reset to Haiku", async (t) => {
+  const { root, service, events } = await fixture(t, {
+    listAssistantCapabilities: async () => ({ engines: [{ engineId: "claude", modelProviders: [{ models: [
+      { id: "haiku", label: "Haiku", status: "available", variants: [] },
+      { id: "sonnet", label: "Sonnet", status: "available", variants: [{ id: "low" }, { id: "high" }] },
+      { id: "unsupported", status: "available", variants: [{ id: "high" }] }
+    ] }] }] })
+  });
+  const owner = { providerId: "claude", vibe64User: { role: "owner" } };
+  const member = { providerId: "claude", vibe64User: { role: "user" } };
+  assert.equal((await service.readHelperModel(member)).ok, false);
+  assert.equal((await service.saveHelperModel({ ...member, modelId: "sonnet" })).ok, false);
+  const selected = await service.saveHelperModel({ ...owner, modelId: "sonnet" });
+  assert.equal(selected.ok, true, JSON.stringify(selected));
+  assert.equal(selected.recommendedModelId, "haiku");
+  assert.equal(await createNativeHelperModelStore({ systemRoot: root, providerId: "claude" }).read(), "sonnet");
+  assert.equal(await createNativeHelperModelStore({ systemRoot: root }).read(), "");
+  assert.equal(events.at(-1)[0], "claude");
+  assert.equal((await service.saveHelperModel({ ...owner, modelId: "unsupported" })).ok, false);
+  assert.equal((await service.saveHelperModel({ ...owner, modelId: "" })).ok, true);
+  assert.equal((await service.readHelperModel(owner)).modelId, "");
 });

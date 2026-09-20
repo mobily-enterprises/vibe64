@@ -511,7 +511,7 @@
                   </Vibe64SessionAssistantMenu>
                   <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
                   <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
-                  <Vibe64CodexPlanUsage
+                  <Vibe64AgentPlanUsage
                     :active="props.active && !props.sessionSelectionArchived"
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
@@ -832,7 +832,7 @@ import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vi
 import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
-import Vibe64CodexPlanUsage from "@/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue";
+import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64StarredFilesMenu from "@/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";

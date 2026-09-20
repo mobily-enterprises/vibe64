@@ -336,6 +336,29 @@ describe("useAccountAuthSessions", () => {
     expect(accounts.readAuthSession).toHaveBeenCalledTimes(2);
   });
 
+  it("confirms Claude login from native status and preserves a session when cancellation fails", async () => {
+    const session = { id: "claude-login", account: { id: "claude" }, mode: "browser", status: "authenticating" };
+    const accounts = {
+      loadError: "", startAuthCommand: {},
+      startAuth: vi.fn().mockResolvedValue(session),
+      readAuthSession: vi.fn().mockResolvedValue({ ...session, status: "connected" }),
+      cancelAuthSession: vi.fn().mockRejectedValue(new Error("Could not stop login")),
+      refresh: vi.fn()
+    };
+    const auth = await mountAccountAuthSessions(accounts, {
+      accountRows: [{ id: "claude" }], browserWindow: null,
+      clearIntervalFn: vi.fn(), setIntervalFn: vi.fn(() => 1)
+    });
+    await auth.startBrowserAuth("claude");
+    expect(await auth.cancelSession(session)).toBe(false);
+    expect(auth.activeSessionFor("claude").id).toBe(session.id);
+    expect(auth.localError.value).toBe("Could not stop login");
+    await lastSocketHandler()({ sessionId: session.id });
+    expect(auth.activeSessionFor("claude")).toBe(null);
+    expect(accounts.refresh).toHaveBeenCalledOnce();
+    expect(auth.localError.value).toBe("");
+  });
+
   it("handles null terminal-attention checks as idle", async () => {
     const { codexAuthSessionNeedsTerminalAttention } = await importAccountAuthSessions();
     expect(codexAuthSessionNeedsTerminalAttention(null)).toBe(false);

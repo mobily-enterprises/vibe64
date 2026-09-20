@@ -26,7 +26,10 @@ const ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS = new Set([
   "opencode-server-progress",
   "opencode-server-reasoning",
   "opencode-server-tool",
-  "opencode-server-turn-idle"
+  "opencode-server-turn-idle",
+  "claude-stream-turn-idle",
+  "claude-stream-message",
+  "claude-stream-message-delivered"
 ]);
 
 function assistantAccessText(value = "") {

@@ -311,7 +311,7 @@ function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
   ]);
   assert.match(
     args[5],
-    /^hooks\.PreToolUse=\[\{matcher="\^Bash\$",hooks=\[\{type="command",command=.*codexSessionCommandHook\.js.*timeout=30\}\]\}\]$/u
+    /^hooks\.PreToolUse=\[\{matcher="\^Bash\$",hooks=\[\{type="command",command=.*agentSessionCommandHook\.js.*timeout=30\}\]\}\]$/u
   );
   assert.deepEqual(args.slice(6), [
     "-c",

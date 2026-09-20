@@ -77,7 +77,7 @@ const CODEX_APP_SERVER_DESKTOP_BUS_ENV_NAMES = new Set([
   "DBUS_STARTER_BUS_TYPE"
 ]);
 const CODEX_APP_SERVER_SESSION_COMMAND_HOOK_PATH = fileURLToPath(
-  new URL("./codexSessionCommandHook.js", import.meta.url)
+  new URL("./agentSessionCommandHook.js", import.meta.url)
 );
 const CODEX_APP_SERVER_INVALID_REQUEST_CODE = -32600;
 const CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE = "vibe64_codex_model_catalog_invalid";

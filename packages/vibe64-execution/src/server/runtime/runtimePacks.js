@@ -95,10 +95,11 @@ const RUNTIME_PACKS = Object.freeze({
   "operator-clis": {
     binDirs: ["managed-bin", "operator-clis/bin"],
     identityPaths: [
+      "operator-clis/lib/node_modules/@anthropic-ai/claude-code/package.json",
       "operator-clis/lib/node_modules/@openai/codex/package.json",
       "operator-clis/lib/node_modules/opencode-ai/package.json"
     ],
-    managedCommands: ["codex", "opencode"]
+    managedCommands: ["claude", "codex", "opencode"]
   },
   "php": {
     binDirs: ["php/bin"],

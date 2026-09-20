@@ -55,7 +55,7 @@ vi.mock("vuetify/components/VTextField", async () => {
   const { h } = await import("vue");
   return { VTextField: { setup: (_, { attrs }) => () => h("input", { "aria-label": attrs.label }) } };
 });
-import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue";
+import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 
 async function render(data, props = {}) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
@@ -189,5 +189,27 @@ it("offers goal creation before the first goal and hides it for OpenCode", async
   mocks.goal = { status: "available", threadId: "", goal: null };
   expect(await render(null)).toContain("Goal objective");
   expect(await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "opencode" } } })).not.toContain("Goal objective");
+  mocks.goal = null;
+});
+
+
+it("shows Claude allowance and native goal controls without an unsupported token budget", async () => {
+  mocks.goal = { status: "available", goal: null };
+  const props = { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } };
+  const html = await render({ status: "available", windows: [
+    { id: "seven_day_opus", remainingPercent: 5, windowDurationMins: 10080 },
+    { id: "seven_day", remainingPercent: 61, windowDurationMins: 10080 },
+    { id: "five_hour", remainingPercent: 20, windowDurationMins: 300 }
+  ] }, props);
+  expect(mocks.options.enabled.value).toBe(true);
+  expect(html).toContain("Weekly Claude allowance remaining: 61%");
+  expect(html).toContain("5h allowance remaining: 20%");
+  expect(html).toContain("opus: 5% weekly remaining");
+  expect(html).toContain("Set a Claude goal");
+  expect(html).not.toContain("Token budget");
+  mocks.goal = { status: "available", goal: { status: "active", objective: "Make tests pass" } };
+  const running = await render(null, props);
+  expect(running).toContain("Pause goal");
+  expect(running).toContain("Pause stops the current turn");
   mocks.goal = null;
 });

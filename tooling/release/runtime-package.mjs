@@ -12,9 +12,11 @@ const RUNTIME_ENTRIES = [
   "node_modules/@local/vibe64-genesis/src/server/promptContext.js",
   "node_modules/@local/vibe64-genesis/bin/genesis",
   "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
-  "node_modules/@local/vibe64-runtime/src/server/codexSessionCommandHook.js",
+  "node_modules/@local/vibe64-runtime/src/server/agentSessionCommandHook.js",
+  "node_modules/@local/vibe64-accounts/bin/claude-auth-browser",
   "node_modules/@local/vibe64-terminals/src/server/sessionWorkOperationCommand.js",
-  "node_modules/@local/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js"
+  "node_modules/@local/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js",
+  "node_modules/@local/vibe64-terminals/src/server/claudeStdioBridge.js"
 ];
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));
 const json = async filename => JSON.parse(await readFile(filename, "utf8"));
