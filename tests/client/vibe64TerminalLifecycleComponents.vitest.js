@@ -188,7 +188,7 @@ describe("Vibe64 terminal lifecycle components", () => {
       })
     }));
     const dismiss = () => findNode(container, (node) => (
-      node.type === "button" && node.props?.["aria-label"] === "Dismiss Save work"
+      node.type === "button" && nodeText(node) === "Dismiss"
     ));
     expect(findNode(container, hasClass("vibe64-temporary-action-terminal__status"))).toBeNull();
     expect(dismiss()).toBeTruthy();
@@ -236,16 +236,25 @@ describe("Vibe64 terminal lifecycle components", () => {
       node.type === "button" && node.props?.["aria-label"] === "Show Save work details"
     ));
     expect(summary).toBeTruthy();
-    expect(summary.props.color).toBe("surface-variant");
-    expect(nodeText(summary)).toContain("Saved revision 42");
-    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBeNull();
+    const surface = findNode(container, hasClass("vibe64-terminal-surface"));
+    const title = findNode(summary, hasClass("vibe64-temporary-action-terminal__title"));
+    const status = findNode(summary, hasClass("vibe64-temporary-action-terminal__status"));
+    const body = findNode(surface, hasClass("vibe64-terminal-surface__body"));
+    expect(surface.props.color).toBe("surface");
+    expect(nodeText(surface)).toContain("Saved revision 42");
+    expect(body.style.display).toBe("none");
     expect(findNode(container, (node) => (
-      node.type === "button" && node.props?.["aria-label"] === "Dismiss Save work"
+      node.type === "button" && nodeText(node) === "Dismiss"
     ))).toBeNull();
 
     details.props.onClick();
     await nextTick();
-    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBeTruthy();
+    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBe(surface);
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBe(summary);
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__title"))).toBe(title);
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__status"))).toBe(status);
+    expect(surface.props.color).toBe("surface");
+    expect(body.style.display).not.toBe("none");
     expect(findNode(container, (node) => (
       node.type === "button" && nodeText(node) === "Dismiss"
     ))).toBeNull();
@@ -255,7 +264,8 @@ describe("Vibe64 terminal lifecycle components", () => {
     ));
     activeCollapse.props.onClick();
     await nextTick();
-    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBeNull();
+    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBe(surface);
+    expect(body.style.display).toBe("none");
 
     const activeReopen = findNode(container, (node) => (
       node.type === "button" && node.props?.["aria-label"] === "Show Save work details"
@@ -273,8 +283,9 @@ describe("Vibe64 terminal lifecycle components", () => {
     ));
     collapseDetails.props.onClick();
     await nextTick();
-    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBeNull();
-    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBeTruthy();
+    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBe(surface);
+    expect(body.style.display).toBe("none");
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBe(summary);
     expect(state.dismissedKey).toBe("");
 
     const reopenedDetails = findNode(container, (node) => (
@@ -296,7 +307,7 @@ describe("Vibe64 terminal lifecycle components", () => {
     await nextTick();
     expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBeTruthy();
     expect(findNode(container, (node) => (
-      node.type === "button" && node.props?.["aria-label"] === "Dismiss Save work"
+      node.type === "button" && nodeText(node) === "Dismiss"
     ))).toBeNull();
 
     state.operationKey = "save-3";
@@ -343,23 +354,26 @@ describe("Vibe64 terminal lifecycle components", () => {
       })
     }));
 
-    const summary = findNode(container, hasClass("vibe64-temporary-action-terminal__summary"));
-    const fixButton = findNode(summary, (node) => (
+    const fixButton = findNode(container, (node) => (
       node.type === "button" && node.props?.["aria-label"] === "Fix it with AI"
     ));
-    const retryButton = findNode(summary, (node) => (
-      node.type === "button" && node.props?.["aria-label"] === "Retry Workspace preparation"
+    const retryButton = findNode(container, (node) => (
+      node.type === "button" && nodeText(node) === "Retry"
     ));
-    expect(summary.props.role).toBe("alert");
+    expect(findNode(container, hasClass("vibe64-temporary-action-terminal__line")).props.role).toBe("alert");
     expect(fixButton).toBeTruthy();
     expect(nodeText(fixButton)).toBe("Fix it with AI");
     expect(retryButton).toBeTruthy();
-    expect(findNode(container, hasClass("vibe64-terminal-surface"))).toBeNull();
+    expect(findNode(container, hasClass("vibe64-terminal-surface__body")).style.display).toBe("none");
 
     fixButton.props.onClick();
     retryButton.props.onClick();
     expect(fix).toHaveBeenCalledTimes(1);
     expect(retry).toHaveBeenCalledTimes(1);
+    findNode(container, (node) => node.props?.["aria-label"] === "Show Workspace preparation details").props.onClick();
+    await nextTick();
+    expect(findNode(container, (node) => node.props?.["aria-label"] === "Fix it with AI")).toBe(fixButton);
+    expect(findNode(container, (node) => node.type === "button" && nodeText(node) === "Retry")).toBe(retryButton);
     app.unmount();
   });
 

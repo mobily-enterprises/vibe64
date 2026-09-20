@@ -1,85 +1,54 @@
 <template>
-  <div v-if="visible && !detailsOpen" class="vibe64-temporary-action-terminal">
-    <v-sheet
-      class="vibe64-temporary-action-terminal__summary"
-      :class="{ 'vibe64-temporary-action-terminal__summary--error': Boolean(error) }"
-      rounded="lg"
-      color="surface-variant"
-      :role="error ? 'alert' : 'status'"
-    >
-      <strong class="vibe64-temporary-action-terminal__title">{{ title }}</strong>
-      <v-chip
-        v-if="status"
-        class="vibe64-temporary-action-terminal__status"
-        size="x-small"
-        variant="tonal"
-      >
-        {{ status }}
-      </v-chip>
-      <span class="vibe64-temporary-action-terminal__line">
-        {{ summaryText }}
-      </span>
-      <div class="vibe64-temporary-action-terminal__actions">
-        <slot v-if="error" name="error-actions" />
-        <v-btn
-          v-if="error && retryable"
-          :aria-busy="starting ? 'true' : undefined"
-          :aria-label="`Retry ${title}`"
-          :disabled="starting"
-          :icon="mdiRefresh"
-          size="small"
-          :title="`Retry ${title}`"
-          variant="text"
-          @click="$emit('retry')"
-        />
-        <v-btn
-          :aria-label="`Show ${title} details`"
-          :color="error ? 'error' : undefined"
-          :icon="error ? mdiAlertCircleOutline : mdiConsoleLine"
-          size="small"
-          :title="`Show ${title} details`"
-          variant="text"
-          @click="openDetails"
-        />
-        <v-btn
-          v-if="canDismiss"
-          :aria-label="`Dismiss ${title}`"
-          :icon="mdiClose"
-          size="small"
-          :title="`Dismiss ${title}`"
-          variant="text"
-          @click="dismiss"
-        />
-      </div>
-    </v-sheet>
-  </div>
-
   <Vibe64TerminalSurface
-    v-else-if="visible"
+    v-if="visible"
+    class="vibe64-temporary-action-terminal"
+    :class="{ 'vibe64-temporary-action-terminal--error': Boolean(error) }"
     body-mode="log"
     close-label="Dismiss"
     collapsible
     :error="error"
-    expanded
+    :expanded="detailsOpen"
     :error-title="errorTitle"
     :height="height"
     mobile-takeover
-    :open-error-details="Boolean(error)"
+    :open-error-details="detailsOpen && Boolean(error)"
     :output="output"
-    :retryable="retryable"
+    :retryable="Boolean(error) && retryable"
     :show-close="canDismiss"
-    :show-copy="Boolean(output)"
+    :show-copy="detailsOpen && Boolean(output)"
     :show-interrupt="false"
-    :stage="stage"
+    :show-summary="false"
     :starting="starting"
-    :status="status"
-    :subtitle="subtitle"
     :title="title"
     @close="dismiss"
     @copy="$emit('copy')"
     @retry="$emit('retry')"
-    @toggle-expanded="closeDetails"
+    @toggle-expanded="toggleDetails"
   >
+    <template #heading>
+      <div class="vibe64-temporary-action-terminal__summary">
+        <strong class="vibe64-temporary-action-terminal__title">{{ title }}</strong>
+        <v-chip
+          v-if="status"
+          class="vibe64-temporary-action-terminal__status"
+          size="x-small"
+          variant="tonal"
+        >
+          {{ status }}
+        </v-chip>
+      </div>
+    </template>
+    <template #actions-before>
+      <span
+        class="vibe64-temporary-action-terminal__line"
+        :role="error ? 'alert' : 'status'"
+        :title="subtitle"
+      >
+        {{ summaryText }}
+      </span>
+      <slot name="actions-before" />
+      <slot v-if="error" name="error-actions" />
+    </template>
     <template v-for="slotName in forwardedSlots" #[slotName]="slotProps">
       <slot :name="slotName" v-bind="slotProps || {}" />
     </template>
@@ -88,7 +57,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAlertCircleOutline, mdiClose, mdiConsoleLine, mdiRefresh } from "@mdi/js";
 import Vibe64TerminalSurface from "@/components/studio/Vibe64TerminalSurface.vue";
 import { terminalLastMeaningfulLine } from "@/lib/codexOutput.js";
 
@@ -154,8 +122,6 @@ const detailsViewed = ref(false);
 const canDismiss = computed(() => !props.active);
 const forwardedSlots = [
   "actions-after",
-  "actions-before",
-  "error-actions",
   "output",
   "overlay"
 ];
@@ -173,17 +139,13 @@ const summaryText = computed(() => {
   return props.stage || outputLine || "Working…";
 });
 
-function openDetails() {
+function toggleDetails() {
   detailsViewed.value = true;
-  detailsOpen.value = true;
-}
-
-function closeDetails() {
-  detailsOpen.value = false;
+  detailsOpen.value = !detailsOpen.value;
 }
 
 function dismiss() {
-  closeDetails();
+  detailsOpen.value = false;
   detailsViewed.value = false;
   emit("dismiss");
 }
@@ -202,34 +164,32 @@ watch(() => props.active, (active, previousActive) => {
 </script>
 
 <style scoped>
-.vibe64-temporary-action-terminal {
-  container-type: inline-size;
-  min-width: 0;
+:global(.vibe64-temporary-action-terminal--error) {
+  border-inline-start: 0.25rem solid rgb(var(--v-theme-error));
+}
+
+:global(.vibe64-temporary-action-terminal .vibe64-terminal-surface__header) {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+:global(.vibe64-temporary-action-terminal .vibe64-terminal-surface__body) {
+  margin-top: 0.5rem;
 }
 
 .vibe64-temporary-action-terminal__summary {
   align-items: center;
   display: grid;
   gap: 0.5rem;
-  grid-template-areas: "title status line actions";
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  min-height: 2.75rem;
-  padding: 0.35rem 0.45rem 0.35rem 0.8rem;
-}
-
-.vibe64-temporary-action-terminal__summary--error {
-  border-inline-start: 0.25rem solid rgb(var(--v-theme-error));
-}
-
-.vibe64-temporary-action-terminal__actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  grid-area: actions;
-  justify-content: flex-end;
+  grid-template-areas: "title status";
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
 }
 
 .vibe64-temporary-action-terminal__title {
+  font-size: 0.88rem;
   grid-area: title;
 }
 
@@ -237,7 +197,8 @@ watch(() => props.active, (active, previousActive) => {
   grid-area: status;
 }
 
-.vibe64-temporary-action-terminal__summary--error .vibe64-temporary-action-terminal__line {
+.vibe64-temporary-action-terminal--error .vibe64-temporary-action-terminal__line {
+  flex-basis: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -250,18 +211,10 @@ watch(() => props.active, (active, previousActive) => {
 }
 
 .vibe64-temporary-action-terminal__line {
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  flex: 1 1 0;
   font-size: 0.82rem;
-  grid-area: line;
-}
-
-@container (max-width: 36rem) {
-  .vibe64-temporary-action-terminal__summary {
-    grid-template-areas:
-      "title status"
-      "line line"
-      "actions actions";
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
+  min-width: 0;
+  order: -1;
 }
 </style>

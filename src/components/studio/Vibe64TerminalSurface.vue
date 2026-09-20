@@ -91,6 +91,7 @@
             ref="expansionToggle"
             :aria-controls="bodyId"
             :aria-expanded="String(surfaceExpanded)"
+            :aria-label="surfaceExpanded ? undefined : `Show ${title} details`"
             size="small"
             variant="text"
             @click="toggleExpanded"
@@ -114,7 +115,7 @@
       </div>
 
       <div
-        v-if="!surfaceExpanded"
+        v-if="showSummary && !surfaceExpanded"
         class="vibe64-terminal-surface__summary"
         aria-live="off"
       >
@@ -286,6 +287,10 @@ const props = defineProps({
     type: Boolean
   },
   showInterrupt: {
+    default: true,
+    type: Boolean
+  },
+  showSummary: {
     default: true,
     type: Boolean
   },

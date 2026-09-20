@@ -14,6 +14,7 @@ contract transported by the project's Stack.
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/workspaceSetup.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
+- `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
@@ -80,7 +81,9 @@ declared preparation recipe. It does not migrate a current, newer, invalid, or
 otherwise unrecognized project merely because setup inspection failed.
 
 During preparation, the workspace shows one compact progress line. Opening its
-details reveals the bounded transcript; while work is active, Collapse returns
+details keeps the same card, heading, status and progress line, with controls
+beside the description, and reveals
+the bounded transcript; while work is active, Collapse returns
 to the compact line and Dismiss is unavailable. After the operation finishes,
 Dismiss removes it. An opened transcript remains available after completion
 until dismissed. The browser remembers that dismissal across reloads for the

@@ -17,6 +17,7 @@ Git commands.
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
 - `packages/vibe64-sessions/src/server/service.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
+- `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionPanel.js`
@@ -43,7 +44,9 @@ recorded prepared commit was already published. Disposable GitHub mirror
 maintenance runs after Save completes and cannot change the Save result.
 
 While Save runs, the workspace shows one compact progress line. Opening its
-details reveals the bounded command progress; while work is active, Collapse
+details keeps the same card, heading, status and progress line, with controls
+beside the description, and reveals
+the bounded command progress; while work is active, Collapse
 returns to the compact line and Dismiss is unavailable. After the operation
 finishes, Dismiss removes it. The browser remembers a dismissal across reloads
 for that exact Save or Update attempt without changing its result; a new attempt

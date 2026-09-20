@@ -796,33 +796,36 @@ test.describe("direct chat", () => {
         };
         await header.click();
         await confirm();
-        const summary = page.locator(".vibe64-temporary-action-terminal__summary").filter({ hasText: error });
+        const summary = page.locator(".vibe64-temporary-action-terminal").filter({ hasText: error });
         await expect(summary).toBeVisible();
         await expect(summary.locator(".vibe64-temporary-action-terminal__status")).toHaveCount(0);
         for (const paneWidth of [240, 360, 600]) {
-          await summary.evaluate((element, size) => { element.parentElement!.style.width = `${size}px`; }, paneWidth);
+          await summary.evaluate((element, size) => { element.style.width = `${size}px`; }, paneWidth);
           const bounds = await summary.boundingBox();
           const buttons = await summary.getByRole("button").all();
-          expect(buttons).toHaveLength(3);
-          let previousRight = 0;
+          expect(buttons).toHaveLength(4);
+          const buttonBounds = [];
           for (const button of buttons) {
             const box = (await button.boundingBox())!;
             expect(box.width).toBeGreaterThanOrEqual(40);
-            expect(box.x).toBeGreaterThanOrEqual(previousRight);
+            expect(box.x).toBeGreaterThanOrEqual(bounds!.x);
             expect(box.x + box.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
-            previousRight = box.x + box.width;
+            for (const previous of buttonBounds) {
+              expect(box.x >= previous.x + previous.width || box.y >= previous.y + previous.height).toBe(true);
+            }
+            buttonBounds.push(box);
           }
           expect(await summary.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
         }
-        await summary.evaluate((element) => { element.parentElement!.style.width = ""; });
+        await summary.evaluate((element) => { element.style.width = ""; });
         const title = update ? "Update this session (rebase)" : "Save work";
         await summary.getByRole("button", { name: `Show ${title} details`, exact: true }).click();
         await page.getByRole("button", { name: "Collapse", exact: true }).click();
-        await summary.getByRole("button", { name: `Retry ${title}`, exact: true }).click();
+        await summary.getByRole("button", { name: "Retry", exact: true }).click();
         await confirm();
         await expect.poll(() => attempts).toBe(2);
         await expect(summary).toBeVisible();
-        await summary.getByRole("button", { name: `Dismiss ${title}`, exact: true }).press("Enter");
+        await summary.getByRole("button", { name: "Dismiss", exact: true }).press("Enter");
         await expect(summary).not.toBeVisible();
         await header.click();
         await confirm();

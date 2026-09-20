@@ -2029,9 +2029,9 @@ test("@preview-lifecycle temporary action output disappears only when completed 
   const activity = page.locator(".studio-autopilot__activity");
   const summary = activity.locator(".vibe64-temporary-action-terminal__summary");
   await expect(summary).toBeVisible();
-  await expect(summary).toContainText("Installing dependencies");
+  await expect(activity.locator(".vibe64-temporary-action-terminal__line")).toContainText("Installing dependencies");
   expect(Number((await summary.boundingBox())?.height || 0)).toBeLessThan(64);
-  await expect(activity.locator(".vibe64-terminal-surface")).toHaveCount(0);
+  await expect(activity.locator(".vibe64-terminal-surface__body")).toBeHidden();
 
   await activity.getByRole("button", { name: /Show Preparing workspace/u }).click();
   const details = activity.locator(".vibe64-terminal-surface");
@@ -2047,7 +2047,7 @@ test("@preview-lifecycle temporary action output disappears only when completed 
   await expect(details).toBeVisible();
   await expect(details).toContainText("Workspace preparation complete");
 
-  await details.getByRole("button", { name: "Hide" }).click();
+  await details.getByRole("button", { name: "Dismiss" }).click();
   await expect(details).toHaveCount(0);
   await expect(summary).toHaveCount(0);
 
