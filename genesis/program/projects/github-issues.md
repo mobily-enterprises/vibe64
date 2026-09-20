@@ -109,6 +109,9 @@ a project override. Public Vibe64's shared session driver tells main and tempora
 assistants to use this internal link first and optionally include GitHub as a
 secondary link. Issues in other repositories retain GitHub links. Genesis
 composes this Vibe64-owned guidance; provider adapters do not duplicate it.
+The returned `/app` path is used exactly. Ordinary clicks use the application
+shell's generic same-origin page routing, including full URLs on the current
+origin, so opening an issue from chat does not reload the document.
 New provider conversations receive the rule through their normal context lifecycle.
 New issue opens a title, Markdown description and label form; successful creation
 opens the resulting issue. The same dialog edits either an existing issue's title

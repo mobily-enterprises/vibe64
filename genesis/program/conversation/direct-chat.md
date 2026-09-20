@@ -28,6 +28,8 @@ continuation and loading older history.
 
 ## Sources
 
+- `src/App.vue`
+- `tests/server/inAppLinks.unit.test.js`
 - `src/components/studio/vibe64-session/Vibe64CodexPlanUsage.vue`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
@@ -439,6 +441,14 @@ reply remains ordinary conversation text.
 Numbered question labels and their suggested choices use the shared inline
 Markdown renderer, preserving bold text, code, and links without interpreting
 raw HTML. Their file links use the same source-editor navigation as prose.
+The application shell handles otherwise-unclaimed ordinary anchor clicks through
+Vue Router when their same-origin URL matches a registered page. Root-relative
+paths and full URLs preserve their query and fragment without reloading the
+document. This applies to rendered Markdown and teleported dialogs as well as
+ordinary page content. The shell's not-found route does not turn API, download
+or unknown URLs into app navigation. Modified clicks, explicit targets,
+downloads, external links and component-handled file links keep their existing
+owners. The document listener is removed when the shell unmounts.
 Explicit numbered questions may include explanatory sentences after the question
 mark; those sentences remain attached to their question and do not suppress the
 answer fields. Numbered statements alone still do not create answer fields.

@@ -65,6 +65,10 @@ issues, comments, labels and PRs through the same realtime connection, without
 clearing browser drafts or filters.
 When assistants refer to this project's issues, they prefer links that open the
 issue inside Vibe64 and may also provide the GitHub link.
+Ordinary links to pages in the current Vibe64 app change the route without
+reloading the app, including root-relative paths and full URLs on the same origin.
+File links keep opening Files. External links, downloads and deliberate new-tab
+clicks retain their browser behavior.
 Projects without a GitHub repository do not show Issues/PR,
 PR session actions, or PR publishing controls.
 Pull requests has the same project-wide, full-width Dashboard presentation.
