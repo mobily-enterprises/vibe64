@@ -118,6 +118,10 @@ test("Vibe64 operational log fields are stable and redact secret-shaped fields",
 
 test("Vibe64 operational logging sanitizes embedded secrets in ordinary strings", () => {
   assert.equal(
+    sanitizeLogText("token=private-token; password: 'private password'; secret=private-secret"),
+    "token=[redacted]; password: [redacted]; secret=[redacted]"
+  );
+  assert.equal(
     sanitizeLogText("DATABASE_URL=mysql://root:secret@example/db authorization: Bearer abc123"),
     "DATABASE_URL=[redacted] authorization: [redacted]"
   );

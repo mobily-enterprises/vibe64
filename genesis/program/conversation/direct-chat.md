@@ -229,6 +229,13 @@ Shared-runtime cancellation includes providers that own only temporary chats.
 Failed stop-state persistence retains the owner for retry; provider retirement
 or release follows that durable write and precedes publication of the stopped
 state. Reconciliation cannot prune an unverified stop owner.
+Connection acquisition retries a cached observation failure through that same
+stop owner. Concurrent attempts share the pending stop; a failed retry retains
+the barrier. After a verified stop, acquisition uses the retained healthy provider
+or its normally acquired replacement. It does not replay a message or resume a
+goal; explicit Send/Resume still owns continuation.
+Normal redacted operational logs retain the original observation cause and any
+stop failure separately, without requiring session-debug logging.
 Startup and ordinary connection checks also reconcile a persisted active
 observation-loss barrier, including one missing its turn identity. Under the
 agent-write lock, the controller uses the session's known conversation to read

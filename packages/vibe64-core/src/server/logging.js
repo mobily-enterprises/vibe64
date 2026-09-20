@@ -29,7 +29,7 @@ const VIBE64_LOG_REDACT_PATHS = Object.freeze([
 ]);
 const VIBE64_LOG_REDACTED_VALUE = "[redacted]";
 const VIBE64_LOG_SECRET_FIELD_PATTERN = /(?:authorization|password|passphrase|token|secret|credential|api[_-]?key|api[_-]?token|access[_-]?token|refresh[_-]?token|database[_-]?url|dsn)/iu;
-const VIBE64_LOG_SECRET_ASSIGNMENT_PATTERN = /\b((?:DATABASE[_-]?URL|DSN)|[A-Za-z_][A-Za-z0-9_-]*?(?:PASSWORD|PASS|PASSPHRASE|TOKEN|SECRET|CREDENTIAL|API[_-]?KEY|API[_-]?TOKEN|ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|DSN)[A-Za-z0-9_-]*)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu;
+const VIBE64_LOG_SECRET_ASSIGNMENT_PATTERN = /\b((?:DATABASE[_-]?URL|DSN)|(?:[A-Za-z_][A-Za-z0-9_-]*?)?(?:PASSWORD|PASS|PASSPHRASE|TOKEN|SECRET|CREDENTIAL|API[_-]?KEY|API[_-]?TOKEN|ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|DSN)[A-Za-z0-9_-]*)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu;
 const VIBE64_LOG_AUTH_VALUE_PATTERN = /\b(authorization|proxy-authorization)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,;]+|[^\s,;]+)/giu;
 const VIBE64_LOG_BEARER_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/giu;
 const VIBE64_LOG_URL_CREDENTIALS_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)([^/@\s:]+):([^/@\s]+)@/giu;

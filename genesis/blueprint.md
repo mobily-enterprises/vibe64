@@ -756,7 +756,10 @@ be stopped through its control connection, Vibe64 uses the existing process
 owner; stopping a shared process can affect its other conversations. An
 unverified stop retains active ownership and keeps Stop available. Verified
 stops remain stopped until an explicit Resume or Send. Drafts remain editable
-during recovery, and the composer updates from external state without losing
+during recovery. Connection checks retry an unconfirmed stop through its retained
+owner before reconnecting; a transient stop failure does not require restarting
+the editor or replacing the conversation. Recovery never repeats a sent message.
+The composer updates from external state without losing
 focus or selection.
 
 People can choose a helper model for their Codex connection in AI Accounts.

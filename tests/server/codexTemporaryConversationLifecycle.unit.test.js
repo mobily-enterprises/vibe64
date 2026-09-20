@@ -1885,6 +1885,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
     ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerActiveReconcileMs: 60_000,
     codexAppServerDaemonWellbeingMs: 60_000,
+    logger: { warn: (event) => captures.onDiagnostic?.(event) },
     publishSessionChanged: async (sessionId, event) => captures.onSessionChanged?.(sessionId, event),
     codexToolHomeRequired: false,
     codexToolHomeSource,
@@ -9766,6 +9767,39 @@ test("Codex retains ownership and refuses new Send when neither thread nor runti
   });
 });
 
+test("Codex connection checks retry an unconfirmed observation stop before reconnecting", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    const diagnostics = [];
+    captures.onDiagnostic = (event) => diagnostics.push(event);
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "recover-stop-owner" });
+    const provider = captures.provider;
+    const threadId = provider.threadId;
+    provider.stopThreadForObservationLoss = async () => { throw new Error("Control unavailable"); };
+    captures.stopRuntimeResult = { stopped: false };
+    await assert.rejects(provider.failObservation(new Error("Observation lost", {
+      cause: new Error("Connection closed; token=private-test-token")
+    })));
+    assert.equal(diagnostics[0].event, "vibe64.codex_observation.lost");
+    assert.match(diagnostics[0].cause, /Connection closed/);
+    assert.equal(JSON.stringify(diagnostics).includes("private-test-token"), false);
+    assert.ok(diagnostics.some((event) => event.event === "vibe64.codex_observation.stop_failed"));
+    const blocked = await controller.ensureThread(sessionId);
+    assert.equal(blocked.ok, false);
+    assert.equal(captures.stopRuntimes, 2, "a connection check retries the retained stop owner");
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, true);
+    captures.stopRuntimeResult = { stopped: true };
+    const recovered = await controller.ensureThread(sessionId);
+    assert.equal(recovered.ok, true, JSON.stringify(recovered));
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
+    assert.equal(captures.turns.length, 1, "recovery must not replay the message");
+    assert.equal(captures.threadStarts.length, 1, "recovery preserves the conversation");
+    const continued = await controller.sendMessage(sessionId, { message: "Continue", messageId: "after-recovered-stop" });
+    assert.equal(continued.ok, true, JSON.stringify(continued));
+    assert.equal(captures.provider.threadId, threadId);
+    assert.equal(captures.turns.length, 2);
+  });
+});
+
 test("temporary Codex retains ownership after observation loss and retries the same stop owner", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId }) => {
     const conversation = await controller.createConversation(sessionId, { ephemeral: true });
@@ -9787,11 +9821,12 @@ test("temporary Codex retains ownership after observation loss and retries the s
       conversationId, ephemeral: true, message: "Must not overlap"
     });
     assert.equal(blocked.ok, false);
+    assert.equal(captures.stopRuntimes, 2, "failed Send retries the same unconfirmed stop");
     captures.stopRuntimeResult = { stopped: true };
     const stopped = await controller.stopConversation(sessionId, { conversationId, ephemeral: true, runId: turn.runId });
     assert.equal(stopped.ok, true, JSON.stringify(stopped));
     assert.equal(controller.hasActiveTemporaryConversation(sessionId), false);
-    assert.equal(captures.stopRuntimes, 2);
+    assert.equal(captures.stopRuntimes, 3);
     assert.equal(captures.turns.length, 1);
   });
 });

@@ -1,4 +1,5 @@
 import { createCodexHelperModelStore } from "@local/vibe64-core/server/codexHelperModel";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   createCodexAppServerDetachedTurnWatcher,
   codexAppServerTurnStatusIsActive,
@@ -1352,6 +1353,7 @@ function createCodexTerminalController({
   codexToolHomeSource = "",
   env = process.env,
   codexGitCommand = null,
+  logger = null,
   projectService,
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command
@@ -2028,6 +2030,14 @@ function createCodexTerminalController({
       },
       onObservationLost(error) {
         if (!observationStop || observationStop.error !== error) {
+          logOperationalEvent(logger, "warn", {
+            component: "vibe64.codex_observation",
+            event: "vibe64.codex_observation.lost",
+            sessionId,
+            code: error.code,
+            error: error.message,
+            cause: error.cause?.message || ""
+          }, "Codex observation was lost; verifying that work stops.");
           const stop = {
             error,
             promise: runWithCodexAppServerProjectContext(projectContext, () =>
@@ -2035,6 +2045,14 @@ function createCodexTerminalController({
           };
           observationStop = stop;
           const tracked = stop.promise.catch((failure) => {
+            logOperationalEvent(logger, "warn", {
+              component: "vibe64.codex_observation",
+              event: "vibe64.codex_observation.stop_failed",
+              sessionId,
+              code: failure.code,
+              error: failure.message,
+              cause: error.cause?.message || error.message
+            }, "Codex stop remains unconfirmed; connection checks will retry.");
             vibe64SessionDebugLog("server.codexTerminal.observation.stopFailed", {
               sessionId, error: vibe64SessionDebugError(failure)
             });
@@ -2236,7 +2254,13 @@ function createCodexTerminalController({
   async function ensureCodexAppServerDaemonForSession(sessionId = "", options = {}, mainThreadId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const providerOptions = options;
-    const provider = await codexAppServerProviderForSession(normalizedSessionId, providerOptions);
+    let provider = await codexAppServerProviderForSession(normalizedSessionId, providerOptions);
+    if (provider.observationFailure) {
+      // Retry the retained stop owner before acquiring another connection.
+      // A failed stop keeps its admission barrier; verified shutdown may retire it.
+      await provider.failObservation(provider.observationFailure);
+      provider = await codexAppServerProviderForSession(normalizedSessionId, providerOptions);
+    }
     const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
     if (mainThreadId) {
       const fields = codexAppServerProviderKeyFields(providerKey);

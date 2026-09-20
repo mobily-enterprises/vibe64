@@ -494,6 +494,7 @@ function createService({
     codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
     codexGitCommand,
     env,
+    logger,
     projectService,
     publishSessionChanged: publishAgentSessionChanged
   });
