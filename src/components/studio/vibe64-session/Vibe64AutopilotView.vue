@@ -1754,12 +1754,17 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__assistant-button {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
 }
 
 .studio-autopilot__assistant-button-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   font-size: 8px;
   letter-spacing: 0;
   line-height: 10px;

@@ -2,8 +2,9 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
-The Settings cog labels the next recipient in small text beneath its icon,
-without increasing the button height or adding a tooltip. The session store
+The Settings cog stays on the same horizontal centerline as the neighboring icons.
+It labels the next recipient underneath without shifting the icon, increasing
+the button height or adding a tooltip. The session store
 snapshots the assistant selection on a new turn. History preserves that snapshot
 through normalization, and the adapter supplies per-turn labels and hover details
 to the shared transcript. Replies without a saved selection display "agent";

@@ -141,8 +141,9 @@ requests show a short description instead of internal agent instructions.
 The main chat composer keeps Add, Settings, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
-The Settings cog shows a tiny Codex, Claude Code or OpenCode label beneath its icon, within
-the existing button height and without a tooltip. New replies retain their
+The Settings cog stays aligned with the neighboring icons, with a tiny Codex,
+Claude Code or OpenCode label underneath. The label does not move the icon or
+increase the button height, and the button has no tooltip. New replies retain their
 answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
