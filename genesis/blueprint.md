@@ -450,6 +450,8 @@ source safely.
 Failed renewals always offer an explicit Retry, including after reopening the
 dialog. Save or Update prerequisites can be corrected in the old session;
 Retry checks the current conditions before continuing the saved renewal.
+Archiving cannot remove the original session while renewal still reserves a
+private replacement; the original session and its Retry action remain available.
 Renewal takes its source identity from the project's configured authority and
 verified Git commit, or the server-resolved PR authority bound to that session.
 Renewal preserves a PR session's destination. Arbitrary legacy session metadata

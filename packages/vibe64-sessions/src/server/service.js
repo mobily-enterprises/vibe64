@@ -852,6 +852,16 @@ function createService({
         const currentSession = await runtime.getSession(sessionId, {
           inspectSource: false
         });
+        const renewalSessions = await runtime.store.listSessionsForRenewal();
+        const reservedSuccessor = renewalSessions.find((session) => (
+          ["renewal_pending", "renewal_activating"].includes(text(session.status)) &&
+          text(session.metadata?.renewed_from) === sessionId
+        ));
+        if (reservedSuccessor) {
+          const error = new Error("Finish the session renewal using Retry before archiving its original session.");
+          error.code = "vibe64_session_renewal_blocks_archive";
+          throw error;
+        }
         const sourceCreationFailed = currentSession.sourceReady !== true &&
           text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
         const stored = text(currentSession.metadata?.session_archive_operation);

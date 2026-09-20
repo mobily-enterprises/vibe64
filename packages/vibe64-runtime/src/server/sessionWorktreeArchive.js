@@ -461,23 +461,29 @@ async function writeCheckpointRecoveryBundle({
         "vibe64_worktree_archive_checkpoint_restore_failed"
       );
     }
-    for (const { commit, ref } of refs) {
-      const restored = await runGit(worktreePath, [
-        "--git-dir",
-        verificationRoot,
-        "rev-parse",
-        "--verify",
-        ref
-      ], {
-        allowedRoots: [artifactsRoot],
-        timeout: 15_000
-      });
-      if (!restored.ok || normalizeText(restored.stdout) !== commit) {
-        throw vibe64Error(
-          `Session checkpoint bundle restored an unexpected ref: ${ref}`,
-          "vibe64_worktree_archive_checkpoint_restore_mismatch"
-        );
-      }
+    const restored = await runGit(worktreePath, [
+      "--git-dir",
+      verificationRoot,
+      "for-each-ref",
+      "--format=%(objectname) %(refname)",
+      `${refRoot}/`
+    ], {
+      allowedRoots: [artifactsRoot],
+      timeout: 15_000
+    });
+    if (!restored.ok) {
+      throw vibe64Error(
+        `Session checkpoint restore verification could not run: ${restored.output}`,
+        "vibe64_worktree_archive_checkpoint_restore_verify_failed"
+      );
+    }
+    const restoredRefs = restored.stdout.split("\n").map(normalizeText).filter(Boolean).sort();
+    const expectedRefs = refs.map(({ commit, ref }) => `${commit} ${ref}`).sort();
+    if (restoredRefs.join("\n") !== expectedRefs.join("\n")) {
+      throw vibe64Error(
+        "Session checkpoint bundle did not restore the exact checkpoint refs.",
+        "vibe64_worktree_archive_checkpoint_restore_mismatch"
+      );
     }
   } finally {
     await rm(verificationRoot, {

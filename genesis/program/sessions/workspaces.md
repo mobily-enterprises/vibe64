@@ -107,6 +107,14 @@ from the saved stage and rechecks its current prerequisites; an error flag does
 not permanently remove that action. Unsaved or outdated source remains blocked
 until Save or Update resolves it. A provider quota failure during generation
 then reaches the existing editable manual handover and successor AI selection.
+Ordinary Archive checks private renewal reservations under the predecessor's
+agent-write lock before stopping tools or releasing resources. A pending or
+activating successor keeps its predecessor visible and returns a Retry instruction;
+archiving cannot leave a hidden successor as the project's only reserved session.
+Before removing source, archive restores the checkpoint bundle into a temporary
+repository and compares every checkpoint name and commit in one Git read. A
+failed verification command is reported separately from a ref mismatch; both
+preserve the original source for Retry.
 
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it

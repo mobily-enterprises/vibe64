@@ -426,10 +426,86 @@ test("archives and proves restoration of hidden turn checkpoint refs before remo
     const restoreVerificationCommands = commandRequests.filter(({ args = [] }) => (
       args.includes("--git-dir") || (args[0] === "init" && args[1] === "--bare")
     ));
-    assert.equal(restoreVerificationCommands.length, 4);
+    assert.equal(restoreVerificationCommands.length, 3);
+    assert.equal(restoreVerificationCommands.filter(({ args }) => args.includes("for-each-ref")).length, 1);
     assert.ok(restoreVerificationCommands.every(({ cwd }) => cwd === worktreePath));
     assert.ok(restoreVerificationCommands.every(({ cwd }) => !cwd.startsWith(
       runtime.store.paths(sessionId).artifactsRoot
     )));
   });
+});
+
+test("checkpoint restore verification failures preserve the original source", async (t) => {
+  for (const failure of ["changed_ref", "interrupted_command"]) {
+    await t.test(failure, async (t) => {
+      await withTemporaryRoot(async (targetRoot) => {
+        const baseCommit = await createGitProject(targetRoot);
+        const runtime = new Vibe64SessionRuntime({
+          projectContextRoot: targetRoot,
+          projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+        });
+        const sessionId = `checkpoint_${failure}`;
+        const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+        await runtime.createSession({
+          metadata: {
+            base_branch: "main",
+            base_commit: baseCommit,
+            branch: `vibe64/${sessionId}`,
+            ...sourceMetadata(targetRoot, sessionId)
+          },
+          sessionId
+        });
+        await createSessionClone({
+          baseCommit,
+          branch: `vibe64/${sessionId}`,
+          sourcePath: worktreePath,
+          targetRoot
+        });
+        await writeProjectFile(worktreePath, "app.txt", "checkpointed only\n");
+        const outerTurnId = "client-message-archive";
+        const checkpoint = await createGitTurnCheckpoint({
+          outerTurnId,
+          outcome: "completed",
+          sessionId,
+          timestamp: "2026-08-18T09:00:00.000Z",
+          worktreePath
+        });
+        const refs = checkpointRefs({ outerTurnId, sessionId });
+        let failureInjected = false;
+        const releaseManagedExecution = installVibe64ManagedExecutionProvider({
+          async runCommand(request, { runLocal }) {
+            const args = request.args || [];
+            if (args[0] === "--git-dir" && args.includes("for-each-ref")) {
+              failureInjected = true;
+              if (failure === "interrupted_command") {
+                return { ok: false, stderr: "simulated managed command interruption" };
+              }
+              await git(args[1], ["update-ref", refs.turnRef, baseCommit]);
+            }
+            return runLocal();
+          },
+          async stopExecution() {
+            return { ok: true, stopped: false };
+          }
+        });
+        t.after(releaseManagedExecution);
+
+        const session = await runtime.getSession(sessionId);
+        await assert.rejects(runtime.archiveSessionSource(session, { reason: "archived" }), {
+          code: failure === "changed_ref"
+            ? "vibe64_worktree_archive_checkpoint_restore_mismatch"
+            : "vibe64_worktree_archive_checkpoint_restore_verify_failed",
+          message: failure === "changed_ref"
+            ? /did not restore the exact checkpoint refs/u
+            : /simulated managed command interruption/u
+        });
+        assert.equal(failureInjected, true);
+        assert.equal(await pathExists(worktreePath), true);
+        assert.equal(await git(worktreePath, ["rev-parse", refs.turnRef]), checkpoint.commit);
+        assert.equal(await git(worktreePath, ["show", `${checkpoint.commit}:app.txt`]), "checkpointed only");
+        assert.equal(await git(worktreePath, ["status", "--porcelain"]), "M app.txt");
+        assert.notEqual((await runtime.store.readMetadata(sessionId)).source_removed, "yes");
+      });
+    });
+  }
 });

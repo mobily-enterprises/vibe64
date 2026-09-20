@@ -13,6 +13,7 @@ function fixture(operation = null) {
   let busy = false;
   const runtime = {
     store: {
+      async listSessionsForRenewal() { return [structuredClone(session)]; },
       async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
       async recoverSessionArchives() { return []; },
       async runSessionExclusive(_id, _name, run) {
@@ -45,6 +46,27 @@ function fixture(operation = null) {
   });
   return { calls, events, project, runtime, service, session, terminals };
 }
+
+test("ordinary archive preserves the visible predecessor of a failed renewal", async () => {
+  const f = fixture();
+  const successor = {
+    sessionId: "renewal-successor", status: "renewal_pending",
+    metadata: { renewal_id: "renewal-1", renewed_from: "session-a" }
+  };
+  f.runtime.store.listSessionsForRenewal = async () => [f.session, successor];
+  const blocked = await f.service().archiveSession("session-a");
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, "vibe64_session_renewal_blocks_archive");
+  assert.match(blocked.error, /Retry/u);
+  assert.deepEqual(f.calls, []);
+  assert.deepEqual(f.events, []);
+  assert.equal(f.session.status, "active");
+  assert.deepEqual(f.session.metadata, {});
+  assert.equal(successor.status, "renewal_pending");
+
+  successor.status = "active";
+  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+});
 
 for (const [phase, expected] of [
   ["stopping", ["stop", "resources", "source"]],
