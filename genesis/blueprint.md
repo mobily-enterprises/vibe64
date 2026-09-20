@@ -736,6 +736,8 @@ so another goal can be set. It preserves the conversation and project work;
 an already running turn still uses Stop for interruption.
 Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
+Automatic Codex goal turns retain managed command access after the assistant
+process restarts.
 
 Claude Code uses the same chat, model selector, Send, Steer, Stop and native
 terminal surfaces. The owner signs in to their Claude subscription through a

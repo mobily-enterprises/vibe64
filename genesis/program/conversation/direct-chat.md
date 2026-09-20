@@ -228,6 +228,14 @@ Thread preparation and reconnection restore the saved assistant selection and
 request concise reasoning summaries in the thread configuration, including when
 Codex resumes a goal before the next explicit message. Model capability rules and
 explicit isolation settings still apply.
+The interactive Codex app-server starts with explicit `approval_policy="never"`
+and `sandbox_mode="danger-full-access"` configuration overrides. Codex does not
+apply its top-level sandbox bypass flag to app-server defaults. Setting those
+defaults prevents native work restored without per-turn overrides from falling
+back to a network-disabled sandbox that denies managed command sockets. Economy
+startup retains its separate isolation. The native paginated-history test runs
+the production launcher and verifies the effective defaults and automatic goal
+continuation permissions after a cold restart.
 Notifications from an obsolete socket cannot reach the current observers.
 Reading a saved final answer never resumes a thread.
 

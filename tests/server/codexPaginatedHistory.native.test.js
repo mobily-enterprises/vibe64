@@ -2,7 +2,7 @@ import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/cod
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import {
   CodexAppServerAgentProvider,
+  startCodexAppServerProcess
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { ensureCodexAppServerThreadForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
@@ -100,7 +101,7 @@ test("native paginated conversations accept their first message and survive reco
   async function connectClient() {
     client = new CodexAppServerJsonRpcClient({ endpoint: `unix://${socketPath}`, requestTimeoutMs: 10000 });
     await client.connect();
-    await client.initialize();
+    await client.initialize({ clientInfo: { name: "vibe64", title: "Vibe64", version: "0.1.0" } });
     provider.client = client;
     client.subscribe((notification) => notifications.push(notification));
     const request = client.request.bind(client);
@@ -111,22 +112,22 @@ test("native paginated conversations accept their first message and survive reco
   }
 
   async function startProcess() {
-    processHandle = spawn("codex", ["app-server", "--listen", `unix://${socketPath}`], {
-      cwd: workdir,
+    await startCodexAppServerProcess({
+      codexCommand: "codex",
+      authStateSignature: "native-test",
+      runtimeDir: root,
       env: { PATH: process.env.PATH, HOME: toolHome, CODEX_HOME: toolHome, RUST_LOG: "error" },
-      detached: true,
-      stdio: ["ignore", "ignore", "pipe"]
-    });
-    processHandle.stderr.on("data", (chunk) => { stderr += chunk; });
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        await access(socketPath);
-        break;
-      } catch {
-        assert.ok(attempt < 100 && processHandle.exitCode === null, stderr);
-        await delay(50);
+      commandRunner: async (request) => {
+        processHandle = spawn(request.command, request.args, {
+          cwd: request.cwd,
+          env: request.baseEnv,
+          detached: true,
+          stdio: ["ignore", "ignore", "pipe"]
+        });
+        processHandle.stderr.on("data", (chunk) => { stderr += chunk; });
+        return { ok: true, pid: processHandle.pid, execution: { id: `native-${processHandle.pid}` } };
       }
-    }
+    });
     await connectClient();
   }
 
@@ -138,6 +139,7 @@ test("native paginated conversations accept their first message and survive reco
       const force = setTimeout(() => process.kill(-processHandle.pid, "SIGKILL"), 5000);
       try { await exited; } finally { clearTimeout(force); }
     }
+    await rm(socketPath, { force: true });
   }
 
   t.after(async () => {
@@ -315,4 +317,39 @@ test("native paginated conversations accept their first message and survive reco
     assert.equal(await readFile(editedFile, "utf8"), "Keep this project edit.");
   });
 
+  await t.test("native startup defaults preserve command access through a cold goal continuation", async () => {
+    // Omit per-thread and per-turn permissions to exercise the process defaults
+    // used when Codex restores work without another explicit Vibe64 turn.
+    const settings = { cwd: workdir, model: "gpt-5.6-luna", config };
+    const thread = await provider.startThread({ ...settings, historyMode: "legacy" });
+    assert.equal(thread.response.approvalPolicy, "never");
+    assert.deepEqual(thread.response.sandbox, { type: "dangerFullAccess" });
+    holdResponses = true;
+    const before = requestCount;
+    await provider.sendTurn(thread.id, ["Keep working until interrupted"], { cwd: workdir });
+    for (let attempt = 0; requestCount === before; attempt += 1) {
+      assert.ok(attempt < 100, stderr);
+      await delay(50);
+    }
+    await client.request("thread/goal/set", {
+      threadId: thread.id, objective: "Keep managed commands available after restart"
+    });
+    await stopProcess();
+    await startProcess();
+    const beforeResume = requestCount;
+    const resumed = await provider.resumeThread(thread.id, settings);
+    for (let attempt = 0; requestCount === beforeResume; attempt += 1) {
+      assert.ok(attempt < 100, `Goal did not continue: ${stderr}`);
+      await delay(50);
+    }
+    await provider.stopThreadForObservationLoss(thread.id, "");
+    assert.equal(resumed.response.approvalPolicy, "never");
+    assert.deepEqual(resumed.response.sandbox, { type: "dangerFullAccess" });
+    const rollout = await readFile(resumed.raw.path, "utf8");
+    const contexts = rollout.trim().split("\n").map((line) => JSON.parse(line))
+      .filter((entry) => entry.type === "turn_context");
+    assert.ok(contexts.length >= 2, "the restart must create an automatic continuation");
+    assert.equal(contexts.at(-1).payload.approval_policy, "never");
+    assert.equal(contexts.at(-1).payload.sandbox_policy.type, "danger-full-access");
+  });
 });

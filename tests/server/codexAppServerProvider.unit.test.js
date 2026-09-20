@@ -302,18 +302,21 @@ function managedCodexAppServerArgs(call = {}) {
 }
 
 function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
-  assert.deepEqual(args.slice(0, 5), [
-    "--dangerously-bypass-approvals-and-sandbox",
+  assert.deepEqual(args.slice(0, 8), [
+    "-c",
+    'approval_policy="never"',
+    "-c",
+    'sandbox_mode="danger-full-access"',
     "--dangerously-bypass-hook-trust",
     "-c",
     "features.hooks=true",
     "-c"
   ]);
   assert.match(
-    args[5],
+    args[8],
     /^hooks\.PreToolUse=\[\{matcher="\^Bash\$",hooks=\[\{type="command",command=.*agentSessionCommandHook\.js.*timeout=30\}\]\}\]$/u
   );
-  assert.deepEqual(args.slice(6), [
+  assert.deepEqual(args.slice(9), [
     "-c",
     STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
     ...tail

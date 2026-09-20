@@ -2233,8 +2233,12 @@ async function startCodexAppServerProcess({
     force: true
   });
   const codexArgs = [
+    // App-server uses config overrides, not the top-level sandbox bypass flag.
     ...(economy ? [] : [
-      "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      'approval_policy="never"',
+      "-c",
+      'sandbox_mode="danger-full-access"',
       "--dangerously-bypass-hook-trust",
       "-c",
       "features.hooks=true",
