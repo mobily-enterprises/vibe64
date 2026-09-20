@@ -8,9 +8,11 @@ import { createMemoryHistory, createRouter, useRouter } from "vue-router";
 import { sourceEditorLinkTarget } from "../../src/lib/vibe64SourceEditorLinks.js";
 
 const { descriptor } = parse(await readFile(new URL("../../src/App.vue", import.meta.url), "utf8"));
+const linkSetup = await readFile(new URL("../../src/composables/useVibe64InAppLinks.js", import.meta.url), "utf8");
 // Execute the real shell setup and lifecycle with Vue; rendering is irrelevant
 // to document-level link delegation.
 const setupShell = new Function("onMounted", "onUnmounted", "useRouter", "window", "document",
+  linkSetup.replace(/^import .*;$/gmu, "").replace("export function", "function") +
   descriptor.scriptSetup.content.replace(/^import .*;$/gmu, ""));
 const origin = "https://vibe64.example";
 const start = "/app/project/example";

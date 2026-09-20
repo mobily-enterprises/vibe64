@@ -30,6 +30,7 @@ continuation and loading older history.
 ## Sources
 
 - `src/App.vue`
+- `src/composables/useVibe64InAppLinks.js`
 - `tests/server/inAppLinks.unit.test.js`
 - `src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue`
 - `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
