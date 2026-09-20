@@ -364,8 +364,9 @@ Codex code sign-in presents preparation and authorization as two clear steps.
 The full one-time code stays on one line beside Copy, with one primary action
 to continue to ChatGPT. Reference screenshots open on request, and the flow
 remains usable on narrow screens and in either theme. The settings and continue
-actions share a row when space permits, cancellation sits beside sign-in status,
-and the login terminal uses a separate shaded surface.
+actions share a row when space permits, Previous step and cancellation sit beside
+sign-in status, and the login terminal uses a separate shaded surface. Once the
+code is ready, authorization shows no repeated introduction or waiting message.
 Each distinct
 connected OpenCode provider route remains its own choice, including separate
 plans from the same provider. The chat selector shows only models the host

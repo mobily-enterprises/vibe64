@@ -17,7 +17,17 @@
           >
             {{ statusReady ? readyLabel : authBusy || authStartBusy ? "Signing in" : neededLabel }}
           </v-chip>
-          <template v-for="{ account, session } in setupRows" :key="account.id">
+          <template v-for="{ account, session, authorizeStep } in setupRows" :key="account.id">
+            <v-btn
+              v-if="authorizeStep"
+              color="primary"
+              :disabled="!accountsReadyForActions"
+              :prepend-icon="mdiArrowLeft"
+              variant="text"
+              @click="setCodexAuthStep(session, 'settings')"
+            >
+              Previous step
+            </v-btn>
             <v-btn
               v-if="session"
               :disabled="!accountsReadyForActions || !session.id"
@@ -85,7 +95,7 @@
 
       <div class="accounts-setup__items">
         <v-sheet
-          v-for="{ account, session, userCode, settingsStep, authorizeStep } in setupRows"
+          v-for="{ account, session, userCode, settingsStep, authorizeStep, statusMessage } in setupRows"
           :key="account.id"
           rounded="xl"
           :border="!session"
@@ -302,12 +312,6 @@
             </div>
 
             <div v-else class="accounts-setup__instruction-copy">
-              <template v-if="authorizeStep">
-                <h2 class="text-title-large ma-0">Connect your ChatGPT account</h2>
-                <p class="text-body-medium text-medium-emphasis ma-0">
-                  Copy your code, then enter it in the ChatGPT page that opens.
-                </p>
-              </template>
               <v-sheet
                 v-if="userCode || authorizeStep"
                 class="accounts-setup__code-block pa-4"
@@ -353,8 +357,8 @@
               >
                 {{ authorizeStep ? "Continue to ChatGPT" : "Continue in browser" }}
               </v-btn>
-              <p class="text-body-medium text-medium-emphasis ma-0" role="status">
-                {{ sessionStatusMessage(session) }}
+              <p v-if="statusMessage" class="text-body-medium text-medium-emphasis ma-0" role="status">
+                {{ statusMessage }}
               </p>
               <v-expansion-panels
                 v-if="authorizeStep"
@@ -374,18 +378,6 @@
                   </v-expansion-panel-text>
                 </v-expansion-panel>
               </v-expansion-panels>
-            </div>
-
-            <div v-if="authorizeStep" class="accounts-setup__session-footer">
-              <v-btn
-                color="primary"
-                :disabled="!accountsReadyForActions"
-                :prepend-icon="mdiArrowLeft"
-                variant="text"
-                @click="setCodexAuthStep(session, 'settings')"
-              >
-                Previous step
-              </v-btn>
             </div>
 
             <div
@@ -539,6 +531,7 @@ const setupRows = computed(() => accountRows.value.map((account) => {
     account,
     session,
     userCode: session ? authSessionUserCode(session) : "",
+    statusMessage: session ? sessionStatusMessage(session) : "",
     settingsStep: codexSettingsStepVisible(session),
     authorizeStep: codexAuthorizeStepVisible(session)
   };
@@ -681,14 +674,6 @@ const setupRows = computed(() => accountRows.value.map((account) => {
 
 .accounts-setup__authorize-action {
   width: 100%;
-}
-
-.accounts-setup__session-footer {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: space-between;
 }
 
 .accounts-setup__reference-image {

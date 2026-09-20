@@ -58,10 +58,11 @@ Codex device sign-in uses a single-column Prepare / Connect flow. The code
 and adjacent Copy action share a responsive surface; Continue to ChatGPT is
 the primary authorization action. Each step keeps its reference screenshot
 behind an optional help disclosure. Copy feedback is announced in place,
-code preparation reserves a skeleton region, and Previous step remains secondary.
-The settings link and continue action share a wrapping row. Cancel login sits
-beside the overall sign-in status, and the terminal uses its existing surface-class
-seam for a distinct themed background. Active sign-in replaces disconnected warning chrome
+code preparation reserves a skeleton region. The authorization step omits a
+repeated introduction and routine waiting message once its code is ready.
+The settings link and continue action share a wrapping row. Previous step and
+Cancel login sit beside the overall sign-in status, and the terminal uses its
+existing surface-class seam for a distinct themed background. Active sign-in replaces disconnected warning chrome
 with a neutral status; the existing session polling, authorization URL, API-key
 choice and terminal recovery continue to own authentication.
 When Codex authentication changes, Vibe64 retires active and

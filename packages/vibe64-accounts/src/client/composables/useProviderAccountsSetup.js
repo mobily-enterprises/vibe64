@@ -404,7 +404,7 @@ function useProviderAccountsSetup(props) {
       return "Signing in with the OpenAI API key. Open the terminal if Vibe64 needs more details.";
     }
     if (session.mode === "device" && authSessionUserCode(session)) {
-      return "Keep this window open. Vibe64 will update when sign-in is complete.";
+      return "";
     }
     if (session.mode === "device" && session.authUrl) {
       return "Waiting for Codex to print the one-time code.";
