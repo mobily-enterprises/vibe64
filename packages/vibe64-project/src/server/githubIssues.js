@@ -148,6 +148,22 @@ export async function githubIssues(project, input = {}, options = {}) {
     return { ok: true, issue: { number: created.number, url: created.html_url } };
   }
   if (operation === "list") {
+    if (/^#?\d+$/u.test(search)) {
+      const issueNumber = Number(search.replace(/^#/u, ""));
+      if (!Number.isSafeInteger(issueNumber) || issueNumber < 1) {
+        throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
+      }
+      const found = await api(`repos/${fullName}/issues/${issueNumber}`, undefined, "GET", { allowNotFound: true });
+      const matches = found && !found.pull_request && (state === "all" || found.state === state) &&
+        selectedLabels.every((label) => found.labels.some((item) => item.name.toLowerCase() === label.toLowerCase()));
+      const issues = matches ? [{
+        number: found.number, title: found.title, url: found.html_url, state: found.state.toUpperCase(),
+        updatedAt: found.updated_at, author: { login: found.user?.login || "" },
+        comments: { totalCount: found.comments }, labels: { totalCount: found.labels.length, nodes: found.labels }
+      }] : [];
+      return { ok: true, repository: fullName, issues, total: issues.length,
+        pageInfo: { hasNextPage: false, endCursor: null }, searchLimit: null };
+    }
     // Search text is a literal phrase, never a user-supplied repository qualifier.
     const phrase = search.replace(/["\\\r\n]/gu, " ").trim();
     // The repository connection matches labels with OR; search provides ALL matching.

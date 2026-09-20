@@ -19,7 +19,7 @@ export function githubApi(input, { env = process.env, runCommand = runVibe64Comm
   const identity = githubCredentialContext({ vibe64User: input.vibe64User }, { accountMode });
   if (!identity.ok) throw vibe64Error(identity.error, identity.code);
 
-  return async function api(endpoint, payload, method = "POST") {
+  return async function api(endpoint, payload, method = "POST", { allowNotFound = false } = {}) {
     const result = await runCommand({
       actor: accountMode === GITHUB_ACCOUNT_MODE_LOCAL ? "daemon" : "named-user",
       allowedRoots: [identity.home],
@@ -32,6 +32,7 @@ export function githubApi(input, { env = process.env, runCommand = runVibe64Comm
     });
     let value;
     try { value = JSON.parse(result.stdout || ""); } catch { /* Handled as an unsuccessful response below. */ }
+    if (allowNotFound && method === "GET" && String(value?.status) === "404") return null;
     if (!result.ok || !value || value.errors?.length) {
       const output = String(result.stderr || "");
       let message = "GitHub could not complete this request. Refresh and try again.";

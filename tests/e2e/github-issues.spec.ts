@@ -63,6 +63,61 @@ async function mockGithubIssues(page: Page) {
 }
 
 for (const viewport of viewports) {
+  test(`optimistic issue comments retain failed posts and retry at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockGithubIssues(page);
+    let savedComments: object[] = [];
+    let finishRequest: () => void = () => {};
+    const postedBodies: string[] = [];
+    await routeApiEndpoint(page, "/vibe64/issues/1001", (route) => fulfillJson(route, {
+      ok: true, issue: { ...issue, comments: { ...issue.comments, nodes: savedComments, totalCount: savedComments.length } }
+    }));
+    await routeApiEndpoint(page, "/vibe64/issues/1001/comments", async (route) => {
+      const body = route.request().postDataJSON().body;
+      postedBodies.push(body);
+      await new Promise<void>((resolve) => { finishRequest = resolve; });
+      if (postedBodies.length === 1) {
+        await route.fulfill({ status: 403, contentType: "application/json",
+          body: JSON.stringify({ error: "GitHub refused this action." }) });
+      } else {
+        const comment = { id: "new-comment", body, author: { login: "alice" }, createdAt: new Date().toISOString() };
+        savedComments = [comment];
+        await fulfillJson(route, { ok: true, comment });
+      }
+    });
+    await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
+    await showProjectPaneIfNeeded(page);
+    const draft = page.getByRole("textbox", { name: "Add a comment", exact: true });
+    await draft.fill("An optimistic **update**");
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
+    const posted = page.locator("article").filter({ hasText: "An optimistic update" });
+    await expect(posted).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Comments 1", exact: true })).toBeVisible();
+    await expect(posted.getByText("Posting…", { exact: true })).toBeVisible();
+    await expect(draft).toHaveValue("");
+    await draft.fill("Keep my next draft");
+    await expect.poll(() => postedBodies.length).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath(`comment-sending-${viewport.name}.png`) });
+    finishRequest();
+    await expect(posted.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.getByRole("button", { name: "All issues", exact: true }).click();
+    await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
+    await expect(posted.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await expect(draft).toHaveValue("Keep my next draft");
+    await page.screenshot({ path: testInfo.outputPath(`comment-retry-${viewport.name}.png`) });
+    await posted.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(posted.getByText("Posting…", { exact: true })).toBeVisible();
+    await expect.poll(() => postedBodies.length).toBe(2);
+    expect(postedBodies).toEqual(["An optimistic **update**", "An optimistic **update**"]);
+    finishRequest();
+    await expect(posted.getByText("alice", { exact: true })).toBeVisible();
+    await expect(posted).toHaveCount(1);
+    await expect(posted.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+    await expect(draft).toHaveValue("Keep my next draft");
+    await expectNoHorizontalOverflow(page);
+  });
+
   test(`issue mention autocomplete preserves drafts and supports keyboard and pointer at ${viewport.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await mockGithubIssues(page);
@@ -134,6 +189,22 @@ for (const viewport of viewports) {
     await expectNoHorizontalOverflow(page);
   });
 }
+
+test("issue number search preserves bare and hash-prefixed numbers through navigation", async ({ page }) => {
+  const requests = await mockGithubIssues(page);
+  await page.goto(`${DASHBOARD_PATH}/issues`);
+  const search = page.getByRole("textbox", { name: "Search issues", exact: true });
+  await expect(search).toHaveAttribute("placeholder", "Number, title or description");
+  for (const number of ["1001", "#1001"]) {
+    await search.fill(number);
+    await search.press("Enter");
+    await expect.poll(() => requests.at(-1)?.searchParams.get("search")).toBe(number);
+    await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
+    await expect(page.getByRole("heading", { name: issue.title, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "All issues", exact: true }).click();
+    await expect(search).toHaveValue(number);
+  }
+});
 
 test("mention loading failure retains local authors and typing, and Retry restores suggestions", async ({ page }) => {
   await mockGithubIssues(page);

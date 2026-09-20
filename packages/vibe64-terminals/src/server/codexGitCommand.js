@@ -872,9 +872,21 @@ function createCodexGitCommandService({
     }
     if (command === "vibe64-github") {
       stage = "github-helper";
-      const usage = "Usage: vibe64-helper github refresh";
+      const usage = "Usage: vibe64-helper github refresh | vibe64-helper github issue-link <number>";
       if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
         return finish({ ok: true, exitCode: 0, stdout: `${usage}\n` }, actor);
+      }
+      if (args.length === 2 && args[0] === "issue-link" && /^[1-9]\d*$/u.test(args[1]) && Number.isSafeInteger(Number(args[1]))) {
+        const project = await projectService.readCurrentProject();
+        const slug = normalizeText(project.slug);
+        if (!slug) {
+          return finish(responseError("The current project has no issue link.", "vibe64_github_issue_link_unavailable"), actor);
+        }
+        return finish({
+          ok: true,
+          exitCode: 0,
+          stdout: `/app/project/${encodeURIComponent(slug)}/dashboard/issues?issue=${args[1]}\n`
+        }, actor);
       }
       if (args.length !== 1 || args[0] !== "refresh") {
         return finish(responseError(usage, "vibe64_github_refresh_input_invalid"), actor);

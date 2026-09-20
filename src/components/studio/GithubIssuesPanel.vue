@@ -13,7 +13,7 @@ import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-  draft, pending, commentCursor, navigate, filter, mutate, issueSaved } = useVibe64Issues(computed(() => props.dashboardContext));
+  draft, pending, comments: issueComments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
 const editorOpen = ref(false);
 const editorIssue = shallowRef(null);
 watch(projectSlug, () => { editorOpen.value = false; editorIssue.value = null; });
@@ -23,7 +23,7 @@ function openEditor(selectedIssue = null) {
 }
 const resource = computed(() => number.value ? detail : list);
 const description = computed(() => parseLongTextReviewBlocks(issue.value?.body || ""));
-const comments = computed(() => (issue.value?.comments?.nodes || []).map((comment) => ({
+const comments = computed(() => issueComments.value.map((comment) => ({
   ...comment, blocks: parseLongTextReviewBlocks(comment.body || "")
 })));
 const canChangeState = computed(() => issue.value?.state === "OPEN" ? issue.value.viewerCanClose : issue.value?.viewerCanReopen);
@@ -71,7 +71,7 @@ function date(value) {
             <v-btn value="all" height="48">All</v-btn>
           </v-btn-toggle>
           <v-text-field
-            v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Title or description"
+            v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Number, title or description"
             :prepend-inner-icon="mdiMagnify" variant="outlined" rounded="pill" hide-details maxlength="200" clearable
             @keydown.enter.prevent="filter()"
             @click:clear="searchDraft = ''; filter()"
@@ -106,7 +106,7 @@ function date(value) {
       <v-sheet v-if="resource.isInitialLoading.value" rounded="xl" border class="pa-4" aria-label="Loading issues" aria-busy="true">
         <v-skeleton-loader v-for="index in 4" :key="index" :type="number ? 'paragraph' : 'list-item-two-line'" />
       </v-sheet>
-      <v-alert v-else-if="resource.loadError.value" type="error" variant="tonal" rounded="lg">
+      <v-alert v-else-if="resource.loadError.value && (!number || !issue)" type="error" variant="tonal" rounded="lg">
         {{ resource.loadError.value }}
         <template #append><v-btn variant="text" height="48" :disabled="resource.isFetching.value" @click="resource.reload()">Retry</v-btn></template>
       </v-alert>
@@ -164,6 +164,10 @@ function date(value) {
       </template>
 
       <template v-else-if="issue">
+        <v-alert v-if="detail.loadError.value" type="error" variant="tonal" rounded="lg">
+          {{ detail.loadError.value }}
+          <template #append><v-btn variant="text" height="48" :disabled="detail.isFetching.value" @click="detail.reload()">Refresh</v-btn></template>
+        </v-alert>
         <div>
           <div class="d-flex align-center flex-wrap ga-2 mb-3">
             <v-chip :prepend-icon="issue.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck" :color="issue.state === 'OPEN' ? 'success' : 'primary'" variant="tonal">
@@ -187,7 +191,7 @@ function date(value) {
           <p v-else class="text-body-medium text-medium-emphasis ma-0">No description provided.</p>
         </v-sheet>
         <div class="d-flex align-center justify-space-between flex-wrap ga-2 px-2">
-          <h3 class="text-title-medium">Comments <span class="text-medium-emphasis">{{ issue.comments.totalCount }}</span></h3>
+          <h3 class="text-title-medium">Comments <span class="text-medium-emphasis">{{ commentCount }}</span></h3>
           <div class="d-flex flex-wrap ga-2">
             <v-btn v-if="commentCursor" height="48" variant="text" @click="commentCursor = ''">Latest comments</v-btn>
             <v-btn
@@ -207,6 +211,13 @@ function date(value) {
               <time class="text-body-small text-medium-emphasis" :datetime="comment.createdAt">{{ date(comment.createdAt) }}</time>
             </div>
             <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown"><LongTextPreviewBlocks :blocks="comment.blocks" /></v-sheet>
+            <div v-if="comment.delivery && comment.delivery !== 'sent'" class="d-flex flex-wrap align-center ga-2 mt-1" aria-live="polite">
+              <span v-if="comment.delivery === 'sending'" class="text-body-small text-medium-emphasis">Posting…</span>
+              <template v-else>
+                <span class="text-body-small text-error">{{ comment.error }}</span>
+                <v-btn variant="text" height="48" :disabled="Boolean(pending)" @click="retryComment(comment.id)">Retry</v-btn>
+              </template>
+            </div>
           </div>
         </article>
         <v-divider />
@@ -214,7 +225,7 @@ function date(value) {
           <p v-if="issue.locked" class="text-body-small text-medium-emphasis ma-0">This conversation is locked. GitHub limits comments to permitted collaborators.</p>
           <GithubMentionTextarea
             v-model="draft" label="Add a comment" placeholder="Share an update or ask a question…" variant="outlined" rounded="lg"
-            rows="4" auto-grow :disabled="Boolean(pending)" :counter="draft.length > 65000 ? 65536 : undefined"
+            rows="4" auto-grow :counter="draft.length > 65000 ? 65536 : undefined"
             :error-messages="draft.length > 65536 ? 'Keep your comment under 65,536 characters.' : []"
             :base-path="basePath" :issue="issue" :enabled="dashboardContext.active !== false"
           />

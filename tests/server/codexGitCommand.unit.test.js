@@ -110,6 +110,7 @@ function serviceForSession(session = {}, {
   authorizeActorAccess = null,
   logger = null,
   metadataReads = null,
+  readCurrentProject,
   refreshGithub,
   runGatewayCommand
 } = {}) {
@@ -117,6 +118,7 @@ function serviceForSession(session = {}, {
     authorizeActorAccess,
     logger,
     projectService: {
+      readCurrentProject,
       refreshGithub,
       async createSessionStore() {
         return {
@@ -162,6 +164,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     const service = serviceForSession(session, {
       authorizeActorAccess: async ({ actor }) => ({ ok: actor.sessionId === session.sessionId }),
       refreshGithub: projectService.refreshGithub,
+      readCurrentProject: projectService.readCurrentProject,
       runGatewayCommand: async () => { throw new Error("Refresh must not read credentials or execute GitHub commands."); }
     });
     const prepared = await runWithProjectRequestContext({ slug: "second", targetRoot: projects[1].path }, () => prepareCodexGitCommand({
@@ -182,6 +185,17 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     const help = await runProcessWithInput(helper, ["github", "--help"], options);
     assert.equal(help.exitCode, 0, help.stderr);
     assert.match(help.stdout, /vibe64-helper github refresh/u);
+    const link = await runWithProjectRequestContext({ slug: "first", targetRoot: projects[0].path }, () =>
+      runProcessWithInput(command, ["issue-link", "43"], options));
+    assert.equal(link.exitCode, 0, link.stderr);
+    assert.equal(link.stdout, "/app/project/second/dashboard/issues?issue=43\n");
+    assert.equal(events.length, 1, "Link lookup must not publish a refresh");
+    for (const args of [["issue-link"], ["issue-link", "0"], ["issue-link", "-1"], ["issue-link", "1.5"],
+      ["issue-link", "9007199254740992"], ["issue-link", "43", "--project", "first"]]) {
+      const rejected = await runProcessWithInput(command, args, options);
+      assert.equal(rejected.exitCode, 1);
+      assert.match(rejected.stderr, /Usage: vibe64-helper github/u);
+    }
     for (const override of [
       { VIBE64_CODEX_GIT_COMMAND_SESSION_ID: "another-session" },
       { VIBE64_CODEX_GIT_COMMAND_TOKEN: "invalid" },
@@ -205,9 +219,11 @@ test("GitHub refresh rejects non-GitHub sessions and revoked actor access", asyn
         authorizeActorAccess: async () => ({ ok: false, error: "Access revoked." }),
         refreshGithub: async () => { assert.fail("Rejected sessions must not publish a refresh."); }
       });
-      const result = await service.run({ command: "vibe64-github", args: ["refresh"], sessionId: session.sessionId });
-      assert.equal(result.ok, false);
-      assert.equal(result.statusCode, 403);
+      for (const args of [["refresh"], ["issue-link", "43"]]) {
+        const result = await service.run({ command: "vibe64-github", args, sessionId: session.sessionId });
+        assert.equal(result.ok, false);
+        assert.equal(result.statusCode, 403);
+      }
     }
   });
 });

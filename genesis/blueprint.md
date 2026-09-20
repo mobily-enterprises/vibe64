@@ -27,8 +27,9 @@ to give the list and conversation room, with a direct route back. People can
 filter open, closed or all issues and select one or more repository labels to
 match together. Issue lists load 25 at a time and remain browsable beyond 1,000
 issues with state and single-label filters. Title and description search or
-multiple labels explain GitHub's 1,000-match limit when needed. People can read
-an issue and its paginated comments, add a comment, and close or reopen it when their
+multiple labels explain GitHub's 1,000-match limit when needed. Entering an issue
+number, with or without #, finds that exact issue within the selected filters.
+People can read an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
 description and repository labels, and edit labels on existing issues. Descriptions
 and comments support immediate @username suggestions from repository collaborators
@@ -43,13 +44,18 @@ Issue labels sit beside their title when space permits and wrap when needed.
 Pull request branch details share the metadata row when space permits.
 GitHub remains the authority; actions use the person's
 connected account. Unsent comments survive navigation within the same browser
-tab. A comment posted through Vibe64 gives other viewers of that project a short
+tab. Submitted comments appear immediately with a posting status. Failed comments
+retain their text and an explicit Retry action in the conversation, including
+after navigation in the same tab. Retrying leaves a newer draft intact.
+A comment posted through Vibe64 gives other viewers of that project a short
 notification and refreshes the issue conversation without clearing their draft.
 This uses the existing realtime connection and shared snackbar; comments posted
 directly on GitHub appear on the next refresh.
 Agents run `vibe64-helper github refresh` after GitHub changes to refresh that project's
 issues, comments, labels and PRs through the same realtime connection, without
 clearing browser drafts or filters.
+When assistants refer to this project's issues, they prefer links that open the
+issue inside Vibe64 and may also provide the GitHub link.
 Projects without a GitHub repository do not show Issues/PR,
 PR session actions, or PR publishing controls.
 Pull requests has the same project-wide, full-width Dashboard presentation.

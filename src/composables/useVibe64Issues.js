@@ -10,6 +10,7 @@ import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 // Unsent comments belong to this browser tab, not project source or GitHub.
 const drafts = reactive(new Map());
+const submittedComments = reactive(new Map());
 
 export function useVibe64Issues(context) {
   const route = useRoute();
@@ -58,7 +59,27 @@ export function useVibe64Issues(context) {
     get: () => drafts.get(detailPath.value) || "",
     set: (value) => value ? drafts.set(detailPath.value, value) : drafts.delete(detailPath.value)
   });
-  const pending = ref("");
+  const stateRequestPath = ref("");
+  const localComments = computed(() => submittedComments.get(detailPath.value) || []);
+  const savedComments = computed(() => issue.value?.comments?.nodes || []);
+  const savedCommentIds = computed(() => new Set(savedComments.value.map((comment) => comment.id)));
+  const comments = computed(() => [
+    ...savedComments.value,
+    ...localComments.value.filter((comment) => !savedCommentIds.value.has(comment.id) &&
+      (comment.delivery !== "sent" || !commentCursor.value))
+  ]);
+  const commentCount = computed(() => (issue.value?.comments?.totalCount || 0) +
+    comments.value.length - savedComments.value.length);
+  const pending = computed(() => {
+    if (stateRequestPath.value === detailPath.value) return "state";
+    return localComments.value.some((comment) => comment.delivery === "sending") ? "comment" : "";
+  });
+  watch([detail.data, detailPath, commentCursor], () => {
+    if (commentCursor.value || issue.value?.number !== Number(number.value)) return;
+    const remaining = localComments.value.filter((comment) => comment.delivery !== "sent" || !savedCommentIds.value.has(comment.id));
+    if (remaining.length) submittedComments.set(detailPath.value, remaining);
+    else submittedComments.delete(detailPath.value);
+  }, { immediate: true });
 
   function navigate(changes) {
     return router.push({ query: { ...route.query, ...changes } });
@@ -73,26 +94,64 @@ export function useVibe64Issues(context) {
     if (basePath.value === requestBasePath) await navigate({ issue: String(issueNumber) });
   }
   async function mutate(kind) {
-    if (pending.value || !issue.value || !active.value) return;
+    if (pending.value || issue.value?.number !== Number(number.value) || !active.value) return;
     const requestBasePath = basePath.value;
     const requestPath = detailPath.value;
-    const submitted = draft.value;
-    const commenting = kind === "comment";
-    if (commenting && (!submitted.trim() || submitted.length > 65536)) return;
-    pending.value = kind;
+    if (kind === "comment") {
+      const submitted = draft.value;
+      if (!submitted.trim() || submitted.length > 65536) return;
+      const comment = reactive({
+        id: crypto.randomUUID(),
+        body: submitted,
+        createdAt: new Date().toISOString(),
+        author: { login: "You" },
+        delivery: "sending",
+        error: ""
+      });
+      submittedComments.set(requestPath, [...localComments.value, comment]);
+      drafts.delete(requestPath);
+      commentCursor.value = "";
+      return sendComment(comment, requestBasePath, requestPath);
+    }
+    stateRequestPath.value = requestPath;
     try {
-      await detail.save(commenting ? vibe64RealtimeOriginPayload({ body: submitted }) : {
+      await detail.save({
         state: issue.value.state === "OPEN" ? "closed" : "open"
-      }, { path: commenting ? `${requestPath}/comments` : requestPath,
-        method: commenting ? "POST" : "PATCH" });
-      if (commenting && drafts.get(requestPath) === submitted) drafts.delete(requestPath);
+      }, { path: requestPath, method: "PATCH" });
       if (detailPath.value === requestPath) commentCursor.value = "";
-      feedback.success(commenting ? "Comment added." : "Issue updated.");
+      feedback.success("Issue updated.");
       await invalidateGithubIssueQueries(queryClient, requestBasePath, requestPath);
     } catch (error) {
-      feedback.error(error, commenting ? "Comment could not be confirmed. Refresh before posting again." : "Issue could not be updated.");
-    } finally { pending.value = ""; }
+      feedback.error(error, "Issue could not be updated.");
+    } finally { stateRequestPath.value = ""; }
+  }
+  async function sendComment(comment, requestBasePath, requestPath) {
+    comment.delivery = "sending";
+    comment.error = "";
+    try {
+      const result = await detail.save(vibe64RealtimeOriginPayload({ body: comment.body }), {
+        path: `${requestPath}/comments`, method: "POST"
+      });
+      Object.assign(comment, result.comment, { delivery: "sent" });
+    } catch (error) {
+      comment.delivery = "failed";
+      feedback.error(error, "Comment could not be confirmed. Refresh before posting again.");
+      comment.error = feedback.message.value;
+      return;
+    }
+    feedback.success("Comment added.");
+    try {
+      await invalidateGithubIssueQueries(queryClient, requestBasePath, requestPath);
+    } catch (error) {
+      feedback.error(error, "Comment added, but the conversation could not refresh.");
+    }
+  }
+  function retryComment(id) {
+    const comment = localComments.value.find((entry) => entry.id === id);
+    if (pending.value || !active.value || comment?.delivery !== "failed") return;
+    commentCursor.value = "";
+    return sendComment(comment, basePath.value, detailPath.value);
   }
   return { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-    draft, pending, commentCursor, navigate, filter, mutate, issueSaved };
+    draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, retryComment };
 }

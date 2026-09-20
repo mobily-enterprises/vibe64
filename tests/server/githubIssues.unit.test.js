@@ -139,6 +139,49 @@ test("browses repository issues beyond 1,000 without using capped search", async
   assert.deepEqual(result.pageInfo, { hasNextPage: true, endCursor: "after-1025" });
 });
 
+test("bare and hash-prefixed issue numbers use exact repository lookup, independent of title and body", async () => {
+  for (const search of ["43", "#43", " #43 "]) {
+    const f = fixture([success({ number: 43, title: "Daily Overview", state: "open",
+      html_url: "https://github.com/example/project/issues/43", user: { login: "alice" },
+      comments: 2, labels: [{ name: "bug", color: "d73a4a" }] })]);
+    const result = await githubIssues(project, { vibe64User: user, search, cursor: "old-page" }, f.options);
+    assert.equal(result.total, 1);
+    assert.equal(result.issues[0].number, 43);
+    assert.equal(result.issues[0].state, "OPEN");
+    assert.equal(result.issues[0].comments.totalCount, 2);
+    assert.equal(result.issues[0].labels.totalCount, 1);
+    assert.equal(result.searchLimit, null);
+    assert.equal(result.pageInfo.hasNextPage, false);
+    assert.equal(f.calls[0].args[3], "repos/example/project/issues/43");
+    assert.equal(f.calls[0].args[5], "GET");
+    assert.equal(f.calls[0].userKey, "alice");
+  }
+});
+
+test("number lookup respects state and every label, excludes pull requests and returns an empty missing result", async () => {
+  const found = { number: 43, title: "Daily Overview", state: "closed", labels: [{ name: "bug" }, { name: "important" }] };
+  for (const [response, filters, count] of [
+    [success(found), {}, 0],
+    [success(found), { state: "all" }, 1],
+    [success(found), { state: "closed", labels: ["BUG", "important"] }, 1],
+    [success(found), { state: "closed", labels: ["bug", "missing"] }, 0],
+    [success({ ...found, pull_request: {} }), { state: "all" }, 0],
+    [{ ok: false, stdout: JSON.stringify({ message: "Not Found", status: "404" }) }, {}, 0]
+  ]) {
+    const f = fixture([response]);
+    const result = await githubIssues(project, { vibe64User: user, search: "#43", ...filters }, f.options);
+    assert.equal(result.issues.length, count);
+    assert.equal(result.total, count);
+  }
+  for (const search of ["0", "#0", "9007199254740992"]) {
+    const f = fixture([]);
+    await assert.rejects(githubIssues(project, { vibe64User: user, search }, f.options), { code: "vibe64_issue_input_invalid" });
+    assert.equal(f.calls.length, 0);
+  }
+  const denied = fixture([{ ok: false, stderr: "HTTP 403" }]);
+  await assert.rejects(githubIssues(project, { vibe64User: user, search: "43" }, denied.options), /permissions/u);
+});
+
 test("unfiltered browsing leaves the GitHub label filter unset in every state", async () => {
   for (const state of ["open", "closed", "all"]) {
     for (const labels of [undefined, []]) {

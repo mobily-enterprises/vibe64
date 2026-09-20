@@ -44,6 +44,10 @@ GitHub's repository issue connection, loading 25 issues per page even beyond
 label array would incorrectly hide every issue. Text search and multiple labels
 use GitHub search with safely quoted label qualifiers and explain its 1,000-match limit when the result count
 exceeds it. Changing any filter returns to the first page.
+An exact number (`43` or `#43`) uses the repository's single-issue REST lookup
+instead of title/body search. State and all selected labels still apply; missing
+numbers and pull requests return an empty list. This lookup has no search cap or
+pagination. Other text retains literal title/body search.
 Descriptions and comments use the existing safe Markdown renderer. The newest
 25 comments appear in chronological order, with access to older pages.
 
@@ -69,8 +73,15 @@ accepted as an issue. No source checkout or active session is required.
 Comment submission, Close and Reopen are deliberate native actions. Neither
 the server nor the HTTP client retries a write automatically. An uncertain
 comment result asks the person to refresh before posting again. Drafts stay in
-tab memory by project and issue until posted or cleared; a failed write keeps
-the draft. Successful actions refresh the affected cached issue and list.
+tab memory by project and issue until submitted or cleared. Submission moves the
+exact text into a tab-local comment with a Posting status and clears the composer
+immediately, so a new draft can be entered. Failure keeps that comment and its
+message with an explicit Retry action; Retry sends the original body to its
+original issue and leaves a newer draft intact. Pending and failed comments
+survive navigation in the same tab, but not a page reload. Confirmed comments
+use GitHub's returned id and author until the read cache includes them, then the
+local entry is removed. A cache-refresh failure cannot make a confirmed write
+retryable. Successful actions refresh the affected cached issue and list.
 Load errors stay in the panel; command outcomes use shared action feedback.
 After GitHub confirms a comment, the existing project-change channel carries its
 issue number, comment id, author login and originating browser tab, without its
@@ -88,6 +99,14 @@ no repository or project override and performs no GitHub operation. The existing
 project-change event invalidates that project's issue lists, details, label
 catalog and PR queries in connected browsers without clearing drafts or filters.
 Other projects remain untouched. A failed notification is reported by the command.
+The same managed command supports `vibe64-helper github issue-link <number>`. After the
+existing session/actor access checks, it returns a root-relative issue path for
+the bound project, without contacting GitHub, exposing credentials, or accepting
+a project override. Public Vibe64's shared session driver tells main and temporary
+assistants to use this internal link first and optionally include GitHub as a
+secondary link. Issues in other repositories retain GitHub links. Genesis
+composes this Vibe64-owned guidance; provider adapters do not duplicate it.
+New provider conversations receive the rule through their normal context lifecycle.
 New issue opens a title, Markdown description and label form; successful creation
 opens the resulting issue. The same dialog edits labels on an existing issue.
 Both forms preserve their inputs after failure and use explicit submissions.
