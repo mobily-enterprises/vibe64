@@ -61,9 +61,9 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/http-web": "0.1.49",
-    "@jskit-ai/kernel": "0.1.204",
-    "@jskit-ai/realtime": "0.1.201",
+    "@jskit-ai/http-web": "0.1.50",
+    "@jskit-ai/kernel": "0.1.205",
+    "@jskit-ai/realtime": "0.1.202",
     "@mdi/js": "^7.4.47",
     "@local/studio-terminal-core": "0.1.0",
     "@local/vibe64-core": "0.1.0",
