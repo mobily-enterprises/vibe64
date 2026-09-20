@@ -12,6 +12,7 @@ Building a package leaves the development dependency installation intact.
 - `tooling/release/runtime-package.mjs`
 - `tooling/release/pack-release.mjs`
 - `tooling/release/verify-runtime.mjs`
+- `tooling/release/verify-client-startup.mjs`
 - `tooling/package-install-smoke.mjs`
 - `tooling/verify-package-boundaries.mjs`
 - `scripts/npm-release.js`
@@ -23,6 +24,10 @@ The initial HTML contains a lightweight, responsive loading shell with inline
 styles and a reload link. Vue replaces it when bootstrap and initial routing
 finish; a bootstrap failure changes its status to a retry explanation. The
 document remains useful while JavaScript downloads or is unavailable.
+Package releases verify the exact built HTML in cold browser contexts at 390,
+768 and 1280 pixels with JavaScript requests held back. Loading feedback and a
+48px Reload target must remain visible without horizontal overflow. Hosted
+artifact builders invoke the same public proof on their composed frontend.
 
 `npm run build` builds the frontend for local source execution. `npm run
 pack:release` verifies package boundaries, builds the frontend, assembles a

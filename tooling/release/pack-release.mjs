@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createRuntimePackage } from "./runtime-package.mjs";
 import { packageSmoke } from "../package-install-smoke.mjs";
+import { verifyClientStartup } from "./verify-client-startup.mjs";
 
 const execute = promisify(execFile);
 const APP_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -21,6 +22,7 @@ async function packRelease({ appRoot = APP_ROOT, outputDirectory = path.join(app
         child.once("exit", code => code === 0 ? resolve() : reject(new Error(`${command} failed with exit code ${code}.`)));
       });
     }
+    await verifyClientStartup(path.join(appRoot, "dist"));
     await createRuntimePackage({ appRoot, releaseAppRoot: path.join(temporary, "app") });
     await mkdir(outputDirectory, { recursive: true });
     const artifactDirectory = await mkdtemp(path.join(outputDirectory, "build-"));
