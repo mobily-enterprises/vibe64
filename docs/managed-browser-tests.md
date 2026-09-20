@@ -6,10 +6,10 @@ through the same Vibe64 commands for Codex and OpenCode, on any host that suppli
 the project's declared runtimes and resources.
 
 ```sh
-vibe64-preview targets --json
-vibe64-playwright --target test-app test --config playwright.test.config.mjs
+vibe64-helper preview targets --json
+vibe64-helper playwright --target test-app test --config playwright.test.config.mjs
 # Or run an existing package script containing the project's Playwright command:
-vibe64-playwright --target test-app npm-run test:e2e
+vibe64-helper playwright --target test-app npm-run test:e2e
 ```
 
 The target id is project-defined; `test-app` is an example, not a reserved name.
@@ -35,15 +35,15 @@ Cancellation or expiry means tests were not run, not that assertions failed.
 An ended command cannot be resumed later; retry it explicitly only after the
 reported constraint has been addressed. Hard safety failures cannot be approved.
 
-After a host service restart, inspect `vibe64-preview status --json`; the terminated
+After a host service restart, inspect `vibe64-helper preview status --json`; the terminated
 service cannot run its cleanup. Select the normal target explicitly if necessary:
 
 ```sh
-vibe64-preview ensure --target app --wait --json
+vibe64-helper preview ensure --target app --wait --json
 ```
 
 This command deliberately leaves its chosen target running. Use the scoped
-`vibe64-playwright --target ...` command when automatic restoration is wanted.
+`vibe64-helper playwright --target ...` command when automatic restoration is wanted.
 
 ## Resource failures during a browser test
 
@@ -125,4 +125,4 @@ processes; it cannot invent a safe testing contract for an arbitrary application
 The shared assistant session instructions include this workflow. New or refreshed
 provider contexts receive updated instructions through their normal lifecycle;
 an already active conversation may need an explicit instruction to read this
-guide and run `vibe64-preview targets --json`.
+guide and run `vibe64-helper preview targets --json`.

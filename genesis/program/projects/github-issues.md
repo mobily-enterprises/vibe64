@@ -81,7 +81,7 @@ Notification failure cannot turn a successfully posted comment into a failed
 write. Notifications are transient and cover comments posted through Vibe64;
 there is no inbox, polling or webhook subscription for external GitHub activity.
 After changing GitHub issues, comments, labels or PRs, agents run
-`vibe64-github refresh`. Session guidance supplies this instruction alongside
+`vibe64-helper github refresh`. Session guidance supplies this instruction alongside
 the existing managed Git commands. The command uses their authenticated Unix
 socket, session generation, stored actor and project access checks. It accepts
 no repository or project override and performs no GitHub operation. The existing

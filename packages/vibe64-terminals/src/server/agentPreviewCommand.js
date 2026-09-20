@@ -174,22 +174,22 @@ function responseError(message = "", code = "vibe64_agent_preview_command_failed
 function usageText() {
   return [
     "Usage:",
-    "  vibe64-preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
-    "  vibe64-preview targets [--json]",
-    "  vibe64-preview status [--json]",
-    "  vibe64-preview inspect-url",
-    "  vibe64-preview screenshot [--output <path>]",
-    "  vibe64-preview browser ensure",
-    "  vibe64-preview browser eval < playwright-code.js",
-    "  vibe64-preview browser identity <default|guest|configured-name>",
-    "  vibe64-preview browser screenshot [--output <path>]",
-    "  vibe64-preview browser status",
-    "  vibe64-preview browser reset",
-    "  vibe64-preview browser close",
-    "  vibe64-preview logs [--lines <count>] [--json]",
-    "  vibe64-preview restart [--wait] [--json] [--timeout-ms <ms>]",
-    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-helper preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
+    "  vibe64-helper preview targets [--json]",
+    "  vibe64-helper preview status [--json]",
+    "  vibe64-helper preview inspect-url",
+    "  vibe64-helper preview screenshot [--output <path>]",
+    "  vibe64-helper preview browser ensure",
+    "  vibe64-helper preview browser eval < playwright-code.js",
+    "  vibe64-helper preview browser identity <default|guest|configured-name>",
+    "  vibe64-helper preview browser screenshot [--output <path>]",
+    "  vibe64-helper preview browser status",
+    "  vibe64-helper preview browser reset",
+    "  vibe64-helper preview browser close",
+    "  vibe64-helper preview logs [--lines <count>] [--json]",
+    "  vibe64-helper preview restart [--wait] [--json] [--timeout-ms <ms>]",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "",
     "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
     "This is the canonical preview server for the configured primary application.",
@@ -220,7 +220,7 @@ function parsePreviewCommandArgs(args = []) {
   return {
     command,
     error: targetOptions.length && (command !== "ensure" || targetOptions.length > 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId))
-      ? "Use --target once with an exact declared target id on vibe64-preview ensure."
+      ? "Use --target once with an exact declared target id on vibe64-helper preview ensure."
       : "",
     json: hasFlag(values, "--json"),
     lines: normalizeLogLines(optionValue(values, "--lines")),
@@ -866,7 +866,7 @@ function createAgentPreviewCommandService({
       const url = inspectionUrl(status, sessionId);
       if (!url) {
         return finish(responseError(
-          "Managed preview inspection URL is unavailable. Run vibe64-preview ensure --wait --json first.",
+          "Managed preview inspection URL is unavailable. Run vibe64-helper preview ensure --wait --json first.",
           "vibe64_agent_preview_command_inspection_url_unavailable",
           {
             exitCode: 1

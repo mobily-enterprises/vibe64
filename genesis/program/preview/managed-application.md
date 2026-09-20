@@ -41,8 +41,8 @@ Declared targets blocked by missing resources remain visible but disabled.
 Working directories resolve relative to the session source. An ordinary name
 such as `..build` is valid; a path resolving outside that source is rejected.
 
-Agents discover declared targets through `vibe64-preview targets --json`.
-`vibe64-playwright --target <id> test ...` and `npm-run <script>` temporarily
+Agents discover declared targets through `vibe64-helper preview targets --json`.
+`vibe64-helper playwright --target <id> test ...` and `npm-run <script>` temporarily
 select an available web target through the same output controller. The server
 holds the session's target selection while the existing managed runner obtains
 its URL and native application identity and executes the suite. It restores a
@@ -99,7 +99,7 @@ assistant parent and descendant cancellation. Other sessions remain independent.
 Target starts, restarts and individual stops are refused while the test owns
 Preview; status and reads remain available. An ordinary ensure can reuse that
 exact running test target but cannot restart its fixtures during the suite.
-`vibe64-preview ensure --target <id> --wait --json` is deliberate persistent
+`vibe64-helper preview ensure --target <id> --wait --json` is deliberate persistent
 selection and does not arrange automatic restoration.
 
 Target selection does not change managed environment values or certify data

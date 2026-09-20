@@ -4,6 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 
 import {
   AGENT_ENV_COMMAND_NAME,
@@ -473,7 +474,9 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
     assert.match(prepared.env[VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV], /env-command\.sock$/u);
     assert.match(prepared.env[VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
 
-    const executed = await runWithInput(prepared.hostWrapperPath, [
+    await prepareAgentHelperCommand({ wrapperHostDir: root });
+    const executed = await runWithInput(path.join(root, "vibe64-helper"), [
+      "env",
       "set",
       "development",
       "WRAPPER_TOKEN",

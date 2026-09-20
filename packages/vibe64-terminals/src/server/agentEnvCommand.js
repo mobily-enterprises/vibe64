@@ -70,9 +70,9 @@ function commandSocketHostPath(wrapperHostDir = "") {
 function usageText() {
   return [
     "Usage:",
-    "  vibe64-env status [development|production|all] [--json]",
-    "  <value on stdin> | vibe64-env set <development|production> <KEY> [--secret] [--json]",
-    "  vibe64-env remove <development|production> <KEY> [--json]",
+    "  vibe64-helper env status [development|production|all] [--json]",
+    "  <value on stdin> | vibe64-helper env set <development|production> <KEY> [--secret] [--json]",
+    "  vibe64-helper env remove <development|production> <KEY> [--json]",
     "",
     "Values are accepted only on stdin and are never printed by this command.",
     "Zero-length stdin stores an empty value; whitespace is preserved as an exact value.",

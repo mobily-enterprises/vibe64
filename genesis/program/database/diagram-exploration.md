@@ -147,7 +147,7 @@ The Overview tab uses a source-owned `data-overview.json` definition:
 Membership is explicit and independent of relationship distance. Each table has
 one home; genuinely shared concepts can be separate actors. Every actor includes
 its main table. Persisted references come from the `reference` fields returned by
-`vibe64-database overview --json`: MySQL uses database-relative table names and
+`vibe64-helper database overview --json`: MySQL uses database-relative table names and
 `table:constraint` relationships; PostgreSQL retains `schema.table` and
 `schema.table:constraint` so same-named tables in different schemas stay distinct.
 The server resolves the stored definition to current physical identities for the
@@ -232,7 +232,7 @@ Make main actor promotes an internal table into its own group. Edit or merge act
 Create/Review with AI offers Not abstract (one actor per table), Balanced (normally 5–10 business concepts), and Very abstract (normally 3–5 domains). These are semantic targets, not hard caps; AI also selects main business connections by real FK IDs. Users choose full regeneration, which explicitly replaces authored choices, or new-tables-only generation, which preserves existing actors and manual adjustments. `reviewedTables` records reviewed names, including tables deliberately left under Other tables; only unseen names are pending. Older definitions treat assigned tables as reviewed without assuming that unassigned tables were considered. AI instructions cover both classification and logical radial placement.
 
 Create/Review with AI uses the provider-independent Temporary AI workspace with
-source-write permission. `vibe64-database overview --json` returns the schema,
+source-write permission. `vibe64-helper database overview --json` returns the schema,
 current definition, coverage, warnings and complete authoring instructions through
 the bound session bridge. Instructions ask the agent to inspect relevant models
 and documentation, preserve authored choices, classify new tables and repair
@@ -270,7 +270,7 @@ are not persisted across a page reload. The full layout remains session-shared.
 The table list scrolls only its own container when selection, visibility or
 filter results change. Open data selects Tables and clears the old sidebar search.
 
-`vibe64-database erd --json` inspects the bound session’s main ERD. It returns
+`vibe64-helper database erd --json` inspects the bound session’s main ERD. It returns
 positioned/visible table rectangles, field names, pins, scope, camera, actual FK
 endpoints, routed polyline points, lengths, bends, detour ratios and obstruction
 counts. It explicitly distinguishes visible from total relationships. Open the
@@ -279,7 +279,7 @@ geometry, visibility and routing functions as the browser. Saved connection path
 retain readable manual arrangements and survive reload; changed endpoints or
 obstructed paths are rerouted. This is layout inspection, not a database row query.
 
-`vibe64-database erd apply --json < moves.json` accepts
+`vibe64-helper database erd apply --json < moves.json` accepts
 `{"revision":7,"moves":[{"table":"public.orders","x":400,"y":200}]}`.
 The `--json` flag can appear before, between or after the command words.
 It validates all table identities, coordinates and pins before saving. Explicit

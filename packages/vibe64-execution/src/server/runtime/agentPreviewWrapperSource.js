@@ -19,7 +19,7 @@ const controlSocketPath = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SOCKET
 const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
 const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION || "").trim();
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
-const browserEvalUsage = "Usage: vibe64-preview browser eval < playwright-code.js";
+const browserEvalUsage = "Usage: vibe64-helper preview browser eval < playwright-code.js";
 const workerToken = crypto.createHash("sha256")
   .update(["vibe64-preview-browser", sessionId, controlGeneration, controlToken].join("\\n"))
   .digest("hex");
@@ -446,7 +446,7 @@ try {
     if (browserCommand === "identity") {
       const identity = String(browserArgs[0] || "").trim();
       if (!identity || browserArgs.length !== 1) {
-        fail("Usage: vibe64-preview browser identity <default|guest|configured-name>", 64);
+        fail("Usage: vibe64-helper preview browser identity <default|guest|configured-name>", 64);
       }
       const session = await previewSession();
       const authorization = await authorizeBrowserIdentity(identity);

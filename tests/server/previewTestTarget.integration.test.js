@@ -27,7 +27,7 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
     session: { managedPreview: true, managedEnvironment: true, managedDatabaseRefresh: false, managedGit: false }
   });
   for (const required of [
-    "vibe64-preview targets --json", "vibe64-playwright --target", "npm-run <script>",
+    "vibe64-helper preview targets --json", "vibe64-helper playwright --target", "npm-run <script>",
     "restores the previous Preview", "application must verify the server's actual test database",
     "preview-identity command must use the same database", "Never spoof safety checks",
     "add one through the project's existing Outputs contract", "external-effect controls are missing"

@@ -54,6 +54,7 @@ continuation and loading older history.
 - `packages/vibe64-execution/src/server/result.js`
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
+- `packages/vibe64-terminals/src/server/agentHelperCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/conversationActor.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
@@ -93,6 +94,18 @@ continuation and loading older history.
 - `vite.config.mjs`
 
 ## Public contract
+
+The shared command environment installs `vibe64-helper` beside the existing
+session executables for Codex and OpenCode. Its fixed groups are `preview`,
+`playwright`, `env`, `database` and `github`; `--help` lists them, and group help
+comes from the existing command owner. The dispatcher replaces itself with
+the matching sibling executable, preserving stdin, argv, environment, cwd,
+exit status and signal handling. Missing groups fail without searching PATH
+for a substitute. Each underlying command retains its session binding and
+authorization. The individual executables stay installed for existing
+conversations and scripts; new session guidance uses the common entry point.
+The ordinary `vibe64` launcher, managed `git`/`gh`, and internal process helpers
+retain their existing roles.
 
 The chat column, empty-session column and divider use the same resize width.
 The resize controller owns the 512-pixel desktop minimum and default. Dragging,

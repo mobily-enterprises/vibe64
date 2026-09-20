@@ -39,6 +39,10 @@ test("assistant engines share one complete session command environment", async (
       calls.push(["preview", input]);
       return { env: { PREVIEW_BOUNDARY: "ready" }, ok: true };
     },
+    prepareHelperCommand: async (input) => {
+      calls.push(["helper", input]);
+      return { ok: true };
+    },
     prepareSessionCommand: async (input) => {
       calls.push(["session", input]);
       return { env: { SESSION_BOUNDARY: "ready" }, ok: true };
@@ -54,12 +58,15 @@ test("assistant engines share one complete session command environment", async (
     "session",
     "preview",
     "environment",
-    "database"
+    "database",
+    "helper"
   ]);
   assert.equal(calls[0][1].env.ATTACHMENT_ENV, "yes");
-  for (const [, input] of calls.slice(1)) {
+  for (const [name, input] of calls.slice(1)) {
     assert.equal(input.wrapperHostDir, "/managed/session-wrappers");
-    assert.equal(input.sessionId, "session-1");
+    if (name !== "helper") {
+      assert.equal(input.sessionId, "session-1");
+    }
   }
   assert.deepEqual(prepared, {
     env: {
@@ -99,4 +106,13 @@ test("a configured assistant command boundary fails closed when preparation is i
       code: "vibe64_agent_command_boundary_unavailable"
     }
   );
+});
+
+test("the shared command environment requires the helper dispatcher to be installed", async () => {
+  await assert.rejects(prepareAgentSessionCommandEnvironment({
+    gitCommand: {},
+    prepareGitCommand: async () => ({ ok: true, hostWrapperDir: "/managed/session-wrappers" }),
+    prepareHelperCommand: async () => ({ ok: false }),
+    sessionId: "session-1"
+  }), { boundary: "helper", code: "vibe64_agent_command_boundary_unavailable" });
 });

@@ -793,8 +793,12 @@ function createCodexGitCommandService({
       }
     }
     if (command === "vibe64-github") {
+      const usage = "Usage: vibe64-helper github refresh";
+      if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
+        return finish({ ok: true, exitCode: 0, stdout: `${usage}\n` }, actor);
+      }
       if (args.length !== 1 || args[0] !== "refresh") {
-        return finish(responseError("Usage: vibe64-github refresh", "vibe64_github_refresh_input_invalid"), actor);
+        return finish(responseError(usage, "vibe64_github_refresh_input_invalid"), actor);
       }
       await projectService.refreshGithub();
       return finish({

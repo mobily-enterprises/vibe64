@@ -196,16 +196,18 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /no more than three concise/u);
   assert.match(session, /`\[1\] Question`/u);
   assert.match(session, /`Possible answers:`/u);
-  assert.match(session, /vibe64-preview status/u);
-  assert.match(session, /vibe64-env status/u);
-  assert.match(session, /vibe64-database refresh/u);
-  assert.match(session, /vibe64-github refresh/u);
+  assert.match(session, /vibe64-helper preview status/u);
+  assert.match(session, /vibe64-helper --help/u);
+  assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
+  assert.match(session, /vibe64-helper env status/u);
+  assert.match(session, /vibe64-helper database refresh/u);
+  assert.match(session, /vibe64-helper github refresh/u);
   assert.doesNotMatch(vibe64Driver({
     conversationKind: "main", scope: "session",
     session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false }
-  }), /vibe64-github/u);
+  }), /vibe64-helper github/u);
   assert.match(session, /data-overview\.json/u);
-  assert.match(session, /vibe64-database overview --json/u);
+  assert.match(session, /vibe64-helper database overview --json/u);
   assert.match(session, /Preserve authored groupings, classify new tables/u);
 
   assert.match(session, /fenced `vibe64-integration` block/u);
@@ -281,8 +283,8 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(composed.output, /including progress updates and final responses/u);
     assert.match(composed.output, /Use Australian English\./u);
     assert.match(composed.output, /temporary conversation in the selected session worktree/u);
-    assert.match(composed.output, /vibe64-env set/u);
-    assert.match(composed.output, /vibe64-database refresh/u);
+    assert.match(composed.output, /vibe64-helper env set/u);
+    assert.match(composed.output, /vibe64-helper database refresh/u);
     assert.doesNotMatch(composed.output, /do not edit files or run state-changing commands|only for inspection/u);
   });
 });

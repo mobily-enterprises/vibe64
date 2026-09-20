@@ -121,7 +121,7 @@ function managedPreview(applicationRoot = "", {
   if (!path.isAbsolute(managedPreviewPath) || !existsSync(managedPreviewPath)) {
     fail(
       "Vibe64 could not select the managed preview for Playwright tests. " +
-      "The session's vibe64-preview command is unavailable. Project tests were not started."
+      "The session's vibe64-helper preview command is unavailable. Project tests were not started."
     );
   }
   const result = spawnSync(managedNodePath, [
@@ -249,7 +249,7 @@ function runManaged(runner = "", args = [], options = {}) {
     cleanup();
     fail(
       "Vibe64 could not start the isolated browser-test execution. " +
-      "The session's vibe64-preview command is unavailable."
+      "The session's vibe64-helper preview command is unavailable."
     );
   }
   const result = spawnSync(managedNodePath, [
@@ -374,12 +374,12 @@ if (!command && (identityExplicit || targetId)) {
 if (!command || command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "Usage:",
-    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
-    "  vibe64-playwright status",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-helper playwright status",
     "",
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
-    "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-preview targets --json."
+    "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json."
   ].join("\\n") + "\\n");
   process.exit(0);
 }

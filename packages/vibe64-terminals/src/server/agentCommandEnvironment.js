@@ -1,6 +1,7 @@
 import process from "node:process";
 
 import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
 import {
   prepareAgentDatabaseCommand
 } from "./agentDatabaseCommand.js";
@@ -43,6 +44,7 @@ async function prepareAgentSessionCommandEnvironment({
   prepareDatabaseCommand = prepareAgentDatabaseCommand,
   prepareEnvironmentCommand = prepareAgentEnvCommand,
   prepareGitCommand = prepareCodexGitCommand,
+  prepareHelperCommand = prepareAgentHelperCommand,
   preparePreviewCommand = prepareAgentPreviewCommand,
   prepareSessionCommand = prepareAgentSessionCommand,
   project = {},
@@ -112,6 +114,10 @@ async function prepareAgentSessionCommandEnvironment({
     throw commandBoundaryError(unavailable.name);
   }
   const hostWrapperDir = text(git.hostWrapperDir);
+  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir });
+  if (helper?.ok !== true) {
+    throw commandBoundaryError("helper");
+  }
   const dropZoneRoot = text(runtime?.store?.paths?.(normalizedSessionId)?.dropZoneRoot);
   return {
     env: Object.assign({}, genesisParserEnvironment({ environment: env }), ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {

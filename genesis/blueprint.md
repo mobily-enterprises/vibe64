@@ -7,6 +7,9 @@ People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
 application, environment, and the system's explained structure in one place.
 Each session keeps valuable work recoverable and separate from unrelated work.
+Assistants have one discoverable command entry point for the session's preview,
+browser tests, environment, database and GitHub tools. Existing individual
+commands remain available so earlier conversation instructions keep working.
 Opening a project shows loading while its sessions are being fetched, including
 when restoring the last selected session. It does not imply creation is blocked.
 Opening a project link reopens its runtime before chat and Preview load, including
@@ -44,7 +47,7 @@ tab. A comment posted through Vibe64 gives other viewers of that project a short
 notification and refreshes the issue conversation without clearing their draft.
 This uses the existing realtime connection and shared snackbar; comments posted
 directly on GitHub appear on the next refresh.
-Agents run `vibe64-github refresh` after GitHub changes to refresh that project's
+Agents run `vibe64-helper github refresh` after GitHub changes to refresh that project's
 issues, comments, labels and PRs through the same realtime connection, without
 clearing browser drafts or filters.
 Projects without a GitHub repository do not show Issues/PR,

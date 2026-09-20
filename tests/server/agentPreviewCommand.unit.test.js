@@ -10,6 +10,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import {
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource
@@ -391,7 +392,7 @@ test("agent preview help distinguishes duplicate previews from explicit referenc
   assert.match(result.stdout, /canonical preview server for the configured primary application/u);
   assert.match(result.stdout, /Do not start a duplicate copy/u);
   assert.match(result.stdout, /distinct secondary application explicitly requested by the user/u);
-  assert.match(result.stdout, /vibe64-playwright \[--target <target-id>\] \[--identity <default\|guest\|configured-name>\] test/u);
+  assert.match(result.stdout, /vibe64-helper playwright \[--target <target-id>\] \[--identity <default\|guest\|configured-name>\] test/u);
   assert.doesNotMatch(result.stdout, /only preview server the agent may use/u);
   assert.doesNotMatch(result.stdout, /any other development server/u);
 });
@@ -416,7 +417,10 @@ test("managed preview browser eval validates stdin before starting browser contr
       ...process.env,
       ...prepared.env
     };
-    const help = await execWithInput(prepared.hostWrapperPath, [
+    await prepareAgentHelperCommand({ wrapperHostDir: root });
+    const helper = path.join(root, "vibe64-helper");
+    const help = await execWithInput(helper, [
+      "preview",
       "browser",
       "eval",
       "--help"
@@ -424,7 +428,9 @@ test("managed preview browser eval validates stdin before starting browser contr
       env: commandEnv
     });
 
-    assert.equal(help.stdout, "Usage: vibe64-preview browser eval < playwright-code.js\n");
+    assert.equal(help.stdout, "Usage: vibe64-helper preview browser eval < playwright-code.js\n");
+    const playwrightHelp = await execWithInput(helper, ["playwright", "--help"], { env: commandEnv });
+    assert.match(playwrightHelp.stdout, /Usage:\n {2}vibe64-helper playwright/u);
     await assert.rejects(
       execWithInput(prepared.hostWrapperPath, [
         "browser",

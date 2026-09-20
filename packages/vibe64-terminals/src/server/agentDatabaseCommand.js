@@ -52,10 +52,10 @@ function commandSocketHostPath(wrapperHostDir = "") {
 function usageText() {
   return [
     "Usage:",
-    "  vibe64-database refresh [--json]",
-    "  vibe64-database overview [--json]",
-    "  vibe64-database erd [--json]",
-    "  vibe64-database erd apply [--json] < moves.json",
+    "  vibe64-helper database refresh [--json]",
+    "  vibe64-helper database overview [--json]",
+    "  vibe64-helper database erd [--json]",
+    "  vibe64-helper database erd apply [--json] < moves.json",
     "",
     "Run this once after a migration or any other database schema change.",
     "It refreshes the session Database tool's tables, relationships, indexes, and ERD source.",

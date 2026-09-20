@@ -4,6 +4,7 @@ import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
+import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { pathToFileURL } from "node:url";
 
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
@@ -172,6 +173,11 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     assert.equal(result.stdout, "Vibe64 GitHub refresh requested.\n");
     assert.equal(events.length, 1);
     assert.deepEqual(events[0].realtime.payload, { projectSlug: "second", githubRefresh: true, reason: "github-refreshed" });
+    await prepareAgentHelperCommand({ wrapperHostDir: prepared.hostWrapperDir });
+    const helper = path.join(prepared.hostWrapperDir, "vibe64-helper");
+    const help = await runProcessWithInput(helper, ["github", "--help"], options);
+    assert.equal(help.exitCode, 0, help.stderr);
+    assert.match(help.stdout, /vibe64-helper github refresh/u);
     for (const override of [
       { VIBE64_CODEX_GIT_COMMAND_SESSION_ID: "another-session" },
       { VIBE64_CODEX_GIT_COMMAND_TOKEN: "invalid" },
@@ -183,7 +189,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     }
     const invalid = await runProcessWithInput(command, ["refresh", "--project", "first"], options);
     assert.equal(invalid.exitCode, 1);
-    assert.match(invalid.stderr, /Usage: vibe64-github refresh/u);
+    assert.match(invalid.stderr, /Usage: vibe64-helper github refresh/u);
     assert.equal(events.length, 1);
   });
 });
