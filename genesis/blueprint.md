@@ -133,6 +133,10 @@ background bookkeeping must not keep Send, Stop, or the saved-commit cleanup
 prompt busy after that confirmation.
 Send and Steer clear submitted text immediately so people can write their next
 message while delivery is pending, with failed messages kept recoverable.
+During active work, people can submit further steering before earlier delivery
+finishes. Each undelivered bubble is visibly Pending, and messages are delivered
+in order. A failed bubble shows its error and Retry, which reuses that message's
+identity and preserves the current draft.
 An interruption failure stays visible without covering the composer or its retry controls.
 Repair conversations keep their input and action buttons visible on small screens.
 Long drafts scroll inside the input; repair details start collapsed, and a shared

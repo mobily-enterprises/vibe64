@@ -456,6 +456,7 @@ function useVibe64AutopilotView(props, emit, {
     diagnosticsBusy: false
   });
   let messageSequence = 0;
+  let composerSubmissionSequence = 0;
   let repositoryRequestSequence = 0;
 
   const shortActionDismissalsStorageKey = computed(() => {
@@ -572,7 +573,7 @@ function useVibe64AutopilotView(props, emit, {
     if (agentActive.value && !agentSteerable.value) {
       return "waiting";
     }
-    if (composerSending.value) {
+    if (composerSending.value && !agentSteerable.value) {
       return composerSubmissionKind.value === "steer" ? "steering" : "sending";
     }
     if (agentActive.value) {
@@ -616,7 +617,7 @@ function useVibe64AutopilotView(props, emit, {
   const composerCanSubmit = computed(() => Boolean(
     props.agentConnectionStatus === "connected" &&
     !composerDisabled.value &&
-    !composerSending.value &&
+    (!composerSending.value || agentSteerable.value) &&
     !interrupting.value &&
     !repositoryOperationActive.value &&
     (!agentActive.value || agentSteerable.value) &&
@@ -1038,7 +1039,8 @@ function useVibe64AutopilotView(props, emit, {
     messageId: existingMessageId = "",
     submissionKind = "send"
   } = {}) {
-    if (composerSending.value || !normalizedAgentTurnText(payload?.message)) {
+    if ((composerSending.value && (submissionKind !== "steer" || !agentSteerable.value)) ||
+      !normalizedAgentTurnText(payload?.message)) {
       return false;
     }
     const messageId = String(existingMessageId || "").trim() || nextMessageId();
@@ -1067,6 +1069,7 @@ function useVibe64AutopilotView(props, emit, {
         agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
       }, {
         messageId,
+        queue: submissionKind === "steer",
         isCurrent: () => sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug,
         deliver: ({ agentSettings, ...submission }) => Promise.race([
           sendMessage({
@@ -1100,7 +1103,7 @@ function useVibe64AutopilotView(props, emit, {
       return false;
     } finally {
       stopWatchingReceipt();
-      if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug) {
+      if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug && !composerSending.value) {
         composerSubmissionKind.value = "";
       }
     }
@@ -1133,32 +1136,23 @@ function useVibe64AutopilotView(props, emit, {
       ? latestAssistantQuestionText.value
       : "");
     const messageId = retry?.messageId || nextMessageId();
-    if (!retry) {
-      submittedQuestionText.value = questionTextSnapshot;
-      composerDraft.value = "";
-      questionAnswers.value = {};
-      selectedAnswerChoice.value = "";
-    }
+    const submissionSequence = ++composerSubmissionSequence;
+    composerRetrySubmission.value = null;
+    submittedQuestionText.value = questionTextSnapshot;
+    composerDraft.value = retry
+      ? composerDraftAfterAcceptedSubmission(composerDraft.value, draftSnapshot)
+      : "";
+    questionAnswers.value = {};
+    selectedAnswerChoice.value = "";
     const sendingSessionId = sessionId.value;
     const sendingProjectSlug = projectSlug.value;
     const accepted = await sendChatPayload(payload, { messageId, submissionKind });
     if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug) {
       return false;
     }
-    if (accepted && retry) {
-      submittedQuestionText.value = questionTextSnapshot;
-      if (!settleComposerRetry(retry)) {
-        composerDraft.value = composerDraftAfterAcceptedSubmission(
-          composerDraft.value,
-          draftSnapshot
-        );
-      }
-      questionAnswers.value = {};
-      selectedAnswerChoice.value = "";
-    } else if (!accepted && submissionKind === "steer" && (retry || !composerDraft.value)) {
-      if (!retry) {
-        composerDraft.value = draftSnapshot;
-      }
+    if (!accepted && submissionKind === "steer" &&
+      submissionSequence === composerSubmissionSequence && !composerDraft.value) {
+      composerDraft.value = draftSnapshot;
       const optimistic = optimisticMessageById(messageId) || {
         createdAtMs: Date.now(),
         id: messageId,

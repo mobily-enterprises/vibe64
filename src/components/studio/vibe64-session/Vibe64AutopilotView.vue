@@ -534,7 +534,7 @@
                     <v-btn
                       ref="composerSendButton" :aria-label="composerSubmitActionAriaLabel"
                       :title="composerSubmitActionTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
-                      :aria-busy="composerSending ? 'true' : undefined" color="primary" size="small" variant="flat"
+                      :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
                       :icon="composerSuggesting ? mdiAccountArrowRightOutline : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
                       class="studio-autopilot__composer-action" @click="sendComposerMessage"
                     />
