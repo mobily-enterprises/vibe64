@@ -1,6 +1,7 @@
 import {
   MariaSQL,
-  PostgreSQL
+  PostgreSQL,
+  SQLite
 } from "@codemirror/lang-sql";
 
 function quotedIdentifier(value = "", delimiter = "\"") {
@@ -23,6 +24,11 @@ function defineDatabaseClientDialect(definition = {}) {
 }
 
 const DATABASE_CLIENT_DIALECTS = Object.freeze({
+  sqlite: defineDatabaseClientDialect({
+    codeMirrorDialect: SQLite,
+    quoteIdentifier: (value) => quotedIdentifier(value),
+    stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`
+  }),
   mysql: defineDatabaseClientDialect({
     codeMirrorDialect: MariaSQL,
     quoteIdentifier: (value) => quotedIdentifier(value, "`"),

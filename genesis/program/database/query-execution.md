@@ -9,6 +9,9 @@ connection and share one query-ownership boundary.
 - `packages/vibe64-database-tools/src/server/queryExecutor.js`
 - `packages/vibe64-database-tools/src/server/sqlPolicy.js`
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`
+- `packages/vibe64-database-tools/src/server/sqliteClient.js`
+- `packages/vibe64-database-tools/src/server/sqliteWorker.js`
+- `packages/vibe64-database-tools/src/server/schemaInspector.js`
 
 ## Public contract
 
@@ -23,6 +26,21 @@ when a hosted user is present, owner access. It accepts one statement at a time.
 Read-only execution uses the reader endpoint and a read-only transaction;
 manual write execution requires the existing unlock and confirmation checks.
 Copilot SQL remains read-only and uses the same execution owner as manual SQL.
+
+SQLite uses an explicitly declared persistent filename. Hosted resources provide
+an absolute filename; standalone projects may resolve a relative filename from
+their source root. Reader and writer connections target the same file, with
+native read-only mode and a SQLite authorizer enforcing reader access. Both modes
+reject attached databases and extension loading. Schema inspection reads tables,
+views, columns, usable keys, indexes and foreign keys into the common browser and
+ERD model. Generated columns and views are not offered as editable fields.
+
+Each SQLite connection runs Node's native SQLite API in a child process. Native
+queries do not block the editor event loop; timeout or cancellation terminates
+that connection. The release bundles its worker explicitly. Manual query results
+have the same row/byte bounds as other engines, and internal schema queries are
+also bounded. This is file-backed SQLite support, not access to another process's
+in-memory database or arbitrary attached files.
 
 A query id belongs to one session and is reserved before connection acquisition.
 A second query with that id in the same session is rejected while the first is

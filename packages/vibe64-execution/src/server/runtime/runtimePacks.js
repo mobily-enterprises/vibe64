@@ -117,6 +117,10 @@ const RUNTIME_PACKS = Object.freeze({
   "ripgrep": {
     binDirs: ["ripgrep/bin"],
     managedCommands: []
+  },
+  "sqlite": {
+    binDirs: ["sqlite/bin"],
+    managedCommands: ["sqlite3"]
   }
 });
 
@@ -128,6 +132,7 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "mysql",
   "mariadb",
   "postgresql",
+  "sqlite",
   "ripgrep",
   "bubblewrap",
   "bun",

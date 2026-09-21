@@ -45,14 +45,28 @@ test("runtime release relocates, runs native and browser services, and packs wit
     await writeFile(path.join(appRoot, "dist/assets/proof.js"), 'export const ready = true;');
     const source = path.join(appRoot, "node_modules/node-pty/package.json");
     const before = await readFile(source, "utf8");
+    await writeFile(path.join(appRoot, "bin/sqlite-proof.js"), `
+      import assert from "node:assert/strict";
+      import { DatabaseSync } from "node:sqlite";
+      import { withSessionKnex } from "@local/vibe64-database-tools/server/connection";
+      const filename = process.argv[2];
+      const db = new DatabaseSync(filename);
+      db.exec("CREATE TABLE proof (id INTEGER PRIMARY KEY); INSERT INTO proof VALUES (42)");
+      db.close();
+      await withSessionKnex({ kind: "sqlite", database: filename, readOnly: true }, async ({ knex }) => {
+        assert.equal((await knex.raw("SELECT id FROM proof")).rows[0].id, 42n);
+        await assert.rejects(knex.raw("DELETE FROM proof"));
+      });
+    `);
     await assert.rejects(createRuntimePackage({ appRoot, releaseAppRoot: appRoot }), /must not contain/u);
     const staged = path.join(root, "staged");
-    await createRuntimePackage({ appRoot, releaseAppRoot: staged });
+    await createRuntimePackage({ appRoot, releaseAppRoot: staged, extraEntries: ["bin/sqlite-proof.js"] });
     await assert.rejects(createRuntimePackage({ appRoot, releaseAppRoot: staged }), /must be empty/u);
     assert.equal(await readFile(source, "utf8"), before);
     const installed = path.join(root, "relocated");
     await rename(staged, installed);
     await verifyRuntime(installed);
+    await execute(process.execPath, [path.join(installed, "bin/sqlite-proof.js"), path.join(root, "proof.sqlite")]);
     await assert.rejects(execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")
     ]), error => error.code === 2 && /Usage: vibe64-exec-helper execute/u.test(error.stderr));

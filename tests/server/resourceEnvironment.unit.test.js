@@ -3,8 +3,38 @@ import test from "node:test";
 
 import {
   applicationDatabaseToolEnvironment,
+  normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment
 } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+
+test("SQLite maps a declared filename and keeps browser reads enforced on the same file", () => {
+  const resource = databaseResource({ kind: "sqlite", preferredBindings: { database: "DB_DATABASE" } });
+  resource.resource.environmentAlternatives.length = 1;
+  const browser = applicationDatabaseToolEnvironment([resource], { DB_DATABASE: "database/app.sqlite" }, "/workspace/source");
+  assert.deepEqual(browser, {
+    contract: "vibe64.database-tool-environment.v1", kind: "sqlite",
+    read: { database: "/workspace/source/database/app.sqlite", readOnly: true },
+    write: { database: "/workspace/source/database/app.sqlite", readOnly: false }
+  });
+  const provided = {
+    contract: "vibe64.resource-environment.v2", databaseToolEnvironment: browser,
+    resourceValues: [{ declaration: { component: "application", id: "database", kind: "sqlite" }, values: { database: browser.write.database } }]
+  };
+  assert.deepEqual(normalizeResourceEnvironment([resource], provided).environment, { DB_DATABASE: browser.write.database });
+  for (const read of [{ ...browser.read, readOnly: false }, { ...browser.read, database: "/other.sqlite" }]) {
+    assert.throws(() => normalizeDatabaseToolEnvironment({ ...browser, read }), { code: "vibe64_database_tool_reader_required" });
+  }
+  assert.throws(() => normalizeResourceEnvironment([resource], { ...provided, resourceValues: [{
+    ...provided.resourceValues[0], values: { database: "/another.sqlite" }
+  }] }), { code: "vibe64_database_tool_resource_mismatch" });
+  for (const filename of [":memory:", "relative.sqlite", ""]) {
+    assert.throws(() => applicationDatabaseToolEnvironment([resource], { DB_DATABASE: filename }));
+  }
+  assert.throws(() => normalizeDatabaseToolEnvironment({ ...browser, read: { ...browser.read, host: "localhost" } }));
+  assert.deepEqual(normalizeResourceEnvironment([resource], {
+    ...provided, databaseToolEnvironment: undefined
+  }, { requireDatabaseTool: false }).environment, { DB_DATABASE: browser.write.database });
+});
 
 function databaseResource({
   component = "application",

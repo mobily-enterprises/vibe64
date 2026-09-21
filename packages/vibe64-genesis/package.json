@@ -35,6 +35,6 @@
   },
   "dependencies": {
     "genesis-compiler": "1.7.3",
-    "genesis-stack": "1.1.3"
+    "genesis-stack": "1.1.4"
   }
 }

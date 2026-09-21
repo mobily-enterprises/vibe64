@@ -19,8 +19,8 @@ const QUERY_ROW_LIMIT = 500;
 const QUERY_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 function text(value = "") {
-  if (Buffer.isBuffer(value)) {
-    return value.toString("utf8");
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    return Buffer.from(value).toString("utf8");
   }
   return String(value ?? "").trim();
 }
@@ -85,9 +85,9 @@ function jsonSafeValue(value, depth = 0) {
   if (typeof value === "bigint") {
     return value.toString();
   }
-  if (Buffer.isBuffer(value)) {
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
     return {
-      base64: value.toString("base64"),
+      base64: Buffer.from(value).toString("base64"),
       byteLength: value.length,
       kind: "binary"
     };
@@ -523,6 +523,9 @@ function insertRecord(table = {}, values = {}, knex) {
   for (const [name, value] of Object.entries(values && typeof values === "object" ? values : {})) {
     const column = schemaColumn(table, name);
     if (column.immutable) {
+      continue;
+    }
+    if (knex.client.dialect === "sqlite3" && value && typeof value === "object" && value.useDefault === true) {
       continue;
     }
     record[column.name] = value && typeof value === "object" && value.useDefault === true

@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   runtimeConfigKeyIsVibe64Reserved
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -7,7 +9,7 @@ import {
 
 const RESOURCE_ENVIRONMENT_CONTRACT = "vibe64.resource-environment.v2";
 const DATABASE_TOOL_ENVIRONMENT_CONTRACT = "vibe64.database-tool-environment.v1";
-const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql"]);
+const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
 const DATABASE_CONNECTION_SEMANTICS = new Set([
   "database",
   "host",
@@ -127,6 +129,15 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
   if (!endpoint) {
     throw resourceEnvironmentError("Database tool connection endpoint is invalid.");
   }
+  if (kind === "sqlite") {
+    const database = text(endpoint.database);
+    if (!database || !path.isAbsolute(database) || database.includes("\0") ||
+        typeof endpoint.readOnly !== "boolean" ||
+        Object.keys(endpoint).some((name) => !["database", "readOnly"].includes(name))) {
+      throw resourceEnvironmentError("SQLite requires an absolute database filename and an explicit access mode.");
+    }
+    return { database: path.normalize(database), readOnly: endpoint.readOnly };
+  }
   const url = text(endpoint.url);
   if (url) {
     if (Object.keys(endpoint).some((name) => name !== "url")) {
@@ -176,7 +187,14 @@ function normalizeDatabaseToolEnvironment(value = {}, {
   }
   const read = normalizedConnectionEndpoint(environment.read, kind);
   const write = normalizedConnectionEndpoint(environment.write, kind);
-  if (requireDistinctReader) {
+  if (kind === "sqlite") {
+    if (read.database !== write.database || !read.readOnly || write.readOnly) {
+      throw resourceEnvironmentError(
+        "SQLite inspection requires a read-only connection to the same database.",
+        "vibe64_database_tool_reader_required"
+      );
+    }
+  } else if (requireDistinctReader) {
     if (
       read.url ||
       write.url ||
@@ -349,7 +367,7 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
   };
 }
 
-function applicationDatabaseToolEnvironment(resources = [], environment = {}) {
+function applicationDatabaseToolEnvironment(resources = [], environment = {}, sourceRoot = "") {
   const databases = (Array.isArray(resources) ? resources : []).filter(({ resource }) => (
     DATABASE_RESOURCE_KINDS.has(resource?.kind)
   ));
@@ -384,7 +402,20 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}) {
       "vibe64_database_tool_semantics_unsupported"
     );
   }
-  if (values.url) {
+  if (resource.kind === "sqlite") {
+    const database = text(values.database);
+    if (!database || database === ":memory:" || Object.keys(values).some((key) => key !== "database") ||
+        (!path.isAbsolute(database) && !path.isAbsolute(sourceRoot))) {
+      throw resourceEnvironmentError("SQLite database browsing requires a declared persistent database file.");
+    }
+    const filename = path.resolve(sourceRoot, database);
+    return normalizeDatabaseToolEnvironment({
+      contract: DATABASE_TOOL_ENVIRONMENT_CONTRACT,
+      kind: "sqlite",
+      read: { database: filename, readOnly: true },
+      write: { database: filename, readOnly: false }
+    });
+  } else if (values.url) {
     endpoint = { url: values.url };
   } else {
     endpoint = normalizedConnectionEndpoint(values, resource.kind);

@@ -4,7 +4,8 @@ import {
 
 import {
   inspectMysqlSchema,
-  inspectPostgresSchema
+  inspectPostgresSchema,
+  inspectSqliteSchema
 } from "./schemaInspector.js";
 
 function text(value = "") {
@@ -188,6 +189,43 @@ const MYSQL_DIALECT = defineDatabaseDialect({
 });
 
 const DATABASE_DIALECTS = Object.freeze({
+  sqlite: defineDatabaseDialect({
+    binaryLiteral: (hex) => `X'${hex}'`,
+    client: "sqlite3",
+    commandResult: (raw = {}, jsonSafeValue = (value) => value) => ({
+      affectedRows: Number(raw.changes || 0),
+      command: "COMMAND",
+      insertId: jsonSafeValue(raw.lastInsertRowid ?? null),
+      kind: "command",
+      warnings: []
+    }),
+    connectionOptions: () => ({}),
+    databaseType: (field = {}) => text(field.type),
+    engine: "sqlite",
+    fieldOrigin(field = {}, maps = {}) {
+      const table = maps.byKey.get(`${text(field.database)}\u0000${text(field.table)}`);
+      const column = table?.columns.find((entry) => entry.name === field.column);
+      return table && column ? { table, column } : null;
+    },
+    inspectSchema: ({ connection, knex }) => inspectSqliteSchema(knex, connection),
+    label: "SQLite",
+    lookupSearch(builder, method, column, pattern) {
+      builder[method]("CAST(?? AS TEXT) LIKE ?", [column, pattern]);
+    },
+    queryOptions: Object.freeze({ sqliteResultSet: true }),
+    quoteIdentifier: (value) => quotedIdentifier(value),
+    readOnlyBeginSql: "BEGIN",
+    resultSet: (raw = {}) => raw.fields?.length ? {
+      command: raw.command,
+      fields: raw.fields,
+      fullRowCount: raw.rows.length,
+      rows: raw.rows
+    } : null,
+    sanitizeConnectionUrl: (value) => value,
+    singleQuoteBackslashEscapes: () => false,
+    stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`,
+    urlProtocols: Object.freeze(["file"])
+  }),
   mysql: MYSQL_DIALECT,
   postgresql: POSTGRESQL_DIALECT
 });

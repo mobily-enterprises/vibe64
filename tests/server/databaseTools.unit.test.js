@@ -179,7 +179,7 @@ test("MySQL URL connections cannot enable driver multi-statements", () => {
 });
 
 test("database dialect registry is the single PostgreSQL and MySQL capability seam", () => {
-  assert.deepEqual(Object.keys(DATABASE_DIALECTS).sort(), ["mysql", "postgresql"]);
+  assert.deepEqual(Object.keys(DATABASE_DIALECTS).sort(), ["mysql", "postgresql", "sqlite"]);
   assert.equal(databaseDialect("postgresql").client, "pg");
   assert.equal(databaseDialect("postgresql").readOnlyBeginSql, "BEGIN READ ONLY");
   assert.deepEqual(databaseDialect("postgresql").urlProtocols, ["postgres", "postgresql"]);
@@ -187,7 +187,7 @@ test("database dialect registry is the single PostgreSQL and MySQL capability se
   assert.equal(databaseDialect("mysql").readOnlyBeginSql, "START TRANSACTION READ ONLY");
   assert.deepEqual(databaseDialect("mysql").urlProtocols, ["maria", "mariadb", "mysql"]);
   assert.throws(
-    () => databaseDialect("sqlite"),
+    () => databaseDialect("unsupported"),
     { code: "vibe64_session_database_client_unsupported" }
   );
   assert.throws(

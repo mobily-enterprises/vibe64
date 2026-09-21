@@ -1296,7 +1296,7 @@ function createService({
         { provisionResources: false }
       );
       const databaseToolEnvironment = resolved.databaseToolEnvironment ||
-        applicationDatabaseToolEnvironment(resolved.resources, resolved.projectEnvironment);
+        applicationDatabaseToolEnvironment(resolved.resources, resolved.projectEnvironment, resolved.source.sourceRoot);
       return {
         ...(await currentDevelopmentDatabaseConfiguration()),
         databaseToolEnvironment,

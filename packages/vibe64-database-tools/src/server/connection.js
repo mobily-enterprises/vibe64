@@ -1,4 +1,6 @@
 import knexFactory from "knex";
+import path from "node:path";
+import { SQLiteClient } from "./sqliteClient.js";
 
 import {
   vibe64Error
@@ -71,6 +73,20 @@ function structuredConnection(endpoint = {}, dialect = {}) {
 
 function resolveDatabaseConnection(endpoint = {}) {
   const dialect = databaseDialect(endpoint.kind);
+  if (dialect.engine === "sqlite") {
+    if (!path.isAbsolute(text(endpoint.database)) || text(endpoint.database).includes("\0") ||
+        typeof endpoint.readOnly !== "boolean" ||
+        Object.keys(endpoint).some((name) => !["kind", "database", "readOnly"].includes(name))) {
+      throw vibe64Error("SQLite requires an absolute filename and explicit access mode.", "vibe64_session_database_configuration_incomplete");
+    }
+    return Object.freeze({
+      client: dialect.client,
+      connection: { filename: endpoint.database, readOnly: endpoint.readOnly },
+      database: path.basename(endpoint.database),
+      engine: dialect.engine,
+      label: dialect.label
+    });
+  }
   const connectionUrl = text(endpoint.url);
   if (connectionUrl) {
     const protocol = urlProtocol(connectionUrl);
@@ -116,11 +132,12 @@ function resolveDatabaseConnection(endpoint = {}) {
 function createSessionKnex(connection = {}) {
   return knexFactory({
     acquireConnectionTimeout: DATABASE_POOL_ACQUIRE_TIMEOUT_MS,
-    client: connection.client,
+    client: connection.engine === "sqlite" ? SQLiteClient : connection.client,
     connection: connection.connection,
+    ...(connection.engine === "sqlite" ? { useNullAsDefault: true } : {}),
     pool: {
       idleTimeoutMillis: 10_000,
-      max: DATABASE_POOL_MAX,
+      max: connection.engine === "sqlite" ? 1 : DATABASE_POOL_MAX,
       min: 0
     }
   });

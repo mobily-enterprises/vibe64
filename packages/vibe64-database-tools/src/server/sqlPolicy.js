@@ -96,6 +96,10 @@ function sqlSegments(sql = "", engine = "postgresql") {
       }
       continue;
     }
+    if (state === "bracket") {
+      if (character === "]") state = "normal";
+      continue;
+    }
     if (state === "dollar-quote") {
       if (sql.startsWith(dollarDelimiter, index)) {
         segment += dollarDelimiter.slice(1);
@@ -120,6 +124,8 @@ function sqlSegments(sql = "", engine = "postgresql") {
       state = "double-quote";
     } else if (character === "`") {
       state = "backtick";
+    } else if (character === "[" && engine === "sqlite") {
+      state = "bracket";
     } else if (character === "$") {
       dollarDelimiter = dollarQuoteDelimiterAt(sql, index);
       if (dollarDelimiter) {

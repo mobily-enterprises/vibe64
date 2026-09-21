@@ -259,6 +259,10 @@ also be opened directly for correction. Unresolved table references remain visib
 overview continues to explain the data itself.
 
 People can explore a project's database through a readable relationship diagram,
+including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
+uses the project's declared filename, enforces read-only inspection, and supports
+deliberate row edits through the same owner controls.
+The diagram lets people explore their data,
 starting with its keys and expanding detail when needed. Large diagrams load
 without blocking typing or navigation while their connections are calculated.
 Expanding fields keeps every table in place and preserves the current zoom.
