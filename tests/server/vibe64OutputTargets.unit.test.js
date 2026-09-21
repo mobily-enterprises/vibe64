@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
+  parseVibe64OutputsLines,
+  resolveVibe64OutputParameters,
   vibe64OutputsInspection
 } from "../../packages/vibe64-genesis/src/server/outputs.js";
 import {
@@ -673,4 +676,67 @@ test("environment setup applies to terminal and finite outputs without a databas
     const [readyTarget] = await listVibe64OutputTargets(context, { inspect: () => ready });
     assert.equal(readyTarget.available, true);
   }
+});
+
+
+const parameterLines = [
+  '### Target `cli`: Run CLI',
+  '- Mode: `interactive`',
+  '- Runtimes: `nodejs`',
+  '- Run `Print`: `node` `-e` `console.log(JSON.stringify(process.argv.slice(1)))` `--` `{parameter:message}` `--label={parameter:message}`',
+  '#### Parameter `message`: Message',
+  '- Default: `Hello world`',
+  '- Description: `Text printed by the program.`',
+  '- Required.',
+  '#### Presentation',
+  '- Kind: `terminal`'
+];
+
+test("declared parameters validate grammar and required values independently of presentation", () => {
+  const target = parseVibe64OutputsLines(parameterLines).targets[0];
+  assert.deepEqual(resolveVibe64OutputParameters(target), { message: "Hello world" });
+  for (const supplied of [{ unknown: "x" }, { message: " " }, { message: 3 }, { message: "a\nb" }, { message: "a\0b" }, { message: "x".repeat(4097) }, null, []]) {
+    assert.throws(() => resolveVibe64OutputParameters(target, supplied), { code: "VIBE64_OUTPUT_PARAMETERS_INVALID" });
+  }
+  for (const lines of [
+    parameterLines.map((line) => line.replace("{parameter:message}", "{parameter:unknown}")),
+    parameterLines.map((line) => line.replace("{parameter:message}", "{parameter:bad.id}")),
+    [...parameterLines, '#### Parameter `message`: Duplicate'],
+    parameterLines.map((line) => line.replace('`node`', '`{parameter:message}`')),
+    parameterLines.map((line) => line.replace('{parameter:message}', '{host}')),
+    parameterLines.map((line) => line.replace('- Required.', '- Required: `yes`')),
+    parameterLines.map((line) => line.replace('{parameter:message}', 'literal').replace('--label={parameter:message}', 'literal'))
+  ]) {
+    assert.throws(() => parseVibe64OutputsLines(lines), { code: "VIBE64_OUTPUTS_INVALID" });
+  }
+});
+
+test("parameterized terminal and finite commands preserve literal argv and configuration identity", async (t) => {
+  const context = await outputContext(t);
+  const target = parseVibe64OutputsLines(parameterLines).targets[0];
+  const value = "spaces ' quotes \" $(printf INJECTED) `printf INJECTED` ; {port} {parameter:message}";
+  const inspect = async () => outputsInspection([target]);
+  const views = await listVibe64OutputTargets(context, { inspect });
+  assert.deepEqual(views[0].parameters, target.parameters);
+  const spec = await createVibe64OutputTargetTerminalSpec({ context, outputTargetId: "cli", outputParameters: { message: value } }, { inspect });
+  assert.equal(spec.ok, true);
+  assert.deepEqual(spec.metadata.outputParameters, { message: value });
+  assert.deepEqual(spec.resourceWorkflow.configuration.parameters, { message: value });
+  const output = execFileSync(spec.command, spec.args, { cwd: spec.cwd, encoding: "utf8" });
+  assert.deepEqual(JSON.parse(output.trim().split("\n").at(-1)), [value, `--label=${value}`]);
+  await assert.rejects(createVibe64OutputTargetTerminalSpec({ context, outputTargetId: "cli", outputParameters: { message: "" } }, { inspect }), { code: "VIBE64_OUTPUT_PARAMETERS_INVALID" });
+  const finite = { ...target, mode: "finite", presentation: null, steps: target.steps.map((step) => ({ ...step, role: "build" })) };
+  const built = await createVibe64OutputTargetTerminalSpec({ context, outputTargetId: "cli", outputParameters: { message: value } }, { inspect: async () => outputsInspection([finite]) });
+  const buildOutput = execFileSync(built.command, built.args, { cwd: built.cwd, encoding: "utf8" });
+  assert.ok(buildOutput.includes(JSON.stringify([value, `--label=${value}`])));
+});
+
+test("web parameter substitution does not expand placeholders inside supplied values", () => {
+  const target = webOutputTarget({
+    parameterValues: { project: "my project/{port}/$(printf unsafe)" },
+    steps: [{ role: "run", label: "Start", argv: ["node", "server.js", "--project", "{parameter:project}", "--port", "{port}"] }]
+  });
+  const descriptor = vibe64WebOutputDescriptor(target, { port: 4321, worktreePath: "/tmp" });
+  assert.equal(descriptor.commands[0].command, "node server.js --project 'my project/{port}/$(printf unsafe)' --port 4321");
+  assert.deepEqual(descriptor.metadata.outputParameters, target.parameterValues);
 });

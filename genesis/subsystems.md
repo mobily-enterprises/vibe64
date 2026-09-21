@@ -182,8 +182,9 @@ Owns presenting Genesis explanations, authored subsystems and source Cities.
 
 ## `distribution` Runtime distribution
 
-Owns the shared compact runtime builder, npm artifact preparation and isolated
-installation proof. Hosted consumers supply their private runtime requirements.
+Owns the shared compact runtime builder, npm artifact preparation, isolated
+installation proof, and the complete development preview with its bundled
+example project. Hosted consumers supply their private runtime requirements.
 
 ### Program
 

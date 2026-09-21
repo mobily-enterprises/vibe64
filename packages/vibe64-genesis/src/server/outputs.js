@@ -17,8 +17,9 @@ const VIBE64_OUTPUTS_SECTION = "Outputs";
 const VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL = "vibe64.preview-identity.command.v1";
 const ERROR_CODE = "VIBE64_OUTPUTS_INVALID";
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const PLACEHOLDER = /\{([a-z][a-z0-9-]*)\}/gu;
+const PLACEHOLDER = /\{([a-z][a-z0-9:-]*)\}/gu;
 const TARGET_HEADING = /^### Target `([^`\r\n]+)`:[ \t]+(.+)$/u;
+const PARAMETER_HEADING = /^#### Parameter `([^`\r\n]+)`:[ \t]+(.+)$/u;
 const DOWNLOAD_HEADING = /^#### Download `([^`\r\n]+)`$/u;
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
 const MEDIA_TYPE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/u;
@@ -73,8 +74,13 @@ function oneToken(source, prefix, outputsPath, label, line) {
 function outputArguments(source, outputsPath, label, line) {
   const argv = processArguments(source, ERROR_CODE, outputsPath, label, line);
   for (const argument of argv) {
-    if ([...argument.matchAll(PLACEHOLDER)].some((match) => !["host", "port"].includes(match[1]))) {
-      invalid(outputsPath, `${label} supports only {host} and {port} placeholders.`, line);
+    if (argument.replace(PLACEHOLDER, "").includes("{parameter:")) {
+      invalid(outputsPath, `${label} has an invalid {parameter:id} placeholder.`, line);
+    }
+    if ([...argument.matchAll(PLACEHOLDER)].some((match) => (
+      !["host", "port"].includes(match[1]) && !/^parameter:[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(match[1])
+    ))) {
+      invalid(outputsPath, `${label} supports only {host}, {port}, and {parameter:id} placeholders.`, line);
     }
   }
   return argv;
@@ -98,9 +104,46 @@ function targetDraft(match, outputsPath, line) {
     presentation: null,
     previewIdentity: null,
     downloads: [],
+    parameters: [],
     seen: new Set(),
     line
   };
+}
+
+function parseParameterLine(draft, source, outputsPath, line) {
+  if (source === "- Required.") {
+    setOnce(draft, "required", true, outputsPath, line, "Parameter Required entry");
+    return;
+  }
+  for (const [label, field] of [["Default", "default"], ["Description", "description"]]) {
+    const prefix = `- ${label}: `;
+    if (source.startsWith(prefix)) {
+      const value = oneToken(source, prefix, outputsPath, `Parameter ${label}`, line);
+      setOnce(draft, field, value, outputsPath, line, `Parameter ${label} entry`);
+      return;
+    }
+  }
+  invalid(outputsPath, `Unknown Outputs parameter entry: ${source}.`, line);
+}
+
+function resolveVibe64OutputParameters(target, supplied = {}) {
+  const parameters = target.parameters || [];
+  const fail = (message) => invalidStackOperation("VIBE64_OUTPUT_PARAMETERS_INVALID", "Outputs", message);
+  if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) {
+    fail("Output parameters must be an object of text values.");
+  }
+  const ids = new Set(parameters.map(({ id }) => id));
+  for (const id of Object.keys(supplied)) {
+    if (!ids.has(id)) fail(`Unknown output parameter: ${id}.`);
+  }
+  return Object.fromEntries(parameters.map((parameter) => {
+    const value = Object.hasOwn(supplied, parameter.id) ? supplied[parameter.id] : parameter.default;
+    if (typeof value !== "string" || value.length > 4096 || /[\0\r\n]/u.test(value)) {
+      fail(`${parameter.label} must be a single line of text, at most 4096 characters.`);
+    }
+    if (parameter.required && !value.trim()) fail(`${parameter.label} is required.`);
+    return [parameter.id, value];
+  }));
 }
 
 function presentationDraft(line) {
@@ -510,8 +553,24 @@ function normalizeTarget(draft, outputsPath) {
   const placeholders = draft.steps.flatMap(({ argv }) => (
     argv.flatMap((argument) => [...argument.matchAll(PLACEHOLDER)].map((match) => match[1]))
   ));
-  if (placeholders.length > 0 && presentation?.kind !== "web") {
+  if (placeholders.some((value) => ["host", "port"].includes(value)) && presentation?.kind !== "web") {
     invalid(outputsPath, `Only a web output target may use {host} or {port} placeholders.`, draft.line);
+  }
+  const parameters = draft.parameters.map(({ seen: _seen, ...parameter }) => parameter);
+  const parameterIds = new Set(parameters.map(({ id }) => id));
+  if (parameters.length > 16 || parameterIds.size !== parameters.length) {
+    invalid(outputsPath, `Output target ${draft.id} may declare at most 16 parameters with unique ids.`, draft.line);
+  }
+  for (const reference of placeholders.filter((value) => value.startsWith("parameter:"))) {
+    const id = reference.slice("parameter:".length);
+    if (!parameterIds.has(id)) {
+      invalid(outputsPath, `Undeclared output parameter: ${id}.`, draft.line);
+    }
+  }
+  for (const parameter of parameters) {
+    if (!placeholders.includes(`parameter:${parameter.id}`)) {
+      invalid(outputsPath, `Output parameter ${parameter.id} must be used in a step command.`, draft.line);
+    }
   }
   if (draft.previewIdentity && presentation?.kind !== "web") {
     invalid(outputsPath, `Only a web output target may declare Preview identity.`, draft.line);
@@ -526,6 +585,7 @@ function normalizeTarget(draft, outputsPath) {
     steps: draft.steps,
     presentation,
     downloads,
+    ...(parameters.length ? { parameters } : {}),
     ...(draft.previewIdentity
       ? { previewIdentity: normalizePreviewIdentity(draft.previewIdentity, outputsPath, draft.id) }
       : {})
@@ -557,6 +617,21 @@ function parseVibe64OutputsLines(lines, {
       continue;
     }
     if (!target) invalid(outputsPath, "## Outputs must begin with a Target heading.", line);
+    const parameterHeading = source.match(PARAMETER_HEADING);
+    if (parameterHeading) {
+      const parameter = {
+        id: outputId(parameterHeading[1], outputsPath, "Parameter id", line),
+        label: oneLineText(parameterHeading[2], ERROR_CODE, outputsPath, "Parameter label", line),
+        default: "",
+        description: "",
+        required: false,
+        seen: new Set()
+      };
+      target.parameters.push(parameter);
+      subsection = "parameter";
+      subsectionDraft = parameter;
+      continue;
+    }
     if (source === "#### Presentation") {
       if (target.presentation) {
         invalid(outputsPath, "Presentation must appear at most once below an output target.", line);
@@ -583,7 +658,9 @@ function parseVibe64OutputsLines(lines, {
       subsectionDraft = download;
       continue;
     }
-    if (subsection === "presentation") {
+    if (subsection === "parameter") {
+      parseParameterLine(subsectionDraft, source, outputsPath, line);
+    } else if (subsection === "presentation") {
       parsePresentationLine(subsectionDraft, source, outputsPath, line);
     } else if (subsection === "previewIdentity") {
       parsePreviewLine(subsectionDraft, source, outputsPath, line);
@@ -644,5 +721,6 @@ export {
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   parseVibe64OutputsLines,
+  resolveVibe64OutputParameters,
   vibe64OutputsInspection
 };

@@ -3,6 +3,13 @@
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+Maintainers can develop Vibe64 inside another editor's preview. The development
+preview runs a complete editor with its own runtime state and an independent
+copy of a bundled, dependency-free Node example. The example has complete
+Genesis guidance, needs no database or external services, and preserves edits
+across preview restarts. Frontend changes update through the development server;
+server changes take effect after restarting Preview.
+
 The initial document shows a lightweight loading shell before the editor's
 JavaScript starts. It remains visible during initialization, offers a page reload,
 and explains a failed initialization instead of leaving a blank page.
@@ -559,7 +566,10 @@ foreground work. Only operations that change shared source or prepare its
 environment require the source lock. A ready preview replaces any stale error
 from an overlapping start request.
 People can inspect and explicitly restart the application while the assistant
-is working; automatic startup waits until that work is idle.
+is working; automatic startup waits until that work is idle. Targets can declare
+named text parameters with defaults. Preview options presents those fields,
+validates required values, and applies them only on Run or Save and restart.
+People can remember values for that project and target in the current browser.
 Agents can run a browser suite against a project's declared test Preview target.
 Vibe64 starts that target, waits for readiness, uses its application identity,
 and restores the previous Preview when the test command finishes. The project

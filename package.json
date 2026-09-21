@@ -42,6 +42,7 @@
     "server:app": "SERVER_SURFACE=app node ./bin/server.js --no-open",
     "start": "node ./bin/server.js --no-open",
     "dev": "node ./bin/dev.js",
+    "dev:example": "node ./tooling/dev-example.mjs",
     "dev:all": "vite",
     "dev:app": "VITE_SURFACE=app node ./bin/dev.js",
     "build": "vite build",

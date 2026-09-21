@@ -627,6 +627,9 @@ function useVibe64OutputControlsSurface(props) {
     refresh: refreshOutputs,
     restartTerminal,
     retryTerminal,
+    parametersForTarget,
+    parametersRemembered,
+    rememberParameters,
     run,
     startNewlyConfiguredWorkspaceSetup,
     terminal,
@@ -770,6 +773,73 @@ function useVibe64OutputControlsSurface(props) {
   const previewContextTarget = computed(() => (
     embeddedAutoStartTarget.value || activeOutputTarget.value || embeddedStartTarget.value || null
   ));
+  const outputOptionsTarget = computed(() => activeOutputTarget.value || previewContextTarget.value);
+  const outputOptionsAvailable = computed(() => Boolean(outputOptionsTarget.value?.parameters?.length));
+  const outputOptionsVisible = ref(false);
+  const outputOptionsSelection = ref(null);
+  const outputOptionsValues = ref({});
+  const outputOptionsRemember = ref(false);
+  const outputOptionsSubmitted = ref(false);
+  const outputOptionsError = ref("");
+  const outputOptionsErrors = computed(() => Object.fromEntries(
+    (outputOptionsSelection.value?.parameters || []).map((parameter) => {
+      const value = outputOptionsValues.value[parameter.id] || "";
+      const error = parameter.required && !value.trim()
+        ? `${parameter.label} is required.`
+        : value.length > 4096 || /[\0\r\n]/u.test(value)
+          ? "Enter one line of text, at most 4096 characters."
+          : "";
+      return [parameter.id, outputOptionsSubmitted.value ? error : ""];
+    })
+  ));
+  const outputOptionsAction = ref("Run");
+
+  function openOutputOptions(target = outputOptionsTarget.value) {
+    if (!target?.parameters?.length || operationBusy.value) return;
+    outputOptionsAction.value = terminalIsRunning.value ? "Save and restart" : "Run";
+    outputOptionsSelection.value = target;
+    outputOptionsValues.value = parametersForTarget(target);
+    outputOptionsRemember.value = parametersRemembered(target);
+    outputOptionsSubmitted.value = false;
+    outputOptionsError.value = "";
+    outputOptionsVisible.value = true;
+  }
+
+  function resetOutputOptions() {
+    outputOptionsValues.value = Object.fromEntries(outputOptionsSelection.value.parameters.map(
+      (parameter) => [parameter.id, parameter.default]
+    ));
+  }
+
+  async function submitOutputOptions() {
+    if (operationBusy.value) return;
+    outputOptionsSubmitted.value = true;
+    if (Object.values(outputOptionsErrors.value).some(Boolean)) return;
+    const target = outputOptionsSelection.value;
+    const values = { ...outputOptionsValues.value };
+    const remember = outputOptionsRemember.value;
+    outputOptionsError.value = "";
+    const started = await run(target, { forceRestart: terminalIsRunning.value, outputParameters: values });
+    if (outputOptionsSelection.value !== target || !outputOptionsVisible.value) return;
+    if (started) {
+      rememberParameters(target, values, remember);
+      outputOptionsVisible.value = false;
+    } else {
+      outputOptionsError.value = launchError.value || "The target could not be started. Try again.";
+    }
+  }
+
+  function runWithOptions(target) {
+    return target.parameters?.length ? openOutputOptions(target) : run(target);
+  }
+
+  watch(() => JSON.stringify([
+    projectSlug.value, props.session?.sessionId,
+    outputTargets.value.map(({ id, parameters }) => [id, parameters])
+  ]), () => {
+    outputOptionsVisible.value = false;
+    outputOptionsSelection.value = null;
+  });
   const previewRoutes = computed(() => previewRoutesForTarget(previewContextTarget.value));
   const previewRoutesAvailable = computed(() => previewRoutes.value.length > 0);
   const previewRouteDialogPath = computed(() => {
@@ -1923,6 +1993,18 @@ function useVibe64OutputControlsSurface(props) {
   });
 
   return {
+    outputOptionsAction,
+    outputOptionsAvailable,
+    outputOptionsError,
+    outputOptionsErrors,
+    outputOptionsRemember,
+    outputOptionsSelection,
+    outputOptionsValues,
+    outputOptionsVisible,
+    openOutputOptions,
+    resetOutputOptions,
+    runWithOptions,
+    submitOutputOptions,
     embeddedAutoStartTarget,
     embeddedManualStartButtonDisabled,
     embeddedManualStartButtonVisible,
@@ -2029,7 +2111,6 @@ function useVibe64OutputControlsSurface(props) {
     submitPreviewAddress,
     restartTerminal,
     retryTerminal,
-    run,
     runMenuDisabled,
     showLaunchLog,
     setTerminalExpanded,

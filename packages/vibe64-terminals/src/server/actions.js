@@ -53,6 +53,7 @@ function createTerminalActions({ terminals } = {}) {
       execute: (input) => terminals.startOutputTargetTerminal(input.sessionId, {
         forceRestart: input.forceRestart === true,
         outputTargetId: input.outputTargetId,
+        ...(input.outputParameters === undefined ? {} : { outputParameters: input.outputParameters }),
         originId: input.originId || "",
         vibe64User: input.vibe64User || null
       })

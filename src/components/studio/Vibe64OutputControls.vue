@@ -326,6 +326,17 @@
               />
             </div>
 
+            <v-btn
+              v-if="outputOptionsAvailable"
+              aria-label="Preview options"
+              :disabled="operationBusy"
+              :icon="mdiCogOutline"
+              size="small"
+              title="Preview options"
+              variant="text"
+              @click="openOutputOptions()"
+            />
+
             <v-menu
               v-if="resultsButtonVisible"
               :close-on-content-click="false"
@@ -397,7 +408,7 @@
                   :prepend-icon="mdiPlayCircleOutline"
                   :subtitle="outputTarget.disabledReason || ''"
                   :title="outputTarget.label"
-                  @click="run(outputTarget)"
+                  @click="runWithOptions(outputTarget)"
                 />
               </v-list>
             </v-menu>
@@ -648,6 +659,48 @@
       @update:open="setTerminalExpanded"
     />
 
+    <v-dialog v-model="outputOptionsVisible" aria-label="Preview options" max-width="520" :persistent="operationBusy" scrollable>
+      <v-card>
+        <v-card-title>Preview options</v-card-title>
+        <v-card-subtitle>{{ outputOptionsSelection?.label }}</v-card-subtitle>
+        <v-card-text>
+          <v-text-field
+            v-for="parameter in outputOptionsSelection?.parameters || []"
+            :key="parameter.id"
+            v-model="outputOptionsValues[parameter.id]"
+            class="mb-3"
+            :disabled="operationBusy"
+            :error-messages="outputOptionsErrors[parameter.id]"
+            :hint="parameter.description"
+            :label="parameter.label"
+            :maxlength="4096"
+            :persistent-hint="Boolean(parameter.description)"
+            :required="parameter.required"
+            variant="outlined"
+            @keydown.enter.prevent="submitOutputOptions"
+          />
+          <v-checkbox
+            v-model="outputOptionsRemember"
+            :disabled="operationBusy"
+            hint="Use these values for new sessions in this browser."
+            label="Remember for this project"
+            persistent-hint
+          />
+          <v-btn :disabled="operationBusy" variant="text" @click="resetOutputOptions">Use defaults</v-btn>
+          <v-alert v-if="outputOptionsError" class="mt-3" type="error" variant="tonal">
+            {{ outputOptionsError }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn :disabled="operationBusy" variant="text" @click="outputOptionsVisible = false">Cancel</v-btn>
+          <v-btn :disabled="operationBusy" color="primary" variant="flat" @click="submitOutputOptions">
+            {{ outputOptionsAction }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog
       v-model="previewRouteDialogVisible"
       max-width="520"
@@ -739,6 +792,7 @@ import {
   mdiChevronRight,
   mdiChevronUp,
   mdiConsoleLine,
+  mdiCogOutline,
   mdiContentCopy,
   mdiDotsHorizontal,
   mdiDownloadOutline,
@@ -842,6 +896,18 @@ function setResourceRetryBusy(value) {
 }
 
 const {
+  outputOptionsAction,
+  outputOptionsAvailable,
+  outputOptionsError,
+  outputOptionsErrors,
+  outputOptionsRemember,
+  outputOptionsSelection,
+  outputOptionsValues,
+  outputOptionsVisible,
+  openOutputOptions,
+  resetOutputOptions,
+  runWithOptions,
+  submitOutputOptions,
   embeddedManualStartButtonDisabled,
   resourceAdmissionId,
   testApproval,
@@ -934,7 +1000,6 @@ const {
   submitPreviewRouteDialog,
   restartTerminal,
   retryTerminal,
-  run,
   runMenuDisabled,
   showLaunchLog,
   setTerminalExpanded,

@@ -35,6 +35,8 @@ import {
   useVibe64Terminal
 } from "@/composables/useVibe64Terminal.js";
 import {
+  readLocalStorageJson,
+  writeLocalStorageJson,
   stableLocalStorageKeyPart
 } from "@/lib/browserLocalStorage.js";
 import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
@@ -771,6 +773,7 @@ function useVibe64OutputControls({
     buildRawPayload: (_model, { context }) => ({
       ...vibe64RealtimeOriginPayload(),
       ...(context.forceRestart === true ? { forceRestart: true } : {}),
+      ...(context.outputParameters === undefined ? {} : { outputParameters: context.outputParameters }),
       outputTargetId: String(context.outputTargetId || "")
     }),
     fallbackRunError: "Output target could not be started.",
@@ -1089,11 +1092,38 @@ function useVibe64OutputControls({
     previewState.value === "idle"
   ));
 
+  function parameterStorageKey(target) {
+    return vibe64ProjectScopedStorageKey(`vibe64.output-parameters.${target.id}`, projectSlug.value);
+  }
+
+  function parametersRemembered(target) {
+    return readLocalStorageJson(parameterStorageKey(target), null) !== null;
+  }
+
+  function rememberParameters(target, values, remember) {
+    writeLocalStorageJson(parameterStorageKey(target), remember ? values : null);
+  }
+
+  function parametersForTarget(target) {
+    const metadata = terminalMetadata.value.outputTargetId === target.id
+      ? terminalMetadata.value
+      : activeTerminal.value?.metadata;
+    const saved = status.value.lastOutputTarget;
+    const values = (metadata?.outputTargetId === target.id ? metadata.outputParameters : null)
+      || (saved?.id === target.id ? saved.outputParameters : null)
+      || readLocalStorageJson(parameterStorageKey(target), {}) || {};
+    return Object.fromEntries((target.parameters || []).map((parameter) => [
+      parameter.id,
+      typeof values[parameter.id] === "string" ? values[parameter.id] : parameter.default
+    ]));
+  }
+
   async function run(outputTarget = {}, {
     applyDefaultDisplay = true,
     autoStartAttemptKey = "",
     forceRestart = false,
-    ignoreExternalBusy = false
+    ignoreExternalBusy = false,
+    outputParameters
   } = {}) {
     const currentSession = selectedSession.value || {};
     const externalBusy = readRefOrGetterValue(busy);
@@ -1128,8 +1158,14 @@ function useVibe64OutputControls({
       writeLaunchAutoStartAttempt(normalizedAutoStartAttemptKey);
     }
     try {
+      const parameters = outputTarget.parameters?.length
+        ? outputParameters || parametersForTarget(outputTarget)
+        : undefined;
+      const missing = outputTarget.parameters?.find((parameter) => parameter.required && !parameters[parameter.id]?.trim());
+      if (missing) throw new Error(`${missing.label} is required. Open Preview options to set it.`);
       const terminalSession = await startTerminalCommand.run({
         forceRestart,
+        ...(parameters ? { outputParameters: parameters } : {}),
         outputTargetId: outputTarget.id,
         sessionId: currentSessionId
       });
@@ -1839,6 +1875,9 @@ function useVibe64OutputControls({
     refresh,
     restartTerminal,
     retryTerminal,
+    parametersForTarget,
+    parametersRemembered,
+    rememberParameters,
     run,
     sendCtrlC,
     stopTerminal,

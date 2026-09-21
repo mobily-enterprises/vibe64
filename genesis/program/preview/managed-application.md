@@ -38,6 +38,23 @@ known preview destination, while Reload can recheck output status without one.
 A blocked Outputs declaration with no targets reports its actionable
 inspection diagnostic instead of claiming that the project has no output.
 Declared targets blocked by missing resources remain visible but disabled.
+Targets may declare up to sixteen named text parameters with labels, defaults,
+descriptions, and required flags. Prepare, Build, and Run arguments reference
+these values with `{parameter:id}`; the executable stays fixed. Vibe64 rejects
+undeclared, unknown, missing required, multiline, or oversized values before
+replacing a running target. Substitution happens once, then each argv value is
+shell-quoted independently. Parameter values join resource configuration identity
+and terminal reuse checks. Restart and temporary browser-test restoration retain
+the selected values; a different target receives its own defaults.
+
+Preview options appears only for targets that declare fields. The Run menu opens
+the same form for parameterized terminal and finite targets. Editing and Cancel
+do not launch anything. Explicit Run or Save and restart submits the selected
+values; Use defaults restores declared defaults in the form. Required errors stay
+beside their fields. Remember for this project stores values in this browser,
+scoped to project and target for future sessions; existing sessions retain their
+own selection. These are ordinary visible arguments, not secret storage.
+
 Working directories resolve relative to the session source. An ordinary name
 such as `..build` is valid; a path resolving outside that source is rejected.
 

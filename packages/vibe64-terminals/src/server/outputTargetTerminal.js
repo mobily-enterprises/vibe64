@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import stripAnsi from "strip-ansi";
 
@@ -116,6 +117,7 @@ const OUTPUT_METADATA = Object.freeze({
   label: "output_target_label",
   openLabel: "output_target_open_label",
   previewAuth: "output_target_preview_auth",
+  parameters: "output_target_parameters",
   restartBaseline: "output_target_restart_baseline",
   sessionRoot: "output_target_session_root",
   startedAt: "output_target_started_at",
@@ -498,6 +500,7 @@ function outputTargetFromMetadata(metadata = {}) {
   }
   return {
     id,
+    outputParameters: JSON.parse(metadata[OUTPUT_METADATA.parameters] || "{}"),
     agentHref: String(metadata[OUTPUT_METADATA.agentHref] || "").trim(),
     label: String(metadata[OUTPUT_METADATA.label] || id).trim() || id,
     openTarget: openTargetFromMetadata(metadata),
@@ -567,6 +570,7 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
     await Promise.all([
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.agentHref, agentHref),
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, metadata.outputTargetId),
+      store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(metadata.outputParameters || {})),
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, metadata.outputTargetLabel || metadata.outputTargetId),
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.kind, openTarget.kind),
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.openLabel, openTarget.label),
@@ -761,6 +765,7 @@ function managedPreviewLaunchPlan({
   outputTargets = [],
   outputTargetId = "",
   previewStatus = {},
+  outputParameters,
   restart = false,
   savedOutputTarget = null
 } = {}) {
@@ -776,7 +781,11 @@ function managedPreviewLaunchPlan({
     };
   }
   const sameTarget = !outputTargetId || activeTerminal?.metadata?.outputTargetId === outputTargetId;
-  if (!restart && sameTarget && (
+  const sameParameters = outputParameters === undefined || isDeepStrictEqual(
+    outputParameters,
+    activeTerminal?.metadata?.outputParameters || {}
+  );
+  if (!restart && sameTarget && sameParameters && (
     previewState === "ready" ||
     (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))
   )) {
@@ -844,6 +853,7 @@ function outputTargetFromTerminalMetadata(terminal = {}) {
   const openTarget = normalizeOpenTarget(metadata.openTarget || {});
   return {
     id,
+    outputParameters: metadata.outputParameters || {},
     agentHref: String(metadata.agentTargetHref || metadata.previewProxyTargetHref || metadata.targetUrl || openTarget.href || "").trim(),
     label: String(metadata.outputTargetLabel || id).trim() || id,
     openTarget: openTarget.href ? openTarget : null,
@@ -1392,7 +1402,8 @@ function launchTerminalCanBeReused(runningSession = {}, {
 } = {}) {
   return spec.reuseRunning !== false &&
     runningSession.metadata?.envHash === launchEnvHash &&
-    runningSession.metadata?.outputTargetId === outputTargetId;
+    runningSession.metadata?.outputTargetId === outputTargetId &&
+    isDeepStrictEqual(runningSession.metadata?.outputParameters || {}, spec.metadata?.outputParameters || {});
 }
 
 function reusableLaunchTerminal(sessionId = "", {
@@ -2390,6 +2401,7 @@ function createOutputTargetTerminalController({
         return {
           running: launchTerminalIsRunning(status.activeTerminal || {}),
           targetId: status.activeTerminal?.metadata?.outputTargetId || "",
+          outputParameters: status.activeTerminal?.metadata?.outputParameters || {},
           savedTarget: outputTargetFromMetadata(context.session.metadata),
           store: context.runtime.store
         };
@@ -2399,6 +2411,7 @@ function createOutputTargetTerminalController({
         const start = () => controller.startTerminal(sessionId, {
           ensurePreview: true,
           outputTargetId: targetId,
+          ...(options?.restoring ? { outputParameters: previous.outputParameters } : {}),
           previewTestRun: testRun
         });
         if (!testRun.restoring) signal?.throwIfAborted();
@@ -2437,6 +2450,7 @@ function createOutputTargetTerminalController({
               await previous.store.mutateSession(sessionId, async () => {
                 await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, previous.savedTarget.id);
                 await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, previous.savedTarget.label);
+                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(previous.savedTarget.outputParameters));
               });
             }
           });
@@ -2554,6 +2568,7 @@ function createOutputTargetTerminalController({
               outputTargets,
               outputTargetId,
               previewStatus,
+              outputParameters: input.outputParameters,
               restart: restartPreview,
               savedOutputTarget
             });
@@ -2648,13 +2663,19 @@ function createOutputTargetTerminalController({
             };
           }
 
+          const savedTarget = outputTargetFromMetadata(context.session.metadata);
+          let outputParameters = input.outputParameters;
+          if (outputParameters === undefined && savedTarget?.id === outputTarget.id) {
+            outputParameters = savedTarget.outputParameters;
+          }
           const spec = await createOutputTargetSpec({
             context: {
               ...context,
               outputTarget,
               vibe64User: input.vibe64User || null
             },
-            outputTargetId: outputTarget.id
+            outputTargetId: outputTarget.id,
+            outputParameters
           });
           if (spec?.ok === false) {
             await writePreviewDiagnostic(context.session, {

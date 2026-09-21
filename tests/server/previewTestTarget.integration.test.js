@@ -44,7 +44,10 @@ async function fixture(t, name, workflowHooks = {}) {
   const target = (id, mode = id) => `### Target \`${id}\`: ${id}
 ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
 - Runtimes: \`nodejs\`
-- Run \`Start\`: \`node\` \`server.mjs\` \`${mode}\`
+- Run \`Start\`: \`node\` \`server.mjs\` \`${mode}\` \`{parameter:label}\`
+#### Parameter \`label\`: Label
+- Default: \`${id} default\`
+- Required.
 #### Presentation
 - Kind: \`web\`
 - URL path: \`/\`
@@ -88,6 +91,7 @@ const file = mode === 'test-app' ? 'test.json' : 'working.json';
 if (mode === 'test-app') writeFileSync(file, JSON.stringify({count: 0}));
 http.createServer((req, res) => {
   const data = JSON.parse(readFileSync(file));
+  if (req.url === '/parameter') { res.end(process.argv[3] || ''); return; }
   if (req.url === '/api/health') { res.end('ok'); return; }
   if (req.url === '/test-state') { res.setHeader('content-type','application/json'); res.end(JSON.stringify({mode, count:data.count, effects:'disabled'})); return; }
   if (req.url === '/test-login') { res.end(req.headers.cookie || ''); return; }
@@ -524,4 +528,40 @@ test("declared test Preview runs real servers, isolates session state, and resto
     assert.equal(closedRun.error, "session closed");
     assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal, null);
   });
+});
+
+
+test("output parameters survive reuse, restart and temporary test-target restoration", async t => {
+  const f = await fixture(t, "parameters");
+  const parameters = { label: "chosen value '{port}' $(printf literal)" };
+  const start = (extra = {}) => f.controller.startTerminal(f.sessionId, { outputTargetId: "app", ...extra });
+  let normal = await start({ outputParameters: parameters });
+  assert.equal(normal.ok, true, JSON.stringify(normal));
+  await f.waitReady(normal);
+  assert.equal((await start({ outputParameters: parameters, ensurePreview: true })).id, normal.id);
+  for (const outputParameters of [{ label: "" }, null, { unknown: "value" }]) {
+    const rejected = await start({ outputParameters, forceRestart: true });
+    assert.equal(rejected.ok, false);
+    assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.id, normal.id);
+  }
+  const changed = await start({ outputParameters: { label: "changed" }, ensurePreview: true });
+  assert.notEqual(changed.id, normal.id, "changed parameters cannot reuse a running command");
+  await f.waitReady(changed);
+  normal = await start({ outputParameters: parameters, forceRestart: true });
+  await f.waitReady(normal);
+  const restarted = await f.controller.restartPreview(f.sessionId);
+  await f.waitReady(restarted);
+  assert.deepEqual(restarted.metadata.outputParameters, parameters);
+  const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
+    const status = await f.controller.launchStatus(f.sessionId);
+    assert.deepEqual(status.activeTerminal.metadata.outputParameters, { label: "test-app default" });
+    return { ok: true, exitCode: 0 };
+  }, { waitUntilReady: f.waitReady });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const restored = await f.controller.launchStatus(f.sessionId);
+  assert.deepEqual(restored.activeTerminal.metadata.outputParameters, parameters);
+  assert.deepEqual(restored.lastOutputTarget.outputParameters, parameters);
+  const url = new URL(restored.previewTarget.href);
+  url.pathname = `${url.pathname.replace(/\/$/u, "")}/parameter`;
+  assert.equal(await (await fetch(url)).text(), parameters.label);
 });

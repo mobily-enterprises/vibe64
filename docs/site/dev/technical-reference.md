@@ -233,6 +233,43 @@ process. Outputs remain pending until the current setup recipe has succeeded;
 a Stack with no setup recipe is simply unconfigured rather than failed.
 Component conflicts are reported instead of interleaving competing commands.
 
+An output target can declare named text parameters. Its executable remains fixed;
+`{parameter:id}` can appear in Prepare, Build, or Run arguments. For example:
+
+```markdown
+### Target `app`: Run editor
+
+- Default.
+- Mode: `interactive`
+- Runtimes: `nodejs`
+- Run `Start`: `node` `server.js` `--project` `{parameter:project-directory}` `--host` `{host}` `--port` `{port}`
+
+#### Parameter `project-directory`: Project directory
+
+- Default: `examples/hello-node`
+- Description: `Directory opened by the editor.`
+- Required.
+
+#### Presentation
+
+- Kind: `web`
+- URL path: `/`
+- Ready when: `GET` `/api/health` returns `200`
+```
+
+A target may declare up to 16 unique parameters. Default, Description, and Required
+are optional; an omitted default is empty text. Each parameter must occur in a
+step argument. Values are single-line text of at most 4096 characters; required
+values cannot be blank. Unknown fields or references are rejected. Vibe64 inserts
+each value once and quotes the completed argument, preserving spaces and shell
+punctuation. `{host}` and `{port}` remain restricted to a web target's Run step.
+
+The Preview options cog appears for a target with parameters. Run and Save and
+restart apply the form explicitly. Remember for this project saves values in the
+current browser for that target's future sessions; existing sessions retain their
+own selections. Parameters are visible command arguments, so credentials belong
+in managed environment values.
+
 ## Project environment projection
 
 Genesis Stack components declare resource kinds, environment variable names,

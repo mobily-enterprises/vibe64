@@ -17,8 +17,34 @@ Building a package leaves the development dependency installation intact.
 - `tooling/verify-package-boundaries.mjs`
 - `scripts/npm-release.js`
 - `tests/server/runtimePackage.unit.test.js`
+- `tooling/dev-example.mjs`
+- `examples/hello-node/server.js`
+- `examples/hello-node/index.html`
+- `tests/server/developmentExample.integration.test.js`
 
 ## Public contract
+
+`npm run dev:example` starts both the editor backend and Vite, opening a working
+copy of `examples/hello-node` through the existing project startup contract.
+The default working copy, isolated state and session source live in ignored
+`.vibe64-local/development/`; restarts preserve them. `--project` selects the
+example working-copy path, `--state-dir` selects its runtime directory, and
+`--host`/`--port` select the loopback frontend listener. The backend gets its own
+OS-assigned port. Vite proxies API and realtime traffic to that backend.
+The listener can be reached through an authenticated hosting preview proxy.
+
+Initial preparation copies the bundled Genesis-authored application, initializes
+current Genesis skills/hooks, and creates an independent Git baseline. An existing
+working copy is never overwritten. The child editor uses standalone execution
+inside the enclosing preview process, with its own state, source roots, attachments
+and runtime namespace. It does not inherit the hosting editor's private control
+configuration. Frontend edits use Vite updates; backend edits require a restart.
+
+The repository's default Outputs target runs this complete development preview.
+Its declared Project directory parameter defaults to the persistent example;
+people can change it in Preview options without command-line access.
+Workspace setup and deployment installation declare Node and C++ runtimes because
+`node-pty` may need to build from source. Example startup also declares Git.
 
 The initial HTML contains a lightweight, responsive loading shell with inline
 styles and a reload link. Vue replaces it when bootstrap and initial routing

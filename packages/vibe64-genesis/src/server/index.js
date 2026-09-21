@@ -15,6 +15,7 @@ import {
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   parseVibe64OutputsLines,
+  resolveVibe64OutputParameters,
   vibe64OutputsInspection
 } from "./outputs.js";
 import {
@@ -475,6 +476,7 @@ export {
   inspectVibe64ResourceEstimates,
   inspectVibe64WorkspaceSetup,
   parseVibe64OutputsLines,
+  resolveVibe64OutputParameters,
   parseVibe64ResourceEstimatesLines,
   parseVibe64DeploymentLines,
   parseVibe64WorkspaceSetupLines,
