@@ -7,7 +7,7 @@
       :aria-label="title"
       :aria-modal="mobileTakeoverActive ? 'true' : undefined"
       rounded="lg"
-      color="surface"
+      color="surface-light"
       class="vibe64-terminal-surface"
       :class="{
         'vibe64-terminal-surface--collapsed': !surfaceExpanded,

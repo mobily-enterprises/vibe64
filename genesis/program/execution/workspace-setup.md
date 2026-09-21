@@ -80,6 +80,8 @@ the bounded output, re-inspects the resulting Stack contract, and then runs the
 declared preparation recipe. It does not migrate a current, newer, invalid, or
 otherwise unrecognized project merely because setup inspection failed.
 
+Preparation uses the shared terminal surface's subtle theme-aware background in
+both compact and expanded states, separating the operation from the conversation.
 During preparation, the workspace shows one compact progress line. Opening its
 details keeps the same card, heading, status and progress line, with controls
 beside the description, and reveals

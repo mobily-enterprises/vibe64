@@ -43,6 +43,8 @@ Save is reconciled only when the canonical authority proves the privately
 recorded prepared commit was already published. Disposable GitHub mirror
 maintenance runs after Save completes and cannot change the Save result.
 
+The shared terminal surface gives operation cards a subtle theme-aware background
+in both compact and expanded states, separating them from the conversation.
 While Save runs, the workspace shows one compact progress line. Opening its
 details keeps the same card, heading, status and progress line, with controls
 beside the description, and reveals

@@ -212,7 +212,8 @@ notice when naming is unavailable. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.
-Operation cards keep their heading, status, progress text and colors when expanded;
+Operation cards share a subtle background that separates them from the chat in
+light and dark themes. They keep their heading, status, progress text and colors when expanded;
 opening details adds output and controls within the same shared presentation.
 Copy and Collapse sit beside the progress description, beneath the heading.
 People can explore the application through a compact searchable subsystem list
