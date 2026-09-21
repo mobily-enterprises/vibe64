@@ -1603,6 +1603,10 @@ async function uploadDropZoneFile(context, input, readUpload) {
         part.file?.resume();
         throw sourceEditorError("Upload exactly one file.", "vibe64_files_invalid_upload");
       }
+      // Multipart limits can close the stream before the iterator yields it.
+      if (part.file.destroyed) {
+        throw sourceEditorError("Upload was interrupted or exceeded the allowed limits.", "vibe64_files_invalid_upload");
+      }
       await pipeline(part.file, createWriteStream(staged, { flags: "wx", mode: 0o660 }));
       if (part.file.truncated) throw sourceEditorError("Upload exceeds the 100 MiB limit.", "vibe64_files_upload_too_large", {}, 413);
     }
