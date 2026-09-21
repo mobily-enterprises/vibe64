@@ -55,5 +55,11 @@ function apply() {
     @select-model="select('model', $event)"
     @select-variant="select('thinking', $event)"
     @apply="apply"
-  />
+  >
+    <template #footer>
+      <v-btn aria-label="Close AI controls" min-height="48" variant="text" @click="menuOpen = false">
+        Close
+      </v-btn>
+    </template>
+  </AssistantModelControl>
 </template>

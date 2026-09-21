@@ -14,6 +14,12 @@ useVibe64InAppLinks();
 </template>
 
 <style>
+/* The shared goal control has no color prop for its hard-coded paused indicator. */
+.v-application .assistant-goal .assistant-goal__light--paused {
+  background: rgb(var(--v-theme-warning));
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-warning), 0.12);
+}
+
 .v-application .v-btn.v-btn--variant-outlined.text-primary:not(.v-btn--disabled) {
   background: rgba(var(--v-theme-primary), 0.1) !important;
   border-color: rgba(var(--v-theme-primary), 0.32) !important;

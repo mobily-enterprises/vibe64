@@ -59,7 +59,25 @@ const { router, fallbackRoute } = createShellRouter({
 
 const vuetify = createVuetify({
   theme: {
-    defaultTheme: "light"
+    defaultTheme: "light",
+    themes: {
+      light: {
+        colors: {
+          warning: "#725C0C",
+          "on-warning": "#FFFFFF",
+          "warning-container": "#F5F0E3",
+          "on-warning-container": "#252117"
+        }
+      },
+      dark: {
+        colors: {
+          warning: "#DFC477",
+          "on-warning": "#3D2F00",
+          "warning-container": "#353126",
+          "on-warning-container": "#EAE1CF"
+        }
+      }
+    }
   },
   icons: {
     defaultSet: "mdi",

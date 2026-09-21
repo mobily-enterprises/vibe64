@@ -241,7 +241,7 @@
           v-if="savedCommitDeslop"
           border
           class="studio-autopilot__deslop-offer"
-          color="surface-variant"
+          color="surface"
           rounded="lg"
         >
           <div class="studio-autopilot__deslop-copy">
@@ -265,7 +265,7 @@
             :prepend-icon="mdiBroom"
             size="small"
             type="button"
-            variant="tonal"
+            variant="flat"
             @click="startSavedCommitDeslop"
           >
             {{ savedCommitDeslopSending ? "Starting…" : "Deslop" }}
@@ -1775,10 +1775,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.studio-autopilot__deslop-copy span {
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
 .studio-autopilot__deslop-action {
   min-inline-size: 5.75rem;
 }
@@ -1803,7 +1799,6 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__composer-actions {
-  flex-wrap: wrap;
   column-gap: clamp(0rem, calc(4% - 1.25rem), 0.5rem);
   width: 100%;
 }
@@ -1846,6 +1841,23 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__composer-tools:empty {
   display: none;
+}
+
+@container studio-chat-pane (max-width: 32rem) {
+  .studio-autopilot__composer-actions,
+  .studio-autopilot__composer-delivery {
+    gap: 0;
+  }
+
+  .studio-autopilot__composer-actions .studio-autopilot__composer-action {
+    width: clamp(2rem, 10cqi, 2.5rem);
+  }
+
+  .studio-autopilot__composer-actions :deep(button) {
+    flex-shrink: 1;
+    min-width: min-content;
+    padding-inline: 0.25rem;
+  }
 }
 
 .studio-autopilot__composer-menu {

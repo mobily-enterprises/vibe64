@@ -10,7 +10,8 @@ through normalization, and the adapter supplies per-turn labels and hover detail
 to the shared transcript. Replies without a saved selection display "agent";
 old history is not backfilled.
 Composer spacing closes in narrow panes so the companion control does not push
-Send onto another row when the controls themselves fit.
+Send or Stop onto another row. Compact icon widths and horizontal padding keep
+all controls together while preserving existing touch-target heights.
 OpenCode waits for its project event connection before sending, allowing cold
 initialization up to two minutes. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message
@@ -218,14 +219,16 @@ allowance, and icon-only Send, with Stop alongside Send while needed. Goal and
 available allowance stay visible outside the menus. Its empty textbox uses one
 compact row and still grows with entered text. Add contains left-aligned file,
 preview, and diagnostics attachment actions. The Settings cog opens the
-model/access selector directly, including recovery guidance and pending message
+model/access selector directly, with an always-available Close action in its
+footer, including during active work. It includes recovery guidance and pending message
 requests even while its catalogue is unavailable. The host tools target sits
 immediately after Settings in the composer row, followed by the icon-only
 starred-files menu, and remains mounted independently of Settings. Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
 desktop minimum keeps Send and Stop on the same row as the other controls,
 including the host avatar, goal timer and allowance. On narrow screens the chat
-uses the full available width and controls can wrap to remain accessible.
+uses the full available width and keeps the controls on one row with tighter
+horizontal padding and icon widths.
 Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;
 an existing draft or attachments are kept for review instead of being sent.
@@ -233,9 +236,11 @@ The goal popover shows a bounded objective preview beside the existing status
 and Pause/Resume/Cancel controls. View full goal opens the exact instruction in a
 scrollable dialog with a fixed Close action. Preview truncation affects only
 presentation; goal updates still identify the complete original objective.
-The goal indicator flashes red while active, stays orange while paused, and shows
+The goal indicator flashes red while active, uses the app's warning color while paused, and shows
 elapsed active time when space permits. The application omits goal controls for
 assistants without that capability.
+The app theme overrides the shared control's hard-coded paused color because
+the control does not expose a color prop.
 
 The conversation uses `AssistantConversationElement` from
 `@jskit-ai/assistant-core/client/conversation`. Main chat, temporary assistance,

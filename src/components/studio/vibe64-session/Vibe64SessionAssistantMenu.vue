@@ -77,16 +77,23 @@
       </section>
     </template>
     <template #footer>
-      <slot name="access" />
-      <v-btn
-        v-if="canConfigure"
-        :disabled="changesDisabled"
-        size="small"
-        variant="text"
-        @click="openConnectionSettings"
-      >
-        Configure more AIs
-      </v-btn>
+      <div class="vibe64-session-assistant-menu__footer">
+        <slot name="access" />
+        <div class="d-flex flex-wrap ga-1">
+          <v-btn
+            v-if="canConfigure"
+            :disabled="changesDisabled"
+            size="small"
+            variant="text"
+            @click="openConnectionSettings"
+          >
+            Configure more AIs
+          </v-btn>
+          <v-btn aria-label="Close AI controls" min-height="48" variant="text" @click="menuOpen = false">
+            Close
+          </v-btn>
+        </div>
+      </div>
     </template>
   </AssistantModelControl>
   <v-dialog v-model="unlockConfirmOpen" max-width="31rem" persistent>
@@ -606,6 +613,10 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
 </script>
 
 <style scoped>
+.vibe64-session-assistant-menu__footer {
+  min-width: 0;
+}
+
 .vibe64-session-assistant-menu__section {
   display: grid;
   gap: 0.32rem;

@@ -3,10 +3,11 @@
     <v-alert
       v-if="!props.archived && (loadError || state === 'attention')"
       class="project-preview__warning"
+      color="warning-container"
       density="compact"
       role="status"
       type="warning"
-      variant="tonal"
+      variant="flat"
     >
       <strong>{{ loadError ? 'Project setup could not be read' : 'Project setup needs attention' }}</strong>
       <p v-if="loadError">{{ loadError }}</p>
@@ -34,10 +35,11 @@
     <v-alert
       v-if="!props.archived && (environmentSetup?.missingKeys.length || environmentSetup?.warning)"
       class="project-preview__warning"
+      color="warning-container"
       density="compact"
       role="status"
       type="warning"
-      variant="tonal"
+      variant="flat"
     >
       <h2 class="text-title-medium">Set up your project's environment</h2>
       <p v-if="environmentSetup.warning">{{ environmentSetup.warning }}</p>
@@ -227,6 +229,7 @@ watch(() => props.busy, (busy, previous) => {
 .project-preview__warning p { margin: .25rem 0; }
 .project-preview__warning-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; margin-top: .25rem; }
 .project-preview__warning-actions span { font-size: .8rem; }
+.project-preview__warning-actions button:disabled { opacity: .6; }
 .project-onboarding { width: min(100%, 52rem); margin: auto; padding: clamp(1rem, 3vw, 2.5rem); overflow-y: auto; }
 .project-onboarding h2 { font-size: 1.6rem; line-height: 1.25; margin-bottom: 1rem; }
 .project-onboarding p { margin-bottom: 1.25rem; line-height: 1.6; }

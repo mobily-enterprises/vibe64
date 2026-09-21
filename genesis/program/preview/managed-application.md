@@ -176,6 +176,8 @@ explicit retry; startup errors are not also repeated as global toasts.
 The broad Genesis opening inspection is not launch admission. Existing-project
 setup diagnostics, including stale Program source citations, and inspection
 request failures appear in a persistent compact warning above the preview.
+Warning foreground and container colors come from the app's light/dark theme
+palette. Setup actions retain readable labels when disabled during assistant work.
 They do not unmount a running iframe or its toolbar. Recheck setup refreshes
 only that inspection, works during assistant activity, and removes the warning
 when resolved. Reload remains the separate browser/output-status action.

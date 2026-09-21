@@ -149,6 +149,8 @@ Deslop of that exact published commit. Accepting sends one ordinary visible
 message through the session's existing assistant path; declining only hides the
 offer and records no preference. A Save that still needs reconciliation does
 not offer cleanup yet.
+The offer uses the theme surface and a filled primary action so Deslop remains
+readable when disabled during active assistant work.
 
 For standalone local folders, Fetch checks the original project's configured
 upstream and push destination; it never uses a session clone's internal origin.

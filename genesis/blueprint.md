@@ -24,6 +24,9 @@ Clicking an already-selected dashboard tab keeps the conversation and dashboard
 mounted; repeating navigation retries opening only after an opening failure.
 Dashboard page titles share one Material typography style. Session history keeps
 its refresh action beside the heading, including on small screens.
+Warnings use a muted gold palette in light and dark themes, with readable text
+and restrained accents. Setup notices pair a soft warning surface with dark or
+light foreground text appropriate to the theme; disabled actions remain legible.
 GitHub-connected projects offer one Issues/PR entry in the project-wide Dashboard
 menu, including when no session is open. Tabs return to the issue or pull request
 list while retaining its filters and pagination. Opening it collapses the Dashboard menu
@@ -151,15 +154,18 @@ increase the button height, and the button has no tooltip. New replies retain th
 answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
+AI controls includes a Close button that remains available while the assistant
+is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery
 guidance and pending message requests in the same panel. Optional companion controls sit immediately to the right of the
 Settings cog, followed by the starred-files icon. These controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
-Send stays alongside the icons, goal and allowance whenever those controls fit.
+Send and Stop stay alongside the icons, goal and allowance in one row on mobile.
+Compact panes reduce horizontal button padding and icon widths while preserving
+the existing touch-target height.
 The desktop chat pane stops at 512 pixels so Send and Stop stay on the same row
-as the other controls. Narrow screens use the full-width chat and may wrap
-controls when needed.
+as the other controls. Narrow screens use the full-width chat.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.
@@ -635,7 +641,9 @@ checks current safety and never creates a duplicate test.
 Deslop is a deliberate cleanup that preserves behavior, not an automatic extra
 agent turn. After Save, Vibe64 may offer Deslop for the exact commit it just
 published. Accepting uses the ordinary visible project conversation; declining
-has no lasting effect. People can also request Deslop for the agent's changes
+has no lasting effect. The offer uses the normal theme surface and a filled
+Deslop button so its label stays readable, including while unavailable during
+active work. People can also request Deslop for the agent's changes
 to the current task, including unsaved work, or explicitly select commits.
 
 People can choose how cautiously the AI engineers a project. The choice follows
@@ -747,7 +755,7 @@ from conversation context usage. API-key connections and unsupported assistants 
 not show a plan meter; unavailable readings never imply unused allowance.
 
 For Codex, the bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
-orange light for a paused goal. Elapsed running time appears beside the light
+muted warning light for a paused goal. Elapsed running time appears beside the light
 when the chat pane has room and remains available in its details. Paused time
 does not accumulate. Reduced-motion settings keep the running light steady.
 Goal controls are optional; OpenCode does not expose them.
