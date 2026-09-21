@@ -758,6 +758,11 @@ Goal controls are separate from plan allowance and are available to authorized
 Codex users even when no weekly allowance is reported.
 Automatic Codex goal turns retain managed command access after the assistant
 process restarts.
+Browser reconnects preserve healthy server-side work. When managed tool connections
+become stale, Vibe64 repairs the same conversation and checks its tools before
+continuing. Recovery preserves project edits, history and goal accounting, respects
+an explicit Pause, and never repeats a submitted command. If recovery cannot be
+verified, work stays stopped with a recoverable explanation.
 
 Claude Code uses the same chat, model selector, Send, Steer, Stop and native
 terminal surfaces. The owner signs in to their Claude subscription through a

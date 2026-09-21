@@ -305,6 +305,32 @@ notifications revive completed turns or overwrite a successor. An active goal
 alone does not override a confirmed inactive, interrupted turn.
 
 
+Managed tool readiness includes the live Git, shell, Preview and Env control
+identities, not only native thread observation. The provider records the environment
+bound to each thread. Listener replacement or a valid stale-generation request
+triggers one serialized check through that owner; account credentials and Env values
+never enter lifecycle logs. Logs correlate session, socket, control generation,
+native thread, connection generation, replacement/rejection and recovery outcome.
+
+Codex can retain an old shell environment across an already-loaded resume. To
+change it, Vibe64 pauses an active goal, confirms that its turn stopped, detaches
+and resumes the same thread, then proves the effective managed environment with a
+bounded native shell digest check and authenticates its live control health routes.
+The check uses no model, prints no environment values and is excluded from live
+chat turn reconciliation; its shell record remains in native history. Another
+native subscriber can retain the old environment, so unsubscribe alone is never
+readiness proof. Failed verification leaves work stopped with an actionable error.
+Only the same goal paused by this recovery may continue, and a concurrent explicit
+Pause or goal change wins. Recovery does not replay a human prompt or tool command.
+
+Session command-environment preparation and closure share a project-scoped admission
+boundary. Closure drains admitted preparation and rejects overlapping acquisitions,
+stops the assistant before retiring its controls, and uses retained provider identity
+rather than preparing controls during cleanup. Browser reconnect checks reuse a
+healthy binding. Restricted helpers retain their explicitly empty environment.
+The focused managed-control regression includes the actual native CLI with a local
+model fixture, a second subscriber, interrupted goals and preserved files/history.
+
 Observation loss is owned by the provider controller. Codex transport loss and
 notification-processing failures block provider work, persist an observation-loss
 barrier, then pause the native goal and interrupt its turn. A fresh idle read

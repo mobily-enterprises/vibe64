@@ -32,6 +32,7 @@ import {
   closeUnixJsonCommandServersForSession,
   listenUnixJsonCommandServer,
   readJsonCommandRequest,
+  reportUnixCommandControlChange,
   removeDeadUnixJsonCommandSocket,
   sendJsonCommandResponse,
   shortCommandHash,
@@ -429,6 +430,9 @@ async function ensureAgentEnvCommandServerUnlocked({
           normalizeText(input.sessionId) !== normalizeText(sessionId) ||
           normalizeText(input.generationId) !== generationId
         ) {
+          if (verifyRequestToken(input, token) && normalizeText(input.sessionId) === normalizeText(sessionId)) {
+            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
+          }
           sendJsonCommandResponse(response, 409, responseError(
             "Managed Env control generation is no longer current. Reconnect the assistant.",
             "vibe64_agent_control_unavailable"
@@ -822,6 +826,7 @@ function createAgentEnvCommandService({
   }
 
   return Object.freeze({
+    logger,
     bindSession,
     closeAllForSession,
     run,

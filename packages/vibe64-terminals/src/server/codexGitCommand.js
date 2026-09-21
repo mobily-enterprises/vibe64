@@ -40,6 +40,7 @@ import {
   closeUnixJsonCommandServer,
   listenUnixJsonCommandServer,
   readJsonCommandRequest,
+  reportUnixCommandControlChange,
   removeDeadUnixJsonCommandSocket,
   sendJsonCommandResponse,
   shortCommandHash,
@@ -984,6 +985,7 @@ function createCodexGitCommandService({
   }
 
   return {
+    logger,
     run,
     sessionWorkSaveContext
   };
@@ -1040,6 +1042,9 @@ async function replaceCodexGitCommandServer({
           normalizeText(input.sessionId) !== normalizeText(sessionId) ||
           normalizeText(input.generationId) !== generationId
         ) {
+          if (verifyRequestToken(input, token) && normalizeText(input.sessionId) === normalizeText(sessionId)) {
+            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
+          }
           sendJsonCommandResponse(response, 409, responseError(
             "Managed Git control generation is no longer current. Reconnect the assistant.",
             "vibe64_agent_control_unavailable",

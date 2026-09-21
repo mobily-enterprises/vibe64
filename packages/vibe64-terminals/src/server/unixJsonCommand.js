@@ -3,6 +3,24 @@ import http from "node:http";
 import { rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+
+const controlListeners = new Set();
+
+function subscribeUnixCommandControlChanges(listener) {
+  controlListeners.add(listener);
+  return () => controlListeners.delete(listener);
+}
+
+function reportUnixCommandControlChange(entry, reason, receivedGeneration = "") {
+  const event = { socketPath: entry.socketPath, sessionId: entry.sessionId,
+    generationId: entry.generationId, reason };
+  logOperationalEvent(entry.commandService?.logger, reason === "rejected" ? "warn" : "info", {
+    component: "vibe64.agent_controls", event: `vibe64.agent_controls.${reason}`,
+    ...event, receivedGeneration: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(receivedGeneration) ? receivedGeneration : ""
+  }, "Managed assistant control lifecycle changed.");
+  for (const listener of controlListeners) listener(event);
+}
 
 const DEAD_UNIX_COMMAND_SOCKET_CODES = new Set([
   "ECONNREFUSED",
@@ -69,18 +87,24 @@ async function unixJsonCommandServerIsHealthy(entry = {}, {
       socketPath,
       timeoutMs
     });
-    return response.statusCode === 200 &&
+    const healthy = response.statusCode === 200 &&
       response.payload?.ok === true &&
       String(response.payload?.generationId || "").trim() === String(entry.generationId || "").trim() &&
       String(response.payload?.sessionId || "").trim() === String(sessionId || "").trim();
+    if (healthy && !entry.readyReported) {
+      entry.readyReported = true;
+      reportUnixCommandControlChange(entry, "ready");
+    }
+    return healthy;
   } catch {
     return false;
   }
 }
 
-async function closeUnixJsonCommandServer(commandServers, socketPath = "", entry = null) {
+async function closeUnixJsonCommandServer(commandServers, socketPath = "", entry = null, reason = "replaced") {
   if (entry?.server) {
     await new Promise((resolve) => entry.server.close(() => resolve())).catch(() => null);
+    reportUnixCommandControlChange(entry, reason);
   }
   if (commandServers.get(socketPath) === entry) {
     commandServers.delete(socketPath);
@@ -98,7 +122,7 @@ async function closeUnixJsonCommandServersForSession(commandServers, sessionId =
       continue;
     }
     closed += entry?.server ? 1 : 0;
-    await closeUnixJsonCommandServer(commandServers, socketPath, entry);
+    await closeUnixJsonCommandServer(commandServers, socketPath, entry, "session-closed");
     await rm(socketPath, { force: true }).catch(() => null);
   }
   return closed;
@@ -237,10 +261,12 @@ export {
   closeUnixJsonCommandServersForSession,
   listenUnixJsonCommandServer,
   readJsonCommandRequest,
+  reportUnixCommandControlChange,
   removeDeadUnixJsonCommandSocket,
   requestUnixJsonCommand,
   sendJsonCommandResponse,
   shortCommandHash,
+  subscribeUnixCommandControlChanges,
   unixCommandSocketPath,
   unixCommandSocketIsPresent,
   unixJsonCommandServerIsHealthy

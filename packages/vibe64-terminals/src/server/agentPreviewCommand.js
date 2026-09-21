@@ -39,6 +39,7 @@ import {
   closeUnixJsonCommandServersForSession,
   listenUnixJsonCommandServer,
   readJsonCommandRequest,
+  reportUnixCommandControlChange,
   removeDeadUnixJsonCommandSocket,
   requestUnixJsonCommand,
   sendJsonCommandResponse,
@@ -966,6 +967,7 @@ function createAgentPreviewCommandService({
   }
 
   return Object.freeze({
+    logger,
     authorizeBrowserIdentity,
     testApprovalStatus,
     resumeTestApproval,
@@ -1759,6 +1761,9 @@ async function ensureAgentPreviewCommandServerUnlocked({
           normalizeText(input.sessionId) !== normalizeText(sessionId) ||
           normalizeText(input.generationId) !== generationId
         ) {
+          if (verifyRequestToken(input, token) && normalizeText(input.sessionId) === normalizeText(sessionId)) {
+            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
+          }
           sendJsonCommandResponse(response, 409, responseError(
             "Managed preview control generation is no longer current. Reconnect the assistant.",
             "vibe64_agent_control_unavailable"

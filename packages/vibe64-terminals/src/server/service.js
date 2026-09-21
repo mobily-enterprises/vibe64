@@ -22,6 +22,7 @@ import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
+import { closeAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
@@ -1259,25 +1260,25 @@ function createService({
   }
 
   function closeAllSessionTerminals(sessionId, controllerOptions = {}) {
-    return closeTerminalControllersForSession(sessionId, [
+    return closeAgentSessionCommandEnvironment(sessionId, () => closeTerminalControllersForSession(sessionId, [
       { controller: outputTarget, label: "outputTarget" },
       ...(!controllerOptions.renewalCleanup && controllerOptions.session?.sourceReady !== false ? [{
         controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
         label: "assistantTurn"
       }] : []),
-      { controller: agentDatabaseCommand, label: "agentDatabase" },
-      { controller: agentEnvCommand, label: "agentEnv" },
-      { controller: agentPreviewCommand, label: "agentPreview" },
-      { controller: agentSessionCommand, label: "agentSessionCommand" },
       {
         controller: {
           closeAllForSession: (id, options) => sessionAgent.closeSession(id, options)
         },
         label: "assistant"
-      }
+      },
+      { controller: agentDatabaseCommand, label: "agentDatabase" },
+      { controller: agentEnvCommand, label: "agentEnv" },
+      { controller: agentPreviewCommand, label: "agentPreview" },
+      { controller: agentSessionCommand, label: "agentSessionCommand" }
     ], {
       controllerOptions
-    });
+    }));
   }
 
   function renewalTerminalAdmissionOwner(renewalId = "") {

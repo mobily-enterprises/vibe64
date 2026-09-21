@@ -33,9 +33,11 @@ import {
   pathInsideOrEqual
 } from "./terminalShared.js";
 import {
+  closeUnixJsonCommandServer,
   closeUnixJsonCommandServersForSession,
   listenUnixJsonCommandServer,
   readJsonCommandRequest,
+  reportUnixCommandControlChange,
   removeDeadUnixJsonCommandSocket,
   sendJsonCommandResponse,
   shortCommandHash,
@@ -348,8 +350,7 @@ async function ensureAgentSessionCommandServer({
   }
   const prepare = (async () => {
     if (existing?.server) {
-      await new Promise((resolve) => existing.server.close(() => resolve())).catch(() => null);
-      commandServers.delete(socketPath);
+      await closeUnixJsonCommandServer(commandServers, socketPath, existing);
     }
     await mkdir(path.dirname(socketPath), {
       mode: 0o700,
@@ -382,6 +383,9 @@ async function ensureAgentSessionCommandServer({
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
+          if (normalizeText(input.token) === token && normalizeText(input.sessionId) === normalizeText(sessionId)) {
+            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
+          }
           sendJsonCommandResponse(response, 403, responseError("Vibe64 session command identity is invalid.", "vibe64_agent_session_command_identity_invalid"));
           return;
         }
@@ -433,6 +437,14 @@ async function ensureAgentSessionCommandServer({
       token
     };
     commandServers.set(socketPath, stored);
+    if (!await unixJsonCommandServerIsHealthy(stored, {
+      healthPath: "/agent-session-command/health", sessionId, socketPath
+    })) {
+      await closeUnixJsonCommandServer(commandServers, socketPath, stored);
+      throw Object.assign(new Error("Managed session control did not pass its ownership health check."), {
+        code: "vibe64_agent_control_unavailable"
+      });
+    }
     return stored;
   })();
   commandServerPrepares.set(socketPath, prepare);
@@ -740,6 +752,7 @@ function createAgentSessionCommandService({
   }
 
   return Object.freeze({
+    logger,
     bindSession,
     closeAllForSession,
     run

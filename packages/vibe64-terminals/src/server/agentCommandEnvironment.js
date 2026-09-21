@@ -1,6 +1,8 @@
 import process from "node:process";
 
 import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { requestUnixJsonCommand } from "./unixJsonCommand.js";
+import { codexTerminalNamespace } from "./terminalShared.js";
 import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
 import {
   prepareAgentDatabaseCommand
@@ -18,6 +20,9 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 
+const preparations = new Map();
+const closures = new Map();
+
 function record(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -33,7 +38,66 @@ function commandBoundaryError(name = "") {
   return error;
 }
 
-async function prepareAgentSessionCommandEnvironment({
+async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
+  const names = Object.keys(env);
+  const controls = [
+    ["VIBE64_CODEX_GIT_COMMAND", "codex-git-command"],
+    ["VIBE64_AGENT_SESSION_COMMAND", "agent-session-command"],
+    ["VIBE64_AGENT_PREVIEW_COMMAND", "agent-preview-command"],
+    ["VIBE64_AGENT_ENV_COMMAND", "agent-env-command"]
+  ].filter(([prefix]) => names.some((key) => key.startsWith(`${prefix}_`)));
+  const results = await Promise.all(controls.map(async ([prefix, route]) => {
+    const socketPath = text(env[`${prefix}_SOCKET`]);
+    const sessionId = text(env[`${prefix}_SESSION_ID`]);
+    const generationId = text(env[`${prefix}_GENERATION`]);
+    const token = text(env[`${prefix}_TOKEN`]);
+    if (!socketPath || !sessionId || !generationId || !token) return false;
+    try {
+      const result = await requestUnixJsonCommand({
+        socketPath,
+        path: `/${route}/health`,
+        body: { sessionId, generationId, token }
+      });
+      return result.statusCode === 200 && result.payload?.ok === true &&
+        result.payload.sessionId === sessionId && result.payload.generationId === generationId;
+    } catch {
+      return false;
+    }
+  }));
+  return results.every(Boolean);
+}
+
+async function prepareAgentSessionCommandEnvironment(options = {}) {
+  const key = codexTerminalNamespace(text(options.sessionId));
+  if (closures.has(key)) throw commandBoundaryError("closing session");
+  const pending = (preparations.get(key) || Promise.resolve()).catch(() => null).then(() => {
+    if (closures.has(key)) throw commandBoundaryError("closing session");
+    return prepareAgentSessionCommandEnvironmentUnlocked(options);
+  });
+  preparations.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (preparations.get(key) === pending) preparations.delete(key);
+  }
+}
+
+async function closeAgentSessionCommandEnvironment(sessionId, operation) {
+  const key = codexTerminalNamespace(text(sessionId));
+  if (closures.has(key)) return closures.get(key);
+  const pending = Promise.resolve().then(async () => {
+    await preparations.get(key)?.catch(() => null);
+    return operation();
+  });
+  closures.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (closures.get(key) === pending) closures.delete(key);
+  }
+}
+
+async function prepareAgentSessionCommandEnvironmentUnlocked({
   agentDatabaseCommand = null,
   agentEnvCommand = null,
   agentPreviewCommand = null,
@@ -130,5 +194,7 @@ async function prepareAgentSessionCommandEnvironment({
 }
 
 export {
+  agentSessionCommandEnvironmentIsHealthy,
+  closeAgentSessionCommandEnvironment,
   prepareAgentSessionCommandEnvironment
 };

@@ -156,8 +156,10 @@ import {
   VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV
 } from "./agentEnvCommand.js";
 import {
+  agentSessionCommandEnvironmentIsHealthy,
   prepareAgentSessionCommandEnvironment
 } from "./agentCommandEnvironment.js";
+import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import {
   agentTerminalIdentityForWorkdir,
   agentTerminalIdentityState
@@ -2016,10 +2018,35 @@ function createCodexTerminalController({
     assertCodexAppServerControllerOpen();
     const projectContext = currentProjectRequestContext();
     let observationStop = null;
+    let unsubscribeControls = null;
     const provider = codexAppServerProviderFactory({
       ...options,
+      logger,
+      onClose() { unsubscribeControls?.(); },
+      prepareThreadEnvironment: (threadEnv) => runWithCodexAppServerProjectContext(projectContext, async () => {
+        assertCodexAppServerControllerOpen();
+        if (codexAppServerSessionClosures.has(codexTerminalNamespace(sessionId))) {
+          throw new Error("The assistant session is closing.");
+        }
+        const admissionError = codexAppServerAdmissionError(sessionId);
+        if (admissionError) throw admissionError;
+        if (await agentSessionCommandEnvironmentIsHealthy(threadEnv)) return threadEnv;
+        const runtime = await createRuntimeForSession();
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+          throw new Error("The assistant session is closing.");
+        }
+        const current = { ...threadEnv, ...await codexManagedCommandEnv({ runtime, session, sessionId }) };
+        if (!await agentSessionCommandEnvironmentIsHealthy(current)) {
+          throw new Error("The assistant's current tool connections did not pass their health checks.");
+        }
+        return current;
+      }),
       beforeResumeThread(threadId) {
         return runWithCodexAppServerProjectContext(projectContext, async () => {
+          if (codexAppServerSessionClosures.has(codexTerminalNamespace(sessionId))) {
+            throw new Error("The assistant session is closing.");
+          }
           const store = await createStoreForSession(sessionId);
           const run = await readCodexAppServerAgentRunForSession(store, sessionId);
           if (run?.providerThreadId === threadId && run.providerStatus === "observation_lost") {
@@ -2066,6 +2093,19 @@ function createCodexTerminalController({
         return observationStop.promise;
       }
     });
+    unsubscribeControls = subscribeUnixCommandControlChanges((event) => {
+      if (codexAppServerServerClosing || codexAppServerSessionClosures.has(codexTerminalNamespace(sessionId))) return;
+      for (const [threadId, binding] of provider.threadEnvironments || []) {
+        const boundEnv = binding.params.config?.shell_environment_policy?.set || {};
+        if (!Object.entries(boundEnv).some(([key, value]) => key.endsWith("_COMMAND_SOCKET") && value === event.socketPath)) continue;
+        // Coalesce listener replacement and subsequent rejected health/command
+        // requests into the provider's existing per-thread recovery operation.
+        if (provider.threadEnvironmentTasks?.has(threadId)) continue;
+        void runWithCodexAppServerProjectContext(projectContext, () => provider.ensureThreadControls(threadId))
+          .catch((error) => provider.failObservation(error))
+          .catch(() => null); // The retained observation-stop owner logs failures.
+      }
+    });
     codexAppServerProviders.set(providerKey, provider);
     codexAppServerProviderOwners.set(
       providerKey,
@@ -2087,8 +2127,11 @@ function createCodexTerminalController({
 
   async function suspendUnobservedCodexProvider(sessionId, providerKey, provider, options, error) {
     if (codexAppServerProviders.get(providerKey) !== provider || codexAppServerServerClosing) return;
-    const message = "Codex observation was lost. Work is stopped; use Resume or Send to continue.";
-    const pendingMessage = "Codex observation was lost. A stop is not yet confirmed.";
+    const controlFailure = error.cause?.code === "vibe64_agent_control_recovery_failed";
+    const message = controlFailure ? error.message
+      : "Codex observation was lost. Work is stopped; use Resume or Send to continue.";
+    const pendingMessage = controlFailure ? "Assistant tool recovery is waiting for a verified stop."
+      : "Codex observation was lost. A stop is not yet confirmed.";
     const managed = codexAppServerManagedSessions.get(providerKey);
     const targets = [{ sessionId, providerKey, provider, ...managed, projectContext: currentProjectRequestContext() }];
     const threads = new Map();
@@ -3188,11 +3231,7 @@ function createCodexTerminalController({
     }
     const runtime = providedRuntime || await createRuntimeForSession();
     const session = providedSession || await runtime.getSession(normalizedSessionId);
-    const providerOptions = providedProviderOptions === undefined
-      ? await codexAppServerRuntimeOptionsForSession(session, {
-          runtime
-        })
-      : providedProviderOptions;
+    const providerOptions = providedProviderOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
     const workdir = terminalWorktreePath(session);
     const threadId = codexThreadIdForWorkdir(session, workdir);
     if (!threadId) {
@@ -3203,8 +3242,13 @@ function createCodexTerminalController({
         status: "notSubscribed"
       };
     }
-    const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
-    const provider = codexAppServerProviders.get(providerKey);
+    // Closing must use the retained owner, never prepare fresh controls merely
+    // to look up a provider whose key contains the previous environment.
+    const provider = [...codexAppServerProviders.entries()].find(([key]) => {
+      const fields = codexAppServerProviderKeyFields(key);
+      return codexAppServerProviderOwners.get(key)?.sessionKey === codexTerminalNamespace(normalizedSessionId) &&
+        fields.workdir === normalizeText(workdir);
+    })?.[1];
     if (!provider || typeof provider.unsubscribeThread !== "function") {
       return {
         ok: true,
@@ -4056,6 +4100,15 @@ function createCodexTerminalController({
         code: "vibe64_agent_session_changed",
         retryable: true
       });
+    }
+    try {
+      const controls = await provider.ensureThreadControls?.(threadId);
+      if (controls?.recovered) providerThread = await codexAppServerReadThreadStatus(provider, threadId);
+    } catch (error) {
+      // Retain the existing stop owner and its visible recovery state. Do not
+      // spend automatic goal turns or repeatedly probe a known failed binding.
+      void Promise.resolve(provider.failObservation?.(error)).catch(() => null);
+      throw error;
     }
     const nativeStatus = codexAppServerThreadRawValue(providerThread).status;
     const subscriptionKey = codexAppServerEventSubscriptionKey(
@@ -13177,6 +13230,10 @@ function createCodexTerminalController({
         return pending;
       }
       const closing = (async () => {
+        await Promise.all([...codexAppServerProviders.entries()]
+          .filter(([key]) => codexAppServerProviderOwners.get(key)?.sessionKey === sessionKey)
+          .flatMap(([, provider]) => [...(provider.threadEnvironmentTasks?.values() || [])])
+          .map((task) => task.catch(() => null)));
         clearCodexAppServerSessionRecoveryTimers(normalizedSessionId);
         clearCodexAppServerSessionContexts(normalizedSessionId);
         let runtime = null;
@@ -13196,11 +13253,7 @@ function createCodexTerminalController({
               sessionId: normalizedSessionId
             })
           );
-          providerOptions = renewalCleanup || options.changeover
-            ? codexAppServerRuntimeOptionsFromSessionMetadata(session)
-            : await codexAppServerRuntimeOptionsForSession(session, {
-                runtime
-              });
+          providerOptions = codexAppServerRuntimeOptionsFromSessionMetadata(session);
         } catch (error) {
           vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.closeSession.prepare.error", {
             error: vibe64SessionDebugError(error),
@@ -13228,13 +13281,7 @@ function createCodexTerminalController({
         try {
           unsubscribeResult = await unsubscribeCodexAppServerThreadForSession(
             normalizedSessionId,
-            renewalCleanup || options.changeover
-              ? {
-                  providerOptions,
-                  runtime,
-                  session
-                }
-              : {}
+            { providerOptions, runtime, session }
           );
           providerOptions = unsubscribeResult?.providerOptions || providerOptions;
         } catch (error) {
