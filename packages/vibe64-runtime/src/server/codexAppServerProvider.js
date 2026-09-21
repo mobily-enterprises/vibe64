@@ -3471,7 +3471,7 @@ class CodexAppServerAgentProvider {
     }
     if (this.options.prepareThreadEnvironment && response?.thread?.id) {
       this.threadEnvironments.set(response.thread.id, {
-        client,
+        client, executionId: normalizeAgentText(this.runtime?.executionId),
         params: requestParams, managed: !Object.hasOwn(params.config || {}, "shell_environment_policy")
       });
     }
@@ -3539,7 +3539,7 @@ class CodexAppServerAgentProvider {
       const environment = await this.options.prepareThreadEnvironment(
         bound?.params?.config?.shell_environment_policy?.set || this.options.threadEnv || {}
       );
-      const requestParams = {
+      let requestParams = {
         ...bound?.params,
         ...params,
         config: {
@@ -3553,6 +3553,16 @@ class CodexAppServerAgentProvider {
         return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
       };
       const nativeStatus = await readStatus();
+      const executionId = normalizeAgentText(this.runtime?.executionId);
+      // Reinstall startup instructions only for a cold thread in a replacement
+      // process. A new socket or a changed command environment is not evidence
+      // that the provider process died.
+      if (nativeStatus === "notLoaded" && executionId && bound?.executionId !== executionId) {
+        requestParams = await this.options.prepareThreadResumeParams?.(threadId, requestParams, {
+          runtime: this.runtime,
+          processChanged: Boolean(bound?.executionId)
+        }) || requestParams;
+      }
       const bindingMatches = bound?.client === client &&
         JSON.stringify(bound.params.config.shell_environment_policy) === JSON.stringify(requestParams.config.shell_environment_policy);
       let pausedGoal = null;
@@ -3609,7 +3619,7 @@ class CodexAppServerAgentProvider {
           if (JSON.stringify(checked) !== JSON.stringify(environment)) {
             throw new Error("Managed controls changed again during thread recovery.");
           }
-          this.threadEnvironments.set(threadId, { client, params: requestParams, managed: true });
+          this.threadEnvironments.set(threadId, { client, executionId, params: requestParams, managed: true });
           log("ready");
         }
       } catch (cause) {

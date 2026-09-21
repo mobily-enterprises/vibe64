@@ -2023,6 +2023,44 @@ function createCodexTerminalController({
       ...options,
       logger,
       onClose() { unsubscribeControls?.(); },
+      prepareThreadResumeParams: (threadId, params, { runtime: providerRuntime, processChanged }) =>
+        runWithCodexAppServerProjectContext(projectContext, async () => {
+          assertCodexAppServerControllerOpen();
+          const runtime = await createRuntimeForSession();
+          const session = await runtime.getSession(sessionId, { inspectSource: false });
+          const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
+          // Older sessions recorded the time of their native attachment, but
+          // not its execution id. A process started after that attachment is
+          // necessarily a replacement; reconnecting to the same process is not.
+          const savedProcessChanged = previousExecutionId
+            ? previousExecutionId !== normalizeText(providerRuntime?.executionId)
+            : Date.parse(providerRuntime?.startedAt) > Date.parse(session.metadata?.agent_identity_captured_at);
+          const processReplaced = processChanged || providerRuntime?.reused === false || savedProcessChanged;
+          if (!processReplaced) return params;
+          if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+            throw new Error("The assistant session is closing.");
+          }
+          const workdir = normalizeText(params.cwd || options.workdir) || terminalWorktreePath(session);
+          const conversationKind = threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary";
+          clearCodexAppServerSessionContexts(sessionId);
+          let developerInstructions = normalizeText(params.developerInstructions);
+          if (!developerInstructions) {
+            const context = await codexAppServerSessionInstructions(session, { conversationKind, workdir });
+            developerInstructions = context.output;
+          }
+          const settings = codexAppServerThreadSettings({
+            agentSettings: codexAgentSettingsFromSession(session),
+            config: await codexAppServerProjectHookTrustConfig(provider, workdir),
+            cwd: workdir,
+            developerInstructions
+          });
+          return {
+            ...settings,
+            ...params,
+            developerInstructions,
+            config: { ...settings.config, ...params.config }
+          };
+        }),
       prepareThreadEnvironment: (threadEnv) => runWithCodexAppServerProjectContext(projectContext, async () => {
         assertCodexAppServerControllerOpen();
         if (codexAppServerSessionClosures.has(codexTerminalNamespace(sessionId))) {

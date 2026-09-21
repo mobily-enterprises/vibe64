@@ -743,14 +743,29 @@ than being reinterpreted as missing history.
 
 Separately, Genesis composes one stable session context containing its project,
 Engineering, and Collaboration guidance plus Vibe64's main-conversation rules.
-Codex installs it as thread instructions and OpenCode keeps it in the system
-context through Genesis's ordinary project plugin. It creates no conversation
+Codex installs it as thread instructions, Claude appends it to the system prompt
+when launching its native process, and OpenCode keeps it in the system context
+through Genesis's ordinary project plugin. It creates no conversation
 message or additional agent turn. Collaboration changes become current only
 when that stable context is next established or refreshed; Codex cannot replace
 developer instructions inside an already-live thread.
 The provider may serialize its system or developer instructions again for a
 later stateless model request, but Vibe64 does not rerender them into the
 person's message or copy them into the turn-context lane.
+
+Codex restores missing startup instructions at the shared cold-resume boundary,
+before native resume can schedule a goal turn. A cold thread alone is insufficient:
+restoration also requires a newly started runtime or a changed managed execution
+identity. Session identity metadata records that execution id; older metadata can
+prove replacement when the current process started after the saved attachment.
+A replacement socket or stale command generation does not trigger this instruction
+resolver. Supplied instructions are retained, including renewal and temporary-chat
+context. The resolver fills omitted instructions from the existing session composer
+and includes the current thread settings and hook trust configuration.
+Claude uses the same complete session composer for JSON and native-terminal
+launches after the prior owned execution has been verified stopped. Reusing its
+live process returns before composing instructions. Neither provider replays the
+person's opening request or creates an extra conversation turn for this restoration.
 
 The Vibe64 Genesis hook executable grants Git trust only to the registered
 OpenCode provider session's exact working directory when invoked from that

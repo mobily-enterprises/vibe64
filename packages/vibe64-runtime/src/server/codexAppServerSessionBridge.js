@@ -1268,6 +1268,7 @@ function codexAppServerIdentityMetadata({
     agent_identity_workdir: normalizedWorkdir,
     agent_resume_command: hostCli,
     agent_transport_endpoint: runtimeMetadata.endpoint,
+    agent_transport_execution_id: normalizeAgentText(appServerRuntime.executionId),
     agent_transport_id: CODEX_APP_SERVER_PROVIDER_ID,
     agent_transport_kind: runtimeMetadata.transport,
     agent_transport_runtime_dir: runtimeMetadata.runtimeDir,

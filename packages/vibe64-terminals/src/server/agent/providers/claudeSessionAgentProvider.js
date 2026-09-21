@@ -7,7 +7,7 @@ import {
   VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot, vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
-import { vibe64Driver } from "@local/vibe64-genesis/server/promptContext";
+import { composeVibe64SessionContext } from "@local/vibe64-genesis/server";
 import { appCredentialContext, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
 import {
   closeTerminalSession, closeTerminalSessionsForNamespace, listTerminalSessions, readTerminalSession,
@@ -82,6 +82,7 @@ function createClaudeSessionAgentProvider({
   systemRoot = resolveVibe64SystemRoot({ env }),
   accountStatus = () => readClaudeCodeAuthStatus({ env, credentialHome, commandRunner }),
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
+  composeSessionContext = composeVibe64SessionContext,
   recordGitActor = recordSessionGitCommandActor,
   codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand
 } = {}) {
@@ -355,9 +356,9 @@ function createClaudeSessionAgentProvider({
     return readClaudeHistory({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
   }
 
-  function sessionDriver(conversationKind) {
-    return vibe64Driver({
-      scope: "session",
+  async function sessionInstructions(workdir, conversationKind) {
+    const { output } = await composeSessionContext({
+      projectRoot: workdir,
       conversationKind,
       session: {
         managedGit: Boolean(codexGitCommand),
@@ -366,6 +367,7 @@ function createClaudeSessionAgentProvider({
         managedPreview: Boolean(agentPreviewCommand)
       }
     });
+    return output;
   }
 
   async function prepareSessionEnvironment(context) {
@@ -468,7 +470,7 @@ function createClaudeSessionAgentProvider({
         toolFree: Boolean(profile || ctx.assistantScope), outputSchema: input.outputSchema,
         systemPrompt: ctx.assistantScope?.stableContext,
         appendSystemPrompt: !profile && !ctx.assistantScope
-          ? sessionDriver(entry.main ? "main" : "temporary") : undefined,
+          ? await sessionInstructions(ctx.workdir, entry.main ? "main" : "temporary") : undefined,
         execution: { ownerId: entry.id, sessionId: ctx.sessionId },
         onStarted: async (executionId) => {
           entry.executionId = executionId;
@@ -967,7 +969,7 @@ function createClaudeSessionAgentProvider({
       return commandRunner({ actor: "app", command,
         args: claudeCodeArguments({ terminal: true, sessionId: entry.id, resume: entry.sent,
           model: ctx.selection.modelId, effort: ctx.selection.variantId,
-          appendSystemPrompt: sessionDriver("main") }),
+          appendSystemPrompt: await sessionInstructions(ctx.workdir, "main") }),
         baseEnv: { ...env, ...prepared.env, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
         allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
         shimDirs: prepared.shimDirs, runtimes: ["operator-clis", "node26"], session: ctx.session,

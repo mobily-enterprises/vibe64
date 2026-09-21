@@ -199,6 +199,10 @@ resume finished work. Startup and disconnect cleanup cannot block each other.
 Connection recovery retains the assistant's exact process ownership even when
 another connection has removed its runtime files. Retry verifies that process
 has stopped before reconnecting and leaves any replacement assistant intact.
+After a confirmed Codex or Claude process replacement, the assistant receives
+its complete session instructions before continuing its saved conversation.
+Reconnecting to the same running process does not refresh those instructions
+or add an opening prompt to the conversation.
 Sessions sharing a Codex assistant process wait for the same startup operation.
 A busy startup lock keeps them reconnecting and retries automatically without
 stopping other sessions' work or goals.
