@@ -2497,19 +2497,32 @@ function createVibe64SessionStore({
         "vibe64_invalid_conversation_message_id"
       );
     }
-    const suffix = `.${normalizedMessageId}.md`;
-    const turnIds = await conversationTurnIds(sessionPaths, true);
-    for (const turnId of [...turnIds].reverse()) {
-      const entries = await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId));
-      if (entries.some((entry) => (
-        entry.isFile() &&
-        entry.name.endsWith(suffix) &&
-        CONVERSATION_MESSAGE_FILE_PATTERN.test(entry.name)
-      ))) {
-        return true;
-      }
+    return (await readConversationMessageIds(sessionPaths)).has(normalizedMessageId);
+  }
+
+  async function readConversationMessageIds(sessionPaths) {
+    const saved = await readTextIfExists(path.join(sessionPaths.conversationLogRoot, "message-ids.json"));
+    if (saved) {
+      try {
+        const ids = JSON.parse(saved);
+        if (Array.isArray(ids) && ids.every((id) => typeof id === "string" && CONVERSATION_MESSAGE_ID_PATTERN.test(id))) {
+          return new Set(ids);
+        }
+      } catch { /* The transcript can rebuild a damaged derived index. */ }
     }
-    return false;
+    const ids = new Set();
+    const turnIds = await conversationTurnIds(sessionPaths, true);
+    // Only legacy sessions or interrupted writes need a scan. Bound filesystem
+    // concurrency without paying one event-loop wait per historical turn.
+    for (let offset = 0; offset < turnIds.length; offset += 16) {
+      await Promise.all(turnIds.slice(offset, offset + 16).map(async (turnId) => {
+        for (const entry of await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId))) {
+          const match = entry.isFile() && entry.name.match(CONVERSATION_MESSAGE_FILE_PATTERN);
+          if (match?.[3]) ids.add(match[3]);
+        }
+      }));
+    }
+    return ids;
   }
 
   function conversationTransaction(sessionPaths) {
@@ -2519,6 +2532,12 @@ function createVibe64SessionStore({
       readTurn: (turnId) => readConversationTurn(sessionPaths, turnId),
       hasMessage: (messageId) => conversationMessageIdExistsFromPaths(sessionPaths, messageId),
       async appendMessage(turnId, { role, text, messageId, at, attachments = [], turnMetadata = null }) {
+        const ids = await readConversationMessageIds(sessionPaths);
+        const indexPath = path.join(sessionPaths.conversationLogRoot, "message-ids.json");
+        // Invalidate before writing the transcript. A crash leaves no complete
+        // index, so the next lookup reconstructs it instead of missing a receipt.
+        // This runs under the existing session mutation lock.
+        await rm(indexPath, { force: true });
         const turnRoot = conversationTurnRoot(sessionPaths, turnId);
         const displayAttachments = normalizeVibe64ConversationAttachments(attachments);
         if (displayAttachments.length) {
@@ -2548,8 +2567,11 @@ function createVibe64SessionStore({
           );
         }
         await writeTextFile(path.join(turnRoot, conversationMessageFileName(role, toDate(at), messageId)), `${text}\n`);
+        if (messageId) ids.add(messageId);
+        await writeJsonFile(indexPath, [...ids]);
       },
       async replaceAssistant(turnId, { text, at }) {
+        await rm(path.join(sessionPaths.conversationLogRoot, "message-ids.json"), { force: true });
         const turnRoot = conversationTurnRoot(sessionPaths, turnId);
         const assistantFiles = sortedFileNames(
           await readDirectoryEntries(turnRoot),
@@ -2616,9 +2638,13 @@ function createVibe64SessionStore({
   function withConversationTransaction(scope, callback, write) {
     const sessionId = typeof scope === "string" ? scope : scope.sessionId;
     const operation = write ? mutateSession : withReadableSessionPaths;
-    return operation(sessionId, (paths) => callback(conversationTransaction(
-      typeof scope === "string" ? paths : conversationPaths(paths, scope.conversationId)
-    )));
+    return operation(sessionId, (paths) => {
+      const scopedPaths = typeof scope === "string" ? paths : conversationPaths(paths, scope.conversationId);
+      const run = () => callback(conversationTransaction(scopedPaths));
+      // Nested session mutations can have concurrent participants. Serialize
+      // transcript writes within that lease as well as between root mutations.
+      return write ? enqueueSessionMutation(scopedPaths.conversationLogRoot, run) : run();
+    });
   }
 
   const {

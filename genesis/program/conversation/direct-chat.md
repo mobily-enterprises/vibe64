@@ -55,6 +55,21 @@ so it does not trigger workspace preparation. The action does not restore Git,
 run project setup, execute tools, or touch the project's database.
 Integration setup requests in discarded turns cannot be resumed from an old tab.
 
+The filesystem transcript maintains `conversation-log/message-ids.json` for
+duplicate delivery checks. Ordinary checks read this index instead of walking
+every historical turn. Transcript writes invalidate it before changing message
+files and publish it afterward under the session mutation lock; missing or
+damaged indexes rebuild from message filenames, including undone turns. Nested
+transcript writes share the existing mutation queue so concurrent participants
+cannot overwrite each other's receipts. AI changeover still compares transcript
+contents to preserve corrections and missed history.
+
+Session detail has its own query key, so a realtime detail refresh does not also
+invalidate access, suggestions and renewal queries. Session lists ignore events
+identified as belonging to another project. Deleting a temporary Claude chat
+removes its metadata record instead of accumulating empty files that every
+session read would reopen.
+
 ## Sources
 
 - `src/App.vue`

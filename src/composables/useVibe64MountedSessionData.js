@@ -84,7 +84,8 @@ function useVibe64MountedSessionData({
       ROUTE_VISIBILITY_PUBLIC,
       projectSlug.value
     ),
-    activeSessionId.value
+    activeSessionId.value,
+    "detail"
   ]);
   const detailResource = useEndpointResource({
     enabled: computed(() => Boolean(activeSessionId.value && activeSessionsApiPath.value)),
@@ -104,7 +105,7 @@ function useVibe64MountedSessionData({
     readMethod: "GET",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => mountedSessionRealtimeShouldRefresh(
+      matches: ({ payload = {} } = {}) => (!payload.projectSlug || payload.projectSlug === projectSlug.value) && mountedSessionRealtimeShouldRefresh(
         { payload },
         activeSessionId.value
       )

@@ -1,4 +1,5 @@
 import { effectScope, nextTick, ref } from "vue";
+import { QueryClient } from "@tanstack/vue-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const endpointMocks = vi.hoisted(() => ({
@@ -98,7 +99,23 @@ describe("useVibe64MountedSessionData", () => {
     }));
 
     expect(endpointMocks.options.path.value).toBe("/api/vibe64/sessions/session-a");
+    const queryClient = new QueryClient();
+    const detailKey = endpointMocks.options.queryKey.value;
+    const accessKey = [...detailKey.slice(0, -1), "assistant-access"];
+    queryClient.setQueryData(detailKey, { sessionId: "session-a" });
+    queryClient.setQueryData(accessKey, { allowed: true });
+    await queryClient.invalidateQueries({ queryKey: detailKey });
+    expect(queryClient.getQueryState(detailKey).isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(accessKey).isInvalidated).toBe(false);
+    queryClient.clear();
     expect(endpointMocks.options.queryOptions.refetchOnMount).toBe("always");
+    expect(endpointMocks.options.realtime.matches({
+      payload: {
+        projectSlug: "project-b",
+        reason: "session-action-run",
+        sessionId: "session-a"
+      }
+    })).toBe(false);
     expect(endpointMocks.options.realtime.matches({
       payload: {
         reason: "session-action-run",

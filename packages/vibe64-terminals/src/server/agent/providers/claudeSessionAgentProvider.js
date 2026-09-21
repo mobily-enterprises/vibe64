@@ -120,10 +120,16 @@ function createClaudeSessionAgentProvider({
     const write = renewal ? store.writeMetadataValueForRenewal.bind(store) : store.writeMetadataValue.bind(store);
     const mutate = renewal ? store.mutateSessionForRenewal.bind(store) : store.mutateSession.bind(store);
     await mutate(context.sessionId, async () => {
-      for (const [name, value] of Object.entries(values)) await write(context.sessionId, name, String(value));
+      for (const [name, value] of Object.entries(values)) {
+        if (value === null) await store.deleteMetadataValue(context.sessionId, name);
+        else await write(context.sessionId, name, String(value));
+      }
     });
     context.session.metadata ||= {};
     Object.assign(context.session.metadata, values);
+    for (const [name, value] of Object.entries(values)) {
+      if (value === null) delete context.session.metadata[name];
+    }
   }
 
   function snapshot(entry) {
@@ -866,7 +872,7 @@ function createClaudeSessionAgentProvider({
       await stopEntry(entry);
       const file = await claudeHistoryPath({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
       if (file) await rm(file.path, { force: true });
-      await metadata(entry.context, { [`claude_conversation_${entry.id}`]: "" });
+      await metadata(entry.context, { [`claude_conversation_${entry.id}`]: null });
       entries.delete(entry.key);
       return { ok: true, deleted: true, conversationId: entry.id };
     },

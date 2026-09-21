@@ -1,4 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -31,7 +32,7 @@ function assertSafeOsUsername(username = "") {
 
 function parsePasswdLine(line = "") {
   const parts = String(line || "").trim().split(":");
-  if (parts.length < 7) {
+  if (parts.length < 7 || !/^\d+$/u.test(parts[2]) || !/^\d+$/u.test(parts[3])) {
     return null;
   }
   const uid = Number(parts[2]);
@@ -67,9 +68,24 @@ function currentOsUser({
 }
 
 async function resolveOsUser(username = "", {
-  execFileFn = execFile
+  execFileFn = execFile,
+  platform = process.platform,
+  readFileFn = readFile
 } = {}) {
   const safeUsername = assertSafeOsUsername(username);
+  if (platform === "linux" && !/^\d+$/u.test(safeUsername)) {
+    // A successful first-source files lookup is authoritative under NSS's
+    // default return rule. Read it asynchronously instead of forking the server.
+    // Other source orders/actions and missing users still go through NSS.
+    const config = await readFileFn("/etc/nsswitch.conf", "utf8").catch(() => "");
+    const rules = [...config.matchAll(/^[\t ]*passwd[\t ]*:[\t ]*([^#\r\n]*)/gmu)];
+    const sources = rules.length === 1 ? rules[0][1].trim().split(/\s+/u) : [];
+    if (sources[0] === "files" && (sources.length === 1 || /^[a-z_][a-z0-9_-]*$/iu.test(sources[1]))) {
+      const passwd = await readFileFn("/etc/passwd", "utf8").catch(() => "");
+      const localUser = passwd.split(/\r?\n/u).map(parsePasswdLine).find((user) => user?.username === safeUsername);
+      if (localUser) return localUser;
+    }
+  }
   const result = await execFileFn("getent", ["passwd", safeUsername], {
     encoding: "utf8"
   });

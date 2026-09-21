@@ -162,7 +162,10 @@ function sessionChangedReason(payload = {}) {
   return String(payload?.reason || "").trim();
 }
 
-function sessionListRealtimeShouldRefresh({ payload = {} } = {}) {
+function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "") {
+  if (payload.projectSlug && payload.projectSlug !== projectSlug) {
+    return false;
+  }
   if (vibe64SessionListRefreshRequested(payload)) {
     return true;
   }
@@ -216,7 +219,7 @@ function useVibe64SessionData({
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: sessionListRealtimeShouldRefresh
+      matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
   const sessionList = proxyRefs({

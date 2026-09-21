@@ -280,6 +280,12 @@ describe("direct assistant realtime state", () => {
 
   it("keeps list refreshes bounded to durable session changes", () => {
     expect(sessionListRealtimeShouldRefresh({
+      payload: { projectSlug: "other-project", reason: "session-created", clientRefresh: { includeList: true } }
+    }, "current-project")).toBe(false);
+    expect(sessionListRealtimeShouldRefresh({
+      payload: { projectSlug: "current-project", reason: "session-created" }
+    }, "current-project")).toBe(true);
+    expect(sessionListRealtimeShouldRefresh({
       payload: { reason: "codex-app-server-commentary", sessionId: "session-1" }
     })).toBe(false);
     expect(sessionListRealtimeShouldRefresh({

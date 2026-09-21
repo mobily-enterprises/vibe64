@@ -143,6 +143,7 @@ async function fixture(t) {
   const store = {
     async mutateSession(_id, operation) { return operation(); },
     async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
+    async deleteMetadataValue(_id, key) { delete session.metadata[key]; },
     async writeAgentRunEvent(_id, _run, { patch }) { return patch; },
     conversationMessageIdExists: async (_id, id) => written.some((message) => message.messageId === id),
     writeConversationUserMessage: async (_id, message) => { written.push({ role: "user", ...message }); return message; },
@@ -157,6 +158,7 @@ async function fixture(t) {
   const processes = [];
   const behavior = { account: { loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" } };
   const providerOptions = { systemRoot: path.join(root, "system"), env: { CLAUDE_CONFIG_DIR: path.join(root, "config") },
+    composeSessionContext: async () => ({ output: "Prepared session instructions" }),
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
     createProcess: async (options) => {
@@ -330,6 +332,7 @@ test("Claude recovers exact admission and temporary history without resending af
   assert.equal(f.processes.length, 1);
   assert.equal((await restored.closeSession(f.context)).processExitProof.exited, true);
   await restored.deleteConversation(f.context, { conversationId: temporary.conversationId });
+  assert.equal(Object.hasOwn(f.context.session.metadata, `claude_conversation_${temporary.conversationId}`), false);
   await assert.rejects(restored.readConversation(f.context, { conversationId: temporary.conversationId }), /unavailable/u);
 });
 
