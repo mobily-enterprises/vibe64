@@ -3413,6 +3413,43 @@ class CodexAppServerAgentProvider {
     };
   }
 
+  async rewindConversation(threadId, input = {}) {
+    const client = await this.activeClient();
+    const { thread } = await client.request("thread/read", { threadId, includeTurns: false });
+    if (thread.historyMode !== "paginated") throw new Error("This older Codex conversation does not support Undo.");
+    const readTurns = () => this.listThreadTurns(threadId, { limit: 2, sortDirection: "desc", itemsView: "full" });
+    const turns = (await readTurns()).data.toReversed();
+    const last = turns.at(-1);
+    const previous = turns.at(-2);
+    const busy = thread.status?.type === "active" || thread.status === "active" || last?.status === "inProgress";
+    const { goal } = await this.readGoal(threadId);
+    if (busy || goal?.status === "active") throw new Error("Stop Codex and pause its goal before undoing a turn.");
+    const checkpoint = input.checkpoint || { threadId, turnId: last?.id, previousTurnId: previous?.id };
+    const matches = (turn, messageId) => {
+      const users = (turn?.items || []).filter((item) => item.type === "userMessage");
+      return users.length === 1 && (users[0].clientId || users[0].client_id || users[0].clientUserMessageId) === messageId;
+    };
+    if (!input.checkpoint) {
+      if (!matches(last, input.messageId) || !matches(previous, input.previousMessageId)) {
+        throw new Error("Codex cannot undo this exchange as one turn. Steered messages share a native turn.");
+      }
+      return { ok: true, checkpoint };
+    }
+    if (checkpoint.threadId !== threadId) throw new Error("The Codex conversation changed. Refresh before undoing.");
+    if (last?.id === checkpoint.previousTurnId && !turns.some((turn) => turn.id === checkpoint.turnId)) return { ok: true };
+    if (last?.id !== checkpoint.turnId || previous?.id !== checkpoint.previousTurnId) {
+      throw new Error("Codex's last turn changed. Refresh before undoing.");
+    }
+    // Revert has an exact, exclusive boundary and preserves the logical thread
+    // identity. It does not restore workspace files.
+    const result = await this.runRequest(() => client.request("thread/revert", { threadId, beforeTurnId: checkpoint.turnId }),
+      "codex-app-server-conversation-rewind");
+    if (result.thread?.id !== threadId || (await readTurns()).data[0]?.id !== checkpoint.previousTurnId) {
+      throw new Error("Codex did not confirm the rewind. Retry Undo last turn to check it.");
+    }
+    return { ok: true };
+  }
+
   async readGoal(threadId = "") {
     const client = await this.activeClient();
     return this.runRequest(

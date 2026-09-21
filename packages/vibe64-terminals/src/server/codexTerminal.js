@@ -13834,6 +13834,31 @@ function createCodexTerminalController({
       });
     },
 
+    async rewindConversation(sessionId, input = {}, options = {}) {
+      return vibe64Result(async () => {
+        const context = await codexAppServerConversationContext(sessionId, {}, options);
+        if (context.ok === false) return context;
+        if (codexAppServerTurnState(context.session).active || activeCodexTerminalSnapshots(context.session).length) {
+          return { ok: false, error: "Stop Codex and close its terminal before undoing a turn." };
+        }
+        const threadId = codexThreadIdForWorkdir(context.session, context.workdir);
+        if (!threadId) return { ok: false, error: "This session has no Codex conversation to undo." };
+        const status = codexAppServerThreadRawValue(await context.provider.readThreadStatus(threadId)).status;
+        if ((status?.type || status) === "notLoaded") {
+          if ((await context.provider.readGoal(threadId)).goal?.status === "active") {
+            return { ok: false, error: "Pause the Codex goal before undoing a turn." };
+          }
+          await context.provider.resumeThread(threadId, await codexAppServerConversationThreadSettings(context));
+        }
+        const result = await context.provider.rewindConversation(threadId, input);
+        if (input.checkpoint && result.ok !== false) await context.runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+          event: { kind: "conversation-rewound", state: VIBE64_AGENT_RUN_STATE.COMPLETED },
+          patch: { state: VIBE64_AGENT_RUN_STATE.COMPLETED, error: "", turnId: input.checkpoint.previousTurnId }
+        });
+        return result;
+      });
+    },
+
     async interruptTurn(sessionId, input = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {

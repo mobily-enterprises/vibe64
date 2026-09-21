@@ -664,3 +664,52 @@ test("Claude economy choices apply to new tasks without changing an already reso
   await store.write("unavailable");
   await assert.rejects(f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" }), /helper model is unavailable/u);
 });
+
+
+test("Claude conversation rewind selects the retained native branch across retries and new replies", async (t) => {
+  const f = await fixture(t);
+  const ready = await f.provider.ensureSession(f.context);
+  for (const messageId of ["first", "second"]) {
+    await f.provider.sendMessage(f.context, { message: messageId, messageId });
+    await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done." });
+  }
+  const events = [];
+  f.context.runtime.store.writeAgentRunEvent = async (_id, _run, { event, patch }) => {
+    events.push(event.kind);
+    return patch;
+  };
+  const first = nativeMessageId("first");
+  const second = nativeMessageId("second");
+  const frames = [
+    { type: "user", uuid: first, parentUuid: null, message: { content: "First" } },
+    { type: "assistant", uuid: "answer-1", parentUuid: first, message: { content: [{ type: "text", text: "Retained" }] } },
+    { type: "user", uuid: second, parentUuid: "answer-1", message: { content: "Second" } },
+    { type: "assistant", uuid: "answer-2", parentUuid: second, message: { content: [{ type: "text", text: "Discarded" }] } }
+  ];
+  await writeHistory(f, ready.thread.id, frames);
+  let controls = 0;
+  f.processes[0].client.request = async (request) => {
+    assert.deepEqual(request, { subtype: "rewind_conversation", target_message_uuid: second });
+    await f.processes[0].options.onEvent({ type: "system", subtype: "status" });
+    controls += 1;
+    frames.push({ type: "last-prompt", leafUuid: "answer-1", explicit: true, rewound: true });
+    await writeHistory(f, ready.thread.id, frames);
+    throw new Error("reply lost after native rewind");
+  };
+  const plan = await f.provider.rewindConversation(f.context, { messageId: "second", previousMessageId: "first" });
+  await assert.rejects(f.provider.rewindConversation(f.context, plan), /reply lost/);
+  await f.provider.rewindConversation(f.context, plan);
+  assert.equal(controls, 1);
+  assert.deepEqual(events, ["conversation-rewound"], "Undo must not publish a turn completion that triggers workspace setup");
+  let history = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path, conversationId: ready.thread.id });
+  assert.deepEqual(history.userIds, [first]);
+  assert.deepEqual(history.messages.map((message) => message.text), ["Retained"]);
+  frames.push(
+    { type: "user", uuid: nativeMessageId("replacement"), parentUuid: "answer-1", message: { content: "Replacement" } },
+    { type: "assistant", uuid: "answer-3", parentUuid: nativeMessageId("replacement"), message: { content: [{ type: "text", text: "New branch" }] } }
+  );
+  await writeHistory(f, ready.thread.id, frames);
+  history = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path, conversationId: ready.thread.id });
+  assert.deepEqual(history.messages.map((message) => message.text), ["Retained", "New branch"]);
+  await assert.rejects(f.provider.rewindConversation(f.context, plan), /last turn no longer matches/);
+});

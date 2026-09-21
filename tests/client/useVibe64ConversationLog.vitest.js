@@ -878,6 +878,12 @@ describe("useVibe64ConversationLog", () => {
   });
 
   it("refreshes only for selected-session events that can change durable chat text", () => {
+    expect(conversationLogRealtimeShouldRefresh({ payload: {
+      reason: "conversation-rewound", sessionId: "session-1"
+    } }, "session-1")).toBe(true);
+    expect(conversationLogRealtimeShouldRefresh({ payload: {
+      reason: "session-assistant-selection-updated", sessionId: "session-1"
+    } }, "session-1")).toBe(true);
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
         sessionId: "session-1"

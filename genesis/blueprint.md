@@ -413,7 +413,12 @@ creates its own conversation IDs; Vibe64 saves them across restarts and applicat
 switches. The next
 ordinary message carries recent history for a new application, or missed and
 corrected messages for a returning one, before the person's request. Choosing
-an AI alone sends nothing. An unavailable old connection does not prevent
+an AI alone sends nothing. When the assistant is idle, Undo last turn removes
+one prompt and its replies from the conversation, retaining earlier context.
+Undo stops at an AI switch: the removed turn and its predecessor must both use
+the currently selected assistant application. Files, databases, and external
+actions remain unchanged. The removed prompt returns to an empty composer for
+editing. An interrupted Undo can be retried without removing another turn. An unavailable old connection does not prevent
 choosing a connected replacement. Leaving a model's
 thinking choice at its provider default leaves that choice to the provider
 instead of silently selecting another listed option. Vibe64 also respects each

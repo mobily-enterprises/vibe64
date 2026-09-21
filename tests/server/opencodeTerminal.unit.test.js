@@ -2432,3 +2432,41 @@ for (const [label, failure, expected] of [
     if (label === "nonzero exit") assert.match(notice, /Project resolver configuration is invalid\./u);
   });
 }
+
+
+test("OpenCode conversation-only Undo retries exact message deletion and never calls file revert", async (t) => {
+  const rows = [];
+  const deletions = [];
+  let failAfterDelete = true;
+  const client = {
+    health: async () => ({ healthy: true }),
+    sessionStatus: async () => ({ type: "idle" }),
+    messages: async () => ({ data: rows }),
+    forDirectory() { return this; },
+    async deleteMessage(_id, id) {
+      deletions.push(id);
+      rows.splice(rows.findIndex((row) => row.id === id), 1);
+      if (failAfterDelete) { failAfterDelete = false; throw new Error("delete response lost"); }
+      return true;
+    }
+  };
+  const h = await controllerHarness({ serverClient: client });
+  t.after(async () => {
+    await h.controller.closeAllForProject();
+    await rm(h.root, { force: true, recursive: true });
+  });
+  h.session.metadata.opencode_conversation_id = "ses_rewind";
+  // These IDs are the provider's deterministic ordinary prompt IDs.
+  const { createHash } = await import("node:crypto");
+  const id = (value) => `msg_vibe64_${createHash("sha256").update(value).digest("hex").slice(0, 40)}`;
+  rows.push({ id: id("first"), type: "user" }, { id: "answer-1", type: "assistant" },
+    { id: id("second"), type: "user" }, { id: "answer-2", type: "assistant" }, { id: "tool-2", type: "assistant" });
+  const plan = await h.controller.rewindConversation("session-1", { messageId: "second", previousMessageId: "first" });
+  await assert.rejects(h.controller.rewindConversation("session-1", plan), /delete response lost/);
+  await h.controller.rewindConversation("session-1", plan);
+  await h.controller.rewindConversation("session-1", plan);
+  assert.deepEqual(deletions, ["tool-2", "answer-2", id("second")]);
+  assert.deepEqual(rows.map((row) => row.id), [id("first"), "answer-1"]);
+  rows.push({ id: "unexpected", type: "user" });
+  await assert.rejects(h.controller.rewindConversation("session-1", plan), /conversation changed/);
+});

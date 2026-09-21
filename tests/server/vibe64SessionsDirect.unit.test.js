@@ -36,6 +36,7 @@ import {
   ACTION_UPDATE_ASSISTANT_SELECTION,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
+  ACTION_REWIND_CONVERSATION,
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_SUGGEST_AGENT_MESSAGE,
   ACTION_INTERRUPT_AGENT_TURN,
@@ -259,7 +260,8 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_READ_SESSION_CONVERSATION_LOG,
     ACTION_RETRY_WORKSPACE_SETUP,
     ACTION_ARCHIVE_SESSION,
-    ACTION_SEND_AGENT_MESSAGE,
+    ACTION_REWIND_CONVERSATION,
+  ACTION_SEND_AGENT_MESSAGE,
     ACTION_INSPECT_ASSISTANT_ACCESS,
     ACTION_LIST_MESSAGE_SUGGESTIONS,
     ACTION_SUGGEST_AGENT_MESSAGE,
@@ -463,7 +465,7 @@ test("session publications use the trusted project context and actions do not re
 
 test("conversation history includes the current live snapshot for reconnecting clients", async () => {
   const conversationStream = { revision: 3, messages: [{ messageId: "answer", role: "assistant", text: "Partial", status: "inProgress" }] };
-  const service = createService({ terminals: {}, project: { async createRuntime() {
+  const service = createService({ terminals: { readConversationRewindState: async () => null }, project: { async createRuntime() {
     return {
       async readConversationLogPage(sessionId) {
         assert.equal(sessionId, "session-1");
@@ -3198,6 +3200,39 @@ test("workspace preparation starts required or newly configured recipes and retr
   assert.equal(startCount, 4);
 });
 
+
+test("conversation rewind forwards the authenticated actor without preparing the workspace", async () => {
+  const session = { sessionId: "session-1" };
+  const calls = [];
+  const events = [];
+  const runtime = { async getSession(id, options) {
+    assert.equal(id, session.sessionId);
+    assert.deepEqual(options, { inspectSource: false });
+    return session;
+  } };
+  const sessions = createService({
+    project: { async createRuntime(options) {
+      assert.deepEqual(options, { inspectSource: false });
+      return runtime;
+    } },
+    terminals: {
+      async rewindConversation(...args) { calls.push(args); return { ok: true, text: "Last prompt" }; },
+      async prepareWorkspaceSetup() { assert.fail("Undo must not prepare the workspace"); }
+    },
+    publishSessionChanged: async (...args) => events.push(args)
+  });
+  const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_REWIND_CONVERSATION);
+  const actor = { username: "member" };
+  const result = await action.execute({
+    sessionId: session.sessionId, turnId: "000002", originId: "browser-1",
+    vibe64User: { username: "owner" }, checkpoint: { threadId: "untrusted" }
+  }, { requestMeta: { request: { vibe64User: actor } } });
+  assert.deepEqual(result, { ok: true, text: "Last prompt" });
+  assert.deepEqual(calls, [[session.sessionId, {
+    turnId: "000002", originId: "browser-1", vibe64User: actor
+  }, { runtime, vibe64User: actor }]]);
+  assert.deepEqual(events, [[session.sessionId, { originId: "browser-1", reason: "conversation-rewound", session }]]);
+});
 
 test("integration continuation action forwards only request identity and authenticated actor", async () => {
   const runtime = {};

@@ -1,4 +1,5 @@
 import {
+  conversationRewindActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
   agentTurnInterruptActionInputValidator,
@@ -59,6 +60,7 @@ const ACTION_READ_SESSION_CONVERSATION_LOG = "vibe64.sessions.conversation-log.r
 const ACTION_RETRY_WORKSPACE_SETUP = "vibe64.sessions.workspace-setup.retry";
 const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
+const ACTION_REWIND_CONVERSATION = "vibe64.sessions.conversation.rewind";
 const ACTION_INSPECT_ASSISTANT_ACCESS = "vibe64.sessions.assistant-access.inspect";
 const ACTION_LIST_MESSAGE_SUGGESTIONS = "vibe64.sessions.message-suggestions.list";
 const ACTION_SUGGEST_AGENT_MESSAGE = "vibe64.sessions.message-suggestions.create";
@@ -356,6 +358,15 @@ function createSessionActions({ sessions } = {}) {
       })
     }),
     action({
+      id: ACTION_REWIND_CONVERSATION,
+      kind: "command",
+      idempotency: "domain_native",
+      input: conversationRewindActionInputValidator,
+      execute: (input, context) => sessions.rewindConversation(input.sessionId, {
+        turnId: input.turnId, originId: input.originId, vibe64User: authenticatedVibe64User(context)
+      })
+    }),
+    action({
       id: ACTION_SEND_AGENT_MESSAGE,
       kind: "command",
       input: agentMessageActionInputValidator,
@@ -426,6 +437,7 @@ function createSessionActions({ sessions } = {}) {
 }
 
 export {
+  ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_APPROVE_MESSAGE_SUGGESTION,

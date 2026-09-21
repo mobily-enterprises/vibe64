@@ -27,6 +27,34 @@ the renderer previews only trailing progress while working. No provider-turn
 association or history rewrite is required for grouping, including goal
 continuation and loading older history.
 
+Undo last turn is a main-conversation command, available while idle. Its saved
+target identifies the latest user prompt and every following reply/activity row.
+The preceding user turn must use the same current assistant application; the
+first turn after an application switch cannot be removed. Changing a model
+within that application does not create a boundary. The confirmation states
+that project files and databases remain unchanged, and the removed prompt
+prefills only an empty composer.
+
+The existing main assistant write lock serializes Undo with Send. A saved
+`assistant_changeover.rewind` boundary precedes native mutation. Claude uses
+`rewind_conversation`; history reads follow its durable `last-prompt` resume
+anchor. Codex App Server uses `thread/revert` with the exact excluded native turn;
+a turn containing steering cannot be represented as one visible prompt and is
+rejected before mutation. OpenCode deletes the exact tail message IDs in reverse
+order through its conversation-only endpoint. Each provider checks the saved
+boundary on retry, so a lost reply cannot remove another exchange. Older
+non-paginated Codex threads reject Undo before mutation.
+
+The filesystem adapter retains undone message files and their IDs, excluding
+the listed rows in `conversation-log/rewound.json` from active history. This
+preserves deduplication and prevents ID reuse or later AI catchup from restoring
+the removed exchange. Pending Undo is exposed with the history response after
+reload and blocks Send, AI changeover and goal restart until native and stored
+history agree. Rewind publishes `conversation-rewound`, not a turn-idle event,
+so it does not trigger workspace preparation. The action does not restore Git,
+run project setup, execute tools, or touch the project's database.
+Integration setup requests in discarded turns cannot be resumed from an old tab.
+
 ## Sources
 
 - `src/App.vue`
@@ -569,6 +597,11 @@ to write that same session, so runtime acquisition must not wait for cleanup
 while holding its mutation lock. Thread preparation rechecks the session under
 the startup gate after acquisition. Observation loss still stops and records
 active work and active goals, but preserves completed main and temporary turns.
+Codex runtime preparation is shared by runtime directory across session providers;
+waiting callers recheck their own authentication and configuration before reuse.
+Runtime-lock contention is a retryable reconnect, not observation loss: it retains
+the provider and active run, schedules managed-thread recovery, and never invokes
+the shared runtime stop procedure merely because another startup holds the lock.
 Once an idle process has been verified stopped, the next automatic connection
 check can recreate it and resume the existing conversation without replaying a
 message or requiring an explicit Resume.

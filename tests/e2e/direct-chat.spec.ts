@@ -66,6 +66,55 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  for (const width of [390, 1280]) {
+    test(`@conversation-rewind confirms and retries the exact last turn at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      let undone = false;
+      const requests: Record<string, unknown>[] = [];
+      const turns = [
+        { turnId: "000001", user: { role: "user", text: "Keep this context." } },
+        { turnId: "000002", user: { role: "user", text: "Revise this request." }, assistant: { role: "assistant", text: "Last reply." } }
+      ];
+      await mockDirectChat(page, { conversationPage: () => ({
+        conversationLog: undone ? turns.slice(0, 1) : turns,
+        rewind: undone ? null : { turnId: "000002", text: "Revise this request.", pending: false }
+      }) });
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/conversation-rewind`, async route => {
+        requests.push(requestBodyWithoutOrigin(route.request()));
+        if (requests.length === 1) {
+          await fulfillJson(route, { ok: false, error: "Retry Undo last turn to check it." });
+        } else {
+          undone = true;
+          await fulfillJson(route, { ok: true, text: "Revise this request." });
+        }
+      });
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      const composer = page.getByLabel("Message AI assistant");
+      await expect(composer).toBeVisible();
+      if (width === 390) await composer.fill("Keep my draft.");
+      const expandedUndo = page.getByRole("button", { name: "Undo last turn", exact: true });
+      if (await expandedUndo.isVisible()) await expandedUndo.click();
+      else {
+        await page.getByRole("button", { name: "Session actions", exact: true }).click();
+        await page.getByText("Undo last turn", { exact: true }).click();
+      }
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText("Project files and databases stay as they are.");
+      await expect(dialog).toContainText("Revise this request.");
+      await page.screenshot({ path: testInfo.outputPath(`undo-${width}.png`), animations: "disabled" });
+      await dialog.getByRole("button", { name: "Undo last turn", exact: true }).click();
+      await expect(page.getByText("Retry Undo last turn to check it.", { exact: true })).toBeVisible();
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Undo last turn", exact: true }).click();
+      await expect(dialog).not.toBeVisible();
+      await expect(page.getByText("Last reply.", { exact: true })).toHaveCount(0);
+      await expect(composer).toHaveValue(width === 390 ? "Keep my draft." : "Revise this request.");
+      expect(requests).toEqual([{ turnId: "000002" }, { turnId: "000002" }]);
+      if (await expandedUndo.isVisible()) await expect(expandedUndo).toBeDisabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+
   for (const temporary of [false, true]) {
     hintTest(`@attachment-batch queues six files and completes without retries in ${temporary ? "temporary" : "main"} chat`, async ({ page }, testInfo) => {
       const release = Promise.withResolvers<void>();

@@ -2932,6 +2932,48 @@ function createOpenCodeTerminalController({
         !entry.reasoningSummary && entry.active === true && entry.target?.sessionId === id
       ));
     },
+    async rewindConversation(sessionId, input = {}, options = {}) {
+      const context = await contextFor(sessionId, options);
+      const threadId = storedUpstreamSessionId(context);
+      if (!threadId) throw openCodeError("vibe64_conversation_rewind_unavailable", "This session has no OpenCode conversation to undo.");
+      const target = await ensureProcess(context, options);
+      const client = target.server.client;
+      if (turns.get(context.key)?.active || (await client.sessionStatus(threadId)).type !== "idle") {
+        throw openCodeError("vibe64_conversation_rewind_unavailable", "Stop OpenCode before undoing a turn.");
+      }
+      const rows = openCodeMessageRows(await client.messages(threadId));
+      const users = rows.filter((row) => row.type === "user");
+      if (!input.checkpoint) {
+        const messageId = upstreamMessageId(input.messageId);
+        if (users.at(-1)?.id !== messageId || users.at(-2)?.id !== upstreamMessageId(input.previousMessageId)) {
+          throw openCodeError("vibe64_conversation_rewind_unavailable", "OpenCode's last turn changed. Refresh before undoing.");
+        }
+        const index = rows.findIndex((row) => row.id === messageId);
+        return { ok: true, checkpoint: { threadId, keepLastId: rows[index - 1].id,
+          previousMessageId: users.at(-2).id,
+          messageIds: rows.slice(index).map((row) => row.id) } };
+      }
+      const checkpoint = input.checkpoint;
+      const kept = rows.findIndex((row) => row.id === checkpoint.keepLastId);
+      const remaining = rows.slice(kept + 1);
+      if (checkpoint.threadId !== threadId || kept < 0 || remaining.some((row) => !checkpoint.messageIds.includes(row.id))) {
+        throw openCodeError("vibe64_conversation_rewind_unavailable", "The OpenCode conversation changed. Refresh before undoing.");
+      }
+      // Delete answers/tools before their prompt. Each exact ID is safe to
+      // inspect and retry after a partial failure, without reverting files.
+      for (const row of remaining.reverse()) {
+        if (await client.deleteMessage(threadId, row.id) !== true) {
+          throw openCodeError("vibe64_conversation_rewind_unconfirmed", "OpenCode did not confirm Undo. Retry Undo last turn to check it.");
+        }
+      }
+      turns.delete(context.key);
+      await context.runtime.store.writeAgentRunEvent(sessionId, OPENCODE_AGENT_RUN_ID, {
+        event: { kind: "conversation-rewound", state: VIBE64_AGENT_RUN_STATE.COMPLETED },
+        patch: { state: VIBE64_AGENT_RUN_STATE.COMPLETED, error: "", turnId: checkpoint.previousMessageId }
+      });
+      return { ok: true };
+    },
+
     async interruptTurn(sessionId, input = {}, options = {}) {
       void input;
       const context = await contextFor(sessionId, options);

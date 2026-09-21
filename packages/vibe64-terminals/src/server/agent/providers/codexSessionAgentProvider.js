@@ -613,6 +613,9 @@ function createCodexSessionAgentProvider({
     async interruptTurn(context, input = {}) {
       return normalizeCodexSessionResult(await controller.interruptTurn(context.sessionId, input));
     },
+    rewindConversation(context, input = {}) {
+      return controller.rewindConversation(context.sessionId, input, { runtime: context.runtime, session: context.session });
+    },
     async invalidateRuntimes(_context, input = {}) {
       return controller.invalidateAppServerRuntimes(input);
     },

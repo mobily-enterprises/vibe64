@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { readConversationRewindState, rememberAssistantBeforeChangeover, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 
 function selection(engineId) {
   return { engineId, agentId: engineId === "codex" ? "codex" : "build",
@@ -41,9 +41,18 @@ async function harness(t) {
     },
     async restart() { store = makeStore(); },
     async history() { return store.readConversationLog(sessionId); },
+    async rewind(turnId) { return rewindLastConversationTurn(sessionId, { turnId }, await api.context(), agent); },
+    async rewindState() { return readConversationRewindState(store, sessionId, JSON.parse((await api.context()).session.metadata.assistant_selection).engineId); },
+    rewindCalls: [], rewindFailure: false,
     async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
   };
   const agent = {
+    async rewindConversation(_id, input) {
+      if (!input.checkpoint) return { ok: true, checkpoint: { messageId: input.messageId } };
+      api.rewindCalls.push(input.checkpoint.messageId);
+      if (api.rewindFailure) throw new Error("lost rewind response");
+      return { ok: true };
+    },
     async inspectMessageAdmission(_id, { messageId, threadId }) {
       return { admission: !api.inspectUnknown && receipts.has(`${threadId}/${messageId}`) ? "accepted" : "unknown" };
     },
@@ -242,4 +251,61 @@ test("uncertain receipt blocks replay but permits switching to another engine", 
   await h.select("codex");
   assert.equal((await h.send("Use this AI instead")).delivered, true);
   assert.equal(h.calls.length, 3);
+});
+
+
+test("Undo removes one whole exchange durably, keeps IDs reserved, and stops at the AI switch", async (t) => {
+  const h = await harness(t);
+  await h.send("Codex first");
+  await h.send("Codex second");
+  await h.select("opencode");
+  await h.send("OpenCode first");
+  const boundary = (await h.history()).at(-1).turnId;
+  assert.equal(await h.rewindState(), null);
+  await assert.rejects(h.rewind(boundary), /same AI/);
+  await h.send("OpenCode second", "undo-me");
+  const last = (await h.history()).at(-1).turnId;
+  await h.store.writeConversationCommentaryMessage("changeover", { messageId: "tail-comment", text: "Extra tool output" });
+  assert.equal((await h.rewindState()).turnId, last);
+  assert.equal((await h.rewind(last)).text, "OpenCode second");
+  await h.restart();
+  assert.equal((await h.history()).at(-1).turnId, boundary);
+  assert.equal(await h.rewindState(), null);
+  assert.equal(await h.store.conversationMessageIdExists("changeover", "undo-me"), true);
+  assert.equal(await h.store.writeConversationCommentaryMessage("changeover", { messageId: "tail-comment", text: "Late duplicate" }), null);
+  await h.rewind(last);
+  assert.equal(h.rewindCalls.length, 1, "retry must not undo a second native turn");
+  await h.send("Replacement", "replacement");
+  assert.ok((await h.history()).at(-1).turnId > last);
+  assert.equal(h.calls.at(-1).message, "Replacement", "undone context must not come back as a changeover");
+});
+
+test("Undo recovers after a lost response and blocks Send until native and local history agree", async (t) => {
+  const h = await harness(t);
+  await h.send("First");
+  await h.send("Second");
+  const last = (await h.history()).at(-1).turnId;
+  h.rewindFailure = true;
+  await assert.rejects(h.rewind(last), /lost rewind response/);
+  await h.restart();
+  await assert.rejects(h.send("Must wait"), /Finish undoing/);
+  const pending = await h.rewindState();
+  assert.equal(pending.turnId, last);
+  assert.equal(pending.pending, true);
+  h.rewindFailure = false;
+  await h.rewind(last);
+  await h.send("Continue");
+  assert.equal(h.calls.at(-1).message, "Continue");
+});
+
+test("Undo rejects stale targets and the currently selected different AI", async (t) => {
+  const h = await harness(t);
+  await h.send("First");
+  const first = (await h.history()).at(-1).turnId;
+  await h.send("Second");
+  await assert.rejects(h.rewind(first), /latest turn/);
+  const second = (await h.history()).at(-1).turnId;
+  await h.select("opencode");
+  await assert.rejects(h.rewind(second), /same AI/);
+  assert.equal(h.rewindCalls.length, 0);
 });

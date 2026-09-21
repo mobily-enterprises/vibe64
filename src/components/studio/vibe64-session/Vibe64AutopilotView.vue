@@ -80,6 +80,10 @@
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
               <v-list-item
+                :disabled="rewindDisabled" :prepend-icon="mdiUndo" title="Undo last turn"
+                :subtitle="rewindHint" min-height="48" @click="openConversationRewind"
+              />
+              <v-list-item
                 v-if="githubProject && !sessionPullRequest?.number" min-height="48"
                 :prepend-icon="mdiSourcePull" title="Create pull request" subtitle="Publish this session on a new branch"
                 :disabled="sourceOperationsSuspended || !assistantDirectAllowed" @click="createPullRequestOpen = true"
@@ -107,6 +111,10 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
+          <v-btn
+            aria-label="Undo last turn" :title="rewindHint" :disabled="rewindDisabled"
+            :icon="mdiUndo" size="48" variant="text" @click="openConversationRewind"
+          />
           <v-btn
             v-if="githubProject && !sessionPullRequest?.number" :icon="mdiSourcePull" size="48" variant="text"
             aria-label="Create pull request" title="Create pull request" :disabled="sourceOperationsSuspended || !assistantDirectAllowed"
@@ -769,6 +777,22 @@
       </div>
     </section>
 
+    <v-dialog :model-value="Boolean(rewindTarget)" :persistent="rewindCommand.isRunning" max-width="34rem" @update:model-value="!$event && (rewindTarget = null)">
+      <v-card title="Undo last turn?">
+        <v-card-text>
+          Remove your last message and the AI’s replies from the conversation. Project files and databases stay as they are.
+          <p class="mt-3 text-body-medium" style="white-space: pre-wrap; overflow-wrap: anywhere">{{ rewindTarget?.text }}</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn :disabled="rewindCommand.isRunning" @click="rewindTarget = null">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" :disabled="rewindDisabled" :aria-busy="rewindCommand.isRunning" @click="confirmConversationRewind">
+            {{ rewindCommand.isRunning ? 'Undoing…' : 'Undo last turn' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="saveWorkConfirmOpen" max-width="34rem">
       <v-card>
         <v-card-title>Save current work?</v-card-title>
@@ -800,6 +824,10 @@
 
 <script setup>
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
+import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
   createAssistantTextSubmission,
   LongTextPreviewBlocks
@@ -826,6 +854,7 @@ import {
   mdiSend,
   mdiSourcePull,
   mdiStop,
+  mdiUndo,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
@@ -867,7 +896,7 @@ import {
   useVibe64AssistantAccess
 } from "@/composables/useVibe64AssistantAccess.js";
 import {
-  VIBE64_SESSION_CHANGED_EVENT
+  VIBE64_SESSION_CHANGED_EVENT, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
@@ -1208,6 +1237,43 @@ const conversationAssistantLabel = computed(() => (
   props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :
     props.session?.assistantSelection?.engineId === "claude" ? "Claude" : "Codex"
 ));
+const rewindTarget = ref(null);
+const rewindCommand = useCommand({
+  access: "never", ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID,
+  apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.conversation-rewind",
+  buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context.path }),
+  buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({ turnId: context.turnId }),
+  onRunSuccess: (response) => {
+    if (response?.ok === false) throw vibe64ApiError(response, "The turn could not be undone.");
+  },
+  fallbackRunError: "The turn could not be undone. Retry Undo last turn to check it.",
+  suppressSuccessMessage: true
+});
+const rewindLastTurn = computed(() => props.conversationLog?.rewind || null);
+const rewindDisabled = computed(() => !(rewindTarget.value || rewindLastTurn.value) || !assistantDirectAllowed.value ||
+  agentActive.value || composerSending.value || interrupting.value || rewindCommand.isRunning ||
+  props.conversationLog?.loading || props.sessionSelectionArchived || sourceOperationsSuspended.value);
+const rewindHint = computed(() => agentActive.value ? "Stop the assistant before undoing a turn" :
+  !rewindLastTurn.value ? "Undo stops at the last AI switch" : "Undo the last conversation turn; keep project files");
+function openConversationRewind() {
+  if (rewindDisabled.value) return;
+  rewindTarget.value = { sessionId: sessionId.value, turnId: rewindLastTurn.value.turnId, text: rewindLastTurn.value.text };
+}
+async function confirmConversationRewind() {
+  if (rewindDisabled.value || !rewindTarget.value) return;
+  const target = rewindTarget.value;
+  try {
+    const response = await rewindCommand.run({ turnId: target.turnId,
+      path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), target.sessionId, "/conversation-rewind") });
+    if (sessionId.value !== target.sessionId) return;
+    rewindTarget.value = null;
+    if (!composerDraft.value.trim()) prefillComposer(response.text);
+    await props.conversationLog?.reload?.();
+  } catch {
+    // The command owns error feedback; retain this exact target for a retry.
+  }
+}
+watch([sessionId, () => props.session?.assistantSelection?.engineId], () => { rewindTarget.value = null; });
 const updateHandledInRepair = computed(() => Boolean(
   (saveWorkActivityIsUpdate.value || saveWorkError.value) && temporaryAiWorkspace.value?.updateRepairVisible
 ));

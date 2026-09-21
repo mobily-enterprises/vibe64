@@ -59,12 +59,35 @@ async function readClaudeHistory(options) {
   const userIds = [];
   let lastUserId = "";
   let goal = null;
+  const frames = [];
+  const byId = new Map();
+  let leafUuid = "";
+  let rewound = false;
   // Snapshot the file length. A writer can be in the middle of its last frame;
   // only this native-history read allows that unfinished tail.
   for await (const frame of readClaudeJsonFrames(createReadStream(file.path, { end: file.size - 1 }), {
     allowIncompleteTail: true
   })) {
     if (frame.isSidechain) continue;
+    frames.push(frame);
+    if (frame.uuid) byId.set(frame.uuid, frame);
+    if (["user", "assistant"].includes(frame.type) && frame.uuid) leafUuid = frame.uuid;
+    if (frame.type === "last-prompt" && frame.leafUuid) {
+      leafUuid = frame.leafUuid;
+      rewound ||= frame.rewound === true;
+    }
+  }
+  // Native rewind appends a resume anchor; it retains the discarded branch.
+  // Follow the selected branch so restart/admission reads cannot revive it.
+  const retained = new Set();
+  if (rewound) {
+    while (leafUuid && !retained.has(leafUuid)) {
+      retained.add(leafUuid);
+      leafUuid = byId.get(leafUuid)?.parentUuid;
+    }
+  }
+  for (const frame of frames) {
+    if (rewound && frame.uuid && !retained.has(frame.uuid)) continue;
     const status = frame.attachment;
     if (status?.type === "goal_status" && typeof status.condition === "string") {
       if (status.met === true && status.sentinel === true) goal = null;

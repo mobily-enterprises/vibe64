@@ -4281,3 +4281,44 @@ test("unexpected Codex transport loss blocks reconnection and notifies its execu
     await assert.rejects(provider.connect(), { code: "vibe64_codex_observation_lost" });
   } finally { provider.close(); }
 });
+
+
+test("Codex rewind checks the exact native turn before retrying a lost revert response", async () => {
+  const provider = new CodexAppServerAgentProvider();
+  let reverts = 0;
+  let loseResponse = true;
+  let goal = null;
+  const turn = (id, clientId) => ({ id, status: "completed", items: [{ type: "userMessage", clientId }] });
+  const thread = { id: "thread-one", status: { type: "idle" }, historyMode: "paginated", turns: [turn("first", "client-1"), turn("second", "client-2")] };
+  provider.client = { isOpen: () => true, async request(method, params) {
+    assert.equal(params.threadId, thread.id);
+    if (method === "thread/read") return { thread };
+    if (method === "thread/goal/get") return { goal };
+    if (method === "thread/turns/list") return { data: thread.turns.toReversed(), nextCursor: null };
+    assert.equal(method, "thread/revert");
+    assert.equal(params.beforeTurnId, thread.turns.at(-1).id);
+    reverts += 1;
+    thread.turns.pop();
+    if (loseResponse) throw new Error("response lost");
+    return { thread: { ...thread, turns: [] } };
+  } };
+  provider.runRequest = (operation) => operation();
+  const plan = await provider.rewindConversation(thread.id, { messageId: "client-2", previousMessageId: "client-1" });
+  goal = { status: "active" };
+  await assert.rejects(provider.rewindConversation(thread.id, plan), /pause its goal/);
+  goal = null;
+  await assert.rejects(provider.rewindConversation(thread.id, plan), /response lost/);
+  assert.equal((await provider.rewindConversation(thread.id, plan)).ok, true);
+  assert.equal(reverts, 1);
+  thread.turns.push(turn("replacement", "client-3"));
+  await assert.rejects(provider.rewindConversation(thread.id, plan), /last turn changed/);
+  thread.turns.at(-1).items.push({ type: "userMessage", clientId: "steer" });
+  await assert.rejects(provider.rewindConversation(thread.id, { messageId: "steer", previousMessageId: "client-3" }), /Steered messages/);
+  assert.equal(reverts, 1);
+  thread.turns.at(-1).items.pop();
+  loseResponse = false;
+  const replacement = await provider.rewindConversation(thread.id, { messageId: "client-3", previousMessageId: "client-1" });
+  assert.equal((await provider.rewindConversation(thread.id, replacement)).ok, true);
+  assert.equal(reverts, 2);
+  assert.deepEqual(thread.turns.map(({ id }) => id), ["first"]);
+});

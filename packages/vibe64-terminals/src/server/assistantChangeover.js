@@ -3,8 +3,76 @@ import { conversationMessageIdentity, conversationMessageVersion } from "@local/
 
 const STATE_KEY = "assistant_changeover";
 
-// The transcript remains authoritative. This record contains only delivery
-// cursors and, while sending, the exact ordinary request being delivered.
+export async function readConversationRewindState(store, sessionId, engineId) {
+  const state = JSON.parse(await store.readMetadataValue(sessionId, STATE_KEY) || "null");
+  if (state?.rewind && !state.rewind.completed) {
+    return { turnId: state.rewind.turnId, text: state.rewind.text, pending: true };
+  }
+  const turns = await store.readConversationTail(sessionId);
+  const users = turns.filter((turn) => turn.user);
+  const last = users.at(-1);
+  const previous = users.at(-2);
+  if (!last?.user.messageId || !previous?.user.messageId ||
+      previous.metadata?.engineId !== engineId || last.metadata?.engineId !== engineId) return null;
+  return { turnId: last.turnId, text: last.user.text, pending: false };
+}
+
+export function requireCompletedConversationRewind(session) {
+  const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
+  if (state?.rewind && !state.rewind.completed) {
+    throw Object.assign(new Error("Finish undoing the last turn before continuing. Choose Undo last turn again to retry."),
+      { code: "vibe64_conversation_rewind_pending", statusCode: 409 });
+  }
+}
+
+// The caller holds the main assistant write lock. Providers inspect an exact
+// boundary first, then apply that same boundary idempotently after it is saved.
+export async function rewindLastConversationTurn(sessionId, input, context, agent) {
+  const { store } = context.runtime;
+  const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+  const messages = await history(store, sessionId);
+  const state = await readState(store, sessionId, engineId, messages);
+  const fail = (message) => { throw Object.assign(new Error(message), { code: "vibe64_conversation_rewind_unavailable", statusCode: 409 }); };
+  let rewind = state.rewind;
+  if (rewind?.turnId === input.turnId && rewind.completed) return { ok: true, text: rewind.text };
+  if (rewind && !rewind.completed) {
+    if (rewind.turnId !== input.turnId || rewind.engineId !== engineId) fail("Retry the unfinished Undo last turn first.");
+  } else {
+    if (Object.values(state.engines).some((binding) => binding.pending)) fail("Confirm the pending message delivery before undoing a turn.");
+    const turns = await store.readConversationLog(sessionId);
+    const users = turns.filter((turn) => turn.user);
+    const previous = users.at(-2);
+    const last = users.at(-1);
+    if (!previous || last.turnId !== input.turnId || !last.user.messageId || !previous.user.messageId ||
+        previous.metadata?.engineId !== engineId || last.metadata?.engineId !== engineId) {
+      fail("Undo is available only for the latest turn, with the same AI as the turn before it.");
+    }
+    const tail = turns.slice(turns.indexOf(last));
+    if (tail.some((turn) => turn.metadata?.engineId !== engineId)) fail("Undo cannot cross an AI change.");
+    const inspected = await agent.rewindConversation(sessionId, {
+      messageId: last.user.messageId, previousMessageId: previous.user.messageId
+    }, context);
+    if (inspected.ok === false) return inspected;
+    if (!inspected.checkpoint) fail("The AI could not identify the last turn.");
+    rewind = state.rewind = { engineId, turnId: last.turnId, turnIds: tail.map((turn) => turn.turnId),
+      text: last.user.text, checkpoint: inspected.checkpoint, completed: false };
+    await saveState(store, sessionId, state);
+  }
+  const result = await agent.rewindConversation(sessionId, { checkpoint: rewind.checkpoint }, context);
+  if (result.ok === false) return result;
+  await store.rewindConversationLog(sessionId, rewind.turnIds);
+  const seen = state.engines[engineId]?.seen || {};
+  for (const id of Object.keys(seen)) {
+    if (rewind.turnIds.includes(id.split("/")[0])) delete seen[id];
+  }
+  rewind.completed = true;
+  await saveState(store, sessionId, state);
+  store.clearConversationStream(sessionId);
+  return { ok: true, text: rewind.text };
+}
+
+// The transcript remains authoritative. Delivery cursors and pending native
+// writes share one record so Send, AI changes and Undo use the same boundary.
 async function history(store, sessionId) {
   const turns = await store.readConversationLog(sessionId);
   return turns.flatMap((turn) => (turn.messages || []).filter((message) => (
@@ -54,6 +122,7 @@ function saveState(store, sessionId, state) {
 }
 
 export async function rememberAssistantBeforeChangeover({ runtime, session }, engineId) {
+  requireCompletedConversationRewind(session);
   const messages = await history(runtime.store, session.sessionId);
   const state = await readState(runtime.store, session.sessionId, engineId, messages);
   rememberReplies(state, engineId, messages);
@@ -67,6 +136,7 @@ function unconfirmed(messageId, threadId) {
 }
 
 export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}) {
+  requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;
   const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
   const messages = await history(store, sessionId);

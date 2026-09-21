@@ -1,4 +1,5 @@
 import {
+  ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_APPROVE_MESSAGE_SUGGESTION,
@@ -40,6 +41,7 @@ import {
   ACTION_WITHDRAW_MESSAGE_SUGGESTION
 } from "./actions.js";
 import {
+  conversationRewindInputValidator,
   integrationSetupRequestInputValidator,
   agentMessageInputValidator,
   agentTurnInterruptInputValidator,
@@ -343,6 +345,15 @@ function registerRoutes(http, {
       });
     },
     summary: "Read a Vibe64 session conversation."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/conversation-rewind", {
+    actionId: ACTION_REWIND_CONVERSATION,
+    body: conversationRewindInputValidator,
+    buildInput: (request) => withVibe64User(request, {
+      ...routes.requestBody(request), sessionId: request.params.sessionId
+    }),
+    summary: "Undo the latest conversation turn without changing project files."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-message", {

@@ -3,7 +3,7 @@ import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createCodexTerminalController } from "./codexTerminal.js";
 import { createSessionConversations } from "./sessionConversations.js";
-import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover } from "./assistantChangeover.js";
+import { readConversationRewindState, rememberAssistantBeforeChangeover, requireCompletedConversationRewind, rewindLastConversationTurn, sendWithAssistantChangeover } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import {
   createSessionAgentManager
@@ -2427,6 +2427,7 @@ function createService({
 
     async resumeIntegrationContinuation(sessionId, input = {}, options = {}) {
       return runMainAgentWrite(sessionId, options, async (context) => {
+        requireCompletedConversationRewind(context.session);
         const access = await sessionAgent.requireAssistantAccess(sessionId, context);
         const store = context.runtime.store;
         const saved = await store.readIntegrationSetupRequest(sessionId, input.turnId);
@@ -2507,6 +2508,22 @@ function createService({
       }, { operation: "resume-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
     },
 
+    async readConversationRewindState(sessionId, options = {}) {
+      const context = await assistantSessionOptions(sessionId, options);
+      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata, { required: false });
+      return selection ? readConversationRewindState(context.runtime.store, sessionId, selection.engineId) : null;
+    },
+
+    async rewindConversation(sessionId, input = {}, options = {}) {
+      return runMainAgentWrite(sessionId, options, async (context) => {
+        await sessionAgent.requireAssistantAccess(sessionId, context);
+        if (sessionHasActiveAgentRun(context.session)) {
+          return { ok: false, error: "Stop the assistant before undoing a turn." };
+        }
+        return rewindLastConversationTurn(sessionId, input, context, sessionAgent);
+      }, { operation: "rewind-conversation" });
+    },
+
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       const startedAt = Date.now();
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
@@ -2521,6 +2538,7 @@ function createService({
               messageId: input.messageId,
               sessionId
             });
+            requireCompletedConversationRewind(context.session);
             await prepareAgentSkillsInsideAgentWrite(sessionId, context);
             const delivered = await sendWithAssistantChangeover(sessionId, input, context, sessionAgent, (event) => {
               logOperationalEvent(logger, "info", {
@@ -2577,6 +2595,7 @@ function createService({
     async updateAgentGoal(sessionId, input = {}) {
       if (["set", "resume"].includes(input.action)) {
         return runMainAgentWrite(sessionId, input, (context) => {
+          requireCompletedConversationRewind(context.session);
           const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
           const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
           if (changeover && changeover.lastEngine !== engineId) {
@@ -2687,6 +2706,7 @@ function createService({
     // Called inside the selection writer's existing session lock. Closing a
     // controller stops observation/execution, never deletes native history.
     async prepareAssistantChangeover(sessionId, context) {
+      requireCompletedConversationRewind(context.session);
       const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
       const metadata = context.session.metadata;
       if (engineId === "codex" && metadata.agent_identity_provider === "codex" && metadata.agent_identity_conversation_id) {

@@ -1687,6 +1687,25 @@ test("integration configuration cards restore from persisted conversation text a
   });
 });
 
+test("rewound integration requests cannot resume from an old browser tab", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ runtimeKind: "genesis", sessionId: "rewound-setup" });
+    await store.writeConversationUserMessage("rewound-setup", { text: "Configure mail." });
+    const turn = await store.writeConversationAssistantMessage("rewound-setup", {
+      text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+    });
+    const selection = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+    assert.equal((await store.readIntegrationSetupRequest("rewound-setup", turn.turnId)).outcome, "pending");
+    await store.rewindConversationLog("rewound-setup", [turn.turnId]);
+    const reopened = createStore(targetRoot);
+    assert.equal(await reopened.readIntegrationSetupRequest("rewound-setup", turn.turnId), null);
+    await assert.rejects(reopened.skipIntegrationSetupRequest("rewound-setup", selection),
+      { code: "vibe64_integration_setup_request_changed" });
+    assert.deepEqual(await reopened.readConversationLog("rewound-setup"), []);
+  });
+});
+
 test("integration setup skip survives reopening, concurrent decisions and archive", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);

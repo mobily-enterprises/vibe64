@@ -36,6 +36,8 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "conversation-rewound",
+  "session-assistant-selection-updated",
   "assistant-stream",
   "integration-setup-skipped",
   "integration-setup-completed",
@@ -774,6 +776,7 @@ function useVibe64ConversationLog({
     loadMore: loadMoreConversationLog,
     loadMoreError,
     loading: resource.isLoading,
+    rewind: computed(() => resource.data.value?.rewind || null),
     loadingMore,
     reload: reloadConversationLog,
     realtime,

@@ -2252,7 +2252,7 @@ function createVibe64SessionStore({
 
   async function readIntegrationSetupDecision(sessionPaths, turnId, assistant) {
     const request = parseIntegrationSetupRequest(assistant);
-    if (!request) return null;
+    if (!request || !(await conversationTurnIds(sessionPaths)).includes(turnId)) return null;
     const requestId = createHash("sha256").update(assistant.text).digest("hex");
     const text = await readTextIfExists(path.join(
       conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"
@@ -2448,11 +2448,42 @@ function createVibe64SessionStore({
     };
   }
 
-  async function conversationTurnIds(sessionPaths) {
-    return sortedDirectoryNames(
+  async function conversationTurnIds(sessionPaths, includeRewound = false) {
+    const ids = sortedDirectoryNames(
       await readDirectoryEntries(sessionPaths.conversationLogRoot),
       (name) => CONVERSATION_TURN_ID_PATTERN.test(name)
     );
+    if (includeRewound) return ids;
+    const source = await readTextIfExists(path.join(sessionPaths.conversationLogRoot, "rewound.json"));
+    const rewound = source ? JSON.parse(source) : [];
+    return ids.filter((id) => !rewound.includes(id));
+  }
+
+  async function rewindConversationLog(sessionId, turnIds) {
+    return mutateSession(sessionId, async (paths) => {
+      const ids = await conversationTurnIds(paths, true);
+      if (!Array.isArray(turnIds) || !turnIds.length || turnIds.some((id) => !ids.includes(id))) {
+        throw vibe64Error("The conversation changed. Refresh before undoing a turn.", "vibe64_conversation_changed");
+      }
+      const file = path.join(paths.conversationLogRoot, "rewound.json");
+      const source = await readTextIfExists(file);
+      // Keep the original messages and identities for deduplication. New turns
+      // must never reuse the IDs of an undone exchange.
+      await writeJsonFile(file, [...new Set([...(source ? JSON.parse(source) : []), ...turnIds])]);
+    });
+  }
+
+  async function readConversationTail(sessionId) {
+    return withReadableSessionPaths(sessionId, async (paths) => {
+      const turns = [];
+      let users = 0;
+      for (const id of (await conversationTurnIds(paths)).reverse()) {
+        const turn = await readConversationTurn(paths, id);
+        turns.unshift(turn);
+        if (turn.user && ++users === 2) break;
+      }
+      return turns;
+    });
   }
 
   async function conversationMessageIdExistsFromPaths(sessionPaths, messageId = "") {
@@ -2467,7 +2498,7 @@ function createVibe64SessionStore({
       );
     }
     const suffix = `.${normalizedMessageId}.md`;
-    const turnIds = await conversationTurnIds(sessionPaths);
+    const turnIds = await conversationTurnIds(sessionPaths, true);
     for (const turnId of [...turnIds].reverse()) {
       const entries = await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId));
       if (entries.some((entry) => (
@@ -2484,7 +2515,7 @@ function createVibe64SessionStore({
   function conversationTransaction(sessionPaths) {
     return {
       listTurnIds: () => conversationTurnIds(sessionPaths),
-      nextTurnId: async () => nextConversationTurnId(await conversationTurnIds(sessionPaths)),
+      nextTurnId: async () => nextConversationTurnId(await conversationTurnIds(sessionPaths, true)),
       readTurn: (turnId) => readConversationTurn(sessionPaths, turnId),
       hasMessage: (messageId) => conversationMessageIdExistsFromPaths(sessionPaths, messageId),
       async appendMessage(turnId, { role, text, messageId, at, attachments = [], turnMetadata = null }) {
@@ -4760,6 +4791,8 @@ function createVibe64SessionStore({
     readIntegrationSetupRequest,
     readConversationLogPage,
     readCurrentSession,
+    rewindConversationLog,
+    readConversationTail,
     readManifest,
     readMetadata,
     readMetadataValue,

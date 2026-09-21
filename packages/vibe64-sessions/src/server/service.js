@@ -1704,6 +1704,7 @@ function createService({
         const result = await runtime.readConversationLogPage(sessionId, pageOptions);
         return {
           ...conversationPage(result, pageOptions),
+          rewind: await terminals.readConversationRewindState(sessionId, { runtime }),
           conversationStream: runtime.store.readConversationStream(sessionId),
           ok: true,
           sessionId
@@ -1957,6 +1958,20 @@ function createService({
         );
         return { ok: true, suggestion: exclusive.value };
       }, "Vibe64 could not discard this message suggestion.");
+    },
+
+    async rewindConversation(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const result = await terminals.rewindConversation(sessionId, input, {
+          runtime, vibe64User: trustedAssistantUser(input)
+        });
+        if (result.ok !== false) await publishSessionChanged(sessionId, {
+          originId: text(input.originId), reason: "conversation-rewound",
+          session: await runtime.getSession(sessionId, { inspectSource: false })
+        });
+        return result;
+      });
     },
 
     async sendAgentMessage(sessionId, input = {}) {

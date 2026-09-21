@@ -190,6 +190,11 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
     async invalidateRuntimes(_context, input = {}) {
       return controller.invalidateRuntimes(input);
     },
+    rewindConversation(context, input = {}) {
+      return controller.rewindConversation(context.sessionId, input, {
+        runtime: context.runtime, session: context.session, vibe64User: context.vibe64User
+      });
+    },
     async readConversation(context, input = {}) {
       return controller.readConversation(context.sessionId, input, {
         assistantScope: context.assistantScope,

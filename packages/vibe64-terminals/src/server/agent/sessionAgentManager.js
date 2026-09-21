@@ -1,4 +1,5 @@
 import path from "node:path";
+import { requireCompletedConversationRewind } from "../assistantChangeover.js";
 
 import {
   assertCanUseVibe64Assistant,
@@ -35,6 +36,7 @@ const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "thinking"
 ]);
 const AI_METHODS = new Set([
+  "rewindConversation",
   "inspectMessageAdmission",
   "createConversation",
   "ensureSession",
@@ -395,6 +397,9 @@ function createSessionAgentManager({
       ...options,
       agentSettings: options?.agentSettings || input?.agentSettings || null
     };
+    if (["sendMessage", "startTerminal", "generateSessionRenewalHandover"].includes(method)) {
+      requireCompletedConversationRewind(options.session);
+    }
     const provider = bindSession(sessionId, operationOptions);
     const operation = attachments?.[method] || provider[method];
     if (typeof operation !== "function") {
@@ -809,6 +814,7 @@ function createSessionAgentManager({
       );
     },
     readConversation: sessionMethod("readConversation"),
+    rewindConversation: sessionMethod("rewindConversation"),
     readEphemeralConversation: ephemeralScopeMethod("readConversation"),
     resolveExecutionProfile: sessionMethod("resolveExecutionProfile"),
     readTerminal(sessionId = "", terminalSessionId = "", options = {}) {

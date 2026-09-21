@@ -808,6 +808,44 @@ function createClaudeSessionAgentProvider({
       return { ok: true, admission: history.userIds.includes(nativeMessageId(input.messageId)) ? "accepted" : "unknown", messageId: input.messageId, threadId: entry.id };
     },
     async interruptTurn(context) { return interrupt(await entryFor(context)); },
+    async rewindConversation(context, input = {}) {
+      const entry = await entryFor(context);
+      await bindAccount(entry);
+      if (entry.turn?.active || entry.inFlight.size || entry.tasks.size || (await goalFor(entry))?.status === "active") {
+        throw error("Stop Claude and pause its goal before undoing a turn.");
+      }
+      const history = await readHistory(entry);
+      const checkpoint = input.checkpoint || {
+        threadId: entry.id, messageId: nativeMessageId(input.messageId),
+        previousMessageId: nativeMessageId(input.previousMessageId)
+      };
+      if (checkpoint.threadId !== entry.id) throw error("The Claude conversation changed. Refresh before undoing.");
+      const alreadyRewound = !history.userIds.includes(checkpoint.messageId) &&
+        history.userIds.at(-1) === checkpoint.previousMessageId;
+      if (!alreadyRewound && (history.userIds.at(-1) !== checkpoint.messageId ||
+          history.userIds.at(-2) !== checkpoint.previousMessageId)) {
+        throw error("Claude's last turn no longer matches this conversation. Refresh before undoing.");
+      }
+      if (!input.checkpoint) return { ok: true, checkpoint };
+      entry.outcome = null;
+      if (!alreadyRewound) {
+        const native = await ensureProcess(entry);
+        const response = await native.client.request({ subtype: "rewind_conversation", target_message_uuid: checkpoint.messageId });
+        if (!response.rewound || response.targetMessageUuid !== checkpoint.messageId) {
+          throw error("Claude did not confirm the rewind. Retry Undo last turn to check it.");
+        }
+      }
+      entry.messages.clear();
+      entry.result = "";
+      entry.turn = { id: checkpoint.previousMessageId, state: RUN.COMPLETED, active: false, updatedAt: now() };
+      entry.lastMessageId = "";
+      await save(entry);
+      await entry.context.runtime.store.writeAgentRunEvent(entry.context.sessionId, TRANSPORT, {
+        event: { kind: "conversation-rewound", state: RUN.COMPLETED },
+        patch: { state: RUN.COMPLETED, error: "", observationError: "", turnId: checkpoint.previousMessageId }
+      });
+      return { ok: true };
+    },
     async createConversation(context, input = {}) {
       const entry = await entryFor(context, randomUUID(), { create: true });
       return { ok: true, conversationId: entry.id, ephemeral: input.ephemeral === true, status: "ready" };
