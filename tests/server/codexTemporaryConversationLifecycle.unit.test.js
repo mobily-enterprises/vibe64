@@ -27,6 +27,7 @@ import {
 import {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
+  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   codexAppServerRuntimeDir,
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
@@ -1787,7 +1788,10 @@ function createRestartedController({
   });
 }
 
-async function withAgentMessageController(operation, { throughTerminalService = false } = {}) {
+async function withAgentMessageController(operation, {
+  throughTerminalService = false,
+  codexAppServerActiveReconcileMs = 60_000
+} = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-message-"));
   const codexToolHomeSource = path.join(temporaryRoot, "codex-tool-home");
   await mkdir(path.join(codexToolHomeSource, ".codex"), { recursive: true });
@@ -1883,7 +1887,7 @@ async function withAgentMessageController(operation, { throughTerminalService = 
   };
   const controllerOptions = {
     ...TEST_SESSION_CONTEXT_COMPOSITION,
-    codexAppServerActiveReconcileMs: 60_000,
+    codexAppServerActiveReconcileMs,
     codexAppServerDaemonWellbeingMs: 60_000,
     logger: { warn: (event) => captures.onDiagnostic?.(event) },
     publishSessionChanged: async (sessionId, event) => captures.onSessionChanged?.(sessionId, event),
@@ -3843,6 +3847,75 @@ test("main thread restoration refuses native resume when its observer cannot att
     assert.ok(captures.stopRuntimes > 0);
   });
 });
+
+for (const retainProvider of [true, false]) {
+  test(`startup-lock contention preserves work and goals and retries (retained provider: ${retainProvider})`, async () => {
+    await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => runWithProjectRequestContext({
+      targetRoot: runtime.projectContextRoot
+    }, async () => {
+      const started = await controller.sendMessage(sessionId, {
+        message: "Keep the goal running while the shared server reconnects.",
+        messageId: "goal-startup-contention"
+      });
+      assert.equal(started.ok, true, JSON.stringify(started));
+      let provider = captures.provider;
+      emitCodexNotification(captures.subscribers, threadGoalUpdated({
+        threadId: provider.threadId,
+        turnId: provider.turnId
+      }));
+      const before = await waitForSessionValue(
+        () => store.readAgentRun(sessionId, "codex_app_server"),
+        (run) => run?.providerGoalStatus === "active",
+        "the active goal before reconnecting"
+      );
+      let busy = true;
+      let recovered = false;
+      let threadStops = 0;
+      const prepareProvider = (current) => {
+        provider = current;
+        provider.status = "inProgress";
+        provider.turnId = before.providerTurnId;
+        provider.ensureAvailable = async () => {
+          if (busy) {
+            throw Object.assign(new Error("Codex is still reconnecting."), {
+              code: CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
+              retryable: true
+            });
+          }
+          recovered = true;
+        };
+        provider.stopThreadForObservationLoss = async () => { threadStops += 1; };
+      };
+      if (retainProvider) {
+        prepareProvider(provider);
+      } else {
+        // Discard the local connection so recovery starts with only persisted ownership.
+        assert.equal((await controller.reconcileThreads([])).ok, true);
+        assert.equal(provider.closed, 1);
+        captures.onProviderCreated = prepareProvider;
+      }
+      const reconciliation = await controller.reconcileThreads([{ sessionId }]);
+      assert.equal(reconciliation.ok, false);
+      assert.equal(reconciliation.results[0].status, "reconnecting");
+      assert.equal(reconciliation.results[0].retryable, true);
+      assert.equal(provider.observationFailure, undefined);
+      assert.equal(provider.closed, 0);
+      assert.equal(threadStops, 0);
+      assert.equal(captures.stopRuntimes, 0);
+      assert.deepEqual(await store.readAgentRun(sessionId, "codex_app_server"), before);
+
+      busy = false;
+      await waitForSessionValue(() => recovered, Boolean, "automatic recovery after the startup lock clears");
+      const after = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(after.state, VIBE64_AGENT_RUN_STATE.ACTIVE);
+      assert.equal(after.providerGoalStatus, "active");
+      assert.equal(after.providerTurnId, before.providerTurnId);
+      assert.equal(captures.provider, provider);
+      assert.equal(captures.turns.length, 1, "Recovery must not replay the prompt");
+      assert.equal(captures.stopRuntimes, 0);
+    }), { codexAppServerActiveReconcileMs: 20 });
+  });
+}
 
 test("restart reconciliation keeps a live goal successor visible and steerable despite interrupted history", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {

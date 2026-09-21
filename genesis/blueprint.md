@@ -192,6 +192,9 @@ the assistant's local command controls from starting.
 An idle assistant whose process has stopped reconnects through the ordinary
 connection check, retaining completed replies without asking the person to
 resume finished work. Startup and disconnect cleanup cannot block each other.
+Sessions sharing a Codex assistant process wait for the same startup operation.
+A busy startup lock keeps them reconnecting and retries automatically without
+stopping other sessions' work or goals.
 Startup and connection checks automatically release a stale assistant busy
 record once the assistant confirms that its conversation is idle and has no
 active goal. Save and Update then become available without manual repair;

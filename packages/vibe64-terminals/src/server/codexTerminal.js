@@ -43,6 +43,7 @@ import {
 import {
   CODEX_APP_SERVER_EXECUTION_MODES,
   CODEX_APP_SERVER_PROVIDER_ID,
+  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexAppServerRequestIsInvalid,
@@ -2295,6 +2296,13 @@ function createCodexTerminalController({
       });
       return provider;
     } catch (error) {
+      if (error?.code === CODEX_APP_SERVER_RUNTIME_BUSY_CODE) {
+        const managedThreadId = mainThreadId || codexAppServerManagedSessions.get(providerKey)?.threadId;
+        if (!codexAppServerServerClosing && managedThreadId) {
+          scheduleCodexAppServerActiveRecovery(normalizedSessionId);
+        }
+        throw error;
+      }
       if (!codexAppServerServerClosing && mainThreadId) {
         await provider.failObservation(error);
       }
@@ -6841,7 +6849,9 @@ function createCodexTerminalController({
       if (!retryOnError) {
         throw error;
       }
-      const store = await createStoreForSession(normalizedSessionId).catch(() => null);
+      const store = await Promise.resolve()
+        .then(() => createStoreForSession(normalizedSessionId))
+        .catch(() => null);
       const run = store
         ? await readCodexAppServerAgentRunForSession(store, normalizedSessionId).catch(() => null)
         : null;
@@ -8375,11 +8385,17 @@ function createCodexTerminalController({
           error: vibe64SessionDebugError(error),
           sessionId
         });
-        return {
+        const failure = {
           ok: false,
           error: errorMessage(error, "Vibe64 Codex app-server thread reconciliation failed."),
           sessionId
         };
+        if (error?.code === CODEX_APP_SERVER_RUNTIME_BUSY_CODE) {
+          failure.code = error.code;
+          failure.retryable = true;
+          failure.status = "reconnecting";
+        }
+        return failure;
       }
     }));
     const failed = [
@@ -8389,9 +8405,22 @@ function createCodexTerminalController({
         result?.economyFailure || null
       ].filter(Boolean))
     ];
-    const keepProviderKeys = new Set(results
-      .map((result) => normalizeText(result?.providerKey))
-      .filter(Boolean));
+    const keepProviderKeys = new Set();
+    const reconnectingSessionIds = new Set();
+    for (const result of results) {
+      const providerKey = normalizeText(result?.providerKey);
+      if (providerKey) {
+        keepProviderKeys.add(providerKey);
+      }
+      if (result.code === CODEX_APP_SERVER_RUNTIME_BUSY_CODE) {
+        reconnectingSessionIds.add(result.sessionId);
+      }
+    }
+    for (const [providerKey, managed] of codexAppServerManagedSessions) {
+      if (reconnectingSessionIds.has(managed.sessionId)) {
+        keepProviderKeys.add(providerKey);
+      }
+    }
     if (reconcileGeneration === codexAppServerThreadReconcileGeneration) {
       await waitForOtherCodexAppServerThreadReconciliations({
         keepProviderKeys,

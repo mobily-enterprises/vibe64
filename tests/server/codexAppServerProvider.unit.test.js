@@ -20,6 +20,7 @@ import {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE,
   CODEX_APP_SERVER_PROVIDER_ID,
+  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
@@ -862,6 +863,110 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
     assert.equal(runtime.endpoint, metadata.endpoint);
     assert.equal(runtime.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(runtime.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("separate Codex session providers await one startup beyond the runtime lock timeout", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const calls = [];
+    const runCommand = codexAppServerCommandRunner(runtimeDir, calls);
+    const options = {
+      authStateSignature: "test-auth-state-signature",
+      async commandRunner(request) {
+        entered.resolve();
+        await release.promise;
+        return runCommand(request);
+      },
+      processGroupIsAlive: () => true,
+      runtimeDir,
+      timeoutMs: 1,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    };
+    const first = new CodexAppServerAgentProvider(options);
+    const second = new CodexAppServerAgentProvider({ ...options });
+    const starting = first.ensureRuntime();
+    await entered.promise;
+    const waiting = second.ensureRuntime();
+    const results = Promise.allSettled([starting, waiting]);
+    try {
+      // A separate lock waiter would time out on its first 100ms polling cycle.
+      await delay(250);
+    } finally {
+      release.resolve();
+    }
+    const settled = await results;
+    assert.deepEqual(settled.map(({ status }) => status), ["fulfilled", "fulfilled"]);
+    assert.equal(calls.length, 1);
+    assert.equal(first.runtime.executionId, second.runtime.executionId);
+    assert.equal(first.runtime.reused, false);
+    assert.equal(second.runtime.reused, true);
+  });
+});
+
+test("shared startup waiters still validate their own runtime configuration", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const calls = [];
+    const runCommand = codexAppServerCommandRunner(runtimeDir, calls);
+    const options = {
+      authStateSignature: "test-auth-state-signature",
+      async commandRunner(request) {
+        entered.resolve();
+        await release.promise;
+        return { ...await runCommand(request), pid: 99999999 };
+      },
+      processGroupIsAlive: () => true,
+      runtimeDir,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    };
+    const starting = ensureCodexAppServerRuntime(options);
+    await entered.promise;
+    const terminalEnv = { TEST_RUNTIME_SETTING: "changed" };
+    const waiting = ensureCodexAppServerRuntime({ ...options, terminalEnv });
+    release.resolve();
+    const [first, second] = await Promise.all([starting, waiting]);
+    assert.equal(calls.length, 2);
+    assert.equal(first.terminalEnvHash, terminalEnvHash({}));
+    assert.equal(second.terminalEnvHash, terminalEnvHash(terminalEnv));
+    assert.notEqual(first.executionId, second.executionId);
+  });
+});
+
+test("a runtime lock held outside shared startup is retryable and does not poison later acquisition", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const lockDir = path.join(runtimeDir, "runtime.lock");
+    await mkdir(lockDir);
+    await writeFile(path.join(lockDir, "owner.json"), JSON.stringify({
+      createdAt: new Date().toISOString(),
+      pid: process.pid
+    }));
+    const calls = [];
+    const options = {
+      authStateSignature: "test-auth-state-signature",
+      commandRunner: codexAppServerCommandRunner(runtimeDir, calls),
+      runtimeDir,
+      timeoutMs: 1,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    };
+    const results = await Promise.allSettled([
+      ensureCodexAppServerRuntime(options),
+      ensureCodexAppServerRuntime(options)
+    ]);
+    for (const result of results) {
+      assert.equal(result.status, "rejected");
+      assert.equal(result.reason.code, CODEX_APP_SERVER_RUNTIME_BUSY_CODE);
+      assert.equal(result.reason.retryable, true);
+      assert.match(result.reason.message, /still reconnecting/);
+    }
+    assert.equal(results[0].reason, results[1].reason);
+    assert.equal(calls.length, 0);
+    assert.equal(JSON.parse(await readFile(path.join(lockDir, "owner.json"))).pid, process.pid);
+    await rm(lockDir, { recursive: true });
+    assert.equal((await ensureCodexAppServerRuntime(options)).reused, false);
+    assert.equal(calls.length, 1);
   });
 });
 

@@ -64,6 +64,7 @@ const CODEX_APP_SERVER_LOCK_DIR = "runtime.lock";
 const CODEX_APP_SERVER_READY_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS = 2000;
 const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
+const CODEX_APP_SERVER_RUNTIME_BUSY_CODE = "vibe64_codex_app_server_runtime_busy";
 const CODEX_APP_SERVER_PROCESS_IDENTITY_SETTLE_TIMEOUT_MS = 1000;
 const CODEX_APP_SERVER_PROCESS_IDENTITY_SETTLE_POLL_MS = 25;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
@@ -2024,7 +2025,10 @@ async function acquireRuntimeLock(runtimeDir = "", {
       await delay(100);
     }
   }
-  throw new Error("Timed out waiting for the Codex app-server runtime lock.");
+  const error = new Error("Codex is still reconnecting: its shared runtime is busy starting or stopping. Please try again shortly.");
+  error.code = CODEX_APP_SERVER_RUNTIME_BUSY_CODE;
+  error.retryable = true;
+  throw error;
 }
 
 async function waitForCodexAppServer(endpoint = "", {
@@ -2475,8 +2479,25 @@ async function startCodexAppServerProcess({
   };
 }
 
+const codexAppServerRuntimePreparations = new Map();
+
 async function ensureCodexAppServerRuntime(options = {}) {
-  const runtimeDir = options.runtimeDir || codexAppServerRuntimeDir(options);
+  const runtimeDir = path.resolve(options.runtimeDir || codexAppServerRuntimeDir(options));
+  while (codexAppServerRuntimePreparations.has(runtimeDir)) {
+    await codexAppServerRuntimePreparations.get(runtimeDir);
+  }
+  // Each waiter rechecks its own auth and runtime configuration after startup.
+  const operation = prepareCodexAppServerRuntime({ ...options, runtimeDir });
+  codexAppServerRuntimePreparations.set(runtimeDir, operation);
+  try {
+    return await operation;
+  } finally {
+    codexAppServerRuntimePreparations.delete(runtimeDir);
+  }
+}
+
+async function prepareCodexAppServerRuntime(options) {
+  const { runtimeDir } = options;
   const [accountIdentitySignature, authStateSignature] = await Promise.all([
     currentCodexAccountIdentitySignature(options),
     currentCodexAuthStateSignature(options)
@@ -3863,6 +3884,7 @@ export {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE,
   CODEX_APP_SERVER_PROVIDER_ID,
+  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
