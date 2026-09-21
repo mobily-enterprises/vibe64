@@ -1464,6 +1464,22 @@ async function stopCodexAppServerRuntime(options = {}) {
   };
   try {
     const existing = await readCodexAppServerMetadata(runtimeDir);
+    const expectedAccount = normalizeAgentText(options.expectedAccountIdentitySignature);
+    const ownedRuntime = options.ownedRuntime;
+    if (
+      ownedRuntime &&
+      codexAppServerProcessMetadataIsIdentifiable(ownedRuntime, runtimeDir) &&
+      (!expectedAccount || ownedRuntime.accountIdentitySignature === expectedAccount) &&
+      (!existing || codexAppServerRuntimeIdentity(existing) !== codexAppServerRuntimeIdentity(ownedRuntime))
+    ) {
+      // Another owner may already have removed or replaced the shared runtime.
+      // Prove this provider's exact execution stopped without touching its successor.
+      return {
+        ...await stopOwnedCodexAppServerExecution(ownedRuntime, options),
+        runtimeDirPreserved: Boolean(existing),
+        runtimeDirRemoved: false
+      };
+    }
     if (!existing) {
       return {
         processExitVerified: false,
@@ -1472,7 +1488,6 @@ async function stopCodexAppServerRuntime(options = {}) {
         stopped: false
       };
     }
-    const expectedAccount = normalizeAgentText(options.expectedAccountIdentitySignature);
     if (expectedAccount) {
       // A replacement runtime is installed only after the previous process has
       // drained under this same lock. Never stop that replacement for stale
@@ -2792,6 +2807,7 @@ class CodexAppServerAgentProvider {
     this.economyAuthBlocked = false;
     this.initializeResult = null;
     this.runtime = null;
+    this.runtimeStopOwner = null;
     this.runtimePromise = null;
     this.serverRequestHandler = null;
   }
@@ -2963,6 +2979,7 @@ class CodexAppServerAgentProvider {
       this.initializeResult = null;
     }
     this.runtime = nextRuntime;
+    this.runtimeStopOwner = nextRuntime;
     await this.assertRuntimeAuthReady("codex-app-server-runtime");
     return this.runtime;
   }
@@ -3141,6 +3158,13 @@ class CodexAppServerAgentProvider {
         pid: runtime.pid,
         processIdentity: runtime.processIdentity
       }, this.options);
+      this.runtimeStopOwner = cleanup.processExitVerified === true
+        ? {
+          ...runtime,
+          processExitVerifiedAt: new Date().toISOString(),
+          processState: CODEX_APP_SERVER_PROCESS_STATE.STOPPED
+        }
+        : runtime;
       this.runtime = null;
       if (economy) {
         this.economyAuth = null;
@@ -3862,14 +3886,25 @@ class CodexAppServerAgentProvider {
     preserveProcessExitProof = false
   } = {}) {
     this.close();
-    const runtime = this.runtime || {};
+    this.runtimeStopOwner = this.runtime || this.runtimeStopOwner;
+    const runtime = this.runtimeStopOwner || {};
     const result = await stopCodexAppServerRuntime({
       ...this.options,
       expectedAccountIdentitySignature,
+      ownedRuntime: runtime,
       preserveProcessExitProof,
       runtimeDir: runtime.runtimeDir || this.options.runtimeDir
     });
-    this.runtime = null;
+    if (result.processExitVerified === true && this.runtimeStopOwner === runtime) {
+      this.runtimeStopOwner = {
+        ...runtime,
+        processExitVerifiedAt: runtime.processExitVerifiedAt || new Date().toISOString(),
+        processState: CODEX_APP_SERVER_PROCESS_STATE.STOPPED
+      };
+    }
+    if (this.runtime === runtime) {
+      this.runtime = null;
+    }
     return result;
   }
 }

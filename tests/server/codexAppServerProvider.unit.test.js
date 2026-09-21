@@ -1557,6 +1557,62 @@ test("codex provider releases verified stopped runtime without stopping expired 
   });
 });
 
+for (const replaced of [false, true]) {
+  test(`Codex stop retries retain exact ownership after runtime metadata is ${replaced ? "replaced" : "removed"}`, async () => {
+    await withTemporaryDirectory(async (baseDir) => {
+      const runtimeDir = path.join(baseDir, "codex-app-server-recovery");
+      const owned = metadataForRuntime(runtimeDir);
+      const replacement = {
+        ...metadataForRuntime(runtimeDir),
+        executionId: randomUUID(),
+        pid: owned.pid + 1
+      };
+      if (replaced) {
+        await mkdir(runtimeDir, { recursive: true });
+        await writeMetadata(runtimeDir, replacement);
+      }
+      const stops = [];
+      const provider = new CodexAppServerAgentProvider({
+        runtimeDir,
+        async stopExecution(executionId) {
+          stops.push(executionId);
+          return { ok: stops.length > 1, scopeEmpty: stops.length > 1, stopped: false };
+        }
+      });
+      provider.runtime = owned;
+
+      const pending = await provider.stopRuntime({ preserveProcessExitProof: true });
+      assert.equal(pending.processExitVerified, false);
+      assert.equal(provider.runtime, null);
+      assert.equal(provider.runtimeStopOwner, owned);
+
+      const stopped = await provider.stopRuntime({ preserveProcessExitProof: true });
+      assert.equal(stopped.processExitVerified, true);
+      assert.equal(stopped.runtimeDirRemoved, false);
+      assert.equal(provider.isAvailable(), false);
+      assert.equal((await provider.stopRuntime()).processExitVerified, true);
+      assert.deepEqual(stops, [owned.executionId, owned.executionId]);
+      if (replaced) {
+        assert.deepEqual(JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8")), replacement);
+      } else {
+        await assert.rejects(readFile(path.join(runtimeDir, "runtime.json"), "utf8"), { code: "ENOENT" });
+      }
+    });
+  });
+}
+
+test("Codex missing runtime metadata is not exit proof without retained process ownership", async () => {
+  await withTemporaryDirectory(async (baseDir) => {
+    const provider = new CodexAppServerAgentProvider({
+      runtimeDir: path.join(baseDir, "codex-app-server-unknown"),
+      async stopExecution() {
+        assert.fail("Missing process ownership must not signal an execution.");
+      }
+    });
+    assert.equal((await provider.stopRuntime()).processExitVerified, false);
+  });
+});
+
 test("codex provider recovers its exact managed scope after resource history expires", async () => {
   await withTemporaryDirectory(async (baseDir) => {
     const runtimeDir = path.join(baseDir, "codex-app-server-expired-record");

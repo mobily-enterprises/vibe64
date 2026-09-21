@@ -192,6 +192,9 @@ the assistant's local command controls from starting.
 An idle assistant whose process has stopped reconnects through the ordinary
 connection check, retaining completed replies without asking the person to
 resume finished work. Startup and disconnect cleanup cannot block each other.
+Connection recovery retains the assistant's exact process ownership even when
+another connection has removed its runtime files. Retry verifies that process
+has stopped before reconnecting and leaves any replacement assistant intact.
 Sessions sharing a Codex assistant process wait for the same startup operation.
 A busy startup lock keeps them reconnecting and retries automatically without
 stopping other sessions' work or goals.

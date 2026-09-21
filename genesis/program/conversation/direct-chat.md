@@ -324,6 +324,13 @@ stop owner. Concurrent attempts share the pending stop; a failed retry retains
 the barrier. After a verified stop, acquisition uses the retained healthy provider
 or its normally acquired replacement. It does not replay a message or resume a
 goal; explicit Send/Resume still owns continuation.
+Each provider retains the exact runtime identity acquired during startup through
+failed cleanup and connection disposal. If its runtime metadata was removed or
+replaced by another owner, shutdown verifies that retained execution through the
+existing execution gateway without deleting or stopping the replacement. Missing
+files alone are never exit proof; a provider without an identifiable owner stays
+blocked. Verified shutdown remains available to later cleanup retries until the
+provider acquires a new runtime.
 Normal redacted operational logs retain the original observation cause and any
 stop failure separately, without requiring session-debug logging.
 Startup and ordinary connection checks also reconcile a persisted active
