@@ -52,6 +52,8 @@ drag-and-drop accept multiple files sequentially, up to 100 MiB each, and never
 overwrite an existing item. Larger files placed there by the assistant remain
 downloadable. Drag-and-drop upload is confined to Drop Zone. Unsaved text stays
 in its area when switching tabs; uploads cannot discard it.
+Malformed uploads with extra fields or files fail promptly and leave no partial
+file, including when the multipart parser closes the file stream before copying starts.
 
 At compact and medium display widths, repository navigation starts hidden and
 can be opened from the file toolbar. Browsing and editing take turns occupying

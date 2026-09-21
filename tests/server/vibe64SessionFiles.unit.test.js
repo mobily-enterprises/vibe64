@@ -121,7 +121,7 @@ test("archival preserves Drop Zone on failure, removes it on success, and keeps 
 });
 
 test("HTTP Files routes retain trusted identity and stream binary uploads/downloads", async (t) => {
-  const { root, service } = await fixture(t);
+  const { root, stores, service } = await fixture(t);
   const server = Fastify();
   await server.register(multipart);
   server.addHook("preHandler", async (request) => {
@@ -144,17 +144,24 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
   const data = new FormData();
   const bytes = new Uint8Array([0, 251, 128, 10]);
   data.append("file", new Blob([bytes]), "file.bin");
-  const uploaded = await fetch(`${base}/drop-zone/upload?path=file.bin`, { method: "POST", body: data });
+  const uploaded = await fetch(`${base}/drop-zone/upload?path=file.bin`, { method: "POST", body: data, signal: AbortSignal.timeout(5000) });
   assert.equal(uploaded.status, 200, await uploaded.text());
   const downloaded = await fetch(`${base}/drop-zone/download?path=file.bin`);
   assert.equal(downloaded.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(new Uint8Array(await downloaded.arrayBuffer()), bytes);
-  const extra = new FormData();
-  extra.append("file", new Blob([bytes]), "file.bin");
-  extra.append("spoof", "owner");
-  const rejected = await fetch(`${base}/drop-zone/upload?path=rejected.bin`, { method: "POST", body: extra });
-  assert.ok(rejected.status >= 400);
-  assert.ok((await fetch(`${base}/drop-zone/download?path=rejected.bin`)).status >= 400);
+  for (const invalidPart of ["field-after", "field-before", "second-file"]) {
+    const extra = new FormData();
+    if (invalidPart === "field-before") extra.append("spoof", "owner");
+    extra.append("file", new Blob([bytes]), "file.bin");
+    if (invalidPart === "field-after") extra.append("spoof", "owner");
+    if (invalidPart === "second-file") extra.append("file", new Blob([bytes]), "second.bin");
+    const rejected = await fetch(`${base}/drop-zone/upload?path=${invalidPart}.bin`, {
+      method: "POST", body: extra, signal: AbortSignal.timeout(5000)
+    });
+    assert.ok(rejected.status >= 400, invalidPart);
+    assert.ok((await fetch(`${base}/drop-zone/download?path=${invalidPart}.bin`)).status >= 400, invalidPart);
+  }
+  assert.deepEqual((await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).sort(), ["file.bin", "shared.txt"]);
 });
 
 test("archival waits for an admitted upload and rejects writes queued after closing", async (t) => {
