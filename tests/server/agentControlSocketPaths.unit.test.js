@@ -9,6 +9,7 @@ import { prepareCodexGitCommand } from "../../packages/vibe64-terminals/src/serv
 import { prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { prepareAgentEnvCommand } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
+import { prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { requestUnixJsonCommand, unixCommandSocketPath } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 
 test("all assistant controls connect with long workspace paths and stay isolated", async () => {
@@ -30,16 +31,20 @@ test("all assistant controls connect with long workspace paths and stay isolated
       });
       const options = { commandService, sessionId, wrapperHostDir: git.hostWrapperDir };
       assert.ok(Buffer.byteLength(path.join(git.hostWrapperDir, "preview-command.sock")) > 107);
+      assert.ok(Buffer.byteLength(path.join(git.hostWrapperDir, "session-command.sock")) > 107);
       const preview = await prepareAgentPreviewCommand(options);
       const environment = await prepareAgentEnvCommand(options);
       const database = await prepareAgentDatabaseCommand(options);
+      const session = await prepareAgentSessionCommand(options);
       for (const [prepared, prefix, route] of [
         [git, "VIBE64_CODEX_GIT_COMMAND", "/codex-git-command/run"],
         [preview, "VIBE64_AGENT_PREVIEW_COMMAND", "/agent-preview-command/run"],
         [environment, "VIBE64_AGENT_ENV_COMMAND", "/agent-env-command/run"],
-        [database, "VIBE64_AGENT_DATABASE_COMMAND", "/agent-database-command/run"]
+        [database, "VIBE64_AGENT_DATABASE_COMMAND", "/agent-database-command/run"],
+        [session, "VIBE64_AGENT_SESSION_COMMAND", "/agent-session-command/run"]
       ]) {
         assert.equal(prepared.ok, true);
+        assert.equal(prepared.env[`${prefix}_SOCKET`], prepared.hostSocketPath);
         assert.equal(sockets.has(prepared.hostSocketPath), false);
         sockets.add(prepared.hostSocketPath);
         assert.equal((await stat(prepared.hostSocketPath)).isSocket(), true);
@@ -73,7 +78,7 @@ test("all assistant controls connect with long workspace paths and stay isolated
         await new Promise((resolve) => browser.close(resolve));
       }
     }
-    assert.equal(sockets.size, 10);
+    assert.equal(sockets.size, 12);
   } finally {
     for (const socket of sockets) await rm(socket, { force: true });
     await rm(root, { force: true, recursive: true });

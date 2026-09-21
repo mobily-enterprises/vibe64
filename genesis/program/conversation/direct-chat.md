@@ -659,7 +659,7 @@ connection and retries failures after one second, backing off to thirty seconds.
 It retains the reported failure in the connection notice until a successful
 check. A control-socket path configuration error stops timed retries and shows
 the repair instruction beside explicit Retry, preserving the draft.
-Git, Env, database, preview and browser command sockets use compact,
+Git, session shell, Env, database, preview and browser command sockets use compact,
 process-user-scoped names in the server temporary directory. Their identities
 include the full wrapper path and control kind, keeping projects and sessions
 separate without placing a long workspace path in the socket address. The shared

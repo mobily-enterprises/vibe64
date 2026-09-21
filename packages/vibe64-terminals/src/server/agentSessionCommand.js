@@ -41,6 +41,7 @@ import {
   removeDeadUnixJsonCommandSocket,
   sendJsonCommandResponse,
   shortCommandHash,
+  unixCommandSocketPath,
   unixJsonCommandServerIsHealthy
 } from "./unixJsonCommand.js";
 import {
@@ -97,7 +98,7 @@ function runnerHostPath(wrapperHostDir = "") {
 }
 
 function commandSocketHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME);
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME));
 }
 
 function commandRunsHostPath(wrapperHostDir = "") {
