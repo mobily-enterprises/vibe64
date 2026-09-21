@@ -140,7 +140,9 @@ Starting a target waits for the separately owned workspace-setup recipe, then
 runs every step through the managed execution gateway. Web targets use the
 preview resource profile, finite targets use the bounded job profile, and
 interactive terminal targets use the terminal profile. Web presentation owns
-port allocation, readiness and the managed proxy. A hosted web target publishes
+port allocation, readiness and the managed proxy. Its terminal includes the
+pinned Node runtime for Vibe64's readiness probes even when the application's
+declared runtime is PHP or another language. A hosted web target publishes
 its ingress socket as soon as readiness is confirmed, independently of client
 status polling. Later status inspection verifies the bound socket identity and
 republishes a missing or replaced socket. Finite runs snapshot only their

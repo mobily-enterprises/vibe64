@@ -708,7 +708,8 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       readinessMarker: readiness.readinessMarker,
       releasePortReservation,
       restartOnChange: launch.restartOnChange || null,
-      runtimes: normalizeLaunchRuntimes(launch.runtimes),
+      // Vibe64's readiness probes use Node independently of the application runtime.
+      runtimes: normalizeLaunchRuntimes([...(launch.runtimes || []), "node26"]),
       reuseRunning: true
     };
   } catch (error) {

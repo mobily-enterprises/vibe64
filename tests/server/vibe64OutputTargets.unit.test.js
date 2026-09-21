@@ -492,6 +492,31 @@ test("web outputs translate through the existing private web-preview terminal se
   assert.deepEqual(spec.metadata.readiness, target.presentation.readiness);
 });
 
+test("PHP web outputs receive the readiness probe runtime without changing their application contract", async (t) => {
+  const context = await outputContext(t);
+  const target = webOutputTarget({
+    runtimeRequirements: ["php"],
+    steps: [{
+      argv: ["php", "artisan", "serve", "--host={host}", "--port={port}"],
+      label: "Start Laravel",
+      role: "run"
+    }]
+  });
+  const spec = await createVibe64OutputTargetTerminalSpec({
+    context,
+    outputTargetId: target.id
+  }, {
+    inspect: () => outputsInspection([target])
+  });
+  t.after(() => spec.releasePortReservation?.());
+
+  assert.equal(spec.ok, true);
+  assert.deepEqual(spec.runtimes, ["php", "node26"]);
+  assert.deepEqual(spec.metadata.vibe64RuntimeRequirements, ["php"]);
+  assert.match(spec.commandPreview, /php artisan serve/u);
+  assert.match(spec.args().join(" "), /VIBE64_LAUNCH_READY_V1/u);
+});
+
 test("terminal outputs use a generic PTY spec and exact declared runtimes", async (t) => {
   const context = await outputContext(t);
   const target = webOutputTarget({
