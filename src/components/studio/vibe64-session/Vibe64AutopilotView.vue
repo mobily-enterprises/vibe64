@@ -1731,6 +1731,7 @@ onBeforeUnmount(() => {
 .studio-autopilot__activity {
   display: grid;
   gap: 0.3rem;
+  grid-auto-rows: max-content;
   grid-row: 2;
   max-height: min(24dvh, 12rem);
   min-width: 0;
