@@ -401,7 +401,9 @@ function createService({
     };
   }
 
-  async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write") {
+  async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", {
+    waitMs = 0
+  } = {}) {
     if (typeof operation !== "function") {
       throw new TypeError("Session source work requires an operation.");
     }
@@ -416,7 +418,7 @@ function createService({
       runtime,
       sessionId,
       operation,
-      { operation: operationName }
+      { operation: operationName, waitMs }
     );
     if (!exclusive.acquired) {
       const error = vibe64Error(
@@ -516,7 +518,9 @@ function createService({
         })
       : {};
     const contribution = developmentDatabase
-      ? normalizeResourceEnvironment(declaration.resources, provided)
+      ? normalizeResourceEnvironment(declaration.resources, provided, {
+          allowUnprepared: !provisionResources
+        })
       : {
           databaseToolEnvironment: null,
           environment: {},
@@ -1030,7 +1034,8 @@ function createService({
     if (inspection.state === "ready") {
       const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
       const missingKeys = new Set();
-      for (const { resource } of resolved.resources) {
+      const resourcesToCheck = resolved.resourcesPrepared ? resolved.resources : [];
+      for (const { resource } of resourcesToCheck) {
         const alternative = requiredAlternative(resource, resolved.effectiveEnvironment);
         for (const [semantic, name] of Object.entries(alternative?.bindings || {})) {
           if (!valuePresent(resolved.effectiveEnvironment, name, (alternative.allowEmpty || []).includes(semantic))) {
@@ -1070,12 +1075,12 @@ function createService({
         // The browser selects a configured identity; it cannot supply a repository or ref.
         const application = await applyTemplate({ projectRoot: source.sourceRoot, templateId });
         return {
-          ...await projectOnboardingState({ sessionId }),
+          ok: true,
           application,
           projectSlug: String(currentProjectRequestContext()?.slug || path.basename(requireSelectedTargetRoot())).trim()
         };
       }, { operation: "apply-project-template" });
-    }, "apply-project-template");
+    }, "apply-project-template", { waitMs: 10_000 });
   }
 
   async function saveEngineeringProfileState(input = {}) {

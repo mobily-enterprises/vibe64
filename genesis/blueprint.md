@@ -308,6 +308,12 @@ outdated unmodified Genesis skills through Genesis's own synchronization.
 Customized skills are preserved and changes remain visible in the source diff.
 Incomplete project setup declarations defer this automatic refresh so people can
 continue chatting with the assistant to repair them.
+Pending host-managed resources also leave starter selection, project inspection,
+and chat available. Starting the application still requires its normal resource
+and workspace preparation.
+Starter selection waits briefly for session initialization. Once its source is
+added, a later setup-check failure is shown as a setup problem with recheck,
+without presenting the completed import as a failed action.
 Background connection checks and active-turn steering do not perform this write.
 Already-loaded guidance becomes current through the assistant's normal context
 refresh lifecycle.

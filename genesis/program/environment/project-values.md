@@ -6,6 +6,7 @@ host provide managed system values separately.
 ## Sources
 
 - `packages/vibe64-project/src/server/service.js`
+- `packages/vibe64-project/src/server/resourceEnvironment.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
@@ -40,6 +41,11 @@ An unreadable resource state is not evidence that preparation can be skipped.
 Preview status, assistant profile discovery, and helper
 conversation cleanup resolve existing values through the inspection API; they
 do not provision resources or materialize project environment files.
+An explicitly unprepared host response may omit resource values during
+inspection. Starter application, setup reads, and chat remain available without
+inventing credentials or treating preparation as complete. Execution still
+requires every declared resource value, and malformed supplied values remain
+errors in either path.
 Constructing a session runtime or reading session state does not resolve the
 project environment. Prompt rendering and command execution resolve it when
 needed and share one resolution within that runtime.
@@ -80,3 +86,5 @@ binding rules as Env to report missing variable names, including for projects
 with no runnable output. Existing host values, defaults, and allowed empty values
 count toward satisfaction. The setup notice links to Env and can be rechecked;
 it does not provision resources, expose values, or replace the output area.
+Pending host-managed resources are left to application preparation rather than
+presented as credentials the person must enter.

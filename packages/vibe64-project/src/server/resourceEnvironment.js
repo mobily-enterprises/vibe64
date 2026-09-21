@@ -201,6 +201,7 @@ function normalizeDatabaseToolEnvironment(value = {}, {
 }
 
 function normalizeResourceEnvironment(resources = [], provided = {}, {
+  allowUnprepared = false,
   requireDatabaseTool = true
 } = {}) {
   if (
@@ -260,6 +261,9 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
   for (const [identity, declaration] of declarations) {
     const values = entries.get(identity);
     if (!values) {
+      if (allowUnprepared && provided.prepared === false) {
+        continue;
+      }
       throw resourceEnvironmentError(
         `The host did not satisfy managed resource ${declaration.resource.id}.`,
         DATABASE_RESOURCE_KINDS.has(declaration.resource.kind)

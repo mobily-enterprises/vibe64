@@ -46,6 +46,29 @@ test("resource preparation evidence must be an explicit boolean", () => {
   });
 });
 
+test("only read-only inspection accepts explicitly unprepared managed resources", () => {
+  const resources = [databaseResource()];
+  const pending = { contract: "vibe64.resource-environment.v2", prepared: false, resourceValues: [] };
+  const inspected = normalizeResourceEnvironment(resources, pending, { allowUnprepared: true });
+  assert.deepEqual(inspected.environment, {});
+  assert.equal(inspected.databaseToolEnvironment, null);
+  assert.throws(() => normalizeResourceEnvironment(resources, pending), {
+    code: "vibe64_managed_database_resource_missing"
+  });
+  for (const prepared of [true, undefined]) {
+    assert.throws(() => normalizeResourceEnvironment(resources, { ...pending, prepared }, { allowUnprepared: true }), {
+      code: "vibe64_managed_database_resource_missing"
+    });
+  }
+  assert.throws(() => normalizeResourceEnvironment(resources, {
+    ...pending,
+    resourceValues: [{
+      declaration: { component: "application", id: "database", kind: "postgresql" },
+      values: { database: "incomplete" }
+    }]
+  }, { allowUnprepared: true }), { code: "vibe64_resource_environment_value_missing" });
+});
+
 test("standalone database tools invert an explicitly satisfied URL binding", () => {
   const resource = databaseResource();
   const databaseToolEnvironment = applicationDatabaseToolEnvironment([resource], {

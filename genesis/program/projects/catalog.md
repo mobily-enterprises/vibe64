@@ -45,12 +45,16 @@ Starter catalogues are owned by Genesis and map a namespace-qualified choice to
 one technology repository and branch. Applying a choice uses the ordinary
 session and project source-write locks, preserves Git history and existing
 bootstrap preferences, and leaves the added source for the normal Save flow.
+Selection waits up to ten seconds for brief source-lock contention, then
+rechecks the active session and assistant work before importing.
 The browser sends only the selected catalogue ID. Neither session startup nor
 inspection runs application verification or workspace preparation.
 Starter command failures use the shared action feedback and leave the choice
-available for retry. Pending state includes the successful canonical inspection
-while Preview remains visible; unexpected inspection failures retain their
-normal error propagation.
+available for retry. Import success is returned independently of the subsequent
+read-only setup check, so a later inspection failure cannot report copied
+source as a failed import. Pending UI state includes that separate refresh while
+Preview remains visible; an inspection failure uses the existing setup warning
+and recheck action.
 
 The hosted project namespace is the catalog authority. When that namespace has
 been removed outside Vibe64, the next catalog read removes its stale private

@@ -69,7 +69,7 @@ test("an empty session offers starters and applies only the configured selection
     assert.ok(choice, "the applied template must be offered by this installation's catalogue");
     const result = await service.applyTemplate({ sessionId, templateId: choice.id, repository: "/untrusted-browser-input", branch: "wrong" });
     assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.inspection.state, "ready");
+    assert.equal((await service.readOnboarding({ sessionId })).inspection.state, "ready");
     assert.equal(result.application.template.id, choice.id);
     assert.deepEqual(result.application.source, { repository: templateRoot, branch: "public", revision: templateCommit });
     assert.equal(await readFile(path.join(root, "genesis/collaboration.md"), "utf8"), collaboration);
@@ -169,6 +169,39 @@ test("template application requires an explicit open session and shares the agen
   });
 });
 
+test("starter selection waits for brief assistant preparation under the existing source lock", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const release = Promise.withResolvers();
+    const entered = Promise.withResolvers();
+    const events = [];
+    const { service, store } = await fixture(targetRoot, {
+      logger: {
+        warn(event) {
+          if (event.operation === "apply-project-template") {
+            events.push(event);
+            release.resolve();
+          }
+        }
+      }
+    });
+    const holding = store.runSessionExclusive(sessionId, "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-agent-session" });
+    await entered.promise;
+    try {
+      const result = await service.applyTemplate({ sessionId, templateId: "test:nodejs/public" });
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.application.status, "applied");
+      assert.equal(events[0].event, "vibe64.session_lock.contended");
+      assert.equal(events[0].owner.operation, "prepare-agent-session");
+    } finally {
+      release.resolve();
+      await holding;
+    }
+  });
+});
+
 test("project environment setup does not require outputs and clears after Env is saved", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { root, service } = await fixture(targetRoot, {
@@ -227,5 +260,61 @@ test("project environment setup does not require outputs and clears after Env is
     assert.equal(hosted.ok, true, JSON.stringify(hosted));
     assert.deepEqual(hosted.environmentSetup.missingKeys, []);
     assert.equal(JSON.stringify(hosted).includes("host-private-token"), false);
+  });
+});
+
+test("a fresh managed starter remains readable before database preparation and execution still provisions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const resource = {
+      component: "application",
+      resource: {
+        id: "database",
+        kind: "mysql",
+        environmentAlternatives: [{
+          preferred: true,
+          bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USER" }
+        }]
+      }
+    };
+    const { root, service } = await fixture(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] })
+    });
+    const pending = { contract: "vibe64.resource-environment.v2", prepared: false, resourceValues: [], ok: true };
+    let provisionCalls = 0;
+    let inspectionCalls = 0;
+    let inspectionError = new Error("Stored database service metadata could not be read.");
+    service.setResourceEnvironmentProvider({
+      managedDevelopmentDatabase: true,
+      environmentForProvisionedResources() {
+        inspectionCalls += 1;
+        if (inspectionError) throw inspectionError;
+        return pending;
+      },
+      environmentForResources() {
+        provisionCalls += 1;
+        return pending;
+      }
+    });
+    const applied = await service.applyTemplate({ sessionId, templateId: "test:nodejs/public" });
+    assert.equal(applied.ok, true, JSON.stringify(applied));
+    assert.equal(applied.application.status, "applied");
+    assert.equal(inspectionCalls, 0, "a successful source import must not depend on a later environment read");
+    const failedInspection = await service.readOnboarding({ sessionId });
+    assert.equal(failedInspection.ok, false);
+    assert.match(failedInspection.error, /Stored database service metadata/);
+    inspectionError = null;
+    const inspected = await service.readOnboarding({ sessionId });
+    assert.equal(inspected.ok, true, JSON.stringify(inspected));
+    assert.equal(inspected.inspection.state, "ready");
+    assert.deepEqual(inspected.templates, []);
+    assert.deepEqual(inspected.environmentSetup.missingKeys, []);
+    assert.deepEqual(await service.projectInspectionEnvironment({ sessionId }), {});
+    assert.equal((await service.readEnv({ sessionId })).ok, true);
+    assert.equal(provisionCalls, 0);
+    await assert.rejects(readFile(path.join(root, ".env")), { code: "ENOENT" });
+    await assert.rejects(service.projectExecutionEnvironment({ sessionId, reusePrepared: true }), {
+      code: "vibe64_managed_database_resource_missing"
+    });
+    assert.equal(provisionCalls, 1, "an unprepared inspection must still enter normal execution preparation");
   });
 });
