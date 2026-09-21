@@ -2,14 +2,8 @@
   <v-defaults-provider :defaults="{ VBtn: { minHeight: 48, rounded: 'pill' } }">
     <section class="accounts-setup">
       <header class="accounts-setup__header">
-        <div class="accounts-setup__heading">
-          <h1 class="text-headline-small ma-0">{{ title }}</h1>
-          <slot name="close" />
-        </div>
-        <p v-if="lede" class="text-body-medium text-medium-emphasis ma-0">
-          {{ lede }}
-        </p>
         <div class="accounts-setup__header-actions">
+          <h1 class="text-headline-small ma-0">{{ title }}</h1>
           <v-chip
             :color="statusReady ? 'success' : undefined"
             size="small"
@@ -66,6 +60,12 @@
             {{ continueLabel }}
           </v-btn>
         </div>
+        <div v-if="$slots.close" class="accounts-setup__close">
+          <slot name="close" />
+        </div>
+        <p v-if="lede" class="text-body-medium text-medium-emphasis ma-0">
+          {{ lede }}
+        </p>
       </header>
 
       <v-alert
@@ -619,7 +619,6 @@ const setupRows = computed(() => accountRows.value.map((account) => {
   gap: 0.75rem;
 }
 
-.accounts-setup__heading,
 .accounts-setup__header-actions,
 .accounts-setup__actions {
   align-items: center;
@@ -628,9 +627,14 @@ const setupRows = computed(() => accountRows.value.map((account) => {
   gap: 0.5rem;
 }
 
-.accounts-setup__heading {
-  flex-wrap: nowrap;
-  justify-content: space-between;
+.accounts-setup__header {
+  align-items: start;
+  column-gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.accounts-setup__header > p {
+  grid-column: 1 / -1;
 }
 
 .accounts-setup__identity-fields {

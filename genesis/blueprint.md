@@ -391,6 +391,8 @@ new-session default. Workspace owners manage account credentials and add
 further connections in the separate account-management area. A connected
 Codex account shows its ChatGPT email when available; API-key access
 does not invent an account identity. Connected accounts offer Disconnect.
+Account setup keeps its title, connection status and Refresh action in one
+wrapping header row.
 Codex code sign-in presents preparation and authorization as two clear steps.
 The full one-time code stays on one line beside Copy, with one primary action
 to continue to ChatGPT. Reference screenshots open on request, and the flow

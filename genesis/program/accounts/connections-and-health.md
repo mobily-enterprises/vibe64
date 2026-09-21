@@ -91,7 +91,8 @@ selected account's local identity token when available, without exposing tokens,
 starting a runtime, or changing the authentication generation. Missing identity
 metadata and API-key connections remain usable without an email. The connection
 surface shows a Disconnect action for connected accounts and sign-in choices for
-disconnected accounts.
+disconnected accounts. The setup title, connection status and Refresh action
+share one wrapping header row, with an optional Close control at the top right.
 Codex device sign-in uses a single-column Prepare / Connect flow. The code
 and adjacent Copy action share a responsive surface; Continue to ChatGPT is
 the primary authorization action. Each step keeps its reference screenshot
