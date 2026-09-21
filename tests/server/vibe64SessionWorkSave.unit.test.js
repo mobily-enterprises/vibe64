@@ -18,7 +18,8 @@ import {
   safeChangePath,
   saveSessionWork as saveManagedSessionWorkImplementation,
   saveSessionWorkDirect as saveSessionWorkImplementation,
-  updateSessionWork
+  updateSessionWork as updateManagedSessionWork,
+  updateSessionWorkDirect as updateSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
   canonicalRepositoryBackupPath,
@@ -695,6 +696,99 @@ test("canonical checks return project-configured source identity despite stale s
       commit: fixture.baseCommit,
       ref: "refs/heads/main"
     });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("managed Update admits four stages and persists recovery before changing source", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-stages-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    const project = githubProject(root, fixture.remote);
+    await writeFile(path.join(session.sourcePath, "mine.txt"), "unsaved work\n");
+    await writeFile(path.join(fixture.seed, "incoming.txt"), "saved upstream\n");
+    await git(fixture.seed, ["add", "."]);
+    await git(fixture.seed, ["commit", "-m", "upstream"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    const canonical = await git(fixture.seed, ["rev-parse", "HEAD"]);
+    const requests = [];
+    const stages = [];
+    let locked = false;
+    let recovery;
+    let invalidated = false;
+    const result = await updateManagedSessionWork({
+      project,
+      session,
+      operationId: "managed-update",
+      async runProjectSourceExclusive(operation) {
+        assert.equal(locked, false);
+        locked = true;
+        try { return await operation(); } finally { locked = false; }
+      },
+      async onProgress(progress) {
+        stages.push(progress.stage);
+        if (progress.stage === "prepared") {
+          recovery = progress;
+          assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+        }
+      },
+      async beforeSourceChange() {
+        assert.equal(locked, true);
+        assert.ok(recovery.checkpointCommit);
+        assert.ok(recovery.mergedCommit);
+        invalidated = true;
+      },
+      async runCommand(request) {
+        assert.equal(locked, true);
+        assert.equal(request.command, "node");
+        const operation = JSON.parse(request.input).operation;
+        requests.push(operation);
+        if (operation === "update-apply") assert.equal(invalidated, true);
+        return commandRunner(request);
+      }
+    });
+    assert.equal(result.status, "updated");
+    assert.equal(result.reconciled, true);
+    assert.deepEqual(requests, ["update-checkpoint", "update-prepare", "update-derived", "update-apply"]);
+    assert.deepEqual(stages, ["repository-lock", "checkpointing", "checkpointed", "merging", "regenerating", "prepared", "mutating"]);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), canonical);
+    assert.equal(await readFile(path.join(session.sourcePath, "mine.txt"), "utf8"), "unsaved work\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "incoming.txt"), "utf8"), "saved upstream\n");
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("managed Update leaves source untouched when merge conflicts cross the helper boundary", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-conflict-stage-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "my work\n");
+    await writeFile(path.join(fixture.seed, "shared.txt"), "their work\n");
+    await git(fixture.seed, ["commit", "-am", "upstream"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    const requests = [];
+    await assert.rejects(updateManagedSessionWork({
+      project: githubProject(root, fixture.remote),
+      session,
+      beforeSourceChange() { assert.fail("Conflicts must not invalidate preparation."); },
+      runCommand(request) {
+        requests.push(JSON.parse(request.input).operation);
+        return commandRunner(request);
+      }
+    }), (error) => {
+      assert.equal(error.code, "vibe64_session_update_conflict");
+      assert.deepEqual(error.details.conflictPaths, ["shared.txt"]);
+      assert.ok(error.details.conflictRecovery.checkpointTree);
+      return true;
+    });
+    assert.deepEqual(requests, ["update-checkpoint", "update-prepare"]);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "my work\n");
   } finally {
     await rm(root, { force: true, recursive: true });
   }

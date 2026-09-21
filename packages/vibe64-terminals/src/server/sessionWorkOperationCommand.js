@@ -1,6 +1,10 @@
 import { runCaptureCommand } from "@local/vibe64-execution/server";
 import {
   checkSessionUpdatesDirect,
+  captureSessionWorkUpdateCheckpointDirect,
+  prepareSessionWorkUpdateDirect,
+  regenerateSessionWorkUpdateDirect,
+  applySessionWorkUpdateDirect,
   inspectSessionChangeDiffDirect,
   inspectSessionChangesDirect,
   inspectSessionWorkDirect,
@@ -24,7 +28,14 @@ const OPERATION_IMPLEMENTATIONS = {
   },
   "save-maintenance": refreshSessionWorkSaveCacheDirect,
   "save-message": prepareSessionWorkSaveMessageDirect,
-  "work": inspectSessionWorkDirect
+  "work": inspectSessionWorkDirect,
+  "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,
+  "update-prepare": prepareSessionWorkUpdateDirect,
+  "update-derived": async (input) => {
+    const { refreshGenesisCities } = await import("@local/vibe64-genesis/server");
+    return regenerateSessionWorkUpdateDirect({ ...input, refreshDerivedArtifacts: refreshGenesisCities });
+  },
+  "update-apply": applySessionWorkUpdateDirect
 };
 
 function runLocalCommand(request = {}) {

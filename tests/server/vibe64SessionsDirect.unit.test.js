@@ -1574,7 +1574,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
       async start(input) {
         assert.equal(input.runtime, runtime);
         assert.equal(input.session.metadata.base_commit, "canonical");
-        assert.equal(tasks.get("update-session").status, "ready");
+        assert.equal(tasks.get("update-session").status, "running");
         assert.notEqual(input.retry, true);
         if (rejectPreparation) throw new Error("Preparation could not start.");
         const pending = Promise.withResolvers();

@@ -682,6 +682,9 @@ function useVibe64AutopilotView(props, emit, {
   });
   const workspaceSetupStatus = computed(() => {
     const status = normalizedAgentTurnText(workspaceSetup.value?.status);
+    if (status === "required" && ["queued", "running", "starting"].includes(
+      normalizedAgentTurnText(props.workState?.updateOperation?.status)
+    )) return "pending";
     return ["ambiguous", "failed", "required", "running", "succeeded"].includes(status)
       ? status
       : "unconfigured";
@@ -696,7 +699,7 @@ function useVibe64AutopilotView(props, emit, {
     workspaceSetupActivityKey.value &&
     shortActionDismissals.value.workspaceSetup === workspaceSetupActivityKey.value
   ));
-  const workspaceSetupRunning = computed(() => workspaceSetupStatus.value === "running");
+  const workspaceSetupRunning = computed(() => ["pending", "running"].includes(workspaceSetupStatus.value));
   const workspaceSetupNeedsAttention = computed(() => (
     ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
   ));
@@ -707,11 +710,14 @@ function useVibe64AutopilotView(props, emit, {
     ambiguous: "Workspace setup needs a choice",
     failed: "Workspace preparation failed",
     required: "Workspace preparation required",
+    pending: "Waiting for session update…",
     running: "Preparing workspace…",
     succeeded: "Workspace prepared"
   })[workspaceSetupStatus.value] || "");
   const workspaceSetupCurrentLabel = computed(() => (
-    workspaceSetupRunning.value
+    workspaceSetupStatus.value === "pending"
+      ? "Workspace preparation will start automatically after the update."
+      : workspaceSetupRunning.value
       ? normalizedAgentTurnText(workspaceSetup.value?.currentLabel)
       : ""
   ));
@@ -721,6 +727,7 @@ function useVibe64AutopilotView(props, emit, {
   const workspaceSetupRetryDisabled = computed(() => Boolean(
     workspaceSetupRunning.value ||
     workspaceSetupRetrying.value ||
+    repositoryOperationActive.value ||
     saveWorkSending.value ||
     saveWorkOperationActive.value ||
     agentActive.value ||

@@ -56,7 +56,6 @@ import {
   inspectGenesisProjectFormat,
   inspectGenesisOpenCodePlugin,
   inspectGenesisSkills,
-  refreshGenesisCities,
   syncGenesisOpenCodePlugin,
   syncGenesisSkills
 } from "@local/vibe64-genesis/server";
@@ -1982,7 +1981,6 @@ function createService({
           operationId: input.operationId,
           project: await projectService.readCurrentProject(),
           derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-          refreshDerivedArtifacts: refreshGenesisCities,
           runCommand: execution.runCommand,
           runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
           session

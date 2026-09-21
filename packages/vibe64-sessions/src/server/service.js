@@ -1547,6 +1547,9 @@ function createService({
             session: refreshedSession
           });
           const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, refreshedWork);
+          // Keep the update active while automatic preparation is starting so
+          // invalidation is presented as pending, not a manual setup failure.
+          await prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId });
           const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
             event: {
               kind: result.status,
@@ -1562,7 +1565,6 @@ function createService({
               status: "ready"
             }
           });
-          await prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId });
           await publishSessionChanged(sessionId, {
             operation: "updated",
             originId: text(input.originId),

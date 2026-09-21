@@ -957,6 +957,30 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(retryWorkspaceSetup).not.toHaveBeenCalled();
   });
 
+  it("presents invalidated preparation as pending until the update hands over to setup", async () => {
+    const { view, props } = await createViewWithProps({
+      session: {
+        ...viewProps().session,
+        workspaceSetup: { status: "required", diagnostic: "Source is updating." }
+      },
+      workState: { updateOperation: { status: "running" } }
+    });
+    expect(view.workspaceSetupStatus.value).toBe("pending");
+    expect(view.workspaceSetupRunning.value).toBe(true);
+    expect(view.workspaceSetupNeedsAttention.value).toBe(false);
+    expect(view.workspaceSetupTitle.value).toBe("Waiting for session update…");
+    expect(view.workspaceSetupAskDisabled.value).toBe(true);
+    props.session.workspaceSetup = { status: "running", currentLabel: "Install dependencies" };
+    props.workState.updateOperation.status = "ready";
+    await nextTick();
+    expect(view.workspaceSetupStatus.value).toBe("running");
+    expect(view.workspaceSetupNeedsAttention.value).toBe(false);
+    props.session.workspaceSetup = { status: "failed", diagnostic: "Install failed." };
+    await nextTick();
+    expect(view.workspaceSetupNeedsAttention.value).toBe(true);
+    expect(view.workspaceSetupDiagnostic.value).toBe("Install failed.");
+  });
+
   it("retains bounded workspace preparation output without showing a completed collapsed action", async () => {
     const view = await createView({
       session: {
