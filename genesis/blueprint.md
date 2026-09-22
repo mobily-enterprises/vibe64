@@ -425,7 +425,8 @@ conversation, grounded in the project's purpose. They help express the current
 intent instead of repeating finished work or proposing unrelated generic tasks.
 
 The chat selector stays focused on choosing among AIs that are already
-configured and connected. A host may contribute an always-available built-in
+configured and connected. With no connected AI, the session picker directs
+people to account setup. A host may contribute an always-available built-in
 OpenCode connection and identify one connected provider as the preferred
 new-session default. Workspace owners manage account credentials and add
 further connections in the separate account-management area. A connected

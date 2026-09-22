@@ -64,6 +64,9 @@ The Accounts surface reports required providers, guides supported sign-in, and
 keeps credentials in host-owned storage. The session picker names Codex and
 Claude explicitly, with their model in the description. Connected choices have
 no recommendation badge; the preferred choice still controls initial selection.
+Standalone Codex availability comes from the Accounts service's sign-in state,
+including disconnection and required reconnection. With no connected AI, the
+session picker directs the user to account setup before creating a session.
 Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
 managed browser runtime. Failures identify the concrete host capability that is

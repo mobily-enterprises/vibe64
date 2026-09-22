@@ -144,6 +144,16 @@ const Vibe64AccountsFeature = defineFeature({
     });
     const connections = createConnections({ accounts, project });
 
+    if (typeof terminals?.configureAssistantRuntime === "function") {
+      terminals.configureAssistantRuntime({
+        async codexConnectionStatus() {
+          const status = await accounts.getStatus({ accountIds: ["codex"] });
+          return status.ok === true &&
+            status.accounts.some((account) => account.id === "codex" && account.connected === true);
+        }
+      });
+    }
+
     registerRoutes(http, {
       accounts,
       fastify,

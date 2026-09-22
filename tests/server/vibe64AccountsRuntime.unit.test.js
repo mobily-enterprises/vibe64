@@ -324,6 +324,33 @@ test("accounts feature reads roots only from its named runtime env capability", 
   });
 });
 
+test("accounts feature keeps assistant readiness aligned with Codex sign-in state", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    let assistantRuntime;
+    const feature = await startAccountsFeature({
+      env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      terminals: {
+        configureAssistantRuntime(input) {
+          assistantRuntime = input;
+        }
+      }
+    });
+    try {
+      assert.equal(await assistantRuntime.codexConnectionStatus(), false);
+      await writeReadyCodexMarker(systemRoot);
+      assert.equal(await assistantRuntime.codexConnectionStatus(), true);
+      await rm(codexAuthMarkerPath(systemRoot));
+      assert.equal(await assistantRuntime.codexConnectionStatus(), false);
+      await writeReadyCodexMarker(systemRoot);
+      await markCodexReconnectRequired(systemRoot);
+      assert.equal(await assistantRuntime.codexConnectionStatus(), false);
+    } finally {
+      await feature.runtime.shutdown();
+    }
+  });
+});
+
 test("accounts actions capture the feature API and keep auth-session reads event-free", async () => {
   const calls = [];
   const actions = createActions({
