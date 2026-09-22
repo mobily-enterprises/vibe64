@@ -182,6 +182,69 @@ describe("useVibe64SourceEditor", () => {
     vi.resetModules();
   });
 
+  it("polls during indexing, keeps partial results and stops when ready", async () => {
+    const editor = await createLoadedEditor({ currentText: ref(""), openFile: false });
+    const result = { path: "dist/app.js", line: 3, column: 1, preview: "needle" };
+    mocks.requestResults.push({ results: [result], index: { state: "building", scanned: 2, total: 10 } });
+    editor.updateSearchQuery("needle");
+    await vi.advanceTimersByTimeAsync(260);
+    expect(editor.searchIndexLabel.value).toBe("Indexing files: 2 of 10 files…");
+    expect(editor.searchResults.value).toEqual([result]);
+    let finish;
+    mocks.requestResults.push(new Promise((resolve) => { finish = resolve; }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(editor.searchLoading.value).toBe(false);
+    expect(editor.searchResults.value).toEqual([result]);
+    finish({ results: [result], index: { state: "ready" } });
+    await flushPromises();
+    const count = mocks.requestCalls.length;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(mocks.requestCalls).toHaveLength(count);
+    expect(editor.searchIndexLabel.value).toBe("");
+  });
+
+  it("stops indexing polls when hidden or unmounted and ignores results for an older query", async () => {
+    const active = ref(true);
+    const editor = await createLoadedEditor({ active, currentText: ref(""), openFile: false });
+    let finish;
+    mocks.requestResults.push(new Promise((resolve) => { finish = resolve; }));
+    editor.updateSearchQuery("old");
+    await vi.advanceTimersByTimeAsync(260);
+    editor.updateSearchQuery("new");
+    finish({ results: [{ path: "old.txt", line: 1 }], index: { state: "building" } });
+    await flushPromises();
+    expect(editor.searchResults.value).toEqual([]);
+    mocks.requestResults.push({ results: [], index: { state: "building" } });
+    await vi.advanceTimersByTimeAsync(260);
+    active.value = false;
+    await nextTick();
+    const count = mocks.requestCalls.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(mocks.requestCalls).toHaveLength(count);
+    mocks.requestResults.push({ results: [], index: { state: "building" } });
+    active.value = true;
+    await nextTick();
+    await flushPromises();
+    expect(mocks.requestCalls).toHaveLength(count + 1);
+    for (const callback of mocks.beforeUnmount) callback();
+    await flushPromises();
+    const afterUnmount = mocks.requestCalls.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(mocks.requestCalls).toHaveLength(afterUnmount);
+  });
+
+  it("shows index failures without continuing to poll", async () => {
+    const editor = await createLoadedEditor({ currentText: ref(""), openFile: false });
+    mocks.requestResults.push({ results: [], index: { state: "error", error: "Use Refresh to retry indexing." } });
+    editor.updateSearchQuery("needle");
+    await vi.advanceTimersByTimeAsync(260);
+    expect(editor.searchIndexLabel.value).toBe("Use Refresh to retry indexing.");
+    expect(editor.searchIndexPending.value).toBe(false);
+    const count = mocks.requestCalls.length;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(mocks.requestCalls).toHaveLength(count);
+  });
+
   it("refreshes the tree and clean selected file once the assistant finishes, without clearing the tree", async () => {
     const currentText = ref("");
     const agentActive = ref(false);

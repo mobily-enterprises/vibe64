@@ -48,10 +48,13 @@ Workspace setup and deployment installation declare Node and C++ runtimes becaus
 
 The initial HTML contains a lightweight, responsive loading shell with inline
 styles and a reload link. Vue replaces it when bootstrap and initial routing
-finish; a bootstrap failure changes its status to a retry explanation. The
+finish; a failed entry-module or dependency download, or a bootstrap failure,
+changes its status to a retry explanation. The download-error handler lives in
+the initial document so it works even when the application cannot execute. The
 document remains useful while JavaScript downloads or is unavailable.
 Package releases verify the exact built HTML in cold browser contexts at 390,
-768 and 1280 pixels with JavaScript requests held back. Loading feedback and a
+768 and 1280 pixels with JavaScript requests held back, then failed entry or
+dependency downloads. Loading feedback, a failure explanation after abort, and a
 48px Reload target must remain visible without horizontal overflow. Hosted
 artifact builders invoke the same public proof on their composed frontend.
 

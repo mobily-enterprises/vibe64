@@ -419,6 +419,7 @@ function createService({
   if (!projectService) {
     throw new TypeError("createService requires vibe64.project.");
   }
+  const projectRuntimeOpenOperations = new Map();
 
   const assistantRuntime = {
     claudeConnectionStatus: async () => (await readClaudeCodeAuthStatus({ env })).loggedIn === true,
@@ -1714,22 +1715,37 @@ function createService({
     async openProjectRuntime(input = {}) {
       const context = projectRuntimeContext();
       const reason = String(input?.reason || "project-open").trim() || "project-open";
-      const runtime = await writeProjectRuntimeOpenState({
-        projectRuntimeRoot: context.projectRuntimeRoot,
-        projectSlug: context.projectSlug,
-        reason
+      const key = context.projectRuntimeRoot;
+      const previous = projectRuntimeOpenOperations.get(key) || Promise.resolve();
+      // Tabs share a runtime. Serialize opens so they observe one transition,
+      // while every visit still refreshes the dormant-runtime grace period.
+      const operation = previous.catch(() => {}).then(async () => {
+        const previousRuntime = await readProjectRuntimeOpenState({ projectRuntimeRoot: key });
+        const runtime = await writeProjectRuntimeOpenState({
+          projectRuntimeRoot: key,
+          projectSlug: context.projectSlug,
+          reason
+        });
+        const result = {
+          ok: true,
+          projectContextRoot: context.projectContextRoot,
+          projectSlug: context.projectSlug,
+          reason,
+          runtime
+        };
+        if (!previousRuntime.open) {
+          await publishProjectRuntimeChanged(result, { action: "runtime-opened" });
+        }
+        return result;
       });
-      const result = {
-        ok: true,
-        projectContextRoot: context.projectContextRoot,
-        projectSlug: context.projectSlug,
-        reason,
-        runtime
-      };
-      await publishProjectRuntimeChanged(result, {
-        action: "runtime-opened"
-      });
-      return result;
+      projectRuntimeOpenOperations.set(key, operation);
+      try {
+        return await operation;
+      } finally {
+        if (projectRuntimeOpenOperations.get(key) === operation) {
+          projectRuntimeOpenOperations.delete(key);
+        }
+      }
     },
 
     closeDormantProjectRuntime(input = {}) {

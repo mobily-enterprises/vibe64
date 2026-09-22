@@ -132,7 +132,8 @@ Owns project values supplied to managed application work.
 
 ## `source` Source work
 
-Owns editing, reviewing and saving project source changes.
+Owns editing, reviewing and saving project source changes, including derived
+filename and content indexes for each working session.
 
 ### Program
 

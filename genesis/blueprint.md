@@ -12,7 +12,8 @@ server changes take effect after restarting Preview.
 
 The initial document shows a lightweight loading shell before the editor's
 JavaScript starts. It remains visible during initialization, offers a page reload,
-and explains a failed initialization instead of leaving a blank page.
+and explains a failed download or initialization instead of leaving a blank
+page or a loading message that never ends after failure.
 
 People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
@@ -27,6 +28,12 @@ Opening a project link reopens its runtime before chat and Preview load, includi
 when returning with cached data. A failed opening or project-data load offers
 Try again without requiring a browser reload. Recovery refreshes the project
 data and retries opening; repeated failures keep the action available.
+Opening the same project in another browser tab refreshes its runtime activity
+without making existing tabs reload unchanged project data. Returning to a tab
+reuses a recent repository check shared by the server; source-change events
+still request an immediate fresh check.
+Tabs inspecting the same session share an already-running worktree inspection;
+completed results are not cached, and different projects stay independent.
 Clicking an already-selected dashboard tab keeps the conversation and dashboard
 mounted; repeating navigation retries opening only after an opening failure.
 Dashboard page titles share one Material typography style. Session history keeps
@@ -142,6 +149,12 @@ Opening a binary or oversized file from chat or Files keeps its filename visible
 and offers Download without placing it in the text editor.
 The file browser keeps starred filenames on one line and starts larger lists
 collapsed.
+Open file and Find in files use indexes for each project working session,
+including ignored files. Indexes live outside the source tree and survive server
+restarts. Content indexing reads changed files instead of rebuilding unchanged
+content; progress stays visible while results fill in. Editor-created filenames
+are discoverable immediately; Refresh picks up outside changes, and subsequent
+searches also refresh discovery after a short interval.
 On phones and tablets, Files prioritizes the open file. Repository browsing and
 search stay hidden until requested, and choosing a file returns to its contents.
 A compact toolbar keeps the filename and Save visible, with other actions in a

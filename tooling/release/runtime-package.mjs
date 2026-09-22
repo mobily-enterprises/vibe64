@@ -9,6 +9,7 @@ const RUNTIME_ENTRIES = [
   "bin/server.js",
   "node_modules/@local/vibe64-execution/src/host/execHelper.js",
   "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
+  "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",
   "node_modules/@local/vibe64-genesis/src/server/index.js",
   "node_modules/@local/vibe64-genesis/src/server/promptContext.js",
   "node_modules/@local/vibe64-genesis/bin/genesis",

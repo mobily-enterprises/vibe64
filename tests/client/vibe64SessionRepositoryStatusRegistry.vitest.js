@@ -432,7 +432,7 @@ describe("session repository status registry", () => {
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "codex-app-server-live-progress" })).toBe(false);
   });
 
-  it("refreshes repository fallbacks once when a hidden tab becomes visible", async () => {
+  it("refreshes visible repository fallbacks without bypassing the server's shared check cache", async () => {
     const scope = effectScope();
     scope.run(() => useVibe64SessionRepositoryStatusRegistry({
       selectedSessionId: ref("session-a"),
@@ -454,6 +454,8 @@ describe("session repository status registry", () => {
       ["POST", "/api/app/sample/vibe64/sessions/session-a/updates/check"],
       ["GET", "/api/app/sample/vibe64/sessions/session-a/work"]
     ]);
+    expect(registryHarness.requests.find(({ options }) => options.method === "POST").options.body)
+      .toEqual({ force: false });
     scope.stop();
     expect(registryHarness.documentListeners.has("visibilitychange")).toBe(false);
   });

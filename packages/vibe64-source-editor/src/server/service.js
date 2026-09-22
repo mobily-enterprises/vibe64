@@ -66,6 +66,8 @@ import {
   createSourceEditorFileObserver
 } from "./sourceChangeObserver.js";
 import { readStarredFiles, setStarredFile, starredFilesPath } from "./starredFiles.js";
+import { createSourceEditorFileIndex } from "./fileIndex.js";
+import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "./searchIndex.js";
 
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
 const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
@@ -685,6 +687,11 @@ function createService({
   const fileObserver = sourceFileObserver || createSourceEditorFileObserver({
     logger
   });
+  const fileIndex = createSourceEditorFileIndex({
+    load: sourceEditorFilePaths,
+    snapshotPath: (context) => path.join(sourceEditorIndexDirectory(context), "filenames.json")
+  });
+  const searchIndex = createSourceEditorSearchIndex();
 
   async function sourceEditorContext(sessionId = "", {
     agentOperation = false,
@@ -1212,6 +1219,8 @@ function createService({
           const file = input.baseHash === null
             ? await createSourceEditorFile(context, change)
             : await saveSourceEditorFile(context, change);
+          if (input.baseHash === null) fileIndex.invalidate(context.sourceRoot);
+          searchIndex.invalidate(context.sourceRoot);
           return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file) };
         });
       });
@@ -1220,6 +1229,10 @@ function createService({
     async readTree(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
+        if (!normalizeSourceEditorRelativePath(input.path) && !sourceEditorResultOffset(input.offset)) {
+          fileIndex.invalidate(context.sourceRoot);
+          searchIndex.invalidate(context.sourceRoot);
+        }
         return {
           ok: true,
           policy: publicSourceEditorPolicy(context.policy),
@@ -1303,6 +1316,7 @@ function createService({
       return runSourceEditorOperation(async () => {
         return runSourceEditorWriteExclusive(input, async (context) => {
           const file = await saveSourceEditorFile(context, input);
+          searchIndex.invalidate(context.sourceRoot);
           return {
             file,
             fileChange: sourceEditorFileChange(context, input, file),
@@ -1316,6 +1330,8 @@ function createService({
       return runSourceEditorOperation(async () => {
         return runSourceEditorWriteExclusive(input, async (context) => {
           const file = await createSourceEditorFile(context, input);
+          fileIndex.invalidate(context.sourceRoot);
+          searchIndex.invalidate(context.sourceRoot);
           return {
             file,
             fileChange: sourceEditorFileChange(context, input, file),
@@ -1331,7 +1347,7 @@ function createService({
         const context = await sourceEditorContext(input.sessionId);
         return {
           ok: true,
-          ...await sourceEditorFileMatches(context, input)
+          ...sourceEditorFileMatches(await fileIndex.read(context), input)
         };
       });
     },
@@ -1341,7 +1357,10 @@ function createService({
         const context = await sourceEditorContext(input.sessionId);
         return {
           ok: true,
-          ...await sourceEditorSearch(context, input)
+          ...await searchIndex.search(context, {
+            query: normalizeSourceEditorQuery(input.query || input.q),
+            limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
+          })
         };
       });
     },
@@ -1510,6 +1529,8 @@ function createService({
       }
       explanationCache.close();
       fileObserver.close();
+      fileIndex.clear();
+      return searchIndex.close();
     }
   });
 }
@@ -1997,18 +2018,16 @@ function fileMatchScore(filePath = "", queryTokens = []) {
 
 function sortFileMatches(matches = [], query = "") {
   const queryTokens = sourceEditorFileQueryTokens(query);
-  return [...matches].sort((left, right) => {
-    const scoreDiff = fileMatchScore(left.path, queryTokens) - fileMatchScore(right.path, queryTokens);
-    return scoreDiff || left.path.localeCompare(right.path);
-  });
+  return matches
+    .map((file) => ({ file, score: fileMatchScore(file.path, queryTokens) }))
+    .sort((left, right) => (
+      left.score - right.score || left.file.path.localeCompare(right.file.path)
+    ))
+    .map(({ file }) => file);
 }
 
-async function sourceEditorFileMatches(context = {}, input = {}) {
-  const query = normalizeSourceEditorQuery(input.query || input.q);
-  const queryTokens = sourceEditorFileQueryTokens(query);
-  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
-  const matches = [];
-  let truncated = false;
+async function sourceEditorFilePaths(context = {}) {
+  const paths = [];
   const ripgrepRun = await runRipgrepLines([
     "--files",
     ...sourceEditorRipgrepBaseArgs(context.policy)
@@ -2018,78 +2037,38 @@ async function sourceEditorFileMatches(context = {}, input = {}) {
       const relativePath = normalizeRipgrepPath(line);
       if (
         !relativePath ||
-        sourceEditorPathExcluded(context.policy, relativePath) ||
-        !filePathMatchesQuery(relativePath, queryTokens)
+        sourceEditorPathExcluded(context.policy, relativePath)
       ) {
         return true;
       }
+      paths.push(relativePath);
+      return true;
+    }
+  });
+  return { paths, truncated: ripgrepRun.truncated || ripgrepRun.timedOut };
+}
+
+function sourceEditorFileMatches(index, input = {}) {
+  const query = normalizeSourceEditorQuery(input.query || input.q);
+  const queryTokens = sourceEditorFileQueryTokens(query);
+  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
+  const matches = [];
+  for (const relativePath of index.paths) {
+    if (filePathMatchesQuery(relativePath, queryTokens)) {
       matches.push({
         language: sourceEditorLanguageForPath(relativePath),
         name: path.posix.basename(relativePath),
         path: relativePath
       });
       if (!queryTokens.length && matches.length >= limit + 1) {
-        truncated = true;
-        return false;
+        break;
       }
-      return true;
     }
-  });
-  truncated ||= ripgrepRun.truncated || ripgrepRun.timedOut;
-  truncated ||= matches.length > limit;
+  }
   return {
     files: sortFileMatches(matches, query).slice(0, limit),
     query,
-    truncated
-  };
-}
-
-async function sourceEditorSearch(context = {}, input = {}) {
-  const query = normalizeSourceEditorQuery(input.query || input.q);
-  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT);
-  const results = [];
-  let truncated = false;
-  if (!query) {
-    return {
-      query,
-      results,
-      truncated
-    };
-  }
-
-  const ripgrepRun = await runRipgrepLines([
-    "--json",
-    "--fixed-strings",
-    "--smart-case",
-    "--line-number",
-    "--column",
-    "--max-columns",
-    "240",
-    "--max-columns-preview",
-    ...sourceEditorRipgrepBaseArgs(context.policy),
-    "--",
-    query
-  ], {
-    cwd: context.sourceRoot,
-    onLine(line = "") {
-      const match = sourceEditorSearchMatchFromRipgrepLine(line);
-      if (!match || sourceEditorPathExcluded(context.policy, match.path)) {
-        return true;
-      }
-      results.push(match);
-      if (results.length >= limit + 1) {
-        truncated = true;
-        return false;
-      }
-      return true;
-    }
-  });
-  truncated ||= ripgrepRun.truncated || ripgrepRun.timedOut;
-
-  return {
-    query,
-    results: results.slice(0, limit),
-    truncated
+    truncated: index.truncated || matches.length > limit
   };
 }
 
@@ -2187,30 +2166,6 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
   return {
     resolved: false,
     target: normalizeText(input.target)
-  };
-}
-
-function sourceEditorSearchMatchFromRipgrepLine(line = "") {
-  let event = null;
-  try {
-    event = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  if (event?.type !== "match") {
-    return null;
-  }
-  const data = event.data || {};
-  const relativePath = normalizeRipgrepPath(data.path?.text || "");
-  if (!relativePath) {
-    return null;
-  }
-  const firstSubmatch = Array.isArray(data.submatches) ? data.submatches[0] : null;
-  return {
-    column: Math.max(1, Number(firstSubmatch?.start || 0) + 1),
-    line: Math.max(1, Number(data.line_number || 1)),
-    path: relativePath,
-    preview: String(data.lines?.text || "").replace(/\r?\n$/u, "")
   };
 }
 

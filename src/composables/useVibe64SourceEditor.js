@@ -593,6 +593,15 @@ function useVibe64SourceEditor({
   const searchError = ref("");
   const searchLoading = ref(false);
   const searchTruncated = ref(false);
+  const searchIndex = ref(null);
+  const searchIndexPending = computed(() => ["building", "refreshing"].includes(searchIndex.value?.state));
+  const searchIndexLabel = computed(() => {
+    const index = searchIndex.value;
+    if (index?.state === "error") return index.error || "The search index could not be updated. Use Refresh to retry.";
+    if (!searchIndexPending.value) return "";
+    const action = index.state === "refreshing" ? "Refreshing file index" : "Indexing files";
+    return index.total ? `${action}: ${index.scanned} of ${index.total} files…` : `${action}…`;
+  });
   const activeExplanation = ref(null);
   const explanationError = ref("");
   const explanationBusy = ref(false);
@@ -741,6 +750,7 @@ function useVibe64SourceEditor({
     searchError.value = "";
     searchLoading.value = false;
     searchTruncated.value = false;
+    searchIndex.value = null;
   }
 
   function resetDiscoveryState() {
@@ -1325,7 +1335,9 @@ function useVibe64SourceEditor({
     }
   }
 
-  async function loadSearchResults() {
+  async function loadSearchResults({ background = false } = {}) {
+    clearSearchTimer();
+    if (disposed || !currentActive.value) return;
     const query = normalizeEditorQuery(searchQuery.value);
     if (!query) {
       clearSearchResults();
@@ -1337,7 +1349,7 @@ function useVibe64SourceEditor({
     if (!canLoad.value) {
       return;
     }
-    searchLoading.value = true;
+    searchLoading.value = !background;
     try {
       const response = await sourceEditorRequest(vibe64SourceEditorSearchPath(
         currentSessionsApiPath.value,
@@ -1349,9 +1361,14 @@ function useVibe64SourceEditor({
       }
       searchResults.value = normalizeSearchResults(response.results);
       searchTruncated.value = response.truncated === true;
+      searchIndex.value = response.index || null;
+      if (searchIndexPending.value && currentActive.value && !disposed) {
+        searchTimer = setTimeout(() => { void loadSearchResults({ background: true }); }, 1000);
+      }
     } catch (error) {
       if (requestId === searchRequestId) {
         searchResults.value = [];
+        searchIndex.value = null;
         searchError.value = String(error?.message || error || "Search results could not be loaded.");
       }
     } finally {
@@ -1715,8 +1732,8 @@ function useVibe64SourceEditor({
   function updateSearchQuery(value = "") {
     searchQuery.value = String(value || "");
     clearSearchTimer();
+    clearSearchResults();
     if (!normalizeEditorQuery(searchQuery.value)) {
-      clearSearchResults();
       return;
     }
     searchTimer = setTimeout(() => {
@@ -1836,6 +1853,7 @@ function useVibe64SourceEditor({
         selectedRevealTree.value = null;
         await loadTree();
         await revalidateSelectedFile();
+        if (searchQuery.value && currentActive.value) await loadSearchResults({ background: true });
       } while (pendingTreeRefresh && currentActive.value);
     })().finally(() => { refreshPromise = null; });
     return refreshPromise;
@@ -1853,6 +1871,13 @@ function useVibe64SourceEditor({
 
   watch([currentSessionsApiPath, currentSessionId, currentActive], async (current, previous = []) => {
     if (current[0] === previous[0] && current[1] === previous[1]) {
+      if (!current[2]) {
+        clearSearchTimer();
+        searchRequestId += 1;
+        searchLoading.value = false;
+      } else if (searchQuery.value && !pendingTreeRefresh) {
+        void loadSearchResults({ background: true });
+      }
       if (current[2] && pendingTreeRefresh) {
         await refresh();
       }
@@ -1902,6 +1927,7 @@ function useVibe64SourceEditor({
     clearAutosave();
     clearFileMatchesTimer();
     clearSearchTimer();
+    searchRequestId += 1;
     if (typeof window !== "undefined") {
       window.removeEventListener("focus", revalidateSelectedFile);
     }
@@ -1953,6 +1979,9 @@ function useVibe64SourceEditor({
     savedHash,
     searchError,
     searchLoading,
+    searchIndex,
+    searchIndexLabel,
+    searchIndexPending,
     searchQuery,
     searchResults,
     searchTruncated,

@@ -487,7 +487,7 @@ function useVibe64SessionRepositoryStatusRegistry({
       return;
     }
     inspectVisible({ force: true });
-    void checkCanonical(selectedId.value, { force: true });
+    void checkCanonical(selectedId.value);
   };
   browserDocument?.addEventListener("visibilitychange", refreshWhenVisible);
 

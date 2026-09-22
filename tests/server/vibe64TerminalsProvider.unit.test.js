@@ -18,6 +18,10 @@ import {
 } from "../../packages/vibe64-terminals/src/server/events.js";
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
 import {
+  clearProjectRuntimeOpenState,
+  readProjectRuntimeOpenState
+} from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
+import {
   Vibe64TerminalsProvider,
   createVibe64TerminalsFeature,
   terminalsProviderEnv
@@ -370,6 +374,53 @@ test("terminal events publish direct session and project events without service 
   assert.equal(published[1].realtime.payload.action, "runtime-opened");
   assert.equal(Object.hasOwn(published[0], "meta"), false);
   assert.equal(Object.hasOwn(published[1], "meta"), false);
+});
+
+test("opening one runtime from multiple tabs publishes only its closed-to-open transition", async () => {
+  await withTemporaryRoot(async (root) => {
+    const runtimeRoot = path.join(root, "runtime");
+    const targetRoot = path.join(root, "project");
+    await mkdir(targetRoot, { recursive: true });
+    const project = {
+      createSessionStore() { return {}; },
+      async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot }; },
+      currentProjectRuntimeRoot() { return runtimeRoot; },
+      currentTargetRoot() { return targetRoot; },
+      async readCurrentProject() { return { slug: "project" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(_slug, operation) { return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    };
+    const published = [];
+    const dependencies = featureDependencies({
+      env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") },
+      project,
+      published
+    });
+    const feature = createVibe64TerminalsFeature();
+    const outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      const reasons = Array.from({ length: 6 }, (_, index) => `tab-${index}`);
+      const results = await Promise.all(reasons.map((reason) => (
+        outputs.terminals.openProjectRuntime({ reason })
+      )));
+      assert.ok(results.every((result) => result.ok && result.runtime.open));
+      assert.deepEqual(results.map((result) => result.reason), reasons);
+      assert.equal(published.length, 1);
+      assert.equal(published[0].realtime.payload.reason, "runtime-opened");
+
+      await outputs.terminals.openProjectRuntime({ reason: "tab-reload" });
+      assert.equal(published.length, 1);
+      assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).reason, "tab-reload");
+
+      await clearProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot });
+      await outputs.terminals.openProjectRuntime();
+      assert.equal(published.length, 2);
+      assert.equal(published[1].realtime.payload.runtime.open, true);
+    } finally {
+      await feature.shutdown(dependencies, { outputs, profile: "test" });
+    }
+  });
 });
 
 test("terminals feature owns attachment and dormancy startup and shutdown", async () => {

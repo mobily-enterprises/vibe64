@@ -36,7 +36,7 @@ const Vibe64SourceEditorProvider = defineFeature({
     return { sourceEditor };
   },
   shutdown(_dependencies, { outputs }) {
-    outputs.sourceEditor.close();
+    return outputs.sourceEditor.close();
   }
 });
 

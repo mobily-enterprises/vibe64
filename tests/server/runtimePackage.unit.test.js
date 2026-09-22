@@ -6,12 +6,32 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { createRuntimePackage } from "../../tooling/release/runtime-package.mjs";
+import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { verifyRuntime } from "../../tooling/release/verify-runtime.mjs";
 
 const execute = promisify(execFile);
 const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
+
+test("bundled source search helper builds and searches a persistent index", async (t) => {
+  const entry = "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js";
+  assert.ok(RUNTIME_ENTRIES.includes(entry));
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-search-bundle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const outfile = path.join(root, "worker.mjs");
+  await buildNodeBundle({ appRoot: sourceRoot, entryPoint: path.join(sourceRoot, entry), outfile });
+  await mkdir(path.join(root, "source"));
+  await writeFile(path.join(root, "source/test.txt"), "bundled needle\n");
+  const run = (operation) => new Promise((resolve, reject) => {
+    const child = execFile(process.execPath, [outfile], (error, stdout) => {
+      if (error) reject(error);
+      else resolve(JSON.parse(stdout));
+    });
+    child.stdin.end(JSON.stringify({ operation, sourceRoot: path.join(root, "source"), directory: path.join(root, "index"), query: "needle", limit: 10 }));
+  });
+  assert.equal((await run("refresh")).state, "ready");
+  assert.deepEqual((await run("search")).results, [{ path: "test.txt", line: 1, column: 9, preview: "bundled needle" }]);
+});
 
 test("bundles relocate module URLs without rewriting generated worker source", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-module-url-test-"));

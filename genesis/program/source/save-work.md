@@ -75,6 +75,15 @@ check results cannot replace a newer confirmation, and pending incoming work
 survives an older work inspection until that inspection sees the announced
 canonical commit. An initially unknown file-change list does not hide a
 confirmed Update action.
+Returning to a visible tab requests a normal canonical check, allowing the
+server's 25-second shared result cache to serve sibling tabs. Explicit source
+and canonical-change invalidations still force a fresh check. Worktree fallback
+inspection on visibility remains immediate.
+Concurrent worktree reads for the same runtime, session, source path and recorded
+base/canonical commits share one repository inspection. Each response rereads
+durable Save/Update operation status after that inspection. Completed and failed
+inspections are removed immediately, so a later read inspects current files;
+different project roots and changed source metadata cannot join an older read.
 The same authority check returns the verified source mode, repository, branch
 ref and commit to session renewal, so handover creation uses the project
 configuration that Git actually checked.

@@ -3937,6 +3937,27 @@ test("source editor file matcher uses ripgrep with the neutral policy", async (t
   }
 });
 
+test("source editor filename index discovers editor creates and explicit tree refreshes", async (t) => {
+  if (!RIPGREP_AVAILABLE) return t.skip("ripgrep is not installed in this test environment");
+  const fixture = await createSourceEditorFixture({
+    extraFiles: [{ path: ".gitignore", text: "dist/\n" }]
+  });
+  t.after(async () => {
+    fixture.service.close();
+    await rm(fixture.root, { force: true, recursive: true });
+  });
+  const search = () => fixture.service.listFiles({ query: "indexed-check", sessionId: "session-1" });
+  assert.deepEqual((await search()).files, []);
+  const created = await fixture.service.createFile({ path: "dist/indexed-check.txt", sessionId: "session-1" });
+  assert.equal(created.ok, true);
+  assert.deepEqual((await search()).files.map((file) => file.path), ["dist/indexed-check.txt"]);
+
+  await rm(path.join(fixture.sourceRoot, "dist/indexed-check.txt"));
+  await writeFile(path.join(fixture.sourceRoot, "src/indexed-check.txt"), "External edit\n");
+  await fixture.service.readTree({ sessionId: "session-1" });
+  assert.deepEqual((await search()).files.map((file) => file.path), ["src/indexed-check.txt"]);
+});
+
 test("source editor file matcher ranks ordered path tokens first", async (t) => {
   if (!RIPGREP_AVAILABLE) {
     t.skip("ripgrep is not installed in this test environment");
@@ -3999,11 +4020,7 @@ test("source editor file matcher finds basename plus unordered path tokens", asy
   }
 });
 
-test("source editor search uses ripgrep and excludes VCS internals", async (t) => {
-  if (!RIPGREP_AVAILABLE) {
-    t.skip("ripgrep is not installed in this test environment");
-    return;
-  }
+test("source editor content index includes ignored files and excludes VCS internals", async () => {
 
   const fixture = await createSourceEditorFixture({
     extraFiles: [{
@@ -4012,10 +4029,16 @@ test("source editor search uses ripgrep and excludes VCS internals", async (t) =
     }]
   });
   try {
-    const response = await fixture.service.search({
-      query: "source editor",
-      sessionId: "session-1"
-    });
+    let response;
+    const deadline = Date.now() + 10000;
+    do {
+      response = await fixture.service.search({ query: "source editor", sessionId: "session-1" });
+      assert.equal(response.ok, true);
+      assert.notEqual(response.index.state, "error", response.index.error);
+      if (response.index.state === "ready") break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } while (Date.now() < deadline);
+    assert.equal(response.index.state, "ready");
     assert.equal(response.ok, true);
     assert.equal(response.truncated, false);
     assert.deepEqual(response.results.map((result) => result.path), [
@@ -4029,6 +4052,7 @@ test("source editor search uses ripgrep and excludes VCS internals", async (t) =
     assert.equal(sourceResult?.line, 1);
     assert.match(sourceResult?.preview || "", /visible needle/u);
   } finally {
+    await fixture.service.close();
     await rm(fixture.root, {
       force: true,
       recursive: true

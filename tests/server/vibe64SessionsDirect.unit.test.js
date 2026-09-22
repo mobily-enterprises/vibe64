@@ -735,6 +735,64 @@ test("session work inspection includes the durable native Save operation", async
   assert.deepEqual(result.updateOperation, { id: "update-session", status: "ready" });
 });
 
+test("overlapping work reads share one inspection only for the same project and source version", async () => {
+  let projectRoot = "/project-a";
+  let canonicalCommit = "canonical-a";
+  const inspections = [];
+  const service = createService({
+    project: {
+      async createRuntime() {
+        return {
+          stateRoot: projectRoot,
+          async getSession(sessionId) {
+            return { sessionId, metadata: { canonical_commit: canonicalCommit }, status: "active" };
+          },
+          store: { async readBackgroundTask() { return null; } }
+        };
+      }
+    },
+    terminals: {
+      inspectSessionWork(sessionId, { runtime }) {
+        return new Promise((resolve, reject) => {
+          inspections.push({ projectRoot: runtime.stateRoot, reject, resolve, sessionId });
+        });
+      }
+    }
+  });
+  const tabs = Array.from({ length: 6 }, () => service.inspectSessionWork("session-1"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inspections.length, 1);
+
+  projectRoot = "/project-b";
+  const otherProject = service.inspectSessionWork("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inspections.length, 2);
+  assert.equal(inspections[1].projectRoot, "/project-b");
+
+  projectRoot = "/project-a";
+  canonicalCommit = "canonical-new";
+  const changedSource = service.inspectSessionWork("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inspections.length, 3);
+  inspections[0].resolve({ unsaved: true });
+  inspections[1].resolve({ unsaved: false });
+  inspections[2].resolve({ unsaved: false });
+  assert.ok((await Promise.all(tabs)).every((result) => result.ok && result.unsaved));
+  assert.equal((await otherProject).unsaved, false);
+  assert.equal((await changedSource).unsaved, false);
+
+  const failed = service.inspectSessionWork("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inspections.length, 4, "Completed reads must not be cached.");
+  inspections[3].reject(new Error("Inspection failed"));
+  assert.equal((await failed).ok, false);
+  const retry = service.inspectSessionWork("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(inspections.length, 5, "Failed reads must not be cached.");
+  inspections[4].resolve({ unsaved: true });
+  assert.equal((await retry).unsaved, true);
+});
+
 test("session work inspection returns operations read after repository inspection", async () => {
   let saveTask = {
     id: "save-work",

@@ -255,6 +255,7 @@ function createService({
   const activeSaveOperations = new Map();
   const activeUpdateOperations = new Map();
   const activeRepositoryUpdateChecks = new Map();
+  const activeWorkInspections = new Map();
   const activeSuggestionDeliveries = new Map();
   let configuredRenewalActorResolver = renewalActorResolver;
   async function resolveRenewalActor(actor = {}, context = {}) {
@@ -1212,10 +1213,27 @@ function createService({
         const updateOperation = recoveredUpdateOperation?.status === "failed"
           ? await resolveSupersededUpdateFailure(runtime, sessionId, operation)
           : recoveredUpdateOperation;
-        const work = await terminals.inspectSessionWork(sessionId, {
-          runtime,
-          session
-        });
+        const inspectionKey = JSON.stringify([
+          runtime.stateRoot,
+          sessionId,
+          session.metadata?.source_path,
+          session.metadata?.base_commit,
+          session.metadata?.canonical_commit
+        ]);
+        let inspection = activeWorkInspections.get(inspectionKey);
+        if (!inspection) {
+          inspection = Promise.resolve().then(() => terminals.inspectSessionWork(sessionId, { runtime, session }));
+          activeWorkInspections.set(inspectionKey, inspection);
+        }
+        let work;
+        try {
+          work = await inspection;
+        } finally {
+          // Share only overlapping reads; the next read must inspect current files.
+          if (activeWorkInspections.get(inspectionKey) === inspection) {
+            activeWorkInspections.delete(inspectionKey);
+          }
+        }
         const [latestOperation, latestUpdateOperation] = await Promise.all([
           runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID),
           runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)

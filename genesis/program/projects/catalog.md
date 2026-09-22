@@ -16,6 +16,8 @@ workspace.
 - `src/composables/useProjectSelectionGate.js`
 - `src/composables/useVibe64AppPage.js`
 - `src/components/studio/ProjectSelectionGate.vue`
+- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-core/src/server/projectRuntimeOpenState.js`
 
 ## Public contract
 
@@ -95,3 +97,7 @@ selection refresh reports an error.
 Runtime lifecycle publication uses that same project-event owner. Deletion
 publishes only a catalog refresh hint, so clients can remove a deleted project
 without exposing its former identity to a broader audience.
+Opening a runtime publishes only its closed-to-open transition. Repeated tab
+opens still refresh the persisted runtime timestamp for dormancy, but do not
+invalidate every open tab's project resources. The terminal service serializes
+opens per runtime root so simultaneous visits observe one transition.

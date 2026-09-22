@@ -9,7 +9,8 @@
     "./server/service": "./src/server/service.js",
     "./docs/application-integration-setup.md": "./docs/application-integration-setup.md",
     "./docs/application-payments-laravel.md": "./docs/application-payments-laravel.md",
-    "./docs/application-google-ads.md": "./docs/application-google-ads.md"
+    "./docs/application-google-ads.md": "./docs/application-google-ads.md",
+    "./server/search-index-worker": "./src/server/searchIndexWorker.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -51,7 +52,7 @@
           },
           {
             "subpath": "./server/service",
-            "summary": "Owns the neutral source-tree policy, selected-file observation, ripgrep-backed file matching/search, file read/autosave operations, and session-scoped source explanation records."
+            "summary": "Owns the neutral source-tree policy, selected-file observation, indexed filename and content search, file read/autosave operations, and session-scoped source explanation records."
           }
         ]
       }

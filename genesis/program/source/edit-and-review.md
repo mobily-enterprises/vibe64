@@ -17,6 +17,11 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64Integrations.js`
 - `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
 - `packages/vibe64-source-editor/src/server/service.js`
+- `packages/vibe64-source-editor/src/server/fileIndex.js`
+- `packages/vibe64-source-editor/src/server/searchIndex.js`
+- `packages/vibe64-source-editor/src/server/searchIndexWorker.js`
+- `tests/server/vibe64SourceFileIndex.unit.test.js`
+- `tests/server/vibe64SourceSearchIndex.unit.test.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
 - `src/composables/useVibe64StarredFiles.js`
@@ -493,6 +498,38 @@ return. This adds no recursive watcher or continuous tree polling. Tree refresh
 keeps the previous tree visible until replacement pages are ready, preserving
 expanded folders, selection and editor position; concurrent local edits are
 never replaced. The existing Refresh action uses the same path.
+
+Open file reuses one filename discovery result per resolved source root for up
+to 30 seconds. Concurrent queries share that scan; creates and root-tree refreshes
+invalidate it. Failed or incomplete scans remain retryable. Each match's ranking
+score is calculated once per query. Eight recent filename indexes stay in memory;
+a recent disk snapshot can be reused after restart.
+
+Find in files builds a persistent SQLite trigram index on first use. Index state
+lives under the project's runtime `source-editor/indexes/<source-root-hash>/`,
+outside Git and session source. These are disposable derived caches, not a
+project database resource. A finite Node command through the execution gateway
+owns indexing and querying, keeping SQLite and text work off the HTTP event loop.
+The runtime artifact bundles that helper. One refresh runs at a time per service;
+there are no recursive watchers or scans while idle. Index metadata compares
+file identity, size, modification and change timestamps, rereads changed files,
+and removes deleted files. Unchanged content survives browser and server restarts.
+
+Ignored files remain included; VCS internals, symlinks and binary content stay
+excluded. Streaming overlapping chunks include large text files and long lines
+without keeping a whole file in memory. Trigrams select candidates; literal
+matching checks smart case and returns line/byte-column positions. Short or
+non-ASCII queries scan indexed text with a time budget, without rereading source.
+Results are limited and report truncation when the result or time budget is met.
+
+Editor saves/creates and root-tree refreshes mark content discovery stale.
+Subsequent searches also refresh after 30 seconds, so external writes appear on
+Refresh or the next expired search. Existing results remain visible while the
+incremental refresh runs. The Files view shows build/refresh counts, polls only
+while indexing is active and the editor is visible, and stops on completion,
+errors, session changes or unmount. A failed refresh shows its error and can be
+retried with Refresh. Each request still resolves its authorized session before
+using any cached data.
 
 The selected file header and file-row actions offer Star and Download. Downloads
 return the saved file's original bytes and filename, including binary files and

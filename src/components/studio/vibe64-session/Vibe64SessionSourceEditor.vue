@@ -337,7 +337,15 @@
               <small>{{ editor.searchResults.value.length }}</small>
             </div>
             <div
-              v-if="editor.searchLoading.value"
+              v-if="editor.searchIndexLabel.value"
+              class="vibe64-source-editor__notice"
+              :class="{ 'vibe64-source-editor__notice--error': editor.searchIndex.value?.state === 'error' }"
+              role="status"
+            >
+              {{ editor.searchIndexLabel.value }}
+            </div>
+            <div
+              v-if="editor.searchLoading.value && !editor.searchResults.value.length"
               class="vibe64-source-editor__notice"
             >
               Searching files...
@@ -349,10 +357,10 @@
               {{ editor.searchError.value }}
             </div>
             <div
-              v-else-if="!editor.searchResults.value.length"
+              v-else-if="!editor.searchResults.value.length && editor.searchIndex.value?.state !== 'error'"
               class="vibe64-source-editor__notice"
             >
-              No results.
+              {{ editor.searchIndexPending.value ? "Results will appear as files are indexed." : "No results." }}
             </div>
             <template v-else>
               <button
