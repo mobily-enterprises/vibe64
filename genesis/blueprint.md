@@ -247,11 +247,13 @@ light and dark themes. They keep their heading, status, progress text and colors
 opening details adds output and controls within the same shared presentation.
 Copy and Collapse sit beside the progress description, beneath the heading.
 People can explore the application through a compact searchable subsystem list
-and a focused detail pane. City opens unobstructed and shows a closable inspector
-only after selection. Each authored subsystem explains
-a responsibility and brings together its Program operations and owned or shared
-data tables. A searchable overview and an optional three-dimensional City share
-the same details. Operations link to explanations and source; tables link to the
+and a focused detail pane in Overview. Each authored subsystem explains a
+responsibility and brings together its Program operations and owned or shared
+data tables. Map opens the three-dimensional Machine City directly, showing
+files, functions, and optional subsystem and implementation layers. There is no
+separate Program presentation. A selected subsystem can be located in Machine
+when its generated subsystem is available. Operations link to explanations and
+source; tables with resolved database references link to the
 relationship diagram, with a way back to the selected subsystem. Missing or invalid maps
 offer a temporary AI task to generate or repair the subsystem map with the session's
 selected model and normal workspace tools. The main draft remains untouched;

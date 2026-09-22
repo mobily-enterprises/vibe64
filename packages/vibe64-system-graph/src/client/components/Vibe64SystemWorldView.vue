@@ -6,34 +6,9 @@
           <v-icon :icon="mdiCityVariantOutline" size="19" />
         </span>
         <div>
-          <strong>Genesis City · {{ rendererRevision }}</strong>
+          <strong>Machine City · {{ rendererRevision }}</strong>
           <span>{{ statusLabel }}</span>
         </div>
-      </div>
-
-      <div class="system-world__city-switch" aria-label="Choose Genesis City">
-        <v-btn
-          :active="cityKind === 'machine'"
-          :prepend-icon="mdiFileCodeOutline"
-          size="small"
-          title="Explore files and functions from the Genesis Machine City"
-          type="button"
-          variant="text"
-          @click="selectCity('machine')"
-        >
-          Machine
-        </v-btn>
-        <v-btn
-          :active="cityKind === 'program'"
-          :prepend-icon="mdiLayersTripleOutline"
-          size="small"
-          title="Explore subsystems and public operations from the Genesis Program City"
-          type="button"
-          variant="text"
-          @click="selectCity('program')"
-        >
-          Program
-        </v-btn>
       </div>
 
       <div class="system-world__view-actions">
@@ -121,7 +96,7 @@
       </div>
 
       <div
-        v-if="cityKind === 'machine' && semanticSubsystems.length"
+        v-if="semanticSubsystems.length"
         class="system-world__layer-controls"
         aria-label="Genesis semantic layers"
       >
@@ -144,7 +119,7 @@
         </button>
       </div>
 
-      <div v-if="loading && !currentCity" class="system-world__state-card" role="status">
+      <div v-if="loading && !machineCity" class="system-world__state-card" role="status">
         <v-skeleton-loader
           :aria-label="`Loading ${cityTitle}`"
           class="system-world__state-skeleton"
@@ -152,14 +127,14 @@
         />
       </div>
 
-      <div v-else-if="worldError || (!programOverride && error) || cityAvailability.state === 'invalid'" class="system-world__state-card system-world__state-card--error">
+      <div v-else-if="worldError || error || cityAvailability.state === 'invalid'" class="system-world__state-card system-world__state-card--error">
         <v-icon :icon="mdiAlertOutline" size="32" />
         <strong>{{ cityTitle }} could not render.</strong>
         <span>{{ worldError || error || cityAvailability.error?.message }}</span>
         <v-btn size="small" type="button" variant="tonal" @click="reload">Retry</v-btn>
       </div>
 
-      <div v-else-if="!currentCity" class="system-world__state-card">
+      <div v-else-if="!machineCity" class="system-world__state-card">
         <v-icon :icon="mdiInformationOutline" size="34" />
         <strong>{{ cityTitle }} has not been generated yet.</strong>
         <span>Genesis can refresh both Cities from the current project.</span>
@@ -178,7 +153,7 @@
       <div v-else-if="buildings.length === 0" class="system-world__state-card">
         <v-icon :icon="mdiInformationOutline" size="34" />
         <strong>{{ cityTitle }} is empty.</strong>
-        <span>{{ emptyCityMessage }}</span>
+        <span>Add Stack pieces with a code indexer, then refresh the Cities.</span>
       </div>
 
       <div v-if="refreshing" class="system-world__progress" role="status">
@@ -210,7 +185,7 @@
       </div>
 
       <nav v-if="buildings.length" class="system-world__navigator" :aria-label="`${cityTitle} explorer`">
-        <template v-if="cityKind === 'machine' && showSubsystems && semanticSubsystems.length">
+        <template v-if="showSubsystems && semanticSubsystems.length">
           <header>
             <span>Subsystems</span>
             <strong>{{ semanticSubsystems.length }}</strong>
@@ -229,83 +204,62 @@
             </span>
           </button>
         </template>
-        <template v-if="cityKind === 'machine'">
-          <template v-if="machineNavigatorRegions.length">
-            <header>
-              <span>Regions</span>
-              <strong>{{ machineNavigatorRegions.length }}</strong>
-            </header>
-            <button
-              v-for="region in machineNavigatorRegions"
-              :key="region.id"
-              :class="{ 'system-world__navigator-button--active': activePresentationRegionId === region.id }"
-              type="button"
-              @click="selectPresentationRegion(region)"
-            >
-              <v-icon :icon="mdiMapMarkerPath" size="13" />
-              <span>
-                <strong>{{ region.title }}</strong>
-                <small>{{ formatCount(region.buildingCount, 'file') }}</small>
-              </span>
-            </button>
-          </template>
-          <header v-if="!machineNavigatorRegions.length">
-            <span>Precincts</span>
-            <strong>{{ machineNavigatorDistricts.length }}</strong>
-          </header>
-          <header v-else>
-            <span>Campuses</span>
-            <strong>{{ machineNavigatorDistricts.length }}</strong>
+        <template v-if="machineNavigatorRegions.length">
+          <header>
+            <span>Regions</span>
+            <strong>{{ machineNavigatorRegions.length }}</strong>
           </header>
           <button
-            v-for="district in machineNavigatorDistricts"
+            v-for="region in machineNavigatorRegions"
+            :key="region.id"
+            :class="{ 'system-world__navigator-button--active': activePresentationRegionId === region.id }"
+            type="button"
+            @click="selectPresentationRegion(region)"
+          >
+            <v-icon :icon="mdiMapMarkerPath" size="13" />
+            <span>
+              <strong>{{ region.title }}</strong>
+              <small>{{ formatCount(region.buildingCount, 'file') }}</small>
+            </span>
+          </button>
+        </template>
+        <header v-if="!machineNavigatorRegions.length">
+          <span>Precincts</span>
+          <strong>{{ machineNavigatorDistricts.length }}</strong>
+        </header>
+        <header v-else>
+          <span>Campuses</span>
+          <strong>{{ machineNavigatorDistricts.length }}</strong>
+        </header>
+        <button
+          v-for="district in machineNavigatorDistricts"
+          :key="district.id"
+          :class="{ 'system-world__navigator-button--active': selectedDistrict?.id === district.id }"
+          type="button"
+          @click="inspectDistrict(district)"
+        >
+          <v-icon :icon="mdiMapMarkerPath" size="13" />
+          <span>
+            <strong>{{ district.title }}</strong>
+            <small>{{ district.path || 'Project root' }}</small>
+          </span>
+        </button>
+        <template v-if="machineNavigatorSections.length">
+          <header>
+            <span>Sections</span>
+            <strong>{{ machineNavigatorSections.length }}</strong>
+          </header>
+          <button
+            v-for="district in machineNavigatorSections"
             :key="district.id"
             :class="{ 'system-world__navigator-button--active': selectedDistrict?.id === district.id }"
             type="button"
             @click="inspectDistrict(district)"
           >
-            <v-icon :icon="mdiMapMarkerPath" size="13" />
+            <v-icon :icon="mdiFolderOutline" size="13" />
             <span>
               <strong>{{ district.title }}</strong>
-              <small>{{ district.path || 'Project root' }}</small>
-            </span>
-          </button>
-          <template v-if="machineNavigatorSections.length">
-            <header>
-              <span>Sections</span>
-              <strong>{{ machineNavigatorSections.length }}</strong>
-            </header>
-            <button
-              v-for="district in machineNavigatorSections"
-              :key="district.id"
-              :class="{ 'system-world__navigator-button--active': selectedDistrict?.id === district.id }"
-              type="button"
-              @click="inspectDistrict(district)"
-            >
-              <v-icon :icon="mdiFolderOutline" size="13" />
-              <span>
-                <strong>{{ district.title }}</strong>
-                <small>{{ district.path }}</small>
-              </span>
-            </button>
-          </template>
-        </template>
-        <template v-else>
-          <header>
-            <span>{{ programOverride ? 'Operations & data' : 'Operations' }}</span>
-            <strong>{{ buildings.length }}</strong>
-          </header>
-          <button
-            v-for="building in buildings"
-            :key="building.id"
-            :class="{ 'system-world__navigator-button--active': selectedBuilding?.id === building.id }"
-            type="button"
-            @click="inspectBuilding(building)"
-          >
-            <v-icon :icon="building.kind === 'table' ? mdiDatabaseOutline : mdiLayersTripleOutline" size="13" />
-            <span>
-              <strong>{{ building.title }}</strong>
-              <small>{{ building.subsystem }}</small>
+              <small>{{ district.path }}</small>
             </span>
           </button>
         </template>
@@ -405,66 +359,35 @@
         </div>
       </aside>
 
-      <aside v-else-if="selectedBuilding && !(sharedInspector && cityKind === 'program')" class="system-world__inspector">
-        <span class="system-world__eyebrow">{{ cityKind === 'machine' ? 'Machine file' : 'Program operation' }}</span>
+      <aside v-else-if="selectedBuilding" class="system-world__inspector">
+        <span class="system-world__eyebrow">Machine file</span>
         <h2>{{ selectedBuilding.title }}</h2>
         <p class="system-world__path">{{ selectedBuilding.path }}</p>
 
-        <template v-if="cityKind === 'machine'">
-          <div class="system-world__chips">
-            <span>{{ selectedBuilding.language }}</span>
-            <span>{{ selectedBuilding.role }}</span>
-          </div>
-          <div class="system-world__metrics">
-            <span><strong>{{ formatNumber(selectedBuilding.lines) }}</strong> lines</span>
-            <span><strong>{{ formatBytes(selectedBuilding.bytes) }}</strong> size</span>
-            <span><strong>{{ selectedFunctions.length }}</strong> functions</span>
-          </div>
-          <div v-if="selectedFunctions.length" class="system-world__section">
-            <strong>Indexed functions</strong>
-            <ul>
-              <li v-for="entry in selectedFunctions" :key="entry.id">
-                <button
-                  class="system-world__function-link"
-                  type="button"
-                  @click="openSourceFile(entry.path, { line: entry.line, column: entry.column })"
-                >
-                  <strong>{{ entry.qualifiedName }}</strong>
-                  <span>{{ entry.visibility }} {{ entry.kind }} · line {{ entry.line }}</span>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="system-world__chips">
-            <span>{{ selectedBuilding.subsystem }}</span>
-            <span>{{ formatCount(selectedBuilding.sources.length, 'source') }}</span>
-            <span>{{ formatCount(selectedImplementationLinks.length, 'implementation link') }}</span>
-          </div>
-          <p v-if="selectedBuilding.description">{{ selectedBuilding.description }}</p>
-          <div class="system-world__section">
-            <strong>Public contract</strong>
-            <pre>{{ selectedBuilding.publicContract }}</pre>
-          </div>
-          <div v-if="selectedBuilding.implementationMap" class="system-world__section">
-            <strong>Implementation map</strong>
-            <pre>{{ selectedBuilding.implementationMap }}</pre>
-          </div>
-          <div class="system-world__section">
-            <strong>Implementation sources</strong>
-            <button
-              v-for="source in selectedBuilding.sources"
-              :key="source"
-              class="system-world__source-link"
-              type="button"
-              @click="openSourceFile(source)"
-            >
-              {{ source }}
-            </button>
-          </div>
-        </template>
+        <div class="system-world__chips">
+          <span>{{ selectedBuilding.language }}</span>
+          <span>{{ selectedBuilding.role }}</span>
+        </div>
+        <div class="system-world__metrics">
+          <span><strong>{{ formatNumber(selectedBuilding.lines) }}</strong> lines</span>
+          <span><strong>{{ formatBytes(selectedBuilding.bytes) }}</strong> size</span>
+          <span><strong>{{ selectedFunctions.length }}</strong> functions</span>
+        </div>
+        <div v-if="selectedFunctions.length" class="system-world__section">
+          <strong>Indexed functions</strong>
+          <ul>
+            <li v-for="entry in selectedFunctions" :key="entry.id">
+              <button
+                class="system-world__function-link"
+                type="button"
+                @click="openSourceFile(entry.path, { line: entry.line, column: entry.column })"
+              >
+                <strong>{{ entry.qualifiedName }}</strong>
+                <span>{{ entry.visibility }} {{ entry.kind }} · line {{ entry.line }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <div class="system-world__inspector-actions">
           <v-btn
@@ -483,18 +406,18 @@
             variant="tonal"
             @click="openSourceFile(selectedBuilding.path)"
           >
-            Open {{ cityKind === 'machine' ? 'file' : 'Program module' }}
+            Open file
           </v-btn>
         </div>
       </aside>
 
-      <aside v-else-if="selectedDistrict && !(sharedInspector && cityKind === 'program')" class="system-world__inspector">
-        <span class="system-world__eyebrow">{{ cityKind === 'machine' ? 'Directory' : 'Subsystem' }}</span>
+      <aside v-else-if="selectedDistrict" class="system-world__inspector">
+        <span class="system-world__eyebrow">Directory</span>
         <h2>{{ selectedDistrict.title }}</h2>
-        <p class="system-world__path">{{ selectedDistrict.path || (cityKind === 'machine' ? 'Project root' : selectedDistrict.id) }}</p>
+        <p class="system-world__path">{{ selectedDistrict.path || 'Project root' }}</p>
         <div class="system-world__metrics">
           <span><strong>{{ selectedDistrict.buildingCount }}</strong> buildings</span>
-          <span v-if="cityKind === 'machine'"><strong>{{ formatNumber(selectedDistrict.lines) }}</strong> lines</span>
+          <span><strong>{{ formatNumber(selectedDistrict.lines) }}</strong> lines</span>
         </div>
         <div class="system-world__inspector-actions">
           <v-btn
@@ -509,16 +432,16 @@
         </div>
       </aside>
 
-      <div v-if="currentCity" class="system-world__controls-hint" aria-label="Genesis City controls">
+      <div v-if="machineCity" class="system-world__controls-hint" aria-label="Genesis City controls">
         <span><v-icon :icon="mdiMouse" size="14" /> Left-drag / arrows: move</span>
         <span><v-icon :icon="mdiGestureSwipeHorizontal" size="14" /> Two-finger horizontal: rotate</span>
         <span><v-icon :icon="mdiMouseScrollWheel" size="14" /> Wheel / two-finger vertical: zoom</span>
         <span><v-icon :icon="mdiMouseRightClickOutline" size="14" /> Right-drag: rotate</span>
       </div>
 
-      <div v-if="currentCity" class="system-world__legend">
-        <span>{{ cityKind === 'machine' ? 'Building height and footprint follow indexed line count · cyan participation and gold implementation tethers come from Genesis implemented-by links' : 'Tall buildings: operations · Low teal buildings: owned tables' }}</span>
-        <span>{{ cityKind === 'machine' ? 'Directory' : 'Subsystem' }} terraces follow native Genesis districts</span>
+      <div v-if="machineCity" class="system-world__legend">
+        <span>Building height and footprint follow indexed line count · cyan participation and gold implementation tethers come from Genesis implemented-by links</span>
+        <span>Directory terraces follow native Genesis districts</span>
       </div>
     </div>
 
@@ -585,7 +508,6 @@ import {
   mdiInformationOutline,
   mdiKeyboardOutline,
   mdiLayersTripleOutline,
-  mdiDatabaseOutline,
   mdiMapMarkerPath,
   mdiMapOutline,
   mdiMouse,
@@ -606,8 +528,6 @@ import {
 } from "../world/createSystemWorld.js";
 import {
   GENESIS_MACHINE_CITY_KIND,
-  GENESIS_PROGRAM_CITY_KIND,
-  genesisCityKind,
   genesisCityWorld
 } from "../world/genesisCityWorld.js";
 import {
@@ -621,9 +541,6 @@ const rendererRevision = "062";
 const CITY_CONTROLS_INTRODUCTION_STORAGE_KEY = "vibe64:city-controls-introduction:v1";
 
 const props = defineProps({
-  programOverride: { type: Object, default: null },
-  initialCity: { type: String, default: "machine" },
-  sharedInspector: { type: Boolean, default: false },
   active: {
     type: Boolean,
     default: false
@@ -643,14 +560,11 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  "select-subsystem",
-  "open-table",
   "open-source-file-immersive",
   "open-source-file"
 ]);
 
 const canvasElement = ref(null);
-const cityKind = ref(genesisCityKind(props.initialCity));
 const controlsIntroductionOpen = ref(props.active && !cityControlsIntroductionSeen());
 const chosenPresentationRegionId = ref("");
 const hoveredImplementationBundle = ref(null);
@@ -688,45 +602,35 @@ const {
   sessionId: toRef(props, "sessionId")
 });
 
-const currentCity = computed(() => (
-  cityKind.value === GENESIS_PROGRAM_CITY_KIND ? (props.programOverride || programCity.value) : machineCity.value
-));
-const worldOverview = computed(() => genesisCityWorld(currentCity.value, cityKind.value, {
+const worldOverview = computed(() => genesisCityWorld(machineCity.value, GENESIS_MACHINE_CITY_KIND, {
   machineCity: machineCity.value,
   programCity: programCity.value
 }));
-const buildings = computed(() => currentCity.value?.buildings || []);
-const machineNavigatorRegions = computed(() => (
-  cityKind.value === GENESIS_MACHINE_CITY_KIND
-    ? currentCity.value?.presentationRegions || []
-    : []
-));
+const buildings = computed(() => machineCity.value?.buildings || []);
+const machineNavigatorRegions = computed(() => machineCity.value?.presentationRegions || []);
 const activePresentationRegionId = computed(() => (
   chosenPresentationRegionId.value || machineNavigatorRegions.value[0]?.id || ""
 ));
 const machineNavigatorDistricts = computed(() => {
-  if (cityKind.value !== GENESIS_MACHINE_CITY_KIND) {
-    return [];
-  }
   if (machineNavigatorRegions.value.length > 0) {
-    const districtsById = new Map((currentCity.value?.districts || []).map((district) => [
+    const districtsById = new Map((machineCity.value?.districts || []).map((district) => [
       district.id,
       district
     ]));
-    return (currentCity.value?.presentationCampuses || [])
+    return (machineCity.value?.presentationCampuses || [])
       .filter((campus) => campus.regionId === activePresentationRegionId.value)
       .map((campus) => districtsById.get(campus.districtId))
       .filter(Boolean)
       .sort((left, right) => left.title.localeCompare(right.title));
   }
-  return topLevelPrecincts(currentCity.value);
+  return topLevelPrecincts(machineCity.value);
 });
 const machineNavigatorSections = computed(() => {
-  if (cityKind.value !== GENESIS_MACHINE_CITY_KIND || !selectedDistrict.value?.id) {
+  if (!selectedDistrict.value?.id) {
     return [];
   }
-  const districts = Array.isArray(currentCity.value?.districts)
-    ? currentCity.value.districts
+  const districts = Array.isArray(machineCity.value?.districts)
+    ? machineCity.value.districts
     : [];
   return districts
     .filter((district) => district.parentId === selectedDistrict.value.id)
@@ -753,43 +657,17 @@ const functionsById = computed(() => new Map(
   (machineCity.value?.functions || []).map((entry) => [entry.id, entry])
 ));
 const selectedFunctions = computed(() => (
-  cityKind.value === GENESIS_MACHINE_CITY_KIND && selectedBuilding.value
+  selectedBuilding.value
     ? selectedBuilding.value.functionIds.map((id) => functionsById.value.get(id)).filter(Boolean)
     : []
 ));
-const selectedImplementationLinks = computed(() => (
-  cityKind.value === GENESIS_PROGRAM_CITY_KIND && selectedBuilding.value
-    ? (currentCity.value?.links || []).filter((link) => link.fromId === selectedBuilding.value.id)
-    : []
-));
-const cityAvailability = computed(() => (
-  cityKind.value === GENESIS_PROGRAM_CITY_KIND && props.programOverride
-    ? { state: "valid" }
-    : systemStatus.value?.cities?.[cityKind.value] || { state: "missing" }
-));
-const cityTitle = computed(() => (
-  cityKind.value === GENESIS_MACHINE_CITY_KIND ? "Machine City" : "Program City"
-));
-const statusLabel = computed(() => {
-  if (!currentCity.value) {
-    return cityAvailability.value.state || systemStatus.value.status || "loading";
-  }
-  if (cityKind.value === GENESIS_MACHINE_CITY_KIND) {
-    return `${formatCount(currentCity.value.buildings.length, "file")} · ${formatCount(currentCity.value.functions.length, "function")}`;
-  }
-  const tables = currentCity.value.buildings.filter((building) => building.kind === "table").length;
-  return `${formatCount(currentCity.value.districts.length, "subsystem")} · ${formatCount(currentCity.value.buildings.length - tables, "operation")}${tables ? ` · ${formatCount(tables, "table")}` : ""}`;
-});
-const emptyCityMessage = computed(() => (
-  cityKind.value === GENESIS_MACHINE_CITY_KIND
-    ? "Add Stack pieces with a code indexer, then refresh the Cities."
-    : "Add explanatory Program modules, then refresh the Cities."
-));
+const cityAvailability = computed(() => systemStatus.value?.cities?.machine || { state: "missing" });
+const cityTitle = "Machine City";
+const statusLabel = computed(() => machineCity.value
+  ? `${formatCount(machineCity.value.buildings.length, "file")} · ${formatCount(machineCity.value.functions.length, "function")}`
+  : cityAvailability.value.state || systemStatus.value.status || "loading");
 const machineBuildingsByPath = computed(() => new Map(
   (machineCity.value?.buildings || []).map((building) => [building.path, building])
-));
-const programBuildingsByPath = computed(() => new Map(
-  (programCity.value?.buildings || []).map((building) => [building.path, building])
 ));
 
 function cityControlsIntroductionSeen() {
@@ -866,7 +744,7 @@ function syncWorldHistoryAvailability() {
 function sourceNavigationContext() {
   return {
     camera: world?.captureView() || null,
-    cityKind: cityKind.value,
+    cityKind: GENESIS_MACHINE_CITY_KIND,
     selectedBuildingId: selectedBuildingId.value,
     selectedDistrictId: selectedDistrict.value?.id || "",
     selectedOperationId: selectedSemanticOperationId.value,
@@ -878,7 +756,7 @@ function sourceNavigationContext() {
 }
 
 function recordWorldNavigation() {
-  if (!world || !worldOverview.value || applyingRestoreRequest || worldHistoryBusy.value) {
+  if (!worldOverview.value || applyingRestoreRequest || worldHistoryBusy.value) {
     return false;
   }
   const recorded = worldViewHistory.record(sourceNavigationContext());
@@ -958,13 +836,13 @@ function openPayload(path = "", {
   if (!normalizedPath) {
     return null;
   }
-  const located = locateBuilding(normalizedPath);
+  const building = locateBuilding(normalizedPath);
   const returnView = world?.captureView() || null;
   return {
-    anchor: immersive && located?.kind === cityKind.value
-      ? world?.buildingScreenRect(located.building.id) || null
+    anchor: immersive && building
+      ? world?.buildingScreenRect(building.id) || null
       : null,
-    buildingId: located?.building.id || "",
+    buildingId: building?.id || "",
     column: Math.max(0, Number(column) || 0),
     line: Math.max(0, Number(line) || 0),
     origin: "system",
@@ -982,12 +860,6 @@ function openSourceFile(path = "", location = {}) {
 }
 
 function handleImmersiveFileOpen(selection = {}) {
-  const building = buildings.value.find((entry) => entry.id === selection.buildingId);
-  if (building?.kind === "table") {
-    world?.endBuildingPortal({ immediate: true });
-    emit("open-table", building.tableReference);
-    return;
-  }
   const payload = openPayload(selection.path, { immersive: true });
   if (payload) {
     emit("open-source-file-immersive", {
@@ -1023,18 +895,20 @@ async function createWorld() {
     if (worldOverview.value) {
       await world.setOverview(worldOverview.value);
     }
-    if (props.restoreRequest) {
-      await applyRestoreRequest(props.restoreRequest);
-    }
   } catch (caught) {
     worldError.value = String(caught?.message || caught || "WebGL could not start.");
   }
 }
 
 async function applyOverview(nextOverview) {
-  if (!world || !nextOverview) {
+  if (!world) {
+    await createWorld();
     return;
   }
+  world.setActive(props.active);
+  resizeWorld();
+  // Suspension can leave the world dirty, so resuming needs an explicit frame.
+  startRenderLoop();
   const generation = ++overviewGeneration;
   const previousView = world.captureView();
   try {
@@ -1063,42 +937,11 @@ async function applyOverview(nextOverview) {
   }
 }
 
-function selectCity(kind, { recordHistory = true } = {}) {
-  const nextKind = genesisCityKind(kind);
-  if (nextKind === cityKind.value) {
-    return;
-  }
-  if (recordHistory) {
-    recordWorldNavigation();
-  }
-  cityKind.value = nextKind;
-  emit("select-subsystem", "");
-  selectedBuildingId.value = "";
-  selectedDistrict.value = null;
-  selectedSemanticOperationId.value = "";
-  selectedSemanticSubsystemId.value = "";
-}
-
-function inspectBuilding(building) {
-  if (!building?.id) {
-    return;
-  }
-  recordWorldNavigation();
-  if (cityKind.value === "program") emit("select-subsystem", building.subsystem);
-  selectedBuildingId.value = building.id;
-  chosenPresentationRegionId.value = building.presentationRegionId || chosenPresentationRegionId.value;
-  selectedDistrict.value = null;
-  selectedSemanticOperationId.value = "";
-  selectedSemanticSubsystemId.value = "";
-  world?.selectBuilding(building.id);
-}
-
 function inspectDistrict(district) {
   if (!district?.id) {
     return;
   }
   recordWorldNavigation();
-  if (cityKind.value === "program") emit("select-subsystem", district.path);
   selectedBuildingId.value = "";
   selectedDistrict.value = world?.selectDistrict(district.id) || district;
   chosenPresentationRegionId.value = district.presentationRegionId || chosenPresentationRegionId.value;
@@ -1120,7 +963,6 @@ function inspectSemanticSubsystem(subsystem) {
   selectedBuildingId.value = "";
   selectedDistrict.value = null;
   selectedSemanticOperationId.value = "";
-  emit("select-subsystem", subsystem.path);
   selectedSemanticSubsystemId.value = subsystem.id;
   world?.selectSubsystem(subsystem.id);
 }
@@ -1235,7 +1077,7 @@ async function refreshCities() {
 }
 
 async function navigateWorldHistory(direction) {
-  if (!world || !worldOverview.value || worldHistoryBusy.value) {
+  if (!worldOverview.value || worldHistoryBusy.value) {
     return;
   }
   const currentView = sourceNavigationContext();
@@ -1261,12 +1103,6 @@ async function applyRestoreRequest(request = {}) {
   }
   applyingRestoreRequest = true;
   try {
-    const requestedKind = genesisCityKind(request.cityKind || cityKind.value);
-    if (requestedKind !== cityKind.value) {
-      selectCity(requestedKind, { recordHistory: false });
-      await nextTick();
-      await overviewPromise;
-    }
     worldView.value = request.view === "top" ? "top" : "perspective";
     world.setView(worldView.value);
     clearSelection();
@@ -1281,7 +1117,7 @@ async function applyRestoreRequest(request = {}) {
       world.selectBuilding(request.selectedBuildingId);
       world.focusBuilding(request.selectedBuildingId);
     } else if (request.selectedDistrictId) {
-      const district = currentCity.value?.districts.find((entry) => entry.id === request.selectedDistrictId);
+      const district = machineCity.value?.districts.find((entry) => entry.id === request.selectedDistrictId);
       if (district) {
         selectedDistrict.value = world.selectDistrict(district.id) || district;
         world.focusDistrict(district.id);
@@ -1312,13 +1148,7 @@ async function applyRestoreRequest(request = {}) {
 }
 
 function locateBuilding(path = "") {
-  const normalizedPath = String(path || "");
-  const machine = machineBuildingsByPath.value.get(normalizedPath);
-  if (machine) {
-    return { building: machine, kind: GENESIS_MACHINE_CITY_KIND };
-  }
-  const program = programBuildingsByPath.value.get(normalizedPath);
-  return program ? { building: program, kind: GENESIS_PROGRAM_CITY_KIND } : null;
+  return machineBuildingsByPath.value.get(String(path || "")) || null;
 }
 
 function hasImmersiveFile(path = "") {
@@ -1326,9 +1156,9 @@ function hasImmersiveFile(path = "") {
 }
 
 function immersiveFileAnchor(path = "") {
-  const located = locateBuilding(path);
-  return located?.kind === cityKind.value
-    ? world?.buildingScreenRect(located.building.id) || null
+  const building = locateBuilding(path);
+  return building
+    ? world?.buildingScreenRect(building.id) || null
     : null;
 }
 
@@ -1344,29 +1174,24 @@ async function restoreImmersiveView(view = null, { immediate = false } = {}) {
 }
 
 async function travelImmersiveFile(path = "") {
-  const located = locateBuilding(path);
-  if (!located || !world || worldHistoryBusy.value) {
+  const building = locateBuilding(path);
+  if (!building || !world || worldHistoryBusy.value) {
     return null;
   }
   recordWorldNavigation();
   worldHistoryBusy.value = true;
   try {
-    if (located.kind !== cityKind.value) {
-      selectCity(located.kind, { recordHistory: false });
-      await nextTick();
-      await overviewPromise;
-    }
-    selectedBuildingId.value = located.building.id;
+    selectedBuildingId.value = building.id;
     selectedDistrict.value = null;
     selectedSemanticOperationId.value = "";
     selectedSemanticSubsystemId.value = "";
-    world.selectBuilding(located.building.id);
-    const anchor = await world.flyToBuilding(located.building.id);
-    world.beginBuildingPortal(located.building.id);
+    world.selectBuilding(building.id);
+    const anchor = await world.flyToBuilding(building.id);
+    world.beginBuildingPortal(building.id);
     return {
-      anchor: world.buildingScreenRect(located.building.id) || anchor,
-      buildingId: located.building.id,
-      path: located.building.path
+      anchor: world.buildingScreenRect(building.id) || anchor,
+      buildingId: building.id,
+      path: building.path
     };
   } finally {
     worldHistoryBusy.value = false;
@@ -1382,8 +1207,8 @@ watch(worldOverview, (nextOverview) => {
     overviewPromise = Promise.resolve();
     return;
   }
-  overviewPromise = applyOverview(nextOverview);
-});
+  overviewPromise = nextTick().then(() => applyOverview(nextOverview));
+}, { flush: "post" });
 
 watch(() => props.active, (active) => {
   world?.setActive(active);
@@ -1400,7 +1225,7 @@ watch(() => props.active, (active) => {
 
 watch(() => props.restoreRequest, (request) => {
   if (request && props.active) {
-    void applyRestoreRequest(request);
+    void overviewPromise.then(() => applyRestoreRequest(request));
   }
 }, { deep: true });
 
@@ -1414,11 +1239,11 @@ watch(() => props.sessionId, () => {
   selectedSemanticSubsystemId.value = "";
   showImplementationLinks.value = false;
   showSubsystems.value = true;
-  cityKind.value = GENESIS_MACHINE_CITY_KIND;
 });
 
-onMounted(() => {
-  void createWorld();
+onMounted(async () => {
+  await createWorld();
+  if (props.restoreRequest) await applyRestoreRequest(props.restoreRequest);
 });
 
 onBeforeUnmount(() => {
@@ -1455,14 +1280,13 @@ defineExpose({
   border-bottom: 1px solid rgba(121, 180, 225, 0.2);
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: minmax(12rem, 1fr) auto minmax(12rem, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 3.5rem;
   padding: 0.55rem 0.75rem;
 }
 
 .system-world__identity,
 .system-world__view-actions,
-.system-world__city-switch,
 .system-world__controls-hint,
 .system-world__legend,
 .system-world__chips,
@@ -1477,7 +1301,6 @@ defineExpose({
 .system-world__identity strong { font-size: 0.82rem; }
 .system-world__identity span { color: rgba(217, 232, 255, 0.55); font-size: 0.62rem; }
 .system-world__mark { align-items: center; background: rgba(86, 216, 255, 0.13); border: 1px solid rgba(86, 216, 255, 0.28); border-radius: 0.55rem; color: var(--city-blue); display: inline-flex; height: 2rem; justify-content: center; width: 2rem; }
-.system-world__city-switch { background: rgba(2, 8, 18, 0.5); border: 1px solid rgba(121, 180, 225, 0.17); border-radius: 0.7rem; padding: 0.14rem; }
 .system-world__view-actions { gap: 0.16rem; justify-content: flex-end; }
 
 .system-world__stage { contain: layout paint; min-height: 0; overflow: hidden; position: relative; }
@@ -1651,7 +1474,6 @@ defineExpose({
 
 @media (max-width: 920px) {
   .system-world__toolbar { grid-template-columns: 1fr auto; }
-  .system-world__city-switch { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
   .system-world__navigator { width: min(14rem, 38%); }
   .system-world__inspector { width: min(20rem, 48%); }
   .system-world__legend { display: none; }

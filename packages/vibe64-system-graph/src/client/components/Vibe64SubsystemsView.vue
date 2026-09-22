@@ -31,7 +31,7 @@
           Overview
         </v-btn>
         <v-btn min-height="48" value="city" :prepend-icon="mdiCityVariantOutline">
-          City
+          Map
         </v-btn>
       </v-btn-toggle>
       <v-btn
@@ -46,7 +46,7 @@
     </header>
 
     <div
-      v-if="subsystemLoading && !subsystemMap"
+      v-if="view === 'overview' && subsystemLoading && !subsystemMap"
       class="subsystems__loading"
       role="status"
       aria-label="Loading subsystems"
@@ -55,7 +55,7 @@
       <v-skeleton-loader type="list-item-two-line@6" />
       <v-skeleton-loader type="heading, paragraph, list-item-three-line@3" />
     </div>
-    <div v-else-if="subsystemError && !entries.length" class="subsystems__empty" role="alert">
+    <div v-else-if="view === 'overview' && subsystemError && !entries.length" class="subsystems__empty" role="alert">
       <v-icon :icon="mdiLayersTripleOutline" color="primary" size="48" />
       <h2 class="text-headline-small">
         The subsystem map needs attention
@@ -117,7 +117,7 @@
           rounded="pill"
           @click="changeView('city')"
         >
-          Explore City
+          Explore map
         </v-btn>
       </div>
     </div>
@@ -204,21 +204,14 @@
         :session-id="sessionId"
         :resolve-request-url="resolveRequestUrl"
         :restore-request="cityRestoreRequest"
-        :program-override="spatialCity"
-        initial-city="program"
-        shared-inspector
-        @select-subsystem="selectSubsystem"
-        @open-table="openDeclaredTable"
         @open-source-file="forwardSource"
         @open-source-file-immersive="forwardSource"
       />
 
       <v-sheet
-        v-if="selected && (view === 'overview' || detailOpen)"
+        v-if="selected && view === 'overview'"
         class="subsystems__detail-shell"
-        :class="{ 'subsystems__detail-shell--floating': view === 'city' }"
         rounded="xl"
-        :elevation="view === 'city' ? 3 : 0"
         color="surface"
         :aria-label="`${selected.title} subsystem details`"
         @keydown.esc.stop="closeDetail"
@@ -226,7 +219,6 @@
         <div class="subsystems__detail-toolbar px-4 pt-3">
           <v-btn
             min-height="48"
-            v-if="view === 'overview'"
             class="subsystems__back"
             :prepend-icon="mdiArrowLeft"
             variant="text"
@@ -235,25 +227,14 @@
           >
             All subsystems
           </v-btn>
-          <span v-else class="text-label-large text-medium-emphasis">
-            Subsystem details
-          </span>
           <v-spacer />
           <v-btn
             min-height="48"
-            v-if="view === 'city'"
-            :icon="mdiClose"
-            variant="text"
-            aria-label="Close subsystem details"
-            @click="closeDetail"
-          />
-          <v-btn
-            min-height="48"
-            v-else
             :icon="mdiCityVariantOutline"
+            :disabled="!programCity?.districts?.some(district => district.id === `subsystem:${selected.id}`)"
             variant="text"
-            aria-label="Show selected subsystem in City"
-            title="Show in City"
+            aria-label="Show selected subsystem in Machine"
+            title="Show in map"
             @click="showInCity"
           />
           <v-btn
@@ -506,7 +487,6 @@ import {
   mdiArrowTopRight,
   mdiCheck,
   mdiChevronRight,
-  mdiClose,
   mdiCityVariantOutline,
   mdiCodeBraces,
   mdiDatabaseOutline,
@@ -518,7 +498,7 @@ import {
 } from "@mdi/js";
 import { useVibe64DatabaseTools } from "@local/vibe64-database-tools/client";
 import { useVibe64SystemGraph } from "../composables/useVibe64SystemGraph.js";
-import { subsystemEntries, subsystemCity } from "../subsystemsModel.js";
+import { subsystemEntries } from "../subsystemsModel.js";
 import Vibe64SystemWorldView from "./Vibe64SystemWorldView.vue";
 const props = defineProps({
   assistantAvailable: {
@@ -603,7 +583,6 @@ const filteredEntries = computed(() => {
     return searchableText.includes(query);
   });
 });
-const spatialCity = computed(() => subsystemCity(subsystemMap.value, programCity.value));
 const unassignedTables = computed(() => {
   const owned = new Set(entries.value.flatMap(entry => entry.dataOwned.map(table => table.qualifiedName)));
   return (databaseState.value?.schema?.tables || []).filter(table => !owned.has(table.qualifiedName));
@@ -637,14 +616,8 @@ function forwardSource(target) {
 function openTable(table) {
   emit("open-table", {
     ...table,
-    systemContext: returnContext()
+    systemContext: { ...table.systemContext, ...returnContext() }
   });
-}
-function openDeclaredTable(reference) {
-  const table = entries.value.flatMap(entry => entry.dataOwned).find(entry => entry.key === reference.key);
-  if (table?.qualifiedName) {
-    openTable(table);
-  }
 }
 async function selectSubsystem(id, event) {
   if (!id) {
@@ -672,8 +645,8 @@ function showInCity() {
   view.value = "city";
   detailOpen.value = false;
   cityRestoreRequest.value = {
-    cityKind: "program",
-    selectedDistrictId: `subsystem:${selected.value.id}`,
+    cityKind: "machine",
+    selectedSubsystemId: `subsystem:${selected.value.id}`,
     sequence: Date.now()
   };
 }
@@ -860,17 +833,6 @@ watch(() => props.restoreRequest, request => {
   min-height: 0;
 }
 
-.subsystems__detail-shell--floating {
-  position: absolute;
-  inset: 16px 16px 16px auto;
-  width: min(400px, calc(100% - 32px));
-  z-index: 2;
-}
-
-.subsystems__detail-shell--floating .subsystems__detail {
-  padding: 16px 24px 24px;
-}
-
 .subsystems__loading {
   display: grid;
   grid-template-columns: 304px 1fr;
@@ -949,10 +911,6 @@ watch(() => props.restoreRequest, request => {
   }
   .subsystems__body--city {
     padding: 0;
-  }
-  .subsystems__detail-shell--floating {
-    inset: 8px;
-    width: auto;
   }
   .subsystems__loading {
     grid-template-columns: 1fr;

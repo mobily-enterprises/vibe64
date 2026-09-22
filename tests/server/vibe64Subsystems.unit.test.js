@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { subsystemEntries, subsystemCity } from "../../packages/vibe64-system-graph/src/client/subsystemsModel.js";
+import { subsystemEntries } from "../../packages/vibe64-system-graph/src/client/subsystemsModel.js";
 import { validateGenesisCity } from "../../packages/vibe64-system-graph/src/server/genesisCities.js";
 const table = {
   resource: "database",
@@ -66,15 +66,6 @@ test("subsystem data resolves exact resource and schema identity and preserves s
     }
   })[0].dataOwned[0].resolution, "missing");
   assert.equal(subsystemEntries(map, city, null)[0].dataOwned[0].resolution, "unavailable");
-});
-test("spatial view includes owned data and operations without inventing read/write links", () => {
-  const presentation = subsystemCity(map, city);
-  assert.equal(presentation.buildings.length, 2);
-  assert.equal(presentation.buildings[1].kind, "table");
-  assert.equal(presentation.buildings[1].districtId, "subsystem:forms");
-  assert.equal(presentation.districts.length, 2);
-  assert.deepEqual(presentation.links, []);
-  assert.equal(city.buildings.length, 1);
 });
 test("unassigned Genesis operations remain readable before subsystem adoption", () => {
   const source = {

@@ -88,7 +88,7 @@ operations, verification commands, and applicable skills are loaded only after
 the relevant path is known through `genesis context <path...>`.
 
 People can
-refresh and explore the detailed Machine City and explanatory Program City,
+refresh and explore Machine City and the subsystem Overview,
 navigate subsystems and operations to their participating files, and open those
 files for editing or discussion. Task guidance names Genesis operations without
 assuming a machine-global executable. Automatic City reads follow the visible
@@ -119,12 +119,15 @@ ownership from directories or create operation-to-table dependency edges.
 Program contracts and source links use the generated Program City when available;
 the authored Program files remain directly accessible before generation.
 
-The optional City presents operations as tall buildings and owned tables as low
-teal buildings in their declared subsystem districts. It opens at full width without a selected responsibility panel. Selecting a
-subsystem or operation opens the same detail content in a closable inspector;
-Escape dismisses it. Switching presentations closes the inspector. Machine City
-remains accessible. Projects without a
-map can still explore existing Cities; their operations are explicitly unassigned.
+Map opens Machine City directly; there is no separate Program view or nested
+Machine/Program switch. Files and functions retain the existing renderer,
+navigation, and closable inspectors. Generated Program operations still supply
+Machine's subsystem sky and exact implemented-by links, and Overview retains
+its operation explanations and data details. Overview's map action focuses the
+selected generated subsystem in Machine. Hiding the retained Machine view
+pauses rendering; reactivation explicitly resumes its render loop even when
+the world was already dirty. Projects without a subsystem declaration can still
+explore an indexed Machine City.
 The empty overview starts a temporary workspace-writing task to generate the
 map using the session's selected model and normal tools. It reuses the existing
 temporary task lifecycle and deduplication, leaves the main composer untouched,

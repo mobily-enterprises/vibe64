@@ -120,7 +120,7 @@ const programCity = {
   }]
 };
 
-test("System switches between native Genesis Machine and Program Cities", async ({ page }) => {
+test("Subsystems keeps Overview and a responsive Machine map without a Program switch", async ({ page }) => {
   test.setTimeout(60_000);
   await mockDirectChatSession(page);
   await page.unroute(apiEndpointPattern("/vibe64/sessions"));
@@ -185,6 +185,15 @@ test("System switches between native Genesis Machine and Program Cities", async 
       path: ".genesis/program-city.json"
     });
   });
+  await routeApiEndpoint(page, `${sessionApi}/subsystems`, async (route) => {
+    await fulfillJson(route, {
+      status: "valid",
+      subsystems: [{
+        id: "catalog", title: "Catalog", description: "Owns the book catalogue.",
+        program: [programCity.buildings[0].path], dataOwned: [], dataUsed: []
+      }]
+    });
+  });
   await routeApiEndpoint(page, `${sessionApi}/refresh`, async (route) => {
     refreshCount += 1;
     await fulfillJson(route, {
@@ -203,11 +212,13 @@ test("System switches between native Genesis Machine and Program Cities", async 
   await page.goto(DEVELOPMENT_PATH);
   await expect(page.getByRole("region", { name: "Session chat" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("tab", { name: "Dashboard" }).click();
-  await page.getByRole("link", { exact: true, name: "Cities" }).click();
+  await page.getByRole("link", { exact: true, name: "Subsystems" }).click();
+  await expect(page.getByRole("button", { exact: true, name: "Overview" })).toBeVisible();
+  await page.getByRole("button", { exact: true, name: "Map" }).click();
 
-  await expect(page.getByText(/Genesis City · \d+/u)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("button", { exact: true, name: "Machine" })).toBeVisible();
-  await expect(page.getByRole("button", { exact: true, name: "Program" })).toBeVisible();
+  await expect(page.getByText(/Machine City · \d+/u)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { exact: true, name: "Machine" })).toHaveCount(0);
+  await expect(page.getByRole("button", { exact: true, name: "Program" })).toHaveCount(0);
   await expect(page.locator("canvas[aria-label^='Interactive 3D Genesis City']")).toBeVisible();
   await expect(page.getByText("Moving around the City", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Got it" }).click();
@@ -217,12 +228,17 @@ test("System switches between native Genesis Machine and Program Cities", async 
   await expect(page.getByRole("heading", { level: 2, name: "catalog" })).toBeVisible();
   await expect(page.getByText("1 exact files", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { exact: true, name: "Program" }).click();
-  await expect(page.getByRole("navigation", { name: "Program City explorer" })).toBeVisible();
-  await page.getByRole("button", { name: /List books.*catalog/iu }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "List books" })).toBeVisible();
-  await expect(page.getByText("Returns every current book in catalogue order.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "src/catalog.js" })).toBeVisible();
+  for (let visit = 0; visit < 3; visit += 1) {
+    await page.getByRole("button", { exact: true, name: "Overview" }).click();
+    await expect(page.getByRole("heading", { level: 2, name: "Catalog" })).toBeVisible();
+    await expect(page.locator("canvas[aria-label^='Interactive 3D Genesis City']")).toHaveCount(0);
+    await page.getByRole("button", { exact: true, name: "Map" }).click();
+    const canvas = page.locator("canvas[aria-label^='Interactive 3D Genesis City']");
+    await expect(canvas).toBeVisible();
+    const before = await canvas.screenshot();
+    await page.getByRole("button", { name: "Rotate view right", exact: true }).click();
+    await expect.poll(async () => before.equals(await canvas.screenshot())).toBe(false);
+  }
 
   await page.getByRole("button", { name: "Refresh Cities" }).click();
   await expect.poll(() => refreshCount).toBe(1);
