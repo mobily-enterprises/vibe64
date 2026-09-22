@@ -287,8 +287,35 @@ function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
     return null;
   }
   const existingIndex = turns.findIndex((turn) => String(turn?.turnId || "").trim() === turnId);
+  const existing = turns[existingIndex];
+  const updated = { ...existing, ...patch.turn };
+  if (existing) {
+    // An upsert adds delivered messages. An older partial turn must not remove
+    // a saved answer or progress; explicit Undo arrives through a fresh read.
+    for (const role of ["system", "user", "assistant"]) {
+      if (existing[role] && !updated[role]) {
+        updated[role] = existing[role];
+      }
+    }
+    const existingTurn = normalizeConversationTurn(existing);
+    const patchedTurn = normalizeConversationTurn(patch.turn);
+    for (const role of ["thinking", "commentary"]) {
+      const messages = new Map();
+      for (const message of [...(existingTurn?.[role] || []), ...(patchedTurn?.[role] || [])]) {
+        const key = message.messageId || JSON.stringify([message.role, message.at, message.text]);
+        messages.set(key, message);
+      }
+      updated[role] = chronologicalConversationActivity([...messages.values()]);
+    }
+    updated.messages = [
+      updated.system,
+      updated.user,
+      ...chronologicalConversationActivity([...updated.thinking, ...updated.commentary]),
+      updated.assistant
+    ].filter(Boolean);
+  }
   const nextTurns = (existingIndex >= 0
-    ? turns.map((turn, index) => index === existingIndex ? patch.turn : turn)
+    ? turns.map((turn, index) => index === existingIndex ? updated : turn)
     : [...turns, patch.turn]
   ).sort((left, right) => String(left?.turnId || "").localeCompare(
     String(right?.turnId || ""),
@@ -400,18 +427,41 @@ function useVibe64ConversationLog({
   const conversationLogPath = computed(() => sessionId.value
     ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
     : "");
+  const pendingReads = new Set();
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
     path: conversationLogPath,
     queryKey,
     queryOptions: {
+      async queryFn({ signal }) {
+        const read = {
+          sessionId: sessionId.value,
+          projectSlug: projectSlug.value,
+          patches: []
+        };
+        pendingReads.add(read);
+        try {
+          let payload = await httpClient.request(conversationLogPath.value, {
+            method: "GET",
+            query: conversationLogReadQuery(),
+            signal
+          });
+          // The request may have captured history before a live delivery. Apply
+          // only updates received during this read before it replaces the cache.
+          for (const patch of read.patches) {
+            payload = applyConversationLogPatch(payload, patch, { limit: CONVERSATION_LOG_PAGE_LIMIT });
+          }
+          return payload;
+        } finally {
+          pendingReads.delete(read);
+        }
+      },
       placeholderData: (previousData) => previousData,
       refetchOnMount: false,
       refetchOnWindowFocus: false
     },
     readMethod: "GET",
-    readQuery: computed(() => conversationLogReadQuery()),
     refreshOnPull: true,
     requestRecoveryLabel: "Conversation history",
     realtime: null
@@ -490,6 +540,11 @@ function useVibe64ConversationLog({
         sessionId: sessionId.value
       });
       return false;
+    }
+    for (const read of pendingReads) {
+      if (read.sessionId === sessionId.value && read.projectSlug === projectSlug.value) {
+        read.patches.push(patch);
+      }
     }
     queryClient.setQueryData(key, nextPayload);
     vibe64SessionDebugLog("client.conversationLog.patch.done", {

@@ -1254,6 +1254,7 @@ describe("useVibe64ConversationLog", () => {
         {
           thinking: [
             {
+              messageId: "thought-2",
               role: "thinking",
               text: "Old thought."
             }
@@ -1271,6 +1272,7 @@ describe("useVibe64ConversationLog", () => {
     const updatedTurn = {
       thinking: [
         {
+          messageId: "thought-2",
           role: "thinking",
           text: "Updated thought."
         }
@@ -1288,7 +1290,12 @@ describe("useVibe64ConversationLog", () => {
     })).toEqual({
       conversationLog: [
         originalPayload.conversationLog[0],
-        updatedTurn
+        {
+          ...updatedTurn,
+          commentary: [],
+          thinking: [{ ...updatedTurn.thinking[0], at: "" }],
+          messages: [updatedTurn.user, { ...updatedTurn.thinking[0], at: "" }]
+        }
       ],
       ok: true,
       pagination: {
