@@ -6,6 +6,9 @@ session history.
 
 ## Sources
 
+- `src/lib/vibe64AssistantHost.js`
+- `src/components/studio/Vibe64SessionPanel.vue`
+
 - `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
 - `packages/vibe64-core/src/server/nativeHelperModel.js`
 
@@ -229,12 +232,29 @@ session directory and normal command boundary. Ordinary temporary replies have
 no forced result schema. Update repair explicitly requests its structured
 completion result for verification; this format does not change permissions.
 
+The temporary composer remains editable during work. Steer sends guidance to
+its current native conversation and keeps Stop available. The server retains
+that chat's current model and skips source/skill preparation during steering.
+Codex uses the exact active thread/turn; Claude uses its existing native
+interrupt-and-continue path; OpenCode uses native steering while the same
+observer follows the latest prompt. Late reads cannot overwrite a newer send,
+and failed steering does not imply that the original work stopped.
+
+A composing host can inject one optional conversation descriptor through
+`VIBE64_HOST_CONVERSATION_KEY`. Its label, theme colour and component appear in
+the existing temporary workspace beside Main and temporary tabs. Main and task
+selection leave that host view without closing its conversation. The host owns
+its state and capabilities; public Vibe64 knows no host-specific repair actions.
+The same view is reachable when the project has no session.
+
 The terminal service also exposes one generic non-project ephemeral
 conversation seam for a composing host. Its exact scope supplies a private
 absolute working directory, private runtime root, empty or explicitly bounded
 environment, provider binding id, and one bounded host-authored stable context.
 It requires an explicit admitted provider/model selection but requires no
 project, session, worktree, History, or Genesis project conversation kind.
+The host can opt into native persistent retention without relaxing this scope;
+its own storage still owns discovery, transcript and explicit clearing.
 Codex runs that scope read-only with dynamic tools and inherited facilities
 disabled; OpenCode uses its hidden deny-all agent. Stop, read, wait, deletion,
 provider cleanup, and unchanged authored turns reuse the ordinary provider

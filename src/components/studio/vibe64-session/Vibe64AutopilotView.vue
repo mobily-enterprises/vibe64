@@ -79,6 +79,8 @@
               </v-badge>
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
+              <v-list-item v-if="hostConversation" :title="hostConversation.label"
+                :prepend-icon="hostConversation.icon" @click="hostConversation.open()" />
               <v-list-item
                 :disabled="rewindDisabled" :prepend-icon="mdiUndo" title="Undo last turn"
                 :subtitle="rewindHint" min-height="48" @click="openConversationRewind"
@@ -116,6 +118,8 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
+          <v-btn v-if="hostConversation" :aria-label="hostConversation.label" :title="hostConversation.label"
+            :color="hostConversation.color" :icon="hostConversation.icon" size="48" variant="text" @click="hostConversation.open()" />
           <v-btn
             aria-label="Undo last turn" :title="rewindHint" :disabled="rewindDisabled"
             :icon="mdiUndo" size="48" variant="text" @click="openConversationRewind"
@@ -851,7 +855,7 @@ import {
   createAssistantTextSubmission,
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -959,6 +963,7 @@ const composerSettingsButton = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
+const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
 const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
 const sessionActionsLabel = computed(() => [
   "Session actions",

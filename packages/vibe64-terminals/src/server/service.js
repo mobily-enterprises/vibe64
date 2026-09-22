@@ -2278,7 +2278,7 @@ function createService({
     createEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.createEphemeralConversation(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 
@@ -2289,7 +2289,7 @@ function createService({
     deleteEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.deleteEphemeralConversation(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 
@@ -2763,7 +2763,7 @@ function createService({
     readEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.readEphemeralConversation(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 
@@ -2827,7 +2827,7 @@ function createService({
     startEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
       return sessionAgent.startEphemeralConversationTurn(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 
@@ -2838,7 +2838,7 @@ function createService({
     stopEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.stopEphemeralConversation(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 
@@ -2907,7 +2907,7 @@ function createService({
     waitForEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
       return sessionAgent.waitForEphemeralConversationTurn(scope, {
         ...input,
-        ephemeral: true
+        ephemeral: input.persistent !== true
       }, options);
     },
 

@@ -67,7 +67,15 @@
             :selection-archived="selection.isArchived"
             :toolbar="emptyToolbar"
           />
+          <v-btn
+            v-if="hostConversation" :color="hostConversation.color" variant="tonal"
+            @click="hostConversation.open()"
+          >{{ hostConversation.label }}</v-btn>
         </div>
+        <Vibe64TemporaryAiWorkspace
+          v-if="hostConversation" class="studio-ai-sessions__empty-host-conversation" active
+          @select-main-chat="hostConversation.close()"
+        />
         <div class="studio-ai-sessions__empty-chat-body">
           <div
             v-if="emptyChatHintText"
@@ -178,7 +186,9 @@
 </template>
 
 <script setup>
-import { computed, provide } from "vue";
+import { computed, inject, provide } from "vue";
+import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64SessionArchiveDialog from "@/components/studio/vibe64-session/Vibe64SessionArchiveDialog.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
@@ -200,6 +210,7 @@ import {
   VIBE64_SESSION_TOOLTIP_KEY
 } from "@/lib/vibe64SessionTooltip.js";
 
+const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
 const emit = defineEmits(vibe64SessionPanelEmits);
 const props = defineProps(vibe64SessionPanelProps);
 const sessionTooltip = createVibe64SessionTooltipState();
@@ -260,6 +271,12 @@ const {
 </script>
 
 <style scoped>
+.studio-ai-sessions__empty-main {
+  position: relative;
+}
+.studio-ai-sessions__empty-main > .studio-ai-sessions__empty-host-conversation {
+  grid-row: 2 / -1;
+}
 .studio-ai-sessions {
   display: grid;
   gap: 0.85rem;

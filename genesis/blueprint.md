@@ -869,6 +869,12 @@ The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
 returning restores the same chats. A server restart retains their history and
 stops any work whose observation was lost until an explicit Send or Resume.
+People can keep typing and use Steer during active temporary work, with Stop
+still available. Guidance reaches the current native conversation; it does not
+switch its model, re-prepare project source or add messages to main History.
+A composing host may contribute a distinctly coloured workspace conversation
+beside Main and temporary chats, including before a project session is open.
+The host owns that conversation's permissions, persistence and actions.
 Their messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.

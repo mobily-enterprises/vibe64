@@ -2374,6 +2374,33 @@ function createOpenCodeTerminalController({
       await stopUnobservedOpenCodeSession(tracked.target, conversationId);
       tracked.active = false;
     }
+    if (tracked.active && input.steer === true) {
+      const messageId = upstreamMessageId(input.messageId || randomUUID());
+      const previousMessageId = tracked.runId;
+      // The existing observer follows the latest admitted prompt in this conversation.
+      tracked.runId = messageId;
+      try {
+        await target.server.client.prompt(conversationId, {
+          agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
+          delivery: "steer",
+          id: messageId,
+          model: openCodeModel(context.selection, executionProfile),
+          prompt: { text: prompt },
+          attachments: input.attachments,
+          resume: true
+        }, { signal: AbortSignal.any([target.abortController.signal, tracked.abortController.signal]) });
+      } catch (error) {
+        tracked.runId = previousMessageId;
+        throw error;
+      }
+      return {
+        conversationId,
+        ok: true,
+        runId: tracked.runId,
+        status: "inProgress",
+        deliveryMode: "steer"
+      };
+    }
     if (tracked.active) {
       throw openCodeError("vibe64_opencode_conversation_busy", "This conversation is still working.", {}, 409);
     }
@@ -2430,7 +2457,7 @@ function createOpenCodeTerminalController({
       let stopped = true;
       try {
         const timeoutMs = openCodeExecutionTimeout(input, executionProfile);
-        await waitForOpenCodeMessages(target.server.client, conversationId, inputMessageId, {
+        await waitForOpenCodeMessages(target.server.client, conversationId, () => tracked.runId, {
           signal: AbortSignal.any([
             signal,
             ...(timeoutMs ? [AbortSignal.timeout(timeoutMs)] : [])

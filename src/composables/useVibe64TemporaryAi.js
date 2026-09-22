@@ -544,6 +544,7 @@ function useVibe64TemporaryAi({
     const canApplyResponse = () => {
       const current = tasks.value.find((candidate) => candidate.id === taskId);
       return !disposed && current?.busy && current.runId === task.runId &&
+        current.sendVersion === task.sendVersion &&
         !closingTaskIds.has(taskId) && !stoppingTaskIds.has(taskId);
     };
     if (!task?.conversationId || !canApplyResponse()) {
@@ -613,7 +614,7 @@ function useVibe64TemporaryAi({
   async function send(taskId = "", { retryMessageId = "" } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
-        readRefOrGetterValue(operationBusy) || task.busy || task.recoveryOutcome === "checking") {
+        readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") {
       return false;
     }
     const retry = retryMessageId ? task.delivery.find(retryMessageId) : null;
@@ -635,7 +636,9 @@ function useVibe64TemporaryAi({
       return false;
     }
     const messageId = retryMessageId || task.pendingMessageId || temporaryAiId("message");
+    stopPolling(taskId);
     updateTask(taskId, {
+      sendVersion: (task.sendVersion || 0) + 1,
       busy: true,
       draft: retry && task.draft !== payload.draftSnapshot ? task.draft : "",
       error: "",
@@ -681,7 +684,9 @@ function useVibe64TemporaryAi({
       if (response === false || disposed || !current || closingTaskIds.has(taskId)) return false;
       const status = current.status === "interrupted" ? "interrupted" : response.status || "inProgress";
       const messages = response.messages || [
-        ...task.messages,
+        ...current.messages.map((entry) => (
+          entry.role === "assistant" ? { ...entry, runId: "", status: "completed" } : entry
+        )),
         {
           attachments: payload.displayAttachments || [],
           id: messageId,
@@ -725,17 +730,19 @@ function useVibe64TemporaryAi({
         removeTask(taskId);
         return false;
       }
+      const stillWorking = task.busy && error?.conversationExpired !== true;
       updateTask(taskId, {
-        busy: false,
+        busy: stillWorking,
         conversationId: error?.conversationExpired === true ? "" : conversationId,
         draft: tasks.value.find((candidate) => candidate.id === taskId).draft || payload.draftSnapshot,
         error: temporaryAiText(error?.message || error) || "Temporary AI message could not be sent.",
         errorCode: temporaryAiText(error?.code),
         pendingMessageId: messageId,
         runId: error?.conversationExpired === true ? "" : task.runId,
-        status: "failed"
+        status: stillWorking ? task.status : "failed"
       });
-      reportTaskFinished(taskId);
+      if (stillWorking) void pollTask(taskId);
+      else reportTaskFinished(taskId);
       return false;
     }
   }

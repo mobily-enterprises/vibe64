@@ -142,6 +142,7 @@ async function conversationFixture(root, engineId = "codex") {
     async readConversation() { return { ok: true, ...native }; },
     async startConversationTurn(_id, input, options) {
       native.turnSelection = options.assistantSelection;
+      native.lastInput = input;
       assert.equal(input.conversationId, "native");
       assert.equal(input.persistent, true);
       assert.equal(options.attachmentsPrepared, true);
@@ -341,5 +342,28 @@ test("saved temporary draft attachments survive restart and cannot take ownershi
     const main = await attachments.readAttachment({ sessionId: "one" }, mainUpload.attachmentId);
     assert.equal(await main.fileHandle.readFile("utf8"), "main file");
     await main.fileHandle.close();
+  });
+});
+
+
+test("temporary conversations steer active work without changing its model or preparing source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, native, restart, store } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Investigate" });
+    native.admitted = false;
+    let preparations = 0;
+    const current = restart({ prepareAgentSkills: async () => { preparations += 1; } });
+    await current.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "steer", message: "Focus on the logs", agentSettings: { model: "missing-model" }
+    });
+    assert.equal(native.lastInput.steer, true);
+    assert.equal(native.lastInput.conversationId, "native");
+    assert.equal(preparations, 0);
+    const log = await store.readConversationLog({ sessionId: "one", conversationId: "chat" });
+    assert.deepEqual(log.filter(turn => turn.user).map(turn => turn.user.text), ["Investigate", "Focus on the logs"]);
+    assert.deepEqual(await store.readConversationLog("one"), []);
+    await current.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "steer", message: "Focus on the logs" });
+    assert.equal(native.starts, 2);
   });
 });

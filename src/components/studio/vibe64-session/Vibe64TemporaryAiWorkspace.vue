@@ -1,9 +1,10 @@
 <template>
   <section
-    v-if="temporary.open.value"
+    v-if="temporary.open.value || hostConversation?.selected"
     ref="workspace"
     class="vibe64-temporary-ai"
-    aria-label="Temporary AI workspace"
+    :class="{ 'vibe64-temporary-ai--host': hostConversation?.selected }"
+    :aria-label="hostConversation?.selected ? hostConversation.label : 'Temporary AI workspace'"
     tabindex="-1"
   >
     <nav
@@ -15,27 +16,33 @@
           class="vibe64-temporary-ai__tab-select"
           data-temporary-ai-main-chat
           type="button"
-          @click="emit('select-main-chat')"
+          @click="selectMainChat"
         >
           Main chat
         </button>
       </div>
       <div class="vibe64-temporary-ai__task-tabs">
+        <v-btn
+          v-if="hostConversation" class="vibe64-temporary-ai__host-tab"
+          :color="hostConversation.color" :variant="hostConversation.selected ? 'flat' : 'tonal'"
+          :aria-current="hostConversation.selected ? 'page' : undefined"
+          :prepend-icon="hostConversation.icon" size="small" @click="hostConversation.open()"
+        >{{ hostConversation.label }}</v-btn>
         <div
           v-for="task in temporary.tasks.value"
           :key="task.id"
           class="vibe64-temporary-ai__tab"
-          :class="{ 'vibe64-temporary-ai__tab--active': task.id === temporary.activeTaskId.value }"
+          :class="{ 'vibe64-temporary-ai__tab--active': !hostConversation?.selected && task.id === temporary.activeTaskId.value }"
         >
           <button
             :ref="(element) => setTaskTabButton(task.id, element)"
-            :aria-current="task.id === temporary.activeTaskId.value ? 'page' : undefined"
+            :aria-current="!hostConversation?.selected && task.id === temporary.activeTaskId.value ? 'page' : undefined"
             class="vibe64-temporary-ai__tab-select"
             :data-temporary-ai-task-id="task.id"
             :aria-label="task.unread ? `${task.title}: unread messages` : task.title"
             :title="task.unread ? `${task.title}: unread messages` : task.title"
             type="button"
-            @click="temporary.selectTask(task.id)"
+            @click="selectTask(task.id)"
           >
             <span>{{ task.title }}</span>
             <span v-if="task.unread" class="vibe64-temporary-ai__unread" aria-hidden="true" />
@@ -56,6 +63,7 @@
           />
         </div>
         <v-btn
+          :disabled="!props.sessionId"
           aria-label="New temporary AI task"
           class="vibe64-temporary-ai__new-task"
           height="32"
@@ -65,12 +73,17 @@
           title="New temporary AI task"
           type="button"
           variant="text"
-          @click="temporary.openTask()"
+          @click="openTask()"
         />
       </div>
       <span class="vibe64-temporary-ai__tabs-spacer" />
     </nav>
 
+    <component
+      :is="hostConversation.component" v-if="hostConversation?.selected && props.active"
+      ref="hostComposer" class="vibe64-temporary-ai__host-content"
+    />
+    <template v-if="!hostConversation?.selected">
     <div class="vibe64-temporary-ai__recovery-row">
       <v-alert v-if="temporary.restoreError.value" type="error" density="compact">
         {{ temporary.restoreError.value }}
@@ -94,7 +107,7 @@
           v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
           class="vibe64-temporary-ai__check-update"
           data-temporary-ai-check-update
-          :disabled="props.updateDisabled || taskInputDisabled(activeTask)"
+          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy"
           :loading="activeTaskRecoveryChecking"
           :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
           size="small"
@@ -201,7 +214,8 @@
                   stopDisabled: !task.conversationId,
                   stopPending: stoppingTaskId === task.id,
                   pending: task.delivery.state.sending,
-                  submitAriaLabel: 'Send to temporary AI'
+                  submitAriaLabel: task.busy ? 'Steer temporary AI' : 'Send to temporary AI',
+                  submitLabel: task.busy ? 'Steer' : 'Send'
                 }"
                 @submit="sendTask(task.id)"
                 @stop="stopTask(task.id)"
@@ -209,7 +223,7 @@
                 <Vibe64AgentSettingsMenu
                   :agent-settings="task.agentSettings"
                   :assistant-selection="props.assistantSelection"
-                  :disabled="taskInputDisabled(task)"
+                  :disabled="taskInputDisabled(task) || task.busy"
                   @update-setting="updateActiveAgentSetting"
                 />
                 <v-btn
@@ -280,12 +294,13 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    </template>
   </section>
 </template>
 
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
   mdiCameraOutline,
@@ -304,6 +319,8 @@ import {
 } from "@/composables/useVibe64TemporaryAi.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
+
+import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
@@ -330,6 +347,24 @@ const props = defineProps({
   }
 });
 
+const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
+const hostComposer = ref(null);
+function selectMainChat() {
+  hostConversation?.value?.close();
+  emit("select-main-chat");
+}
+function selectTask(id) {
+  hostConversation?.value?.close();
+  return temporary.selectTask(id);
+}
+function openTask(options) {
+  hostConversation?.value?.close();
+  return temporary.openTask(options);
+}
+function closeWorkspace() {
+  hostConversation?.value?.close();
+  temporary.closeWorkspace();
+}
 const workspace = ref(null);
 const completionMessage = ref(null);
 const returnToMainButton = ref(null);
@@ -341,7 +376,7 @@ const temporaryAiFeedback = useUiFeedback({
   source: "vibe64.temporary-ai.feedback"
 });
 const temporary = useVibe64TemporaryAi({
-  active: () => props.active,
+  active: () => props.active && !hostConversation?.value?.selected,
   agentSettings: computed(() => ({
     providerId: props.assistantSelection.engineId,
     model: props.assistantSelection.modelId,
@@ -391,7 +426,7 @@ const taskToClose = computed(() => temporary.tasks.value.find((task) => task.id 
 const activeTaskRecoveryChecking = computed(() => activeTask.value?.recoveryOutcome === "checking");
 const typingPresence = useVibe64SessionTypingPresence({
   active: computed(() => props.active && temporary.open.value && Boolean(activeTask.value?.conversationId) &&
-    !taskInputDisabled(activeTask.value) && !closingTask.value),
+    !hostConversation?.value?.selected && !taskInputDisabled(activeTask.value) && !closingTask.value),
   conversationId: computed(() => activeTask.value?.conversationId || ""),
   projectSlug: computed(() => props.projectSlug),
   sessionId: computed(() => props.sessionId),
@@ -524,7 +559,7 @@ async function stopTask(taskId) {
 }
 
 function taskInputDisabled(task) {
-  return props.repositoryBusy || task.busy || task.status === "closing" || task.recoveryOutcome === "checking";
+  return props.repositoryBusy || task.delivery.state.sending || task.status === "closing" || task.recoveryOutcome === "checking";
 }
 
 function taskPrompt(taskId = "") {
@@ -573,6 +608,7 @@ async function sendTask(taskId = "", options = {}) {
 }
 
 async function startTask(options = {}) {
+  hostConversation?.value?.close();
   const started = temporary.startTask(options);
   const taskId = temporary.activeTaskId.value;
   await revealTaskTab(taskId, { focus: true });
@@ -595,6 +631,7 @@ function reportTaskRecovery(taskId = "", outcome = {}) {
 }
 
 function showWorkspace() {
+  hostConversation?.value?.close();
   const task = temporary.showWorkspace();
   void revealTaskTab(temporary.activeTaskId.value);
   return task;
@@ -664,12 +701,15 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
 }, { flush: "post" });
 
 defineExpose({
-  get composer() { return temporary.open.value ? taskPrompt(temporary.activeTaskId.value) : null; },
-  closeWorkspace: temporary.closeWorkspace,
+  get composer() {
+    if (hostConversation?.value?.selected) return hostComposer.value;
+    return temporary.open.value ? taskPrompt(temporary.activeTaskId.value) : null;
+  },
+  closeWorkspace,
   hasUnreadMessages: temporary.hasUnreadMessages,
-  openTask: temporary.openTask,
+  openTask,
   reportTaskRecovery,
-  selectTask: temporary.selectTask,
+  selectTask,
   startTask,
   showWorkspace,
   updateRepairVisible,
@@ -678,6 +718,21 @@ defineExpose({
 </script>
 
 <style scoped>
+.vibe64-temporary-ai.vibe64-temporary-ai--host {
+  border-color: rgba(var(--v-theme-secondary), 0.65);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.vibe64-temporary-ai--host .vibe64-temporary-ai__tabs {
+  background: rgba(var(--v-theme-secondary), 0.12);
+}
+.vibe64-temporary-ai__host-tab {
+  flex: 0 0 auto;
+}
+.vibe64-temporary-ai__host-content {
+  min-height: 0;
+  min-width: 0;
+}
+
 .vibe64-temporary-ai__unread {
   background: rgb(var(--v-theme-primary));
   border-radius: 50%;

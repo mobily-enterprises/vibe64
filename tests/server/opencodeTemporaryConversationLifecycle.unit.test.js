@@ -385,3 +385,26 @@ test("durable OpenCode Close never kills main chat when an observed Stop is unco
   assert.equal(harness.processStops.length, 0);
   assert.equal((await harness.controller.stopConversation("session-1", { conversationId, persistent: true })).stopped, true);
 });
+
+
+test("temporary OpenCode steers its observed conversation and follows the new prompt", async (t) => {
+  const reply = { pending: true, text: "" };
+  const harness = await controllerHarness({ helperResponse: reply });
+  t.after(async () => {
+    reply.pending = false;
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true });
+  await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "first", message: "Investigate" });
+  const guided = await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, steer: true, messageId: "guidance", message: "Read logs first" });
+  assert.equal(guided.deliveryMode, "steer");
+  assert.equal(harness.promptCalls.at(-1).input.delivery, "steer");
+  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  reply.pending = false;
+  reply.text = "Read the logs.";
+  const completed = await harness.controller.waitForConversationTurn("session-1", { conversationId, persistent: true });
+  assert.equal(completed.runId, guided.runId);
+  assert.equal(completed.status, "completed");
+  assert.deepEqual(harness.userMessages, []);
+});

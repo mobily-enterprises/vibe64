@@ -11523,6 +11523,28 @@ function createCodexTerminalController({
         return codexAppServerEphemeralConversationSnapshot(conversationState);
       }
       if (conversationState && codexAppServerConversationTurnIsActive(conversationState.status)) {
+        if (input.steer === true) {
+          const images = (input.attachments || [])
+            .filter((attachment) => attachment.contentType?.startsWith("image/"))
+            .map((attachment) => ({ type: "localImage", path: attachment.path }));
+          const result = await context.provider.steerTurn(
+            conversationId,
+            conversationState.runId,
+            images.length ? [prompt, ...images] : prompt,
+            { clientUserMessageId: messageId }
+          );
+          const failure = codexAppServerSteerFailure(result);
+          if (failure) return { ...failure, ok: false };
+          conversationState.messageId = messageId;
+          return {
+            conversationId,
+            messageId,
+            ok: true,
+            runId: conversationState.runId,
+            status: "inProgress",
+            deliveryMode: "steer"
+          };
+        }
         return {
           code: "vibe64_temporary_conversation_turn_active",
           error: "Temporary AI is already working on this conversation.",

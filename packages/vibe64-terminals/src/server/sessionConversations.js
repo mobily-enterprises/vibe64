@@ -194,9 +194,9 @@ function createSessionConversations({
         const previous = await snapshot(ctx, { ...record, messageId: input.messageId });
         if (previous.readError) throw new Error(previous.error);
         if (previous.admitted) return previous;
-        if (["starting", "inProgress"].includes(previous.status)) throw new Error("This conversation is still working.");
+        const steering = ["starting", "inProgress"].includes(previous.status);
         const selection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
-        const settings = input.agentSettings || record.agentSettings;
+        const settings = steering ? record.agentSettings : input.agentSettings || record.agentSettings;
         const assistantSelection = await sessionAgent.resolveSelection({
           engineId: selection.engineId,
           modelProviderId: selection.modelProviderId,
@@ -205,7 +205,7 @@ function createSessionConversations({
           variantId: settings.thinking || ""
         }, { ...ctx, vibe64User: input.vibe64User });
         ctx = { ...ctx, assistantSelection };
-        await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User });
+        if (!steering) await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User });
         if (!record.providerConversationId) {
           const created = requireSuccess(await sessionAgent.createConversation(sessionId, {
             agentSettings: input.agentSettings || record.agentSettings, persistent: true, vibe64User: input.vibe64User
@@ -220,15 +220,15 @@ function createSessionConversations({
         });
         record = await save(ctx, record, {
           ...presentation(input.presentation),
-          agentSettings: input.agentSettings || record.agentSettings,
+          agentSettings: settings,
           messageId: input.messageId,
-          status: "starting",
-          runId: "",
+          status: steering ? previous.status : "starting",
+          runId: steering ? previous.runId : "",
           error: ""
         });
         try {
           const result = requireSuccess(await sessionAgent.startConversationTurn(sessionId,
-            providerInput(record, prepared), { ...ctx, attachmentsPrepared: true }));
+            providerInput(record, { ...prepared, steer: steering }), { ...ctx, attachmentsPrepared: true }));
           await save(ctx, record, { runId: result.runId, status: result.status || "inProgress", draft: "", attachments: [] });
           return { ...result, conversationId: record.conversationId };
         } catch (error) {

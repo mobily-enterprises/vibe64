@@ -623,7 +623,7 @@ function createClaudeSessionAgentProvider({
 
   async function startConversationTurn(context, input = {}) {
     const entry = await entryFor(context, input.conversationId || input.threadId);
-    if (entry.turn?.active && entry.process) throw error("This conversation is still working.");
+    if (entry.turn?.active && entry.process && input.steer !== true) throw error("This conversation is still working.");
     await send(entry, input);
     return { ...resultFor(entry), ok: true, started: true };
   }

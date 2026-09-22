@@ -295,6 +295,10 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
       captures.persistentStatus = "idle";
       if (captures.persistentGoal) captures.persistentGoal.status = "paused";
     },
+    async steerTurn(threadId, turnId, message, options) {
+      calls.push(["steer", { threadId, turnId, message, options }]);
+      return { id: turnId };
+    },
     async sendTurn(threadId, input, settings) {
       calls.push(["turn", threadId]);
       const turnId = `turn-${captures.turns.length + 1}`;
@@ -10507,5 +10511,22 @@ test("a fresh Codex observer pauses an unobserved temporary goal before exposing
     assert.equal(captures.persistentGoal.status, "paused");
     assert.ok(calls.some(([method, id]) => method === "stopObserved" && id === "saved-native"));
     assert.deepEqual(captures.turns, []);
+  });
+});
+
+
+test("temporary Codex steers its exact active native conversation without starting a second turn", async () => {
+  await withConversationController(async ({ captures, controller, calls }) => {
+    captures.persistentHistory = [];
+    const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+    const first = await controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "first", message: "Investigate" });
+    const steered = await controller.startConversationTurn("session-1", { conversationId, persistent: true, steer: true, messageId: "guidance", message: "Read logs first" });
+    assert.equal(steered.ok, true);
+    assert.equal(steered.runId, first.runId);
+    assert.equal(steered.deliveryMode, "steer");
+    assert.equal(captures.turns.length, 1);
+    assert.deepEqual(calls.find(([kind]) => kind === "steer")[1], {
+      threadId: conversationId, turnId: first.runId, message: "Read logs first", options: { clientUserMessageId: "guidance" }
+    });
   });
 });

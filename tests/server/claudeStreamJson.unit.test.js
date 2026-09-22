@@ -716,3 +716,17 @@ test("Claude conversation rewind selects the retained native branch across retri
   assert.deepEqual(history.messages.map((message) => message.text), ["Retained", "New branch"]);
   await assert.rejects(f.provider.rewindConversation(f.context, plan), /last turn no longer matches/);
 });
+
+
+test("temporary Claude accepts active-turn steering in its existing native conversation", async (t) => {
+  const f = await fixture(t);
+  const { conversationId } = await f.provider.createConversation(f.context, { persistent: true });
+  const first = await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, message: "Investigate", messageId: "first" });
+  const guided = await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, steer: true, message: "Read logs first", messageId: "guidance" });
+  assert.equal(guided.ok, true);
+  assert.equal(guided.runId, first.runId);
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].lastInput.message, "Read logs first");
+  assert.equal(f.written.length, 0, "temporary steering stays out of main History");
+  await f.provider.stopConversation(f.context, { conversationId });
+});
