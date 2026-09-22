@@ -235,7 +235,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(access.canUseAi.value).toBe(false);
     expect(access.canRequestMessage.value).toBe(true);
     expect(access.canSubmitMainChat.value).toBe(true);
-    expect(access.restrictionMessage.value).toContain("request a main-chat message");
+    expect(access.restrictionMessage.value).toContain("owner reviews your request");
     expect(access.pendingSuggestions.value.map(({ id }) => id)).toEqual(["suggestion-a"]);
 
     const result = await access.suggestMessage({
@@ -284,7 +284,7 @@ describe("useVibe64AssistantAccess", () => {
     scope.stop();
   });
 
-  it("uses zero normal footer space and opens pending suggestions from an alert", () => {
+  it("puts message review above the composer with direct approval and attachment previews", () => {
     const autopilot = fs.readFileSync(path.resolve(
       "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
     ), "utf8");
@@ -303,17 +303,15 @@ describe("useVibe64AssistantAccess", () => {
     const assistantMenu = autopilot.indexOf("<Vibe64SessionAssistantMenu", footerStart);
 
     expect(footerStart).toBeGreaterThan(-1);
-    expect(accessControl).toBeGreaterThan(footerStart);
-    expect(accessControl).toBeGreaterThan(assistantMenu);
-    expect(assistantMenuSource).toContain('<slot name="access" />');
-    expect(panel).toContain('<v-dialog v-model="queueOpen"');
-    expect(panel).toContain('@click="queueOpen = true"');
-    expect(panel).toContain('v-if="accessError || suggestionsRelevant"');
-    expect(panel).toContain("props.suggestionsError ||\n  props.pendingSuggestions.length");
-    expect(panel).toMatch(/\.vibe64-assistant-access \{[\s\S]*?display: flex;/u);
-    expect(panel).not.toContain("<v-chip");
-    expect(panel).not.toContain("Workspace use");
-    expect(panel).not.toContain("border-block:");
+    expect(accessControl).toBeLessThan(footerStart);
+    expect(accessControl).toBeLessThan(autopilot.indexOf("<Vibe64AutopilotPromptTextarea"));
+    expect(assistantMenu).toBeGreaterThan(accessControl);
+    expect(panel).not.toContain("<v-dialog");
+    expect(panel).toContain("Approve & send");
+    expect(panel).toContain("Vibe64ConversationAttachments");
+    expect(panel).toContain("Waiting for the owner");
+    expect(panel).toContain("Approved and sent");
+    expect(autopilot).toContain("Send for approval");
     expect(autopilot).toContain(':access-label="assistantAccessLabel"');
     expect(autopilot).toContain(':access-loading="assistantAccessLoading"');
     expect(autopilot).toContain(':can-configure="assistantSuggestionsCanManage"');
@@ -349,7 +347,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(assistantDialog).toContain('active: true');
     expect(assistantDialog).toContain('aria-label="Connected AI"');
     expect(assistantDialog).toContain('<v-radio-group');
-    expect(assistantDialog).toContain('label: engine.engineId === "codex" ? "Codex" : engine.engineId === "claude" ? "Claude" : model.label');
+    expect(assistantDialog).toContain('label: engine.engineId === "codex" ? `Codex - ${provider.label}` : engine.engineId === "claude" ? "Claude" : model.label');
     expect(assistantDialog).toContain('Claude account · ${model.label}');
     expect(assistantDialog).not.toContain('Recommended');
     expect(assistantDialog).toContain('preferred: provider.preferred === true');

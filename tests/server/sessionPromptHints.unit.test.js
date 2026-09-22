@@ -176,6 +176,7 @@ function readyAgentResult({
 
 function createFixture({
   accountIdentitySignature = ACCOUNT_SIGNATURE,
+  artifacts = new Map(),
   agentResult = null,
   cacheMaxEntries = 128,
   cacheTtlMs = 300_000,
@@ -198,6 +199,7 @@ function createFixture({
     diagnostic: [],
     interrupt: [],
     promptHints: [],
+    published: [],
     access: [],
     resolve: [],
     run: [],
@@ -218,6 +220,10 @@ function createFixture({
     status: "active"
   };
   const runtime = {
+    store: {
+      async readArtifact(sessionId, name) { return artifacts.get(`${currentProjectScopeKey()}:${sessionId}:${name}`) || ""; },
+      async writeJsonArtifact(sessionId, name, value) { artifacts.set(`${currentProjectScopeKey()}:${sessionId}:${name}`, JSON.stringify(value)); }
+    },
     async getSession(sessionId) {
       calls.session.push(sessionId);
       return typeof currentSession === "function"
@@ -235,6 +241,7 @@ function createFixture({
     }
   };
   const service = createSessionPromptHintsService({
+    publishSessionChanged: (sessionId, payload) => { calls.published.push({ sessionId, payload }); },
     cacheMaxEntries,
     cacheTtlMs,
     async deleteAgentThread(sessionId, input, options) {
@@ -332,6 +339,7 @@ function createFixture({
   });
 
   return {
+    artifacts,
     calls,
     runtime,
     service,
@@ -617,7 +625,7 @@ test("a newer draft supersedes in-flight suggestions for the older intent", asyn
   assert.equal(generations, 2);
 });
 
-test("restricted prompt hints stop before provider inspection and cannot reuse an authorized cache", async () => {
+test("restricted members read shared conversation suggestions without provider inspection", async () => {
   let restricted = false;
   const fixture = createFixture({
     requireAssistantAccess({ options, sessionId }) {
@@ -649,9 +657,9 @@ test("restricted prompt hints stop before provider inspection and cannot reuse a
   );
 
   assert.equal(denied.ok, true);
-  assert.equal(denied.status, "unavailable");
-  assert.equal(denied.cached, false);
-  assert.deepEqual(denied.suggestions, []);
+  assert.equal(denied.status, "ready");
+  assert.equal(denied.cached, true);
+  assert.deepEqual(denied.suggestions, first.suggestions);
   assert.equal(fixture.calls.access.length, 2);
   assert.equal(fixture.calls.describe.length, 1);
   assert.equal(fixture.calls.resolve.length, 1);
@@ -660,7 +668,7 @@ test("restricted prompt hints stop before provider inspection and cannot reuse a
     fixture.calls.diagnostic.some((event) => (
       event.code === "vibe64_prompt_hints_access_restricted"
     )),
-    true
+    false
   );
 });
 
@@ -1919,4 +1927,36 @@ test("another helper's retirement does not acknowledge this hint's failed cleanu
   assert.equal(fixture.calls.delete.length, 1);
   assert.equal(fixture.calls.delete[0].input.threadId, "thread-owned");
   assert.ok(fixture.calls.diagnostic.some(({ code }) => code === "vibe64_prompt_hints_cleanup_failed"));
+});
+
+
+test("shared hints survive restart, exclude drafts and stale conversations, and never start member AI", async () => {
+  const artifacts = new Map();
+  const owner = createFixture({ artifacts });
+  const hints = await owner.service.generateSessionPromptHints("session-1", generateInput("hint:owner"));
+  assert.equal(hints.status, "ready");
+  assert.equal(owner.calls.published.length, 1);
+  const member = createFixture({ artifacts, requireAssistantAccess() {
+    const error = new Error("Personal connection");
+    error.code = "vibe64_assistant_owner_required";
+    throw error;
+  } });
+  const shared = await member.service.generateSessionPromptHints("session-1", generateInput("hint:member"));
+  assert.deepEqual(shared.suggestions, hints.suggestions);
+  assert.equal(member.calls.describe.length, 0);
+  assert.equal(member.calls.resolve.length, 0);
+  assert.equal(member.calls.run.length, 0);
+  const privateDraft = await member.service.generateSessionPromptHints("session-1", {
+    ...generateInput("hint:member-draft"), draft: "Please improve my private draft"
+  });
+  assert.deepEqual(privateDraft.suggestions, []);
+  const otherSession = await member.service.generateSessionPromptHints("session-2", generateInput("hint:other-session"));
+  assert.deepEqual(otherSession.suggestions, []);
+  member.setConversation(conversationPage({ assistantText: "The conversation changed." }));
+  const stale = await member.service.generateSessionPromptHints("session-1", generateInput("hint:stale"));
+  assert.deepEqual(stale.suggestions, []);
+  const original = [...artifacts.values()];
+  await owner.service.generateSessionPromptHints("session-1", { ...generateInput("hint:owner-draft"), draft: "Private owner draft" });
+  assert.deepEqual([...artifacts.values()], original);
+  assert.equal(owner.calls.published.length, 1);
 });

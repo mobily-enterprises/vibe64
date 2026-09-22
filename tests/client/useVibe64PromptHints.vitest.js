@@ -14,6 +14,11 @@ import {
   useVibe64PromptHints
 } from "../../src/composables/useVibe64PromptHints.js";
 
+const realtime = vi.hoisted(() => ({ options: null }));
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent: (options) => { realtime.options = options; }
+}));
+
 function deferredResult() {
   let resolve;
   const promise = new Promise((done) => {
@@ -500,4 +505,24 @@ describe("useVibe64PromptHints", () => {
     expect(JSON.parse(fingerprint)).toHaveLength(PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT);
     expect(fingerprint).not.toContain("Old answer");
   });
+});
+
+
+it("refreshes shared conversation hints on realtime without sending a member's draft", async () => {
+  vi.useFakeTimers();
+  const request = vi.fn(async () => ({ status: "ready", suggestions: VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject }));
+  const { hints, scope, state } = createHints({ sharedOnly: ref(true), projectSlug: ref("project-a"), draft: ref("My unsent proposal") }, { request });
+  try {
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request.mock.calls[0][1].body.draft).toBe("");
+    expect(hints.suggestions.value).toHaveLength(3);
+    expect(state.draft.value).toBe("My unsent proposal");
+    const event = { payload: { reason: "shared-prompt-hints-updated", sessionId: "session-1", projectSlug: "project-a" } };
+    expect(realtime.options.matches(event)).toBe(true);
+    expect(realtime.options.matches({ payload: { ...event.payload, projectSlug: "project-b" } })).toBe(false);
+    realtime.options.onEvent(event);
+    await vi.advanceTimersByTimeAsync(PROMPT_HINT_DEBOUNCE_MS);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][1].body.draft).toBe("");
+  } finally { scope.stop(); vi.useRealTimers(); }
 });

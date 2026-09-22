@@ -21,11 +21,17 @@ server-owned, and uses its existing bounded schema/read-only query backend.
 Copilot history remains transient in the database workspace; it is not copied
 into the main project conversation.
 
-SQL execution requires the session's canonical database-tool connection and,
-when a hosted user is present, owner access. It accepts one statement at a time.
+Database access follows the host's project membership policy independently of
+AI access. Members can inspect schema, browse data, arrange diagrams and run
+manual SQL using the session's canonical database-tool connection. It accepts
+one statement at a time.
 Read-only execution uses the reader endpoint and a read-only transaction;
 manual write execution requires the existing unlock and confirmation checks.
 Copilot SQL remains read-only and uses the same execution owner as manual SQL.
+Only Copilot invokes the assistant access check: a personal connection requires
+the owner, while a shareable connection permits members. Members using a personal
+connection can prepare a database question or overview request in the main chat
+for owner approval.
 
 SQLite uses an explicitly declared persistent filename. Hosted resources provide
 an absolute filename; standalone projects may resolve a relative filename from

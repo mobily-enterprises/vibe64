@@ -20,7 +20,7 @@ function databaseStatusCode(response = {}) {
   if (response?.ok !== false) {
     return 200;
   }
-  if (response?.code === "vibe64_owner_required") {
+  if (response?.code === "vibe64_assistant_owner_required") {
     return 403;
   }
   if (response?.code === "vibe64_session_not_found") {

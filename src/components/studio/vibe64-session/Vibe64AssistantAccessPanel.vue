@@ -1,243 +1,133 @@
 <template>
   <section
-    v-if="accessError || suggestionsRelevant"
+    v-if="accessError || suggestionsError || pendingSuggestions.length || recentSuggestions.length"
     class="vibe64-assistant-access"
-    aria-label="AI attention required"
+    aria-label="Message requests"
   >
-    <v-btn
-      v-if="accessError"
-      :aria-label="accessError"
-      color="warning"
-      :icon="mdiAlertCircleOutline"
-      size="small"
-      :title="accessError"
-      type="button"
-      variant="text"
-      @click="$emit('reload')"
-    />
-
-    <v-badge
-      v-if="suggestionsRelevant"
-      :color="suggestionsError || pendingSuggestions.length ? 'warning' : undefined"
-      :content="suggestionsError ? '!' : pendingSuggestions.length"
-      inline
-    >
-      <v-btn
-        :aria-label="queueButtonAriaLabel"
-        :color="suggestionsError || pendingSuggestions.length ? 'warning' : undefined"
-        :icon="suggestionsError ? mdiAlertCircleOutline : mdiMessageAlertOutline"
-        size="small"
-        :title="queueButtonAriaLabel"
-        type="button"
-        variant="text"
-        @click="queueOpen = true"
-      />
-    </v-badge>
-
-    <v-dialog v-model="queueOpen" max-width="40rem" scrollable>
-      <v-card rounded="xl">
-        <v-card-title>{{ canManage ? "Message requests awaiting review" : "Your message requests" }}</v-card-title>
-        <v-card-subtitle>
-          {{ canManage ? "Approve a message before it enters the AI conversation." : "The owner decides whether these messages enter the AI conversation." }}
-        </v-card-subtitle>
-        <v-card-text class="vibe64-assistant-access__queue">
-          <div v-if="suggestionsError" class="vibe64-assistant-access__queue-error">
-            <span class="text-body-small">{{ suggestionsError }}</span>
-            <v-btn size="small" type="button" variant="text" @click="$emit('reload')">
-              Try again
+    <div v-if="accessError || suggestionsError" class="vibe64-assistant-access__feedback" role="status">
+      <span>{{ accessError || suggestionsError }}</span>
+      <v-btn size="small" type="button" variant="text" @click="$emit('reload')">Try again</v-btn>
+    </div>
+    <template v-if="pendingSuggestions.length">
+      <header class="vibe64-assistant-access__heading">
+        <strong>{{ canManage ? 'Ready for your approval' : 'Waiting for the owner' }}</strong>
+        <span class="text-label-medium">{{ pendingSuggestions.length }} request{{ pendingSuggestions.length === 1 ? '' : 's' }}</span>
+      </header>
+      <div class="vibe64-assistant-access__items">
+        <article v-for="suggestion in pendingSuggestions" :key="suggestion.id" class="vibe64-assistant-access__item">
+          <div class="vibe64-assistant-access__author">
+            <v-icon :icon="mdiAccountCircleOutline" size="20" />
+            <strong>{{ suggestion.author?.displayName || suggestion.author?.username || 'Member' }}</strong>
+            <span class="text-label-small text-medium-emphasis">{{ suggestion.status === 'delivering' ? 'Sending to AI…' : 'Message request' }}</span>
+          </div>
+          <p class="vibe64-assistant-access__message">{{ suggestion.displayMessage || suggestion.message }}</p>
+          <Vibe64ConversationAttachments :items="suggestion.displayAttachments || []" :session-id="sessionId" />
+          <span v-if="suggestion.attachmentIds?.length && !suggestion.displayAttachments?.length" class="text-label-small text-medium-emphasis">
+            {{ suggestion.attachmentIds.length }} attached file{{ suggestion.attachmentIds.length === 1 ? '' : 's' }} will be sent with this request.
+          </span>
+          <div v-if="suggestion.lastDeliveryError" class="text-body-small" role="status">
+            This request hasn’t been sent. {{ suggestion.lastDeliveryError }}
+          </div>
+          <span v-if="canManage && assistantBusy && suggestion.attachmentIds?.length" class="text-body-small text-medium-emphasis">
+            The AI is working. You can send this request with its files when it finishes.
+          </span>
+          <div class="vibe64-assistant-access__actions">
+            <template v-if="canManage">
+              <v-btn :disabled="Boolean(pendingAction) || suggestion.status === 'delivering'" size="small" type="button" variant="text" @click="$emit('discard', suggestion.id)">
+                Decline
+              </v-btn>
+              <v-btn
+                :loading="actionIsPending('approve', suggestion.id)"
+                :disabled="Boolean(pendingAction) || (assistantBusy && Boolean(suggestion.attachmentIds?.length))"
+                :prepend-icon="mdiCheck"
+                color="primary" size="small" type="button" variant="flat"
+                @click="$emit('approve', suggestion.id)"
+              >
+                {{ suggestion.lastDeliveryError ? 'Retry sending' : suggestion.status === 'delivering' ? 'Check delivery' : 'Approve & send' }}
+              </v-btn>
+            </template>
+            <v-btn v-else :disabled="Boolean(pendingAction) || suggestion.status === 'delivering'" size="small" type="button" variant="text" @click="$emit('withdraw', suggestion.id)">
+              Withdraw request
             </v-btn>
           </div>
-          <p v-else-if="!pendingSuggestions.length" class="vibe64-assistant-access__empty text-body-small text-medium-emphasis">
-            No pending message requests.
-          </p>
-          <div v-else class="vibe64-assistant-access__items">
-            <article
-              v-for="suggestion in pendingSuggestions"
-              :key="suggestion.id"
-              class="vibe64-assistant-access__item"
-            >
-              <div class="vibe64-assistant-access__message">
-                <strong class="text-label-large">{{ suggestion.author?.displayName || suggestion.author?.username || "Member" }}</strong>
-                <p class="text-body-medium">{{ suggestion.displayMessage || suggestion.message }}</p>
-                <span v-if="suggestion.attachmentIds?.length" class="text-label-small text-medium-emphasis">
-                  {{ suggestion.attachmentIds.length }} attachment{{ suggestion.attachmentIds.length === 1 ? "" : "s" }} retained
-                </span>
-                <span v-if="suggestion.lastDeliveryError" class="text-label-small text-error">
-                  Delivery failed: {{ suggestion.lastDeliveryError }}
-                </span>
-              </div>
-              <div class="vibe64-assistant-access__actions">
-                <template v-if="canManage">
-                  <v-btn
-                    :aria-busy="actionIsPending('discard', suggestion.id) ? 'true' : undefined"
-                    :disabled="Boolean(pendingAction)"
-                    size="small"
-                    type="button"
-                    variant="text"
-                    @click="$emit('discard', suggestion.id)"
-                  >
-                    Discard
-                  </v-btn>
-                  <v-btn
-                    :aria-busy="actionIsPending('approve', suggestion.id) ? 'true' : undefined"
-                    color="primary"
-                    :disabled="Boolean(pendingAction)"
-                    size="small"
-                    type="button"
-                    variant="tonal"
-                    @click="$emit('approve', suggestion.id)"
-                  >
-                    Approve
-                  </v-btn>
-                </template>
-                <v-btn
-                  v-else
-                  :aria-busy="actionIsPending('withdraw', suggestion.id) ? 'true' : undefined"
-                  :disabled="Boolean(pendingAction)"
-                  size="small"
-                  type="button"
-                  variant="text"
-                  @click="$emit('withdraw', suggestion.id)"
-                >
-                  Withdraw
-                </v-btn>
-              </div>
-            </article>
-          </div>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn type="button" variant="text" @click="queueOpen = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+        </article>
+      </div>
+    </template>
+    <details v-if="recentSuggestions.length" class="vibe64-assistant-access__recent">
+      <summary>{{ requestStatusLabels[recentSuggestions[0].status] }} · Recent requests</summary>
+      <article v-for="suggestion in recentSuggestions" :key="suggestion.id">
+        <strong>{{ suggestion.author?.displayName || suggestion.author?.username }} · {{ requestStatusLabels[suggestion.status] }}</strong>
+        <p>{{ suggestion.displayMessage || suggestion.message }}</p>
+      </article>
+    </details>
+    <span class="sr-only" role="status" aria-live="polite">{{ pendingSuggestions.length }} messages waiting for approval.</span>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
-import {
-  mdiAlertCircleOutline,
-  mdiMessageAlertOutline
-} from "@mdi/js";
+import { mdiAccountCircleOutline, mdiCheck } from "@mdi/js";
+import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 
-const props = defineProps({
-  accessError: {
-    default: "",
-    type: String
-  },
-  actionIsPending: {
-    default: () => false,
-    type: Function
-  },
-  canManage: {
-    default: false,
-    type: Boolean
-  },
-  pendingAction: {
-    default: null,
-    type: Object
-  },
-  pendingSuggestions: {
-    default: () => [],
-    type: Array
-  },
-  suggestionsError: {
-    default: "",
-    type: String
-  }
+defineProps({
+  accessError: { default: "", type: String },
+  assistantBusy: { default: false, type: Boolean },
+  actionIsPending: { default: () => false, type: Function },
+  canManage: { default: false, type: Boolean },
+  pendingAction: { default: null, type: Object },
+  pendingSuggestions: { default: () => [], type: Array },
+  recentSuggestions: { default: () => [], type: Array },
+  sessionId: { default: "", type: String },
+  suggestionsError: { default: "", type: String }
 });
-
-defineEmits([
-  "approve",
-  "discard",
-  "reload",
-  "withdraw"
-]);
-const queueOpen = ref(false);
-
-const suggestionsRelevant = computed(() => Boolean(
-  props.suggestionsError ||
-  props.pendingSuggestions.length
-));
-const queueButtonAriaLabel = computed(() => {
-  if (props.suggestionsError) {
-    return "Message requests need attention";
-  }
-  return `Open ${props.pendingSuggestions.length} pending message request${
-    props.pendingSuggestions.length === 1 ? "" : "s"
-  }`;
-});
+defineEmits(["approve", "discard", "reload", "withdraw"]);
+const requestStatusLabels = { delivered: "Approved and sent", discarded: "Declined by owner", withdrawn: "Withdrawn" };
 </script>
 
 <style scoped>
 .vibe64-assistant-access {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.2rem;
+  border: 1px solid rgba(var(--v-theme-primary), 0.22);
+  border-radius: 0.875rem;
+  background: rgba(var(--v-theme-primary), 0.04);
+  margin-bottom: 0.65rem;
   min-width: 0;
+  overflow: hidden;
 }
-
-.vibe64-assistant-access__queue {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.vibe64-assistant-access__items {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.vibe64-assistant-access__message {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.vibe64-assistant-access__item {
-  align-items: center;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-outline), 0.16);
-  border-radius: 0.75rem;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  min-height: 4.5rem;
-  padding: 0.6rem 0.7rem;
-}
-
-.vibe64-assistant-access__message p,
-.vibe64-assistant-access__empty {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.vibe64-assistant-access__actions,
-.vibe64-assistant-access__queue-error {
+.vibe64-assistant-access__heading,
+.vibe64-assistant-access__feedback {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.85rem;
 }
-
-.vibe64-assistant-access__empty,
-.vibe64-assistant-access__queue-error {
-  min-height: 3rem;
+.vibe64-assistant-access__items { max-height: min(20rem, 35dvh); overflow: auto; }
+.vibe64-assistant-access__item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border-top: 1px solid rgba(var(--v-theme-outline), 0.14);
 }
-
+.vibe64-assistant-access__author,
+.vibe64-assistant-access__actions { align-items: center; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.vibe64-assistant-access__author { font-size: 0.85rem; }
+.vibe64-assistant-access__actions { justify-content: flex-end; }
+.vibe64-assistant-access__message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 10rem;
+  overflow: auto;
+}
+.vibe64-assistant-access__recent { padding: 0.65rem 0.8rem; font-size: 0.8rem; }
+.vibe64-assistant-access__recent summary { cursor: pointer; }
+.vibe64-assistant-access__recent article { margin-top: 0.6rem; }
+.vibe64-assistant-access__recent p { margin: 0.15rem 0 0; max-height: 5rem; overflow: auto; overflow-wrap: anywhere; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 600px), (pointer: coarse) {
-  .vibe64-assistant-access__item {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .vibe64-assistant-access__actions .v-btn {
-    min-height: 3rem;
-  }
-
-  .vibe64-assistant-access > :deep(.v-btn) {
-    min-height: 3rem;
-  }
+  .vibe64-assistant-access__actions .v-btn { min-height: 2.75rem; }
 }
 </style>

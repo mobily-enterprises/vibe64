@@ -1018,7 +1018,7 @@ test("work inspection observes a live Save without mistaking it for an interrupt
   assert.equal(afterSave.activeOperation, null);
 });
 
-test("Save access denial happens before commit naming or durable Save state", async () => {
+test("members can Save and create pull requests independently of AI access", async () => {
   const taskEvents = [];
   const metadataWrites = [];
   let saveCalls = 0;
@@ -1032,6 +1032,7 @@ test("Save access denial happens before commit naming or durable Save state", as
     store: {
       async writeBackgroundTaskEvent(...args) {
         taskEvents.push(args);
+        return args[2].patch;
       },
       async writeMetadataValue(...args) {
         metadataWrites.push(args);
@@ -1045,29 +1046,39 @@ test("Save access denial happens before commit naming or durable Save state", as
       }
     },
     terminals: {
-      async requireAssistantAccess(sessionId, options) {
-        assert.equal(sessionId, "session-1");
-        assert.equal(options.runtime, runtime);
-        assert.equal(options.session.sessionId, "session-1");
-        assert.equal(options.vibe64User.username, "member");
+      async requireAssistantAccess() {
         throw denied;
       },
-      async saveSessionWork() {
+      async saveSessionWork(_sessionId, input) {
+        assert.equal(input.vibe64User.username, "member");
+        await input.onRepositoryWriteAcquired();
         saveCalls += 1;
-        throw new Error("Save must not start after authorization denial.");
+        return { reconciled: true, saveCommit: "member-save", status: "saved" };
+      },
+      async createSessionPullRequest(_sessionId, input) {
+        assert.equal(input.vibe64User.username, "member");
+        assert.equal(input.title, "Member changes");
+        return { ok: true, pullRequest: { number: 12 } };
       }
     }
   });
 
   const result = await service.saveSessionWork("session-1", {
-    vibe64User: { username: "member" }
+    vibe64User: { username: "member", role: "member" }
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_assistant_owner_required");
-  assert.equal(saveCalls, 0);
-  assert.deepEqual(taskEvents, []);
-  assert.deepEqual(metadataWrites, []);
+  assert.equal(result.ok, true, result.error);
+  assert.equal(saveCalls, 1);
+  assert.equal(taskEvents.at(-1)[2].patch.status, "ready");
+  assert.deepEqual(metadataWrites, [
+    ["session-1", "canonical_commit", "member-save"],
+    ["session-1", "base_commit", "member-save"]
+  ]);
+  const published = await service.createSessionPullRequest("session-1", {
+    title: "Member changes", vibe64User: { username: "member", role: "member" }
+  });
+  assert.equal(published.ok, true, published.error);
+  assert.equal(published.pullRequest.number, 12);
 });
 
 test("Save authority races become a ready update requirement rather than an AI failure", async () => {

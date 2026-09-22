@@ -32,6 +32,7 @@ import {
 } from "./terminalShared.js";
 
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v2";
+const SHARED_PROMPT_HINTS_ARTIFACT = "assistant/shared-prompt-hints.json";
 const PROMPT_HINT_CACHE_TTL_MS = 5 * 60 * 1000;
 const PROMPT_HINT_CACHE_MAX_ENTRIES = 128;
 const PROMPT_HINT_RECENT_TURN_LIMIT = 8;
@@ -388,6 +389,7 @@ function createSessionPromptHintsService({
   now = () => Date.now(),
   requireAssistantAccess,
   projectService,
+  publishSessionChanged = async () => {},
   readBlueprintText = readPromptHintBlueprint,
   resolveExecutionProfile,
   runAgentTurn,
@@ -793,6 +795,19 @@ function createSessionPromptHintsService({
       basis: job.snapshot.basis,
       suggestions
     });
+    // Only conversation-based hints are shared. Draft-based hints stay private
+    // to the actor's existing short-lived cache.
+    if (!job.snapshot.draft) {
+      try {
+        await current.runtime.store.writeJsonArtifact(job.sessionId, SHARED_PROMPT_HINTS_ARTIFACT, {
+          basis: job.snapshot.basis,
+          suggestions
+        });
+        await publishSessionChanged(job.sessionId, { reason: "shared-prompt-hints-updated" });
+      } catch (error) {
+        reportDiagnostic("vibe64_prompt_hints_share_failed", error, { sessionId: job.sessionId });
+      }
+    }
     return promptHintResponse("ready", {
       basis: job.snapshot.basis,
       suggestions
@@ -904,6 +919,21 @@ function createSessionPromptHintsService({
     } catch (error) {
       if (request.cancelled) {
         return promptHintResponse("cancelled", { basis: snapshot.basis });
+      }
+      if (error?.code === "vibe64_assistant_owner_required") {
+        if (!snapshot.draft) {
+          try {
+            const source = await context.runtime.store.readArtifact(sessionId, SHARED_PROMPT_HINTS_ARTIFACT);
+            const shared = source ? JSON.parse(source) : null;
+            const suggestions = normalizedPromptHintSuggestions(shared?.suggestions);
+            if (!request.cancelled && suggestions.length && samePromptHintBasis(shared?.basis, snapshot.basis)) {
+              return promptHintResponse("ready", { basis: snapshot.basis, cached: true, suggestions });
+            }
+          } catch (readError) {
+            reportDiagnostic("vibe64_prompt_hints_share_read_failed", readError, { sessionId });
+          }
+        }
+        return promptHintResponse("unavailable", { basis: snapshot.basis });
       }
       reportDiagnostic("vibe64_prompt_hints_access_restricted", error, { sessionId });
       return promptHintResponse("unavailable", { basis: snapshot.basis });

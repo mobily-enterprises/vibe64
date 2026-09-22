@@ -1273,7 +1273,6 @@ function createService({
         const vibe64User = trustedAssistantUser(input);
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
-        await terminals.requireAssistantAccess(sessionId, { runtime, session, vibe64User });
         try {
           return await terminals.createSessionPullRequest(sessionId, {
             title: input.title, body: input.body, draft: input.draft,
@@ -1296,11 +1295,6 @@ function createService({
         });
         const session = await runtime.getSession(sessionId, {
           inspectSource: false
-        });
-        await terminals.requireAssistantAccess(sessionId, {
-          runtime,
-          session,
-          vibe64User
         });
         const operationId = crypto.randomUUID();
         let operationStarted = false;

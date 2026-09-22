@@ -563,6 +563,7 @@ function createService({
     }
   });
   const sessionPromptHints = createSessionPromptHintsService({
+    publishSessionChanged: publishAgentSessionChanged,
     deleteAgentThread: (sessionId, input, options) => (
       sessionAgent.deleteDetachedChatThread(sessionId, input, options)
     ),
@@ -826,6 +827,7 @@ function createService({
     };
     let commitTitle;
     try {
+      await sessionAgent.requireAssistantAccess(normalizedSessionId, agentContext);
       const providerDescription = await sessionAgent.describeProvider(agentContext);
       commitTitle = await generateSessionSaveCommitMessage({
         agentContext,

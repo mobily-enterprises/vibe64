@@ -32,6 +32,9 @@ GitHub, managed-Git, or local-source authority. It refuses ambiguous authority,
 changed session history, dirty local authority, or a moving canonical branch.
 Assistant naming is optional: provider, account, invalid-title, or cleanup failures
 produce a visible fallback notice and a deterministic checkpoint-based subject.
+Members can Save when the selected AI connection is personal-only. The AI access
+check applies before generating the optional commit name; denied naming
+uses the same fallback. Repository authorization and write admission still apply.
 Failed temporary-thread ownership remains intact for safe cleanup; it does not
 prevent repository persistence. Git authority and checkpoint checks still apply.
 Worktree edits made after capture are left as unsaved work on top of the named

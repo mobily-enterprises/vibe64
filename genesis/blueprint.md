@@ -241,7 +241,9 @@ available. Starting or restoring an assistant still respects session renewal
 and cleanup.
 Save and Update wait for active assistant preparation to finish. Save can proceed
 without assistant naming, using a checkpoint-based version name and a visible
-notice when naming is unavailable. A request that
+notice when naming is unavailable. Members can Save and create pull requests
+with a personal-only AI connection; the access restriction applies to optional
+AI naming, while ordinary repository permissions still apply. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.
@@ -269,7 +271,9 @@ overview continues to explain the data itself.
 People can explore a project's database through a readable relationship diagram,
 including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
 uses the project's declared filename, enforces read-only inspection, and supports
-deliberate row edits through the same owner controls.
+deliberate row edits through the same explicit unlock and confirmation controls.
+Project members can browse and work with the database regardless of AI access.
+Only AI assistance checks whether the selected connection is personal.
 The diagram lets people explore their data,
 starting with its keys and expanding detail when needed. Large diagrams load
 without blocking typing or navigation while their connections are calculated.
@@ -425,6 +429,17 @@ source. Those choices apply when a conversation next establishes stable
 context; they do not rewrite past conversation or get repeated with every
 message. Personal names and prompt suggestions remain separate Vibe64 conveniences
 and are not added to agent prompts.
+When a personal AI connection is selected, members compose messages and attach
+files in the normal chat, using Send for approval. Requests remain visible above
+the composer while the owner reviews them, even when the assistant is busy.
+Owners see the author, full text and previewable attachments with Approve & send
+and Decline actions directly in chat. Members can withdraw pending requests and
+see recent decisions. Approval retains the author's attribution and safely
+retries a failed delivery.
+Conversation-based suggestions are shared with members without invoking AI on
+their behalf. They survive reloads, follow the current conversation and Blueprint,
+and never include another person's unsent draft suggestions.
+
 Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
 intent instead of repeating finished work or proposing unrelated generic tasks.

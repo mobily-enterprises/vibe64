@@ -389,6 +389,7 @@ function useVibe64AutopilotView(props, emit, {
   const assistantDirectAllowed = computed(() => (
     !assistantAccessConfigured || unref(assistantCanUseAi) === true
   ));
+  const assistantRequestOnly = computed(() => unref(assistantCanRequestMessage) === true);
   const assistantMainChatAllowed = computed(() => (
     !assistantAccessConfigured ||
     unref(assistantCanUseAi) === true ||
@@ -546,7 +547,7 @@ function useVibe64AutopilotView(props, emit, {
     !composerDisabled.value &&
     !composerSending.value &&
     !interrupting.value &&
-    !agentActive.value &&
+    (!agentActive.value || assistantRequestOnly.value) &&
     !repositoryOperationActive.value
   ));
   const composerRetryMatchesDraft = computed(() => {
@@ -558,6 +559,7 @@ function useVibe64AutopilotView(props, emit, {
     ));
   });
   const composerSubmitMode = computed(() => {
+    if (assistantRequestOnly.value) return composerSending.value ? "sending" : "send";
     if (assistantAccountUnavailable.value) {
       return "unavailable";
     }
@@ -614,21 +616,26 @@ function useVibe64AutopilotView(props, emit, {
     steering: "Keep typing while this guidance is sent",
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
-  const composerCanSubmit = computed(() => Boolean(
-    props.agentConnectionStatus === "connected" &&
-    !composerDisabled.value &&
-    (!composerSending.value || agentSteerable.value) &&
-    !interrupting.value &&
-    !repositoryOperationActive.value &&
-    (!agentActive.value || agentSteerable.value) &&
-    (!agentActive.value || composerAttachments.value.length === 0) && (
-      numberedQuestions.value.length
-        ? numberedQuestions.value.every((question) => String(questionAnswers.value[question.name] || "").trim())
-        : answerChoices.value.length
-          ? selectedAnswerChoice.value || composerDraft.value.trim()
-          : composerDraft.value.trim()
-    )
-  ));
+  const composerCanSubmit = computed(() => {
+    if (composerDisabled.value) return false;
+    if (assistantRequestOnly.value) {
+      if (composerSending.value) return false;
+    } else if (
+      props.agentConnectionStatus !== "connected" ||
+      (composerSending.value && !agentSteerable.value) ||
+      interrupting.value ||
+      repositoryOperationActive.value ||
+      (agentActive.value && (!agentSteerable.value || composerAttachments.value.length > 0))
+    ) {
+      return false;
+    }
+    if (numberedQuestions.value.length) {
+      return numberedQuestions.value.every((question) => String(questionAnswers.value[question.name] || "").trim());
+    }
+    return Boolean(
+      (answerChoices.value.length && selectedAnswerChoice.value) || composerDraft.value.trim()
+    );
+  });
   const agentStopVisible = computed(() => agentActive.value);
   const agentStopEnabled = computed(() => Boolean(
     agentStopVisible.value &&
@@ -1131,7 +1138,7 @@ function useVibe64AutopilotView(props, emit, {
     if (!payload) {
       return false;
     }
-    const submissionKind = retry?.submissionKind || (agentSteerable.value ? "steer" : "send");
+    const submissionKind = retry?.submissionKind || (!assistantRequestOnly.value && agentSteerable.value ? "steer" : "send");
     const questionTextSnapshot = retry?.questionTextSnapshot || (structuredQuestionActive.value
       ? latestAssistantQuestionText.value
       : "");
@@ -1291,7 +1298,6 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const saveWorkDisabled = computed(() => Boolean(
     updateWorkDisabled.value ||
-    (!saveWorkRequiresUpdate.value && !assistantDirectAllowed.value) ||
     (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
   ));
   const saveWorkActionLabel = computed(() => (
@@ -1336,9 +1342,6 @@ function useVibe64AutopilotView(props, emit, {
     }
     if (!saveWorkUnsaved.value) {
       return "No work to save";
-    }
-    if (!assistantDirectAllowed.value) {
-      return currentAssistantRestrictionMessage.value;
     }
     return "Save this session's work to the project repository";
   });
@@ -1967,7 +1970,7 @@ function useVibe64AutopilotView(props, emit, {
     props.active &&
     sessionId.value &&
     !props.sessionSelectionArchived &&
-    assistantDirectAllowed.value
+    assistantMainChatAllowed.value
   ));
 
   function prefillComposer(text = "", { append = false } = {}) {

@@ -158,9 +158,15 @@ function useVibe64AssistantAccess({
       ? suggestionsResource.data.value.suggestions
       : []
   ));
-  const pendingSuggestions = computed(() => suggestions.value.filter((suggestion) => (
-    ["pending", "delivering"].includes(assistantAccessText(suggestion?.status))
-  )));
+  const pendingSuggestions = computed(() => suggestions.value
+    .filter((suggestion) => ["pending", "delivering"].includes(assistantAccessText(suggestion?.status)))
+    .sort((left, right) => String(left.createdAt || "").localeCompare(String(right.createdAt || "")))
+  );
+  const recentSuggestions = computed(() => suggestions.value
+    .filter((suggestion) => ["delivered", "discarded", "withdrawn"].includes(suggestion?.status))
+    .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")))
+    .slice(0, 3)
+  );
   const accessError = computed(() => vibe64ResourceResponseError(
     accessResource.data.value,
     "AI access could not be loaded."
@@ -181,7 +187,7 @@ function useVibe64AssistantAccess({
   ));
   const restrictionMessage = computed(() => {
     if (canRequestMessage.value) {
-      return "Only the workspace owner can run this personal AI connection. You can request a main-chat message for approval.";
+      return "Write a message and add any files you’d like to share. The owner reviews your request before sending it to the AI.";
     }
     if (access.value?.available === true && access.value?.ownerOnly === true) {
       return "Only the workspace owner can use this personal AI connection.";
@@ -284,6 +290,7 @@ function useVibe64AssistantAccess({
     initialAccessLoading,
     pendingAction,
     pendingSuggestions,
+    recentSuggestions,
     reload,
     restrictionMessage,
     suggestMessage,

@@ -126,7 +126,7 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   } });
   assert.equal(invalid.code, "vibe64_database_erd_moves_invalid");
   assert.deepEqual(await readErdLayout(store, "session"), current);
-  assert.equal((await service.readErd({ sessionId: "session", vibe64User: { role: "member" } })).code, "vibe64_owner_required");
+  assert.deepEqual((await service.readErd({ sessionId: "session", vibe64User: { role: "member" } })).connections, moved.connections);
   const undo = await service.moveErdTables({ sessionId: "session", changes: { revision: moved.revision, moves: moved.previousMoves } });
   assert.equal(undo.ok, true);
   assert.deepEqual((await readErdLayout(store, "session")).nodes, saved.nodes);
@@ -173,8 +173,10 @@ test("service publishes a scoped hint only after a successful shared save, witho
     audience: "all_clients", event: "vibe64.database.layout.changed",
     payload: { projectSlug: "project", sessionId: "session" }
   });
-  assert.equal((await service.saveLayout({ sessionId: "session", vibe64User: { role: "member" }, layout })).code, "vibe64_owner_required");
+  const memberSave = await runWithProjectRequestContext({ slug: "project" }, () => service.saveLayout({ sessionId: "session", vibe64User: { role: "member", username: "bob" }, layout }));
+  assert.equal(memberSave.ok, true);
+  assert.equal(memberSave.layout.revision, 2);
   store.writeJsonArtifact = async () => { throw new Error("disk unavailable"); };
   assert.equal((await service.saveLayout({ sessionId: "session", layout })).ok, false);
-  assert.equal(events.length, 1);
+  assert.equal(events.length, 2);
 });

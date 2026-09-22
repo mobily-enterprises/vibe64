@@ -759,6 +759,16 @@ Each approval checks its current caller, including requests that arrive while
 an owner's delivery is already pending. Duplicate owner approvals share that
 delivery; a failed delivery remains retryable with the same provider message id.
 
+The main composer clearly labels this mode Send for approval, allows attachments
+while the assistant is working, and accepts a request while its connection is
+recovering. Submission queues a proposal rather than steering the active turn.
+Pending requests appear above the composer, oldest first, with the author's name,
+full message and ordinary attachment preview/download controls. Owners approve
+and send or decline directly there; authors can withdraw their pending requests.
+Recent decisions remain available in the same panel. The existing session-scoped
+realtime refresh brings requests and decisions into other viewers' panels.
+Database questions and overview tasks can prefill this same editable composer.
+
 New paginated Codex conversations persist their native identity and empty
 history before Vibe64 publishes them as ready. Their initial native name is
 their conversation id. This one-time initialization reads only the newly
@@ -1050,6 +1060,14 @@ The browser waits for a short typing pause, cancels superseded requests and
 rejects late responses. Draft context is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
 Cache identity includes the draft alongside the Blueprint and conversation.
+Successful generation without a draft also stores a shared suggestion snapshot
+in the session's private assistant artifact and publishes a session refresh hint.
+A member denied personal AI access may read that snapshot only while its complete
+conversation/Blueprint basis still matches; this path does not inspect or invoke
+a provider. Draft suggestions remain actor-specific and are never persisted in
+this shared artifact. A member's browser requests only conversation suggestions,
+leaves their draft local, and rereads on the shared-hint realtime event. Missing,
+stale or unreadable shared hints stay absent until authorized generation succeeds.
 An empty conversation still uses its Blueprint or draft; generic starters are
 reserved for a session with none of those inputs.
 Suggestions may preview their full text in an otherwise empty

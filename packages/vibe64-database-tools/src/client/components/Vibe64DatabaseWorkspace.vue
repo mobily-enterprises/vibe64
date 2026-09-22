@@ -147,7 +147,7 @@
             :key="sessionId"
             :schema="schema"
             :overview="state?.overview || { present: false, hash: '', definition: { version: 1, actors: [] } }"
-            :assistant-available="assistantAvailable"
+            :assistant-available="assistantAvailable || assistantRequestAvailable"
             :save-overview="saveOverview"
             @select-table="(table, label) => selectTableFromErd(table, 'overview', label)"
             @inspect-table="diagramSelections.overview = $event"
@@ -414,6 +414,12 @@
             <v-icon :icon="mdiInformationOutline" size="26" />
             <strong>{{ assistantUnavailableTitle }}</strong>
             <span>{{ assistantUnavailableCopy }}</span>
+            <v-btn
+              v-if="assistantRequestAvailable" color="primary" variant="tonal"
+              @click="emit('request-message', assistantRequestMessage)"
+            >
+              Ask through the owner
+            </v-btn>
           </div>
         </aside>
       </div>
@@ -587,6 +593,7 @@ const props = defineProps({
     default: true,
     type: Boolean
   },
+  assistantRequestAvailable: { default: false, type: Boolean },
   assistantUnavailableMessage: {
     default: "",
     type: String
@@ -604,7 +611,7 @@ const props = defineProps({
     type: [String, Object, Function]
   }
 });
-const emit = defineEmits(["request-overview-assistant"]);
+const emit = defineEmits(["request-overview-assistant", "request-message"]);
 
 function requestOverviewAssistant({ abstraction = "balanced", scope = "all" } = {}) {
   const level = DATA_OVERVIEW_ABSTRACTIONS.find((item) => item.value === abstraction) || DATA_OVERVIEW_ABSTRACTIONS[1];
@@ -716,20 +723,25 @@ const assistantStatusLabel = computed(() => {
   if (!props.assistantAvailable) return "Owner only";
   return state.value?.assistant?.model || "Available";
 });
-const assistantUnavailableTitle = computed(() => (
-  assistantConfigured.value ? "Copilot is owner-only for this connection." : "Copilot is optional."
-));
+const assistantUnavailableTitle = computed(() => {
+  if (props.assistantRequestAvailable) return "Get help through the owner";
+  return assistantConfigured.value ? "Copilot is owner-only for this connection." : "Copilot is optional.";
+});
 const assistantUnavailableCopy = computed(() => {
   if (assistantConfigured.value) {
     return props.assistantUnavailableMessage || "This Personal AI connection can only be used by the workspace owner. Database browsing and editing remain available.";
   }
-  return "Configure the server’s database-assistant OpenAI key to enable it. Database browsing and editing work without AI.";
+  return "Choose an available AI connection for this session to enable Copilot. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
 const assistantTableName = computed(() => {
   const name = activeView.value === "data" ? selectedTableName.value : diagramSelections[activeView.value];
   return schema.value.tables.some((table) => table.qualifiedName === name) ? name : "";
 });
+const assistantRequestMessage = computed(() => assistantTableName.value
+  ? `Help me understand the ${assistantTableName.value} table and its relationships.`
+  : "Help me understand this project’s database and its main tables."
+);
 const currentQueryIsDefault = computed(() => Boolean(
   selectedTable.value && sqlText.value.trim() === defaultTableSql(selectedTable.value)
 ));

@@ -86,7 +86,7 @@
               <v-list-item
                 v-if="githubProject && !sessionPullRequest?.number" min-height="48"
                 :prepend-icon="mdiSourcePull" title="Create pull request" subtitle="Publish this session on a new branch"
-                :disabled="sourceOperationsSuspended || !assistantDirectAllowed" @click="createPullRequestOpen = true"
+                :disabled="sourceOperationsSuspended" @click="createPullRequestOpen = true"
               />
               <v-list-item
                 v-if="props.sessionRenewal?.visible"
@@ -122,7 +122,7 @@
           />
           <v-btn
             v-if="githubProject && !sessionPullRequest?.number" :icon="mdiSourcePull" size="48" variant="text"
-            aria-label="Create pull request" title="Create pull request" :disabled="sourceOperationsSuspended || !assistantDirectAllowed"
+            aria-label="Create pull request" title="Create pull request" :disabled="sourceOperationsSuspended"
             @click="createPullRequestOpen = true"
           />
           <v-badge
@@ -384,10 +384,29 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
+            <Vibe64AssistantAccessPanel
+              :access-error="assistantAccessError"
+              :assistant-busy="agentActive"
+              :action-is-pending="assistantActionIsPending"
+              :can-manage="assistantSuggestionsCanManage"
+              :pending-action="assistantPendingAction"
+              :recent-suggestions="assistantRecentSuggestions"
+              :session-id="sessionId"
+              :pending-suggestions="assistantPendingSuggestions"
+              :suggestions-error="assistantSuggestionsError"
+              @approve="approveAssistantSuggestion"
+              @discard="discardAssistantSuggestion"
+              @reload="reloadAssistantAccess"
+              @withdraw="withdrawAssistantSuggestion"
+            />
+            <div v-if="assistantCanRequestMessage" class="studio-autopilot__request-intro">
+              <strong>Send a request to the owner</strong>
+              <span>{{ assistantRestrictionMessage }}</span>
+            </div>
             <Vibe64AutopilotPromptTextarea
               ref="composerInput"
               v-model="composerDraft"
-              aria-label="Message AI assistant"
+              :aria-label="assistantCanRequestMessage ? 'Message for owner approval' : 'Message AI assistant'"
               :attachments-enabled="composerAttachmentsEnabled"
               :described-by="composerSupportStatusVisible ? thinkingStatusId : ''"
               :disabled="composerDisabled"
@@ -415,7 +434,7 @@
                 />
               </template>
               <template #footer="{ attachmentState }">
-                <div class="studio-autopilot__composer-actions">
+                <div class="studio-autopilot__composer-actions" :class="{ 'studio-autopilot__composer-actions--request': assistantCanRequestMessage }">
                   <v-menu eager location="top start" :close-on-content-click="false">
                     <template #activator="{ props: menuProps }">
                       <v-btn
@@ -472,14 +491,14 @@
                   </v-menu>
                   <v-btn
                     ref="composerSettingsButton"
-                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint ? ': attention required' : ''}`"
+                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint && !assistantCanRequestMessage ? ': attention required' : ''}`"
                     aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
                     icon size="small" variant="text"
                     class="studio-autopilot__composer-action"
                     @click="composerSettingsOpen = !composerSettingsOpen"
                   >
                     <span class="studio-autopilot__assistant-button">
-                      <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
+                      <v-badge :model-value="Boolean(composerAccessHint) && !assistantCanRequestMessage" color="warning" dot floating>
                         <v-icon :icon="mdiCogOutline" size="20" />
                       </v-badge>
                       <span class="studio-autopilot__assistant-button-label">{{ conversationAssistantLabel }}</span>
@@ -497,10 +516,10 @@
                   >
                     <template #access>
                       <div
-                        v-if="composerAccessHint || assistantAccessError || assistantSuggestionsError || assistantPendingSuggestions.length"
+                        v-if="composerAccessHint && !assistantCanRequestMessage"
                         class="studio-autopilot__settings-access"
                       >
-                        <div v-if="composerAccessHint" class="text-body-small" role="status">
+                        <div class="text-body-small" role="status">
                           {{ composerAccessHint }}
                           <v-btn
                             v-if="agentObservationLost && !agentActive" size="small" variant="text"
@@ -509,18 +528,6 @@
                             Continue
                           </v-btn>
                         </div>
-                        <Vibe64AssistantAccessPanel
-                          :access-error="assistantAccessError"
-                          :action-is-pending="assistantActionIsPending"
-                          :can-manage="assistantSuggestionsCanManage"
-                          :pending-action="assistantPendingAction"
-                          :pending-suggestions="assistantPendingSuggestions"
-                          :suggestions-error="assistantSuggestionsError"
-                          @approve="approveAssistantSuggestion"
-                          @discard="discardAssistantSuggestion"
-                          @reload="reloadAssistantAccess"
-                          @withdraw="withdrawAssistantSuggestion"
-                        />
                       </div>
                     </template>
                   </Vibe64SessionAssistantMenu>
@@ -542,9 +549,12 @@
                       ref="composerSendButton" :aria-label="composerSubmitActionAriaLabel"
                       :title="composerSubmitActionTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
                       :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
-                      :icon="composerSuggesting ? mdiAccountArrowRightOutline : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
+                      :icon="composerSuggesting ? undefined : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
+                      :prepend-icon="composerSuggesting ? mdiAccountArrowRightOutline : undefined"
                       class="studio-autopilot__composer-action" @click="sendComposerMessage"
-                    />
+                    >
+                      <template v-if="composerSuggesting">Send for approval</template>
+                    </v-btn>
                   </div>
                 </div>
               </template>
@@ -698,12 +708,14 @@
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantDirectAllowed"
+          :assistant-request-available="assistantCanRequestMessage"
           :assistant-unavailable-message="assistantRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
-          @request-overview-assistant="startTemporaryAiTask"
+          @request-overview-assistant="assistantCanRequestMessage ? prefillComposer($event.message, { append: true }) : startTemporaryAiTask($event)"
+          @request-message="prefillComposer($event, { append: true })"
         />
       </section>
 
@@ -1034,6 +1046,7 @@ const {
   initialAccessLoading: assistantAccessLoading,
   pendingAction: assistantPendingAction,
   pendingSuggestions: assistantPendingSuggestions,
+  recentSuggestions: assistantRecentSuggestions,
   reload: reloadAssistantAccess,
   restrictionMessage: assistantRestrictionMessage,
   suggestMessage: suggestAssistantMessage,
@@ -1211,7 +1224,7 @@ const composerSuggesting = computed(() => assistantCanRequestMessage.value && [
   "steering"
 ].includes(composerSubmitMode.value));
 const composerSubmitActionAriaLabel = computed(() => (
-  composerSuggesting.value ? "Request message from workspace owner" : composerSubmitAriaLabel.value
+  composerSuggesting.value ? "Send for approval" : composerSubmitAriaLabel.value
 ));
 const composerSubmitActionTitle = computed(() => (
   composerSuggesting.value ? assistantRestrictionMessage.value : composerSubmitTitle.value
@@ -1305,7 +1318,7 @@ const promptHintsCanRequest = computed(() => Boolean(
   (
     promptHintsBlankConversation.value || (
       props.agentConnectionStatus === "connected" &&
-      assistantDirectAllowed.value
+      (assistantDirectAllowed.value || assistantCanRequestMessage.value)
     )
   ) &&
   !structuredQuestionActive.value &&
@@ -1335,6 +1348,8 @@ const {
   canRequest: promptHintsCanRequest,
   conversationKey: promptHintsConversationKey,
   draft: composerDraft,
+  sharedOnly: assistantCanRequestMessage,
+  projectSlug,
   existingProject: promptHintsExistingProject,
   onSelect: applyPromptHint,
   policy: computed(() => props.promptHintPolicy),
@@ -1349,7 +1364,8 @@ const composerPromptHintPreview = computed(() => (
     : ""
 ));
 const composerPromptHintPlaceholder = computed(() => (
-  composerPromptHintPreview.value || composerPlaceholder.value
+  composerPromptHintPreview.value || (assistantCanRequestMessage.value
+    ? "What would you like the AI to help with?" : composerPlaceholder.value)
 ));
 const composerSupportStatusVisible = computed(() => Boolean(
   composerAssistantLabel.value || promptHintsVisible.value
@@ -1618,6 +1634,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.studio-autopilot__request-intro {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.2rem 0.2rem 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: rgba(var(--v-theme-on-surface), 0.75);
+}
+.studio-autopilot__request-intro strong { color: rgb(var(--v-theme-on-surface)); }
 .studio-autopilot {
   background: rgb(var(--v-theme-background));
   display: grid;
@@ -1716,6 +1741,21 @@ onBeforeUnmount(() => {
 }
 
 @container studio-chat-pane (max-width: 32rem) {
+  .studio-autopilot__composer-actions--request {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+
+  .studio-autopilot__composer-actions--request .studio-autopilot__composer-delivery {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+
+  .studio-autopilot__composer-actions--request .studio-autopilot__composer-delivery .studio-autopilot__composer-action {
+    width: auto;
+    padding-inline: 0.75rem;
+  }
+
   .studio-autopilot__header-actions--compact {
     display: flex;
   }

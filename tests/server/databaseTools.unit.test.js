@@ -1108,7 +1108,7 @@ test("schema access fails visibly instead of truncating one enormous object", ()
   );
 });
 
-test("database service is owner-only and routes read-only SQL through the reader identity", async () => {
+test("database members can browse, run SQL and use a shared assistant through the existing identities", async () => {
   const schema = testSchema();
   const artifacts = new Map([["database/schema.json", JSON.stringify(schema)]]);
   const environments = [];
@@ -1223,8 +1223,8 @@ test("database service is owner-only and routes read-only SQL through the reader
     async requireAssistantAccess(sessionId, options) {
       assert.equal(sessionId, "service-session");
       assert.deepEqual(options.vibe64User, {
-        role: "owner",
-        username: "owner"
+        role: "member",
+        username: "member"
       });
       return { ok: true };
     },
@@ -1249,17 +1249,18 @@ test("database service is owner-only and routes read-only SQL through the reader
   };
   const service = createDatabaseService({ projectService, terminalService, withKnex });
 
-  const forbidden = await service.readState({
+  const memberState = await service.readState({
     sessionId: "service-session",
     vibe64User: { role: "member", username: "member" }
   });
-  assert.equal(forbidden.ok, false);
-  assert.equal(forbidden.code, "vibe64_owner_required");
+  assert.equal(memberState.ok, true);
+  assert.deepEqual(memberState.schema.tables, schema.tables);
+  assert.equal(assistantTurns.length, 0);
 
   const assistant = await service.askAssistant({
     messages: [{ content: "What does the books table contain?", role: "user" }],
     sessionId: "service-session",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(assistant.ok, true);
   assert.equal(assistant.engineId, "opencode");
@@ -1272,8 +1273,8 @@ test("database service is owner-only and routes read-only SQL through the reader
     workloadId: "database_assistant"
   });
   assert.deepEqual(assistantTurns[0].options.vibe64User, {
-    role: "owner",
-    username: "owner"
+    role: "member",
+    username: "member"
   });
   assert.equal(assistantDeletions.length, 1);
   assert.equal(assistantDeletions[0].sessionId, "service-session");
@@ -1284,7 +1285,7 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: true,
     sessionId: "service-session",
     sql: "SELECT * FROM public.books;",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(read.ok, true);
   assert.equal(environments[0], "reader");
@@ -1300,12 +1301,12 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: true,
     sessionId: "service-session",
     sql: defaultQuery(schema.tables[0], schema.engine),
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(automaticRead.ok, true);
   const stateAfterAutomaticRead = await service.readState({
     sessionId: "service-session",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.deepEqual(
     stateAfterAutomaticRead.workspace.history.map((entry) => entry.sql),
@@ -1318,12 +1319,12 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: true,
     sessionId: "service-session",
     sql: "SELECT title FROM public.books;",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(explicitReadClaimingToBeAutomatic.ok, true);
   const stateAfterExplicitRead = await service.readState({
     sessionId: "service-session",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.deepEqual(
     stateAfterExplicitRead.workspace.history.map((entry) => entry.sql),
@@ -1335,7 +1336,7 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: false,
     sessionId: "service-session",
     sql: "UPDATE public.books SET title = 'Changed' WHERE id = 7;",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(refusedWrite.ok, false);
   assert.equal(refusedWrite.code, "vibe64_database_write_confirmation_required");
@@ -1347,7 +1348,7 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: false,
     sessionId: "service-session",
     sql: "UPDATE public.books SET title = 'Changed' WHERE id = 7;",
-    vibe64User: { role: "owner", username: "owner" },
+    vibe64User: { role: "member", username: "member" },
     writeUnlocked: true
   });
   assert.equal(write.ok, true);
@@ -1361,7 +1362,7 @@ test("database service is owner-only and routes read-only SQL through the reader
     readOnly: false,
     sessionId: "service-session",
     sql: "ALTER TABLE public.books ADD CONSTRAINT books_category_fk FOREIGN KEY (category_id) REFERENCES public.categories (id);",
-    vibe64User: { role: "owner", username: "owner" },
+    vibe64User: { role: "member", username: "member" },
     writeUnlocked: true
   });
   assert.equal(constraint.ok, true);
@@ -1372,7 +1373,7 @@ test("database service is owner-only and routes read-only SQL through the reader
   const refreshed = await service.refreshSchema({
     sessionId: "service-session",
     source: "test",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
   assert.equal(refreshed.ok, true);
   assert.equal(environments.at(-1), "reader");
@@ -1734,7 +1735,7 @@ test("database assistant denial happens before schema inspection or its read-que
       },
       async requireAssistantAccess(sessionId, options) {
         assert.equal(sessionId, "service-session");
-        assert.equal(options.vibe64User.username, "owner");
+        assert.equal(options.vibe64User.username, "member");
         throw denied;
       },
       async runDetachedAgentChatTurn() {
@@ -1749,7 +1750,7 @@ test("database assistant denial happens before schema inspection or its read-que
   const result = await service.askAssistant({
     messages: [{ content: "Describe the catalogue.", role: "user" }],
     sessionId: "service-session",
-    vibe64User: { role: "owner", username: "owner" }
+    vibe64User: { role: "member", username: "member" }
   });
 
   assert.equal(result.ok, false);

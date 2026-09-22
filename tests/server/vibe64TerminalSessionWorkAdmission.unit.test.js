@@ -1229,49 +1229,63 @@ test("an active attachment upload finishes before renewal can freeze and cleanup
   ]);
 });
 
-test("Save publishes captured work when assistant naming is unavailable", async (t) => {
-  const events = [];
-  const { projectService, root, service, session } = await terminalServiceFixture(t, { store: {} });
-  const baseline = path.join(root, "baseline");
-  const source = session.metadata.source_path;
-  const git = async (cwd, args) => {
-    const result = await execFileAsync("git", args, {
-      cwd,
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: "Save Test", GIT_AUTHOR_EMAIL: "save@example.test",
-        GIT_COMMITTER_NAME: "Save Test", GIT_COMMITTER_EMAIL: "save@example.test"
-      }
+for (const personalMember of [false, true]) {
+  test(`Save publishes captured work when assistant naming is ${personalMember ? "personal-only" : "unavailable"}`, async (t) => {
+    const events = [];
+    const { projectService, root, service, session } = await terminalServiceFixture(t, { store: {} });
+    if (personalMember) {
+      service.configureAssistantRuntime({ readAssistantAccess: async () => ({ ownerOnly: true }) });
+      session.metadata.assistant_selection = JSON.stringify({
+        engineId: "opencode", agentId: "build", modelProviderId: "test", modelId: "test-model",
+        catalogRevision: `sha256:${"a".repeat(64)}`, variantId: ""
+      });
+    }
+    const baseline = path.join(root, "baseline");
+    const source = session.metadata.source_path;
+    const git = async (cwd, args) => {
+      const result = await execFileAsync("git", args, {
+        cwd,
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "Save Test", GIT_AUTHOR_EMAIL: "save@example.test",
+          GIT_COMMITTER_NAME: "Save Test", GIT_COMMITTER_EMAIL: "save@example.test"
+        }
+      });
+      return result.stdout.trim();
+    };
+    await git(root, ["init", "--initial-branch=main", baseline]);
+    await initializeGenesisProject({ projectRoot: baseline });
+    await writeFile(path.join(baseline, "app.txt"), "initial\n");
+    await git(baseline, ["add", "."]);
+    await git(baseline, ["commit", "-m", "Initial"]);
+    const baseCommit = await git(baseline, ["rev-parse", "HEAD"]);
+    await git(root, ["clone", "--branch", "main", baseline, source]);
+    await git(source, ["checkout", "-b", "vibe64/session-1"]);
+    Object.assign(session.metadata, {
+      base_branch: "main", base_commit: baseCommit, branch: "vibe64/session-1"
     });
-    return result.stdout.trim();
-  };
-  await git(root, ["init", "--initial-branch=main", baseline]);
-  await initializeGenesisProject({ projectRoot: baseline });
-  await writeFile(path.join(baseline, "app.txt"), "initial\n");
-  await git(baseline, ["add", "."]);
-  await git(baseline, ["commit", "-m", "Initial"]);
-  const baseCommit = await git(baseline, ["rev-parse", "HEAD"]);
-  await git(root, ["clone", "--branch", "main", baseline, source]);
-  await git(source, ["checkout", "-b", "vibe64/session-1"]);
-  Object.assign(session.metadata, {
-    base_branch: "main", base_commit: baseCommit, branch: "vibe64/session-1"
+    projectService.readCurrentProject = async () => ({
+      slug: "test-project",
+      sourceRoot: baseline,
+      repository: { mode: "local_source", defaultBranch: "main" }
+    });
+    projectService.runProjectSourceExclusive = async (operation) => operation();
+    await writeFile(path.join(source, "app.txt"), "important work\n");
+    const saved = await service.saveSessionWork(session.sessionId, {
+      operationId: "save-without-assistant",
+      vibe64User: personalMember ? { username: "member", role: "member" } : null,
+      onProgress(event) { events.push(event); }
+    });
+    assert.equal(saved.status, "saved");
+    assert.equal(await git(baseline, ["rev-parse", "HEAD"]), saved.saveCommit);
+    assert.equal(await readFile(path.join(baseline, "app.txt"), "utf8"), "important work\n");
+    const checkpoint = events.find((event) => event.checkpointTree);
+    assert.equal(await git(baseline, ["log", "-1", "--format=%s"]),
+      `Save work ${checkpoint.checkpointTree.slice(0, 12)}`);
+    assert.ok(events.some((event) => event.stage === "message-fallback"));
+    if (personalMember) {
+      assert.equal(events.find((event) => event.stage === "message-fallback").code, "vibe64_assistant_owner_required");
+    }
+    assert.equal(saved.commitTitleExecutionProfile, null);
   });
-  projectService.readCurrentProject = async () => ({
-    sourceRoot: baseline,
-    repository: { mode: "local_source", defaultBranch: "main" }
-  });
-  projectService.runProjectSourceExclusive = async (operation) => operation();
-  await writeFile(path.join(source, "app.txt"), "important work\n");
-  const saved = await service.saveSessionWork(session.sessionId, {
-    operationId: "save-without-assistant",
-    onProgress(event) { events.push(event); }
-  });
-  assert.equal(saved.status, "saved");
-  assert.equal(await git(baseline, ["rev-parse", "HEAD"]), saved.saveCommit);
-  assert.equal(await readFile(path.join(baseline, "app.txt"), "utf8"), "important work\n");
-  const checkpoint = events.find((event) => event.checkpointTree);
-  assert.equal(await git(baseline, ["log", "-1", "--format=%s"]),
-    `Save work ${checkpoint.checkpointTree.slice(0, 12)}`);
-  assert.ok(events.some((event) => event.stage === "message-fallback"));
-  assert.equal(saved.commitTitleExecutionProfile, null);
-});
+}

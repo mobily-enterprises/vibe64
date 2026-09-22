@@ -63,15 +63,6 @@ function databaseError(message, code, details = {}) {
   return error;
 }
 
-function requireOwner(vibe64User = null) {
-  if (vibe64User && vibe64User.role !== "owner") {
-    throw databaseError(
-      "The session database tool is currently available only to the Vibe64 owner.",
-      "vibe64_owner_required"
-    );
-  }
-}
-
 function actorId(vibe64User = null) {
   return normalizeText(
     vibe64User?.username ||
@@ -169,7 +160,6 @@ function createService({
   }
 
   async function sessionContext(input = {}) {
-    requireOwner(input.vibe64User);
     const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {
       throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
@@ -689,6 +679,5 @@ function createService({
 
 export {
   createService,
-  defaultQuery,
-  requireOwner
+  defaultQuery
 };

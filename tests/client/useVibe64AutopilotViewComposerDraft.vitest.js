@@ -170,6 +170,28 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).not.toHaveBeenCalled();
   });
 
+  it("queues member requests with attachments while personal AI is busy or reconnecting", async () => {
+    const sendMainChatMessage = vi.fn(async () => ({ ok: true, suggested: true }));
+    const props = viewProps();
+    props.agentConnectionStatus = "disconnected";
+    props.session.agentSession.turn = { active: true, id: "busy-turn", state: "active" };
+    const view = await createView(props, {
+      assistantCanUseAi: ref(false), assistantCanRequestMessage: ref(true), sendMainChatMessage
+    });
+    expect(view.composerDisabled.value).toBe(false);
+    expect(view.composerAttachmentsEnabled.value).toBe(true);
+    expect(view.composerSubmitMode.value).toBe("send");
+    expect(view.prefillComposer("Please explain these tables")).toBe(true);
+    view.updateComposerAttachments([{ attachmentId: "11111111-1111-4111-8111-111111111111", fileName: "schema.png", size: 10 }]);
+    expect(view.composerCanSubmit.value).toBe(true);
+    await view.submitComposerMessage();
+    expect(sendMainChatMessage).toHaveBeenCalledWith(expect.objectContaining({
+      message: "Please explain these tables", attachmentIds: ["11111111-1111-4111-8111-111111111111"]
+    }));
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.composerDraft.value).toBe("");
+  });
+
   it("uses the new-build welcome for a blank, workspace-unconfigured project", async () => {
     const view = await createView();
 
@@ -2010,6 +2032,16 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkError.value).toBe("");
     expect(view.saveWorkFailure.value).toBeNull();
     expect(view.saveWorkCanResolveWithTemporaryAi.value).toBe(false);
+  });
+
+  it("lets members save source without access to the personal AI connection", async () => {
+    const view = await createView({
+      workState: { unsaved: true, updateAvailable: false, updateStatusPending: false }
+    }, { assistantCanUseAi: ref(false), assistantCanRequestMessage: ref(true) });
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.saveWorkTitle.value).toBe("Save this session's work to the project repository");
+    await view.requestSaveWork();
+    expect(view.saveWorkConfirmOpen.value).toBe(true);
   });
 
   it("fails closed when Save has no work or the canonical version needs checking", async () => {

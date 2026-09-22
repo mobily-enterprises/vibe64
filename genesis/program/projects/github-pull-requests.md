@@ -63,7 +63,8 @@ destination remain visible in chat and session info.
 
 Create pull request is available in session actions and in the PR browser for
 the selected session. The form preserves its text on failure and defaults to a
-draft. The server serializes publication with the existing assistant/repository
+draft. Members do not need AI access to publish a PR; optional commit naming
+follows Save's access check and non-AI fallback. The server serializes publication with the existing assistant/repository
 write lock, checks GitHub write permission, binds a session-specific branch,
 and creates that branch only if absent. The empty Git lease rejects a concurrent
 creator without replacing an existing ref. It supports locally committed
