@@ -581,10 +581,12 @@ GitHub branch authority of its own; publishing its work does not change the
 project authority or notify sessions that track a different branch.
 
 Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
-Their slim Git toolbar shows the branch and a short sync status. Pull and
+Their project header shows the branch, a short sync status and Fetch beside the
+project name, leaving the space below for work. Pull and
 Push appear with commit counts when work is available; the branch button opens
-remote destinations, the last check time and settings. Controls wrap on narrow
-screens, and failed checks remain visible with their details available on demand.
+remote destinations, the last check time and settings. Controls scroll
+horizontally on narrow screens, and failed checks remain visible with their
+details available on demand.
 The original folder's checked-out branch and native Git configuration determine
 separate pull and push destinations; Vibe64 never assumes origin or main.
 Fetch reports incoming and outgoing commits without changing working files.

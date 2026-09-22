@@ -91,6 +91,10 @@ const {
             </v-list>
           </v-menu>
           <div
+            id="studio-home-shell-local-remotes"
+            class="studio-home-shell-local-remotes-host"
+          />
+          <div
             :id="githubActorHostId"
             class="studio-home-shell-github-actor-host"
           />
@@ -185,10 +189,15 @@ const {
           @ready="handleProjectSelectionReady"
         >
           <template #default="projectSelectionSlotProps">
-            <Vibe64LocalRemoteControls
+            <Teleport
               v-if="projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
-              :project="projectSelectionSlotProps.projectSelection.currentProject"
-            />
+              to="#studio-home-shell-local-remotes"
+              defer
+            >
+              <Vibe64LocalRemoteControls
+                :project="projectSelectionSlotProps.projectSelection.currentProject"
+              />
+            </Teleport>
             <Vibe64SessionPanel
               :chat-collapsed="chatCollapsed"
               :github-actor-teleport-target="githubActorTeleportTarget"
@@ -281,15 +290,18 @@ const {
 .studio-home-shell-title-area {
   align-items: center;
   display: flex;
+  flex: 1 1 auto;
   gap: 0.42rem;
   min-width: 0;
+  overflow-x: auto;
   padding-left: 1rem;
+  scrollbar-width: none;
 }
 
 .studio-home-shell-project-selector {
   border-radius: 6px;
   color: rgb(var(--v-theme-on-surface)) !important;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   font-size: 1rem;
   font-weight: 720;
   justify-content: start;
@@ -323,6 +335,15 @@ const {
 }
 
 .studio-home-shell-github-actor-host:empty {
+  display: none;
+}
+
+.studio-home-shell-local-remotes-host {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.studio-home-shell-local-remotes-host:empty {
   display: none;
 }
 

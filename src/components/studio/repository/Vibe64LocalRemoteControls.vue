@@ -1,15 +1,14 @@
 <template>
   <v-sheet
     v-if="project.repositoryMode === 'local_source'"
-    border
-    rounded="lg"
-    class="local-remotes mb-2"
+    color="transparent"
+    class="local-remotes"
     tag="section"
     aria-label="Local Git repository"
   >
     <div
       v-if="!state && busy"
-      class="local-remotes__toolbar px-2"
+      class="local-remotes__toolbar"
       aria-label="Loading Git remote status"
       aria-busy="true"
     >
@@ -17,7 +16,7 @@
       <v-skeleton-loader type="text" width="100" height="32" />
       <v-skeleton-loader class="ms-auto" type="button" :width="xs ? 48 : 112" height="32" />
     </div>
-    <div v-else class="local-remotes__toolbar px-2">
+    <div v-else class="local-remotes__toolbar">
       <div class="local-remotes__identity">
         <v-menu
           v-model="detailsOpen"
@@ -307,12 +306,12 @@ onScopeDispose(() => {
 
 <style scoped>
 .local-remotes { flex: 0 0 auto; min-width: 0; }
-.local-remotes__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-height: 32px; }
-.local-remotes__identity { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; min-width: 0; }
+.local-remotes__toolbar { display: flex; align-items: center; gap: 0.5rem; min-height: 32px; white-space: nowrap; }
+.local-remotes__identity { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 .local-remotes__branch { min-width: 0; max-width: 100%; }
 .local-remotes__branch-name { display: block; max-width: min(18rem, 40vw); overflow: hidden; text-overflow: ellipsis; }
 .local-remotes__status { display: flex; align-items: center; gap: 0.375rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
-.local-remotes__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-inline-start: auto; }
+.local-remotes__actions { display: flex; align-items: center; gap: 0.5rem; }
 .local-remotes__count { font-variant-numeric: tabular-nums; }
 .local-remotes__details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem 1rem; }
 .local-remotes__details dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }

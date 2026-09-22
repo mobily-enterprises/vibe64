@@ -166,12 +166,14 @@ readable when disabled during active assistant work.
 
 For standalone local folders, Fetch checks the original project's configured
 upstream and push destination; it never uses a session clone's internal origin.
-The compact toolbar uses a 32-pixel row with no vertical padding, keeping the
-branch, a short sync status and Fetch visible.
+The standalone project shell places the compact Git controls beside the project
+name in its existing header, with no separate toolbar row below. The controls
+show the branch, a short sync status and Fetch.
 Pull and Push appear with nonzero commit counts. The branch button opens a
 popover containing full branch and remote names, the last check time, any fetch
 error and Remote settings. Long names truncate only in the toolbar; details wrap,
-and toolbar actions wrap to fit narrow panes. Pending actions use stable labels.
+and the header's title area scrolls horizontally when space is limited. Pending
+actions use stable labels.
 The toolbar refreshes while visible, at most once per minute in the background,
 and supports explicit Fetch. Transport failures show unknown counts and retain
 the last successful check time. Native branch upstream and push configuration,
