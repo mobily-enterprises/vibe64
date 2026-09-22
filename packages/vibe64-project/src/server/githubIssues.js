@@ -1,10 +1,10 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 
-const ISSUE_FIELDS = `id number title body url state stateReason createdAt updatedAt
+const ISSUE_FIELDS = `id number title body bodyHTML url state stateReason createdAt updatedAt
   author { login } viewerCanClose viewerCanReopen viewerCanUpdate locked
   labels(first:100) { nodes { name color description } }`;
-const COMMENT_FIELDS = "id body createdAt author { login } viewerCanUpdate";
+const COMMENT_FIELDS = "id body bodyHTML createdAt author { login } viewerCanUpdate";
 const ISSUE_LIST_FIELDS = `number title url state updatedAt author { login } comments { totalCount }
   labels(first:10) { totalCount nodes { name color description } }`;
 const PAGE_INFO = "pageInfo { hasNextPage endCursor }";

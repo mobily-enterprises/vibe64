@@ -43,6 +43,9 @@ match together. Issue lists load 25 at a time and remain browsable beyond 1,000
 issues with state and single-label filters. Title and description search or
 multiple labels explain GitHub's 1,000-match limit when needed. Entering an issue
 number, with or without #, finds that exact issue within the selected filters.
+Issue descriptions and comments display GitHub's formatted content and attached
+images, including private attachments available to the connected account.
+Images fit the available pane width; editing preserves the original Markdown.
 People can read an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
 description and repository labels, edit issue titles and descriptions, and edit

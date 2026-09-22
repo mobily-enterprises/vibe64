@@ -17,6 +17,7 @@ Dashboard without opening a session.
 - `src/composables/useVibe64AppPage.js`
 - `src/lib/vibe64GithubProject.js`
 - `src/components/studio/GithubIssuesPanel.vue`
+- `src/components/studio/GithubMarkdown.vue`
 - `src/components/studio/GithubIssueEditorDialog.vue`
 - `src/components/studio/GithubCommentEditor.vue`
 - `src/components/studio/GithubBulkLabelsDialog.vue`
@@ -51,8 +52,13 @@ An exact number (`43` or `#43`) uses the repository's single-issue REST lookup
 instead of title/body search. State and all selected labels still apply; missing
 numbers and pull requests return an empty list. This lookup has no search cap or
 pagination. Other text retains literal title/body search.
-Descriptions and comments use the existing safe Markdown renderer. The newest
-25 comments appear in chronological order, with access to older pages.
+Descriptions and confirmed comments use GitHub's `bodyHTML`, sanitized by
+DOMPurify with a fixed content/attribute allowlist. This retains GitHub's signed
+private attachment URLs without exposing account credentials. Images keep their
+aspect ratio within the pane width. Raw `body` remains the editing source;
+optimistic comments awaiting GitHub use the existing safe Markdown renderer.
+Refresh obtains fresh rendered content, including renewed attachment URLs.
+The newest 25 comments appear in chronological order, with access to older pages.
 
 New issue descriptions and comment drafts suggest @usernames from repository
 collaborators; comments also include the issue's participants across all pages,

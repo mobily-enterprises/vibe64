@@ -63,6 +63,48 @@ async function mockGithubIssues(page: Page) {
 }
 
 for (const viewport of viewports) {
+  test(`GitHub attachment images render safely at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockGithubIssues(page);
+    const rawBody = 'Screenshot: <img width="1637" height="892" alt="Schedule" src="https://github.com/user-attachments/assets/example" />';
+    const imageUrl = "https://private-user-images.githubusercontent.com/example/schedule.png?jwt=fixture";
+    await page.route("https://private-user-images.githubusercontent.com/**", route => route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="1637" height="892"><rect width="1637" height="892" fill="#b5c7dd"/><text x="80" y="120" font-size="60">Schedule attachment</text></svg>'
+    }));
+    const bodyHTML = `<p>Screenshot: <strong>Schedule</strong></p><p><a href="${imageUrl}"><img src="${imageUrl}" alt="Schedule" width="1637" height="892" onload="window.imageScriptRan=true" style="position:fixed;width:9999px"></a></p>
+      <script>window.imageScriptRan=true</script><iframe src="https://example.com"></iframe>
+      <a href="javascript:window.imageScriptRan=true">Unsafe link</a><p><code>&lt;img src="example"&gt;</code></p>`;
+    await routeApiEndpoint(page, "/vibe64/issues/1001", route => fulfillJson(route, {
+      ok: true, issue: { ...issue, body: rawBody, bodyHTML, viewerCanUpdate: true,
+        comments: { ...issue.comments, totalCount: 1, nodes: [{
+          id: "image-comment", body: `![Comment attachment](${imageUrl})`,
+          bodyHTML: `<p><img src="${imageUrl}" alt="Comment attachment" width="1637" height="892"></p>`,
+          author: { login: "alice" }, createdAt: issue.createdAt
+        }] } }
+    }));
+    await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
+    await showProjectPaneIfNeeded(page);
+    const image = page.getByRole("img", { name: "Schedule", exact: true });
+    await expect(image).toBeVisible();
+    await expect(image).toHaveAttribute("src", imageUrl);
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1637);
+    await expect(page.getByRole("img", { name: "Comment attachment", exact: true })).toBeVisible();
+    const content = page.locator(".github-markdown");
+    await expect(content.locator("script, iframe, [onload], [style], a[href^='javascript:']")).toHaveCount(0);
+    expect(await page.evaluate(() => (window as Window & { imageScriptRan?: boolean }).imageScriptRan)).toBeUndefined();
+    await expect(content.locator("code")).toHaveText('<img src="example">');
+    expect(await image.evaluate(element => element.getBoundingClientRect().width <= element.closest(".github-markdown")!.clientWidth)).toBe(true);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`github-images-${viewport.name}.png`) });
+    await page.getByRole("button", { name: "Edit issue", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(rawBody);
+    await page.getByRole("button", { name: "Close issue dialog", exact: true }).click();
+    await page.getByRole("button", { name: "All issues", exact: true }).click();
+    await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
+    await expect(image).toBeVisible();
+  });
+
   test(`optimistic issue comments retain failed posts and retry at ${viewport.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await mockGithubIssues(page);

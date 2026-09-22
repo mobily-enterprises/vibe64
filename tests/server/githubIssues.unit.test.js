@@ -255,12 +255,20 @@ test("rejects non-GitHub projects, absent hosted identity and invalid input befo
 });
 
 test("reads latest comments and requests older pages without treating pull requests as issues", async () => {
-  const f = fixture([success({ data: { repository: { issue } } }), success({ data: { repository: { issue: null } } })]);
+  const rendered = { ...issue, body: "![Image](https://github.com/user-attachments/assets/example)",
+    bodyHTML: '<p><img src="https://private-user-images.githubusercontent.com/example?jwt=signed"></p>',
+    comments: { ...issue.comments, nodes: [{ id: "comment", body: "**Update**", bodyHTML: "<p><strong>Update</strong></p>" }] } };
+  const f = fixture([success({ data: { repository: { issue: rendered } } }), success({ data: { repository: { issue: null } } })]);
   const result = await githubIssues(project, { operation: "read", number: 7, cursor: "older", vibe64User: user }, f.options);
   assert.equal(result.issue.number, 7);
+  assert.equal(result.issue.body, rendered.body);
+  assert.equal(result.issue.bodyHTML, rendered.bodyHTML);
+  assert.deepEqual(result.issue.comments.nodes, rendered.comments.nodes);
   const payload = JSON.parse(f.calls[0].input);
   assert.deepEqual(payload.variables, { owner: "example", name: "project", number: 7, cursor: "older" });
   assert.match(payload.query, /comments\(last:25, before:\$cursor\)/u);
+  assert.match(payload.query, /title body bodyHTML/u);
+  assert.match(payload.query, /id body bodyHTML createdAt/u);
   await assert.rejects(githubIssues(project, { operation: "comment", number: 9, body: "test", vibe64User: user }, f.options),
     { code: "vibe64_issue_not_found" });
   assert.equal(f.calls.length, 2);

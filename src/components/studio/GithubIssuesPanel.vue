@@ -3,8 +3,6 @@ import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import { mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCommentOutline,
   mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline, mdiPencilOutline } from "@mdi/js";
-import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
-import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
@@ -13,10 +11,11 @@ import GithubBulkLabelsDialog from "./GithubBulkLabelsDialog.vue";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
+import GithubMarkdown from "./GithubMarkdown.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-  draft, pending, comments: issueComments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
+  draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
 const route = useRoute();
 const bulkOpen = ref(false);
 const selectedNumbers = ref([]);
@@ -43,10 +42,6 @@ function openEditor(selectedIssue = null, mode = "create") {
   editorOpen.value = true;
 }
 const resource = computed(() => number.value ? detail : list);
-const description = computed(() => parseLongTextReviewBlocks(issue.value?.body || ""));
-const comments = computed(() => issueComments.value.map((comment) => ({
-  ...comment, blocks: parseLongTextReviewBlocks(comment.body || "")
-})));
 const canChangeState = computed(() => issue.value?.state === "OPEN" ? issue.value.viewerCanClose : issue.value?.viewerCanReopen);
 function date(value) {
   return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
@@ -225,7 +220,7 @@ function date(value) {
         </div>
 
         <v-sheet border rounded="xl" class="pa-5 issues-panel__markdown">
-          <LongTextPreviewBlocks v-if="description.length" :blocks="description" />
+          <GithubMarkdown v-if="issue.body || issue.bodyHTML" :text="issue.body" :html="issue.bodyHTML" />
           <p v-else class="text-body-medium text-medium-emphasis ma-0">No description provided.</p>
         </v-sheet>
         <div class="d-flex align-center justify-space-between flex-wrap ga-2 px-2">
@@ -249,7 +244,9 @@ function date(value) {
               <time class="text-body-small text-medium-emphasis" :datetime="comment.createdAt">{{ date(comment.createdAt) }}</time>
             </div>
             <GithubCommentEditor :key="`${basePath}:${issue.number}:${comment.id}`" :comment="comment" :issue="issue" :base-path="basePath" @saved="issueUpdated">
-              <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown"><LongTextPreviewBlocks :blocks="comment.blocks" /></v-sheet>
+              <v-sheet color="surface-light" rounded="xl" class="pa-4 issues-panel__markdown">
+                <GithubMarkdown :text="comment.body" :html="comment.bodyHTML" />
+              </v-sheet>
             </GithubCommentEditor>
             <div v-if="comment.delivery && comment.delivery !== 'sent'" class="d-flex flex-wrap align-center ga-2 mt-1" aria-live="polite">
               <span v-if="comment.delivery === 'sending'" class="text-body-small text-medium-emphasis">Posting…</span>
