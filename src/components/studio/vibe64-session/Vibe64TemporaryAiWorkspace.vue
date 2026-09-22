@@ -208,6 +208,7 @@
               >
                 <Vibe64AgentSettingsMenu
                   :agent-settings="task.agentSettings"
+                  :assistant-selection="props.assistantSelection"
                   :disabled="taskInputDisabled(task)"
                   @update-setting="updateActiveAgentSetting"
                 />
@@ -315,7 +316,7 @@ const props = defineProps({
   updateDisabled: Boolean,
   updateDisabledReason: { type: String, default: "" },
   workspaceSetupStatus: { type: String, default: "" },
-  agentSettings: {
+  assistantSelection: {
     default: () => ({}),
     type: Object
   },
@@ -341,7 +342,11 @@ const temporaryAiFeedback = useUiFeedback({
 });
 const temporary = useVibe64TemporaryAi({
   active: () => props.active,
-  agentSettings: computed(() => props.agentSettings),
+  agentSettings: computed(() => ({
+    providerId: props.assistantSelection.engineId,
+    model: props.assistantSelection.modelId,
+    thinking: props.assistantSelection.variantId
+  })),
   assistantReady: () => props.assistantReady,
   operationBusy: () => props.repositoryBusy,
   onTaskFinished(task = {}) {

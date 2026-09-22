@@ -816,7 +816,11 @@ without changing main chat or tasks already running.
 Main conversation, temporary assistance, and database copilot share the same
 conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
-modes. The server keeps their conversations, settings, drafts and sent attachments
+modes.
+Temporary model and thinking choices come from the connected service's current
+catalogue, including new Codex models and OpenCode models. Each chat can select
+its own model within the session's AI connection without changing main chat.
+The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
 returning restores the same chats. A server restart retains their history and
 stops any work whose observation was lost until an explicit Send or Resume.

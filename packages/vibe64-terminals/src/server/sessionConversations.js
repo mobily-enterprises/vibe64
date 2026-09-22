@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { normalizeVibe64AgentTaskResult } from "@local/vibe64-runtime/shared";
+import { normalizeVibe64AgentTaskResult, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
@@ -191,6 +191,20 @@ function createSessionConversations({
       return write(sessionId, options, async (ctx) => {
         let record = await recordFor(ctx, input.conversationId);
         if (record.state === "closing") throw new Error("This conversation is closing.");
+        const previous = await snapshot(ctx, { ...record, messageId: input.messageId });
+        if (previous.readError) throw new Error(previous.error);
+        if (previous.admitted) return previous;
+        if (["starting", "inProgress"].includes(previous.status)) throw new Error("This conversation is still working.");
+        const selection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
+        const settings = input.agentSettings || record.agentSettings;
+        const assistantSelection = await sessionAgent.resolveSelection({
+          engineId: selection.engineId,
+          modelProviderId: selection.modelProviderId,
+          agentId: selection.agentId,
+          modelId: settings.model || selection.modelId,
+          variantId: settings.thinking || ""
+        }, { ...ctx, vibe64User: input.vibe64User });
+        ctx = { ...ctx, assistantSelection };
         await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User });
         if (!record.providerConversationId) {
           const created = requireSuccess(await sessionAgent.createConversation(sessionId, {
@@ -198,10 +212,6 @@ function createSessionConversations({
           }, ctx));
           record = await save(ctx, record, { providerConversationId: created.conversationId });
         }
-        const previous = await snapshot(ctx, { ...record, messageId: input.messageId });
-        if (previous.readError) throw new Error(previous.error);
-        if (previous.admitted) return previous;
-        if (["starting", "inProgress"].includes(previous.status)) throw new Error("This conversation is still working.");
         const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, input, {
           durable: true, conversationId: record.conversationId
         });

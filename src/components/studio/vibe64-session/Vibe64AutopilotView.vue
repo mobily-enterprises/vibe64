@@ -556,7 +556,7 @@
       <Vibe64TemporaryAiWorkspace
         ref="temporaryAiWorkspace"
         :active="props.active && !chatCollapsed"
-        :agent-settings="currentAgentSettings"
+        :assistant-selection="props.session?.assistantSelection"
         :assistant-ready="props.agentConnectionStatus === 'connected'"
         :connection-unavailable="connectionRecoveryVisible"
         :preview-attachment-state="previewAttachmentState"
@@ -1092,7 +1092,6 @@ const {
   conversationLogVisible,
   conversationFollowLatestKey,
   conversationScrollKey,
-  currentAgentSettings,
   dashboardSessionContext,
   dashboardRouteVisible,
   dashboardShellVisible,

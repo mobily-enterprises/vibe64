@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
@@ -107,22 +108,40 @@ test("one attachment cleanup action targets only its exact attachment", async ()
   }]]);
 });
 
-async function conversationFixture(root) {
+async function conversationFixture(root, engineId = "codex") {
+  const selection = { engineId, modelProviderId: engineId === "opencode" ? "deepseek" : "openai",
+    agentId: engineId === "opencode" ? "build" : "codex", modelId: "main-model", variantId: "high",
+    catalogRevision: `sha256:${"a".repeat(64)}` };
+  const capabilities = {
+    engineId, transportId: engineId, revision: `sha256:${"b".repeat(64)}`, defaults: selection,
+    agents: [{ id: selection.agentId, mode: "primary" }],
+    modelProviders: [{ id: selection.modelProviderId, connected: true, models: [
+      ...["main-model", "chosen", "gpt-6-astra", "deepseek-reasoner"].map(id => ({
+        id, status: "available", variants: [{ id: "high" }, { id: "ultra" }]
+      })),
+      { id: "disabled-model", status: "unavailable", variants: [] }
+    ] }]
+  };
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) });
-  await store.createSession({ runtimeKind: "genesis", sessionId: "one", metadata: sourceMetadata(root, "one") });
+  await store.createSession({ runtimeKind: "genesis", sessionId: "one", metadata: {
+    ...sourceMetadata(root, "one"), assistant_selection: serializeVibe64AssistantSelection(selection)
+  } });
   const runtime = { store, getSession: (id) => store.readSession(id) };
   const projectService = { createRuntime: async () => runtime };
   const attachments = createSessionAttachments({ projectService, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = { messages: [], status: "ready", runId: "", admitted: false, starts: 0, deletes: 0, stopError: "", deleteError: "" };
   const sessionAgent = {
     async requireAssistantAccess() {},
-    async createConversation(_id, input) {
+    async resolveSelection(input) { return resolveVibe64AssistantSelection(capabilities, input); },
+    async createConversation(_id, input, options) {
+      native.createdSelection = options.assistantSelection;
       assert.equal(input.persistent, true);
       assert.notEqual(input.ephemeral, true);
       return { ok: true, conversationId: "native" };
     },
     async readConversation() { return { ok: true, ...native }; },
     async startConversationTurn(_id, input, options) {
+      native.turnSelection = options.assistantSelection;
       assert.equal(input.conversationId, "native");
       assert.equal(input.persistent, true);
       assert.equal(options.attachmentsPrepared, true);
@@ -158,8 +177,45 @@ async function conversationFixture(root) {
     publishSessionChanged: async (...args) => { events.push(args); },
     ...overrides
   });
-  return { attachments, events, native, restart, service: restart(), store };
+  return { attachments, events, native, restart, service: restart(), store, selection };
 }
+
+for (const [engineId, model] of [["codex", "gpt-6-astra"], ["opencode", "deepseek-reasoner"]]) {
+  test(`temporary ${engineId} validates and retains its own model without changing main chat`, async () => {
+    await withTemporaryRoot(async (root) => {
+      const { service, store, native, selection, restart } = await conversationFixture(root, engineId);
+      await service.createTemporaryConversation("one", { conversationId: "chat" });
+      await service.updateTemporaryConversation("one", {
+        conversationId: "chat", agentSettings: { providerId: engineId, model, thinking: "ultra" }
+      });
+      await restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "input", message: "Question" });
+      assert.equal(native.createdSelection.modelId, model);
+      assert.equal(native.turnSelection.modelId, model);
+      assert.equal(native.turnSelection.variantId, "ultra");
+      assert.equal(native.turnSelection.modelProviderId, selection.modelProviderId);
+      assert.equal(native.turnSelection.catalogRevision, `sha256:${"b".repeat(64)}`);
+      assert.equal((await store.readSession("one")).metadata.assistant_selection, serializeVibe64AssistantSelection(selection));
+      assert.equal((await restart().listTemporaryConversations("one")).conversations[0].agentSettings.model, model);
+    });
+  });
+}
+
+test("temporary model and effort must be currently available before native work starts", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { service, native, store } = await conversationFixture(root);
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    for (const agentSettings of [
+      { model: "missing-model" }, { model: "disabled-model" }, { model: "gpt-6-astra", thinking: "unsupported" }
+    ]) {
+      await assert.rejects(service.startTemporaryConversationTurn("one", {
+        conversationId: "chat", messageId: "input", message: "Question", agentSettings
+      }), { code: "vibe64_assistant_selection_unavailable" });
+    }
+    assert.equal(native.createdSelection, undefined);
+    assert.equal(native.starts, 0);
+    assert.deepEqual(await store.readConversationLog({ sessionId: "one", conversationId: "chat" }), []);
+  });
+});
 
 test("a temporary draft waits for another assistant operation and saves once the lock is released", async () => {
   await withTemporaryRoot(async (root) => {

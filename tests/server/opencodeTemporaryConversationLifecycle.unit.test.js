@@ -6,6 +6,23 @@ import test from "node:test";
 
 import { controllerHarness } from "../fixtures/opencodeController.js";
 
+test("temporary OpenCode applies its own model and variant while main chat keeps its selection", async (t) => {
+  const harness = await controllerHarness({ helperResponse: "Temporary reply." });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { recursive: true, force: true }); });
+  const main = JSON.parse(harness.session.metadata.assistant_selection);
+  const assistantSelection = { ...main, modelId: "deepseek-reasoner", variantId: "high" };
+  const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true }, { assistantSelection });
+  await harness.controller.startConversationTurn("session-1", { conversationId, message: "Temporary question" }, { assistantSelection });
+  await harness.controller.waitForConversationTurn("session-1", { conversationId });
+  assert.deepEqual(harness.promptCalls.at(-1).input.model, {
+    providerID: main.modelProviderId, id: assistantSelection.modelId, variant: "high"
+  });
+  await harness.controller.sendMessage("session-1", { message: "Main question", messageId: "main" });
+  await harness.controller.waitForTurn("session-1");
+  assert.equal(harness.promptCalls.at(-1).input.model.id, main.modelId);
+  assert.deepEqual(JSON.parse(harness.session.metadata.assistant_selection), main);
+});
+
 test("temporary OpenCode uses the main agent and project commands while keeping edits and history separate on close", async (t) => {
   const harness = await controllerHarness({
     withCommandBoundary: true,

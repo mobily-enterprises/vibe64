@@ -36,6 +36,8 @@ session history.
 - `src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
+- `src/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue`
+- `src/composables/useVibe64AssistantCatalog.js`
 
 ## Public contract
 
@@ -287,9 +289,16 @@ query runs only through the session's read-only database identity.
 
 Temporary chat uses the shared model chooser for its native model and thinking
 parameters. Selections remain local until Apply, matching the main chat control;
-changing them preserves the prompt draft. Vibe64 supplies each provider's allowed
-parameters and passes the applied configuration through the normal temporary
-conversation endpoint.
+changing them preserves the prompt draft. The chooser uses the same live
+catalogue as main chat, scoped to the session's current engine and connected
+model provider. Only available models and their advertised thinking variants
+are selectable. New chats start with the main selection; each chat then keeps
+its own model and thinking settings. Before a new turn, the server resolves
+those settings through the existing catalogue validator and passes that
+selection to the native temporary conversation without changing main metadata.
+OpenCode applies the selection only to the temporary native session; its shared
+process retains the main session's configuration. Catalogue failures are shown
+with Retry, and unavailable selections cannot be applied or executed.
 
 Bounded Codex and Claude economy tasks resolve the connection's saved helper model before
 starting. Recommended selects the default; explicit models must remain available

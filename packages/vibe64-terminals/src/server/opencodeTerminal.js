@@ -2259,6 +2259,8 @@ function createOpenCodeTerminalController({
       await ensureProcess(context, options),
       executionProfile
     );
+    // The shared process keeps main chat's configuration; only this chat changes model.
+    context.selection = options.assistantSelection || context.selection;
     const conversation = await target.server.client.createSession({
       agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
       location: { directory: target.workdir },
@@ -2285,6 +2287,7 @@ function createOpenCodeTerminalController({
       await ensureProcess(context, options),
       executionProfile
     );
+    context.selection = options.assistantSelection || context.selection;
     const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
     let conversationId = text(input.conversationId || input.threadId);
     if (!conversationId) {

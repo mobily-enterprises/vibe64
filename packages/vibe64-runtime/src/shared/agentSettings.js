@@ -142,31 +142,11 @@ function normalizeAgentSettingText(value = "") {
   return String(value || "").trim();
 }
 
-function normalizedParameterValue(provider = {}, parameterId = "", value = "") {
-  const parameter = agentProviderParameter(provider, parameterId);
-  if (!parameter) {
-    return "";
-  }
-  const requested = normalizeAgentSettingText(value);
-  // Availability is validated against the provider's live assistant catalogue.
-  // Persistence and turn mapping must preserve newly advertised model/effort ids.
-  if (provider.id === VIBE64_AGENT_PROVIDER_IDS.CODEX) {
-    return requested;
-  }
-  const options = Array.isArray(parameter.options) ? parameter.options : [];
-  const supported = options.some((option) => (
-    normalizeAgentSettingText(option.value) === requested
-  ));
-  if (supported) {
-    return requested;
-  }
-  return normalizeAgentSettingText(parameter.defaultValue);
-}
-
 function normalizeVibe64AgentSettings(value = {}) {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const provider = agentProviderDefinition(input.providerId || input.provider);
-  const model = normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, input.model);
+  // The live catalogue validates availability; storage preserves provider ids.
+  const model = normalizeAgentSettingText(input.model);
   return {
     model,
     providerId: provider.id,
@@ -182,7 +162,7 @@ function defaultVibe64AgentSettings(providerId = VIBE64_DEFAULT_AGENT_PROVIDER_I
 
 function effectiveAgentParameterValue(provider = {}, parameterId = "", value = "") {
   const parameter = agentProviderParameter(provider, parameterId);
-  const normalizedValue = normalizedParameterValue(provider, parameterId, value);
+  const normalizedValue = normalizeAgentSettingText(value);
   return normalizedValue || normalizeAgentSettingText(parameter?.defaultValue);
 }
 
@@ -205,7 +185,7 @@ function supportedAgentThinkingValues(provider = {}, model = "") {
 }
 
 function normalizedAgentThinkingValue(provider = {}, model = "", value = "") {
-  const normalized = normalizedParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, value);
+  const normalized = normalizeAgentSettingText(value);
   if (provider.id === VIBE64_AGENT_PROVIDER_IDS.CODEX) return normalized;
   const supported = supportedAgentThinkingValues(provider, model);
   if (!supported || !normalized || supported.has(normalized)) {
