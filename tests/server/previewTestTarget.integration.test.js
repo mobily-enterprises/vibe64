@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -11,6 +12,7 @@ import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceS
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
+import { runCaptureCommand, stopCaptureExecution } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64-execution/src/server/engines/detached.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -145,7 +147,8 @@ process.stdout.write(JSON.stringify({
     },
     selectedProject: { slug: name }, targetRoot: sourceRoot
   };
-  const children = new Set();
+  const captureExecutionIds = new Set();
+  const previewStarts = [];
   const detached = new Set();
   const commandEnv = {
     ...process.env,
@@ -162,27 +165,22 @@ process.stdout.write(JSON.stringify({
       });
     }
     if (input.mode === "pty") {
+      previewStarts.push(input.terminal.metadata.outputTargetId);
       return startTerminalSession({
         ...input.terminal, command: input.command, args: input.args, cwd: input.cwd,
         env: typeof input.env === "function" ? (identity) => ({ ...commandEnv, ...input.env(identity) }) : { ...commandEnv, ...input.env }
       });
     }
-    return new Promise((resolve, reject) => {
-      const child = spawn(input.command, input.args, {
-        cwd: input.cwd, env: { ...commandEnv, ...input.env, VIBE64_EXECUTION_ID: `fixture-${children.size}` },
-        stdio: ["pipe", "pipe", "pipe"]
+    const id = randomUUID();
+    captureExecutionIds.add(id);
+    try {
+      return await runCaptureCommand(input.command, input.args, {
+        ...input, execution: { ...input.execution, id },
+        env: { ...commandEnv, ...input.env, VIBE64_EXECUTION_ID: id }
       });
-      children.add(child);
-      let stdout = "", stderr = "";
-      child.stdout.on("data", chunk => { stdout += chunk; input.onOutput?.(String(chunk)); });
-      child.stderr.on("data", chunk => { stderr += chunk; input.onOutput?.(String(chunk)); });
-      child.once("error", reject);
-      child.once("close", (code, signal) => {
-        children.delete(child);
-        resolve({ ok: code === 0, exitCode: code ?? 1, signal, stdout, stderr, output: stdout + stderr, error: code === 0 ? "" : stderr });
-      });
-      child.stdin.end(input.input);
-    });
+    } finally {
+      captureExecutionIds.delete(id);
+    }
   };
   const controller = createOutputTargetTerminalController({ projectService, runCommand, ...workflowHooks });
   const commandService = createAgentPreviewCommandService({
@@ -192,7 +190,7 @@ process.stdout.write(JSON.stringify({
     publishSessionChanged: workflowHooks.publishSessionChanged
   });
   t.after(async () => {
-    for (const child of children) child.kill("SIGKILL");
+    for (const id of captureExecutionIds) await stopCaptureExecution(id);
     await controller.closeAllForSession(sessionId);
     await controller.close();
     await commandService.closeAllForSession(sessionId);
@@ -209,7 +207,7 @@ process.stdout.write(JSON.stringify({
     }
     throw new Error(`Preview ${terminal.id} did not become ready`);
   };
-  return { root, sourceRoot, sessionId, controller, commandService, command, waitReady, children };
+  return { root, sourceRoot, sessionId, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
 }
 
 async function browserCommands(f) {
@@ -243,6 +241,9 @@ test('test database round trip', async ({page, request}) => {
   await page.getByRole('button').click();
   await expect(page.getByText('Count: 1', {exact:true})).toBeVisible();
 });
+test('same suite keeps its fixture', async ({request}) => {
+  expect(await (await request.get('/test-state')).json()).toEqual({mode:'test-app',count:1,effects:'disabled'});
+});
 test('intentional failure', async () => { expect(1).toBe(2); });
 test('test target login', async ({page}) => {
   await page.goto('/test-login');
@@ -265,9 +266,25 @@ test('cancelled test', async ({page}) => {
     worktreePath: f.sourceRoot, wrapperHostDir: path.join(f.root, "commands")
   });
   return {
-    execute: args => execFileAsync(prepared.hostPlaywrightWrapperPath, args, {
-      cwd: f.sourceRoot, env: { ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent" }, maxBuffer: 4 * 1024 * 1024
-    })
+    execute(args) {
+      const child = spawn(prepared.hostPlaywrightWrapperPath, args, {
+        cwd: f.sourceRoot, detached: true,
+        env: { ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent" },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      const completion = new Promise((resolve, reject) => {
+        let stdout = "", stderr = "";
+        child.stdout.on("data", chunk => { stdout += chunk; });
+        child.stderr.on("data", chunk => { stderr += chunk; });
+        child.once("error", reject);
+        child.once("close", (code, signal) => {
+          if (code === 0 && !signal) resolve({ stdout, stderr });
+          else reject(Object.assign(new Error(stderr || "Playwright command failed"), { stdout, stderr, code, signal }));
+        });
+      });
+      completion.child = child;
+      return completion;
+    }
   };
 }
 
@@ -457,8 +474,18 @@ test("declared test Preview runs real servers, isolates session state, and resto
 
     await t.test("the complete managed command runs Playwright and restores after actual assertion failure", async () => {
       const commands = await browserCommands(f);
-      const result = await commands.execute(["--target", "test-app", "test", "--grep", "test database round trip"]);
-      assert.match(result.stdout, /1 passed/u);
+      async function waitForTestStart() {
+        const marker = path.join(f.sourceRoot, "test-started");
+        for (let attempt = 0; attempt < 160; attempt++) {
+          if (await readFile(marker, "utf8").catch(() => "")) break;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        assert.equal(await readFile(marker, "utf8"), "ready");
+      }
+      const startsBeforeSuite = f.previewStarts.length;
+      const result = await commands.execute(["--target", "test-app", "test", "--grep", "test database round trip|same suite keeps its fixture"]);
+      assert.match(result.stdout, /2 passed/u);
+      assert.deepEqual(f.previewStarts.slice(startsBeforeSuite), ["test-app", "app"], "the whole suite switches once and restores once");
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
       await assert.rejects(commands.execute(["--target=test-app", "npm-run", "e2e", "--", "--grep", "intentional failure"]), error => {
         assert.match(error.stdout + error.stderr, /1 failed/u);
@@ -477,26 +504,47 @@ test("declared test Preview runs real servers, isolates session state, and resto
       assert.match(authenticated.stdout, /1 passed/u);
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
 
-      const cancellation = commands.execute(["--target", "test-app", "test", "--grep", "cancelled test"])
-        .then(value => ({ value }), error => ({ error }));
-      for (let attempt = 0; attempt < 160; attempt++) {
-        if (await readFile(path.join(f.sourceRoot, "test-started"), "utf8").catch(() => "")) break;
-        await new Promise(resolve => setTimeout(resolve, 100));
+      const launcher = commands.execute(["--target", "test-app", "test", "--grep", "cancelled test"]);
+      const cancellation = launcher.then(value => ({ value }), error => ({ error }));
+      await waitForTestStart();
+      const active = JSON.parse((await commands.execute(["status"])).stdout).run;
+      assert.equal(active.state, "running");
+      assert.equal(active.targetId, "test-app");
+      process.kill(-launcher.child.pid, "SIGINT");
+      assert.ok((await cancellation).error, "interrupted launcher must fail");
+      for (let attempt = 0; attempt < 100 && f.commandService.playwrightStatus(f.sessionId).run; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
-      assert.equal(await readFile(path.join(f.sourceRoot, "test-started"), "utf8"), "ready");
-      const runningTests = [...f.children].filter(child => child.spawnargs.some(arg => arg.endsWith('/cli.js')));
-      assert.equal(runningTests.length, 1);
-      runningTests[0].kill("SIGTERM");
-      assert.ok((await cancellation).error, "cancelled test command must fail");
+      assert.equal(f.commandService.playwrightStatus(f.sessionId).run, null, "disconnect alone completes cancellation");
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
-      assert.equal(f.children.size, 0, "test command descendants have exited");
+      assert.equal(f.captureExecutionIds.size, 0, "nested managed test commands have drained");
+      assert.equal(JSON.parse((await commands.execute(["status"])).stdout).run, null);
+      assert.equal((await f.commandService.cancelPlaywrightRun(f.sessionId, active.id)).code, "vibe64_test_run_unavailable");
+
+      await rm(path.join(f.sourceRoot, "test-started"));
+      const next = commands.execute(["--target", "test-app", "test", "--grep", "cancelled test"])
+        .then(value => ({ value }), error => ({ error }));
+      await waitForTestStart();
+      const nextRun = JSON.parse((await commands.execute(["status"])).stdout).run;
+      assert.notEqual(nextRun.id, active.id);
+      assert.equal((await f.commandService.cancelPlaywrightRun(f.sessionId, active.id)).ok, false, "old cancellation cannot affect a new run");
+      const startsBeforeCancel = f.previewStarts.length;
+      const cancelled = await Promise.all([commands.execute(["cancel", nextRun.id]), commands.execute(["cancel", nextRun.id])]);
+      assert.ok(cancelled.every(result => JSON.parse(result.stdout).ok));
+      assert.ok((await next).error);
+      assert.deepEqual(f.previewStarts.slice(startsBeforeCancel), ["app"], "repeated cancellation restores only once");
 
       await assert.rejects(commands.execute(["--target", "test-app", "test", "--grep", "restoration failure"]), error => {
         assert.match(error.stdout + error.stderr, /original test failure/u);
         assert.match(error.stdout + error.stderr, /Could not restore Preview/u);
         return true;
       });
+      const failed = JSON.parse((await commands.execute(["status"])).stdout).run;
+      assert.equal(failed.state, "restore_failed");
+      assert.equal((await f.command(["ensure", "--target", "app", "--json"])).ok, false);
       await rm(path.join(f.sourceRoot, "fail-normal-start"));
+      assert.equal(JSON.parse((await commands.execute(["cancel", failed.id])).stdout).ok, true);
+      assert.equal(JSON.parse((await commands.execute(["status"])).stdout).run, null);
       const recovered = await f.command(["ensure", "--target", "app", "--wait", "--json"]);
       assert.equal(recovered.ok, true, JSON.stringify(recovered));
     });
@@ -530,6 +578,39 @@ test("declared test Preview runs real servers, isolates session state, and resto
   });
 });
 
+
+test("failed cleanup keeps Preview owned until every execution drains, without repeating completed stops", async t => {
+  const stops = [];
+  let parentCanStop = false;
+  const f = await fixture(t, "cleanup", {
+    async stopExecution(id) {
+      stops.push(id);
+      if (id === "parent" && !parentCanStop) throw new Error("host cleanup unavailable");
+      return { ok: true, scopeEmpty: true };
+    }
+  });
+  await f.waitReady(await f.controller.ensurePreview(f.sessionId));
+  const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => ({
+    ok: false, exitCode: 1, code: "vibe64_execution_cleanup_required",
+    execution: { id: "parent", state: "active" }, cleanupExecutionIds: ["child", "parent"]
+  }), { waitUntilReady: f.waitReady });
+  assert.equal(result.previewRecoveryRequired, true);
+  const starts = f.previewStarts.length;
+  const retries = await Promise.all([
+    f.controller.retryPreviewTestCleanup(f.sessionId),
+    f.controller.retryPreviewTestCleanup(f.sessionId)
+  ]);
+  assert.ok(retries.every(result => result.previewRecoveryRequired));
+  assert.deepEqual(stops, ["child", "parent"]);
+  assert.equal(f.previewStarts.length, starts, "unproven cleanup never restarts Preview");
+  assert.equal((await f.command(["ensure", "--target", "app", "--json"])).ok, false);
+  parentCanStop = true;
+  const recovered = await f.controller.retryPreviewTestCleanup(f.sessionId);
+  assert.equal(recovered.previewRecoveryRequired, undefined);
+  assert.deepEqual(stops, ["child", "parent", "parent"], "a proven empty execution is not stopped again");
+  assert.deepEqual(f.previewStarts.slice(starts), ["app"]);
+  assert.equal(f.controller.previewTestRunAdmission(f.sessionId), null);
+});
 
 test("output parameters survive reuse, restart and temporary test-target restoration", async t => {
   const f = await fixture(t, "parameters");

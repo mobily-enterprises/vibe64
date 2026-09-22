@@ -651,8 +651,13 @@ and restores the previous Preview when the test command finishes. The project
 owns disposable test data and suppression of external effects. Competing target
 changes are refused while the suite owns Preview, and cleanup failures remain
 visible. The same commands and instructions apply to every assistant.
-Related checks share one suite startup. Shared guidance keeps ordinary browser
-preparation incremental and separates fresh-database proofs from routine checks.
+Related checks share one suite startup and one restoration for the whole command.
+Cancellation waits for the command and its children to stop before restoring Preview.
+Agents can inspect the current run and cancel its exact ID; repeated cancellation
+joins the same cleanup. Failed cleanup or restoration retains ownership for an
+explicit retry. These controls introduce no background polling or restart loop.
+Shared guidance keeps ordinary browser preparation incremental and separates
+fresh-database proofs from routine checks.
 When the host records a process/thread denial during a failed browser command,
 the caller sees the resource diagnostic and incident reference for investigation
 before retrying.

@@ -117,6 +117,48 @@ test("execution gateway reports capture timeouts as failures", async () => {
   assert.match(result.output, /timed out/iu);
 });
 
+test("capture cancellation drains the command and its child before returning", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-capture-cancel-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const marker = path.join(root, "child-pid");
+  const cancellation = new AbortController();
+  const running = runVibe64Command({
+    command: process.execPath,
+    args: ["--input-type=module", "-e", `
+      import { spawn } from 'node:child_process';
+      import { writeFileSync } from 'node:fs';
+      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
+      writeFileSync(${JSON.stringify(marker)}, String(child.pid));
+      console.log('test command started');
+      setInterval(() => {}, 1000);
+    `],
+    runtimes: [], signal: cancellation.signal, timeout: 10000
+  });
+  t.after(() => cancellation.abort());
+  const pid = Number(await waitForFile(marker));
+  cancellation.abort();
+  cancellation.abort();
+  const result = await running;
+  assert.equal(result.code, "vibe64_command_cancelled");
+  assert.equal(result.ok, false);
+  assert.match(result.stdout, /test command started/u);
+  // Linux may briefly retain a reparented zombie; it is no longer executable.
+  const stat = await readFile(`/proc/${pid}/stat`, "utf8").catch(() => "");
+  assert.ok(!stat || stat.slice(stat.lastIndexOf(") ") + 2).startsWith("Z "), stat);
+});
+
+test("an already cancelled capture never starts the command", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-capture-pre-cancel-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const result = await runVibe64Command({
+    command: process.execPath,
+    args: ["-e", "require('fs').writeFileSync('started', 'yes')"],
+    cwd: root, runtimes: [], signal: AbortSignal.abort()
+  });
+  assert.equal(result.code, "vibe64_command_cancelled");
+  assert.deepEqual(await readdir(root), []);
+});
+
 test("execution gateway injects shared tool and fallback git identity env", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
@@ -1138,7 +1180,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 15), [
+  assert.deepEqual(parts.slice(0, 16), [
     "/runtime-packs/policy-bin",
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
@@ -1147,6 +1189,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
     "/runtime-packs/gh/bin",
     "/runtime-packs/mariadb/bin",
     "/runtime-packs/postgresql/bin",
+    "/runtime-packs/sqlite/bin",
     "/runtime-packs/ripgrep/bin",
     "/runtime-packs/bubblewrap/bin",
     "/runtime-packs/bun/bin",
@@ -1642,6 +1685,7 @@ test("execution helper operation policy distinguishes account auth from GitHub w
 });
 
 test("execution helper client sends normalized payloads through sudo helper", async () => {
+  const signal = new AbortController().signal;
   const payload = helperPayload({
     actor: {
       user: {
@@ -1667,6 +1711,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
     },
     helperPath: "/tmp/vibe64-exec-helper",
     outputEncoding: "base64",
+    signal,
     runCapture(command, args, options) {
       calls.push({
         args,
@@ -1694,6 +1739,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
         },
         input: `${JSON.stringify(payload)}\n`,
         outputEncoding: "base64",
+        signal,
         timeout: 1234
       }
     }

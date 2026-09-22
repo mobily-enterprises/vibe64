@@ -101,12 +101,14 @@ async function runHelperCommand(payload = {}, {
   maxBuffer = undefined,
   outputEncoding = "utf8",
   runCapture = runCaptureCommand,
+  signal = null,
   timeout = 15_000
 } = {}) {
   const options = {
     env,
     input: `${JSON.stringify(payload)}\n`,
     outputEncoding,
+    signal,
     timeout
   };
   if (Number.isSafeInteger(Number(maxBuffer)) && Number(maxBuffer) > 0) {

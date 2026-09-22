@@ -1,4 +1,7 @@
 import {
+  stopCaptureExecution
+} from "./engines/capture.js";
+import {
   stopDetachedExecution
 } from "./engines/detached.js";
 import {
@@ -95,6 +98,8 @@ async function stopVibe64Execution(executionId = "", options = {}) {
   if (installedProvider) {
     return installedProvider.stopExecution(normalizedExecutionId, options);
   }
+  const captured = await stopCaptureExecution(normalizedExecutionId);
+  if (captured.code !== "vibe64_execution_not_found") return captured;
   const detached = await stopDetachedExecution(normalizedExecutionId, options);
   if (detached.code !== "vibe64_execution_not_found") {
     return detached;

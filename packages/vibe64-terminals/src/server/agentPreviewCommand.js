@@ -35,6 +35,10 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import {
+  browserTestNeedsCleanup,
+  drainBrowserTestExecutions
+} from "./browserTestCleanup.js";
+import {
   closeUnixJsonCommandServer,
   closeUnixJsonCommandServersForSession,
   listenUnixJsonCommandServer,
@@ -63,6 +67,8 @@ const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
   "/agent-preview-command/health",
   "/agent-preview-command/identity",
   "/agent-preview-command/playwright-run",
+  "/agent-preview-command/playwright-status",
+  "/agent-preview-command/playwright-cancel",
   "/agent-preview-command/run"
 ]);
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -557,15 +563,52 @@ function createAgentPreviewCommandService({
   publishSessionChanged = async () => {}
 } = {}) {
   const browserWorkers = new Map();
-  const testApprovals = new Map();
+  const browserTestRuns = new Map();
 
   function testApprovalStatus(sessionId) {
-    const pending = testApprovals.get(sessionId);
+    const pending = browserTestRuns.get(sessionId);
     return pending?.admissionId ? { admissionId: pending.admissionId, state: pending.state, expiresAt: pending.expiresAt } : null;
   }
 
+  function playwrightStatus(sessionId) {
+    const pending = browserTestRuns.get(sessionId);
+    return { ok: true, run: pending ? {
+      id: pending.id, targetId: pending.targetId, state: pending.state,
+      startedAt: pending.startedAt, elapsedMs: Date.now() - Date.parse(pending.startedAt)
+    } : null };
+  }
+
+  async function cancelPlaywrightRun(sessionId, runId) {
+    const pending = browserTestRuns.get(sessionId);
+    if (!pending || pending.id !== runId) return responseError(
+      "That browser test is no longer active. Check playwright status before cancelling another run.", "vibe64_test_run_unavailable"
+    );
+    pending.cancelling ||= finishCancellation(sessionId, pending).finally(() => { pending.cancelling = null; });
+    return pending.cancelling;
+  }
+
+  async function finishCancellation(sessionId, pending) {
+    pending.interrupt();
+    let result = await pending.completion;
+    if (result?.previewRecoveryRequired) {
+      if (pending.targetId) {
+        result = await launchTarget.retryPreviewTestCleanup(sessionId);
+      } else {
+        pending.cleanupExecutionIds ||= new Set(result.cleanupExecutionIds || [result.execution?.id]);
+        await drainBrowserTestExecutions(pending.cleanupExecutionIds, stopManagedExecution);
+        result = { ...result, previewRecoveryRequired: pending.cleanupExecutionIds.size > 0 };
+      }
+      if (!result.previewRecoveryRequired && browserTestRuns.get(sessionId) === pending) {
+        browserTestRuns.delete(sessionId);
+        await publishSessionChanged(sessionId);
+      }
+    }
+    if (result?.previewRecoveryRequired) return result;
+    return { ok: true, cancelled: true, runId: pending.id, message: "Browser test finished and Preview cleanup completed." };
+  }
+
   function cancelTestApproval({ projectSlug, sessionId, admissionId }, reason = "cancelled") {
-    const pending = testApprovals.get(sessionId);
+    const pending = browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId || pending.state !== "waiting") {
       return responseError("This test request is no longer waiting for approval.", "vibe64_test_approval_unavailable");
     }
@@ -574,7 +617,7 @@ function createAgentPreviewCommandService({
   }
 
   async function resumeTestApproval({ projectSlug, sessionId, admissionId }, authorizeStart) {
-    const pending = testApprovals.get(sessionId);
+    const pending = browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId) {
       return responseError("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
     }
@@ -591,7 +634,7 @@ function createAgentPreviewCommandService({
 
   async function withTestApproval(sessionId, input, options, targetId, operation, validate) {
     const run = (startTarget) => launchTarget.withPreviewTarget(sessionId, targetId, async (token) => {
-      const pending = testApprovals.get(sessionId);
+      const pending = browserTestRuns.get(sessionId);
       if (pending?.admissionId) {
         pending.state = "running";
         await publishSessionChanged(sessionId);
@@ -606,6 +649,10 @@ function createAgentPreviewCommandService({
         return start();
       }) : undefined,
       signal: options.signal,
+      onState: (state) => {
+        const pending = browserTestRuns.get(sessionId);
+        if (pending) pending.state = state;
+      },
       waitUntilReady: async (terminal, { restoring = false } = {}) => {
         const waited = await waitForPreviewReady(launchTarget, sessionId, {
           terminalSessionId: terminal.id, signal: restoring ? null : options.signal
@@ -627,7 +674,7 @@ function createAgentPreviewCommandService({
     });
     let outcome = "interrupted";
     let timer;
-    const pending = testApprovals.get(sessionId);
+    const pending = browserTestRuns.get(sessionId);
     Object.assign(pending, identity, { state: "waiting", expiresAt: wait.expiresAt });
     const decision = new Promise((resolve) => {
       pending.cancel = (reason) => {
@@ -714,7 +761,7 @@ function createAgentPreviewCommandService({
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     const existing = sessionWorkers.get(socketPath);
     const sameGeneration = normalizeText(existing?.token) === normalizeText(descriptor.token);
-    if (existing && !sameGeneration) testApprovals.get(normalizedSessionId)?.interrupt();
+    if (existing && !sameGeneration) browserTestRuns.get(normalizedSessionId)?.interrupt();
     sessionWorkers.set(socketPath, {
       ...descriptor,
       executionId: sameGeneration ? normalizeText(existing?.executionId) : "",
@@ -733,7 +780,9 @@ function createAgentPreviewCommandService({
 
   async function closeAllForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
-    testApprovals.get(normalizedSessionId)?.interrupt();
+    const pending = browserTestRuns.get(normalizedSessionId);
+    pending?.interrupt();
+    await pending?.completion;
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     browserWorkers.delete(normalizedSessionId);
     let closed = 0;
@@ -754,7 +803,9 @@ function createAgentPreviewCommandService({
 
   async function releaseControlForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
-    testApprovals.get(normalizedSessionId)?.interrupt();
+    const pending = browserTestRuns.get(normalizedSessionId);
+    pending?.interrupt();
+    await pending?.completion;
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
     for (const descriptor of sessionWorkers.values()) {
       await stopRegisteredBrowserWorker(descriptor, {
@@ -966,6 +1017,76 @@ function createAgentPreviewCommandService({
     });
   }
 
+  async function playwrightRun(sessionId, input, options = {}) {
+    input = structuredClone(input);
+    if (browserTestRuns.has(sessionId) && !input.testRunToken) return responseError(
+      "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.", "vibe64_test_approval_busy"
+    );
+    const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
+    if (admission) return admission;
+    const parent = input.testRunToken ? browserTestRuns.get(sessionId) : null;
+    const cancellation = new AbortController();
+    const completion = Promise.withResolvers();
+    const pending = !input.testRunToken ? {
+      id: crypto.randomUUID(),
+      targetId: input.targetId || "",
+      state: "starting",
+      startedAt: new Date().toISOString(),
+      completion: completion.promise,
+      children: [],
+      interrupt: () => cancellation.abort()
+    } : null;
+    if (pending) {
+      browserTestRuns.set(sessionId, pending);
+    }
+    options = {
+      ...options,
+      signal: AbortSignal.any([options.signal, cancellation.signal, parent?.signal].filter(Boolean))
+    };
+    if (pending) pending.signal = options.signal;
+    if (parent) parent.children.push(completion.promise);
+    const stopping = () => {
+      if (pending && ["starting", "running"].includes(pending.state)) pending.state = "stopping";
+    };
+    options.signal.addEventListener("abort", stopping, { once: true });
+    let result;
+    try {
+      result = await runRegisteredPlaywrightCommand(sessionId, input, {
+        browserWorkers,
+        onOutput: options.onOutput,
+        signal: options.signal,
+        runCommand: async (request) => {
+          if (pending && !input.targetId) pending.state = "running";
+          const commandResult = await runManagedCommand(request);
+          // The scoped wrapper may exit before its independently managed child.
+          // Restoration must wait for every registered child to finish draining.
+          const children = pending ? await Promise.all(pending.children) : [];
+          const incomplete = [...children, commandResult].filter(browserTestNeedsCleanup);
+          return incomplete.length ? {
+            ...incomplete[0],
+            cleanupExecutionIds: [...new Set(incomplete.flatMap(result => result.cleanupExecutionIds || [result.execution?.id]))]
+          } : commandResult;
+        },
+        withTarget: (targetId, operation, validate) => withTestApproval(sessionId, input, options, targetId, operation, validate)
+      });
+      if (browserTestNeedsCleanup(result)) {
+        result = { ...result, previewRecoveryRequired: true };
+        if (pending) pending.state = "cleanup_required";
+      }
+      return result;
+    } catch (error) {
+      result = responseError(error.message, error.code || "vibe64_managed_playwright_run_failed");
+      return result;
+    } finally {
+      options.signal.removeEventListener("abort", stopping);
+      completion.resolve(result);
+      if (pending && !result?.previewRecoveryRequired && browserTestRuns.get(sessionId) === pending) {
+        browserTestRuns.delete(sessionId);
+        await publishSessionChanged(sessionId);
+      }
+    }
+  }
+
   return Object.freeze({
     logger,
     authorizeBrowserIdentity,
@@ -984,31 +1105,9 @@ function createAgentPreviewCommandService({
       stopOwnedExecutions
     }),
     closeAllForSession,
-    playwrightRun: async (sessionId, input, options = {}) => {
-      input = structuredClone(input);
-      if (testApprovals.has(sessionId) && !input.testRunToken) return responseError(
-        "The original browser test is waiting for approval or resuming. Finish or cancel it before starting another.", "vibe64_test_approval_busy"
-      );
-      const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
-      if (admission) return admission;
-      const cancellation = new AbortController();
-      const pending = input.targetId ? { state: "preparing", interrupt: () => cancellation.abort() } : null;
-      if (pending) {
-        testApprovals.set(sessionId, pending);
-        options = { ...options, signal: options.signal ? AbortSignal.any([options.signal, cancellation.signal]) : cancellation.signal };
-      }
-      try { return await runRegisteredPlaywrightCommand(sessionId, input, {
-        browserWorkers,
-        onOutput: options.onOutput,
-        runCommand: runManagedCommand,
-        withTarget: (targetId, operation, validate) => withTestApproval(sessionId, input, options, targetId, operation, validate)
-      }); } finally {
-        if (pending && testApprovals.get(sessionId) === pending) {
-          testApprovals.delete(sessionId);
-          await publishSessionChanged(sessionId);
-        }
-      }
-    },
+    playwrightStatus,
+    cancelPlaywrightRun,
+    playwrightRun,
     registerBrowserWorker,
     releaseControlForSession,
     run
@@ -1344,6 +1443,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
 async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   browserWorkers = new Map(),
   onOutput = null,
+  signal = null,
   runCommand = runVibe64Command,
   withTarget = null
 } = {}) {
@@ -1479,6 +1579,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     maxBuffer: 32 * 1024 * 1024,
     mode: "capture",
     onOutput,
+    signal,
     project: descriptor.project,
     purpose: "preview",
     runtimes: ["node26", "playwright"],
@@ -1783,6 +1884,15 @@ async function ensureAgentPreviewCommandServerUnlocked({
             sessionId,
             input.identity
           );
+          sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
+          return;
+        }
+        if (request.url === "/agent-preview-command/playwright-status") {
+          sendJsonCommandResponse(response, 200, commandService.playwrightStatus(sessionId));
+          return;
+        }
+        if (request.url === "/agent-preview-command/playwright-cancel") {
+          const payload = await commandService.cancelPlaywrightRun(sessionId, normalizeText(input.runId));
           sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
           return;
         }

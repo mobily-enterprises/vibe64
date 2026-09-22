@@ -83,6 +83,7 @@ async function runLocalVibe64Command(request, {
     }), {
       maxBuffer: request.maxBuffer,
       outputEncoding: request.outputEncoding,
+      signal: request.signal,
       timeout: request.timeout
     });
     return {
@@ -98,6 +99,7 @@ async function runLocalVibe64Command(request, {
     maxBuffer: request.maxBuffer,
     onOutput: request.onOutput,
     outputEncoding: request.outputEncoding,
+    signal: request.signal,
     timeout: request.timeout
   });
 }
@@ -106,6 +108,9 @@ async function runVibe64Command(input = {}) {
   let request = null;
   try {
     request = normalizeVibe64CommandRequest(input);
+    if (request.signal?.aborted) {
+      return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution: request.execution });
+    }
     const actor = await resolveVibe64CommandActor(request);
     const baseEnv = request.inheritProcessEnv
       ? {

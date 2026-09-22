@@ -343,9 +343,29 @@ function parseInvocation(values = []) {
   };
 }
 
+const invocation = parseInvocation(process.argv.slice(2));
+const {
+  args,
+  command,
+  identity,
+  identityExplicit,
+  targetId
+} = invocation;
 const applicationRoot = findApplicationRoot();
 if (!applicationRoot) {
   fail("No package.json was found for this Playwright test command.");
+}
+if (command === "status" || command === "cancel") {
+  if (identityExplicit || targetId) {
+    fail("--identity and --target apply only to test and npm-run commands.", 64);
+  }
+  if ((command === "status" && args.length) || (command === "cancel" && (args.length !== 1 || !args[0]))) {
+    fail("Use status, or cancel <run-id> with the ID from status.", 64);
+  }
+  const result = spawnSync(managedNodePath, [managedPreviewPath, "playwright-" + command, ...args], {
+    cwd: applicationRoot, env: process.env, stdio: "inherit"
+  });
+  process.exit(Number.isInteger(result.status) ? result.status : 1);
 }
 const project = projectPlaywright(applicationRoot);
 if (!project || !existsSync(project.cliPath)) {
@@ -360,14 +380,6 @@ if (!runtime) {
   );
 }
 
-const invocation = parseInvocation(process.argv.slice(2));
-const {
-  args,
-  command,
-  identity,
-  identityExplicit,
-  targetId
-} = invocation;
 if (!command && (identityExplicit || targetId)) {
   fail("Specify test or npm-run after --target and --identity options.", 64);
 }
@@ -377,22 +389,11 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
     "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "  vibe64-helper playwright status",
+    "  vibe64-helper playwright cancel <run-id>",
     "",
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
     "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json."
   ].join("\\n") + "\\n");
-  process.exit(0);
-}
-if (command === "status") {
-  if (identityExplicit || targetId) {
-    fail("--identity and --target apply only to test and npm-run commands.", 64);
-  }
-  process.stdout.write(JSON.stringify({
-    browsersPath: runtime.browsersPath,
-    managed: true,
-    applicationRoot,
-    version: project.version
-  }, null, 2) + "\\n");
   process.exit(0);
 }
 if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {

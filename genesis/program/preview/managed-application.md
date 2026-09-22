@@ -10,6 +10,7 @@ without leaving the coding workspace.
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/browserTestCleanup.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
@@ -66,6 +67,18 @@ its URL and native application identity and executes the suite. It restores a
 previously running target and waits for readiness, or stops the test Preview
 when there was no running target. Failures and cancellation use the same cleanup;
 restoration failures preserve the test failure and make the command fail.
+One command owns the entire suite: several tests share one startup and one
+restoration. Separate command invocations each perform that lifecycle.
+`vibe64-helper playwright status` reads the current run ID, target, phase, start
+time and elapsed time. `cancel <run-id>` cancels only that run and waits for
+cleanup. A stale ID cannot cancel a replacement run. Concurrent cancellation
+requests join the same operation.
+Disconnection aborts running finite commands through their execution owner.
+Restoration waits for the scoped wrapper and its registered nested test commands
+to finish draining. Failed drains retain their exact execution IDs and Preview
+ownership; explicit cancellation retries only unproven drains. Restoration failure
+also retains the run for explicit retry. Reads do not launch work, and there is
+no new timer, periodic recovery, automatic test rerun or per-test target switch.
 Shared agent instructions require focused batches with full stdout/stderr saved
 to local artifacts. Callers report counts, timings, exit status and relevant
 failure excerpts, expanding those artifacts only when needed. Startup, resource

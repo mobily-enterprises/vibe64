@@ -400,6 +400,11 @@ if (!controlSocketPath || !controlToken || !controlGeneration || !sessionId || !
 
 const args = process.argv.slice(2);
 try {
+  if (args[0] === "playwright-status" || args[0] === "playwright-cancel") {
+    const payload = await controlRequest("/agent-preview-command/" + args[0], { runId: args[1] || "" });
+    printJson(payload);
+    process.exit(payloadExitCode(payload));
+  }
   if (args[0] === "playwright-run") {
     const runner = String(args[1] || "").trim();
     if (!["node", "npm"].includes(runner)) {

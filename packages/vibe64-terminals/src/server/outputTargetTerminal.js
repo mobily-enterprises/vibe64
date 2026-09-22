@@ -20,9 +20,14 @@ import {
 import {
   finishVibe64Workflow,
   setVibe64WorkflowPhase,
+  stopVibe64Execution,
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import { startResourceWorkflow } from "./resourceWorkflow.js";
+import {
+  browserTestNeedsCleanup,
+  drainBrowserTestExecutions
+} from "./browserTestCleanup.js";
 import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -2027,6 +2032,7 @@ function createOutputTargetTerminalController({
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command,
   startWorkflow = startResourceWorkflow,
+  stopExecution = stopVibe64Execution,
   finishWorkflow = finishVibe64Workflow,
   setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure = () => null
@@ -2376,7 +2382,7 @@ function createOutputTargetTerminalController({
       });
     },
 
-    async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady, startTarget = (start) => start(), signal }) {
+    async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady, startTarget = (start) => start(), signal, onState = () => {} }) {
       const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
       const previous = await withLaunchStartLock(sessionId, async () => {
         signal?.throwIfAborted();
@@ -2424,47 +2430,73 @@ function createOutputTargetTerminalController({
 
       let result;
       try {
+        onState("starting");
         await ensureTargetReady(outputTargetId);
         signal?.throwIfAborted();
         if (testRun.closing) {
           throw new Error("The session closed before browser tests could start.");
         }
+        onState("running");
         result = await operation(testRun.token);
       } catch (error) {
         result = { ok: false, exitCode: 1, error: error.message, code: error.code,
+          ...(error.execution ? { execution: error.execution } : {}),
           ...(error.details ? { details: error.details } : {}) };
       }
-      try {
-        if (testRun.closing) {
-          return result;
+      let cleanupRequired = browserTestNeedsCleanup(result);
+      const cleanupExecutionIds = new Set(cleanupRequired ? result.cleanupExecutionIds || [result.execution?.id] : []);
+      testRun.finish = async (retry = false) => {
+        if (cleanupRequired) {
+          onState("cleanup_required");
+          if (retry) {
+            await drainBrowserTestExecutions(cleanupExecutionIds, stopExecution);
+            cleanupRequired = cleanupExecutionIds.size > 0;
+          }
+          if (cleanupRequired) return { ...result, previewRecoveryRequired: true };
         }
-        if (previous.running && previous.targetId) {
-          await ensureTargetReady(previous.targetId, { restoring: true });
-        } else {
-          await withLaunchStartLock(sessionId, async () => {
-            await launchPreviewProxies.close({ sessionId });
-            const closed = await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));
-            if (closed?.ok === false) throw new Error(closed.error);
-            await clearLaunchMetadata(previous.store, sessionId);
-            if (previous.savedTarget) {
-              await previous.store.mutateSession(sessionId, async () => {
-                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, previous.savedTarget.id);
-                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, previous.savedTarget.label);
-                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(previous.savedTarget.outputParameters));
-              });
-            }
-          });
+        try {
+          if (testRun.closing) {
+            previewTestRuns.delete(sessionId);
+            return result;
+          }
+          onState("restoring");
+          if (previous.running && previous.targetId) {
+            await ensureTargetReady(previous.targetId, { restoring: true });
+          } else {
+            await withLaunchStartLock(sessionId, async () => {
+              await launchPreviewProxies.close({ sessionId });
+              const closed = await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));
+              if (closed?.ok === false) throw new Error(closed.error);
+              await clearLaunchMetadata(previous.store, sessionId);
+              if (previous.savedTarget) {
+                await previous.store.mutateSession(sessionId, async () => {
+                  await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, previous.savedTarget.id);
+                  await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, previous.savedTarget.label);
+                  await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(previous.savedTarget.outputParameters));
+                });
+              }
+            });
+          }
+          previewTestRuns.delete(sessionId);
+        } catch (error) {
+          onState("restore_failed");
+          return {
+            ...result, ok: false, exitCode: result?.exitCode || 1,
+            code: "vibe64_preview_restore_failed",
+            error: [result?.error, `Could not restore Preview: ${error.message}`].filter(Boolean).join("\n"),
+            previewRecoveryRequired: true
+          };
         }
-      } catch (error) {
-        result = {
-          ...result, ok: false, exitCode: result?.exitCode || 1,
-          code: "vibe64_preview_restore_failed",
-          error: [result?.error, `Could not restore Preview: ${error.message}`].filter(Boolean).join("\n")
-        };
-      } finally {
-        previewTestRuns.delete(sessionId);
-      }
-      return result;
+        return result;
+      };
+      return testRun.finish();
+    },
+
+    async retryPreviewTestCleanup(sessionId) {
+      const testRun = previewTestRuns.get(sessionId);
+      if (!testRun?.finish) return { ok: false, error: "The browser test has not finished.", previewRecoveryRequired: true };
+      testRun.finishing ||= testRun.finish(true).finally(() => { testRun.finishing = null; });
+      return testRun.finishing;
     },
 
     previewTestRunAdmission(sessionId, token = "") {

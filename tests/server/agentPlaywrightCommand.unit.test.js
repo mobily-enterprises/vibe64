@@ -540,17 +540,12 @@ test("managed Playwright test command uses the exact versioned browser runtime w
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
+          ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override"
         }
       }
     )).stdout);
-    assert.equal(status.version, "1.61.1");
-    assert.equal(status.applicationRoot, fixture.projectRoot);
-    assert.equal(Object.hasOwn(status, "projectRoot"), false);
-    assert.equal(
-      status.browsersPath,
-      path.join(fixture.runtimeRoot, "playwright-versions", "1.61.1", "browsers")
-    );
+    assert.deepEqual(status, { ok: true, run: null });
 
     const executed = JSON.parse((await execFileAsync(
       fixture.prepared.hostPlaywrightWrapperPath,

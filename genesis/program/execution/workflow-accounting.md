@@ -8,6 +8,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/index.js`
 - `packages/vibe64-execution/src/server/managedExecution.js`
 - `packages/vibe64-execution/src/server/request.js`
+- `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `packages/vibe64-execution/src/server/runtime/runtimePacks.js`
@@ -29,6 +30,13 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 installed managed-execution provider as commands. Standalone operation may
 return no workflow; a required hosted provider or installed provider without
 workflow support fails explicitly rather than bypassing accounting.
+
+Finite capture requests accept an `AbortSignal`. The installed execution provider
+owns hosted cancellation and descendant drain. Standalone capture uses its
+existing process-group cleanup; unsuccessful drains retain an execution stop
+handle for explicit retry through `stopVibe64Execution()`. Concurrent stops share
+the same drain, and a successful drain is not repeated. Cancellation reports
+completion only after cleanup; a failed drain remains an explicit failure.
 
 Execution metadata carries only a validated workflow UUID. It cannot select a
 systemd unit, host path or resource policy. The execution provider verifies

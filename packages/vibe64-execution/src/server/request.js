@@ -339,6 +339,9 @@ function normalizeVibe64CommandRequest(input = {}) {
     throw commandRequestError("A command is required.", "vibe64_command_required");
   }
   const mode = normalizeEnum(request.mode, VIBE64_COMMAND_MODES, "capture", "mode");
+  if (request.signal != null && (!(request.signal instanceof AbortSignal) || mode !== "capture")) {
+    throw commandRequestError("Cancellation signals require a finite capture command.", "vibe64_command_signal_invalid");
+  }
   const baseEnv = envRecord(request.baseEnv);
   const normalizedEnv = normalizeCommandEnv(request.env !== undefined ? request.env : request.extraEnv, {
     mode
@@ -399,6 +402,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     purpose,
     runtimes,
     session,
+    signal: request.signal ?? null,
     shimDirs: normalizeAbsolutePaths(request.shimDirs),
     terminal: normalizeTerminalOptions(request.terminal || request.pty),
     timeout: Number.isSafeInteger(Number(request.timeout)) && Number(request.timeout) > 0

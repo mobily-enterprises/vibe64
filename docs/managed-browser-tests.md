@@ -17,13 +17,32 @@ Vibe64 waits for that target, creates browser login state using its declared
 Preview identity command, and supplies `PLAYWRIGHT_BASE_URL` to the suite.
 It restores the previously running target after success, failure, timeout or
 assistant cancellation. If Preview was stopped, it stops the test target again.
-Restoration failure makes the command fail and identifies the remaining work.
+Cancellation waits for the managed command and its child processes to stop before
+restoring Preview. Failed cleanup or restoration keeps the run visible and blocks
+a replacement suite until recovery succeeds.
 Stopping or closing the session takes precedence over restoring its application.
 
 While the suite owns Preview, another target change or restart is refused. The
 person sees the test application in Preview during the run. Other sessions have
 their own target selection; shared resources still require application-level
 coordination. Do not run two suites that reset the same test database at once.
+
+Batch related tests into one invocation: the entire suite gets one target startup
+and one restoration. Separate invocations each switch and restore Preview. Vibe64
+does not switch targets between individual tests or add background retry loops.
+
+Inspect the current run before diagnosing a stuck test:
+
+```sh
+vibe64-helper playwright status
+vibe64-helper playwright cancel <run-id>
+```
+
+Status includes the run ID, target, phase and elapsed time. Cancel waits for cleanup
+and restoration; repeated concurrent requests join that operation. If cleanup or
+restoration fails, address the reported cause and retry cancellation with the same
+ID. An old ID cannot cancel a newer run. Do not kill individual child PIDs or delete
+ownership records. Recheck status before reporting that Preview is still blocked.
 
 If the host offers approval for a marginal memory fit, this same command can
 wait for up to five minutes after restoring the normal Preview. Chat shows

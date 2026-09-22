@@ -8,6 +8,25 @@ import {
   drainProcessGroup
 } from "./detached.js";
 
+// Retain failed drains so the execution owner can retry the same stop.
+const capturedExecutions = new Map();
+
+async function stopCaptureExecution(executionId) {
+  const stop = capturedExecutions.get(executionId);
+  if (!stop) return { ok: false, code: "vibe64_execution_not_found" };
+  const scopeEmpty = await stop();
+  if (scopeEmpty) capturedExecutions.delete(executionId);
+  return {
+    ok: scopeEmpty,
+    executionId,
+    scopeEmpty,
+    ...(scopeEmpty ? {} : {
+      code: "vibe64_execution_drain_failed",
+      error: "The command's process group could not be stopped."
+    })
+  };
+}
+
 async function runCaptureCommand(command = "", args = [], {
   cwd = "",
   env = {},
@@ -16,10 +35,20 @@ async function runCaptureCommand(command = "", args = [], {
   maxBuffer = undefined,
   onOutput = null,
   outputEncoding = "utf8",
+  signal = null,
   timeout = 15_000
 } = {}) {
-  let processGroupId = null;
   let outcome;
+  let stop;
+  let cancellation;
+  const cancellationFinished = Promise.withResolvers();
+  const abort = () => {
+    cancellation ||= stop();
+    cancellation.then(cancellationFinished.resolve);
+  };
+  if (signal?.aborted) {
+    return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution });
+  }
   try {
     const subprocess = execa(command, args, {
       all: true,
@@ -35,7 +64,27 @@ async function runCaptureCommand(command = "", args = [], {
       stripFinalNewline: false,
       timeout
     });
-    processGroupId = Number(subprocess.pid);
+    const processGroupId = Number(subprocess.pid);
+    let stopping;
+    stop = () => {
+      if (!stopping) {
+        let drain;
+        if (process.platform !== "win32") {
+          drain = drainProcessGroup(processGroupId).catch(() => false);
+        } else {
+          subprocess.kill("SIGKILL");
+          drain = subprocess.then(() => true, () => true);
+        }
+        stopping = drain.then((scopeEmpty) => {
+          if (!scopeEmpty) stopping = null;
+          return scopeEmpty;
+        });
+      }
+      return stopping;
+    };
+    if (execution?.id) capturedExecutions.set(execution.id, stop);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     if (typeof onOutput === "function" && subprocess.all) {
       subprocess.all.on("data", (chunk) => {
         try {
@@ -45,7 +94,10 @@ async function runCaptureCommand(command = "", args = [], {
         }
       });
     }
-    const result = await subprocess;
+    const result = await Promise.race([
+      subprocess,
+      cancellationFinished.promise.then((scopeEmpty) => scopeEmpty ? subprocess : { exitCode: 1 })
+    ]);
     const exitCode = typeof result.exitCode === "number" ? result.exitCode : 1;
     outcome = commandResult({
       code: result.timedOut === true
@@ -72,12 +124,11 @@ async function runCaptureCommand(command = "", args = [], {
       stdout: error.stdout,
       timedOut: error.timedOut === true
     });
+  } finally {
+    signal?.removeEventListener("abort", abort);
   }
-  if (
-    process.platform !== "win32" &&
-    Number.isSafeInteger(processGroupId) &&
-    !await drainProcessGroup(processGroupId)
-  ) {
+  const scopeEmpty = await (cancellation || stop?.() || true);
+  if (!scopeEmpty) {
     return commandErrorResult(
       "The command finished, but its execution scope did not become empty.",
       "vibe64_execution_drain_failed",
@@ -90,9 +141,16 @@ async function runCaptureCommand(command = "", args = [], {
       }
     );
   }
+  if (execution?.id) capturedExecutions.delete(execution.id);
+  if (signal?.aborted) {
+    return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", {
+      ...outcome, execution, outputEncoding
+    });
+  }
   return outcome;
 }
 
 export {
-  runCaptureCommand
+  runCaptureCommand,
+  stopCaptureExecution
 };
