@@ -192,8 +192,9 @@ spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send and Stop stay alongside the icons, goal and allowance in one row on mobile.
 Compact panes reduce horizontal button padding and icon widths while preserving
 the existing touch-target height.
-The desktop chat pane stops at 512 pixels so Send and Stop stay on the same row
-as the other controls. Narrow screens use the full-width chat.
+The desktop chat pane can shrink to 320 pixels, keeping Send and the working
+assistant's Stop button on the same row as the other controls. Narrow screens
+use the full-width chat.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.

@@ -224,8 +224,8 @@ The ordinary `vibe64` launcher, managed `git`/`gh`, and internal process helpers
 retain their existing roles.
 
 The chat column, empty-session column and divider use the same resize width.
-The resize controller owns the 512-pixel desktop minimum and default. Dragging,
-keyboard resizing and restoring older saved widths all respect that minimum;
+The resize controller owns the 320-pixel desktop minimum and 512-pixel default.
+Dragging, keyboard resizing and restoring older saved widths all respect that minimum;
 the layout does not impose another minimum.
 
 JSKIT owns the suggestion and working-status presentation, debounced suggestion
@@ -244,8 +244,9 @@ immediately after Settings in the composer row, followed by the icon-only
 starred-files menu, and remains mounted independently of Settings. Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
 desktop minimum keeps Send and Stop on the same row as the other controls,
-including the host avatar, goal timer and allowance. On narrow screens the chat
-uses the full available width and keeps the controls on one row with tighter
+including the host avatar, goal and allowance; the goal timer hides when space
+is tight. On narrow screens the chat uses the full available width and keeps
+the controls on one row with tighter
 horizontal padding and icon widths.
 Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;

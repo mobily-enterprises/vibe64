@@ -269,7 +269,7 @@ test.describe("direct chat", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.addInitScript(() => {
       if (localStorage.getItem("vibe64:studio-chat-column-width") === null) {
-        localStorage.setItem("vibe64:studio-chat-column-width", "320");
+        localStorage.setItem("vibe64:studio-chat-column-width", "200");
       }
     });
     const agentTurn = { active: false, id: "", state: "idle" };
@@ -293,16 +293,16 @@ test.describe("direct chat", () => {
     await expect(page.getByRole("button", { name: "Weekly Codex allowance remaining: 100%", exact: true })).toBeVisible();
     await input.fill("Keep this draft while resizing");
     const separator = page.getByRole("separator", { name: "Resize chat" });
-    await expect(separator).toHaveAttribute("aria-valuenow", "512");
+    await expect(separator).toHaveAttribute("aria-valuenow", "320");
     await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
     const handle = await separator.boundingBox();
     await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + 100);
     await page.mouse.down();
     await page.mouse.move(10, handle!.y + 100, { steps: 5 });
     await page.mouse.up();
-    await expect(separator).toHaveAttribute("aria-valuenow", "512");
+    await expect(separator).toHaveAttribute("aria-valuenow", "320");
     const chat = page.getByRole("region", { name: "Session chat", exact: true });
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
     const chatBounds = await chat.boundingBox();
     const divider = await separator.boundingBox();
     expect(chatBounds!.x + chatBounds!.width).toBeLessThanOrEqual(divider!.x + 1);
@@ -322,6 +322,8 @@ test.describe("direct chat", () => {
         await input.fill("Keep this draft while resizing");
       }
       const actions = chat.locator(".studio-autopilot__composer-actions");
+      await expect(chat.getByRole("button", { name: "Stop", exact: true })).toHaveCount(active ? 1 : 0);
+      await expect.poll(() => actions.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
       await expect.poll(() => actions.evaluate(node => {
         const buttons = [...node.querySelectorAll("button")].filter(button => button.offsetWidth);
         const centers = buttons.map(button => {
@@ -337,11 +339,11 @@ test.describe("direct chat", () => {
     await expect.poll(async () => (await chat.boundingBox())!.width)
       .toBe(Number(await separator.getAttribute("aria-valuemax")));
     await separator.press("Home");
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vibe64:studio-chat-column-width")!))).toBe(512);
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vibe64:studio-chat-column-width")!))).toBe(320);
     await page.reload();
-    await expect(separator).toHaveAttribute("aria-valuenow", "512");
-    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
+    await expect(separator).toHaveAttribute("aria-valuenow", "320");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(320);
     for (const viewportWidth of [981, 980, 390]) {
       await page.setViewportSize({ width: viewportWidth, height: 900 });
       await expect.poll(() => chat.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
