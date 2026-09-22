@@ -2679,16 +2679,19 @@ test("assistant selection changes engines or Codex providers only after destinat
     for (const failure of ["active", "shutdown", ""]) {
       const lock = agentWriteLockHarness();
       const operations = [];
+      const events = [];
       const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
         modelId: VIBE64_CODEX_DEFAULT_MODEL, modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
       const next = target === "opencode"
         ? { ...current, agentId: "build", engineId: "opencode", modelProviderId: "deepseek", modelId: "deepseek-chat" }
         : { ...current, modelProviderId: target, modelId: target === "deepseek" ? "deepseek-flash" : "glm-5.3" };
-      const session = { sessionId: "session-1", status: "active", metadata: { assistant_selection: JSON.stringify(current) } };
+      const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: { assistant_selection: JSON.stringify(current) } };
       const runtime = { async getSession() { return session; }, store: { ...lock.store,
         async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
       } };
-      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+      const service = createService({
+        publishSessionChanged: createSessionChangedPublisher({ publish(event) { events.push(event); } }),
+        project: { async createRuntime() { return runtime; } }, terminals: {
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
@@ -2701,17 +2704,25 @@ test("assistant selection changes engines or Codex providers only after destinat
         }
       } });
       const result = await service.updateAssistantSelection(session.sessionId, {
-        assistantSelection: next, vibe64User: { role: "owner", username: "owner" }
+        assistantSelection: next, originId: "owner-browser", vibe64User: { role: "owner", username: "owner" }
       });
       if (failure) {
         assert.equal(result.ok, false, JSON.stringify(result));
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
         assert.ok(!operations.includes("write"));
+        assert.equal(events.length, 0);
         if (failure === "active") assert.ok(!operations.includes("shutdown"));
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.equal(JSON.parse(session.metadata.assistant_selection).modelProviderId, next.modelProviderId);
         assert.deepEqual(operations, ["access", "state", "shutdown", "write"]);
+        assert.equal(events.length, 1);
+        assert.equal(events[0].realtime.audience, "all_clients");
+        assert.equal(events[0].realtime.event, "vibe64.session.changed");
+        assert.deepEqual(events[0].realtime.payload, {
+          projectSlug: "project-a", sessionId: "session-1", status: "active",
+          originId: "owner-browser", reason: "session-assistant-selection-updated"
+        });
       }
     }
   }

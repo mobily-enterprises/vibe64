@@ -250,7 +250,7 @@ function agentConnectionThinkingLabel({
   active = false,
   status = "connected"
 } = {}) {
-  if (!active || status === "connected" || status === "failed") {
+  if (!active || ["connected", "failed", "restricted"].includes(status)) {
     return "";
   }
   if (status === "initializing") {
@@ -656,7 +656,7 @@ function useVibe64AutopilotView(props, emit, {
   const thinkingVisible = computed(() => Boolean(
     !assistantAccountUnavailable.value && (
       agentActive.value || composerSending.value ||
-      (!assistantConnectionReady.value && props.agentConnectionStatus !== "failed" && !sessionInteractionDisabled.value)
+      (!assistantConnectionReady.value && !["failed", "restricted"].includes(props.agentConnectionStatus) && !sessionInteractionDisabled.value)
     )
   ));
   const thinkingLabel = computed(() => (

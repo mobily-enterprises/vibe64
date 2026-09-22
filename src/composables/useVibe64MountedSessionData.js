@@ -318,6 +318,11 @@ function useVibe64MountedSessionData({
     })();
     reconciliationInFlight = Promise.race([checking, cancelled]).catch((error) => {
       if (currentConnection()) {
+        if (error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED) {
+          agentConnectionStatus.value = "restricted";
+          agentConnectionError.value = "";
+          return null;
+        }
         agentConnectionError.value = String(error?.message || "The assistant could not be started. Please retry.");
         if (error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE) {
           agentConnectionStatus.value = "unavailable";
@@ -356,11 +361,22 @@ function useVibe64MountedSessionData({
   const reconcileAfterRealtimeConnect = () => {
     connectionGeneration += 1;
     reconciliationRetryDelay = 1_000;
+    reconciliationController?.abort();
     void reconcileMountedAgentSession();
   };
   useRealtimeEvent({
     enabled: mountedActive,
     event: VIBE64_CONNECTIONS_CHANGED_EVENT,
+    onEvent: reconcileAfterRealtimeConnect
+  });
+  useRealtimeEvent({
+    enabled: mountedActive,
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => (
+      payload.projectSlug === projectSlug.value &&
+      payload.sessionId === activeSessionId.value &&
+      payload.reason === "session-assistant-selection-updated"
+    ),
     onEvent: reconcileAfterRealtimeConnect
   });
   const markRealtimeDisconnected = () => {

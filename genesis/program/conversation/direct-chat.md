@@ -769,6 +769,16 @@ Recent decisions remain available in the same panel. The existing session-scoped
 realtime refresh brings requests and decisions into other viewers' panels.
 Database questions and overview tasks can prefill this same editable composer.
 
+A successful assistant selection change publishes to every authorized project
+viewer. Each browser refreshes its access and reconciles the selected assistant
+immediately, cancelling any check of the previous selection. Members move between
+Send for approval and direct AI use without reload, focus or a retry timer;
+their drafts and attachments remain intact. Switching to a personal connection
+restores the restriction. Personal-only access is an expected restricted state,
+without a connection error or repeated retries. Client lifecycle tests cover
+pending and denied checks, and the assistant-status browser test exercises both
+transitions through real realtime sockets in separate browser contexts.
+
 New paginated Codex conversations persist their native identity and empty
 history before Vibe64 publishes them as ready. Their initial native name is
 their conversation id. This one-time initialization reads only the newly

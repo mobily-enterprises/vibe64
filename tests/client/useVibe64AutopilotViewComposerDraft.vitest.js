@@ -192,6 +192,28 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerDraft.value).toBe("");
   });
 
+  it("presents personal AI access as approval mode without connection errors", async () => {
+    const canUse = ref(false);
+    const canRequest = ref(true);
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "restricted" }, {
+      assistantCanUseAi: canUse, assistantCanRequestMessage: canRequest
+    });
+    view.composerDraft.value = "Please review the layout.";
+    expect(view.connectionRecoveryVisible.value).toBe(false);
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.thinkingLabel.value).toBe("");
+    expect(view.composerCanSubmit.value).toBe(true);
+    props.session.agentSession.turn = { active: true, id: "owner-turn", state: "active" };
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Assistant is working...");
+    props.session.agentSession.turn.active = false;
+    canUse.value = true;
+    canRequest.value = false;
+    props.agentConnectionStatus = "connected";
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerDraft.value).toBe("Please review the layout.");
+  });
+
   it("uses the new-build welcome for a blank, workspace-unconfigured project", async () => {
     const view = await createView();
 

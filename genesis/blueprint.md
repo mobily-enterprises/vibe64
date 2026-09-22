@@ -436,6 +436,9 @@ Owners see the author, full text and previewable attachments with Approve & send
 and Decline actions directly in chat. Members can withdraw pending requests and
 see recent decisions. Approval retains the author's attribution and safely
 retries a failed delivery.
+When the owner switches to a connection available to the workspace, members'
+open browsers immediately return to direct AI use without reloading or losing
+drafts and attachments. Switching back restores Send for approval in real time.
 Conversation-based suggestions are shared with members without invoking AI on
 their behalf. They survive reloads, follow the current conversation and Blueprint,
 and never include another person's unsent draft suggestions.

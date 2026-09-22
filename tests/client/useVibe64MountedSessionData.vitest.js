@@ -490,6 +490,40 @@ describe("useVibe64MountedSessionData", () => {
       expect(httpMocks.request).toHaveBeenCalledTimes(2);
     });
 
+    it.each([false, true])("immediately rechecks a model change after personal access is denied (check pending: %s)", async (pending) => {
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      const controller = mountAssistant();
+      const failure = { ok: false, code: "vibe64_assistant_owner_required", error: "Only the owner can use this connection." };
+      if (!pending) response.resolve(failure);
+      await vi.advanceTimersByTimeAsync(0);
+      if (!pending) {
+        expect(controller.agentConnectionStatus.value).toBe("restricted");
+        expect(controller.agentConnectionError.value).toBe("");
+        await vi.advanceTimersByTimeAsync(90_000);
+        expect(httpMocks.request).toHaveBeenCalledTimes(1);
+        expect(warnings).not.toHaveBeenCalled();
+      }
+      // A background browser must recover without focus or the retry timer.
+      vi.stubGlobal("document", { hidden: true, removeEventListener: vi.fn() });
+      const payload = { projectSlug: "project-a", sessionId: "session-a", reason: "session-assistant-selection-updated", originId: "another-browser" };
+      const selectionEvent = realtimeMocks.events.find(({ event, matches }) => (
+        event === "vibe64.session.changed" && matches?.({ payload })
+      ));
+      expect(selectionEvent).toBeDefined();
+      expect(selectionEvent.matches({ payload: { ...payload, projectSlug: "project-b" } })).toBe(false);
+      expect(selectionEvent.matches({ payload: { ...payload, sessionId: "session-b" } })).toBe(false);
+      expect(selectionEvent.matches({ payload: { ...payload, reason: "session-agent-turn-delta" } })).toBe(false);
+      selectionEvent.onEvent({ payload });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      response.resolve(failure);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
     it("manual recovery reconnects the socket or rechecks the existing connection", async () => {
       const controller = mountAssistant();
       await vi.advanceTimersByTimeAsync(0);
