@@ -5,6 +5,12 @@ and see whether the Studio host is ready to support them.
 
 ## Sources
 
+- `packages/vibe64-core/src/shared/curatedCodexProviders.js`
+- `packages/vibe64-core/src/server/codexProviderConnections.js`
+- `packages/vibe64-accounts/src/client/studio/CodexProviderConnections.vue`
+- `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
+- `src/components/studio/Vibe64AuthSettingsButton.vue`
+
 - `packages/vibe64-core/src/server/nativeHelperModel.js`
 - `packages/vibe64-accounts/bin/claude-auth-browser`
 - `packages/studio-terminal-core/src/server/claudeRuntime.js`
@@ -31,6 +37,32 @@ and see whether the Studio host is ready to support them.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
 ## Public contract
+
+Codex provider setup offers GPT, DeepSeek and GLM. GPT keeps its existing
+ChatGPT device login and OpenAI API-key flow. The curated catalogue owns the
+DeepSeek API route and Z.AI's dedicated Coding Plan Responses route
+(`https://api.z.ai/api/v1`). Regular Z.AI API keys remain an OpenCode option;
+the regular `/api/paas/v4/responses` route returned 404 in the compatibility check.
+The browser submits only a provider id and key. Connections use the provider's
+name automatically, and the browser cannot set an endpoint. The existing host Codex-management policy authorizes reads and
+mutations, and lists never return keys.
+
+A bounded Responses request checks a new key before changing a working
+connection. Replacement or removal marks that provider unavailable, drains only
+its owned runtimes, and updates its private native configuration and auth
+generation. Failure to prove process exit leaves the transition unavailable for
+retry. Each curated provider has a separate home under the installation's
+private `ai-connections/codex` state; OpenAI's credential home stays independent.
+Disconnect removes credentials while retaining native conversation history.
+
+The setup form uses the shared Accounts command feedback, clears unsaved keys
+when changing providers, and keeps an in-flight save open. Online hosts can
+compose the same form into their existing AI Accounts list. DeepSeek is a
+workspace-use API connection; the GLM plan is owner-only. Provider definitions
+follow the official [DeepSeek Codex guide](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/)
+and [Z.AI Codex guide](https://docs.z.ai/devpack/tool/codex).
+The native fixture verifies Vibe64's routing and lifecycle against a local
+Responses server; it does not establish live provider availability or quota.
 
 The owner can connect a Claude subscription through the existing Accounts flow.
 The unmodified CLI runs `claude auth login --claudeai`. Its browser-opener

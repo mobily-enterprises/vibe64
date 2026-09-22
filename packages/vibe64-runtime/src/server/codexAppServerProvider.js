@@ -1,3 +1,4 @@
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { CodexAppServerJsonRpcClient, socketPathFromCodexAppServerEndpoint } from "@jskit-ai/assistant-core/server/codex-client";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -32,6 +33,7 @@ import {
   runVibe64Command as defaultCommandRunner,
   stableHash,
   stopVibe64Execution,
+  stopVibe64OwnedExecutions,
   vibe64ManagedExecutionProvider,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
@@ -347,6 +349,10 @@ async function readCodexSelectedAccountAccess(options = {}) {
 }
 
 async function currentCodexAccountIdentitySignature(options = {}) {
+  if (options.modelProviderId && options.modelProviderId !== "openai") {
+    const config = await readFile(path.join(options.toolHomeSource, ".codex", "config.toml"), "utf8");
+    return `sha256:${createHash("sha256").update(config).digest("hex")}`;
+  }
   const explicit = normalizeAgentText(options.accountIdentitySignature);
   if (explicit) {
     return explicit;
@@ -798,7 +804,7 @@ function codexAppServerRuntimeScope({
 
 function codexAppServerRuntimeIdentityScope(options = {}) {
   const scope = codexAppServerRuntimeScope(options);
-  if (!scope) {
+  if (!scope && !options.modelProviderId) {
     return "";
   }
   const namespace = runtimeNamespace();
@@ -807,6 +813,7 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
   return [
     namespace ? `namespace:${namespace}` : "",
     `scope:${scope}`,
+    options.modelProviderId ? `provider:${options.modelProviderId}` : "",
     runtimeInstanceId ? `instance:${runtimeInstanceId}` : "",
     executionMode === CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
       ? `mode:${executionMode}`
@@ -927,7 +934,7 @@ async function assertCodexAuthGenerationCurrent(capturedSignature = "", options 
     throw error;
   }
   if (authStatus?.status === "reconnect_required") {
-    throw codexReconnectRequiredError();
+    throw codexReconnectRequiredError({ modelProviderId: options.modelProviderId });
   }
   const currentSignature = await codexAuthStateSignature({
     systemRoot
@@ -945,18 +952,22 @@ async function assertCodexAuthGenerationCurrent(capturedSignature = "", options 
 }
 
 function codexReconnectRequiredError({
+  modelProviderId = "",
   cause = null,
   observed = ""
 } = {}) {
-  const error = new Error(CODEX_RECONNECT_REQUIRED_MESSAGE);
-  error.code = CODEX_RECONNECT_REQUIRED_CODE;
+  const provider = curatedCodexProvider(modelProviderId);
+  const message = provider ? `Reconnect Codex - ${provider.label} in AI Accounts to continue.` : CODEX_RECONNECT_REQUIRED_MESSAGE;
+  const code = provider ? "vibe64_codex_provider_reconnect_required" : CODEX_RECONNECT_REQUIRED_CODE;
+  const error = new Error(message);
+  error.code = code;
   error.errors = [
     {
-      code: CODEX_RECONNECT_REQUIRED_CODE,
-      message: CODEX_RECONNECT_REQUIRED_MESSAGE
+      code,
+      message
     }
   ];
-  error.observed = normalizeAgentText(observed);
+  error.observed = provider ? "" : normalizeAgentText(observed);
   if (cause) {
     error.cause = cause;
   }
@@ -1050,7 +1061,7 @@ async function markCodexAppServerReconnectRequired(options = {}, {
     reason
   });
   throw codexReconnectRequiredError({
-    observed
+    modelProviderId: options.modelProviderId, observed
   });
 }
 
@@ -1482,11 +1493,24 @@ async function stopCodexAppServerRuntime(options = {}) {
       };
     }
     if (!existing) {
+      // Changeover after a server restart may have no runtime.json left. The
+      // managed execution owner can still drain and prove its exact scope empty.
+      // A missing file alone is never process-exit proof, and account-specific
+      // cleanup must keep using its retained execution identity above.
+      const owned = options.verifyOwnerScope === true && !expectedAccount
+        ? await stopVibe64OwnedExecutions({
+          kind: "assistant",
+          operationId: "codex-app-server",
+          ownerId: normalizeAgentText(options.runtimeInstanceId || options.session?.sessionId || options.session?.id) ||
+            stableHash(runtimeDir)
+        }, { reason: "codex-app-server-changeover" })
+        : null;
+      const ownerExitVerified = owned?.supported === true && owned?.ok === true && owned?.scopeEmpty === true;
       return {
-        processExitVerified: false,
+        processExitVerified: ownerExitVerified,
         runtimeDirPreserved: false,
         runtimeDirRemoved: false,
-        stopped: false
+        stopped: ownerExitVerified && Number(owned?.closed) > 0
       };
     }
     if (expectedAccount) {
@@ -2151,6 +2175,7 @@ async function captureCodexAppServerProcessIdentity({
 }
 
 async function startCodexAppServerProcess({
+  modelProviderId = "",
   accountIdentitySignature = "",
   authStateSignature = "",
   codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
@@ -2202,7 +2227,7 @@ async function startCodexAppServerProcess({
     systemRoot
   });
   await assertCodexAuthGenerationCurrent(resolvedAuthStateSignature, {
-    systemRoot
+    modelProviderId, systemRoot
   });
   const socketPath = codexAppServerSocketPath(runtimeDir);
   assertCodexAppServerSocketPathSupported(socketPath);
@@ -2219,6 +2244,17 @@ async function startCodexAppServerProcess({
       ensureWritablePrivateDirectory(economyHome),
       ensureWritablePrivateDirectory(economyWorkspace)
     ]);
+    if (curatedCodexProvider(modelProviderId)) {
+      // The canonical home contains only our curated provider projection. Copy
+      // it into the existing isolated helper home; never load OpenAI auth here.
+      const sourceHome = path.join(normalizedToolHomeSource, ".codex");
+      const catalogPath = path.join(economyHome, "models.json");
+      const config = await readFile(path.join(sourceHome, "config.toml"), "utf8");
+      await writeFile(catalogPath, await readFile(path.join(sourceHome, "models.json")), { mode: 0o600 });
+      await writeFile(path.join(economyHome, "config.toml"), config.replace(
+        JSON.stringify(path.join(sourceHome, "models.json")), JSON.stringify(catalogPath)
+      ), { mode: 0o600 });
+    }
   }
   const processCwd = economy
     ? economyWorkspace
@@ -2437,7 +2473,7 @@ async function startCodexAppServerProcess({
 
   try {
     await assertCodexAuthGenerationCurrent(resolvedAuthStateSignature, {
-      systemRoot
+      modelProviderId, systemRoot
     });
   } catch (cause) {
     const cleanup = await cleanupFailedCodexAppServerStart(runtimeDir, {
@@ -2826,6 +2862,9 @@ class CodexAppServerAgentProvider {
     if (!this.isEconomyProvider()) {
       return null;
     }
+    if (curatedCodexProvider(this.options.modelProviderId)) {
+      return { identitySignature: await currentCodexAccountIdentitySignature(this.options) };
+    }
     return readCodexSelectedAccountAuth(this.options);
   }
 
@@ -2865,6 +2904,7 @@ class CodexAppServerAgentProvider {
     }
     this.economyAuth = auth;
     this.economyAuthBlocked = false;
+    if (curatedCodexProvider(this.options.modelProviderId)) return auth;
     try {
       const login = await client.request(
         "account/login/start",
@@ -2975,6 +3015,7 @@ class CodexAppServerAgentProvider {
   async prepareRuntime() {
     const previousRuntime = this.runtime;
     const nextRuntime = await ensureCodexAppServerRuntime(this.options);
+    if (this.options.modelProviderId) nextRuntime.modelProviderId = this.options.modelProviderId;
     if (
       this.client &&
       previousRuntime &&
@@ -2991,6 +3032,10 @@ class CodexAppServerAgentProvider {
   }
 
   async preflightAuth(reason = "codex-auth-preflight") {
+    if (this.options.modelProviderId && this.options.modelProviderId !== "openai") {
+      await assertCodexAuthGenerationCurrent("", this.options);
+      return;
+    }
     await this.assertRuntimeAuthReady(reason);
     try {
       return await assertCodexAuthPreflightReady(this.options, {

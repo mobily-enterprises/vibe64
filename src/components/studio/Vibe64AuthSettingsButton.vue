@@ -17,6 +17,7 @@
 
     <v-dialog
       v-model="dialogOpen"
+      :persistent="codexProviderSaving"
       max-width="1120"
       scrollable
     >
@@ -30,6 +31,7 @@
             density="comfortable"
             :icon="mdiClose"
             title="Close account settings"
+            :disabled="codexProviderSaving"
             type="button"
             variant="text"
             aria-label="Close account settings"
@@ -49,6 +51,7 @@
             class="vibe64-auth-settings__provider-tab"
             :prepend-icon="provider.icon"
             :value="provider.id"
+            :disabled="codexProviderSaving"
           >
             {{ provider.label }}
             <span
@@ -96,8 +99,13 @@
               </v-btn>
             </div>
           </section>
+          <CodexProviderConnections
+            v-if="selectedProviderId === 'codex'"
+            v-model="codexModelProviderId"
+            @busy="codexProviderSaving = $event"
+          />
           <ProviderAccountsSetup
-            v-else
+            v-if="selectedProviderId !== 'profile' && (selectedProviderId !== 'codex' || codexModelProviderId === 'openai')"
             :accounts="accounts"
             :account-rows="selectedAccountRows"
             :status-loaded="statusLoaded"
@@ -125,6 +133,7 @@ import {
 import {
   accountRowsForStatus,
   ProviderAccountsSetup,
+  CodexProviderConnections,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
@@ -156,6 +165,8 @@ const providerOptions = computed(() => [
 ]);
 const dialogOpen = ref(false);
 const selectedProviderId = ref("codex");
+const codexModelProviderId = ref("openai");
+const codexProviderSaving = ref(false);
 const accounts = useVibe64Accounts();
 const preferredNameField = ref(null);
 const preferredNameDraft = ref("");

@@ -1,3 +1,4 @@
+import { vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
 import path from "node:path";
 
 import { MINIMUM_CODEX_VERSION } from "./minimumCodexVersion.js";
@@ -743,6 +744,7 @@ function codexAppServerThreadSettings({
     cwd: normalizedCwd,
     developerInstructions: normalizeAgentText(developerInstructions) || null,
     model: normalizeAgentText(model) || effectiveSettings.model,
+    ...(effectiveSettings.modelProviderId ? { modelProvider: effectiveSettings.modelProviderId } : {}),
     sandbox: CODEX_SESSION_SANDBOX
   };
 }
@@ -1236,6 +1238,7 @@ function codexAppServerRuntimeMetadata(runtime = {}) {
 }
 
 function codexAppServerIdentityMetadata({
+  modelProviderId = "openai",
   appServerRuntime = {},
   capturedAt = new Date().toISOString(),
   terminalSessionId = "",
@@ -1254,9 +1257,11 @@ function codexAppServerIdentityMetadata({
         threadId: normalizedThreadId
       }).command
     : "";
+  const prefix = modelProviderId === "openai" ? "codex" : `codex_${modelProviderId}`;
   return {
-    codex_conversation_id: normalizedThreadId,
-    codex_conversation_workdir: normalizedWorkdir,
+    [`${prefix}_conversation_id`]: normalizedThreadId,
+    [`${prefix}_conversation_workdir`]: normalizedWorkdir,
+    agent_identity_model_provider: modelProviderId,
     agent_identity_captured_at: capturedAt,
     agent_identity_conversation_id: normalizedThreadId,
     agent_identity_error: "",
@@ -1296,6 +1301,7 @@ async function writeCodexAppServerIdentityMetadata({
   const metadata = {
     ...supplemental,
     ...codexAppServerIdentityMetadata({
+      modelProviderId: appServerRuntime.modelProviderId || "openai",
       appServerRuntime,
       terminalSessionId,
       threadId,
@@ -1963,9 +1969,13 @@ async function startFreshCodexAppServerThreadForSession({
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
-  if (metadata.agent_identity_provider === "opencode" && metadata.codex_conversation_id && normalizeWorkdir(workdir) &&
-      normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)) {
-    return normalizeAgentText(metadata.codex_conversation_id);
+  const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
+  const providerId = selection?.engineId === "codex" ? selection.modelProviderId : "openai";
+  const prefix = providerId === "openai" ? "codex" : `codex_${providerId}`;
+  const identityProvider = metadata.agent_identity_model_provider || "openai";
+  if (metadata.agent_identity_provider !== "codex" || identityProvider !== providerId) {
+    return normalizeWorkdir(workdir) && normalizeWorkdir(metadata[`${prefix}_conversation_workdir`]) === normalizeWorkdir(workdir)
+      ? normalizeAgentText(metadata[`${prefix}_conversation_id`]) : "";
   }
   if (metadata.agent_transport_id !== CODEX_APP_SERVER_PROVIDER_ID) {
     return "";

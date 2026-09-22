@@ -64,6 +64,7 @@ import {
 import {
   sessionRenewalHandoverHash
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
+import { installVibe64ManagedExecutionProvider, stableHash } from "@local/vibe64-execution/server";
 import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createSessionPromptHintsService } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
@@ -7645,6 +7646,31 @@ test("renewal predecessor cleanup accepts exact preserved process-exit proof", a
     assert.deepEqual(captures.stopRuntimeOptions, [{
       preserveProcessExitProof: true
     }]);
+  });
+});
+
+test("changeover retries after a restart require the old runtime owner's verified empty scope", async () => {
+  await withConversationController(async ({ controller, session, temporaryRoot }) => {
+    const runtimeDir = path.join(temporaryRoot, "codex-app-server-old");
+    session.metadata.agent_transport_runtime_dir = runtimeDir;
+    const stops = [];
+    let scopeEmpty = false;
+    const release = installVibe64ManagedExecutionProvider({
+      async runCommand() { assert.fail("Changing an idle session must not start Codex."); },
+      async stopExecution() { assert.fail("The old session has no retained execution id."); },
+      async stopOwnedExecutions(selector) {
+        stops.push(selector);
+        return { supported: true, ok: scopeEmpty, scopeEmpty, closed: 0 };
+      }
+    });
+    try {
+      await assert.rejects(controller.closeAllForSession(session.sessionId, { changeover: true }),
+        { code: "vibe64_changeover_process_exit_unverified" });
+      scopeEmpty = true;
+      await controller.closeAllForSession(session.sessionId, { changeover: true });
+      assert.equal(stops.length, 2);
+      assert.deepEqual(stops[1], { kind: "assistant", operationId: "codex-app-server", ownerId: stableHash(runtimeDir) });
+    } finally { release(); }
   });
 });
 

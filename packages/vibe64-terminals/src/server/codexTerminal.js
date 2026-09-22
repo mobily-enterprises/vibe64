@@ -1,3 +1,5 @@
+import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createNativeHelperModelStore } from "@local/vibe64-core/server/nativeHelperModel";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
@@ -63,6 +65,7 @@ import {
   assertCodexAppServerEconomyCompatibility,
   assertCodexAppServerEconomyOutputWithinLimit,
   codexAppServerProjectHookTrustConfig,
+  codexAppServerThreadIdForSession,
   codexAppServerThreadHasReadableHistory,
   codexAppServerThreadSettings,
   ensureCodexAppServerThreadForSession,
@@ -231,6 +234,9 @@ const CODEX_STATE_METADATA_NAMES = Object.freeze([
   "agent_identity_conversation_id",
   "agent_identity_error",
   "agent_identity_provider",
+  "agent_identity_model_provider",
+  "assistant_selection",
+  ...CURATED_CODEX_PROVIDERS.flatMap(({ id }) => [`codex_${id}_conversation_id`, `codex_${id}_conversation_workdir`]),
   "agent_identity_resume_strategy",
   "agent_identity_status",
   "agent_identity_terminal_session_id",
@@ -426,6 +432,7 @@ function codexAgentSettingsFromSession(session = {}) {
   if (selection?.engineId === VIBE64_ASSISTANT_ENGINE_IDS.CODEX) {
     return {
       model: selection.modelId,
+      modelProviderId: selection.modelProviderId,
       providerId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
       thinking: selection.variantId
     };
@@ -1027,7 +1034,7 @@ function codexState(session = {}, {
 }
 
 function codexConversationIdForWorkdir(session = {}, workdir = "") {
-  return codexReadyIdentityForWorkdir(session, workdir)?.conversationId || "";
+  return codexAppServerThreadIdForSession(session, workdir) || codexReadyIdentityForWorkdir(session, workdir)?.conversationId || "";
 }
 
 function codexThreadIdForWorkdir(session = {}, workdir = "") {
@@ -1035,6 +1042,8 @@ function codexThreadIdForWorkdir(session = {}, workdir = "") {
 }
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
+  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
+  if (selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return "";
   if (!codexThreadIdForWorkdir(session, workdir)) {
     return "";
   }
@@ -1044,6 +1053,8 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
 }
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
+  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
+  if (selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return null;
   const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
   const identity = agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
@@ -1380,6 +1391,8 @@ function createCodexTerminalController({
       })
     : null;
 
+  const providerConnections = createCodexProviderConnectionStore({ systemRoot: codexAppServerProviderOptions.systemRoot });
+
   const codexAppServerProviders = new Map();
   const codexAppServerProviderOwners = new Map();
   const codexAppServerModelCatalogs = new WeakMap();
@@ -1563,15 +1576,27 @@ function createCodexTerminalController({
     terminalEnv = {},
     toolHomeSource = ""
   } = {}) {
+    const selectedHome = normalizeText(toolHomeSource) || resolvedCodexToolHomeSource();
+    const curated = CURATED_CODEX_PROVIDERS.find(({ id }) => codexAppServerProviderOptions.systemRoot &&
+      codexProviderPaths(codexAppServerProviderOptions.systemRoot, id).toolHomeSource === selectedHome);
+    const connectionOptions = curated ? {
+      ...codexProviderPaths(codexAppServerProviderOptions.systemRoot, curated.id),
+      modelProviderId: curated.id,
+      runtimeInstanceId: `provider:${curated.id}`
+    } : {};
     const runtimeContext = codexRuntimeContext({
       env,
-      providerOptions: codexAppServerProviderOptions,
+      providerOptions: { ...codexAppServerProviderOptions, ...connectionOptions },
       shimDirs: codexGitCommandShimDirs({ terminalEnv }),
       terminalEnv,
-      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource()
+      toolHomeSource: selectedHome
     });
     if (runtimeContext?.ok === false) {
       throw new Error(runtimeContext.error || "Codex runtime context could not be resolved.");
+    }
+    if (curated) {
+      runtimeContext.env.CODEX_HOME = connectionOptions.codexHome;
+      runtimeContext.terminalProcessEnv.CODEX_HOME = connectionOptions.codexHome;
     }
     return runtimeContext;
   }
@@ -1630,8 +1655,7 @@ function createCodexTerminalController({
     reason = "codex-terminal",
     toolHomeSource = ""
   } = {}) {
-    void toolHomeSource;
-    const systemRoot = normalizeText(codexAppServerProviderOptions.systemRoot);
+    const systemRoot = normalizeText(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions.systemRoot);
     if (!systemRoot) {
       return;
     }
@@ -1662,7 +1686,13 @@ function createCodexTerminalController({
     return reconnectFailure;
   }
 
-  async function codexToolHomeResult() {
+  async function codexToolHomeResult(session = {}) {
+    const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
+    const providerId = selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    if (curatedCodexProvider(providerId)) {
+      const options = await providerConnections.runtimeOptions(providerId);
+      return { ok: true, toolHomeSource: options.toolHomeSource };
+    }
     const toolHomeSource = resolvedCodexToolHomeSource();
     if (!toolHomeSource) {
       return codexToolHomeRequired
@@ -1833,8 +1863,10 @@ function createCodexTerminalController({
       return null;
     }
     try {
+      const runtimeContext = codexRuntimeForTerminalEnv({ terminalEnv, toolHomeSource });
+      if (runtimeContext.providerOptions.modelProviderId) return null;
       await codexAuthPreflight({
-        ...codexAppServerProviderOptions,
+        ...runtimeContext.providerOptions,
         terminalEnv,
         toolHomeSource
       }, {
@@ -1937,6 +1969,12 @@ function createCodexTerminalController({
     return runtimeDir
       ? `runtime:${path.resolve(runtimeDir)}`
       : `provider:${normalizeText(providerKey)}`;
+  }
+
+  function codexAppServerRuntimeIsShared(providerKey = "", providerOptions = {}) {
+    const runtimeKey = codexAppServerOwnedRuntimeKey(providerKey, providerOptions);
+    return [...codexAppServerProviders.keys()].some((key) => key !== providerKey &&
+      codexAppServerOwnedRuntimeKey(key, codexAppServerProviderOwners.get(key)?.providerOptions) === runtimeKey);
   }
 
   function rememberCodexAppServerOwnedRuntime({
@@ -2448,7 +2486,7 @@ function createCodexTerminalController({
       executionRoot: "",
       project: {},
       runtimeDir: sharedRuntimeDir,
-      runtimeInstanceId: "",
+      runtimeInstanceId: runtimeContext.providerOptions.runtimeInstanceId || "",
       session: {},
       terminalEnv: {},
       threadEnv: runtimeContext.terminalProcessEnv,
@@ -2492,7 +2530,10 @@ function createCodexTerminalController({
           sessionId: normalizeText(session.sessionId || session.id)
         })
       };
-    const expectedRuntimeDir = codexAppServerRuntimeDir(codexAppServerProviderOptions);
+    const selectedHome = await codexToolHomeResult(session);
+    if (selectedHome.ok === false) throw new Error(selectedHome.error);
+    toolHomeSource = selectedHome.toolHomeSource;
+    const expectedRuntimeDir = codexAppServerRuntimeDir(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions);
     const metadataRuntimeDir = normalizeText(metadata.agent_transport_runtime_dir);
     const reusableMetadataRuntimeDir = metadataRuntimeDir && expectedRuntimeDir &&
       path.resolve(metadataRuntimeDir) === path.resolve(expectedRuntimeDir)
@@ -3536,8 +3577,9 @@ function createCodexTerminalController({
     assertCodexAppServerEconomyThreadsRetired(
       await retireCodexAppServerEconomyThreads({ provider })
     );
-    const sharedProcessRetained = [...codexAppServerProviders.keys()]
-      .some((key) => key !== normalizedProviderKey);
+    const sharedProcessRetained = codexAppServerRuntimeIsShared(
+      normalizedProviderKey, codexAppServerProviderOwners.get(normalizedProviderKey)?.providerOptions
+    );
     if (sharedProcessRetained) {
       closeCodexAppServerProvider(normalizedProviderKey);
       return {
@@ -3635,8 +3677,14 @@ function createCodexTerminalController({
     const metadataExecutionRoot = normalizeText(fallbackOptions.executionRoot) ||
       terminalSessionSourceRoot(session) ||
       metadataSourcePath;
+    const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
+    const providerId = selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    const providerHome = curatedCodexProvider(providerId) && codexAppServerProviderOptions.systemRoot
+      ? codexProviderPaths(codexAppServerProviderOptions.systemRoot, providerId).toolHomeSource
+      : "";
     return codexAppServerRuntimeOptions({
       ...fallbackOptions,
+      ...(providerHome ? { toolHomeSource: providerHome } : {}),
       runtimeDir,
       executionRoot: metadataExecutionRoot,
       workdir: metadataWorkdir
@@ -3644,7 +3692,8 @@ function createCodexTerminalController({
   }
 
   async function stopPersistedCodexAppServerRuntimeForSession(session = {}, fallbackOptions = {}, {
-    preserveProcessExitProof = false
+    preserveProcessExitProof = false,
+    verifyOwnerScope = false
   } = {}) {
     const runtimeOptions = codexAppServerRuntimeOptionsFromSessionMetadata(session, fallbackOptions);
     if (!runtimeOptions) {
@@ -3654,7 +3703,8 @@ function createCodexTerminalController({
     }
     const result = await stopCodexAppServerRuntime({
       ...runtimeOptions,
-      preserveProcessExitProof
+      preserveProcessExitProof,
+      verifyOwnerScope
     });
     return {
       ...result,
@@ -4282,7 +4332,7 @@ function createCodexTerminalController({
     const providerKey = codexAppServerProviderKey(normalizedSessionId, options);
     const provider = codexAppServerProviders.get(providerKey);
     if (!provider) {
-      if (codexAppServerProviders.size > 0) {
+      if (codexAppServerRuntimeIsShared(providerKey, options)) {
         return {
           providerKey,
           sessionDetached: true,
@@ -5130,7 +5180,10 @@ function createCodexTerminalController({
         turnMetadata = {
           actorDisplayName: previousMetadata?.actorDisplayName,
           actorId: previousMetadata?.actorId,
-          engineId: "codex"
+          engineId: "codex",
+          assistantSelection: vibe64AssistantSelectionFromMetadata({
+            assistant_selection: await store.readMetadataValue(normalizedSessionId, "assistant_selection")
+          }, { required: false })
         };
       }
       written = await writer.call(store, normalizedSessionId, {
@@ -5340,8 +5393,9 @@ function createCodexTerminalController({
     let recoveredMessage = null;
     if (receiptId && !pendingMessage) {
       const saved = JSON.parse(await store.readMetadataValue(normalizedSessionId, "assistant_changeover") || "null");
-      const pending = saved?.engines?.codex?.pending;
-      if (pending?.messageId === receiptId && pending.threadId === normalizedThreadId) {
+      const pending = Object.values(saved?.engines || {}).map((binding) => binding.pending)
+        .find((candidate) => candidate?.messageId === receiptId && candidate.threadId === normalizedThreadId);
+      if (pending) {
         recoveredMessage = pending;
         ownership ||= { clientId: receiptId, inputSource: "chat" };
       }
@@ -7726,7 +7780,7 @@ function createCodexTerminalController({
       session,
       workdir
     });
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
       return toolHome;
     }
@@ -7844,7 +7898,7 @@ function createCodexTerminalController({
     const session = {
       executionRoot
     };
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
       return toolHome;
     }
@@ -8225,7 +8279,7 @@ function createCodexTerminalController({
         })
       );
     }
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
       return toolHome;
     }
@@ -9591,7 +9645,7 @@ function createCodexTerminalController({
       }
       return { record: null, retiredThreadId: record.threadId };
     }
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
       throw codexAppServerEconomyOwnershipError(toolHome.error, {
         sessionId: record.sessionId,
@@ -9933,7 +9987,7 @@ function createCodexTerminalController({
     };
     const executionRoot = terminalSessionSourceRoot(session);
     const workdir = terminalWorktreePath(session);
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
       throw codexAppServerEconomyOwnershipError(toolHome.error, { sessionId });
     }
@@ -10182,7 +10236,7 @@ function createCodexTerminalController({
     if (!await directoryExists(workdir)) {
       throw new TypeError("Codex ephemeral conversation workdir is unavailable.");
     }
-    const toolHome = await codexToolHomeResult();
+    const toolHome = await codexToolHomeResult({ agentSettings: input.agentSettings });
     if (toolHome.ok === false) {
       return toolHome;
     }
@@ -12819,7 +12873,13 @@ function createCodexTerminalController({
         attachments,
         messageId: normalizeText(messageId),
         text: message,
-        turnMetadata: { ...turnMetadata, engineId: "codex" }
+        turnMetadata: {
+          ...turnMetadata,
+          engineId: "codex",
+          assistantSelection: vibe64AssistantSelectionFromMetadata({
+            assistant_selection: await runtime.store.readMetadataValue(normalizedSessionId, "assistant_selection")
+          }, { required: false })
+        }
       });
       if (!written) {
         return null;
@@ -13251,7 +13311,7 @@ function createCodexTerminalController({
       const sessionKey = codexTerminalNamespace(normalizedSessionId);
       const renewalCleanup = renewalCleanupContext(normalizedSessionId, options);
       const preserveProcessExitProof = Boolean(
-        renewalCleanup || options.preserveProcessExitProof === true
+        renewalCleanup || options.changeover || options.preserveProcessExitProof === true
       );
       let pending = codexAppServerSessionClosures.get(sessionKey);
       while (pending) {
@@ -13309,8 +13369,9 @@ function createCodexTerminalController({
             } catch (error) {
               // If other sessions retain the shared process, closing this
               // socket alone is not proof that its native goal/work stopped.
-              const shared = [...codexAppServerProviders.keys()].some((other) =>
-                codexAppServerProviderOwners.get(other)?.sessionKey !== sessionKey);
+              const shared = codexAppServerRuntimeIsShared(
+                key, codexAppServerProviderOwners.get(key)?.providerOptions
+              );
               if (shared) throw error;
               // The existing shutdown below must instead prove process exit.
             }
@@ -13342,16 +13403,6 @@ function createCodexTerminalController({
               sessionId: normalizedSessionId
             });
           }
-          if (
-            !renewalCleanup &&
-            !cachedProviders.providerCount &&
-            providerOptions &&
-            sessionHasCodexAppServerRuntime(session)
-          ) {
-            await stopCodexAppServerProviderForSession(normalizedSessionId, providerOptions, {
-              preserveProcessExitProof
-            });
-          }
           let persistedRuntime = null;
           if (session) {
             persistedRuntime = cachedProviders.stopped > 0
@@ -13359,7 +13410,7 @@ function createCodexTerminalController({
                   stopped: true,
                   verifiedStopped: true
                 }
-              : codexAppServerProviders.size > 0
+              : codexAppServerRuntimeIsShared("", providerOptions || {})
               ? {
                   sessionDetached: true,
                   sharedProcessRetained: true,
@@ -13371,7 +13422,8 @@ function createCodexTerminalController({
                   session,
                   providerOptions || {},
                   {
-                    preserveProcessExitProof
+                    preserveProcessExitProof,
+                    verifyOwnerScope: options.changeover === true
                   }
                 )
                 : {
@@ -13481,7 +13533,9 @@ function createCodexTerminalController({
       return createCodexAppServerConversation(sessionId, input, options);
     },
 
-    readHelperModel() {
+    readHelperModel(context = {}) {
+      const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId);
+      if (curated) return Promise.resolve(curated.models[0].id);
       return createNativeHelperModelStore({ systemRoot: codexAppServerProviderOptions.systemRoot }).read();
     },
 

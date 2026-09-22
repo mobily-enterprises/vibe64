@@ -1,3 +1,5 @@
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
 import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
@@ -115,6 +117,7 @@ import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
+  vibe64AssistantConversationKey,
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 import { createWorkspaceSetupRunner } from "./workspaceSetup.js";
@@ -485,6 +488,7 @@ function createService({
     projectService
   });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
+  const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
   const codex = createCodexTerminalController({
     ...codexTerminalController,
     agentDatabaseCommand,
@@ -526,6 +530,7 @@ function createService({
         connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
       }),
       createCodexSessionAgentProvider({
+        listConnections: codexProviderConnections.list,
         connectionStatus: (context) => assistantRuntime.codexConnectionStatus(context),
         controller: codex
       }),
@@ -540,6 +545,16 @@ function createService({
       }
       if (context.engineId !== "codex") {
         return assistantRuntime.readAssistantAccess(context);
+      }
+      const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId || context.modelProviderId);
+      if (curated) {
+        const connected = (await codexProviderConnections.list()).find(({ id }) => id === curated.id)?.connected === true;
+        return {
+          available: connected,
+          ownerOnly: curated.ownerOnly,
+          endpointCode: curated.id,
+          economyModelId: curated.models[0].id
+        };
       }
       if (!await assistantRuntime.codexConnectionStatus(context)) {
         return { available: false, ownerOnly: true };
@@ -2510,7 +2525,7 @@ function createService({
     async readConversationRewindState(sessionId, options = {}) {
       const context = await assistantSessionOptions(sessionId, options);
       const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata, { required: false });
-      return selection ? readConversationRewindState(context.runtime.store, sessionId, selection.engineId) : null;
+      return selection ? readConversationRewindState(context.runtime.store, sessionId, vibe64AssistantConversationKey(selection)) : null;
     },
 
     async rewindConversation(sessionId, input = {}, options = {}) {
@@ -2709,15 +2724,18 @@ function createService({
       const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
       const metadata = context.session.metadata;
       if (engineId === "codex" && metadata.agent_identity_provider === "codex" && metadata.agent_identity_conversation_id) {
-        await context.runtime.store.writeMetadataValue(sessionId, "codex_conversation_id", metadata.agent_identity_conversation_id);
-        await context.runtime.store.writeMetadataValue(sessionId, "codex_conversation_workdir", metadata.agent_identity_workdir);
+        const modelProviderId = metadata.agent_identity_model_provider || "openai";
+        const prefix = modelProviderId === "openai" ? "codex" : `codex_${modelProviderId}`;
+        await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_id`, metadata.agent_identity_conversation_id);
+        await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_workdir`, metadata.agent_identity_workdir);
         // Resuming a Codex thread can resume an active native goal. Pause it
         // before that resume so only the user's next Send starts work.
         await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
       }
       const closed = await sessionAgent.closeSession(sessionId, { ...context, changeover: true });
       if (closed?.ok === false) return closed;
-      await rememberAssistantBeforeChangeover(context, engineId);
+      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+      await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
       logOperationalEvent(logger, "info", {
         event: "vibe64.assistant_changeover.previous_stopped", component: "vibe64.agent_message", sessionId, engineId
       }, "Previous assistant stopped; its conversation is retained.");

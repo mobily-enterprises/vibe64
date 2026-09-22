@@ -23,6 +23,7 @@ test("native account logout and credential restoration drain old processes and c
   const systemRoot = path.join(root, "system");
   const source = path.join(root, "managed", "sessions", "active", "session-1", "source");
   await Promise.all([mkdir(codexHome, { recursive: true }), mkdir(source, { recursive: true })]);
+  assert.equal(spawnSync("git", ["init", "--quiet", source]).status, 0);
   const credentialPath = path.join(codexHome, "auth.json");
   const nativeEnv = { PATH: process.env.PATH, HOME: toolHome, CODEX_HOME: codexHome, RUST_LOG: "error" };
   const requests = [];

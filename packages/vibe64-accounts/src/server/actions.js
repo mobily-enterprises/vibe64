@@ -1,4 +1,5 @@
 import {
+  codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionInputValidator,
@@ -13,6 +14,9 @@ import {
   vibe64ConnectionsChangedActionEvent
 } from "./accountRealtimeEvents.js";
 
+const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
+const ACTION_SAVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.save";
+const ACTION_REMOVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.remove";
 const ACTION_READ_HELPER_MODEL = "vibe64.accounts.helper-model.read";
 const ACTION_SAVE_HELPER_MODEL = "vibe64.accounts.helper-model.save";
 const ACTION_READ_ACCOUNTS = "vibe64.accounts.read";
@@ -29,6 +33,41 @@ function createActions({ accounts } = {}) {
   }
 
   return Object.freeze([
+    {
+      id: ACTION_READ_CODEX_PROVIDERS,
+      version: 1,
+      kind: "query",
+      input: accountsReadInputValidator,
+      output: null,
+      idempotency: "none",
+      audit: { actionName: ACTION_READ_CODEX_PROVIDERS },
+      observability: {},
+      execute: (input) => accounts.readCodexProviders(input)
+    },
+    {
+      id: ACTION_SAVE_CODEX_PROVIDER,
+      version: 1,
+      kind: "command",
+      input: codexProviderInputValidator,
+      output: null,
+      idempotency: "none",
+      audit: { actionName: ACTION_SAVE_CODEX_PROVIDER },
+      observability: {},
+      events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      execute: (input) => accounts.saveCodexProvider(input)
+    },
+    {
+      id: ACTION_REMOVE_CODEX_PROVIDER,
+      version: 1,
+      kind: "command",
+      input: codexProviderInputValidator,
+      output: null,
+      idempotency: "none",
+      audit: { actionName: ACTION_REMOVE_CODEX_PROVIDER },
+      observability: {},
+      events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      execute: (input) => accounts.removeCodexProvider(input)
+    },
     {
       id: ACTION_READ_HELPER_MODEL,
       version: 1,
@@ -176,6 +215,9 @@ function createActions({ accounts } = {}) {
 }
 
 export {
+  ACTION_READ_CODEX_PROVIDERS,
+  ACTION_SAVE_CODEX_PROVIDER,
+  ACTION_REMOVE_CODEX_PROVIDER,
   ACTION_READ_HELPER_MODEL,
   ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,

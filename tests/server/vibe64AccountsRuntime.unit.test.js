@@ -1963,3 +1963,28 @@ test("Claude login receives its browser link as JSON and accepts code input only
     }
   });
 });
+
+test("curated Codex connection management uses the existing workspace owner authorization", async () => {
+  await withTempDir(async (root) => {
+    const denied = { ok: false, code: "owner_only", error: "Only the owner can manage Codex." };
+    const checked = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ systemRoot: path.join(root, "system"),
+        canManageCodex(input) {
+          checked.push(input.vibe64User?.role);
+          return input.vibe64User?.role === "owner" ? null : denied;
+        }
+      })
+    });
+    for (const method of ["readCodexProviders", "saveCodexProvider", "removeCodexProvider"]) {
+      assert.deepEqual(await service[method]({ modelProviderId: "deepseek", apiKey: "never-sent", vibe64User: { role: "member" } }), denied);
+      assert.deepEqual(await service[method]({ modelProviderId: "deepseek", apiKey: "never-sent" }), denied);
+    }
+    const visible = await service.readCodexProviders({ vibe64User: { role: "owner" } });
+    assert.equal(visible.ok, true);
+    assert.deepEqual(visible.providers.map(({ id, connected }) => ({ id, connected })), [
+      { id: "deepseek", connected: false }, { id: "zai-coding-plan", connected: false }
+    ]);
+    assert.equal(checked.length, 7);
+  });
+});

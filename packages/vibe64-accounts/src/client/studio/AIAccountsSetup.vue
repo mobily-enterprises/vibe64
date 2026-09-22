@@ -1,5 +1,7 @@
 <template>
+  <CodexProviderConnections v-if="providerId === 'codex'" v-model="codexProviderId" :actions-enabled="actionsEnabled" />
   <ProviderAccountsSetup
+    v-if="providerId !== 'codex' || codexProviderId === 'openai'"
     :accounts="accounts"
     :actions-disabled-message="actionsDisabledMessage"
     :actions-enabled="actionsEnabled"
@@ -18,7 +20,8 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import CodexProviderConnections from "./CodexProviderConnections.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 
@@ -66,6 +69,7 @@ const props = defineProps({
   }
 });
 
+const codexProviderId = ref("openai");
 const emit = defineEmits(["back", "continue"]);
 const accounts = useVibe64Accounts({
   client: props.accountsClient

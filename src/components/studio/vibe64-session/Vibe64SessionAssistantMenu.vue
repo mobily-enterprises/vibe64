@@ -11,7 +11,7 @@
     @apply="save" @reload="reloadCatalog"
   >
     <template #before-choices>
-      <p v-if="engineId !== assistantSelection?.engineId" class="text-body-small" role="status">
+      <p v-if="engineId !== assistantSelection?.engineId || modelProviderId !== assistantSelection?.modelProviderId" class="text-body-small" role="status">
         Your conversation and files stay here. This AI will receive the recent or missed messages with your next message.
       </p>
       <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
@@ -218,7 +218,7 @@ const connectionRows = computed(() => connections.engines.value
       id: `${engine.engineId}/${provider.id}`,
       engineId: engine.engineId,
       modelProviderId: provider.id,
-      label: `${engine.label || engine.engineId} · ${provider.label || provider.id}`
+      label: `${engine.label || engine.engineId} - ${provider.label || provider.id}`
     }))
   ));
 const connectionId = computed(() => `${engineId.value}/${modelProviderId.value}`);

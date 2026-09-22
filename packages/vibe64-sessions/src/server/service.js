@@ -2052,7 +2052,8 @@ function createService({
           const next = assertVibe64AssistantSelectionUpdate(current, resolved, {
             turnActive: agentSession?.turn?.active === true
           });
-          if (current.engineId !== next.engineId) {
+          if (current.engineId !== next.engineId ||
+              current.engineId === "codex" && current.modelProviderId !== next.modelProviderId) {
             const changeover = await terminals.prepareAssistantChangeover(sessionId, {
               runtime, session, vibe64User
             });

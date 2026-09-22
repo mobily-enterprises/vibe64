@@ -306,3 +306,27 @@ test("accounts personal profile route accepts a standalone preferred name", asyn
     });
   });
 });
+
+test("curated Codex routes use trusted request identity and accept only curated provider ids", async () => {
+  await withLocalRequestBypass(async () => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
+      projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+    for (const [method, suffix] of [["GET", ""], ["PATCH", ""], ["POST", "/remove"]]) {
+      const route = findRegisteredRoute(runtime, { method, path: `/api/vibe64/accounts/codex-providers${suffix}` });
+      assert.ok(route);
+      if (method !== "GET") {
+        assert.notDeepEqual(route.options.body.schema.patch({ modelProviderId: "https://custom.invalid" }).errors, {});
+        assert.deepEqual(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture" }).errors, {});
+      }
+      let action;
+      const member = { role: "member", username: "member" };
+      await route.handler({ vibe64User: member,
+        input: { body: { modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } } },
+        async executeAction(value) { action = value; return { ok: true, providers: [] }; }
+      }, testReply());
+      assert.deepEqual(action.input.vibe64User, member);
+      assert.ok(action.actionId);
+    }
+  });
+});

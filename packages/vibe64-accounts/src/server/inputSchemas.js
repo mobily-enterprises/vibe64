@@ -1,3 +1,4 @@
+import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
@@ -137,7 +138,16 @@ const personalAiProfileInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const codexProviderInputValidator = deepFreeze({
+  schema: createSchema({
+    ...vibe64UserInputSchema,
+    modelProviderId: { type: "string", enum: CURATED_CODEX_PROVIDERS.map(({ id }) => id), required: true },
+    apiKey: { type: "string", maxLength: 16384, required: false }
+  }), mode: "patch"
+});
+
 export {
+  codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,

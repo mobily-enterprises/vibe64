@@ -178,7 +178,7 @@ function configuredChoice(engine = {}, provider = {}) {
   if (!model || !agent || !engine.revision) {
     return null;
   }
-  const requestedVariantId = String(agent.variantId || engine.defaults?.variantId || "");
+  const requestedVariantId = String(agent.variantId || model.capabilities?.defaultVariantId || engine.defaults?.variantId || "");
   const variants = Array.isArray(model.variants) ? model.variants : [];
   const variantId = variants.some((variant) => variant.id === requestedVariantId)
     ? requestedVariantId
@@ -186,14 +186,14 @@ function configuredChoice(engine = {}, provider = {}) {
   const id = `${engine.engineId}:${provider.id}`;
   return {
     description: engine.engineId === "codex"
-      ? `OpenAI account · ${model.label}`
+      ? `${provider.id === "openai" ? "OpenAI account" : provider.description} · ${model.label}`
       : engine.engineId === "claude"
         ? `Claude account · ${model.label}`
         : [provider.label, provider.description].filter(Boolean).join(" · "),
     domId: id.replace(/[^a-z0-9_-]+/giu, "-"),
     engineId: engine.engineId,
     id,
-    label: engine.engineId === "codex" ? "Codex" : engine.engineId === "claude" ? "Claude" : model.label,
+    label: engine.engineId === "codex" ? `Codex - ${provider.label}` : engine.engineId === "claude" ? "Claude" : model.label,
     preferred: provider.preferred === true,
     selection: {
       agentId: agent.id,

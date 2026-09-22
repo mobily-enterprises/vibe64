@@ -465,8 +465,18 @@ thinking choice at its provider default leaves that choice to the provider
 instead of silently selecting another listed option. Vibe64 also respects each
 AI's declared response capacity rather than assuming every model can produce
 the same size answer.
-The chat's Codex models and thinking choices come from the connected Codex
-service, so newly available models appear without an editor update.
+Codex offers GPT, DeepSeek and GLM as named provider choices. GPT retains
+ChatGPT device sign-in and OpenAI API-key setup; DeepSeek uses its own API key,
+and GLM uses a Z.AI Coding Plan key. Regular Z.AI API connections use OpenCode;
+they are not presented as verified Codex connections. Provider URLs and supported models are
+curated by Vibe64, with no custom URL field. Each connection has a private key
+and uses its provider's name automatically. Connecting or removing one preserves the others.
+Switching Codex providers between turns retains the visible session and files,
+resumes each provider's own native thread, and carries missed conversation
+history with the next message. Undo cannot cross a Codex provider switch.
+Helper work uses the selected provider's default model and credentials.
+The GPT models and thinking choices come from the connected Codex service,
+so newly available GPT models appear without an editor update.
 After Codex login or logout, an unfinished account transition automatically
 retries on the next ordinary account status check, including after a service
 restart. Recovery uses the saved credentials without asking the person to sign

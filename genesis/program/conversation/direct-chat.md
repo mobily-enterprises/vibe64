@@ -30,9 +30,9 @@ continuation and loading older history.
 
 Undo last turn is a main-conversation command, available while idle. Its saved
 target identifies the latest user prompt and every following reply/activity row.
-The preceding user turn must use the same current assistant application; the
-first turn after an application switch cannot be removed. Changing a model
-within that application does not create a boundary. The confirmation states
+The preceding user turn must use the same current assistant application and,
+for Codex, the same model provider. The first turn after either switch cannot
+be removed. Changing a model within that provider does not create a boundary. The confirmation states
 that project files and databases remain unchanged, and the removed prompt
 prefills only an empty composer.
 
@@ -70,6 +70,15 @@ invalidate access, suggestions and renewal queries. Session lists ignore events
 identified as belonging to another project. Deleting a temporary Claude chat
 removes its metadata record instead of accumulating empty files that every
 session read would reopen.
+
+Automatic thinking uses the selected curated model's declared default in both
+native Codex terminals and app-server turns.
+
+When a Codex provider changes, shutdown retains verified exit evidence. If a
+server restart already removed the runtime record, managed hosts can prove the
+exact previous execution owner's scope empty. A missing file by itself is never
+accepted as proof. Runtime sharing and shutdown follow the provider's runtime,
+so retaining a different provider does not skip the selected provider's cleanup.
 
 ## Sources
 
@@ -1211,3 +1220,18 @@ The shared model chooser, file queue, sent-file list, preview and question input
 provide presentation. Vibe64 retains native model/account policy, authorized
 attachment URLs and accepted-file retention, question submission ownership,
 favourite files, project access and operation admission.
+
+
+Codex's curated provider selection is part of runtime and conversation identity.
+GPT retains its existing `codex` history binding; DeepSeek and GLM use distinct
+provider bindings and saved native thread ids. Changeover reads the transcript's
+existing assistant-selection snapshot, remembers each provider's received
+messages, and recovers uncertain delivery without resending the prompt. Changing
+the selection alone sends nothing and is rejected while a turn is active.
+
+Curated provider homes project only their fixed endpoint, key and model
+metadata. Main chat, ephemeral tasks and isolated Economy helpers use that
+selected connection. Economy copies only this server-owned projection into
+its existing temporary private home, checks canonical identity before and after
+requests, and never activates OpenAI authentication. Its existing no-tool,
+no-project-access contract and verified process cleanup still apply.

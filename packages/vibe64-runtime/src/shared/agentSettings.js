@@ -1,3 +1,4 @@
+import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS
 } from "./agentExecutionProfiles.js";
@@ -227,10 +228,12 @@ function vibe64AgentSettingParameters(value = {}) {
 function effectiveVibe64AgentSettings(value = {}) {
   const normalized = normalizeVibe64AgentSettings(value);
   const provider = agentProviderDefinition(normalized.providerId);
+  const curated = provider.id === VIBE64_AGENT_PROVIDER_IDS.CODEX ? curatedCodexModel(normalized.model) : null;
   return {
     model: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, normalized.model),
     providerId: provider.id,
-    thinking: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, normalized.thinking)
+    thinking: normalized.thinking || curated?.defaultThinking ||
+      effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, normalized.thinking)
   };
 }
 
@@ -242,6 +245,16 @@ function agentOptionRequestValue(option = {}, name = "", fallback = true) {
 }
 
 function effectiveVibe64AgentExecutionSettings(value = {}) {
+  const curated = (value.providerId || value.provider || "codex") === "codex" ? curatedCodexModel(value.model) : null;
+  if (curated) {
+    return {
+      model: curated.id,
+      providerId: "codex",
+      modelProviderId: curated.modelProviderId,
+      thinking: value.thinking || curated.defaultThinking,
+      request: { reasoning: true, summary: false }
+    };
+  }
   const normalized = normalizeVibe64AgentSettings(value);
   const provider = agentProviderDefinition(normalized.providerId);
   if (provider.implemented !== true) {

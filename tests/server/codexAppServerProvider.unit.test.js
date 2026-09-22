@@ -48,6 +48,7 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  installVibe64ManagedExecutionProvider,
   runVibe64Command,
   stableHash,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -1610,6 +1611,37 @@ test("Codex missing runtime metadata is not exit proof without retained process 
       }
     });
     assert.equal((await provider.stopRuntime()).processExitVerified, false);
+  });
+});
+
+test("Codex changeover verifies missing metadata through only its managed execution owner", async () => {
+  await withTemporaryDirectory(async (baseDir) => {
+    const runtimeDir = path.join(baseDir, "codex-app-server-changeover");
+    const stops = [];
+    let proof = { supported: true, ok: true, scopeEmpty: true, closed: 0 };
+    const release = installVibe64ManagedExecutionProvider({
+      async runCommand() { assert.fail("Cleanup must not launch a process."); },
+      async stopExecution() { assert.fail("Missing metadata cannot identify one execution."); },
+      async stopOwnedExecutions(selector) { stops.push(selector); return proof; }
+    });
+    try {
+      assert.equal((await stopCodexAppServerRuntime({ runtimeDir, verifyOwnerScope: true })).processExitVerified, true);
+      assert.deepEqual(stops, [{ kind: "assistant", operationId: "codex-app-server", ownerId: stableHash(runtimeDir) }]);
+      for (const partial of [{ supported: false }, { scopeEmpty: false }, { ok: false }]) {
+        proof = { supported: true, ok: true, scopeEmpty: true, closed: 1, ...partial };
+        const incomplete = await stopCodexAppServerRuntime({ runtimeDir, verifyOwnerScope: true });
+        assert.equal(incomplete.processExitVerified, false);
+        assert.equal(incomplete.stopped, false, "A partially drained scope is not verified shutdown.");
+      }
+      proof = { supported: true, ok: true, scopeEmpty: true };
+      await stopCodexAppServerRuntime({ runtimeDir, runtimeInstanceId: "provider:deepseek", verifyOwnerScope: true });
+      assert.equal(stops.at(-1).ownerId, "provider:deepseek");
+      const count = stops.length;
+      assert.equal((await stopCodexAppServerRuntime({ runtimeDir })).processExitVerified, false);
+      assert.equal((await stopCodexAppServerRuntime({ runtimeDir, verifyOwnerScope: true,
+        expectedAccountIdentitySignature: `sha256:${"a".repeat(64)}` })).processExitVerified, false);
+      assert.equal(stops.length, count, "Ordinary or account-specific cleanup must not drain an unknown owner.");
+    } finally { release(); }
   });
 });
 

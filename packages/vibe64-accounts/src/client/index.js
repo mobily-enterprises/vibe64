@@ -1,3 +1,5 @@
+export { default as CodexProviderConnections } from "./studio/CodexProviderConnections.vue";
+export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 import HelperModelSettings from "./studio/HelperModelSettings.vue";
 import AccountsSetup from "./studio/AccountsSetup.vue";
 import AIAccountsSetup from "./studio/AIAccountsSetup.vue";

@@ -39,7 +39,9 @@
     "./server/runtimeConfig": "./src/server/runtimeConfig.js",
     "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js",
-    "./server/nativeHelperModel": "./src/server/nativeHelperModel.js"
+    "./server/nativeHelperModel": "./src/server/nativeHelperModel.js",
+    "./shared/curatedCodexProviders": "./src/shared/curatedCodexProviders.js",
+    "./server/codexProviderConnections": "./src/server/codexProviderConnections.js"
   },
   "jskit": {
     "kind": "runtime",

@@ -1203,3 +1203,20 @@ test("Codex helper preference selects the exact model and never silently falls b
   assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "").model, "gpt-5.6-luna");
   assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "missing-model"), /not available/);
 });
+
+
+test("a curated connection works without an OpenAI login or model discovery", async () => {
+  for (const [id, modelId] of [["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
+    const provider = createCodexSessionAgentProvider({
+      controller: { modelCatalog() { throw new Error("OpenAI discovery must not run"); } },
+      connectionStatus: async () => false,
+      listConnections: async () => [{ id, connected: true }]
+    });
+    const catalog = await provider.capabilities({}, { configuredOnly: "true" });
+    assert.equal(catalog.health.status, "ready");
+    const selected = resolveVibe64AssistantSelection(catalog, { engineId: "codex" });
+    assert.equal(selected.modelProviderId, id);
+    assert.equal(selected.modelId, modelId);
+    assert.equal(catalog.modelProviders[0].connected, false);
+  }
+});

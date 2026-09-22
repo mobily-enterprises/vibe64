@@ -1,4 +1,4 @@
-import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { conversationMessageIdentity, conversationMessageVersion } from "@local/vibe64-runtime/server/sessionStore";
 
 const STATE_KEY = "assistant_changeover";
@@ -13,7 +13,8 @@ export async function readConversationRewindState(store, sessionId, engineId) {
   const last = users.at(-1);
   const previous = users.at(-2);
   if (!last?.user.messageId || !previous?.user.messageId ||
-      previous.metadata?.engineId !== engineId || last.metadata?.engineId !== engineId) return null;
+      vibe64AssistantConversationKey(previous.metadata?.assistantSelection || previous.metadata) !== engineId ||
+      vibe64AssistantConversationKey(last.metadata?.assistantSelection || last.metadata) !== engineId) return null;
   return { turnId: last.turnId, text: last.user.text, pending: false };
 }
 
@@ -29,7 +30,7 @@ export function requireCompletedConversationRewind(session) {
 // boundary first, then apply that same boundary idempotently after it is saved.
 export async function rewindLastConversationTurn(sessionId, input, context, agent) {
   const { store } = context.runtime;
-  const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+  const engineId = vibe64AssistantConversationKey(vibe64AssistantSelectionFromMetadata(context.session.metadata));
   const messages = await history(store, sessionId);
   const state = await readState(store, sessionId, engineId, messages);
   const fail = (message) => { throw Object.assign(new Error(message), { code: "vibe64_conversation_rewind_unavailable", statusCode: 409 }); };
@@ -44,11 +45,14 @@ export async function rewindLastConversationTurn(sessionId, input, context, agen
     const previous = users.at(-2);
     const last = users.at(-1);
     if (!previous || last.turnId !== input.turnId || !last.user.messageId || !previous.user.messageId ||
-        previous.metadata?.engineId !== engineId || last.metadata?.engineId !== engineId) {
+        vibe64AssistantConversationKey(previous.metadata?.assistantSelection || previous.metadata) !== engineId ||
+        vibe64AssistantConversationKey(last.metadata?.assistantSelection || last.metadata) !== engineId) {
       fail("Undo is available only for the latest turn, with the same AI as the turn before it.");
     }
     const tail = turns.slice(turns.indexOf(last));
-    if (tail.some((turn) => turn.metadata?.engineId !== engineId)) fail("Undo cannot cross an AI change.");
+    if (tail.some((turn) => vibe64AssistantConversationKey(turn.metadata?.assistantSelection || turn.metadata) !== engineId)) {
+      fail("Undo cannot cross an AI change.");
+    }
     const inspected = await agent.rewindConversation(sessionId, {
       messageId: last.user.messageId, previousMessageId: previous.user.messageId
     }, context);
@@ -84,7 +88,7 @@ async function history(store, sessionId) {
       id,
       ...content,
       messageId: message.messageId,
-      engineId: turn.metadata?.engineId || "",
+      engineId: vibe64AssistantConversationKey(turn.metadata?.assistantSelection || turn.metadata) || "",
       originalVersion: turn.metadata?.nativeMessageVersions?.[id],
       version: conversationMessageVersion(content)
     };
@@ -138,7 +142,7 @@ function unconfirmed(messageId, threadId) {
 export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}) {
   requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;
-  const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+  const engineId = vibe64AssistantConversationKey(vibe64AssistantSelectionFromMetadata(context.session.metadata));
   const messages = await history(store, sessionId);
   const state = await readState(store, sessionId, engineId, messages);
   const binding = state.engines[engineId] ||= { seen: {} };
@@ -167,7 +171,11 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
     await store.writeConversationUserMessage(sessionId, {
       text: pending.displayMessage, messageId: pending.messageId,
       attachments: pending.displayAttachments,
-      turnMetadata: { ...pending.turnMetadata, engineId }
+      turnMetadata: {
+        ...pending.turnMetadata,
+        engineId: engineId.split("/")[0],
+        assistantSelection: vibe64AssistantSelectionFromMetadata(context.session.metadata)
+      }
     });
     await markDelivered(pending.seen);
     log({ event: "accepted", engineId, messageId: pending.messageId, threadId: pending.threadId, recovered: true });

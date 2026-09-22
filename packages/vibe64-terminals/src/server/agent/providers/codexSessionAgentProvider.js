@@ -1,3 +1,4 @@
+import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { CODEX_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { createHash } from "node:crypto";
 
@@ -46,13 +47,14 @@ function codexAssistantSettings(context = {}, input = {}) {
     ? {
         ...requested,
         model: selection.modelId,
+        modelProviderId: selection.modelProviderId,
         providerId: CODEX_PRODUCT_PROVIDER_ID,
         thinking: selection.variantId
       }
     : requested;
 }
 
-function codexAssistantCapabilities(connected = true, catalog = { data: [] }) {
+function codexAssistantCapabilities(connected = true, catalog = { data: [] }, connections = []) {
   const rows = codexCatalogRows(catalog).filter((model) => model.hidden !== true);
   const models = rows.map((model) => ({
     id: normalizeText(model.model),
@@ -69,9 +71,30 @@ function codexAssistantCapabilities(connected = true, catalog = { data: [] }) {
   const defaultThinking = codexCatalogReasoningEfforts(defaultModel).has(VIBE64_CODEX_DEFAULT_THINKING)
     ? VIBE64_CODEX_DEFAULT_THINKING
     : normalizeText(defaultModel?.defaultReasoningEffort);
+  const curated = CURATED_CODEX_PROVIDERS.map((provider) => {
+    const connection = connections.find(({ id }) => id === provider.id);
+    return {
+      id: provider.id,
+      label: provider.label,
+      description: provider.description,
+      connected: connection?.connected === true,
+      apiKeyCompatible: true,
+      defaultModelId: provider.models[0].id,
+      models: provider.models.map((model) => ({
+        id: model.id,
+        label: model.label,
+        status: "available",
+        capabilities: { images: model.images === true, defaultVariantId: model.defaultThinking },
+        variants: model.variants.map((id) => ({ id, label: id[0].toUpperCase() + id.slice(1) }))
+      }))
+    };
+  });
+  const defaultCuratedProvider = curated.find((provider) => provider.connected);
+  const available = connected || Boolean(defaultCuratedProvider);
   const revision = `sha256:${createHash("sha256").update(JSON.stringify({
     connected,
-    models
+    models,
+    curated
   })).digest("hex")}`;
   return {
     agents: [{
@@ -86,23 +109,23 @@ function codexAssistantCapabilities(connected = true, catalog = { data: [] }) {
     },
     defaults: {
       agentId: "codex",
-      modelId: normalizeText(defaultModel?.model),
-      modelProviderId: "openai",
-      variantId: defaultThinking
+      modelId: connected ? normalizeText(defaultModel?.model) : defaultCuratedProvider?.defaultModelId || "",
+      modelProviderId: connected ? "openai" : defaultCuratedProvider?.id || "openai",
+      variantId: connected ? defaultThinking : ""
     },
     engineId: CODEX_PRODUCT_PROVIDER_ID,
     health: {
-      message: connected ? "" : "Connect Codex before starting a Codex session.",
-      status: connected ? "ready" : "unavailable"
+      message: available ? "" : "Connect a Codex provider in AI Accounts.",
+      status: available ? "ready" : "unavailable"
     },
     label: "Codex",
     modelProviders: [{
       connected,
       description: "Codex models provided by OpenAI",
       id: "openai",
-      label: "OpenAI",
+      label: "GPT",
       models
-    }],
+    }, ...curated],
     revision,
     transportId: CODEX_APP_SERVER_TRANSPORT_ID
   };
@@ -494,6 +517,7 @@ function emitCodexExecutionProfile(context = {}, executionProfile = null) {
 
 function createCodexSessionAgentProvider({
   connectionStatus = async () => true,
+  listConnections = async () => [],
   controller
 } = {}) {
   if (!controller) {
@@ -508,14 +532,14 @@ function createCodexSessionAgentProvider({
     async capabilities(context = {}, input = {}) {
       const connected = (await connectionStatus(context)) !== false;
       const configuredOnly = normalizeText(input.configuredOnly).toLowerCase() === "true";
-      const catalog = connected && !configuredOnly
+      const catalog = connected && !configuredOnly && (!input.modelProviderId || input.modelProviderId === "openai")
         ? await controller.modelCatalog({ signal: context.signal })
         : { data: connected ? [{
             model: VIBE64_CODEX_DEFAULT_MODEL,
             defaultReasoningEffort: VIBE64_CODEX_DEFAULT_THINKING,
             supportedReasoningEfforts: [{ reasoningEffort: VIBE64_CODEX_DEFAULT_THINKING }]
           }] : [] };
-      return codexAssistantCapabilities(connected, catalog);
+      return codexAssistantCapabilities(connected, catalog, await listConnections());
     },
     async closeProject(_context, input = {}) {
       return controller.closeAllForProject(input);
@@ -644,7 +668,7 @@ function createCodexSessionAgentProvider({
         executionProfile,
         limits
       } = codexEconomyExecutionProfileRequest(input);
-      const helperModelId = await controller.readHelperModel();
+      const helperModelId = await controller.readHelperModel(context);
       return resolveCodexEconomyExecutionProfile(
         executionProfile,
         await controller.executionProfileModelCatalog(context.sessionId, {

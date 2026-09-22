@@ -450,7 +450,13 @@ function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {},
   return next;
 }
 
+function vibe64AssistantConversationKey(selection = {}) {
+  return selection.engineId === "codex" && selection.modelProviderId && selection.modelProviderId !== "openai"
+    ? `codex/${selection.modelProviderId}` : selection.engineId;
+}
+
 export {
+  vibe64AssistantConversationKey,
   VIBE64_ASSISTANT_CAPABILITIES_SCHEMA,
   VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN,
   VIBE64_ASSISTANT_ENGINE_IDS,

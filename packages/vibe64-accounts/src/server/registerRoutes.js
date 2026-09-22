@@ -1,4 +1,5 @@
 import {
+  ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
   ACTION_READ_HELPER_MODEL,
   ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
@@ -10,6 +11,7 @@ import {
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
+  codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
@@ -50,6 +52,22 @@ function registerRoutes(
     buildInput: (request) => queryInput(routes, request),
     query: accountsReadInputValidator,
     summary: "Read Vibe64 account readiness."
+  });
+
+  routes.actionRoute("GET", "/codex-providers", {
+    actionId: ACTION_READ_CODEX_PROVIDERS,
+    buildInput: (request) => withVibe64User(request),
+    summary: "Read curated Codex provider connections."
+  });
+  routes.actionRoute("PATCH", "/codex-providers", {
+    actionId: ACTION_SAVE_CODEX_PROVIDER, body: codexProviderInputValidator,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Check and connect a curated Codex provider."
+  });
+  routes.actionRoute("POST", "/codex-providers/remove", {
+    actionId: ACTION_REMOVE_CODEX_PROVIDER, body: codexProviderInputValidator,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Disconnect a curated Codex provider."
   });
 
   routes.actionRoute("GET", "/helper-model", {

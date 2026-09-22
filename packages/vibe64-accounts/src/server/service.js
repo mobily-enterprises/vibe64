@@ -1,3 +1,4 @@
+import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -1436,6 +1437,10 @@ function createService({
       message: status.loggedIn ? "Connected through Claude Code." : status.error || "Sign in to Claude Code with your Claude plan." };
   }
 
+  const codexProviders = createCodexProviderConnectionStore({
+    systemRoot: resolvedSystemRoot, invalidateRuntimes: invalidateAgentRuntimes
+  });
+
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
   }
@@ -2368,6 +2373,32 @@ function createService({
           ok: account?.ok !== false,
           output: result.output || ""
         };
+      });
+    },
+
+    readCodexProviders(input = {}) {
+      return accountsResult(async () => {
+        const failure = codexManagementError(input);
+        if (failure) return failure;
+        return { ok: true, providers: await codexProviders.list() };
+      });
+    },
+    saveCodexProvider(input = {}) {
+      return accountsResult(async () => {
+        const failure = codexManagementError(input);
+        if (failure) return failure;
+        const providers = await codexProviders.change(input.modelProviderId, input);
+        await publishAccountChanged("codex", { reason: "provider-key-saved" });
+        return { ok: true, providers };
+      });
+    },
+    removeCodexProvider(input = {}) {
+      return accountsResult(async () => {
+        const failure = codexManagementError(input);
+        if (failure) return failure;
+        const providers = await codexProviders.change(input.modelProviderId, { remove: true });
+        await publishAccountChanged("codex", { reason: "provider-key-removed" });
+        return { ok: true, providers };
       });
     },
 
