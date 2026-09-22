@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick, ref } from "vue";
 
 const mocks = vi.hoisted(() => ({
   requests: [],
@@ -93,6 +94,99 @@ describe("useVibe64TemporaryAi", () => {
     mocks.requests.length = 0;
     mocks.responses.length = 0;
     vi.useFakeTimers();
+  });
+
+  it("flags unseen replies while working and clears them only when that conversation is viewed", async () => {
+    const { task, temporary } = await runningTemporaryAi();
+    temporary.closeWorkspace();
+    mocks.responses.push({ ok: true, status: "inProgress", text: "A new reply." });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+    expect(temporary.activeTask.value).toMatchObject({ busy: true, unread: true });
+
+    const other = temporary.openTask();
+    await nextTick();
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+    temporary.closeWorkspace();
+    temporary.showWorkspace();
+    await nextTick();
+    expect(temporary.activeTask.value.id).toBe(other.id);
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+
+    temporary.selectTask(task.id);
+    await nextTick();
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+    temporary.closeWorkspace();
+    mocks.responses.push(
+      { ok: true, conversationId: "conversation-2" },
+      { ok: true, status: "inProgress", text: "A new reply." }
+    );
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+    mocks.responses.push({ ok: true, status: "completed", text: "A new reply. Now complete." });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+    temporary.showWorkspace();
+    await nextTick();
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+  });
+
+  it("does not flag visible replies or background reasoning and user messages", async () => {
+    const { temporary } = await runningTemporaryAi();
+    mocks.responses.push({ ok: true, status: "inProgress", text: "Visible reply." });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+    temporary.closeWorkspace();
+    mocks.responses.push({
+      ok: true,
+      status: "inProgress",
+      text: "Visible reply.",
+      progressUpdates: [{ id: "progress-1", text: "Still working." }]
+    });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+    mocks.responses.push({
+      ok: true,
+      status: "completed",
+      messages: [...temporary.activeTask.value.messages, { id: "user-2", role: "user", text: "Another prompt." }]
+    });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+  });
+
+  it("retains unread replies while its session is inactive and removes them with a closed task", async () => {
+    const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
+    const active = ref(false);
+    const temporary = useVibe64TemporaryAi({
+      active,
+      sessionId: () => "session-1",
+      sessionsApiPath: () => "/api/vibe64/sessions"
+    });
+    const task = temporary.openTask({ draft: "Check this." });
+    mocks.responses.push(
+      { ok: true, conversationId: "conversation-1" },
+      { ok: true, runId: "turn-1", status: "inProgress" },
+      { ok: true, status: "completed", text: "Ready for review." }
+    );
+    await temporary.send(task.id);
+    await flushPromises();
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+    active.value = true;
+    await nextTick();
+    expect(temporary.hasUnreadMessages.value).toBe(false);
+
+    temporary.closeWorkspace();
+    temporary.updateDraft(task.id, "One more check.");
+    mocks.responses.push(
+      { ok: true, runId: "turn-2", status: "inProgress" },
+      { ok: true, status: "completed", text: "Checked again." }
+    );
+    await temporary.send(task.id);
+    await flushPromises();
+    expect(temporary.hasUnreadMessages.value).toBe(true);
+    mocks.responses.push({ ok: true });
+    await temporary.closeTask(task.id);
+    expect(temporary.hasUnreadMessages.value).toBe(false);
   });
 
   it("keeps a repair visible and resumes progress when stopping it fails", async () => {

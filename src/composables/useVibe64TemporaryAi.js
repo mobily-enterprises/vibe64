@@ -62,6 +62,7 @@ function temporaryAiTurnMessages(messages = [], runId = "", update = {}) {
 }
 
 function useVibe64TemporaryAi({
+  active = () => true,
   agentSettings = () => defaultVibe64AgentSettings(),
   assistantReady = () => false,
   onTaskFinished = null,
@@ -89,6 +90,13 @@ function useVibe64TemporaryAi({
   const activeTask = computed(() => (
     tasks.value.find((task) => task.id === activeTaskId.value) || tasks.value[0] || null
   ));
+  const visibleTaskId = computed(() => (
+    readRefOrGetterValue(active) && open.value ? activeTask.value?.id || "" : ""
+  ));
+  const hasUnreadMessages = computed(() => tasks.value.some((task) => task.unread));
+  watch(visibleTaskId, (taskId) => {
+    if (taskId) updateTask(taskId, { unread: false });
+  }, { immediate: true });
   const updateRepairTask = computed(() => [...tasks.value].reverse().find((task) => (
     task.sessionId === currentSessionId() && task.recoveryOperation === "update" &&
     task.recoveryOutcome !== "succeeded"
@@ -107,9 +115,18 @@ function useVibe64TemporaryAi({
   }
 
   function updateTask(taskId = "", update = {}) {
-    tasks.value = tasks.value.map((task) => (
-      task.id === taskId ? { ...task, ...update } : task
-    ));
+    tasks.value = tasks.value.map((task) => {
+      if (task.id !== taskId) return task;
+      const updated = { ...task, ...update };
+      if (update.messages) {
+        const newReply = update.messages.some((message) => (
+          message.role === "assistant" && temporaryAiText(message.text) &&
+          !task.messages.some((old) => old.id === message.id && old.text === message.text)
+        ));
+        updated.unread = visibleTaskId.value !== taskId && (task.unread === true || newReply);
+      }
+      return updated;
+    });
     const task = tasks.value.find((task) => task.id === taskId) || null;
     const draftChanged = ["draft", "agentSettings", "attachments", "recoveryOutcome", "recoveryRetryKeys"]
       .some((key) => Object.hasOwn(update, key));
@@ -229,6 +246,7 @@ function useVibe64TemporaryAi({
           delivery: createAssistantMessageDelivery(),
           draft: record.draft || "",
           messages: record.messages || [],
+          unread: false,
           busy: temporaryAiTurnIsActive(record.status),
           recoveryRetryKeys: record.recoveryRetryKeys || [],
           // A client-side verification callback interrupted by navigation is not running now.
@@ -311,6 +329,7 @@ function useVibe64TemporaryAi({
       failureMessage: temporaryAiText(failureMessage),
       id: temporaryAiId("temporary-ai"),
       messages: [],
+      unread: false,
       delivery: createAssistantMessageDelivery(),
       nextStepMessage: temporaryAiText(nextStepMessage),
       pendingMessageId: "",
@@ -894,6 +913,7 @@ function useVibe64TemporaryAi({
     closeWorkspace,
     cancelMessage,
     editMessage,
+    hasUnreadMessages,
     open,
     openTask,
     reportRecoveryOutcome,

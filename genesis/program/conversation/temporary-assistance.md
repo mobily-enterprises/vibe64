@@ -79,6 +79,14 @@ chats, hiding the workspace and disposal clear the old presence; reconnect
 refreshes it only while typing remains active. This indicator does not lock or
 merge simultaneous draft edits.
 Switching sessions preserves each session's selected temporary chat and draft.
+While mounted, each task tracks unread assistant text in browser-local state.
+New or streamed reply text received outside the active visible conversation
+marks that task's tab, the expanded incognito button and the compact session
+actions trigger/menu entry. Viewing a task clears only its own indicator;
+opening the actions menu does not mark messages read. Unchanged polls, user
+messages and reasoning-only updates do not create unread replies. The compact
+trigger preserves independent renewal attention after unread replies clear.
+Restored history starts as a baseline rather than announcing old replies.
 Reloading or removing the project view stops only its local readers. It sends no
 Stop or Delete request. Late responses cannot restart a retired reader or report
 an obsolete repair result. Server startup restores discovery and finishes recorded

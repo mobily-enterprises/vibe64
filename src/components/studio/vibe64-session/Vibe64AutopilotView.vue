@@ -58,9 +58,9 @@
           >
             <template #activator="{ props: menuProps }">
               <v-badge
-                :color="sessionRenewalActionPresentation.color || 'primary'"
+                :color="(sessionRenewalActionPresentation.attention && sessionRenewalActionPresentation.color) || 'primary'"
                 dot
-                :model-value="sessionRenewalActionPresentation.attention === true"
+                :model-value="sessionRenewalActionPresentation.attention === true || temporaryAiHasUnreadMessages"
                 offset-x="5"
                 offset-y="5"
               >
@@ -102,11 +102,16 @@
                 class="studio-autopilot__session-action-item"
                 data-vibe64-temporary-ai-action
                 :disabled="!sessionId || !assistantDirectAllowed"
-                :prepend-icon="mdiIncognito"
-                :subtitle="assistantDirectAllowed ? 'Open a separate short-lived conversation' : assistantRestrictionMessage"
+                :subtitle="assistantDirectAllowed ? (temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation') : assistantRestrictionMessage"
                 title="Temporary AI"
                 @click="openTemporaryAi"
-              />
+              >
+                <template #prepend>
+                  <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages">
+                    <v-icon :icon="mdiIncognito" />
+                  </v-badge>
+                </template>
+              </v-list-item>
             </v-list>
           </v-menu>
         </div>
@@ -142,17 +147,19 @@
               @click="requestSessionRenewal($event.currentTarget)"
             />
           </v-badge>
-          <v-btn
-            aria-label="Open temporary AI"
-            :disabled="!sessionId || !assistantDirectAllowed"
-            height="48"
-            :icon="mdiIncognito"
-            :title="assistantDirectAllowed ? 'Open a temporary AI conversation' : assistantRestrictionMessage"
-            type="button"
-            variant="text"
-            width="48"
-            @click="openTemporaryAi"
-          />
+          <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
+            <v-btn
+              :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
+              :disabled="!sessionId || !assistantDirectAllowed"
+              height="48"
+              :icon="mdiIncognito"
+              :title="assistantDirectAllowed ? (temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation') : assistantRestrictionMessage"
+              type="button"
+              variant="text"
+              width="48"
+              @click="openTemporaryAi"
+            />
+          </v-badge>
         </div>
       </header>
 
@@ -548,7 +555,7 @@
 
       <Vibe64TemporaryAiWorkspace
         ref="temporaryAiWorkspace"
-        :active="props.active"
+        :active="props.active && !chatCollapsed"
         :agent-settings="currentAgentSettings"
         :assistant-ready="props.agentConnectionStatus === 'connected'"
         :connection-unavailable="connectionRecoveryVisible"
@@ -924,11 +931,6 @@ const sessionRenewalActionPresentation = computed(() => (
     reason: "Renew this session with a reviewed handover."
   }
 ));
-const sessionActionsLabel = computed(() => (
-  sessionRenewalActionPresentation.value.attention
-    ? `Session actions: ${sessionRenewalActionPresentation.value.label}`
-    : "Session actions"
-));
 const sourceOperationsSuspended = computed(() => (
   props.sessionRenewal?.sourceOperationsSuspended === true
 ));
@@ -945,6 +947,12 @@ const composerSettingsButton = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
+const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
+const sessionActionsLabel = computed(() => [
+  "Session actions",
+  sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : "",
+  temporaryAiHasUnreadMessages.value ? "Unread temporary AI messages" : ""
+].filter(Boolean).join(": "));
 const workspaceRecoveryTaskId = ref("");
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
 const testApproval = ref(null);

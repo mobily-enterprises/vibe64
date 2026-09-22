@@ -32,11 +32,13 @@
             :aria-current="task.id === temporary.activeTaskId.value ? 'page' : undefined"
             class="vibe64-temporary-ai__tab-select"
             :data-temporary-ai-task-id="task.id"
-            :title="task.title"
+            :aria-label="task.unread ? `${task.title}: unread messages` : task.title"
+            :title="task.unread ? `${task.title}: unread messages` : task.title"
             type="button"
             @click="temporary.selectTask(task.id)"
           >
             <span>{{ task.title }}</span>
+            <span v-if="task.unread" class="vibe64-temporary-ai__unread" aria-hidden="true" />
             <span v-if="task.busy" class="vibe64-temporary-ai__busy" aria-label="Assistant working" />
           </button>
           <v-btn
@@ -338,6 +340,7 @@ const temporaryAiFeedback = useUiFeedback({
   source: "vibe64.temporary-ai.feedback"
 });
 const temporary = useVibe64TemporaryAi({
+  active: () => props.active,
   agentSettings: computed(() => props.agentSettings),
   assistantReady: () => props.assistantReady,
   operationBusy: () => props.repositoryBusy,
@@ -658,6 +661,7 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
 defineExpose({
   get composer() { return temporary.open.value ? taskPrompt(temporary.activeTaskId.value) : null; },
   closeWorkspace: temporary.closeWorkspace,
+  hasUnreadMessages: temporary.hasUnreadMessages,
   openTask: temporary.openTask,
   reportTaskRecovery,
   selectTask: temporary.selectTask,
@@ -669,6 +673,13 @@ defineExpose({
 </script>
 
 <style scoped>
+.vibe64-temporary-ai__unread {
+  background: rgb(var(--v-theme-primary));
+  border-radius: 50%;
+  flex: 0 0 8px;
+  height: 8px;
+}
+
 .vibe64-temporary-ai {
   background: rgb(var(--v-theme-surface));
   border: 2px solid rgba(var(--v-theme-tertiary), 0.42);

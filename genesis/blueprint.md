@@ -837,6 +837,10 @@ messages retain Resend, Edit and Cancel; retry preserves the original request
 and leaves a newer draft and its attachments intact.
 Temporary chats show who is typing in that same conversation, using the main
 chat's indicator. Switching chats, sending, or leaving clears that presence.
+New Temporary AI replies received while that conversation is hidden mark its
+tab and the top incognito icon, or the session-actions menu when collapsed.
+The indicator clears for each conversation when it is viewed; opening the menu
+alone does not clear it or any session-renewal reminder.
 Internal helpers retain their deliberate execution restrictions.
 
 If Codex or OpenCode loses its server-side observation of a conversation, Vibe64
