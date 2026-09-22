@@ -55,9 +55,9 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.210",
-    "@jskit-ai/http-web": "0.1.55",
-    "@jskit-ai/shell-web": "0.1.214",
+    "@jskit-ai/kernel": "0.1.215",
+    "@jskit-ai/http-web": "0.1.60",
+    "@jskit-ai/shell-web": "0.1.219",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-database-tools": "0.1.0",
