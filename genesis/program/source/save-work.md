@@ -154,7 +154,8 @@ readable when disabled during active assistant work.
 
 For standalone local folders, Fetch checks the original project's configured
 upstream and push destination; it never uses a session clone's internal origin.
-The compact toolbar keeps the branch, a short sync status and Fetch visible.
+The compact toolbar uses a 32-pixel row with no vertical padding, keeping the
+branch, a short sync status and Fetch visible.
 Pull and Push appear with nonzero commit counts. The branch button opens a
 popover containing full branch and remote names, the last check time, any fetch
 error and Remote settings. Long names truncate only in the toolbar; details wrap,

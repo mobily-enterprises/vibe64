@@ -63,7 +63,9 @@ these chats survive view removal and stay separate from main History.
 
 ## `accounts` Agent connections
 
-Owns configured agent accounts, connection selection and connection health.
+Owns AI account setup, provider-key storage and validation, connection selection,
+helper-model preferences and connection health. Standalone and hosted editors
+share these operations; hosts supply credential context and access policy.
 
 ### Program
 

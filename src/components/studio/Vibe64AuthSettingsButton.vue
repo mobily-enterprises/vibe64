@@ -17,7 +17,7 @@
 
     <v-dialog
       v-model="dialogOpen"
-      :persistent="codexProviderSaving"
+      :persistent="aiConnectionsBusy"
       max-width="1120"
       scrollable
     >
@@ -31,7 +31,7 @@
             density="comfortable"
             :icon="mdiClose"
             title="Close account settings"
-            :disabled="codexProviderSaving"
+            :disabled="aiConnectionsBusy"
             type="button"
             variant="text"
             aria-label="Close account settings"
@@ -51,7 +51,7 @@
             class="vibe64-auth-settings__provider-tab"
             :prepend-icon="provider.icon"
             :value="provider.id"
-            :disabled="codexProviderSaving"
+            :disabled="aiConnectionsBusy"
           >
             {{ provider.label }}
             <span
@@ -99,13 +99,14 @@
               </v-btn>
             </div>
           </section>
-          <CodexProviderConnections
-            v-if="selectedProviderId === 'codex'"
-            v-model="codexModelProviderId"
-            @busy="codexProviderSaving = $event"
+          <AiConnectionsSettings
+            v-if="selectedProviderId === 'ai'"
+            ref="aiConnectionsSettings"
+            is-owner
+            @busy="aiConnectionsBusy = $event"
           />
           <ProviderAccountsSetup
-            v-if="selectedProviderId !== 'profile' && (selectedProviderId !== 'codex' || codexModelProviderId === 'openai')"
+            v-if="selectedProviderId === 'github'"
             :accounts="accounts"
             :account-rows="selectedAccountRows"
             :status-loaded="statusLoaded"
@@ -133,7 +134,7 @@ import {
 import {
   accountRowsForStatus,
   ProviderAccountsSetup,
-  CodexProviderConnections,
+  AiConnectionsSettings,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
@@ -146,8 +147,8 @@ import {
 const accountProviderOptions = Object.freeze([
   {
     icon: mdiRobotOutline,
-    id: "codex",
-    label: "Codex"
+    id: "ai",
+    label: "AI Accounts"
   },
   {
     icon: mdiGithub,
@@ -164,9 +165,9 @@ const providerOptions = computed(() => [
   ...accountProviderOptions
 ]);
 const dialogOpen = ref(false);
-const selectedProviderId = ref("codex");
-const codexModelProviderId = ref("openai");
-const codexProviderSaving = ref(false);
+const selectedProviderId = ref("ai");
+const aiConnectionsSettings = ref(null);
+const aiConnectionsBusy = ref(false);
 const accounts = useVibe64Accounts();
 const preferredNameField = ref(null);
 const preferredNameDraft = ref("");
@@ -181,7 +182,7 @@ const statusLoaded = computed(() => {
   return Boolean(accounts.status.value && Array.isArray(accounts.status.value.accounts));
 });
 const allAccountRows = computed(() => {
-  return accountRowsForStatus(accounts.status.value, ["codex", "github"], {
+  return accountRowsForStatus(accounts.status.value, ["github"], {
     includeFallbackRows: false
   });
 });
@@ -200,7 +201,7 @@ const selectedProviderLede = computed(() => {
   if (selectedProvider.value.id === "github") {
     return "Configure the GitHub account and Git identity used by this local Vibe64 editor.";
   }
-  return "Configure the Codex account used by this local Vibe64 editor.";
+  return "Connect the AI accounts used by this Vibe64 editor.";
 });
 const credentialsNeedAttention = computed(() => {
   if (!statusLoaded.value) {
@@ -216,7 +217,8 @@ function normalizeProviderId(providerId = "") {
 
 async function openDialog(options = {}) {
   const profileRequested = String(options.section || "").trim() === "profile";
-  const requestedProviderId = normalizeProviderId(options.providerId);
+  const requestedAi = options.codexReconnectRequired === true ? "codex" : String(options.providerId || "").trim();
+  const requestedProviderId = normalizeProviderId(requestedAi) || (requestedAi ? "ai" : "");
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
   }
@@ -235,12 +237,11 @@ async function openDialog(options = {}) {
   }
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
+    await nextTick();
+    if (requestedProviderId === "ai" && requestedAi !== "ai") aiConnectionsSettings.value?.openProvider(requestedAi, options);
     return;
   }
-  const accountProviderId = firstAccountProviderNeedingAttention();
-  if (accountProviderId) {
-    selectedProviderId.value = accountProviderId;
-  }
+  selectedProviderId.value = "ai";
 }
 
 async function focusPreferredName() {
@@ -259,10 +260,6 @@ async function savePreferredName() {
   await accounts.savePersonalAiProfile({
     preferredName: preferredNameValidation.value.preferredName
   });
-}
-
-function firstAccountProviderNeedingAttention() {
-  return allAccountRows.value.find((account) => account.connected !== true)?.id || "";
 }
 
 function providerNeedsAttention(providerId = "") {

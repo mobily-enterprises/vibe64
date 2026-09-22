@@ -388,6 +388,29 @@ test("accounts actions capture the feature API and keep auth-session reads event
   assert.equal(Object.hasOwn(authSessionEvent.realtime.payload, "session"), false);
 });
 
+test("accounts feature reports connection readiness without the optional terminal service", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeReadyCodexMarker(systemRoot);
+    const feature = await startAccountsFeature({
+      env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      project: {
+        async readCurrentProject() {
+          return { repository: { mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT } };
+        }
+      }
+    });
+    try {
+      const status = await feature.connections.getStatus();
+      assert.equal(status.ok, true);
+      assert.equal(status.ready, true);
+      assert.deepEqual(status.connections.map((connection) => connection.id), ["codex"]);
+    } finally {
+      await feature.runtime.shutdown();
+    }
+  });
+});
+
 test("connection readiness contains only the accounts required by the current project", async () => {
   const accountStatus = {
     accounts: [

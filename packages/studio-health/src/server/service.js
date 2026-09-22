@@ -119,37 +119,27 @@ async function inspectWorkspace({ projectService, studioRoot }) {
 
 async function inspectAccounts({ connectionsService, input }) {
   try {
-    const result = await connectionsService.getStatus({
-      ...input,
-      providerIds: ["codex", "github"]
-    });
-    const connections = Array.isArray(result?.connections)
-      ? result.connections
-      : Array.isArray(result?.accounts)
-        ? result.accounts
-        : [];
-    return ["codex", "github"].map((id) => {
-      const account = connections.find((entry) => String(entry?.id || "") === id);
-      const label = id === "codex" ? "Codex authentication" : "GitHub authentication";
+    const result = await connectionsService.getStatus(input);
+    if (result?.ok === false) throw new Error(result.error || result.blockedReason || "Account status could not be read.");
+    const connections = Array.isArray(result?.connections) ? result.connections : [];
+    if (!connections.length) throw new Error("The account service returned no connection status.");
+    return connections.map((account) => {
+      const label = account.label || (account.id === "github" ? "GitHub authentication" : "AI connection");
       const check = {
-        id: `${id}-auth`,
-        label,
-        group: "Credentials",
+        id: `${account.id}-auth`, label, group: "Credentials",
         expected: `${label} is connected.`,
-        observed: account?.message || account?.observed || account?.status || "No status was returned.",
-        explanation: `${label} is inspected by the account service; Studio Health does not attempt a repair.`
+        observed: account.message || account.observed || account.status || "No status was returned.",
+        explanation: "Account readiness is inspected by the account service; Studio Health does not attempt a repair."
       };
-      return account?.connected === true ? passedCheck(check) : failedCheck(check);
+      return account.connected === true || account.required === false ? passedCheck(check) : failedCheck(check);
     });
   } catch (error) {
-    return ["codex", "github"].map((id) => failedCheck({
-      id: `${id}-auth`,
-      label: id === "codex" ? "Codex authentication" : "GitHub authentication",
-      group: "Credentials",
+    return [failedCheck({
+      id: "accounts-auth", label: "Account readiness", group: "Credentials",
       expected: "The account service returns an explicit connection state.",
       observed: error?.message || error,
-      explanation: "Studio Health could not inspect this credential and does not infer its state."
-    }));
+      explanation: "Studio Health could not inspect accounts and does not infer their state."
+    })];
   }
 }
 

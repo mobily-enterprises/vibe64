@@ -9,15 +9,15 @@
   >
     <div
       v-if="!state && busy"
-      class="local-remotes__toolbar pa-2"
+      class="local-remotes__toolbar px-2"
       aria-label="Loading Git remote status"
       aria-busy="true"
     >
-      <v-skeleton-loader type="text" width="120" height="48" />
-      <v-skeleton-loader type="text" width="100" height="48" />
-      <v-skeleton-loader class="ms-auto" type="button" :width="xs ? 48 : 112" height="48" />
+      <v-skeleton-loader type="text" width="120" height="32" />
+      <v-skeleton-loader type="text" width="100" height="32" />
+      <v-skeleton-loader class="ms-auto" type="button" :width="xs ? 48 : 112" height="32" />
     </div>
-    <div v-else class="local-remotes__toolbar pa-2">
+    <div v-else class="local-remotes__toolbar px-2">
       <div class="local-remotes__identity">
         <v-menu
           v-model="detailsOpen"
@@ -32,7 +32,7 @@
               class="local-remotes__branch"
               variant="tonal"
               rounded="lg"
-              height="48"
+              height="32"
               :prepend-icon="mdiSourceBranch"
               :append-icon="mdiChevronDown"
               :aria-label="`Git details for ${state?.branch || 'this repository'}`"
@@ -75,7 +75,7 @@
             v-if="remoteError"
             variant="text"
             color="error"
-            height="48"
+            height="32"
             :prepend-icon="syncStatus.icon"
             :append-icon="mdiChevronDown"
             @click="detailsOpen = true"
@@ -91,7 +91,7 @@
       <div class="local-remotes__actions">
         <v-btn
           :min-width="xs ? 48 : 112"
-          height="48"
+          height="32"
           variant="text"
           :icon="xs"
           :prepend-icon="xs ? undefined : mdiRefresh"
@@ -105,7 +105,7 @@
         </v-btn>
         <v-btn
           v-if="state?.upstream && state.incoming > 0"
-          height="48"
+          height="32"
           color="primary"
           variant="flat"
           :prepend-icon="mdiArrowDown"
@@ -117,7 +117,7 @@
         </v-btn>
         <v-btn
           v-if="state?.push && state.outgoing > 0"
-          height="48"
+          height="32"
           color="primary"
           :variant="state.incoming > 0 ? 'tonal' : 'flat'"
           :prepend-icon="mdiArrowUp"
@@ -307,7 +307,7 @@ onScopeDispose(() => {
 
 <style scoped>
 .local-remotes { flex: 0 0 auto; min-width: 0; }
-.local-remotes__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-height: 64px; }
+.local-remotes__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-height: 32px; }
 .local-remotes__identity { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; min-width: 0; }
 .local-remotes__branch { min-width: 0; max-width: 100%; }
 .local-remotes__branch-name { display: block; max-width: min(18rem, 40vw); overflow: hidden; text-overflow: ellipsis; }

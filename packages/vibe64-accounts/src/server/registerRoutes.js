@@ -20,6 +20,7 @@ import {
   gitIdentityInputValidator,
   personalAiProfileInputValidator
 } from "./inputSchemas.js";
+import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
@@ -27,6 +28,8 @@ function registerRoutes(
   http,
   {
     accounts = null,
+    aiConnectionService = null,
+    requireAiManagement = () => null,
     fastify = null,
     projectContext = null,
     routeSurface = "",
@@ -53,6 +56,31 @@ function registerRoutes(
     query: accountsReadInputValidator,
     summary: "Read Vibe64 account readiness."
   });
+
+  if (aiConnectionService) {
+    registerAiConnectionRoutes(aiConnectionService, (method, suffix, handler) => {
+      routes.serviceRoute(method, `/ai-connections${suffix}`, {
+        summary: "Manage AI provider connections."
+      }, async (request) => {
+        const vibe64User = request.vibe64User || null;
+        const denied = await requireAiManagement({ vibe64User });
+        if (denied) return { ...denied, statusCode: 403 };
+        try {
+          return await handler({
+            body: routes.requestBody(request),
+            query: routes.requestQuery(request),
+            params: request.params
+          }, vibe64User);
+        } catch (error) {
+          return {
+            ...vibe64ErrorResponse(error),
+            statusCode: error.statusCode || 500,
+            ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
+          };
+        }
+      });
+    });
+  }
 
   routes.actionRoute("GET", "/codex-providers", {
     actionId: ACTION_READ_CODEX_PROVIDERS,
@@ -151,6 +179,25 @@ function registerRoutes(
   });
 }
 
+function registerAiConnectionRoutes(service, register) {
+  for (const [method, suffix, operation] of [
+    ["GET", "", "list"],
+    ["GET", "/catalog", "catalog"],
+    ["PATCH", "/:providerId", "save"],
+    ["POST", "/:providerId/remove", "remove"],
+    ["GET", "/:providerId/helper-model", "helperModel"],
+    ["PATCH", "/:providerId/helper-model", "helperModel"],
+    ["PATCH", "/:providerId/model-access", "modelAccess"]
+  ]) {
+    register(method, suffix, (request, vibe64User) => service[operation]({
+      ...(method === "GET" ? (operation === "catalog" ? request.query : {}) : request.body),
+      ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {}),
+      ...(method === "PATCH" && operation === "helperModel" ? { modelId: request.body?.modelId } : {}),
+      vibe64User
+    }));
+  }
+}
+
 function queryInput(routes, request) {
   return withVibe64User(request, routes.requestQuery(request));
 }
@@ -173,4 +220,4 @@ function withVibe64User(request, input = {}) {
   };
 }
 
-export { registerRoutes };
+export { registerRoutes, registerAiConnectionRoutes };

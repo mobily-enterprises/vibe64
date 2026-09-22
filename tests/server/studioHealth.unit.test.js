@@ -51,11 +51,11 @@ test("Studio Health reports explicit platform checks without repairs", async () 
   const service = createService({
     connectionsService: {
       async getStatus(input) {
-        assert.deepEqual(input.providerIds, ["codex", "github"]);
+        assert.equal(input.providerIds, undefined);
         return {
           ok: true,
           connections: [
-            { connected: true, id: "codex", status: "connected" },
+            { connected: true, id: "ai", label: "AI connection", status: "connected" },
             { connected: true, id: "github", status: "connected" }
           ]
         };
@@ -85,7 +85,7 @@ test("Studio Health reports explicit platform checks without repairs", async () 
   assert.equal(result.summary.failed, 0);
   assert.deepEqual(result.checks.map((check) => check.id), [
     "workspace",
-    "codex-auth",
+    "ai-auth",
     "github-auth",
     "node",
     "git",
@@ -127,7 +127,7 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
   assert.equal(result.healthy, false);
   assert.equal(result.summary.failed, result.summary.total);
   assert.match(result.checks.find((check) => check.id === "workspace").observed, /Catalog unavailable/u);
-  assert.match(result.checks.find((check) => check.id === "codex-auth").observed, /Account service unavailable/u);
+  assert.match(result.checks.find((check) => check.id === "accounts-auth").observed, /Account service unavailable/u);
   assert.match(result.checks.find((check) => check.id === "genesis").observed, /Runtime pack unavailable/u);
 });
 

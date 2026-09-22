@@ -3,9 +3,12 @@ import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { createActions } from "./actions.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
-  createVibe64AccountsChangedPublisher
+  createVibe64AccountsChangedPublisher,
+  createVibe64ConnectionsChangedPublisher
 } from "./accountRealtimeEvents.js";
 import { registerRoutes } from "./registerRoutes.js";
+import { createAiConnectionRuntime, configureAiConnectionRuntime } from "./aiConnectionRuntime.js";
+import { createAiConnectionService } from "./aiConnectionService.js";
 import {
   createAccountsRuntime,
   createService,
@@ -64,7 +67,7 @@ async function connectionAccountStatusInput(input = {}, project) {
   };
 }
 
-function createConnections({ accounts, project } = {}) {
+function createConnections({ accounts, project, listAssistantCapabilities = null } = {}) {
   if (!accounts || typeof accounts.getStatus !== "function") {
     throw new TypeError("createConnections requires the Vibe64 Accounts API.");
   }
@@ -79,12 +82,24 @@ function createConnections({ accounts, project } = {}) {
       if (status?.ok === false) {
         return status;
       }
-      const connections = Array.isArray(status?.accounts) ? status.accounts : [];
+      const connections = Array.isArray(status?.accounts) ? [...status.accounts] : [];
+      if (!inputHasProviderSelection(input) && listAssistantCapabilities) {
+        const catalog = await listAssistantCapabilities({ configuredOnly: "true", vibe64User: input.vibe64User });
+        if (catalog?.ok === false) return catalog;
+        const connected = (catalog.engines || []).some((engine) =>
+          (engine.modelProviders || []).some((provider) => provider.connected === true));
+        const codexIndex = connections.findIndex((account) => account.id === "codex");
+        if (codexIndex >= 0) connections.splice(codexIndex, 1);
+        connections.unshift({
+          id: "ai", label: "AI connection", connected, required: true,
+          message: connected ? "An AI provider is connected." : "Connect an AI provider in AI Accounts."
+        });
+      }
       const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
       return {
         ...status,
         blockedReason: ready ? "" : firstBlockedConnectionMessage(connections),
-        connections: [...connections],
+        connections,
         ready
       };
     }
@@ -123,15 +138,14 @@ const Vibe64AccountsFeature = defineFeature({
     const personalProfileStore = localRuntime && systemRoot
       ? createPersonalAiProfileStore({ systemRoot })
       : null;
+    const resolvedAccountRuntime = createDefaultAccountRuntime({ accountRuntime, project, systemRoot, targetRoot });
+    const listAssistantCapabilities = typeof terminals?.listAssistantCapabilities === "function"
+      ? (input) => terminals.listAssistantCapabilities(input)
+      : null;
     const accounts = createService({
-      accountRuntime: createDefaultAccountRuntime({
-        accountRuntime,
-        project,
-        systemRoot,
-        targetRoot
-      }),
+      accountRuntime: resolvedAccountRuntime,
       personalProfileStore,
-      listAssistantCapabilities: (input) => terminals.listAssistantCapabilities(input),
+      listAssistantCapabilities,
       invalidateAgentRuntimes: async (input = {}) => {
         if (typeof terminals?.invalidateAgentRuntimes === "function") {
           return terminals.invalidateAgentRuntimes(input);
@@ -142,7 +156,10 @@ const Vibe64AccountsFeature = defineFeature({
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
       publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events })
     });
-    const connections = createConnections({ accounts, project });
+    const connections = createConnections({
+      accounts, project,
+      listAssistantCapabilities
+    });
 
     if (typeof terminals?.configureAssistantRuntime === "function") {
       terminals.configureAssistantRuntime({
@@ -154,8 +171,30 @@ const Vibe64AccountsFeature = defineFeature({
       });
     }
 
+    const aiConnections = localRuntime && terminals && systemRoot
+      ? createAiConnectionRuntime({
+          systemRoot: resolvedAccountRuntime.systemRoot,
+          terminals,
+          publishConnectionChanged: createVibe64ConnectionsChangedPublisher({ events })
+        })
+      : null;
+    const aiConnectionService = aiConnections
+      ? createAiConnectionService({
+          aiConnections,
+          readAssistantCapabilities: (input, vibe64User) => terminals.listAssistantCapabilities({ ...input, vibe64User })
+        })
+      : null;
+    if (aiConnections) {
+      configureAiConnectionRuntime({
+        accountService: accounts, aiConnections, terminals,
+        requireManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input)
+      });
+    }
+
     registerRoutes(http, {
       accounts,
+      aiConnectionService,
+      requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input),
       fastify,
       projectContext,
       routeRelativePath: "vibe64/accounts",
@@ -163,6 +202,8 @@ const Vibe64AccountsFeature = defineFeature({
     });
     registerRoutes(http, {
       accounts,
+      aiConnectionService,
+      requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input),
       fastify,
       projectContext,
       projectScoped: false,

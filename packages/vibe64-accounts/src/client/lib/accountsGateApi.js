@@ -14,6 +14,7 @@ const VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT = "vibe64.accounts.auth-session.
 const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
 
 const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
+const AI_CONNECTIONS_ENDPOINT = `${ACCOUNTS_ENDPOINT}/ai-connections`;
 const ACCOUNTS_AUTH_ENDPOINT = `${ACCOUNTS_ENDPOINT}/auth`;
 const ACCOUNTS_GIT_IDENTITY_ENDPOINT = `${ACCOUNTS_ENDPOINT}/git-identity`;
 const ACCOUNTS_LOGOUT_ENDPOINT = `${ACCOUNTS_ENDPOINT}/logout`;
@@ -27,6 +28,7 @@ function accountAuthTerminalWebSocketUrl(sessionId = "") {
 }
 
 export {
+  AI_CONNECTIONS_ENDPOINT,
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
   ACCOUNTS_GIT_IDENTITY_ENDPOINT,

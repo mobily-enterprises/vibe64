@@ -5,6 +5,16 @@ and see whether the Studio host is ready to support them.
 
 ## Sources
 
+- `packages/vibe64-accounts/src/server/aiConnectionStore.js`
+- `packages/vibe64-accounts/src/server/aiConnectionService.js`
+- `packages/vibe64-accounts/src/server/aiConnectionRuntime.js`
+- `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
+- `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
+- `packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue`
+- `packages/vibe64-accounts/src/client/studio/FreeAiSelector.vue`
+- `packages/vibe64-accounts/src/client/studio/freeAiStarters.js`
+- `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
+
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
 - `packages/vibe64-core/src/server/codexProviderConnections.js`
 - `packages/vibe64-accounts/src/client/studio/CodexProviderConnections.vue`
@@ -38,6 +48,32 @@ and see whether the Studio host is ready to support them.
 
 ## Public contract
 
+Standalone and hosted editors compose the same AI Accounts screen, catalogue
+validation, provider policy, connection store and runtime wiring. The local
+Account settings dialog has You, AI Accounts and GitHub tabs. AI Accounts offers
+Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex
+and the current OpenCode provider catalogue. An AI connection request opens the
+requested provider's setup. Hosts choose the API endpoint, credential context
+and account-management authorization; they do not duplicate these forms or
+provider operations.
+
+OpenCode connections retain the existing versioned file at
+`<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login
+keep using the existing host account context; curated Codex provider homes stay
+under `<systemRoot>/ai-connections/codex`. Moving the implementation does not
+copy keys, change file formats or merge separate installations' account stores.
+The nested development editor preserves native credential context while keeping
+its own runtime state.
+
+The connection store supplies included OpenCode Big Pickle, with no Codex login
+required. New OpenCode keys are checked against the complete trusted provider
+catalogue and verified before replacing a working connection. The browser cannot
+supply a network route, verification model or access policy. Only redacted
+metadata is returned. Existing model-access restrictions, helper preferences,
+Zen checks and runtime invalidation apply equally in both editions. All account
+management routes use the host's management policy before reading or changing
+connection state; request bodies cannot supply the acting user.
+
 Codex provider setup offers GPT, DeepSeek and GLM. GPT keeps its existing
 ChatGPT device login and OpenAI API-key flow. The curated catalogue owns the
 DeepSeek API route and Z.AI's dedicated Coding Plan Responses route
@@ -56,8 +92,7 @@ private `ai-connections/codex` state; OpenAI's credential home stays independent
 Disconnect removes credentials while retaining native conversation history.
 
 The setup form uses the shared Accounts command feedback, clears unsaved keys
-when changing providers, and keeps an in-flight save open. Online hosts can
-compose the same form into their existing AI Accounts list. DeepSeek is a
+when changing providers, and keeps an in-flight save open. The shared AI Accounts list composes this form in both editions. DeepSeek is a
 workspace-use API connection; the GLM plan is owner-only. Provider definitions
 follow the official [DeepSeek Codex guide](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/)
 and [Z.AI Codex guide](https://docs.z.ai/devpack/tool/codex).
@@ -96,8 +131,12 @@ The Accounts surface reports required providers, guides supported sign-in, and
 keeps credentials in host-owned storage. The session picker names Codex and
 Claude explicitly, with their model in the description. Connected choices have
 no recommendation badge; the preferred choice still controls initial selection.
-Standalone Codex availability comes from the Accounts service's sign-in state,
-including disconnection and required reconnection. With no connected AI, the
+Native Codex availability comes from the Accounts service's sign-in state,
+including disconnection and required reconnection. Overall AI readiness accepts
+any connected assistant, including included OpenCode or Claude; missing Codex
+authentication does not fail readiness. Studio Health consumes this aggregate
+AI status and the project's required repository connections rather than forcing
+a Codex/GitHub pair for every project. With no connected AI, the
 session picker directs the user to account setup before creating a session.
 Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
@@ -195,9 +234,9 @@ host-supplied explanation, while selection resolution and the session selector
 expose only available models. A
 generic owner-authenticated model-access operation delegates a warned unlock or
 relock to the host; a host may reserve more involved account-management actions
-for its own management surface. Public Vibe64 does not name a private provider
-policy or store provider credentials. Runtime admission remains a separate host
-check, so a durable selection cannot bypass a later restriction.
+for its own management surface. The public Accounts service owns the provider policy and protected connection
+store. Runtime admission checks that policy again, so a durable selection cannot
+bypass a later restriction.
 
 Zen's rotating model roster never makes its saved connection stale. Provider
 revision checks still protect connection setup and other provider definitions,

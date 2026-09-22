@@ -429,6 +429,15 @@ Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
 intent instead of repeating finished work or proposing unrelated generic tasks.
 
+Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
+configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
+Code, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
+sign-in. Provider credentials and helper-model preferences belong to the editor's
+account storage, outside the project. Native Codex and Claude credentials keep
+using the host's existing account context, including in a nested development
+preview. Hosts supply account storage and management permissions; they do not
+maintain a separate provider setup implementation.
+
 The chat selector stays focused on choosing among AIs that are already
 configured and connected. With no connected AI, the session picker directs
 people to account setup. A host may contribute an always-available built-in
@@ -533,7 +542,7 @@ GitHub branch authority of its own; publishing its work does not change the
 project authority or notify sessions that track a different branch.
 
 Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
-Their compact Git toolbar shows the branch and a short sync status. Pull and
+Their slim Git toolbar shows the branch and a short sync status. Pull and
 Push appear with commit counts when work is available; the branch button opens
 remote destinations, the last check time and settings. Controls wrap on narrow
 screens, and failed checks remain visible with their details available on demand.

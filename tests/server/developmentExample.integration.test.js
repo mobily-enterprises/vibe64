@@ -92,6 +92,13 @@ test("the development preview serves its own backend, frontend and project", { t
     const page = await fetch(`${origin}${entry.headers.get("location")}`);
     assert.equal(page.status, 200);
     assert.match(await page.text(), /@vite\/client/u);
+    const aiAccounts = await fetch(`${origin}/api/vibe64/accounts/ai-connections`);
+    assert.equal(aiAccounts.status, 200, logs);
+    const aiState = await aiAccounts.json();
+    assert.equal(aiState.ok, true);
+    assert.ok(aiState.connections.some((connection) => connection.id === "opencode" && connection.connected));
+    const nativeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=codex`)).json();
+    assert.equal(nativeAccounts.accounts.find((account) => account.id === "codex").connected, false);
     const realtime = await fetch(`${origin}/socket.io/?EIO=4&transport=polling`);
     assert.equal(realtime.status, 200);
     assert.match(await realtime.text(), /^0\{"sid"/u);
