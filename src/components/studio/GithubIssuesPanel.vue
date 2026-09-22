@@ -9,6 +9,7 @@ import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
 import GithubCommentEditor from "./GithubCommentEditor.vue";
 import GithubBulkLabelsDialog from "./GithubBulkLabelsDialog.vue";
 import GithubLabelChip from "./GithubLabelChip.vue";
+import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 import GithubMarkdown from "./GithubMarkdown.vue";
@@ -95,14 +96,14 @@ function date(value) {
             <template #append-inner><v-btn :icon="mdiArrowRight" variant="text" size="48" aria-label="Search issues" @click="filter()" /></template>
           </v-text-field>
         </form>
-        <div class="issues-panel__labels">
-          <v-skeleton-loader v-if="labelCatalog.isInitialLoading.value" type="list-item" height="80" aria-label="Loading label filters" aria-busy="true" />
-          <v-alert v-else-if="labelCatalog.loadError.value" type="error" variant="tonal" rounded="lg">
+        <div class="issues-panel__labels d-flex flex-wrap align-start ga-2">
+          <v-skeleton-loader v-if="labelCatalog.isInitialLoading.value" class="issues-panel__label-filter" type="list-item" height="80" aria-label="Loading label filters" aria-busy="true" />
+          <v-alert v-else-if="labelCatalog.loadError.value" class="issues-panel__label-filter" type="error" variant="tonal" rounded="lg">
             {{ labelCatalog.loadError.value }}
             <template #append><v-btn variant="text" height="48" @click="labelCatalog.reload()">Retry labels</v-btn></template>
           </v-alert>
           <v-autocomplete
-            v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []"
+            v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []" class="issues-panel__label-filter"
             item-title="name" item-value="name" multiple chips closable-chips clearable
             label="Filter by labels" :prepend-inner-icon="mdiLabelOutline" variant="outlined" rounded="lg"
             :menu-props="{ maxHeight: 320 }" hint="Match all selected labels." persistent-hint
@@ -116,6 +117,9 @@ function date(value) {
               </v-list-item>
             </template>
           </v-autocomplete>
+          <div v-if="labelCatalog.data.value?.canCreateLabels" class="d-flex justify-end">
+            <GithubNewLabelButton :base-path="basePath" :labels="labelCatalog.data.value.labels" />
+          </div>
         </div>
       </template>
 
@@ -286,7 +290,7 @@ function date(value) {
     </template>
     <GithubBulkLabelsDialog
       v-if="available" :key="basePath" v-model="bulkOpen" :base-path="basePath" :numbers="selectedNumbers"
-      :labels="labelCatalog.data.value?.labels || []" @applied="labelsApplied"
+      :labels="labelCatalog.data.value?.labels || []" :can-create-labels="labelCatalog.data.value?.canCreateLabels === true" @applied="labelsApplied"
     />
     <GithubIssueEditorDialog
       v-if="available" v-model="editorOpen" :base-path="basePath" :issue="editorIssue" :mode="editorMode" @saved="issueSaved"
@@ -300,6 +304,7 @@ function date(value) {
 .issues-panel__comment-body { min-width: 0; flex: 1; }
 .issues-panel__search { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__labels { min-width: 0; }
+.issues-panel__label-filter { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__item-title { min-width: 0; overflow-wrap: anywhere; }
 .issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }

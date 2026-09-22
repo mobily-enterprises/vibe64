@@ -10,6 +10,7 @@ const ISSUE_LIST_FIELDS = `number title url state updatedAt author { login } com
 const PAGE_INFO = "pageInfo { hasNextPage endCursor }";
 const LABEL_WRITE_PERMISSIONS = ["ADMIN", "MAINTAIN", "WRITE"];
 const LABEL_EDIT_PERMISSIONS = [...LABEL_WRITE_PERMISSIONS, "TRIAGE"];
+const LABEL_CREATION_UNCONFIRMED = "Label creation could not be confirmed. Refresh the labels before trying again.";
 
 async function issueMentionUsers(api, owner, name, number) {
   const fields = `nodes { login name } ${PAGE_INFO}`;
@@ -77,9 +78,11 @@ async function repositoryLabels(api, owner, name) {
     viewerPermission = repository.viewerPermission;
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (cursor);
+  const canWriteLabels = LABEL_WRITE_PERMISSIONS.includes(viewerPermission);
   return {
     labels,
-    canCreateWithLabels: LABEL_WRITE_PERMISSIONS.includes(viewerPermission),
+    canCreateLabels: canWriteLabels,
+    canCreateWithLabels: canWriteLabels,
     canEditLabels: LABEL_EDIT_PERMISSIONS.includes(viewerPermission)
   };
 }
@@ -87,7 +90,7 @@ async function repositoryLabels(api, owner, name) {
 export async function githubIssues(project, input = {}, options = {}) {
   const fullName = requireGithubRepository(project, "Issues");
   const operation = input.operation || "list";
-  if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "set-labels", "mentions"].includes(operation)) {
+  if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "create-label", "set-labels", "mentions"].includes(operation)) {
     throw vibe64Error("Unknown issue action.", "vibe64_issue_input_invalid");
   }
   const number = Number(input.number);
@@ -111,6 +114,14 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (operation === "edit-comment" && (typeof input.commentId !== "string" || !input.commentId.trim() || input.commentId.length > 256)) {
     throw vibe64Error("Choose a valid comment.", "vibe64_issue_input_invalid");
   }
+  if (operation === "create-label") {
+    if (typeof input.name !== "string" || !input.name.trim() || input.name.trim().length > 50 || /\p{Cc}/u.test(input.name)) {
+      throw vibe64Error("Enter a label name of up to 50 characters.", "vibe64_issue_input_invalid");
+    }
+    if (typeof input.color !== "string" || !/^[a-f\d]{6}$/iu.test(input.color)) {
+      throw vibe64Error("Choose a colour or enter a six-digit hex colour.", "vibe64_issue_input_invalid");
+    }
+  }
   const labelMode = input.labelMode ?? "replace";
   if (operation === "set-labels" && !["replace", "add", "remove"].includes(labelMode)) {
     throw vibe64Error("Choose whether to add, remove or replace labels.", "vibe64_issue_input_invalid");
@@ -130,14 +141,29 @@ export async function githubIssues(project, input = {}, options = {}) {
     failureCode: "vibe64_github_issues_failed",
     uncertainWriteMessage: operation === "comment"
       ? "The comment could not be confirmed. Refresh the conversation before posting again."
-      : operation === "create" ? "Issue creation could not be confirmed. Refresh the issue list before trying again." : ""
+      : operation === "create" ? "Issue creation could not be confirmed. Refresh the issue list before trying again."
+      : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
   });
   const [owner, name] = fullName.split("/");
   if (operation === "mentions") return issueMentionUsers(api, owner, name, input.number == null ? null : number);
   let labelIds;
-  if (operation === "labels" || operation === "set-labels" || (operation === "create" && selectedLabels.length)) {
+  if (["labels", "create-label", "set-labels"].includes(operation) || (operation === "create" && selectedLabels.length)) {
     const catalog = await repositoryLabels(api, owner, name);
     if (operation === "labels") return { ok: true, ...catalog };
+    if (operation === "create-label") {
+      if (!catalog.canCreateLabels) {
+        throw vibe64Error("GitHub requires write access to create repository labels.", "vibe64_issue_permission_denied");
+      }
+      const labelName = input.name.trim();
+      if (catalog.labels.some((label) => label.name.toLowerCase() === labelName.toLowerCase())) {
+        throw vibe64Error("A label with this name already exists. Choose another name.", "vibe64_issue_input_invalid");
+      }
+      const created = await api(`repos/${fullName}/labels`, { name: labelName, color: input.color.toLowerCase() });
+      if (typeof created.name !== "string" || !created.name || !/^[a-f\d]{6}$/iu.test(created.color || "")) {
+        throw vibe64Error(LABEL_CREATION_UNCONFIRMED, "vibe64_github_issues_failed");
+      }
+      return { ok: true, label: { id: created.node_id, name: created.name, color: created.color, description: created.description || "" } };
+    }
     const allowed = operation === "create" ? catalog.canCreateWithLabels : catalog.canEditLabels;
     if (!allowed) {
       throw vibe64Error("Your GitHub account cannot set labels for this issue.", "vibe64_issue_permission_denied");

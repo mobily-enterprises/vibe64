@@ -62,6 +62,12 @@ test("issue routes preserve repeated label filters and browser origin with the a
       };
       await list.handler({ query, input: { query }, params: routeProjectParams(), vibe64User: user }, testReply());
       assert.deepEqual(received, { ...query, operation: "list", vibe64User: user });
+      const createLabel = findRegisteredRoute(app, {
+        method: "POST", path: `${apiRouteBase}/vibe64/issue-labels`
+      });
+      const labelBody = { name: "Ready", color: "0075ca", repository: "another/project", operation: "set-labels", vibe64User: { id: "forged" } };
+      await createLabel.handler({ body: labelBody, input: { body: labelBody }, params: routeProjectParams(), vibe64User: user }, testReply());
+      assert.deepEqual(received, { name: "Ready", color: "0075ca", operation: "create-label", vibe64User: user });
     });
   });
 });

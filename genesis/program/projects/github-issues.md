@@ -23,6 +23,7 @@ Dashboard without opening a session.
 - `src/components/studio/GithubBulkLabelsDialog.vue`
 - `src/components/studio/GithubMentionTextarea.vue`
 - `src/components/studio/GithubLabelChip.vue`
+- `src/components/studio/GithubNewLabelButton.vue`
 - `src/components/studio/GithubBrowserTabs.vue`
 - `src/components/studio/Vibe64DashboardShell.vue`
 - `src/components/SectionContainerShell.vue`
@@ -134,7 +135,17 @@ use Vuetify foreground contrast. Labels appear in the list and issue details.
 The backend rechecks label permissions and rejects unavailable labels before
 writing. Existing issue labels require triage access or higher; GitHub
 requires write access to attach labels during issue creation. Empty selections
-remove existing labels. Repository label definitions are not changed.
+remove existing labels. Repository write access or higher also permits creating
+label definitions through `POST /issue-labels`. The backend validates the name
+and six-digit colour, rechecks permissions, and rejects case-insensitive duplicate
+names across the complete catalog before sending one GitHub creation request.
+Uncertain results are never retried automatically.
+New label is available beside list filters and in the issue and bulk-add label
+pickers. Its compact dialog contains a name, eight colour swatches, a native
+custom colour picker, a hex field and the ordinary label chip as a live preview.
+The form retains its choices after failure. Confirmed creation updates the shared
+repository label cache immediately and selects the new label when opened from a
+picker, preserving the parent form's draft. Cancelling leaves the parent untouched.
 People with label permissions can select individual issue rows or every issue on
 the current page, see the selected count, clear the selection, and bulk add or
 remove repository labels. Page, filter, project and detail navigation clear the

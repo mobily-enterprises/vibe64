@@ -5,12 +5,14 @@ import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedba
 import { useQueryClient } from "@tanstack/vue-query";
 import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import GithubLabelChip from "./GithubLabelChip.vue";
+import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 
 const props = defineProps({
   modelValue: Boolean,
   basePath: { type: String, required: true },
   numbers: { type: Array, required: true },
-  labels: { type: Array, required: true }
+  labels: { type: Array, required: true },
+  canCreateLabels: Boolean
 });
 const emit = defineEmits(["update:modelValue", "applied"]);
 const labelMode = ref("add");
@@ -87,6 +89,9 @@ async function submit() {
             </v-list-item>
           </template>
         </v-autocomplete>
+        <div v-if="canCreateLabels && labelMode === 'add'" class="d-flex justify-start">
+          <GithubNewLabelButton :base-path="basePath" :labels="labels" :disabled="pending" @created="selectedLabels = [...selectedLabels, $event.name]" />
+        </div>
         <div v-if="failures.length" role="status">
           <p class="text-body-medium">Some issues could not be updated. Retry applies only to these issues:</p>
           <p v-for="failure in failures" :key="failure.number" class="text-body-small text-error">#{{ failure.number }}: {{ failure.message }}</p>

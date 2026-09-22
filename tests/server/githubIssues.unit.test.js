@@ -328,9 +328,54 @@ test("repository labels retain GitHub colors and include every page", async () =
   const result = await githubIssues(project, { operation: "labels", vibe64User: user }, f.options);
   assert.deepEqual(result.labels, [bug, documentation]);
   assert.equal(result.canEditLabels, true);
+  assert.equal(result.canCreateLabels, false);
   assert.equal(result.canCreateWithLabels, false);
   assert.equal(JSON.parse(f.calls[1].input).variables.cursor, "next-labels");
   assert.match(JSON.parse(f.calls[0].input).query, /labels\(first:100/u);
+});
+
+test("create label uses the acting account and publishes its literal name and normalized colour", async () => {
+  for (const permission of ["WRITE", "MAINTAIN", "ADMIN"]) {
+    const name = "Ready $(literal) `review`";
+    const f = fixture([labelPage([bug], permission), success({ node_id: "LA_new", name, color: "aabbcc" })]);
+    const result = await githubIssues(project, { operation: "create-label", name: ` ${name} `, color: "AABBCC", vibe64User: user }, f.options);
+    assert.deepEqual(result.label, { id: "LA_new", name, color: "aabbcc", description: "" });
+    assert.equal(f.calls[1].args[3], "repos/example/project/labels");
+    assert.equal(f.calls[1].args[5], "POST");
+    assert.equal(f.calls[1].userKey, "alice");
+    assert.deepEqual(JSON.parse(f.calls[1].input), { name, color: "aabbcc" });
+  }
+});
+
+test("creating label definitions requires write access and rejects duplicate names across catalog pages", async () => {
+  for (const permission of ["TRIAGE", "READ", null]) {
+    const f = fixture([labelPage([], permission)]);
+    await assert.rejects(githubIssues(project, { operation: "create-label", name: "Ready", color: "0075ca", vibe64User: user }, f.options),
+      { code: "vibe64_issue_permission_denied" });
+    assert.equal(f.calls.length, 1);
+  }
+  const duplicate = fixture([labelPage([], "WRITE", { hasNextPage: true, endCursor: "next-labels" }), labelPage([bug])]);
+  await assert.rejects(githubIssues(project, { operation: "create-label", name: " BUG ", color: "0075ca", vibe64User: user }, duplicate.options),
+    /already exists/u);
+  assert.equal(duplicate.calls.length, 2);
+});
+
+test("invalid label names and colours never reach GitHub; uncertain creation is not retried", async () => {
+  const invalid = fixture([]);
+  for (const payload of [
+    { name: "" }, { name: " " }, { name: 1 }, { name: "x".repeat(51) }, { name: "a\nb" },
+    { color: "#0075ca" }, { color: "red" }, { color: "abc" }, { color: "abcdgg" }, { color: null }
+  ]) {
+    await assert.rejects(githubIssues(project, { operation: "create-label", name: "Ready", color: "0075ca", ...payload, vibe64User: user }, invalid.options),
+      { code: "vibe64_issue_input_invalid" });
+  }
+  assert.equal(invalid.calls.length, 0);
+  for (const response of [{ ok: false, stderr: "upstream timeout" }, success({})]) {
+    const f = fixture([labelPage([]), response]);
+    await assert.rejects(githubIssues(project, { operation: "create-label", name: "Ready", color: "0075ca", vibe64User: user }, f.options),
+      /Refresh the labels before trying again/u);
+    assert.equal(f.calls.length, 2);
+  }
 });
 
 test("create issue publishes literal title, Markdown and existing labels in the selected repository", async () => {

@@ -4,6 +4,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { mdiClose, mdiLabelOutline, mdiPencilOutline, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
+import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
 
 const props = defineProps({
@@ -122,7 +123,13 @@ async function submit() {
                 </v-list-item>
               </template>
             </v-autocomplete>
-            <div class="d-flex justify-end"><v-btn variant="text" height="48" :disabled="pending || catalog.isFetching.value" @click="catalog.reload()">Refresh labels</v-btn></div>
+            <div class="d-flex flex-wrap justify-space-between ga-2">
+              <GithubNewLabelButton
+                v-if="catalog.data.value?.canCreateLabels" :base-path="basePath" :labels="labels" :disabled="pending"
+                @created="selectedLabels = [...selectedLabels, $event.name]"
+              />
+              <v-btn variant="text" height="48" :disabled="pending || catalog.isFetching.value" @click="catalog.reload()">Refresh labels</v-btn>
+            </div>
           </template>
         </template>
       </v-card-text>

@@ -58,6 +58,11 @@ and comments support immediate @username suggestions from repository collaborato
 and everyone participating in that issue. New issue descriptions suggest
 collaborators too; keyboard or pointer selection inserts the username while
 preserving the surrounding draft. Unavailable suggestions never block typing.
+People with repository write access can create labels from the issue browser or
+label pickers. A small form offers a name, colour swatches, a custom colour and
+a live preview. A label created while choosing issue labels is selected immediately;
+the issue draft stays intact. Duplicate names are explained and failed creation
+keeps the form's choices.
 Labels retain their GitHub colors with readable text in either theme. The issue browser
 uses the available pane width, with Back to dashboard, Refresh and New issue in
 one toolbar row and no extra heading or repository subtitle. Both browsers keep

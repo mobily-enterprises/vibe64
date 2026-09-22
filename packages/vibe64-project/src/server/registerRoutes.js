@@ -73,6 +73,13 @@ function registerRoutes(http, {
   }, (request) => project.githubIssues({
     operation: "labels", vibe64User: request.vibe64User || null
   }));
+  routes.serviceRoute("POST", "/issue-labels", {
+    summary: "Create a GitHub repository label with a chosen colour."
+  }, (request) => project.githubIssues({
+    name: routes.requestBody(request).name,
+    color: routes.requestBody(request).color,
+    operation: "create-label", vibe64User: request.vibe64User || null
+  }));
   routes.serviceRoute("GET", "/issue-mentions", {
     summary: "Read repository collaborators and issue participants for mentions."
   }, (request) => project.githubIssues({
