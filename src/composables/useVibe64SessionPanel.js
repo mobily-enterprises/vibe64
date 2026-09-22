@@ -37,6 +37,10 @@ const vibe64SessionPanelEmits = [
   "project-attention"
 ];
 const vibe64SessionPanelProps = {
+  createSessionTeleportTarget: {
+    default: "",
+    type: String
+  },
   chatCollapsed: {
     default: false,
     type: Boolean
@@ -126,6 +130,7 @@ function useVibe64SessionPanel(props, emit) {
     sessions: sessionData.sessions.value || []
   }));
   const toolbar = proxyRefs({
+    refreshRepositoryState: repositoryStatusRegistry.refresh,
     canCreateSession: sessionData.canCreateSession,
     createSession: sessionData.createSession,
     createSessionCommand: sessionData.createSessionCommand,

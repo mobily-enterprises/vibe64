@@ -379,11 +379,16 @@ function useVibe64SessionRepositoryStatusRegistry({
         !sourceOperationsSuspended(id) &&
         forcedCanonicalFollowups.delete(id)
       ) {
-        void checkCanonical(id, { force: true });
+        return checkCanonical(id, { force: true });
       }
     });
     canonicalChecks.set(id, { accessRevision, promise: request });
     return request;
+  }
+
+  async function refresh(sessionId) {
+    await checkCanonical(sessionId, { force: true });
+    await queue.waitForIdle();
   }
 
   watch(() => [apiPath.value, selectedId.value, ...visibleSessionIds.value], () => {
@@ -510,6 +515,7 @@ function useVibe64SessionRepositoryStatusRegistry({
   return {
     inspectVisible,
     observe: queue.observe,
+    refresh,
     visibleSessionIds
   };
 }

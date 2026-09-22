@@ -79,6 +79,12 @@ Returning to a visible tab requests a normal canonical check, allowing the
 server's 25-second shared result cache to serve sibling tabs. Explicit source
 and canonical-change invalidations still force a fresh check. Worktree fallback
 inspection on visibility remains immediate.
+Clicking the muted Save disk explicitly forces a server update check through
+the same registry and waits for the work inspection to settle. A visible
+“Checking…” hint and busy state last for that request, with repeated clicks
+suppressed. The refreshed state may enable Save or show Update, but checking
+never invokes either operation. Archived sessions, suspended source access and
+active repository operations retain their disabled controls.
 Concurrent worktree reads for the same runtime, session, source path and recorded
 base/canonical commits share one repository inspection. Each response rereads
 durable Save/Update operation status after that inspection. Completed and failed
@@ -166,14 +172,15 @@ readable when disabled during active assistant work.
 
 For standalone local folders, Fetch checks the original project's configured
 upstream and push destination; it never uses a session clone's internal origin.
-The standalone project shell places the compact Git controls beside the project
-name in its existing header, with no separate toolbar row below. The controls
-show the branch, a short sync status and Fetch.
-Pull and Push appear with nonzero commit counts. The branch button opens a
-popover containing full branch and remote names, the last check time, any fetch
-error and Remote settings. Long names truncate only in the toolbar; details wrap,
-and the header's title area scrolls horizontally when space is limited. Pending
-actions use stable labels.
+The standalone project shell shows one branch dropdown beside the project name
+and new-session button, with no separate Git row. A badge shows the total
+incoming/outgoing count, or an error marker when a check fails. The button's
+accessible name and hover title include the full branch and sync status; small
+screens use a Git icon. The dropdown contains status, Fetch, Pull and Push with
+nonzero commit counts, full branch and remote names, the last check time, any
+fetch error and Remote settings. Pull/Push close this menu before opening their
+existing review dialog. Long branch names truncate in the header; details wrap.
+Pending actions use stable labels.
 The toolbar refreshes while visible, at most once per minute in the background,
 and supports explicit Fetch. Transport failures show unknown counts and retain
 the last successful check time. Native branch upstream and push configuration,

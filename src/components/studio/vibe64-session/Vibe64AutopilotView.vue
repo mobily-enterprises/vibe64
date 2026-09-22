@@ -31,27 +31,41 @@
           :archive="props.sessionArchive"
           compact
           :create-visible="props.sessionToolbar.createSessionVisible === true"
+          :create-teleport-target="props.createSessionTeleportTarget"
           :max-visible-sessions="3"
           :selected-session-id="sessionId"
           :selection-archived="sessionArchiveDisabled"
           :toolbar="props.sessionToolbar"
         />
 
-        <v-btn
+        <v-tooltip
           v-if="saveWorkHeaderVisible"
-          :aria-busy="saveWorkSending ? 'true' : undefined"
-          :aria-label="saveWorkHeaderAriaLabel"
-          class="studio-autopilot__save-work"
-          :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
-          :disabled="saveWorkDisabled || temporaryAiWorkspace?.updateRepairTask?.busy"
-          height="48"
-          :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline"
-          :title="saveWorkTitle"
-          type="button"
-          variant="tonal"
-          width="48"
-          @click="requestSessionSaveWork"
-        />
+          :model-value="saveWorkChecking"
+          location="bottom"
+          :open-on-click="false"
+          :open-on-focus="false"
+          :open-on-hover="false"
+        >
+          <template #activator="{ props: checkingProps }">
+            <v-btn
+              v-bind="checkingProps"
+              :aria-busy="saveWorkSending || saveWorkChecking ? 'true' : undefined"
+              :aria-label="saveWorkChecking ? 'Checking repository status' : saveWorkCheckAvailable ? 'Check for updates' : saveWorkHeaderAriaLabel"
+              class="studio-autopilot__save-work"
+              :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
+              :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
+              :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
+              height="48"
+              :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline"
+              :title="saveWorkCheckAvailable ? `${saveWorkTitle}. Click to check for updates.` : saveWorkTitle"
+              type="button"
+              variant="tonal"
+              width="48"
+              @click="requestSessionSaveWork"
+            />
+          </template>
+          <span role="status">Checking…</span>
+        </v-tooltip>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
           <v-menu
             location="bottom end"
@@ -1542,7 +1556,25 @@ function checkTemporaryAiUpdate(task) {
   ), { force: true });
 }
 
-function requestSessionSaveWork() {
+const saveWorkChecking = ref(false);
+const saveWorkCheckAvailable = computed(() => Boolean(
+  saveWorkDisabled.value && !saveWorkRequiresUpdate.value &&
+  !saveWorkSending.value && !repositoryOperationActive.value &&
+  !sourceOperationsSuspended.value && !props.sessionSelectionArchived &&
+  typeof props.sessionToolbar?.refreshRepositoryState === "function"
+));
+
+async function requestSessionSaveWork() {
+  if (saveWorkChecking.value) return;
+  if (saveWorkCheckAvailable.value) {
+    saveWorkChecking.value = true;
+    try {
+      await props.sessionToolbar.refreshRepositoryState(sessionId.value);
+    } finally {
+      saveWorkChecking.value = false;
+    }
+    return;
+  }
   const repair = temporaryAiWorkspace.value?.updateRepairTask;
   if (saveWorkRequiresUpdate.value && repair) {
     temporaryAiWorkspace.value?.selectTask?.(repair.id);
@@ -1921,6 +1953,10 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__save-work {
   flex: 0 0 auto;
+}
+
+.studio-autopilot__save-work--check {
+  opacity: var(--v-disabled-opacity);
 }
 
 .studio-autopilot__project-panel,

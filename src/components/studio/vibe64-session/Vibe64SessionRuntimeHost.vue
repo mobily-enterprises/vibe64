@@ -10,6 +10,7 @@
       :agent-connection-status="agentConnectionStatus"
       :retry-agent-connection="retryAgentConnection"
       :chat-collapsed="props.chatCollapsed"
+      :create-session-teleport-target="props.createSessionTeleportTarget"
       :cancel-agent-message="cancelAgentMessage"
       :conversation-log="conversationLog"
       :github-actor-teleport-target="props.githubActorTeleportTarget"
@@ -90,6 +91,14 @@ import {
 } from "@/composables/useVibe64SessionRuntimeHost.js";
 
 const props = defineProps({
+  refreshRepositoryState: {
+    default: null,
+    type: Function
+  },
+  createSessionTeleportTarget: {
+    default: "",
+    type: String
+  },
   active: {
     default: false,
     type: Boolean

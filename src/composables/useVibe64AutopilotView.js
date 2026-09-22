@@ -134,6 +134,10 @@ const vibe64AutopilotViewProps = {
     default: "",
     type: String
   },
+  createSessionTeleportTarget: {
+    default: "",
+    type: String
+  },
   interruptAgentTurn: {
     default: async () => false,
     type: Function
@@ -1270,7 +1274,7 @@ function useVibe64AutopilotView(props, emit, {
       checkedAt: monitored.checkedAt || inspected.checkedAt,
       error: monitoredState === "unavailable"
         ? inspected.error || "Repository status is unavailable."
-        : inspected.error || "",
+        : "",
       loading: monitoredState === "checking",
       unsaved: monitoredUnsaved,
       updateAvailable: monitored.updateAvailable === true ||

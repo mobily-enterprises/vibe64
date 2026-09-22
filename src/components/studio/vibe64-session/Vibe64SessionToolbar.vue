@@ -1,5 +1,6 @@
 <template>
   <div
+    v-show="!createTeleportTarget || allSessions.length > 0"
     class="studio-ai-sessions__toolbar"
     :class="{
       'studio-ai-sessions__toolbar--compact': compact
@@ -90,13 +91,19 @@
         </v-tooltip>
       </v-chip>
 
-      <Vibe64CreateSessionButton
+      <Teleport
         v-if="createVisible && (sessionLimit < 1 || allSessions.length < sessionLimit)"
-        aria-label="New session"
-        :button-class="createSessionButtonClass"
-        icon-only
-        :toolbar="toolbar"
-      />
+        :disabled="!createTeleportTarget"
+        :to="createTeleportTarget || 'body'"
+        defer
+      >
+        <Vibe64CreateSessionButton
+          aria-label="New session"
+          :button-class="createSessionButtonClass"
+          icon-only
+          :toolbar="toolbar"
+        />
+      </Teleport>
 
       <slot name="after-sessions" />
     </div>
@@ -165,6 +172,10 @@ const props = defineProps({
   createAttention: {
     default: false,
     type: Boolean
+  },
+  createTeleportTarget: {
+    default: "",
+    type: String
   },
   createVisible: {
     default: true,

@@ -72,6 +72,11 @@ all clients with a list-refresh hint. Reconnecting clients read persisted state.
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session
 plus is hidden when those visible slots are full and returns when a slot opens.
+The standalone shell places that same creation button beside the project name,
+including with no open sessions. Only the selected runtime, or the empty state,
+supplies it. Hosted shells keep their existing placement. The relocation retains
+creation permissions, pending feedback, the assistant dialog and the three-session
+limit; compact Git controls leave space for the button on small screens.
 Save sits directly beside the session actions so the tabs retain that space.
 Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
 including its full name, status, assistant and model when available, save state, identifier,

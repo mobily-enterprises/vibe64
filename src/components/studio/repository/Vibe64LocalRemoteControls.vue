@@ -6,128 +6,119 @@
     tag="section"
     aria-label="Local Git repository"
   >
-    <div
+    <v-skeleton-loader
       v-if="!state && busy"
-      class="local-remotes__toolbar"
       aria-label="Loading Git remote status"
       aria-busy="true"
+      type="button"
+      :width="xs ? 48 : 112"
+      height="32"
+    />
+    <v-menu
+      v-else
+      v-model="detailsOpen"
+      location="bottom start"
+      :close-on-content-click="false"
+      width="360"
+      max-width="calc(100vw - 32px)"
     >
-      <v-skeleton-loader type="text" width="120" height="32" />
-      <v-skeleton-loader type="text" width="100" height="32" />
-      <v-skeleton-loader class="ms-auto" type="button" :width="xs ? 48 : 112" height="32" />
-    </div>
-    <div v-else class="local-remotes__toolbar">
-      <div class="local-remotes__identity">
-        <v-menu
-          v-model="detailsOpen"
-          location="bottom start"
-          :close-on-content-click="false"
-          width="360"
-          max-width="calc(100vw - 32px)"
+      <template #activator="{ props: menuProps }">
+        <v-badge
+          :model-value="Boolean(remoteError) || state?.incoming > 0 || state?.outgoing > 0"
+          :content="remoteError ? '!' : (state?.incoming || 0) + (state?.outgoing || 0)"
+          :color="remoteError ? 'error' : 'primary'"
+          max="99"
+          offset-x="5"
+          offset-y="5"
         >
-          <template #activator="{ props: menuProps }">
-            <v-btn
-              v-bind="menuProps"
-              class="local-remotes__branch"
-              variant="tonal"
-              rounded="lg"
-              height="32"
-              :prepend-icon="mdiSourceBranch"
-              :append-icon="mdiChevronDown"
-              :aria-label="`Git details for ${state?.branch || 'this repository'}`"
-              :title="state?.branch || 'Git details'"
-            >
-              <span class="local-remotes__branch-name">{{ state?.branch || (state ? 'No branch' : 'Repository') }}</span>
-            </v-btn>
-          </template>
-          <v-sheet class="pa-4" rounded="lg" elevation="3">
-            <div class="text-label-large mb-3">Local repository</div>
-            <dl class="local-remotes__details text-body-medium">
-              <dt>Branch</dt>
-              <dd>{{ state?.branch || 'No branch checked out' }}</dd>
-              <dt>Pull from</dt>
-              <dd>{{ state?.upstream ? destination(state.upstream) : 'Not configured' }}</dd>
-              <dt>Push to</dt>
-              <dd>{{ state?.push ? destination(state.push) : 'Not configured' }}</dd>
-              <dt>Last checked</dt>
-              <dd>{{ state?.checkedAt ? new Date(state.checkedAt).toLocaleString() : 'Not checked yet' }}</dd>
-            </dl>
-            <p v-if="remoteError" class="text-body-medium text-error mt-3 local-remotes__message">{{ remoteError }}</p>
-            <p v-else-if="!state?.upstream || !state?.push" class="text-body-small text-medium-emphasis mt-3">
-              Set pull and push destinations to track remote changes.
-            </p>
-            <v-divider class="my-3" />
-            <v-btn
-              variant="text"
-              block
-              height="48"
-              :prepend-icon="mdiCogOutline"
-              :disabled="isBusy || !state?.branch"
-              @click="openSettings"
-            >
-              Remote settings
-            </v-btn>
-          </v-sheet>
-        </v-menu>
-        <div class="local-remotes__status text-body-small" role="status" aria-live="polite">
           <v-btn
-            v-if="remoteError"
-            variant="text"
-            color="error"
+            v-bind="menuProps"
+            class="local-remotes__branch"
+            variant="tonal"
+            rounded="lg"
             height="32"
-            :prepend-icon="syncStatus.icon"
-            :append-icon="mdiChevronDown"
-            @click="detailsOpen = true"
+            :icon="xs"
+            :width="xs ? 48 : undefined"
+            :prepend-icon="xs ? undefined : mdiSourceBranch"
+            :append-icon="xs ? undefined : mdiChevronDown"
+            :aria-label="`Git details for ${state?.branch || 'this repository'}. ${syncStatus.label}`"
+            :title="`${state?.branch || 'Git details'} · ${syncStatus.label}`"
           >
-            {{ syncStatus.label }}
+            <v-icon v-if="xs" :icon="mdiSourceBranch" />
+            <span v-else class="local-remotes__branch-name">{{ state?.branch || (state ? 'No branch' : 'Repository') }}</span>
           </v-btn>
-          <template v-else>
-            <v-icon :icon="syncStatus.icon" :color="syncStatus.color" size="18" />
-            <span>{{ syncStatus.label }}</span>
-          </template>
+        </v-badge>
+      </template>
+      <v-sheet class="pa-4" rounded="lg" elevation="3">
+        <div class="text-label-large mb-2">Local repository</div>
+        <div class="local-remotes__status text-body-small mb-3" role="status" aria-live="polite">
+          <v-icon :icon="syncStatus.icon" :color="syncStatus.color" size="18" />
+          <span>{{ syncStatus.label }}</span>
         </div>
-      </div>
-      <div class="local-remotes__actions">
+        <div class="d-flex flex-column ga-1">
+          <v-btn
+            height="48"
+            variant="text"
+            :prepend-icon="mdiRefresh"
+            :aria-label="busy === 'fetch' ? 'Fetching remote changes' : 'Fetch remote changes'"
+            :disabled="isBusy"
+            @click="refresh(false)"
+          >
+            {{ busy === 'fetch' ? 'Fetching…' : 'Fetch' }}
+          </v-btn>
+          <v-btn
+            v-if="state?.upstream && state.incoming > 0"
+            height="48"
+            color="primary"
+            variant="flat"
+            :prepend-icon="mdiArrowDown"
+            :disabled="isBusy || Boolean(remoteError)"
+            @click="review('pull')"
+          >
+            Pull
+            <span class="local-remotes__count ms-2">{{ state.incoming }}</span>
+          </v-btn>
+          <v-btn
+            v-if="state?.push && state.outgoing > 0"
+            height="48"
+            color="primary"
+            :variant="state.incoming > 0 ? 'tonal' : 'flat'"
+            :prepend-icon="mdiArrowUp"
+            :disabled="isBusy || Boolean(remoteError)"
+            @click="review('push')"
+          >
+            Push
+            <span class="local-remotes__count ms-2">{{ state.outgoing }}</span>
+          </v-btn>
+        </div>
+        <v-divider class="my-3" />
+        <dl class="local-remotes__details text-body-medium">
+          <dt>Branch</dt>
+          <dd>{{ state?.branch || 'No branch checked out' }}</dd>
+          <dt>Pull from</dt>
+          <dd>{{ state?.upstream ? destination(state.upstream) : 'Not configured' }}</dd>
+          <dt>Push to</dt>
+          <dd>{{ state?.push ? destination(state.push) : 'Not configured' }}</dd>
+          <dt>Last checked</dt>
+          <dd>{{ state?.checkedAt ? new Date(state.checkedAt).toLocaleString() : 'Not checked yet' }}</dd>
+        </dl>
+        <p v-if="remoteError" class="text-body-medium text-error mt-3 local-remotes__message">{{ remoteError }}</p>
+        <p v-else-if="!state?.upstream || !state?.push" class="text-body-small text-medium-emphasis mt-3">
+          Set pull and push destinations to track remote changes.
+        </p>
+        <v-divider class="my-3" />
         <v-btn
-          :min-width="xs ? 48 : 112"
-          height="32"
           variant="text"
-          :icon="xs"
-          :prepend-icon="xs ? undefined : mdiRefresh"
-          :aria-label="busy === 'fetch' ? 'Fetching remote changes' : 'Fetch remote changes'"
-          title="Fetch remote changes"
-          :disabled="isBusy"
-          @click="refresh(false)"
+          block
+          height="48"
+          :prepend-icon="mdiCogOutline"
+          :disabled="isBusy || !state?.branch"
+          @click="openSettings"
         >
-          <v-icon v-if="xs" :icon="mdiRefresh" />
-          <template v-else>{{ busy === 'fetch' ? 'Fetching…' : 'Fetch' }}</template>
+          Remote settings
         </v-btn>
-        <v-btn
-          v-if="state?.upstream && state.incoming > 0"
-          height="32"
-          color="primary"
-          variant="flat"
-          :prepend-icon="mdiArrowDown"
-          :disabled="isBusy || Boolean(remoteError)"
-          @click="review('pull')"
-        >
-          Pull
-          <span class="local-remotes__count ms-2">{{ state.incoming }}</span>
-        </v-btn>
-        <v-btn
-          v-if="state?.push && state.outgoing > 0"
-          height="32"
-          color="primary"
-          :variant="state.incoming > 0 ? 'tonal' : 'flat'"
-          :prepend-icon="mdiArrowUp"
-          :disabled="isBusy || Boolean(remoteError)"
-          @click="review('push')"
-        >
-          Push
-          <span class="local-remotes__count ms-2">{{ state.outgoing }}</span>
-        </v-btn>
-      </div>
-    </div>
+      </v-sheet>
+    </v-menu>
 
     <v-dialog v-model="settingsOpen" max-width="560" :persistent="isBusy">
       <v-card>
@@ -237,6 +228,7 @@ async function refresh(background = true) {
   }
 }
 function review(action) {
+  detailsOpen.value = false;
   const current = state.value;
   pendingReview.value = {
     action, review: snapshot(current.review), target: snapshot(action === "push" ? current.push : current.upstream),
@@ -306,12 +298,9 @@ onScopeDispose(() => {
 
 <style scoped>
 .local-remotes { flex: 0 0 auto; min-width: 0; }
-.local-remotes__toolbar { display: flex; align-items: center; gap: 0.5rem; min-height: 32px; white-space: nowrap; }
-.local-remotes__identity { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 .local-remotes__branch { min-width: 0; max-width: 100%; }
-.local-remotes__branch-name { display: block; max-width: min(18rem, 40vw); overflow: hidden; text-overflow: ellipsis; }
+.local-remotes__branch-name { display: block; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
 .local-remotes__status { display: flex; align-items: center; gap: 0.375rem; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
-.local-remotes__actions { display: flex; align-items: center; gap: 0.5rem; }
 .local-remotes__count { font-variant-numeric: tabular-nums; }
 .local-remotes__details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem 1rem; }
 .local-remotes__details dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }

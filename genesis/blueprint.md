@@ -581,12 +581,12 @@ GitHub branch authority of its own; publishing its work does not change the
 project authority or notify sessions that track a different branch.
 
 Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
-Their project header shows the branch, a short sync status and Fetch beside the
-project name, leaving the space below for work. Pull and
-Push appear with commit counts when work is available; the branch button opens
-remote destinations, the last check time and settings. Controls scroll
-horizontally on narrow screens, and failed checks remain visible with their
-details available on demand.
+Their project header keeps the new-session + beside the project name and one
+compact Git dropdown. A badge signals incoming/outgoing commits or a failed
+check. The dropdown contains sync status, Fetch, Pull/Push with commit counts,
+remote destinations, the last check time and settings. Small screens show an
+accessible Git icon so the + stays visible. Session limits, creation permissions
+and Git review/confirmation remain unchanged.
 The original folder's checked-out branch and native Git configuration determine
 separate pull and push destinations; Vibe64 never assumes origin or main.
 Fetch reports incoming and outgoing commits without changing working files.
@@ -596,6 +596,12 @@ Terminal Git remains available. If it rewrites the baseline, a person can
 review and reconcile an existing session's changes onto the new history,
 keeping its conversation and recoverable work. Hosted source authority and
 its Save and Update workflow remain unchanged.
+
+The muted Save disk remains clickable to request fresh repository status from
+the server. It shows “Checking…” while waiting, then reflects the latest Save
+or Update state without invoking either action. Repeated clicks cannot start
+overlapping checks; archived sessions, suspended source access and repository
+operations still block the control.
 
 All hosted editing happens in isolated session checkouts. A hosted project's
 container is never an application checkout and is never used as a source or

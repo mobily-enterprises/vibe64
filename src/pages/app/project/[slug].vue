@@ -91,6 +91,10 @@ const {
             </v-list>
           </v-menu>
           <div
+            id="studio-home-shell-create-session"
+            class="studio-home-shell-create-session-host"
+          />
+          <div
             id="studio-home-shell-local-remotes"
             class="studio-home-shell-local-remotes-host"
           />
@@ -200,6 +204,7 @@ const {
             </Teleport>
             <Vibe64SessionPanel
               :chat-collapsed="chatCollapsed"
+              create-session-teleport-target="#studio-home-shell-create-session"
               :github-actor-teleport-target="githubActorTeleportTarget"
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
               :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
@@ -293,15 +298,13 @@ const {
   flex: 1 1 auto;
   gap: 0.42rem;
   min-width: 0;
-  overflow-x: auto;
   padding-left: 1rem;
-  scrollbar-width: none;
 }
 
 .studio-home-shell-project-selector {
   border-radius: 6px;
   color: rgb(var(--v-theme-on-surface)) !important;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   font-size: 1rem;
   font-weight: 720;
   justify-content: start;
@@ -338,12 +341,14 @@ const {
   display: none;
 }
 
-.studio-home-shell-local-remotes-host {
+.studio-home-shell-local-remotes-host,
+.studio-home-shell-create-session-host {
   display: flex;
   flex: 0 0 auto;
 }
 
-.studio-home-shell-local-remotes-host:empty {
+.studio-home-shell-local-remotes-host:empty,
+.studio-home-shell-create-session-host:empty {
   display: none;
 }
 
