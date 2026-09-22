@@ -49,6 +49,13 @@ Selection waits up to ten seconds for brief source-lock contention, then
 rechecks the active session and assistant work before importing.
 The browser sends only the selected catalogue ID. Neither session startup nor
 inspection runs application verification or workspace preparation.
+All onboarding conversation actions use the session's existing Temporary AI
+workspace, opening a new task with the current diagnostics or entered purpose.
+Main-assistant activity does not disable help, including failed inspections and
+newer-format warnings. Direct assistant access, an active unarchived session,
+and duplicate-click protection still apply. Starter import retains its separate
+source-work busy guard. Help leaves the main draft and History untouched; the
+person can recheck setup after the task finishes.
 Starter command failures use the shared action feedback and leave the choice
 available for retry. Import success is returned independently of the subsequent
 read-only setup check, so a later inspection failure cannot report copied

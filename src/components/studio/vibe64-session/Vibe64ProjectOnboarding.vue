@@ -19,17 +19,12 @@
         <v-btn :disabled="!enabled || resource.isFetching.value" size="small" variant="text" @click="resource.reload()">
           {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
         </v-btn>
-        <v-btn
-          v-if="!loadError && onboarding.inspection.nextAction !== 'update-genesis'"
-          :disabled="disabled || !props.canAsk"
-          size="small"
-          variant="text"
+        <Vibe64TemporaryAiFixAction
+          :disabled="askDisabled"
+          :pending="asking"
+          title="Open Temporary AI to resolve project setup"
           @click="ask('repair')"
-        >
-          Ask AI to update setup
-        </v-btn>
-        <span v-if="props.busy">The assistant is working; setup can still be rechecked.</span>
-        <span v-else-if="asking" role="status">Sending to the conversation…</span>
+        />
       </div>
     </v-alert>
     <v-alert
@@ -76,7 +71,7 @@
               :key="template.id"
               type="button"
               class="project-onboarding__choice"
-              :disabled="disabled"
+              :disabled="starterDisabled"
               @click="apply(template)"
             >
               <strong>{{ template.name }}</strong>
@@ -87,7 +82,7 @@
           </div>
         </div>
         <p v-if="!groups.length">No starters are configured for this installation yet.</p>
-        <v-btn :disabled="disabled || !props.canAsk" variant="text" @click="ask('create')">Start through conversation</v-btn>
+        <v-btn :disabled="askDisabled" variant="text" @click="ask('create')">Start through conversation</v-btn>
       </template>
       <template v-else-if="state === 'adoption'">
         <p class="project-onboarding__eyebrow">Bring your project</p>
@@ -99,14 +94,14 @@
           placeholder="For example: a Python tool that processes invoices. I want to run its command line."
           rows="3"
           auto-grow
-          :disabled="disabled"
+          :disabled="askDisabled"
         />
         <div class="project-onboarding__actions">
-          <v-btn :disabled="disabled || !props.canAsk || !purpose.trim()" color="primary" @click="ask('adopt')">Set up project</v-btn>
-          <v-btn :disabled="disabled || !props.canAsk" variant="text" @click="ask('inspect')">Inspect it for me</v-btn>
+          <v-btn :disabled="askDisabled || !purpose.trim()" color="primary" @click="ask('adopt')">Set up project</v-btn>
+          <v-btn :disabled="askDisabled" variant="text" @click="ask('inspect')">Inspect it for me</v-btn>
         </div>
       </template>
-      <p v-if="pending" role="status">{{ applying ? 'Adding the starter to this session…' : 'Sending to the conversation…' }}</p>
+      <p v-if="pending" role="status">{{ applying ? 'Adding the starter to this session…' : 'Opening Temporary AI…' }}</p>
     </section>
   </div>
 </template>
@@ -120,13 +115,14 @@ import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
+import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 
 const props = defineProps({
   active: Boolean,
   archived: Boolean,
   busy: Boolean,
   canAsk: Boolean,
-  sendMessage: { type: Function, required: true },
+  requestTemporaryAi: { type: Function, required: true },
   sessionId: { type: String, required: true }
 });
 const projectSlug = useVibe64ProjectSlug();
@@ -170,7 +166,8 @@ const showPreview = computed(() => {
   return onboarding.value !== null && state.value !== "new" && state.value !== "adoption";
 });
 const pending = computed(() => Boolean(applying.value || asking.value));
-const disabled = computed(() => pending.value || props.busy || !enabled.value);
+const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);
+const askDisabled = computed(() => pending.value || !enabled.value || !props.canAsk);
 const groups = computed(() => {
   const grouped = new Map();
   for (const template of onboarding.value?.templates || []) {
@@ -186,7 +183,7 @@ function technologyLabel(technology) {
 }
 
 async function apply(template) {
-  if (disabled.value) return;
+  if (starterDisabled.value) return;
   const sessionId = props.sessionId;
   applying.value = template.id;
   try {
@@ -204,16 +201,41 @@ async function apply(template) {
 }
 
 async function ask(kind) {
-  if (disabled.value || !props.canAsk) return;
+  if (askDisabled.value) return;
+  const inspection = onboarding.value?.inspection;
+  const diagnostic = loadError.value || inspection?.diagnostics.map(({ message }) => message).join(" ");
   const requests = {
-    create: "Help me start this project through conversation. Ask what I want to build, use answers I have already given, and help me choose a suitable Stack. I have not selected a starter.",
-    adopt: `Set up this existing project for guided editing. What this project is and what I want to run: ${purpose.value.trim()}. Inspect its current implementation and work backwards into Genesis Blueprint, Stack, and Program, including its actual setup and run outputs. Preserve its source and Git history.`,
-    inspect: "Set up this existing project for guided editing. Inspect it for me to identify what it does and its run targets. Ask me only where the evidence is ambiguous. Work backwards into Genesis Blueprint, Stack, and Program while preserving the implementation and Git history.",
-    repair: `Inspect and update this project's Genesis setup. The opening inspection reports: ${onboarding.value?.inspection?.diagnostics.map(({ message }) => message).join(" ")}. Use the appropriate migration or repair, preserve source and Git history, and explain the specific change.`
+    create: {
+      title: "Start this project",
+      message: "Help me start this project through conversation. Ask what I want to build, use answers I have already given, and help me choose a suitable Stack. I have not selected a starter."
+    },
+    adopt: {
+      title: "Set up this project",
+      message: `Set up this existing project for guided editing. What this project is and what I want to run: ${purpose.value.trim()}. Inspect its current implementation and work backwards into Genesis Blueprint, Stack, and Program, including its actual setup and run outputs. Preserve its source and Git history.`
+    },
+    inspect: {
+      title: "Inspect project setup",
+      message: "Set up this existing project for guided editing. Inspect it for me to identify what it does and its run targets. Ask me only where the evidence is ambiguous. Work backwards into Genesis Blueprint, Stack, and Program while preserving the implementation and Git history."
+    },
+    repair: {
+      title: "Fix project setup",
+      message: `Inspect and update this project's Genesis setup. The opening inspection reports: ${diagnostic}. ` +
+        (inspection?.nextAction === "update-genesis" ? "The project requires a newer Genesis installation; do not downgrade its source format. " : "") +
+        "Use the appropriate migration or repair, preserve source and Git history, and explain the specific change."
+    }
   };
+  const { title, message } = requests[kind];
   asking.value = true;
-  try { await props.sendMessage({ message: requests[kind] }); }
-  finally { asking.value = false; }
+  try {
+    await props.requestTemporaryAi({
+      title,
+      displayMessage: kind === "adopt" ? `${title}: ${purpose.value.trim()}` : `${title}.`,
+      message,
+      nextStepMessage: "Recheck setup after the AI finishes. Project edits remain in this session for review and Save."
+    });
+  } finally {
+    asking.value = false;
+  }
 }
 
 watch(() => props.sessionId, () => { purpose.value = ""; });
@@ -228,7 +250,6 @@ watch(() => props.busy, (busy, previous) => {
 .project-preview__warning { flex: 0 0 auto; max-height: 35%; overflow-y: auto; overflow-wrap: anywhere; }
 .project-preview__warning p { margin: .25rem 0; }
 .project-preview__warning-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; margin-top: .25rem; }
-.project-preview__warning-actions span { font-size: .8rem; }
 .project-preview__warning-actions button:disabled { opacity: .6; }
 .project-onboarding { width: min(100%, 52rem); margin: auto; padding: clamp(1rem, 3vw, 2.5rem); overflow-y: auto; }
 .project-onboarding h2 { font-size: 1.6rem; line-height: 1.25; margin-bottom: 1rem; }

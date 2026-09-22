@@ -1008,13 +1008,16 @@ test("@render-recovery completes hidden preview loads across toolbar moves", asy
   }
 });
 
-for (const width of [1280, 390]) {
+for (const width of [1280, 768, 390]) {
   test(`@preview-setup-warning keeps the app and browser usable through Genesis warnings at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await mockLaunchTerminalSocket(page, { terminalSocketNeverSettles: true });
     const session = sessionPayload();
     session.agentSession.turn.active = true;
-    const launch = await mockLaunchSession(page, { session });
+    const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
+    const launch = await mockLaunchSession(page, {
+      session, assistantAccess: PERSONAL_ASSISTANT_ACCESS, temporaryAiRecoveryRequests: requests
+    });
     let state = "attention";
     let failInspection = false;
     let reads = 0;
@@ -1035,13 +1038,15 @@ for (const width of [1280, 390]) {
       });
     });
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    if (width === 390) await page.getByRole("button", { name: "Show project", exact: true }).click();
+    const mainDraft = page.getByRole("textbox", { name: "Message AI assistant", exact: true });
+    await mainDraft.fill("Keep my current task draft.");
+    if (width <= 960) await page.getByRole("button", { name: "Show project", exact: true }).click();
     const frame = page.locator(".vibe64-launch-controls__preview-frame");
     const warning = page.locator(".project-preview__warning");
     await expect(frame).toBeVisible();
     await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
     await expect(warning).toContainText("ContactUpcomingBookings.vue");
-    await expect(warning.getByRole("button", { name: "Ask AI to update setup" })).toBeDisabled();
+    await expect(warning.getByRole("button", { name: "Fix it with AI" })).toBeEnabled();
     await expect(warning.getByRole("button", { name: "Recheck setup" })).toBeEnabled();
     const frameElement = await frame.elementHandle();
     const initialLoads = launch.getPreviewLoadCount();
@@ -1049,6 +1054,7 @@ for (const width of [1280, 390]) {
     failInspection = true;
     await warning.getByRole("button", { name: "Recheck setup" }).click();
     await expect(warning).toContainText("Setup inspection unavailable.");
+    await expect(warning.getByRole("button", { name: "Fix it with AI" })).toBeEnabled();
     await expect(frame).toBeVisible();
     expect(await frameElement?.evaluate((element) => element === document.querySelector(".vibe64-launch-controls__preview-frame"))).toBe(true);
     expect(launch.getPreviewLoadCount()).toBe(initialLoads);
@@ -1062,7 +1068,7 @@ for (const width of [1280, 390]) {
 
     // Returning with a warm cache must show a new warning without replacing the iframe.
     state = "attention";
-    if (width === 390) {
+    if (width <= 960) {
       await page.getByRole("button", { name: "Go to dashboard", exact: true }).click();
       await page.getByRole("button", { name: "Go to preview", exact: true }).click();
     } else {
@@ -1073,7 +1079,7 @@ for (const width of [1280, 390]) {
     expect(await frameElement?.evaluate((element) => element === document.querySelector(".vibe64-launch-controls__preview-frame"))).toBe(true);
     expect(launch.getPreviewLoadCount()).toBe(initialLoads);
 
-    if (width === 390) await page.getByRole("button", { name: "Show preview controls", exact: true }).click();
+    if (width <= 960) await page.getByRole("button", { name: "Show preview controls", exact: true }).click();
     await expect(page.getByLabel("Preview URL", { exact: true })).toHaveValue("/home");
     const readsBeforeReload = reads;
     await page.locator('button[title="Reload preview"]').click();
@@ -1081,7 +1087,7 @@ for (const width of [1280, 390]) {
     expect(reads).toBe(readsBeforeReload);
     expect(launch.getLaunchStartPayloads()).toHaveLength(0);
     await expect(page.locator('.vibe64-launch-controls__dock button[title="Open browser"]')).toBeEnabled();
-    if (width === 390) await page.getByRole("button", { name: "Collapse preview controls", exact: true }).click();
+    if (width <= 960) await page.getByRole("button", { name: "Collapse preview controls", exact: true }).click();
     await expect(frame).toBeVisible();
     const warningBox = await warning.boundingBox();
     const frameBox = await frame.boundingBox();
@@ -1089,6 +1095,22 @@ for (const width of [1280, 390]) {
     expect(frameBox?.height).toBeGreaterThan(300);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`setup-warning-${width}.png`) });
+
+    await warning.getByRole("button", { name: "Fix it with AI" }).click();
+    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+    await expect(workspace).toBeVisible();
+    await expect(workspace.getByRole("button", { name: "Fix project setup", exact: true })).toBeVisible();
+    await expect.poll(() => requests.temporaryTurns).toHaveLength(1);
+    expect(requests.temporaryStarts).toHaveLength(1);
+    expect(requests.temporaryTurns[0]).toEqual(expect.objectContaining({
+      displayMessage: "Fix project setup.",
+      message: expect.stringContaining("ContactUpcomingBookings.vue"),
+      promptLabel: "Fix project setup"
+    }));
+    expect(requests.mainMessages).toHaveLength(0);
+    await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+    await expect(mainDraft).toHaveValue("Keep my current task draft.");
   });
 }
 

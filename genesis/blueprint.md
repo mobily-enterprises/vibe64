@@ -642,6 +642,11 @@ Project-understanding warnings do not replace the application preview. People
 can read a persistent warning, recheck setup, and keep using the preview's URL,
 reload, and navigation controls. Starting an application still requires valid
 launch settings.
+Setup help opens a new Temporary AI conversation even while the main assistant
+is working. This applies to setup warnings, inspection failures, starting through
+conversation and adopting an existing project. The request includes the reported
+problem or project purpose and preserves the main conversation and its draft.
+Starter installation still waits for active source work to finish.
 Commands and background processes started for a session remain owned by that
 session and stop with it, even while the assistant service itself is shared.
 Assistant terminal commands retain readable shell text through the session

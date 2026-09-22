@@ -45,13 +45,20 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => Vue.ref("project-a")
 }));
 import Onboarding from "../../src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
+import FixAction from "../../src/components/studio/Vibe64TemporaryAiFixAction.vue";
+import { useVibe64TemporaryAi } from "../../src/composables/useVibe64TemporaryAi.js";
 
-const filename = path.resolve("src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue");
-const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
-const script = compileScript(descriptor, { id: "onboarding-test" });
-Onboarding.render = new Function("Vue", compile(descriptor.template.content, {
-  bindingMetadata: script.bindings, mode: "function", prefixIdentifiers: true
-}).code)(Vue);
+for (const [component, relativePath] of [
+  [Onboarding, "src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue"],
+  [FixAction, "src/components/studio/Vibe64TemporaryAiFixAction.vue"]
+]) {
+  const filename = path.resolve(relativePath);
+  const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
+  const script = compileScript(descriptor, { id: "onboarding-test" });
+  component.render = new Function("Vue", compile(descriptor.template.content, {
+    bindingMetadata: script.bindings, mode: "function", prefixIdentifiers: true
+  }).code)(Vue);
+}
 
 const autopilot = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue"), "utf8");
 const onboardingTag = autopilot.match(/<Vibe64ProjectOnboarding\b[\s\S]*?>/u)?.[0];
@@ -86,11 +93,14 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false } = {}) {
   mocks.live = live;
-  const props = Vue.reactive({ active, archived: false, busy: false, mounted: true, projectPane, sessionId: "session-a" });
+  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, sessionId: "session-a" });
   const reads = [];
   const writes = [];
+  const conversationRequests = [];
+  const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
+  let temporary;
   const listeners = new Set();
   const feedback = { dismiss: vi.fn(), report: vi.fn(() => ({ skipped: true })) };
   const outputs = { mounted: vi.fn(), unmounted: vi.fn() };
@@ -98,6 +108,13 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
   let closed = false;
   configureHttpWebClient({
     request(url, options) {
+      if (url.startsWith("/api/vibe64/sessions/")) {
+        conversationRequests.push({ url, ...options });
+        if (url.endsWith("/temporary-conversations")) {
+          return Promise.resolve({ ok: true, conversationId: options.body.conversationId });
+        }
+        return Promise.resolve({ ok: true, runId: "repair-turn", status: "inProgress" });
+      }
       const response = Promise.withResolvers();
       if (options.method === "GET") {
         expect(url).toBe("/api/vibe64/onboarding");
@@ -141,22 +158,31 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
     setText: (node, text) => { node.text = text; }
   });
   const app = renderer.createApp({
-    setup: () => () => props.mounted ? Vue.h(Onboarding, {
-      active: onboardingActive(props),
-      archived: props.archived,
-      busy: props.busy,
-      canAsk: true,
-      sendMessage: vi.fn(),
-      sessionId: props.sessionId
-    }, { default: () => Vue.h(outputSlot) }) : null
+    setup() {
+      if (temporaryChats) {
+        temporary = useVibe64TemporaryAi({
+          sessionId: () => props.sessionId,
+          sessionsApiPath: () => "/api/vibe64/sessions"
+        });
+        requestTemporaryAi.mockImplementation(temporary.startTask);
+      }
+      return () => props.mounted ? Vue.h(Onboarding, {
+        active: onboardingActive(props),
+        archived: props.archived,
+        busy: props.busy,
+        canAsk: props.canAsk,
+        requestTemporaryAi,
+        sessionId: props.sessionId
+      }, { default: () => Vue.h(outputSlot) }) : null;
+    }
   });
   app.use(VueQueryPlugin, { queryClient });
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
   app.provide("jskit.realtime.runtime.client.socket", {
-    on(event, handler) { expect(event).toBe("vibe64.project.changed"); listeners.add(handler); },
-    off(event, handler) { expect(event).toBe("vibe64.project.changed"); listeners.delete(handler); }
+    on(event, handler) { if (event === "vibe64.project.changed") listeners.add(handler); },
+    off(event, handler) { if (event === "vibe64.project.changed") listeners.delete(handler); }
   });
   for (const [name, element] of [["VAlert", "aside"], ["VBtn", "button"], ["VTextarea", "textarea"], ["VSkeletonLoader", "div"]]) {
     app.component(name, passthroughComponent(element));
@@ -164,7 +190,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
   const container = { children: [], props: {}, type: "root" };
   app.mount(container);
   return {
-    container, feedback, listeners, outputs, props, reads, writes,
+    container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
@@ -201,7 +227,7 @@ async function render(state, props = {}, environmentSetup = null) {
     templates: [{ id: "official:jskit/public", technology: "jskit", name: "Public starter", description: "A public app." }]
   };
   const app = Vue.createSSRApp({
-    render: () => Vue.h(Onboarding, { active: true, sessionId: "session-a", canAsk: true, sendMessage: async () => {}, ...props }, {
+    render: () => Vue.h(Onboarding, { active: true, sessionId: "session-a", canAsk: true, requestTemporaryAi: async () => {}, ...props }, {
       default: () => Vue.h("div", "Normal outputs")
     })
   });
@@ -274,7 +300,7 @@ describe("Preview project onboarding", () => {
       attention.inspection.diagnostics = [{ message: "Program module cites a missing or ineligible source file: src/Old.vue." }];
       await fixture.settleRead(1, attention);
       expect(nodeText(fixture.container)).toContain("src/Old.vue");
-      expect(fixture.button("Ask AI to update setup").props.disabled).toBe(true);
+      expect(fixture.button("Fix it with AI").props.disabled).toBe(false);
       expect(fixture.button("Recheck setup").props.disabled).toBe(false);
       expect(findNode(fixture.container, (node) => node.type === "output")).toBe(output);
 
@@ -293,6 +319,108 @@ describe("Preview project onboarding", () => {
       expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
       expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
     } finally {
+      fixture.close();
+    }
+  });
+
+  it("opens separate repair conversations while the main assistant and a previous repair are working", async () => {
+    expect(onboardingTag).toContain(':can-ask="assistantDirectAllowed"');
+    expect(onboardingTag).toContain(':request-temporary-ai="startTemporaryAiTask"');
+    const fixture = mountOnboarding({ temporaryChats: true });
+    try {
+      const attention = opening("attention");
+      const diagnostic = "genesis/subsystems.md: workplace-operations: Data used must reference a table owned by another declared subsystem.";
+      attention.inspection.diagnostics = [{ message: diagnostic }];
+      await fixture.settleRead(0, attention);
+      fixture.props.busy = true;
+      await Vue.nextTick();
+      const help = fixture.button("Fix it with AI");
+      expect(help.props.disabled).toBe(false);
+      await help.props.onClick();
+      await fixture.requestTemporaryAi.mock.results.at(-1).value;
+      await Vue.nextTick();
+      expect(fixture.temporary.open.value).toBe(true);
+      expect(fixture.temporary.activeTask.value.busy).toBe(true);
+      expect(help.props.disabled).toBe(false);
+      await help.props.onClick();
+      await fixture.requestTemporaryAi.mock.results.at(-1).value;
+      const creations = fixture.conversationRequests.filter(({ url, method }) => method === "POST" && url.endsWith("/temporary-conversations"));
+      const turns = fixture.conversationRequests.filter(({ url, method }) => method === "POST" && url.endsWith("/turns"));
+      expect(creations).toHaveLength(2);
+      expect(turns).toHaveLength(2);
+      expect(creations[0].body.conversationId).not.toBe(creations[1].body.conversationId);
+      expect(turns.every(({ body }) => body.message.includes(diagnostic))).toBe(true);
+      expect(turns.every(({ body }) => body.displayMessage === "Fix project setup.")).toBe(true);
+      expect(fixture.temporary.tasks.value).toHaveLength(2);
+      expect(fixture.writes).toHaveLength(0);
+      expect(nodeText(fixture.container)).not.toContain("The assistant is working; setup can still be rechecked.");
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it.each([
+    { state: "new", label: "Start through conversation", title: "Start this project", detail: "I have not selected a starter" },
+    { state: "adoption", label: "Inspect it for me", title: "Inspect project setup", detail: "Inspect it for me to identify what it does" },
+    { state: "adoption", label: "Set up project", title: "Set up this project", detail: "Invoice processing CLI", purpose: true },
+    { state: "attention", label: "Fix it with AI", title: "Fix project setup", detail: "requires a newer Genesis installation", nextAction: "update-genesis" },
+    { state: null, label: "Fix it with AI", title: "Fix project setup", detail: "Setup inspection is unavailable.", loadError: true }
+  ])("opens Temporary AI for $label ($state) during main assistant work", async ({ state, label, title, detail, purpose, nextAction, loadError }) => {
+    mocks.resource.data.value = state ? opening(state) : null;
+    if (nextAction) mocks.resource.data.value.inspection.nextAction = nextAction;
+    if (loadError) mocks.resource.loadError.value = detail;
+    const fixture = mountOnboarding({ live: false });
+    try {
+      fixture.props.busy = true;
+      await Vue.nextTick();
+      if (purpose) {
+        expect(fixture.button(label).props.disabled).toBe(true);
+        const field = findNode(fixture.container, ({ type }) => type === "textarea");
+        expect(field.props.disabled).toBe(false);
+        field.props["onUpdate:modelValue"](detail);
+        await Vue.nextTick();
+      }
+      expect(fixture.button(label).props.disabled).toBe(false);
+      await fixture.button(label).props.onClick();
+      expect(fixture.requestTemporaryAi).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        title, message: expect.stringContaining(detail)
+      }));
+      if (state === "new") {
+        expect(fixture.button("Public starter").props.disabled).toBe(true);
+        await fixture.button("Public starter").props.onClick();
+        expect(fixture.writes).toHaveLength(0);
+      }
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("guards duplicate help clicks, recovers after a failed start and respects assistant access", async () => {
+    mocks.resource.data.value = opening("attention");
+    const fixture = mountOnboarding({ live: false });
+    const start = Promise.withResolvers();
+    try {
+      fixture.props.busy = true;
+      fixture.requestTemporaryAi.mockReturnValueOnce(start.promise);
+      const help = fixture.button("Fix it with AI");
+      help.props.onClick();
+      const pending = fixture.requestTemporaryAi.mock.results.at(-1).value;
+      await Vue.nextTick();
+      expect(help.props.disabled).toBe(true);
+      expect(nodeText(fixture.container)).toContain("Opening…");
+      await help.props.onClick();
+      expect(fixture.requestTemporaryAi).toHaveBeenCalledOnce();
+      start.resolve({ ok: false });
+      await pending;
+      await Vue.nextTick();
+      expect(help.props.disabled).toBe(false);
+      fixture.props.canAsk = false;
+      await Vue.nextTick();
+      expect(help.props.disabled).toBe(true);
+      await help.props.onClick();
+      expect(fixture.requestTemporaryAi).toHaveBeenCalledOnce();
+    } finally {
+      start.resolve({ ok: false });
       fixture.close();
     }
   });

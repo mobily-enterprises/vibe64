@@ -32,6 +32,7 @@ session history.
 - `src/composables/useVibe64AutopilotView.js`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue`
 - `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
@@ -158,8 +159,11 @@ status and matching connection error; drafts stay editable and Send waits for
 the connection. A failed generated repair request shows its concise description
 in the composer while retaining the full request and message identity for retry.
 
-Every product-owned repair entry uses the shared Fix it with AI control. It
-opens, selects, and focuses a separate Temporary AI task immediately. That task
+Every product-owned repair entry, including project setup warnings, uses the
+shared Fix it with AI control and temporary-task sender. It opens, selects, and
+focuses a separate Temporary AI task immediately, even while the main assistant
+is working. Onboarding's create, inspect and adoption actions use that same
+temporary-chat path. Each onboarding request opens a fresh chat. The task
 shows a concise user-facing repair request and a compact status heading while
 the AI works. Completion and verification results appear after the task stops.
 Detailed diagnostics remain in the AI request without overwhelming the visible

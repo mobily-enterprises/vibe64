@@ -769,8 +769,8 @@
           :active="props.active && props.projectPane === 'preview'"
           :archived="props.sessionSelectionArchived"
           :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-          :can-ask="assistantCanUseAiState || assistantCanRequestMessage"
-          :send-message="sendMainChatMessage"
+          :can-ask="assistantDirectAllowed"
+          :request-temporary-ai="startTemporaryAiTask"
           :session-id="selectedAssistantSessionId"
         >
           <Vibe64OutputControls
