@@ -289,6 +289,10 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
     async readThreadStatus(threadId) {
       return this.readThread(threadId);
     },
+    async listThreadTurns(threadId) {
+      const thread = await this.readThread(threadId);
+      return { data: thread.raw?.turns || thread.turns || [] };
+    },
     async readGoal() { return { goal: captures.persistentGoal || null }; },
     async stopThreadForObservationLoss(threadId, turnId) {
       calls.push(["stopObserved", threadId, turnId]);
@@ -1961,6 +1965,14 @@ async function withAgentMessageController(operation, {
           const finalText = typeof captures.finalText === "function"
             ? captures.finalText(provider.turnId)
             : captures.finalText || `Completed ${provider.turnId}.`;
+          if (!finalItems.length && (captures.finalText || provider.status !== "inProgress")) {
+            finalItems.push({
+              id: `answer-${provider.turnId}`,
+              phase: "final_answer",
+              text: finalText,
+              type: "agentMessage"
+            });
+          }
           return {
             cwd: provider.threadCwd,
             id: threadId,
@@ -1974,12 +1986,7 @@ async function withAgentMessageController(operation, {
                 }],
                 id: `user-${provider.turnId}`,
                 type: "userMessage"
-              }, ...(finalItems.length ? finalItems : [{
-                id: `answer-${provider.turnId}`,
-                phase: "final_answer",
-                text: finalText,
-                type: "agentMessage"
-              }])],
+              }, ...finalItems],
               status: provider.status
             }] : []
           };
@@ -1988,6 +1995,25 @@ async function withAgentMessageController(operation, {
           return {
             status: provider.status,
             turnId: provider.turnId
+          };
+        },
+        async listThreadTurns(threadId, { cursor = "0", limit = 1, sortDirection = "desc" } = {}) {
+          const thread = await provider.readThread(threadId);
+          const byId = new Map();
+          if (!Array.isArray(captures.threadSnapshotTurns)) {
+            for (const entry of captures.finalItems.values()) {
+              if (entry.threadId !== threadId) continue;
+              if (!byId.has(entry.turnId)) byId.set(entry.turnId, { id: entry.turnId, status: "completed", items: [] });
+              byId.get(entry.turnId).items.push(entry.item);
+            }
+          }
+          for (const turn of thread.turns || []) byId.set(turn.id, turn);
+          const turns = [...byId.values()];
+          if (sortDirection === "desc") turns.reverse();
+          const offset = Number(cursor);
+          return {
+            data: turns.slice(offset, offset + limit),
+            nextCursor: offset + limit < turns.length ? String(offset + limit) : null
           };
         },
         async readGoal() { return { goal: null }; },
@@ -2062,6 +2088,16 @@ async function withAgentMessageController(operation, {
             const params = notification.params;
             if (notification.method === "item/completed" && params?.item?.phase === "final_answer") {
               captures.finalItems.set(`${params.threadId}:${params.turnId}:${params.item.id}`, params);
+              if (Array.isArray(captures.threadSnapshotTurns)) {
+                let turn = captures.threadSnapshotTurns.find((candidate) => candidate.id === params.turnId);
+                if (!turn) {
+                  turn = { id: params.turnId, items: [], status: "inProgress" };
+                  captures.threadSnapshotTurns.push(turn);
+                }
+                const index = turn.items.findIndex((item) => item.id === params.item.id);
+                if (index < 0) turn.items.push(params.item);
+                else turn.items[index] = params.item;
+              }
             }
             callback(notification);
           };
@@ -3993,16 +4029,16 @@ test("restart reconciliation keeps a live goal successor visible and steerable d
 
     // Failure reconciliation may await history while the goal starts working.
     // The final decision must confirm inactivity after that awaited read.
-    const readThread = provider.readThread;
-    provider.readThread = async (...args) => {
+    const listThreadTurns = provider.listThreadTurns;
+    provider.listThreadTurns = async (...args) => {
       liveStatus = "active";
-      return readThread(...args);
+      return listThreadTurns(...args);
     };
     liveStatus = "idle";
     await controller.ensureThread(sessionId);
     assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).state,
       VIBE64_AGENT_RUN_STATE.ACTIVE);
-    provider.readThread = readThread;
+    provider.listThreadTurns = listThreadTurns;
 
     // Once the provider really is idle, interrupted history must still settle
     // the turn. An active goal alone is not evidence of a running provider.
@@ -4781,6 +4817,9 @@ test("an active chat keeps one composed session context while authored turns sta
               status: provider.status
             }] : []
           };
+        },
+        async listThreadTurns() {
+          return { data: (await provider.readThread()).turns };
         },
         async readThreadStatus() {
           return {
@@ -10212,14 +10251,19 @@ test("active-goal steering publishes independent native replies immediately and 
   });
 });
 
-for (const failure of ["storage", "realtime"]) {
+for (const failure of ["storage", "realtime", "history"]) {
   test(`a final reply survives ${failure} failure and history recovery without duplicate publication`, async () => {
     await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
       await controller.sendMessage(sessionId, { message: "Work", messageId: `recover-${failure}` });
       const provider = captures.provider;
       provider.stopThreadForObservationLoss = async () => { provider.status = "idle"; };
       const write = store.writeConversationAssistantMessage;
+      const listThreadTurns = provider.listThreadTurns;
       let unavailable = true;
+      provider.listThreadTurns = (...args) => {
+        if (unavailable && failure === "history") throw new Error("Native history temporarily unavailable");
+        return listThreadTurns(...args);
+      };
       store.writeConversationAssistantMessage = (...args) => {
         if (unavailable && failure === "storage") throw new Error("Transcript unavailable");
         return write(...args);
@@ -10237,7 +10281,7 @@ for (const failure of ["storage", "realtime"]) {
         await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
           (run) => run?.providerStatus === "observation_lost" && !run.active, "verified stop after publication failure");
         assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length,
-          failure === "storage" ? 0 : 1);
+          failure === "realtime" ? 1 : 0);
         unavailable = false;
         provider.resumeThread = async () => { throw new Error("History recovery must not resume native work"); };
         const readThread = provider.readThread;
@@ -10257,10 +10301,96 @@ for (const failure of ["storage", "realtime"]) {
       } finally {
         unavailable = false;
         store.writeConversationAssistantMessage = write;
+        provider.listThreadTurns = listThreadTurns;
       }
     });
   });
 }
+
+test("Codex live IDs and history IDs publish each reply once across replay and restart", async () => {
+  await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "history-identity" });
+    const { threadId, turnId } = captures.provider;
+    const historyIds = { "msg-first": "item-4040", "msg-second": "item-4041" };
+    const useHistoryIds = (provider) => {
+      const list = provider.listThreadTurns;
+      provider.listThreadTurns = async (...args) => {
+        const page = await list(...args);
+        return {
+          ...page,
+          data: page.data.map((turn) => ({
+            ...turn,
+            items: turn.items.map((item) => ({ ...item, id: historyIds[item.id] || item.id }))
+          }))
+        };
+      };
+    };
+    useHistoryIds(captures.provider);
+    emitCodexNotification(captures.subscribers, threadGoalUpdated({ threadId, turnId }));
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerGoalStatus === "active", "active goal");
+
+    const replies = () => store.readConversationLog(sessionId).then((rows) => rows.filter((row) => row.assistant));
+    const bundles = [];
+    captures.onSessionChanged = (_sessionId, event) => {
+      if (event.payload?.conversationLogPatch) bundles.push(event.payload);
+    };
+    for (const [index, itemId] of Object.keys(historyIds).entries()) {
+      const params = { threadId, turnId, itemId };
+      emitCodexNotification(captures.subscribers, { method: "item/started", params: {
+        ...params, item: { id: itemId, type: "agentMessage", phase: "final_answer" }
+      } });
+      emitCodexNotification(captures.subscribers, {
+        method: "item/agentMessage/delta", params: { ...params, delta: "Same answer." }
+      });
+      const live = await waitForSessionValue(() => store.readConversationStream(sessionId),
+        (stream) => stream.messages.length === 1, "live reply");
+      bundles.length = 0;
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({ ...params, phase: "final_answer", text: "Same answer." }));
+      const saved = await waitForSessionValue(replies, (rows) => rows.length === index + 1, "distinct saved reply");
+      const savedMessageId = saved.at(-1).assistant.messageId;
+      assert.notEqual(savedMessageId, live.messages[0].messageId);
+      await waitForSessionValue(() => store.readConversationStream(sessionId),
+        (stream) => !stream.messages.length, "provisional stream replaced by saved history");
+      await waitForSessionValue(() => bundles,
+        (events) => events.some((event) => event.conversationLogPatch.turn.assistant.messageId === savedMessageId),
+        "saved reply publication");
+      for (const event of bundles.filter((event) => !event.conversationStream.messages.length)) {
+        assert.equal(event.conversationLogPatch.turn.assistant.messageId, savedMessageId,
+          "The stream must be retired with its saved reply, not an earlier reply");
+      }
+    }
+    const ids = (await replies()).map((row) => row.assistant.messageId);
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      threadId, turnId, itemId: "msg-first", phase: "final_answer", text: "Corrected first answer."
+    }));
+    await waitForSessionValue(replies, (rows) => rows[0]?.assistant.text === "Corrected first answer.", "correction to the original row");
+    await controller.closeAllForSession(sessionId);
+
+    captures.onProviderCreated = (provider) => {
+      provider.threadId = threadId;
+      provider.turnId = turnId;
+      provider.status = "inProgress";
+      useHistoryIds(provider);
+    };
+    const restarted = createCodexTerminalController(controllerOptions);
+    try {
+      assert.equal((await restarted.reconcileThreads([{ sessionId }])).ok, true);
+      assert.equal((await restarted.ensureThread(sessionId)).ok, true);
+      for (const [itemId, answer] of [["msg-first", "Corrected first answer."], ["msg-second", "Same answer."]]) {
+        emitCodexNotification(captures.subscribers, assistantItemCompleted({
+          threadId, turnId, itemId, phase: "final_answer", text: answer
+        }));
+      }
+      await restarted.closeAllForSession(sessionId);
+      assert.deepEqual((await replies()).map((row) => row.assistant.messageId), ids);
+      assert.deepEqual((await replies()).map((row) => row.assistant.text), ["Corrected first answer.", "Same answer."]);
+      assert.equal(captures.turns.length, 1, "history reads must not resend the prompt");
+    } finally {
+      await restarted.closeAllForSession(sessionId);
+    }
+  });
+});
 
 test("a fresh controller recovers each active-goal final by native identity without resending", async () => {
   await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {

@@ -216,6 +216,8 @@ phones and desktops, and becomes one saved reply when complete. Reconnecting
 restores live text while the observing server is running; Stop removes unfinished
 text without recording it as a completed answer. Each reply remains in the conversation;
 showing it does not finish the goal or disable further steering.
+Reading saved Codex history after live delivery or a restart preserves each
+reply once, including when two separate replies contain the same text.
 History requests retain messages delivered live while the request was pending.
 A delayed partial update cannot remove an already displayed answer or progress.
 Deliberate Undo still removes its selected exchange through the saved history.

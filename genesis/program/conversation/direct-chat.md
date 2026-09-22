@@ -324,8 +324,15 @@ continuation permissions after a cold restart.
 Notifications from an obsolete socket cannot reach the current observers.
 Reading a saved final answer never resumes a thread.
 
-Each completed final reply is saved and broadcast immediately using its native
-thread, turn and item identity. Two replies in one provider turn remain separate,
+Each completed final reply is saved and broadcast using its native saved-history
+thread, turn and item identity. A live completion triggers a paged history read,
+starting with the newest turn and locating the exact completed turn if a goal
+has already continued. It replaces that live item's provisional stream in the
+same publication. Live item IDs are not durable reply identities: older Codex
+threads return different item IDs in saved history. Both live completion and
+recovery therefore use the same history-owned identity, without text matching,
+an identity mapping store or full-conversation hydration.
+Two replies in one provider turn remain separate,
 even when their text is equal. A replay is idempotent across controller restarts;
 a correction updates only that item's original row. Terminal-origin finals use
 this same writer. Commentary retains its separate duplicate-progress policy.

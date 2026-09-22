@@ -352,4 +352,38 @@ test("native paginated conversations accept their first message and survive reco
     assert.equal(contexts.at(-1).payload.approval_policy, "never");
     assert.equal(contexts.at(-1).payload.sandbox_policy.type, "danger-full-access");
   });
+  for (const historyMode of ["legacy", "paginated"]) {
+    await t.test(`completed ${historyMode} replies have durable history identities before settlement`, async () => {
+      holdResponses = false;
+      const thread = await provider.startThread({
+        cwd: workdir, model: "gpt-5.6-luna", approvalPolicy: "never", sandbox: "read-only",
+        historyMode, config
+      });
+      const observed = Promise.withResolvers();
+      const unsubscribe = client.subscribe((notification) => {
+        const { item, threadId, turnId } = notification.params || {};
+        if (notification.method !== "item/completed" || threadId !== thread.id || item?.type !== "agentMessage") return;
+        provider.listThreadTurns(thread.id, { limit: 1, itemsView: "full", sortDirection: "desc" })
+          .then((page) => observed.resolve({ item, turnId, page }), observed.reject);
+      });
+      try {
+        const sent = await provider.sendTurn(thread.id, ["Reply PROBE_OK"], {
+          cwd: workdir, model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }
+        });
+        const { item, turnId, page } = await observed.promise;
+        assert.equal(turnId, sent.id);
+        assert.equal(page.data[0].id, turnId);
+        const replies = page.data[0].items.filter((entry) => entry.type === "agentMessage");
+        assert.equal(replies.length, 1);
+        assert.equal(replies[0].text, item.text);
+        await stopProcess();
+        await startProcess();
+        const repeated = await provider.listThreadTurns(thread.id, { limit: 1, itemsView: "full", sortDirection: "desc" });
+        assert.equal(repeated.data[0].id, turnId);
+        assert.deepEqual(repeated.data[0].items, page.data[0].items);
+      } finally {
+        unsubscribe();
+      }
+    });
+  }
 });

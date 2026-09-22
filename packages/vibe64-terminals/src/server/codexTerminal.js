@@ -4541,8 +4541,8 @@ function createCodexTerminalController({
     ) || null;
   }
 
-  async function persistCodexAppServerAssistantReply(runtime, sessionId = "", record = {}) {
-    if (record.conversationTurn) {
+  async function persistCodexAppServerAssistantReply(runtime, sessionId = "", record = {}, streamItemId = "") {
+    if (record.conversationTurn && !streamItemId) {
       return record.conversationTurn;
     }
     const conversationText = normalizeText(record.text);
@@ -4552,7 +4552,7 @@ function createCodexTerminalController({
     const messageId = codexAppServerConversationMessageId(
       record.threadId, record.turnId, "assistant-item", record.itemId
     );
-    let written = await runtime.store.writeConversationAssistantMessage(sessionId, {
+    let written = record.conversationTurn || await runtime.store.writeConversationAssistantMessage(sessionId, {
       messageId,
       text: conversationText
     });
@@ -4569,6 +4569,11 @@ function createCodexTerminalController({
           turnId: written.turnId
         });
       }
+    }
+    if (streamItemId) {
+      runtime.store.completeConversationStreamMessage(sessionId, codexAppServerConversationMessageId(
+        record.threadId, record.turnId, "assistant-item", streamItemId
+      ));
     }
     await publishSessionChanged(sessionId, {
       payload: {
@@ -4596,6 +4601,7 @@ function createCodexTerminalController({
     notification = {},
     sessionId = "",
     source = "",
+    streamItemId = "",
     text = "",
     threadId = "",
     turnId = ""
@@ -4661,7 +4667,29 @@ function createCodexTerminalController({
       };
     }
 
+    if (source !== "provider-recovery") {
+      // Live item IDs and saved-history IDs differ in native Codex threads.
+      // Only saved history supplies durable replies; a live completion triggers
+      // that read and retires its provisional stream in the same publication.
+      const segments = await recoverCodexAppServerAssistantSegmentsFromProvider(
+        normalizedSessionId, normalizedThreadId, normalizedTurnId
+      );
+      if (!segments.length) throw new Error("Codex's completed reply is missing from its saved turn.");
+      let result;
+      for (const segment of segments) {
+        result = await recordCodexAppServerFinalAssistantResult({
+          ...segment,
+          sessionId: normalizedSessionId,
+          source: "provider-recovery",
+          streamItemId: segment === segments.at(-1) ? normalizedItemId : "",
+          threadId: normalizedThreadId,
+          turnId: normalizedTurnId
+        });
+      }
+      return result;
+    }
     if (existing?.itemId === normalizedItemId && existing.text === assistantText && existing.conversationTurn) {
+      if (streamItemId) await persistCodexAppServerAssistantReply(runtime, normalizedSessionId, existing, streamItemId);
       return { ...existing, recorded: true, reason: "duplicate" };
     }
     const record = {
@@ -4674,7 +4702,7 @@ function createCodexTerminalController({
     codexAppServerFinalAssistantResults.set(key, record);
 
     try {
-      await persistCodexAppServerAssistantReply(runtime, normalizedSessionId, record);
+      await persistCodexAppServerAssistantReply(runtime, normalizedSessionId, record, streamItemId);
       vibe64SessionDebugLog("server.codexTerminal.appServerFinalAssistantResult.recorded", {
         itemId: record.itemId,
         sessionId: normalizedSessionId,
@@ -5711,12 +5739,21 @@ function createCodexTerminalController({
       normalizedSessionId,
       await codexAppServerRuntimeOptionsForSession(session, { runtime })
     );
-    if (typeof provider?.readThread !== "function") {
-      return [];
-    }
-    // Reading a saved result must not restart a goal while settling its turn.
-    const thread = await provider.readThread(normalizedThreadId);
-    const assistantSegments = codexAppServerProviderThreadAssistantSegments(thread, normalizedTurnId);
+    // Page from the newest turn instead of hydrating the entire conversation.
+    // A goal may already have started its successor when completion arrives.
+    let cursor;
+    let assistantSegments = [];
+    do {
+      const page = await provider.listThreadTurns(normalizedThreadId, {
+        limit: 1, itemsView: "full", sortDirection: "desc", ...(cursor ? { cursor } : {})
+      });
+      const turn = page.data.find((candidate) => candidate.id === normalizedTurnId);
+      if (turn) {
+        assistantSegments = codexAppServerProviderThreadAssistantSegments({ turns: [turn] }, normalizedTurnId);
+        break;
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
     if (assistantSegments.length) {
       vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.recovered", {
         assistantSegmentCount: assistantSegments.length,
