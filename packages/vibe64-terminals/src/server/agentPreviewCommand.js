@@ -59,7 +59,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "10";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "11";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
   "/agent-preview-command/browser-start",
@@ -200,6 +200,9 @@ function usageText() {
     "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "",
     "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
+    "For browser navigation, use preview inspect-url or the status Browser URL; these use the managed Preview proxy.",
+    "Inside browser eval, navigate with await page.goto(new URL('/your-path', preview.url).href).",
+    "The direct application endpoint in diagnostics bypasses Preview identity; do not use it for interactive browsing.",
     "This is the canonical preview server for the configured primary application.",
     "Do not start a duplicate copy of that application on another port.",
     "A distinct secondary application explicitly requested by the user, such as a reference app, may run separately without replacing this preview."
@@ -294,6 +297,9 @@ function previewPageUrl(baseUrl = "", route = "", {
   try {
     const base = new URL(normalizedBaseUrl);
     const page = new URL(normalizedRoute, base);
+    if (page.origin !== base.origin) {
+      return "";
+    }
     if (inheritBaseSearch) {
       for (const [name, value] of base.searchParams) {
         if (!page.searchParams.has(name)) {
@@ -311,7 +317,7 @@ function previewInspectionUrl(status = {}, {
   previewState = null
 } = {}) {
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
-  const proxyUrl = normalizeText(previewTarget.href);
+  const proxyUrl = previewReady(status) ? previewEndpoint(previewTarget.href)?.url || "" : "";
   const route = normalizeText(previewState?.route);
   if (proxyUrl) {
     return route
@@ -320,21 +326,18 @@ function previewInspectionUrl(status = {}, {
         }) || proxyUrl
       : proxyUrl;
   }
-  const summary = previewStatusSummary(status, {
-    previewState
-  });
-  return normalizeText(summary.currentPage?.agentUrl || summary.endpoints?.agent?.url);
+  return "";
 }
 
 function previewCurrentPage(previewState = {}, {
-  agentUrl = ""
+  browserUrl = ""
 } = {}) {
   const route = normalizeText(previewState?.route);
   if (!route) {
     return null;
   }
   return {
-    agentUrl: previewPageUrl(agentUrl, route),
+    url: browserUrl,
     observedAt: normalizeText(previewState?.updatedAt),
     route,
     title: normalizeText(previewState?.title)
@@ -372,10 +375,9 @@ function previewStatusSummary(status = {}, {
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const openTarget = isRecord(status.openTarget) ? status.openTarget : {};
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
-  const agentUrl = normalizeText(lastOutputTarget.agentHref || activeMetadata.previewProxyTargetHref || activeMetadata.targetUrl || openTarget.href);
-  const browserUrl = normalizeText(openTarget.href || previewTarget.targetHref);
-  const agentEndpoint = previewEndpoint(agentUrl);
-  const browserEndpoint = previewEndpoint(browserUrl);
+  const applicationUrl = normalizeText(lastOutputTarget.agentHref || activeMetadata.previewProxyTargetHref || activeMetadata.targetUrl || openTarget.href);
+  const browserUrl = previewInspectionUrl(status, { previewState });
+  const browserEndpoint = previewReady(status) ? previewEndpoint(previewTarget.href) : null;
   const identityTypes = (Array.isArray(status.previewIdentity?.identityTypes)
     ? status.previewIdentity.identityTypes
     : [])
@@ -391,11 +393,13 @@ function previewStatusSummary(status = {}, {
     .filter((identity) => identity.name && identity.type);
   return {
     currentPage: previewCurrentPage(previewState, {
-      agentUrl: agentEndpoint?.url
+      browserUrl
     }),
-    diagnostics: previewDiagnostics(status),
+    diagnostics: {
+      ...previewDiagnostics(status),
+      directApplicationEndpoint: previewEndpoint(applicationUrl)
+    },
     endpoints: {
-      agent: agentEndpoint,
       browser: browserEndpoint
     },
     defaultIdentity: normalizeText(status.previewIdentity?.defaultIdentityName),
@@ -413,12 +417,9 @@ function previewSummaryLines(summary = {}) {
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
     `Preview running: ${summary.terminal?.running ? "yes" : "no"}`,
     summary.outputTargetId ? `Output target: ${summary.outputTargetId}` : "",
-    summary.endpoints?.agent?.url ? `Agent URL: ${summary.endpoints.agent.url}` : "",
-    summary.endpoints?.agent?.hostname ? `Agent host: ${summary.endpoints.agent.hostname}` : "",
-    summary.endpoints?.agent?.port ? `Agent port: ${summary.endpoints.agent.port}` : "",
-    summary.endpoints?.browser?.url ? `Browser URL: ${summary.endpoints.browser.url}` : "",
+    summary.endpoints?.browser?.url ? `Browser URL (Preview proxy): ${summary.endpoints.browser.url}` : "Browser URL: unavailable",
     summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : "Current page: not observed",
-    summary.currentPage?.agentUrl ? `Current page agent URL: ${summary.currentPage.agentUrl}` : "",
+    summary.currentPage?.url ? `Current page URL (Preview proxy): ${summary.currentPage.url}` : "",
     summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     summary.identities?.length
       ? `Managed app identities: ${summary.identities.map((identity) => identity.name).join(", ")}`

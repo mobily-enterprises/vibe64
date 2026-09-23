@@ -663,6 +663,12 @@ is working; automatic startup waits until that work is idle. Targets can declare
 named text parameters with defaults. Preview options presents those fields,
 validates required values, and applies them only on Run or Save and restart.
 People can remember values for that project and target in the current browser.
+Selecting an application identity returns the assistant's browser to managed
+Preview if it has navigated elsewhere, without requiring a manual browser reset.
+Identity selection within Preview preserves the current page.
+Assistant browser tools consistently identify the managed Preview address for
+navigation, keeping direct application addresses in diagnostics. A missing
+Preview address is reported as unavailable.
 Agents can run a browser suite against a project's declared test Preview target.
 Vibe64 starts that target, waits for readiness, uses its application identity,
 and restores the previous Preview when the test command finishes. The project

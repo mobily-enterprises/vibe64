@@ -16,8 +16,11 @@ import {
   agentPreviewWrapperSource
 } from "../../packages/vibe64-execution/src/server/index.js";
 import {
-  PREVIEW_IDENTITY_CONTROL_PATH
+  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+  PREVIEW_IDENTITY_CONTROL_PATH,
+  createPreviewIdentityGrant
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
+import { createLaunchPreviewProxyRegistry } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import {
   AGENT_PREVIEW_COMMAND_NAME,
   VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
@@ -428,7 +431,9 @@ test("managed preview browser eval validates stdin before starting browser contr
       env: commandEnv
     });
 
-    assert.equal(help.stdout, "Usage: vibe64-helper preview browser eval < playwright-code.js\n");
+    assert.match(help.stdout, /Usage: vibe64-helper preview browser eval < playwright-code\.js/u);
+    assert.match(help.stdout, /new URL\('\/your-path', preview\.url\)/u);
+    assert.match(help.stdout, /direct application ports bypass Preview identity/u);
     const playwrightHelp = await execWithInput(helper, ["playwright", "--help"], { env: commandEnv });
     assert.match(playwrightHelp.stdout, /Usage:\n {2}vibe64-helper playwright/u);
     await assert.rejects(
@@ -557,7 +562,7 @@ test("agent preview command ensures the managed preview and waits for readiness"
       },
       previewTarget: {
         available: true,
-        href: "/preview/session/",
+        href: "http://127.0.0.1:49100/",
         targetHref: "http://127.0.0.1:4100/"
       }
     }
@@ -594,17 +599,18 @@ test("agent preview command ensures the managed preview and waits for readiness"
   assert.deepEqual(ensureCalls, [sessionId]);
   assert.deepEqual(JSON.parse(result.stdout), {
     currentPage: null,
-    diagnostics: null,
-    endpoints: {
-      agent: {
+    diagnostics: {
+      directApplicationEndpoint: {
         hostname: "vibe64-launch-agent",
         port: 4100,
         url: "http://vibe64-launch-agent:4100/"
-      },
+      }
+    },
+    endpoints: {
       browser: {
         hostname: "127.0.0.1",
-        port: 4100,
-        url: "http://127.0.0.1:4100/"
+        port: 49100,
+        url: "http://127.0.0.1:49100/"
       }
     },
     defaultIdentity: "admin",
@@ -679,7 +685,7 @@ test("agent preview command delegates restart to the managed launch controller",
       },
       previewTarget: {
         available: true,
-        href: "/preview/session/app",
+        href: "http://127.0.0.1:49100/app",
         targetHref: "http://127.0.0.1:4100/app"
       }
     }
@@ -718,17 +724,18 @@ test("agent preview command delegates restart to the managed launch controller",
   assert.deepEqual(restartCalls, [sessionId]);
   assert.deepEqual(JSON.parse(result.stdout), {
     currentPage: null,
-    diagnostics: null,
-    endpoints: {
-      agent: {
+    diagnostics: {
+      directApplicationEndpoint: {
         hostname: "vibe64-launch-agent",
         port: 4100,
         url: "http://vibe64-launch-agent:4100/app"
-      },
+      }
+    },
+    endpoints: {
       browser: {
         hostname: "127.0.0.1",
-        port: 4100,
-        url: "http://127.0.0.1:4100/app"
+        port: 49100,
+        url: "http://127.0.0.1:49100/app"
       }
     },
     defaultIdentity: "",
@@ -751,6 +758,7 @@ test("agent preview command delegates restart to the managed launch controller",
 
 test("agent preview status exposes the managed endpoint, current page, and server logs", async () => {
   const sessionId = "preview-inspection-session";
+  let observedRoute = "/orders/42?tab=history";
   const status = {
     activeTerminal: {
       commandPreview: "npm run dev",
@@ -787,7 +795,7 @@ test("agent preview status exposes the managed endpoint, current page, and serve
       assert.equal(receivedSessionId, sessionId);
       return {
         preview: {
-          route: "/orders/42?tab=history",
+          route: observedRoute,
           title: "Order 42",
           updatedAt: "2026-07-13T02:01:00.000Z"
         }
@@ -800,15 +808,27 @@ test("agent preview status exposes the managed endpoint, current page, and serve
     sessionId
   });
   const statusPayload = JSON.parse(statusResult.stdout);
-  assert.equal(statusPayload.endpoints.agent.hostname, "vibe64-launch-agent");
-  assert.equal(statusPayload.endpoints.agent.port, 4103);
+  assert.equal(statusPayload.endpoints.browser.hostname, "v64preview-example.test");
+  assert.equal(statusPayload.endpoints.browser.port, 443);
+  assert.equal(statusPayload.endpoints.agent, undefined);
   assert.equal(statusPayload.currentPage.route, "/orders/42?tab=history");
-  assert.equal(statusPayload.currentPage.agentUrl, "http://vibe64-launch-agent:4103/orders/42?tab=history");
+  assert.equal(statusPayload.currentPage.url, "https://v64preview-example.test/orders/42?tab=history&vibe64_preview_token=preview-secret");
+  assert.equal(statusPayload.currentPage.agentUrl, undefined);
   assert.equal(statusPayload.currentPage.title, "Order 42");
   assert.deepEqual(statusPayload.diagnostics, {
     latest: "/workspace/session-7/preview-last.json",
-    log: "/workspace/session-7/preview-log.jsonl"
+    log: "/workspace/session-7/preview-log.jsonl",
+    directApplicationEndpoint: {
+      hostname: "vibe64-launch-agent",
+      port: 4103,
+      url: "http://vibe64-launch-agent:4103/"
+    }
   });
+
+  const textStatus = await command.run({ args: ["status"], sessionId });
+  assert.match(textStatus.stdout, /Browser URL \(Preview proxy\): https:\/\/v64preview-example.test/u);
+  assert.match(textStatus.stdout, /Current page URL \(Preview proxy\): https:\/\/v64preview-example.test\/orders\/42/u);
+  assert.doesNotMatch(textStatus.stdout, /vibe64-launch-agent|4103|Agent URL/u);
 
   const inspectionResult = await command.run({
     args: ["inspect-url"],
@@ -827,9 +847,20 @@ test("agent preview status exposes the managed endpoint, current page, and serve
   assert.equal(logsPayload.lineLimit, 2);
   assert.equal(logsPayload.output, "GET /orders/42\nrender complete");
   assert.equal(logsPayload.terminal.id, "launch-terminal-7");
+
+  observedRoute = "//127.0.0.1:4103/orders/42";
+  const escapedRoute = await command.run({ args: ["inspect-url"], sessionId });
+  assert.equal(escapedRoute.stdout.trim(), status.previewTarget.href);
+
+  status.previewTarget.available = false;
+  const unavailable = await command.run({ args: ["inspect-url"], sessionId });
+  assert.equal(unavailable.ok, false);
+  const unavailableStatus = JSON.parse((await command.run({ args: ["status", "--json"], sessionId })).stdout);
+  assert.equal(unavailableStatus.endpoints.browser, null);
+  assert.equal(unavailableStatus.currentPage.url, "");
 });
 
-test("agent preview inspection URL falls back to the direct managed endpoint", async () => {
+test("agent preview inspection refuses a missing proxy instead of offering the raw application", async () => {
   const command = createAgentPreviewCommandService({
     launchTarget: {
       async launchStatus() {
@@ -852,8 +883,14 @@ test("agent preview inspection URL falls back to the direct managed endpoint", a
     sessionId: "direct-inspection-session"
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.stdout, "http://vibe64-launch-agent:4104/home\n");
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_agent_preview_command_inspection_url_unavailable");
+  assert.doesNotMatch(result.error, /4104/u);
+  const status = JSON.parse((await command.run({
+    args: ["status", "--json"], sessionId: "direct-inspection-session"
+  })).stdout);
+  assert.equal(status.endpoints.browser, null);
+  assert.equal(status.diagnostics.directApplicationEndpoint.port, 4104);
 });
 
 test("agent preview wrapper forwards command input over the private session socket", async () => {
@@ -884,7 +921,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "10");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "11");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",
@@ -972,7 +1009,7 @@ test("managed preview browser surfaces capacity refusal without creating a worke
   }
 });
 
-test("managed preview browser selects real application identities inside its own context", async () => {
+test("managed preview browser selects configured identities and retains signed-out failures", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-identity-"));
   const runtimeRoot = path.join(root, "runtime-packs");
   const previewUrl = "https://preview.example.test/home?vibe64_preview_token=identity-token";
@@ -1134,6 +1171,124 @@ test("managed preview browser selects real application identities inside its own
   }
 });
 
+test("managed browser identity returns from the app port to the real Preview proxy without a reset", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-origin-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "browser-origin-session";
+  const directIdentityRequests = [];
+  const selections = [];
+  const app = http.createServer((request, response) => {
+    if (request.url === PREVIEW_IDENTITY_CONTROL_PATH) {
+      directIdentityRequests.push(request.url);
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "text/html" });
+    response.end(`<!doctype html><html><body>${request.headers.cookie?.includes("app_session=ada")
+      ? "Signed in as Ada" : "Sign in"}</body></html>`);
+  });
+  const registry = createLaunchPreviewProxyRegistry();
+  let commandService;
+  try {
+    await new Promise((resolve) => app.listen(0, "127.0.0.1", resolve));
+    const appOrigin = `http://127.0.0.1:${app.address().port}`;
+    const previewAuth = {
+      kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+      identityTypes: ["email"],
+      projectScope: "project:browser-origin",
+      secret: "a".repeat(64),
+      sessionSourceRoot: root,
+      sessionId,
+      targetHref: `${appOrigin}/admin`,
+      terminalSessionId: "launch-terminal"
+    };
+    const preview = await registry.ensure({
+      ...previewAuth,
+      previewAuth,
+      async executePreviewIdentityCommand({ selection }) {
+        selections.push(selection);
+        const guest = selection.operation === "logout";
+        return {
+          ok: true,
+          identity: guest ? null : { displayName: "Ada", email: "ada@example.com" },
+          setCookie: [guest
+            ? "app_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+            : "app_session=ada; Path=/; HttpOnly; SameSite=Lax"]
+        };
+      }
+    });
+    commandService = createReadyPreviewCommandService({
+      previewUrl: preview.href,
+      async selectPreviewIdentity(_sessionId, input) {
+        const selection = input.mode === "guest"
+          ? { operation: "logout" }
+          : { operation: "login-as", selector: { type: "email", value: "ada@example.com" } };
+        return {
+          ok: true,
+          grant: createPreviewIdentityGrant(previewAuth, selection),
+          requestedIdentity: { mode: input.mode, name: "admin", selector: selection.selector }
+        };
+      }
+    });
+    const { playwrightModule } = await createFakePlaywrightRuntime(runtimeRoot);
+    const require = createRequire(import.meta.url);
+    const playwrightPath = require.resolve("playwright");
+    const executablePath = require("playwright").chromium.executablePath();
+    await writeFile(path.join(playwrightModule, "index.js"), `
+const playwright = require(${JSON.stringify(playwrightPath)});
+exports.chromium = { launch(options) {
+  return playwright.chromium.launch({ ...options, executablePath: ${JSON.stringify(executablePath)} });
+} };
+exports.request = playwright.request;
+`, "utf8");
+    const prepared = await prepareAgentPreviewCommand({
+      commandService, env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, sessionId,
+      wrapperHostDir: path.join(root, "commands")
+    });
+    const env = { ...process.env, ...prepared.env };
+    await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env,
+      input: `await page.evaluate(() => sessionStorage.setItem("retained", "same browser"));
+await page.goto(${JSON.stringify(`${appOrigin}/auth/login`)});`
+    });
+    const navigation = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env, input: 'return { managed: new URL(preview.url).origin, current: new URL(page.url()).origin };'
+    })).stdout);
+    assert.equal(navigation.result.managed, new URL(preview.href).origin);
+    assert.equal(navigation.result.current, appOrigin);
+    const identity = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "identity", "admin"], { env })).stdout);
+    assert.equal(identity.identity.email, "ada@example.com");
+    assert.equal(new URL(identity.url).origin, new URL(preview.href).origin);
+    const authenticated = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env,
+      input: 'return { text: await page.locator("body").innerText(), retained: await page.evaluate(() => sessionStorage.getItem("retained")) };'
+    })).stdout);
+    assert.deepEqual(authenticated.result, { text: "Signed in as Ada", retained: "same browser" });
+    assert.deepEqual(directIdentityRequests, []);
+
+    // Selecting on the managed origin must preserve the page's current route.
+    await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env,
+      input: 'await page.goto(new URL("/bookings/162?tab=details", page.url()).href);'
+    });
+    const guest = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "identity", "guest"], { env })).stdout);
+    assert.deepEqual(guest.identity, { mode: "guest" });
+    assert.equal(new URL(guest.url).pathname, "/bookings/162");
+    assert.equal(new URL(guest.url).search, "?tab=details");
+    const signedOut = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env, input: 'return await page.locator("body").innerText();'
+    })).stdout);
+    assert.equal(signedOut.result, "Sign in");
+    assert.deepEqual(selections.map(({ operation }) => operation), ["login-as", "logout"]);
+  } finally {
+    await commandService?.closeAllForSession(sessionId);
+    await registry.closeAll();
+    await new Promise((resolve) => app.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("managed preview writes authenticated Playwright state without changing the interactive browser identity", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-storage-state-"));
   const runtimeRoot = path.join(root, "runtime-packs");
@@ -1229,6 +1384,7 @@ test("Playwright state preserves host and application cookies without starting C
   const sessionId = "request-state-session";
   const outputPath = path.join(root, "storage-state.json");
   const requests = [];
+  let invalidExchangeStatus = null;
   const server = http.createServer(async (request, response) => {
     requests.push([request.method, request.url]);
     if (request.method === "GET") {
@@ -1238,6 +1394,11 @@ test("Playwright state preserves host and application cookies without starting C
     }
     let body = "";
     for await (const chunk of request) body += chunk;
+    if (invalidExchangeStatus !== null) {
+      response.writeHead(invalidExchangeStatus, { "Content-Type": "text/html" });
+      response.end("<html>Unexpected application page with private details</html>");
+      return;
+    }
     const authorized = request.url === PREVIEW_IDENTITY_CONTROL_PATH &&
       request.headers.cookie?.includes("preview_session=host") &&
       JSON.parse(body).grant === "request-state-grant";
@@ -1276,6 +1437,20 @@ exports.chromium = { launch() { throw new Error("Storage state must not start Ch
     ]);
     assert.deepEqual(requests, [["GET", "/home?vibe64_preview_token=test"], ["POST", PREVIEW_IDENTITY_CONTROL_PATH]]);
     assert.deepEqual(state.origins, []);
+    for (const status of [404, 200]) {
+      invalidExchangeStatus = status;
+      await assert.rejects(
+        execFileAsync(prepared.hostWrapperPath, ["browser", "storage-state", "default", "--output", outputPath], {
+          env: { ...process.env, ...prepared.env }
+        }),
+        (error) => {
+          assert.ok(error.stderr.includes(`Preview identity exchange failed (HTTP ${status}).`));
+          assert.doesNotMatch(error.stderr, /private details|request-state-grant/u);
+          return true;
+        }
+      );
+      assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), state);
+    }
   } finally {
     await commandService.closeAllForSession(sessionId);
     await new Promise((resolve) => server.close(resolve));

@@ -102,7 +102,7 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
     "}",
     "if (args[0] === \"ensure\") {",
     "  process.stdout.write(JSON.stringify({",
-    "    endpoints: { agent: { url: previewUrl } },",
+    "    diagnostics: { directApplicationEndpoint: { url: previewUrl } },",
     "    identityTypes: [\"email\"],",
     "    ready: true",
     "  }));",
@@ -742,7 +742,7 @@ test("managed Playwright preserves browser startup diagnostics without claiming 
 if (process.argv[2] === "ensure") {
   console.log(JSON.stringify({
     ready: true,
-    endpoints: { agent: { url: "http://127.0.0.1:4104/home" } },
+    diagnostics: { directApplicationEndpoint: { url: "http://127.0.0.1:4104/home" } },
     identityTypes: ["email"]
   }));
 } else {

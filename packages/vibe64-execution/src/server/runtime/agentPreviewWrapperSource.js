@@ -19,7 +19,7 @@ const controlSocketPath = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SOCKET
 const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
 const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION || "").trim();
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
-const browserEvalUsage = "Usage: vibe64-helper preview browser eval < playwright-code.js";
+const browserEvalUsage = "Usage: vibe64-helper preview browser eval < playwright-code.js\\nNavigate through Preview: await page.goto(new URL('/your-path', preview.url).href);\\npreview.url is the managed proxy; direct application ports bypass Preview identity.";
 const workerToken = crypto.createHash("sha256")
   .update(["vibe64-preview-browser", sessionId, controlGeneration, controlToken].join("\\n"))
   .digest("hex");

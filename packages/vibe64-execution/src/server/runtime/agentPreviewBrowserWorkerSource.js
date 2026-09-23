@@ -533,9 +533,9 @@ async function exchangeApplicationIdentity(requestContext, targetUrl, grantValue
   } catch {
     payload = {};
   }
-  if (!response.ok() || payload?.ok === false) {
+  if (!response.ok() || payload?.ok !== true) {
     const error = new Error(String(
-      payload?.error || "Preview identity exchange failed."
+      payload?.error || "Preview identity exchange failed (HTTP " + response.status() + ")."
     ));
     error.code = String(payload?.code || "vibe64_preview_identity_exchange_failed");
     error.signedOut = payload?.signedOut === true;
@@ -548,9 +548,13 @@ async function selectApplicationIdentity(input = {}) {
   await ensureBrowser(input.previewUrl, {
     instance: input.previewInstance
   });
+  const managedUrl = new URL(input.previewUrl);
+  if (new URL(page.url()).origin !== managedUrl.origin) {
+    await page.goto(managedUrl.href, { waitUntil: "load" });
+  }
   let payload;
   try {
-    payload = await exchangeApplicationIdentity(context.request, page.url(), input.grant);
+    payload = await exchangeApplicationIdentity(context.request, managedUrl.href, input.grant);
   } catch (error) {
     if (error?.signedOut === true) {
       applicationIdentity = {
@@ -680,7 +684,7 @@ async function evaluateCode(input = {}) {
     context,
     page,
     state,
-    Object.freeze({ url: safeUrl(page.url()) }),
+    Object.freeze({ url: safeUrl(input.previewUrl) }),
     outputPathFromInput(input),
     consoleProxy
   );

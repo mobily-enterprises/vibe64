@@ -156,7 +156,7 @@ function managedPreview(applicationRoot = "", {
       "Project tests were not started."
     );
   }
-  const endpoint = String(status?.endpoints?.agent?.url || "").trim();
+  const endpoint = String(status?.diagnostics?.directApplicationEndpoint?.url || "").trim();
   try {
     const url = new URL(endpoint);
     if (status?.ready !== true || !["http:", "https:"].includes(url.protocol)) {

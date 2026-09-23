@@ -5,6 +5,17 @@ must stay separate from the ordinary application's working data. This works
 through the same Vibe64 commands for Codex and OpenCode, on any host that supplies
 the project's declared runtimes and resources.
 
+For interactive inspection, `vibe64-helper preview status --json` exposes the
+managed proxy as `endpoints.browser.url` and the observed page as `currentPage.url`.
+`vibe64-helper preview inspect-url` returns that page's usable proxy URL and fails
+if Preview is unavailable. The raw `diagnostics.directApplicationEndpoint` is
+for diagnostics and the native application test runner, not interactive navigation.
+Inside `vibe64-helper preview browser eval`, navigate relative to the canonical
+proxy with `await page.goto(new URL('/your-path', preview.url).href)`. Select a
+named application identity with `vibe64-helper preview browser identity <name>`.
+That command always exchanges through Preview, including after navigation to a
+direct application port.
+
 ```sh
 vibe64-helper preview targets --json
 vibe64-helper playwright --target test-app test --config playwright.test.config.mjs
