@@ -158,6 +158,54 @@ test("bare and hash-prefixed issue numbers use exact repository lookup, independ
   }
 });
 
+test("label qualifiers reuse uncapped repository filtering for simple and quoted names", async () => {
+  for (const [search, label] of [
+    ["label:new", "new"], ['label:"help wanted"', "help wanted"],
+    ['label:"needs \\"review\\""', 'needs "review"'], ['label:"path\\\\name"', "path\\name"],
+    ['label:bug LABEL:"BUG"', "bug"]
+  ]) {
+    const f = fixture([success({ data: { repository: { issues: {
+      nodes: [{ number: 1001 }], totalCount: 1250, pageInfo: { hasNextPage: true, endCursor: "next" }
+    } } } })]);
+    const result = await githubIssues(project, { vibe64User: user, search, state: "all", cursor: "after-1000" }, f.options);
+    assert.deepEqual(JSON.parse(f.calls[0].input).variables, {
+      owner: "example", name: "project", cursor: "after-1000", states: null, labels: [label]
+    });
+    assert.equal(result.searchLimit, null);
+    assert.equal(result.total, 1250);
+  }
+});
+
+test("typed labels combine with selected labels and leave other search qualifiers literal", async () => {
+  const f = fixture([success({ data: { search: { nodes: [], issueCount: 0, pageInfo: { hasNextPage: false } } } })]);
+  await githubIssues(project, {
+    vibe64User: user, search: 'broken label:bug layout label:"help wanted" repo:other/private', labels: ["BUG"]
+  }, f.options);
+  assert.equal(JSON.parse(f.calls[0].input).variables.search,
+    'repo:example/project is:issue is:open "broken layout repo:other/private" in:title,body label:"BUG" label:"help wanted" sort:updated-desc');
+});
+
+test("issue numbers retain exact lookup when combined with typed labels", async () => {
+  for (const [search, count] of [["#43 label:bug", 1], ['label:"missing label" 43', 0]]) {
+    const f = fixture([success({ number: 43, title: "Daily Overview", state: "open", comments: 0, labels: [{ name: "bug" }] })]);
+    const result = await githubIssues(project, { vibe64User: user, search }, f.options);
+    assert.equal(f.calls[0].args[3], "repos/example/project/issues/43");
+    assert.equal(result.total, count);
+  }
+});
+
+test("empty typed labels are rejected and incomplete qualifiers remain ordinary text", async () => {
+  const invalid = fixture([]);
+  await assert.rejects(githubIssues(project, { vibe64User: user, search: 'label:""' }, invalid.options),
+    { code: "vibe64_issue_input_invalid" });
+  assert.equal(invalid.calls.length, 0);
+  for (const search of ['label:"unfinished', "label:"]) {
+    const f = fixture([success({ data: { search: { nodes: [], issueCount: 0, pageInfo: { hasNextPage: false } } } })]);
+    await githubIssues(project, { vibe64User: user, search }, f.options);
+    assert.ok(JSON.parse(f.calls[0].input).variables.search.includes('"' + search.replaceAll('"', " ") + '" in:title,body'));
+  }
+});
+
 test("number lookup respects state and every label, excludes pull requests and returns an empty missing result", async () => {
   const found = { number: 43, title: "Daily Overview", state: "closed", labels: [{ name: "bug" }, { name: "important" }] };
   for (const [response, filters, count] of [

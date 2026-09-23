@@ -63,6 +63,51 @@ async function mockGithubIssues(page: Page) {
 }
 
 for (const viewport of viewports) {
+  test(`label clicks search issues without opening them at ${viewport.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const requests = await mockGithubIssues(page);
+    await page.goto(`${DASHBOARD_PATH}/issues?issueState=all&issueSearch=old&issueLabel=bug&issueCursor=after-1000`);
+    await showProjectPaneIfNeeded(page);
+    const panel = page.locator(".issues-panel");
+    const search = panel.getByRole("textbox", { name: "Search issues", exact: true });
+    await panel.getByRole("button", { name: "Filter by label help wanted", exact: true }).click();
+    await expect(search).toHaveValue('label:"help wanted"');
+    await expect.poll(() => requests.at(-1)?.searchParams.get("search")).toBe('label:"help wanted"');
+    const filteredUrl = page.url();
+    const query = new URL(filteredUrl).searchParams;
+    expect(query.get("issueState")).toBe("all");
+    for (const key of ["issue", "issueCursor", "issueLabel"]) expect(query.has(key)).toBe(false);
+    expect(requests.at(-1)?.searchParams.getAll("labels")).toEqual([]);
+    await expectNoHorizontalOverflow(page);
+    await panel.screenshot({ path: testInfo.outputPath(`label-search-${viewport.name}.png`) });
+
+    await panel.getByRole("link", { name: issue.title, exact: true }).click();
+    await expect(panel.getByText(issue.body, { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "All issues", exact: true }).click();
+    await expect(page).toHaveURL(filteredUrl);
+    await expect(search).toHaveValue('label:"help wanted"');
+    await panel.getByRole("tab", { name: "Pull requests", exact: true }).click();
+    await page.getByRole("tab", { name: "Issues", exact: true }).click();
+    await expect(search).toHaveValue('label:"help wanted"');
+
+    await panel.getByRole("link", { name: issue.title, exact: true }).click();
+    const bug = panel.getByRole("button", { name: "Filter by label bug", exact: true });
+    await bug.focus();
+    await bug.press("Enter");
+    await expect(search).toHaveValue("label:bug");
+    expect(new URL(page.url()).searchParams.has("issue")).toBe(false);
+    await page.goBack();
+    await expect(panel.getByText(issue.body, { exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(search).toHaveValue("label:bug");
+    await search.fill('layout label:new label:"some label"');
+    await search.press("Enter");
+    await expect.poll(() => requests.at(-1)?.searchParams.get("search")).toBe('layout label:new label:"some label"');
+    await panel.getByRole("button", { name: "Clear Search issues", exact: true }).click();
+    await expect(search).toHaveValue("");
+    await expect.poll(() => requests.at(-1)?.searchParams.has("search")).toBe(false);
+  });
+
   test(`GitHub attachment images render safely at ${viewport.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await mockGithubIssues(page);

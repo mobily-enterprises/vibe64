@@ -99,7 +99,7 @@ export async function githubIssues(project, input = {}, options = {}) {
     throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
   }
   const state = input.state || "open";
-  const search = String(input.search || "").trim();
+  let search = String(input.search || "").trim();
   const cursor = input.cursor || null;
   if (!["open", "closed", "all"].includes(state) || search.length > 200 ||
       (cursor !== null && (typeof cursor !== "string" || cursor.length > 500)) ||
@@ -129,6 +129,17 @@ export async function githubIssues(project, input = {}, options = {}) {
   let selectedLabels = input.labels;
   if (["create", "list"].includes(operation)) selectedLabels ??= [];
   if (operation === "list" && typeof selectedLabels === "string") selectedLabels = [selectedLabels];
+  if (operation === "list" && Array.isArray(selectedLabels)) {
+    selectedLabels = [...selectedLabels];
+    search = search.replace(/(?:^|\s)label:(?:"((?:\\.|[^"\\])*)"|([^\s"]+))(?=\s|$)/giu,
+      (match, quoted, bare) => {
+        const label = quoted === undefined ? bare : quoted.replace(/\\(["\\])/gu, "$1");
+        if (!selectedLabels.some((selected) => typeof selected === "string" && selected.toLowerCase() === label.toLowerCase())) {
+          selectedLabels.push(label);
+        }
+        return "";
+      }).trim();
+  }
   if (["create", "set-labels", "list"].includes(operation) &&
       (!Array.isArray(selectedLabels) || selectedLabels.length > 100 ||
        selectedLabels.some((label) => typeof label !== "string" || !label.trim() ||

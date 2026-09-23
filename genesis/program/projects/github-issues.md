@@ -49,6 +49,13 @@ GitHub's repository issue connection, loading 25 issues per page even beyond
 label array would incorrectly hide every issue. Text search and multiple labels
 use GitHub search with safely quoted label qualifiers and explain its 1,000-match limit when the result count
 exceeds it. Changing any filter returns to the first page.
+Search accepts `label:new` and `label:"some label"` qualifiers, including escaped
+quotes and backslashes in quoted names. The server extracts only label qualifiers,
+combines them with selected labels without case-insensitive duplicates, and keeps
+the remaining text literal. Clicking a label in a list or detail replaces search
+with that qualifier, clears the separate label selector and pagination, and opens
+the list while retaining Open/Closed/All. Label buttons and issue title links have
+separate keyboard targets. The search text remains in the URL across navigation.
 An exact number (`43` or `#43`) uses the repository's single-issue REST lookup
 instead of title/body search. State and all selected labels still apply; missing
 numbers and pull requests return an empty list. This lookup has no search cap or

@@ -16,7 +16,7 @@ import GithubMarkdown from "./GithubMarkdown.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const { available, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-  draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
+  draft, pending, comments, commentCount, commentCursor, navigate, filter, filterLabel, mutate, issueSaved, issueUpdated, retryComment } = useVibe64Issues(computed(() => props.dashboardContext));
 const route = useRoute();
 const bulkOpen = ref(false);
 const selectedNumbers = ref([]);
@@ -88,7 +88,7 @@ function date(value) {
             <v-btn value="all" height="48">All</v-btn>
           </v-btn-toggle>
           <v-text-field
-            v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Number, title or description"
+            v-model="searchDraft" class="issues-panel__search" label="Search issues" placeholder="Number, text, label:new or label:&quot;some label&quot;"
             :prepend-inner-icon="mdiMagnify" variant="outlined" rounded="pill" hide-details maxlength="200" clearable
             @keydown.enter.prevent="filter()"
             @click:clear="searchDraft = ''; filter()"
@@ -157,7 +157,7 @@ function date(value) {
                 v-if="labelCatalog.data.value?.canEditLabels" v-model="selectedNumbers" :value="item.number"
                 :aria-label="`Select issue #${item.number}`" class="flex-grow-0 ml-2" min-width="48" min-height="48"
               />
-              <v-list-item class="py-2 flex-grow-1" :active="false" :to="{ query: { ...$route.query, issue: String(item.number) } }">
+              <v-list-item class="py-2 flex-grow-1" :active="false">
                 <template #prepend>
                   <v-icon
                     :icon="item.state === 'OPEN' ? mdiRecordCircleOutline : mdiCheck"
@@ -165,8 +165,13 @@ function date(value) {
                   />
                 </template>
                 <div class="d-flex flex-wrap align-center ga-1">
-                  <v-list-item-title class="issues-panel__item-title text-title-medium text-wrap">{{ item.title }}</v-list-item-title>
-                  <GithubLabelChip v-for="label in item.labels?.nodes || []" :key="label.name" :label="label" />
+                  <v-list-item-title class="issues-panel__item-title text-title-medium text-wrap">
+                    <router-link class="issues-panel__issue-link text-decoration-none" :to="{ query: { ...$route.query, issue: String(item.number) } }">{{ item.title }}</router-link>
+                  </v-list-item-title>
+                  <GithubLabelChip
+                    v-for="label in item.labels?.nodes || []" :key="label.name" :label="label"
+                    tag="button" type="button" :aria-label="`Filter by label ${label.name}`" @click="filterLabel(label.name)"
+                  />
                   <span v-if="item.labels?.totalCount > item.labels?.nodes?.length" class="text-label-small">+{{ item.labels.totalCount - item.labels.nodes.length }}</span>
                 </div>
                 <v-list-item-subtitle class="text-body-small mt-1">
@@ -217,7 +222,10 @@ function date(value) {
           <h2 class="text-title-large mb-2 issues-panel__title">{{ issue.title }}</h2>
           <p class="text-body-small text-medium-emphasis mb-0">{{ issue.author?.login || 'Deleted user' }} opened this on {{ date(issue.createdAt) }}</p>
           <div class="d-flex align-center flex-wrap ga-2 mt-3">
-            <GithubLabelChip v-for="label in issue.labels?.nodes || []" :key="label.name" :label="label" />
+            <GithubLabelChip
+              v-for="label in issue.labels?.nodes || []" :key="label.name" :label="label"
+              tag="button" type="button" :aria-label="`Filter by label ${label.name}`" @click="filterLabel(label.name)"
+            />
             <span v-if="!issue.labels?.nodes?.length" class="text-body-small text-medium-emphasis">No labels</span>
             <v-btn v-if="issue.canEditLabels" :prepend-icon="mdiLabelOutline" variant="text" height="48" @click="openEditor(issue, 'labels')">Edit labels</v-btn>
           </div>
@@ -306,6 +314,7 @@ function date(value) {
 .issues-panel__labels { min-width: 0; }
 .issues-panel__label-filter { flex: 1 1 16rem; min-width: 0; }
 .issues-panel__item-title { min-width: 0; overflow-wrap: anywhere; }
+.issues-panel__issue-link { color: inherit; }
 .issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
 </style>

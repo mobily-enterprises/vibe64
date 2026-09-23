@@ -89,6 +89,10 @@ export function useVibe64Issues(context) {
       issueLabel: nextLabels?.length ? nextLabels : undefined,
       issueCursor: undefined, issue: undefined });
   }
+  function filterLabel(label) {
+    searchDraft.value = `label:${/[\s"\\]/u.test(label) ? JSON.stringify(label) : label}`;
+    return filter(state.value, []);
+  }
   function issueUpdated({ number: issueNumber, basePath: requestBasePath }) {
     return invalidateGithubIssueQueries(queryClient, requestBasePath, `${requestBasePath}/${issueNumber}`);
   }
@@ -156,5 +160,5 @@ export function useVibe64Issues(context) {
     return sendComment(comment, basePath.value, detailPath.value);
   }
   return { available, repository, projectSlug, basePath, list, detail, labelCatalog, issue, number, state, searchDraft, selectedLabels,
-    draft, pending, comments, commentCount, commentCursor, navigate, filter, mutate, issueSaved, issueUpdated, retryComment };
+    draft, pending, comments, commentCount, commentCursor, navigate, filter, filterLabel, mutate, issueSaved, issueUpdated, retryComment };
 }

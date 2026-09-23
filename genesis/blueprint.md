@@ -46,7 +46,11 @@ menu, including when no session is open. Tabs return to the issue or pull reques
 list while retaining its filters and pagination. Opening it collapses the Dashboard menu
 to give the list and conversation room, with a direct route back. People can
 filter open, closed or all issues and select one or more repository labels to
-match together. Issue lists load 25 at a time and remain browsable beyond 1,000
+match together. Clicking a label in the list or issue details searches that label
+using `label:new` or `label:"some label"`, keeping the selected issue state and
+returning to the first page. People can also type these qualifiers alongside
+text or an issue number; typed and selected labels must all match.
+Issue lists load 25 at a time and remain browsable beyond 1,000
 issues with state and single-label filters. Title and description search or
 multiple labels explain GitHub's 1,000-match limit when needed. Entering an issue
 number, with or without #, finds that exact issue within the selected filters.
