@@ -1,9 +1,9 @@
 <template>
   <div>
-    <v-btn :disabled="disabled" variant="text" @click="open = true">Helper model</v-btn>
+    <v-btn :disabled="disabled" variant="text" @click="open = true">Background helpers</v-btn>
     <v-dialog v-model="open" max-width="520" :persistent="saving">
       <v-card>
-        <v-card-title>Helper model · {{ accountLabel }}</v-card-title>
+        <v-card-title>Background helpers · {{ accountLabel }}</v-card-title>
         <v-card-text>
           <p class="text-body-medium mb-4">Used for prompt suggestions, commit names, and other small background tasks. Your main chat model stays separate. Changes apply to new helper tasks across projects.</p>
           <v-skeleton-loader v-if="resource.isInitialLoading.value" type="list-item-two-line" />
@@ -18,7 +18,7 @@
             :disabled="saving || resource.isLoading.value"
             item-title="label"
             item-value="id"
-            label="Helper model"
+            label="Background helper model"
             hint="Uses this account’s billing or plan allowance. A different model may cost more."
             persistent-hint
             variant="outlined"

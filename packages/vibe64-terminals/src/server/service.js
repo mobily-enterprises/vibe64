@@ -4,8 +4,10 @@ import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessio
 import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createCodexTerminalController } from "./codexTerminal.js";
+import { createAssistantRouting } from "./assistantRouting.js";
+import { assistantModePrompt, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
-import { readConversationRewindState, rememberAssistantBeforeChangeover, requireCompletedConversationRewind, rewindLastConversationTurn, sendWithAssistantChangeover } from "./assistantChangeover.js";
+import { readConversationRewindState, rememberAssistantBeforeChangeover, requireCompletedConversationRewind, rewindLastConversationTurn, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import {
   createSessionAgentManager
@@ -420,6 +422,8 @@ function createService({
     throw new TypeError("createService requires vibe64.project.");
   }
   const projectRuntimeOpenOperations = new Map();
+  let assistantRouting;
+  let sessionConversations;
 
   const assistantRuntime = {
     claudeConnectionStatus: async () => (await readClaudeCodeAuthStatus({ env })).loggedIn === true,
@@ -438,11 +442,20 @@ function createService({
     if (typeof publisher === "function") {
       await publisher(sessionId, payload);
     }
+    if (payload.reason === "temporary-agent-turn-idle") {
+      void sessionConversations?.afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
+        logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.temporary_review_deferred", sessionId, code: error.code }, "Temporary chat review needs attention.");
+      });
+      return;
+    }
     if (!["claude-stream-turn-idle", "codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
       String(payload?.reason || "").trim()
     )) {
       return;
     }
+    void assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
+      logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
+    });
     void prepareWorkspaceSetup(sessionId, {
       publish: true
     }).catch((error) => {
@@ -541,7 +554,9 @@ function createService({
     ],
     async readAssistantAccess(context) {
       if (context.engineId === "claude") {
-        return { available: await assistantRuntime.claudeConnectionStatus(context), ownerOnly: true,
+        const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
+        return { available: external ? (await codexProviderConnections.list()).some((item) => item.id === external.id && item.connected)
+          : await assistantRuntime.claudeConnectionStatus(context), ownerOnly: true,
           economyModelId: await createNativeHelperModelStore({ systemRoot: codexProviderOptions.systemRoot, providerId: "claude" }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL };
       }
       if (context.engineId !== "codex") {
@@ -589,6 +604,24 @@ function createService({
     runAgentTurn: (sessionId, input, options) => (
       sessionAgent.streamDetachedChatTurn(sessionId, input, options)
     )
+  });
+
+  assistantRouting = createAssistantRouting({
+    systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
+    exclusive: async (sessionId, options, operation) => {
+      const result = await runMainAgentWrite(sessionId, options, operation,
+        { operation: "assistant-routing", waitMs: AGENT_WRITE_WAIT_MS });
+      if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
+      return result;
+    },
+    publish: publishAgentSessionChanged,
+    prepareSelection: (sessionId, selection, context) => selection.engineId === "codex"
+      ? codex.prepareModelRouting(sessionId, selection, context) : null,
+    async dispatch(sessionId, input, context) {
+      requireCompletedConversationRewind(context.session);
+      await prepareAgentSkillsInsideAgentWrite(sessionId, context);
+      return sendWithAssistantChangeover(sessionId, input, context, sessionAgent);
+    }
   });
 
   async function runMainAgentWrite(sessionId = "", options = {}, operation, lockOptions = {}) {
@@ -1595,7 +1628,10 @@ function createService({
     return { execution, normalizedSessionId, runtime, session };
   }
 
-  const sessionConversations = createSessionConversations({
+  sessionConversations = createSessionConversations({
+    systemRoot: codexProviderOptions.systemRoot,
+    prepareSelection: (sessionId, selection, context) => selection.engineId === "codex"
+      ? codex.prepareModelRouting(sessionId, selection, context) : null,
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
@@ -2445,7 +2481,8 @@ function createService({
       return sessionAgent.interruptDetachedChatTurn(sessionId, input, options);
     },
 
-    interruptAgentTurn(sessionId, input = {}, options = {}) {
+    async interruptAgentTurn(sessionId, input = {}, options = {}) {
+      if (await assistantRouting.cancel(sessionId, options)) return { ok: true, interrupted: true, routingCancelled: true };
       return sessionAgent.interruptTurn(sessionId, input, options);
     },
 
@@ -2543,10 +2580,11 @@ function createService({
     async readConversationRewindState(sessionId, options = {}) {
       const context = await assistantSessionOptions(sessionId, options);
       const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata, { required: false });
-      return selection ? readConversationRewindState(context.runtime.store, sessionId, vibe64AssistantConversationKey(selection)) : null;
+      return selection ? readConversationRewindState(context.runtime.store, sessionId, sessionConversationKey(context.session)) : null;
     },
 
     async rewindConversation(sessionId, input = {}, options = {}) {
+      await assistantRouting.cancel(sessionId, options);
       return runMainAgentWrite(sessionId, options, async (context) => {
         await sessionAgent.requireAssistantAccess(sessionId, context);
         if (sessionHasActiveAgentRun(context.session)) {
@@ -2561,32 +2599,7 @@ function createService({
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
       try {
-        const result = await runMainAgentWrite(
-          sessionId,
-          options,
-          async (context) => {
-            vibe64SessionDebugLog("server.terminals.agentMessage.writeAcquired", {
-              durationMs: Date.now() - startedAt,
-              messageId: input.messageId,
-              sessionId
-            });
-            requireCompletedConversationRewind(context.session);
-            await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-            const delivered = await sendWithAssistantChangeover(sessionId, input, context, sessionAgent, (event) => {
-              logOperationalEvent(logger, "info", {
-                ...event, event: `vibe64.assistant_changeover.${event.event}`,
-                component: "vibe64.agent_message", sessionId, username
-              }, "Assistant changeover delivery.");
-            });
-            vibe64SessionDebugLog("server.terminals.agentMessage.providerDone", {
-              durationMs: Date.now() - startedAt,
-              messageId: input.messageId,
-              sessionId
-            });
-            return delivered;
-          },
-          { operation: "send-agent-message", waitMs: AGENT_WRITE_WAIT_MS }
-        );
+        const result = await assistantRouting.send(sessionId, input, options);
         if (result?.ok === false) {
           logOperationalEvent(logger, "warn", {
             code: result.code,
@@ -2621,23 +2634,51 @@ function createService({
     },
 
     async readAgentGoal(sessionId, options = {}) {
-      return sessionAgent.readGoal(sessionId, await assistantSessionOptions(sessionId, options));
+      const context = await assistantSessionOptions(sessionId, options);
+      const result = await sessionAgent.readGoal(sessionId, context);
+      const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+      if (pinned && result.status !== "unavailable") {
+        const status = result.goal?.status || "complete";
+        if (pinned.status !== status) {
+          await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
+          await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
+        }
+        if (result.goal) return { ...result, goal: { ...result.goal,
+          objective: result.goal.objective === assistantModePrompt(pinned.mode, pinned.objective) ? pinned.objective : result.goal.objective },
+          routing: { mode: pinned.mode, selection: pinned.selection } };
+      }
+      return result;
     },
 
     async updateAgentGoal(sessionId, input = {}) {
       if (["set", "resume"].includes(input.action)) {
-        return runMainAgentWrite(sessionId, input, (context) => {
+        return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
+          if (assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
+            return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Plan, Code, or Economy before starting or resuming a goal." };
+          }
+          const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+          if (assistantRoutingStatusIsPending(pendingRoute?.status)) {
+            return { ok: false, error: "Finish or cancel the pending request before starting a goal." };
+          }
           const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
           const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
           if (changeover && changeover.lastEngine !== engineId) {
             return { ok: false, code: "vibe64_changeover_message_required",
               error: "Send a message to catch this AI up before starting or resuming its goal." };
           }
-          return sessionAgent.updateGoal(sessionId, input, context);
+          const prepared = await assistantRouting.prepareGoal(sessionId, input, context);
+          const result = await sessionAgent.updateGoal(sessionId, prepared.input, prepared.context);
+          if (result?.ok !== false && prepared.pinned) {
+            await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
+          }
+          return result;
         }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
       }
-      return sessionAgent.updateGoal(sessionId, input, await assistantSessionOptions(sessionId, input));
+      const context = await assistantSessionOptions(sessionId, input);
+      const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+      return sessionAgent.updateGoal(sessionId, pinned && input.objective === pinned.objective
+        ? { ...input, objective: assistantModePrompt(pinned.mode, input.objective) } : input, context);
     },
 
     async readAgentPlanUsage(sessionId, options = {}) {
@@ -2658,7 +2699,12 @@ function createService({
 
       try {
         const context = await assistantSessionOptions(sessionId, options);
+        const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+        if (selection.engineId === "codex" && !context.session.metadata.agent_identity_conversation_id) {
+          await codex.prepareModelRouting(sessionId, selection, context);
+        }
         const result = await sessionAgent.ensureSession(sessionId, context);
+        if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
         if (result?.ok === false) {
           logFailure({
             code: result.code,
@@ -2680,6 +2726,12 @@ function createService({
       const session = options.session?.sessionId === sessionId
         ? options.session
         : await runtime.getSession(sessionId, { inspectSource: false });
+      const records = await runtime.store.listSessionConversations(sessionId);
+      const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
+        .map((metadata) => JSON.parse(metadata.assistant_routing_request || "null"));
+      if (requests.some((request) => assistantRoutingStatusIsPending(request?.status))) {
+        throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), { code: "vibe64_assistant_routing_pending", retryable: true });
+      }
       const conversation = await sessionAgent.hasActiveTemporaryConversation(
         sessionId,
         {},

@@ -41,6 +41,21 @@ Important boundaries:
 
 Keep those scopes separate even though they share the word "deploy."
 
+## Persisted State Upgrades
+
+For a persisted application-data or metadata format change (including message
+history), or a historical repair, read
+[`docs/state-upgrades.md`](docs/state-upgrades.md). Add a numbered upgrade to
+`packages/vibe64-core/src/server/stateUpgrades/` and its ordered registry.
+Deployments run these with writers stopped; successful IDs are recorded once.
+Do not add lazy backfills to account reads, request handlers, project opening,
+or normal startup. New writes must produce the current format. Upgrades need
+read-only preflight, actionable warnings/errors, safe retry and focused tests.
+Published upgrade scripts and ordering are immutable; fixes use a new script.
+The implemented API is `{ id, run }`; each script currently owns its backups.
+The guide distinguishes this from the proposed, unimplemented
+`prepare()`/`backupPaths` API. Do not assume the runner creates backups for you.
+
 ## Test Execution Safety
 
 Do not start tests unless they are relevant to the current work, and never

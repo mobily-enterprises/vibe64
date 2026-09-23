@@ -7,6 +7,7 @@ const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
 const RUNTIME_ENTRIES = [
   "bin/run.js",
   "bin/server.js",
+  "bin/upgrade-state.js",
   "node_modules/@local/vibe64-execution/src/host/execHelper.js",
   "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
   "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",

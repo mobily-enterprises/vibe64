@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -2047,6 +2048,17 @@ function createService({
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
+          if (input.assistantRouting) {
+            const preferences = assistantRoutingPreferences(input.assistantRouting);
+            if (preferences.override?.engineId && preferences.override.engineId !== current.engineId) throw new Error("A mode override must use the current assistant.");
+            if (preferences.mode === "auto") {
+              const goal = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
+              if (goal?.goal && !["complete", "completed"].includes(goal.goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+            }
+            await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
+            return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+          }
+          if (!input.assistantSelection) throw new Error("Choose an assistant or a chat mode.");
           const requested = {
             ...record(input.assistantSelection),
             engineId: text(input.assistantSelection?.engineId) || current.engineId
@@ -2064,13 +2076,23 @@ function createService({
           const next = assertVibe64AssistantSelectionUpdate(current, resolved, {
             turnActive: agentSession?.turn?.active === true
           });
+          const routing = assistantRoutingFromMetadata(session.metadata);
+          if (routing && current.engineId === next.engineId && routing.mode === "auto") throw new Error("Choose Plan, Code, or Economy before selecting a custom model.");
+          const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
+          if (current.engineId !== next.engineId && assistantRoutingStatusIsPending(routingRequest?.status)) {
+            throw new Error("Finish or cancel the pending request before changing orchestrators.");
+          }
           if (current.engineId !== next.engineId ||
-              current.engineId === "codex" && current.modelProviderId !== next.modelProviderId) {
+              current.engineId === "codex" && !session.metadata.codex_routing_home_provider && current.modelProviderId !== next.modelProviderId) {
             const changeover = await terminals.prepareAssistantChangeover(sessionId, {
               runtime, session, vibe64User
             });
             if (changeover?.ok === false) return changeover;
           }
+          if (routing) await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify({
+            mode: routing.mode, review: routing.review,
+            ...(current.engineId === next.engineId ? { override: next } : {})
+          }));
           await runtime.store.writeMetadataValue(
             sessionId,
             VIBE64_ASSISTANT_SELECTION_METADATA,

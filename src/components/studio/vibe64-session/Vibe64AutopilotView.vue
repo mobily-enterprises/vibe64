@@ -402,6 +402,16 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
+            <Vibe64ChatModeControls v-if="assistantDirectAllowed" :session="props.session" :sessions-api-path="props.sessionsApiPath"
+              :disabled="composerDisabled" :active="agentActive" :can-configure="assistantSuggestionsCanManage" />
+            <v-alert v-if="routingStatusLabel" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
+              {{ routingStatusLabel }}
+              <p v-if="routingRequest?.error" class="text-body-small mt-1">{{ routingRequest.error }}</p>
+              <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
+                <v-btn variant="text" min-height="48" :disabled="routingReviewRetrying" @click="retryAutomaticReview">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
+                <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="props.interruptAgentTurn({ reason: 'skip-review' })">Skip review</v-btn>
+              </div>
+            </v-alert>
             <Vibe64AssistantAccessPanel
               :access-error="assistantAccessError"
               :assistant-busy="agentActive"
@@ -899,6 +909,7 @@ import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe6
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
+import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64StarredFilesMenu from "@/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
@@ -1118,6 +1129,8 @@ const {
   composerHint,
   composerPlaceholder,
   composerSending,
+  routingRequest,
+  routingStatusLabel,
   composerSubmitAriaLabel,
   composerSubmitMode,
   composerSubmitTitle,
@@ -1272,9 +1285,16 @@ watch(agentActive, (active) => {
     openCodeProgressLabel.value = "";
   }
 }, { flush: "sync", immediate: true });
+const routingReviewRetrying = ref(false);
+async function retryAutomaticReview() {
+  if (routingReviewRetrying.value || !routingRequest.value) return;
+  routingReviewRetrying.value = true;
+  try { await props.sendAgentMessage({ messageId: routingRequest.value.messageId, message: routingRequest.value.input.message, reviewAction: "retry" }); }
+  finally { routingReviewRetrying.value = false; }
+}
 const conversationAssistantLabel = computed(() => (
-  props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :
-    props.session?.assistantSelection?.engineId === "claude" ? "Claude" : "Codex"
+  `${props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :
+    props.session?.assistantSelection?.engineId === "claude" ? "Claude" : "Codex"} · ${props.session?.assistantSelection?.modelId || ""}`
 ));
 const rewindTarget = ref(null);
 const rewindCommand = useCommand({

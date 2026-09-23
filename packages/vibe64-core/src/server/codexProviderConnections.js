@@ -93,6 +93,20 @@ async function verifyCodexProviderKey(provider, apiKey, fetchImpl = fetch) {
   }
 }
 
+async function verifyClaudeProviderKey(provider, apiKey, fetchImpl) {
+  try {
+    const response = await fetchImpl(`${provider.claudeBaseUrl}/v1/messages`, {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
+      headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: provider.models[0].id, max_tokens: 64,
+        messages: [{ role: "user", content: "Reply with OK." }] })
+    });
+    if (!response.ok) { await response.body?.cancel?.(); return false; }
+    const result = await response.json().catch(() => null);
+    return Boolean(result?.id && result.type === "message" && !result.error && Array.isArray(result.content));
+  } catch { return false; }
+}
+
 function createCodexProviderConnectionStore({
   systemRoot,
   invalidateRuntimes = async () => ({ ok: true }),
@@ -117,6 +131,7 @@ function createCodexProviderConnectionStore({
         id: provider.id,
         label: provider.label,
         connected: Boolean(saved && !status),
+        claudeReady: Boolean(saved?.claudeReady && !status),
         status: status?.status || (saved ? "connected" : "not_connected")
       };
     }));
@@ -134,19 +149,50 @@ function createCodexProviderConnectionStore({
       runtimeInstanceId: `provider:${providerId}`
     };
   }
+  async function threadConfig(providerId) {
+    const provider = curatedCodexProvider(providerId);
+    if (!provider) return {};
+    const paths = await runtimeOptions(providerId);
+    const connection = await read(providerId);
+    if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
+    // Private control-plane data. Never return this configuration through an
+    // Accounts response or put it into the model's shell environment.
+    return {
+      model_catalog_json: path.join(paths.codexHome, "models.json"),
+      model_reasoning_summary: "none",
+      web_search: provider.webSearch ? "live" : "disabled",
+      [`model_providers.${providerId}`]: {
+        name: provider.label, base_url: provider.baseUrl, wire_api: "responses",
+        requires_openai_auth: false, experimental_bearer_token: connection.apiKey
+      }
+    };
+  }
+  async function claudeProviderSettings(providerId) {
+    const provider = curatedCodexProvider(providerId);
+    if (!provider) return null;
+    await runtimeOptions(providerId);
+    const connection = await read(providerId);
+    if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
+    if (!connection.claudeReady) throw new Error(`Check and reconnect ${provider.label} in AI Accounts to verify its Claude Code connection.`);
+    return { providerId, apiKey: connection.apiKey,
+      baseUrl: provider.claudeBaseUrl };
+  }
   async function change(providerId, input = {}) {
     const provider = curatedCodexProvider(providerId);
     const paths = codexProviderPaths(systemRoot, providerId);
     const previous = changes.get(paths.connectionPath) || Promise.resolve();
     const operation = previous.catch(() => null).then(async () => {
+      const previousConnection = await read(providerId);
       const removing = input.remove === true;
       const key = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+      let claudeReady = false;
       if (!removing) {
         if (!key || key.length > 16384 || /\s/u.test(key) ||
             [...key].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
           throw new Error("Enter a valid provider API key.");
         }
         await verifyCodexProviderKey(provider, key, fetchImpl);
+        claudeReady = await verifyClaudeProviderKey(provider, key, fetchImpl);
       }
       await markCodexAuthReconnecting(paths.systemRoot, { reason: "provider-key-change" });
       const stopped = await invalidateRuntimes({
@@ -157,6 +203,15 @@ function createCodexProviderConnectionStore({
         toolHomeSource: paths.toolHomeSource
       });
       if (stopped?.ok === false) throw new Error("The previous connection could not be stopped. Retry before changing its key.");
+      if (previousConnection) {
+        // Routed Codex threads share the native runtime. Stop that runtime on
+        // rotation/revocation so no loaded thread retains the superseded key.
+        const shared = await invalidateRuntimes({ provider: "codex", includeOwned: true,
+          reason: "provider-key-change", systemRoot });
+        const claude = await invalidateRuntimes({ provider: "claude", includeOwned: true,
+          reason: "provider-key-change", modelProviderId: providerId });
+        if (shared?.ok === false || claude?.ok === false) throw new Error("A routed conversation could not be stopped. Retry before changing its key.");
+      }
       if (removing) {
         await rm(paths.connectionPath, { force: true });
         await rm(path.join(paths.codexHome, "config.toml"), { force: true });
@@ -178,7 +233,7 @@ function createCodexProviderConnectionStore({
         ].join("\n");
         await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
         await privateFile(path.join(paths.codexHome, "config.toml"), config);
-        await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key }));
+        await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key, claudeReady }));
       }
       await privateFile(codexAuthMarkerPath(paths.systemRoot), JSON.stringify({
         connected: !removing,
@@ -195,7 +250,7 @@ function createCodexProviderConnectionStore({
       if (changes.get(paths.connectionPath) === operation) changes.delete(paths.connectionPath);
     }
   }
-  return { change, list, runtimeOptions };
+  return { change, list, runtimeOptions, threadConfig, claudeProviderSettings };
 }
 
 export { codexProviderPaths, createCodexProviderConnectionStore };

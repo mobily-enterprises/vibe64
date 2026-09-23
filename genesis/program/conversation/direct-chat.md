@@ -91,6 +91,14 @@ so retaining a different provider does not skip the selected provider's cleanup.
 
 ## Sources
 
+- `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
+- `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
+- `tests/server/codexHistoryAdapter.unit.test.js`
+- `tests/server/codexProviderSwitch.test.js`
+- `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
+
 - `src/App.vue`
 - `src/composables/useVibe64InAppLinks.js`
 - `tests/server/inAppLinks.unit.test.js`
@@ -170,6 +178,73 @@ so retaining a different provider does not skip the selected provider's cleanup.
 - `vite.config.mjs`
 
 ## Public contract
+
+Main chat can save Plan, Code, Economy or Auto plus an optional review preference
+in the existing conversation metadata. A role resolves to a live, available
+selection in that same orchestrator. Existing concrete selections remain usable
+until a mode is chosen. Exact model overrides apply only to explicit modes.
+
+Auto snapshots its three role assignments and settings revision before invoking
+the existing tool-free Economy workload. The classifier sees the submitted text,
+attachment labels and bounded recent visible exchanges; it returns only a mode
+and reason. Vibe64 validates this result and sends the original request through
+ordinary native delivery with a scoped Plan or Code instruction. It does not
+change orchestrators or use conversation changeover for model routing.
+
+One durable request record owns preparation, admission uncertainty and an optional
+review continuation. Stop cancels preparation and suppresses its late result;
+after native admission it uses ordinary interruption. Native receipts prevent
+duplicate delivery after a lost HTTP response. A failed classifier is retryable;
+uncertain delivery checks acceptance before any resend. Unfinished preparation
+after a server restart becomes visibly retryable. A new request cannot overtake
+an unresolved pending request. Active-turn steering bypasses classification.
+
+After the matching Code turn completes normally, review uses one preallocated
+message identity and the snapshotted Plan selection. The visible automatic
+request permits scoped fixes. Structured waiting, failure, interruption, active
+goals and Stop suppress continuation; a reviewer never schedules another review.
+Preparation failures retain Retry and Skip. A review stopped after admission is
+incomplete and needs a new explicit request; even a late native success cannot
+overwrite its cancellation. Completion must match the exact admitted turn,
+recovering that identity from its receipt when necessary. Unknown completion
+skips review visibly. Backend recovery offers an unsent review for Retry/Skip
+instead of launching it. Goal mode and selection are pinned only after native
+goal acceptance.
+
+Codex prepares private per-thread provider configuration, detaches and resumes
+the same idle native thread, and checks the provider acknowledgement. A native
+subscriber retaining the old provider blocks delivery. It does not restart the
+shared app-server. New routed histories use the native home; older external-home
+histories are not silently moved into a different native home.
+
+The managed execution leader starts a local history adapter before Codex and
+stops both together. Browser/backend observer reconnects do not own its lifetime.
+The native account type selects a fixed OpenAI upstream through per-thread
+`openai_base_url`; authentication remains native-owned. On outgoing OpenAI
+requests, recognized foreign plaintext reasoning becomes labelled assistant
+history in the same position. Original rollout records, opaque provider state,
+tool calls/results and valid OpenAI reasoning remain unchanged. This preserves
+detailed text without a summarization call and lets DeepSeek or GLM consume its
+original history on the return trip. Unknown incompatible reasoning fails visibly.
+
+The adapter bounds and decodes request bodies, forwards streamed HTTP responses,
+aborts upstream when native delivery disconnects, and adds no inference retry.
+It rejects WebSocket upgrades explicitly so the built-in provider falls back to
+HTTP. Models and native compaction use the same fixed upstream boundary.
+The runtime descriptor is private and tied to its existing process identity;
+older runtimes without the adapter retire once through normal owned cleanup.
+Focused transport tests cover cancellation, stream failure and process shutdown.
+The native fixture covers DeepSeek reasoning with opaque state and GLM reasoning
+with null opaque state, provider round trips, tools, another conversation and
+refusal when another subscriber retains old settings.
+Claude acknowledges process-local provider settings and then model
+selection before sending, preserving its native conversation. Partial settings
+acknowledgement stops that process before another prompt is admitted.
+
+The composer exposes preparation state and the intended recipient; durable
+transcript metadata retains mode and model for each exchange. The current chat
+selection does not relabel previous replies. Temporary chats reuse this policy
+with their own saved state; internal bounded helpers do not opt into it.
 
 Claude Code uses the unmodified pinned CLI and a bounded streaming JSON reader
 inside the existing managed execution owner. Control replies bypass ordered,
@@ -1267,12 +1342,11 @@ attachment URLs and accepted-file retention, question submission ownership,
 favourite files, project access and operation admission.
 
 
-Codex's curated provider selection is part of runtime and conversation identity.
-GPT retains its existing `codex` history binding; DeepSeek and GLM use distinct
-provider bindings and saved native thread ids. Changeover reads the transcript's
-existing assistant-selection snapshot, remembers each provider's received
-messages, and recovers uncertain delivery without resending the prompt. Changing
-the selection alone sends nothing and is rejected while a turn is active.
+Legacy Codex conversations may retain separate provider homes and native thread
+ids. New routed conversations pin one home and resume the same native thread
+across qualified provider choices, as described above. Application changeover
+continues to use transcript selection snapshots and per-application receipts.
+Changing the selection alone sends nothing and is rejected while a turn is active.
 
 Curated provider homes project only their fixed endpoint, key and model
 metadata. Main chat, ephemeral tasks and isolated Economy helpers use that

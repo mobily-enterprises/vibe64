@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
+import ModelRoutingForm from "./ModelRoutingForm.vue";
 
 const props = defineProps({
   actionsEnabled: { type: Boolean, default: true },
@@ -26,10 +27,12 @@ const choices = computed(() => [
 const apiKey = ref("");
 const visible = ref(false);
 const confirmRemove = ref(false);
+const routingProposal = ref(false);
 watch(providerId, () => {
   apiKey.value = "";
   visible.value = false;
   confirmRemove.value = false;
+  routingProposal.value = false;
 }, { immediate: true });
 async function save(remove = false) {
   try {
@@ -39,6 +42,7 @@ async function save(remove = false) {
     visible.value = false;
     confirmRemove.value = false;
     emit("changed");
+    if (!remove) routingProposal.value = true;
   } catch {
     // The shared command feedback owns errors; retain the form for retry.
   }
@@ -47,6 +51,12 @@ async function save(remove = false) {
 
 <template>
   <section aria-label="Codex providers" class="codex-providers">
+    <ModelRoutingForm
+      v-if="routingProposal" :connection-id="providerId" :connection-label="provider?.label || providerId"
+      @busy="emit('busy', $event)" @close="routingProposal = false; emit('close')"
+      @saved="routingProposal = false; emit('changed'); emit('close')"
+    />
+    <template v-else>
     <div class="d-flex align-center ga-2 mb-3">
       <v-select
         v-model="providerId" :items="choices" item-title="label" item-value="id"
@@ -63,6 +73,7 @@ async function save(remove = false) {
         <v-chip v-if="connection?.connected" color="success" size="small" :prepend-icon="mdiCheckCircleOutline">Connected</v-chip>
       </div>
       <p class="text-body-medium mb-3">{{ provider.description }}.</p>
+      <p v-if="connection?.connected" class="text-body-small mb-3">{{ connection.claudeReady ? 'Ready for Codex and Claude Code.' : 'Ready for Codex. Check this key again to verify Claude Code support.' }}</p>
       <p v-if="provider.id === 'zai-coding-plan'" class="text-body-small mb-3">
         For a regular Z.AI API account, choose GLM through OpenCode in Add AI.
         Codex support is verified for the Coding Plan.
@@ -81,7 +92,7 @@ async function save(remove = false) {
           variant="outlined" hint="Stored privately outside your projects. Existing keys are never shown." persistent-hint
           @click:append-inner="visible = !visible"
         />
-        <p class="text-body-small my-3">Connecting sends one small test request to {{ provider.label }} and may use API credit or plan quota.</p>
+        <p class="text-body-small my-3">Connecting checks Codex and Claude Code with small requests to {{ provider.label }} and may use API credit or plan quota.</p>
         <div class="d-flex flex-wrap ga-2 align-center">
           <v-btn
             type="submit" color="primary" variant="flat"
@@ -107,6 +118,7 @@ async function save(remove = false) {
           <v-btn color="error" :disabled="busy" @click="save(true)">{{ busy ? "Disconnecting…" : "Disconnect" }}</v-btn>
         </div>
       </v-alert>
+    </template>
     </template>
   </section>
 </template>

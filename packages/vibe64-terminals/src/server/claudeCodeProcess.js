@@ -11,6 +11,16 @@ import { createClaudeJsonClient } from "@local/vibe64-runtime/server/claudeStrea
 const CLAUDE_CODE_VERSION = "2.1.278";
 const bridgePath = fileURLToPath(new URL("./claudeStdioBridge.js", import.meta.url));
 
+function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {}) {
+  const commandHook = {
+    type: "command", timeout: 30,
+    command: [process.execPath, fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/agentSessionCommandHook"))].map(shellQuote).join(" ")
+  };
+  return { fallbackModel: [], effortLevel: effort || null,
+    ...(!toolFree ? { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [commandHook] }] } } : {}),
+    ...(providerEnv ? { env: providerEnv } : {}) };
+}
+
 function claudeCodeArguments({
   sessionId, resume = false, model = "", effort = "", toolFree = false,
   outputSchema, terminal = false, systemPrompt, appendSystemPrompt
@@ -26,17 +36,7 @@ function claudeCodeArguments({
     args.push("--safe-mode", "--restricted", "--tools", "", "--disallowedTools", "mcp__*",
       "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--settings", '{"fallbackModel":[]}');
   } else {
-    const commandHook = {
-      type: "command",
-      timeout: 30,
-      command: [
-        process.execPath,
-        fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/agentSessionCommandHook"))
-      ].map(shellQuote).join(" ")
-    };
-    args.push("--permission-mode", "bypassPermissions", "--settings", JSON.stringify({
-      hooks: { PreToolUse: [{ matcher: "Bash", hooks: [commandHook] }] }
-    }));
+    args.push("--permission-mode", "bypassPermissions", "--settings", JSON.stringify(claudeFlagSettings()));
   }
   if (outputSchema) args.push("--json-schema", JSON.stringify(outputSchema));
   return args;
@@ -114,4 +114,4 @@ async function createClaudeCodeProcess({
   }
 }
 
-export { CLAUDE_CODE_VERSION, claudeCodeArguments, createClaudeCodeProcess };
+export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess };

@@ -7,7 +7,8 @@
   "exports": {
     "./server": "./src/server/index.js",
     "./server/*": "./src/server/*.js",
-    "./shared": "./src/shared/index.js"
+    "./shared": "./src/shared/index.js",
+    "./shared/assistantRouting": "./src/shared/assistantRouting.js"
   },
   "jskit": {
     "kind": "runtime",

@@ -88,6 +88,14 @@ const helperModelInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const modelRoutingInputValidator = deepFreeze({
+  schema: createSchema({
+    ...vibe64UserInputSchema,
+    revision: { type: "integer", min: 0, required: true },
+    orchestrators: { type: "object", additionalProperties: true, required: true }
+  }), mode: "patch"
+});
+
 const accountIdInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
@@ -147,6 +155,7 @@ const codexProviderInputValidator = deepFreeze({
 });
 
 export {
+  modelRoutingInputValidator,
   codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,

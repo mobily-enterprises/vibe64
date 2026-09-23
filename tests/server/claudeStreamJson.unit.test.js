@@ -165,7 +165,7 @@ async function fixture(t) {
       const native = { options, executionId: `test-${processes.length}`, stopped: false, stopAllowed: true,
         initialization: { models: [{ value: "sonnet", supportedEffortLevels: ["low", "high"] }, { value: "haiku", supportedEffortLevels: [] }] },
         async stop() { this.stopped = this.stopAllowed; return { exited: this.stopped, scopeEmpty: this.stopped }; },
-        client: { interrupt: async () => {
+        client: { async request(request) { (native.requests ||= []).push(request); return {}; }, interrupt: async () => {
           await options.onEvent({ type: "result", subtype: "success", terminal_reason: "aborted_streaming", result: "" });
           return {};
         }, async send(message, input) {
@@ -342,6 +342,7 @@ test("Claude admission inspection uses the shared contract and native history pr
   await writeHistory(f, ready.thread.id, [{ type: "user", uuid: nativeMessageId("accepted"), message: { content: "accepted" } }]);
   const inspected = await f.provider.inspectMessageAdmission(f.context, { messageId: "accepted", threadId: ready.thread.id });
   assert.equal(inspected.admission, "accepted");
+  assert.equal(inspected.turnId, nativeMessageId("accepted"));
   assert.equal((await f.provider.sendMessage(f.context, { message: "accepted", messageId: "accepted" })).duplicate, true);
   assert.equal(f.processes[0].lastInput, undefined);
 });
@@ -535,13 +536,12 @@ test("Claude changes model and effort through native controls without restarting
   f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
   const second = await f.provider.ensureSession(f.context);
   assert.equal(second.thread.id, first.thread.id);
-  assert.deepEqual(requests, [
-    { subtype: "set_model", model: "haiku" },
-    { subtype: "apply_flag_settings", settings: { effortLevel: null } }
-  ]);
+  assert.deepEqual(requests.map(({ subtype }) => subtype), ["apply_flag_settings", "set_model"]);
+  assert.equal(requests[0].settings.effortLevel, null);
+  assert.deepEqual(requests[1], { subtype: "set_model", model: "haiku" });
   f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "sonnet", variantId: "low" };
   await f.provider.ensureSession(f.context);
-  assert.deepEqual(requests.at(-1), { subtype: "apply_flag_settings", settings: { effortLevel: "low" } });
+  assert.equal(requests.at(-2).settings.effortLevel, "low");
   assert.equal(f.processes.length, 1);
   assert.equal(native.stopped, false);
   await f.provider.sendMessage(f.context, { message: "Continue", messageId: "switched" });
@@ -729,4 +729,44 @@ test("temporary Claude accepts active-turn steering in its existing native conve
   assert.equal(f.processes[0].lastInput.message, "Read logs first");
   assert.equal(f.written.length, 0, "temporary steering stays out of main History");
   await f.provider.stopConversation(f.context, { conversationId });
+});
+
+
+test("Claude changes provider controls before model and keeps the native conversation", async (t) => {
+  const f = await fixture(t);
+  const home = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
+  await mkdir(home, { recursive: true });
+  await writeFile(path.join(home, "connection.json"), JSON.stringify({ apiKey: "fixture-deepseek-secret", claudeReady: true }));
+  const first = await f.provider.sendMessage(f.context, { message: "Plan this", messageId: "plan" });
+  const native = f.processes[0];
+  await native.options.onEvent({ type: "result", subtype: "success", result: "Agreed." });
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
+  const second = await f.provider.sendMessage(f.context, { message: "Implement it", messageId: "code" });
+  assert.equal(second.thread.id, first.thread.id);
+  assert.equal(f.processes.length, 1);
+  assert.deepEqual(native.requests.slice(-2).map(({ subtype }) => subtype), ["apply_flag_settings", "set_model"]);
+  const flags = native.requests.at(-2).settings;
+  assert.equal(flags.env.ANTHROPIC_BASE_URL, "https://api.deepseek.com/anthropic");
+  assert.equal(flags.env.ANTHROPIC_AUTH_TOKEN, "fixture-deepseek-secret");
+  assert.ok(flags.hooks.PreToolUse.length);
+  assert.deepEqual(flags.fallbackModel, []);
+  assert.ok(!JSON.stringify(native.options.env).includes("fixture-deepseek-secret"));
+  await native.options.onEvent({ type: "result", subtype: "success", result: "Implemented." });
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelProviderId: "anthropic", modelId: "sonnet" };
+  await f.provider.sendMessage(f.context, { message: "Review it", messageId: "review" });
+  assert.equal(native.requests.at(-2).settings.env.ANTHROPIC_AUTH_TOKEN, "");
+  assert.equal(native.requests.at(-2).settings.env.ANTHROPIC_BASE_URL, "https://api.anthropic.com");
+  assert.equal(f.processes.length, 1);
+});
+
+test("Claude does not send when a provider-settings acknowledgement fails", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "First", messageId: "first" });
+  const native = f.processes[0];
+  await native.options.onEvent({ type: "result", subtype: "success", result: "Done." });
+  native.client.request = async () => { throw new Error("Settings rejected"); };
+  f.context.assistantSelection = { ...f.context.assistantSelection, variantId: "low" };
+  await assert.rejects(f.provider.sendMessage(f.context, { message: "Second", messageId: "second" }), /Settings rejected/);
+  assert.equal(native.lastInput.messageId, nativeMessageId("first"));
+  assert.equal(native.stopped, true);
 });

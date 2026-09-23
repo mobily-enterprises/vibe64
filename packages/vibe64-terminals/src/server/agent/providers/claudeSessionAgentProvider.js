@@ -1,3 +1,5 @@
+import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { rm } from "node:fs/promises";
@@ -17,7 +19,7 @@ import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/cla
 import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import { CLAUDE_CODE_VERSION, claudeCodeArguments, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
+import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
 import { claudeHistoryPath, claudeMessageBlocks, readClaudeHistory, requireClaudeSessionId } from "../../claudeConversationHistory.js";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
@@ -53,23 +55,31 @@ function claudePlanUsage(value) {
   return { status: !value.rate_limits_available ? "unsupported" : windows.length ? "available" : "unavailable",
     windows, checkedAt: Date.now() };
 }
-function claudeCapabilities(initialization, connected) {
+function claudeCapabilities(initialization, connected, connections = []) {
   const models = (initialization.models || []).map((model) => ({
     id: model.value, label: model.displayName || model.value, description: model.description || "",
     status: "available", variants: (model.supportedEffortLevels || []).map((id) => ({
       id, label: id[0].toUpperCase() + id.slice(1)
     }))
   }));
-  const selected = models.find((model) => model.id === "default") || models[0];
+  const external = CURATED_CODEX_PROVIDERS.map((provider) => ({
+    id: provider.id, label: provider.label, description: provider.description,
+    connected: connections.some((item) => item.id === provider.id && item.connected && item.claudeReady),
+    models: provider.models.map((model) => ({ id: model.id, label: model.label, status: "available",
+      variants: model.variants.map((id) => ({ id, label: id })), capabilities: { images: model.images === true } }))
+  }));
+  const defaultProvider = connected ? { id: "anthropic", models } : external.find((provider) => provider.connected);
+  const selected = defaultProvider?.models.find((model) => model.id === "default") || defaultProvider?.models[0];
+  const available = connected || external.some((provider) => provider.connected);
   return {
     engineId: ENGINE, transportId: TRANSPORT, label: "Claude Code",
     agents: [{ id: ENGINE, label: "Claude Code", mode: "primary", description: "Anthropic's native coding agent" }],
     authentication: { management: "account-owner", modes: ["oauth"] },
-    defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: "anthropic",
+    defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: defaultProvider?.id || "anthropic",
       variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
-    health: { status: connected ? "ready" : "unavailable", message: connected ? "" : "Connect Claude Code to use your Claude plan." },
-    modelProviders: [{ id: "anthropic", label: "Anthropic", connected, models }],
-    revision: `sha256:${hash(JSON.stringify({ models, connected }))}`
+    health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
+    modelProviders: [{ id: "anthropic", label: "Anthropic", connected, models }, ...external],
+    revision: `sha256:${hash(JSON.stringify({ models, connected, external }))}`
   };
 }
 
@@ -86,6 +96,7 @@ function createClaudeSessionAgentProvider({
   recordGitActor = recordSessionGitCommandActor,
   codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand
 } = {}) {
+  const providerConnections = createCodexProviderConnectionStore({ systemRoot });
   const entries = new Map();
   const starts = new Map();
   const accountProcessStops = new Set();
@@ -138,8 +149,8 @@ function createClaudeSessionAgentProvider({
   async function save(entry) {
     await metadata(entry.context, { [`claude_conversation_${entry.id}`]: JSON.stringify({
       executionId: entry.process?.executionId || entry.executionId || "",
-      accountIdentity: entry.accountIdentity, sent: entry.sent, state: entry.turn?.state || "ready", turnId: entry.turn?.id || "",
-      lastMessageId: entry.lastMessageId || "", main: entry.main, nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
+      accountIdentity: entry.accountIdentity, accountIdentities: entry.accountIdentities, sent: entry.sent, state: entry.turn?.state || "ready", turnId: entry.turn?.id || "",
+      lastMessageId: entry.lastMessageId || "", main: entry.main, persistent: entry.persistent === true, nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
     }) });
   }
 
@@ -148,12 +159,19 @@ function createClaudeSessionAgentProvider({
     const active = [RUN.STARTING, RUN.ACTIVE, RUN.FINALIZING].includes(state);
     Object.assign(entry.turn, { active, state, error: message, updatedAt: now() });
     await save(entry);
-    if (!entry.main || entry.renewal) return;
+    if (!entry.main || entry.renewal) {
+      if (!active && entry.persistent && !entry.profile && !entry.context.assistantScope && !entry.renewal) {
+        await publishSessionChanged(entry.context.sessionId, { reason: "temporary-agent-turn-idle", payload: {
+          conversationId: entry.id, temporaryRun: { active: false, state, providerTurnId: entry.turn.id }
+        } });
+      }
+      return;
+    }
     const { runtime, sessionId, selection } = entry.context;
     const run = await runtime.store.writeAgentRunEvent(sessionId, TRANSPORT, {
       event: { kind: `claude-${state}`, state, message },
       patch: { engineId: ENGINE, state, error: message, observationError: entry.observationError || "",
-        model: selection.modelId, modelProviderId: "anthropic", threadId: entry.id,
+        model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
         turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : now(), updatedAt: now() }
     });
     await publishSessionChanged(sessionId, {
@@ -342,7 +360,8 @@ function createClaudeSessionAgentProvider({
     const saved = ctx.session?.metadata?.[`claude_conversation_${id}`];
     if (!main && !saved && !create) throw error("This Claude conversation is unavailable.");
     const state = saved ? JSON.parse(saved) : {};
-    const entry = { id, key, main, context: ctx, process: null, executionId: state.executionId || "",
+    const entry = { id, key, main, persistent: state.persistent === true, context: ctx, process: null, executionId: state.executionId || "",
+      accountIdentities: state.accountIdentities || (state.accountIdentity ? { anthropic: state.accountIdentity } : {}),
       accountIdentity: state.accountIdentity || "", sent: state.sent === true, nativeWorkdir: state.nativeWorkdir || ctx.workdir,
       messages: new Map(), admissions: new Map(), inFlight: new Set(), tasks: new Set(), result: "",
       lastMessageId: state.lastMessageId || "", turn: state.turnId ? {
@@ -388,6 +407,11 @@ function createClaudeSessionAgentProvider({
   }
 
   async function accountIdentity(context) {
+    const selection = context.selection || context.assistantSelection;
+    if (curatedCodexProvider(selection?.modelProviderId)) {
+      const settings = await providerConnections.claudeProviderSettings(selection.modelProviderId);
+      return `sha256:${hash(JSON.stringify([configRoot, settings.providerId, settings.apiKey]))}`;
+    }
     const account = await accountStatus(context);
     const email = text(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
@@ -419,12 +443,15 @@ function createClaudeSessionAgentProvider({
 
   async function bindAccount(entry) {
     const identity = await accountIdentity(entry.context);
-    if (entry.accountIdentity && entry.accountIdentity !== identity) {
+    const providerId = entry.context.selection.modelProviderId;
+    entry.accountIdentities ||= {};
+    if (!curatedCodexProvider(providerId) && entry.accountIdentities[providerId] && entry.accountIdentities[providerId] !== identity) {
       await stopEntry(entry, "The signed-in Claude account changed.");
       throw error("This conversation belongs to another Claude account. Reconnect that account or start a new session.", "vibe64_claude_account_changed");
     }
-    if (!entry.accountIdentity) {
+    if (entry.accountIdentity !== identity) {
       entry.accountIdentity = identity;
+      entry.accountIdentities[providerId] = identity;
       await save(entry);
     }
   }
@@ -437,7 +464,14 @@ function createClaudeSessionAgentProvider({
     await bindAccount(entry);
     const selection = entry.context.selection;
     const profile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
-    const identity = JSON.stringify([selection, profile, input.outputSchema]);
+    const external = await providerConnections.claudeProviderSettings(selection.modelProviderId);
+    const providerEnv = {
+      ANTHROPIC_BASE_URL: external?.baseUrl || "https://api.anthropic.com",
+      ANTHROPIC_AUTH_TOKEN: external?.apiKey || "", ANTHROPIC_API_KEY: "", CLAUDE_CODE_OAUTH_TOKEN: ""
+    };
+    const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
+      effort: profile ? profile.thinking : selection.variantId, providerEnv });
+    const identity = JSON.stringify([selection, profile, input.outputSchema, entry.accountIdentity]);
     if (entry.process && !entry.stopping && entry.identity === identity) return entry.process;
     if (entry.process && !entry.stopping && entry.turn?.active) throw error("Stop the current Claude turn before changing its settings.");
     if (starts.has(entry.key)) return starts.get(entry.key);
@@ -445,10 +479,8 @@ function createClaudeSessionAgentProvider({
       if (entry.process && !entry.stopping && !profile && !entry.profile &&
           entry.outputSchemaIdentity === JSON.stringify(input.outputSchema)) {
         try {
+          await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
           await entry.process.client.request({ subtype: "set_model", model: selection.modelId });
-          await entry.process.client.request({ subtype: "apply_flag_settings", settings: {
-            effortLevel: selection.variantId || null
-          } });
           entry.identity = identity;
           return entry.process;
         } catch (failure) {
@@ -471,7 +503,7 @@ function createClaudeSessionAgentProvider({
       entry.outputSchemaIdentity = JSON.stringify(input.outputSchema);
       entry.process = await createProcess({ command, commandRunner, stopExecution, credentialHome,
         env: { ...env, ...prepared.env }, shimDirs: prepared.shimDirs, workdir: entry.nativeWorkdir,
-        sessionId: entry.id, resume: entry.sent, model: profile?.model || selection.modelId,
+        sessionId: entry.id, resume: entry.sent, model: external ? "" : profile?.model || selection.modelId,
         effort: profile ? profile.thinking : selection.variantId,
         toolFree: Boolean(profile || ctx.assistantScope), outputSchema: input.outputSchema,
         systemPrompt: ctx.assistantScope?.stableContext,
@@ -488,6 +520,13 @@ function createClaudeSessionAgentProvider({
           await stopEntry(entry, failure.message);
         }
       });
+      try {
+        await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
+        await entry.process.client.request({ subtype: "set_model", model: profile?.model || selection.modelId });
+      } catch (failure) {
+        await stopEntry(entry, failure.message);
+        throw failure;
+      }
       await save(entry);
       return entry.process;
     })().finally(() => starts.delete(entry.key));
@@ -560,7 +599,8 @@ function createClaudeSessionAgentProvider({
     entry.onEvent = ctx.onEvent;
     entry.lastMessageId = uuid;
     entry.inFlight.add(uuid);
-    const actorMetadata = await conversationActorMetadata({ vibe64User: ctx.vibe64User });
+    const actorMetadata = { ...input.turnMetadata, ...await conversationActorMetadata({ vibe64User: ctx.vibe64User }),
+      ...(input.turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {}) };
     const admitted = Promise.withResolvers();
     void admitted.promise.catch(() => {});
     let conversationTurn;
@@ -623,6 +663,7 @@ function createClaudeSessionAgentProvider({
 
   async function startConversationTurn(context, input = {}) {
     const entry = await entryFor(context, input.conversationId || input.threadId);
+    entry.persistent ||= input.persistent === true;
     if (entry.turn?.active && entry.process && input.steer !== true) throw error("This conversation is still working.");
     await send(entry, input);
     return { ...resultFor(entry), ok: true, started: true };
@@ -704,18 +745,20 @@ function createClaudeSessionAgentProvider({
     id: ENGINE, transportId: TRANSPORT, executionProfiles: ["economy"],
     async capabilities(context) {
       const connected = await connectionStatus(context);
-      if (!connected) return claudeCapabilities({}, false);
+      const connections = await providerConnections.list();
+      if (!connected) return claudeCapabilities({}, false, connections);
       if (closing) throw error("Claude is reconnecting.");
-      const identity = await accountIdentity(context);
+      const nativeContext = { ...context, assistantSelection: null, selection: null };
+      const identity = await accountIdentity(nativeContext);
       if (!catalog || catalog.identity !== identity || Date.now() - catalog.at > 600_000) {
         catalogStart ||= (async () => {
           const value = await readAccountProcess(identity, (native) => native.initialization);
-          if (identity !== await accountIdentity(context)) throw error("The signed-in Claude account changed. Refresh the model list.");
+          if (identity !== await accountIdentity(nativeContext)) throw error("The signed-in Claude account changed. Refresh the model list.");
           catalog = { at: Date.now(), identity, value };
         })().finally(() => { catalogStart = null; });
         await catalogStart;
       }
-      return claudeCapabilities(catalog.value, true);
+      return claudeCapabilities(catalog.value, true, connections);
     },
     async describeProvider(context) {
       return {
@@ -813,7 +856,10 @@ function createClaudeSessionAgentProvider({
       const entry = await entryFor(context);
       if (input.threadId && input.threadId !== entry.id) return { ok: true, admission: "unknown", messageId: input.messageId, threadId: entry.id };
       const history = await readHistory(entry);
-      return { ok: true, admission: history.userIds.includes(nativeMessageId(input.messageId)) ? "accepted" : "unknown", messageId: input.messageId, threadId: entry.id };
+      const turnId = nativeMessageId(input.messageId);
+      const accepted = history.userIds.includes(turnId);
+      return { ok: true, admission: accepted ? "accepted" : "unknown", messageId: input.messageId,
+        threadId: entry.id, turnId: accepted ? turnId : "" };
     },
     async interruptTurn(context) { return interrupt(await entryFor(context)); },
     async rewindConversation(context, input = {}) {
@@ -885,7 +931,8 @@ function createClaudeSessionAgentProvider({
     async resolveExecutionProfile(context, request) {
       const limits = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS[request.workloadId];
       if (request.profileId !== "economy" || !limits) throw error("Unsupported Claude helper execution profile.");
-      const modelId = await createNativeHelperModelStore({ systemRoot, providerId: ENGINE }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL;
+      const modelId = request.workloadId === "request_routing" ? context.assistantSelection.modelId
+        : await createNativeHelperModelStore({ systemRoot, providerId: ENGINE }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL;
       const catalog = await provider.capabilities(context);
       const model = catalog.modelProviders.flatMap((provider) => provider.models).find((model) => model.id === modelId);
       if (!model || (model.variants.length && !model.variants.some((variant) => variant.id === "low"))) {
@@ -934,6 +981,13 @@ function createClaudeSessionAgentProvider({
     },
     async invalidateRuntimes(_context, input = {}) {
       if (input.provider && input.provider !== ENGINE) return { ok: true, closed: 0 };
+      if (input.modelProviderId) {
+        let closed = 0;
+        for (const entry of entries.values()) if (entry.context.selection.modelProviderId === input.modelProviderId) {
+          await stopEntry(entry, "The provider connection changed."); closed++;
+        }
+        return { ok: true, closed };
+      }
       closing = true;
       try {
         await Promise.allSettled([catalogStart, planUsagePending]);
@@ -957,6 +1011,9 @@ function createClaudeSessionAgentProvider({
       return { ok: true, results, failed: [], sessionCount: results.length };
     },
     async startTerminal(context, input = {}) {
+      if (curatedCodexProvider(context.assistantSelection?.modelProviderId)) {
+        throw error("Use chat for Claude Code with this external model. Its interactive terminal does not support this connection yet.");
+      }
       const entry = await entryFor(context);
       if (entry.turn?.active) throw error("Stop the current turn before opening the Claude Code terminal.");
       if (closing || closingSessions.has(entry.context.key) || sessionIsClosing(entry.context.session)) throw error("This session is closing.");

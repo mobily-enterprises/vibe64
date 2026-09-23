@@ -753,6 +753,23 @@ test("Codex economy fails closed for managed hooks and incomplete hook discovery
   });
 });
 
+test("Codex economy inventories MCP servers independently of a large unrelated native model catalogue", async () => {
+  const provider = economyInventoryProvider({ mcpServers: { example: { command: "example" } } });
+  const read = provider.readConfig;
+  provider.readConfig = async (params) => {
+    const response = await read(params);
+    response.config.model_catalog = { notes: "catalogue".repeat(100_000) };
+    return response;
+  };
+  const prepared = await prepareCodexAppServerEconomyThreadStartSettings({
+    executionProfile: sourceExplanationEconomyProfile(), provider,
+    developerInstructions: "Classify the bounded request."
+  });
+  assert.deepEqual(prepared.enforcement.mcpServerNames, ["example"]);
+  assert.equal(prepared.settings.config.mcp_servers.example.enabled, false);
+  assert.equal(prepared.settings.config.model_catalog, undefined);
+});
+
 test("Codex economy bounds config, hook, and instruction inventories without exposing their payloads", async () => {
   const cases = [{
     label: "too many MCP servers",

@@ -27,7 +27,8 @@ import {
   codexAuthOutputRequiresReconnect,
   codexAuthStateSignature,
   markCodexReconnectRequired,
-  readCodexAuthStatus
+  readCodexAuthStatus,
+  readCodexLoginId
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   runVibe64Command as defaultCommandRunner,
@@ -83,6 +84,7 @@ const CODEX_APP_SERVER_DESKTOP_BUS_ENV_NAMES = new Set([
 const CODEX_APP_SERVER_SESSION_COMMAND_HOOK_PATH = fileURLToPath(
   new URL("./agentSessionCommandHook.js", import.meta.url)
 );
+const CODEX_APP_SERVER_PROCESS_PATH = fileURLToPath(new URL("./codexAppServerProcess.js", import.meta.url));
 const CODEX_APP_SERVER_INVALID_REQUEST_CODE = -32600;
 const CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE = "vibe64_codex_model_catalog_invalid";
 const CODEX_APP_SERVER_MODEL_CATALOG_PAGE_LIMIT = 100;
@@ -348,7 +350,7 @@ async function readCodexSelectedAccountAccess(options = {}) {
   });
 }
 
-async function currentCodexAccountIdentitySignature(options = {}) {
+async function currentCodexAccountIdentitySignature(options = {}, { includeInteractive = false } = {}) {
   if (options.modelProviderId && options.modelProviderId !== "openai") {
     const config = await readFile(path.join(options.toolHomeSource, ".codex", "config.toml"), "utf8");
     return `sha256:${createHash("sha256").update(config).digest("hex")}`;
@@ -358,7 +360,19 @@ async function currentCodexAccountIdentitySignature(options = {}) {
     return explicit;
   }
   if (!codexAppServerIsEconomy(options)) {
-    return "";
+    if (!includeInteractive) {
+      return "";
+    }
+    await assertCodexAuthGenerationCurrent("", options);
+    const loginId = await readCodexLoginId(options.systemRoot);
+    if (!loginId) {
+      throw codexAppServerEconomyAuthError(
+        "vibe64_codex_login_identity_unavailable",
+        "Codex login identity is unavailable. Run the Vibe64 state upgrades with the service stopped, or sign in again."
+      );
+    }
+    // This identifies a Vibe64 login, never an OpenAI account or workspace.
+    return codexAccountIdentitySignature("vibe64-login", loginId);
   }
   return (await readCodexSelectedAccountAuth(options)).identitySignature;
 }
@@ -1759,6 +1773,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     executionMode: normalizeAgentText(normalized.executionMode) || CODEX_APP_SERVER_EXECUTION_MODES.INTERACTIVE,
     executionContextHash: normalizeAgentText(normalized.executionContextHash),
     healthz: normalizeAgentText(normalized.healthz),
+    historyAdapterBaseUrl: normalizeAgentText(normalized.historyAdapterBaseUrl),
     logPath: normalizeAgentText(normalized.logPath),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
     processCwd: normalizeAgentText(normalized.processCwd),
@@ -1803,6 +1818,8 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.processCwd &&
     codexAppServerProcessMetadataIsIdentifiable(metadata) &&
     metadata.processState === CODEX_APP_SERVER_PROCESS_STATE.RUNNING &&
+    (expectedExecutionMode === CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY ||
+      codexHistoryAdapterUrlIsValid(metadata.historyAdapterBaseUrl, metadata.processIdentity.runtimeToken)) &&
     (!expectedEconomyProcessCwd || metadata.processCwd === expectedEconomyProcessCwd) &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.runtimesHash === expectedRuntimesHash &&
@@ -1812,6 +1829,11 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.endpoint &&
     metadata.socketPath
   );
+}
+
+function codexHistoryAdapterUrlIsValid(baseUrl, token) {
+  const match = typeof baseUrl === "string" && /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})\/[0-9a-f-]{36}$/iu.exec(baseUrl);
+  return Boolean(match && Number(match[1]) <= 65535 && baseUrl.endsWith(`/${token}`));
 }
 
 async function readCodexAppServerMetadata(runtimeDir = "") {
@@ -2334,6 +2356,7 @@ async function startCodexAppServerProcess({
       "-c",
       economy ? CODEX_APP_SERVER_ECONOMY_STARTUP_SCRIPT : CODEX_APP_SERVER_MANAGED_STARTUP_SCRIPT,
       "vibe64-codex-app-server",
+      ...(economy ? [] : [process.execPath, CODEX_APP_SERVER_PROCESS_PATH, runtimeDir]),
       codexCommand,
       ...codexArgs
     ],
@@ -2358,7 +2381,8 @@ async function startCodexAppServerProcess({
           command: codexCommand, economy, executionMode, runtimes: normalizedRuntimes,
           binary: [profileBinary.dev, profileBinary.ino, profileBinary.size, profileBinary.mtimeMs, profileBinary.ctimeMs],
           platform: process.platform, architecture: process.arch,
-          startup: economy ? CODEX_APP_SERVER_ECONOMY_STARTUP_SCRIPT : CODEX_APP_SERVER_MANAGED_STARTUP_SCRIPT
+          startup: economy ? CODEX_APP_SERVER_ECONOMY_STARTUP_SCRIPT : CODEX_APP_SERVER_MANAGED_STARTUP_SCRIPT,
+          historyAdapter: !economy
         })).digest("hex")
       } } : {}),
       ownerId: normalizeAgentText(runtimeInstanceId || session?.sessionId || session?.id) ||
@@ -2471,7 +2495,15 @@ async function startCodexAppServerProcess({
     throw error;
   }
 
+  let historyAdapterBaseUrl = "";
   try {
+    if (!economy) {
+      const descriptor = JSON.parse(await readFile(path.join(runtimeDir, "history-adapter.json"), "utf8"));
+      if (descriptor.runtimeToken !== runtimeToken || !codexHistoryAdapterUrlIsValid(descriptor.baseUrl, runtimeToken)) {
+        throw new Error("Codex history adapter did not confirm the current runtime.");
+      }
+      historyAdapterBaseUrl = descriptor.baseUrl;
+    }
     await assertCodexAuthGenerationCurrent(resolvedAuthStateSignature, {
       modelProviderId, systemRoot
     });
@@ -2511,6 +2543,7 @@ async function startCodexAppServerProcess({
       userKey: economy ? "" : userKey
     }),
     healthz: "",
+    historyAdapterBaseUrl,
     logPath,
     pid: Number.isSafeInteger(Number(startResult.pid)) ? Number(startResult.pid) : null,
     processCwd,
@@ -3031,7 +3064,11 @@ class CodexAppServerAgentProvider {
     return this.runtime;
   }
 
-  async preflightAuth(reason = "codex-auth-preflight") {
+  async preflightAuth(reason = "codex-auth-preflight", modelProviderId = "") {
+    if (await this.options.prepareAuth?.(modelProviderId) === "external") {
+      await this.assertRuntimeAuthReady(reason);
+      return;
+    }
     if (this.options.modelProviderId && this.options.modelProviderId !== "openai") {
       await assertCodexAuthGenerationCurrent("", this.options);
       return;
@@ -3310,9 +3347,8 @@ class CodexAppServerAgentProvider {
     const executionMode = codexAppServerExecutionMode(this.options);
     const effective = codexAppServerEffectiveRuntimeInput(this.options);
     return Object.freeze({
-      accountIdentitySignature: await currentCodexAccountIdentitySignature({
-        ...this.options,
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
+      accountIdentitySignature: await currentCodexAccountIdentitySignature(this.options, {
+        includeInteractive: true
       }),
       authStateSignature: await currentCodexAuthStateSignature(this.options),
       endpoint: normalizeAgentText(runtime.endpoint),
@@ -3347,9 +3383,8 @@ class CodexAppServerAgentProvider {
     }
     await ensureWritablePrivateDirectory(cwd);
     return Object.freeze({
-      accountIdentitySignature: await currentCodexAccountIdentitySignature({
-        ...this.options,
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
+      accountIdentitySignature: await currentCodexAccountIdentitySignature(this.options, {
+        includeInteractive: true
       }),
       cwd,
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
@@ -3369,7 +3404,7 @@ class CodexAppServerAgentProvider {
     return this.client;
   }
 
-  async ensureAvailable() {
+  async ensureAvailable({ modelProviderId = "" } = {}) {
     if (this.observationFailure) throw this.observationFailure;
     if (this.isAvailable()) {
       return {
@@ -3384,7 +3419,7 @@ class CodexAppServerAgentProvider {
     }
     const operation = (async () => {
       if (!this.isEconomyProvider()) {
-        await this.preflightAuth("codex-app-server-ensure-available");
+        await this.preflightAuth("codex-app-server-ensure-available", modelProviderId);
       }
       const client = await this.activeClient();
       return {
@@ -3495,7 +3530,9 @@ class CodexAppServerAgentProvider {
   }
 
   async startThread(params = {}) {
+    params = await this.options.prepareThreadParams?.(params) || params;
     const client = await this.activeClient();
+    params = await this.withHistoryAdapter(params, client);
     const environment = this.options.prepareThreadEnvironment
       ? await this.options.prepareThreadEnvironment(this.options.threadEnv || {})
       : this.options.threadEnv;
@@ -3531,6 +3568,7 @@ class CodexAppServerAgentProvider {
   }
 
   async resumeThread(threadId = "", params = {}) {
+    params = await this.options.prepareThreadParams?.(params) || params;
     await this.options.beforeResumeThread?.(threadId);
     const client = await this.activeClient();
     let response;
@@ -3538,6 +3576,7 @@ class CodexAppServerAgentProvider {
       response = await this.withThreadEnvironment(threadId, params, (requestParams, resumed) =>
         resumed || client.request("thread/resume", { excludeTurns: true, ...requestParams, threadId }));
     } else {
+      params = await this.withHistoryAdapter(params, client);
       const requestParams = codexAppServerThreadRequestParams(params, this.options.threadEnv);
       response = await this.runRequest(
         () => client.request("thread/resume", {
@@ -3556,6 +3595,18 @@ class CodexAppServerAgentProvider {
       }),
       response
     };
+  }
+
+  async withHistoryAdapter(params, client, options = {}) {
+    if (!this.runtime?.historyAdapterBaseUrl) return params;
+    if ((params.modelProvider || this.options.modelProviderId || "openai") !== "openai") return params;
+    const { account } = await client.request("account/read", { refreshToken: false }, options);
+    if (!["chatgpt", "apiKey"].includes(account?.type)) {
+      throw new Error("Reconnect the OpenAI account before using this model.");
+    }
+    return { ...params, config: { ...params.config,
+      openai_base_url: `${this.runtime.historyAdapterBaseUrl}/${account.type}`
+    } };
   }
 
   // A loaded native thread can ignore shell_environment_policy on resume.
@@ -3584,20 +3635,39 @@ class CodexAppServerAgentProvider {
       const environment = await this.options.prepareThreadEnvironment(
         bound?.params?.config?.shell_environment_policy?.set || this.options.threadEnv || {}
       );
+      const previousConfig = { ...bound?.params?.config };
+      if (params.modelProvider) {
+        for (const key of Object.keys(previousConfig)) {
+          if (key === "model_providers" || key === "model_catalog_json" || key === "web_search" || key === "openai_base_url" || key.startsWith("model_providers.")) delete previousConfig[key];
+        }
+      }
       let requestParams = {
         ...bound?.params,
         ...params,
         config: {
-          ...bound?.params?.config,
+          ...previousConfig,
           ...params?.config,
           shell_environment_policy: { inherit: "none", set: environment }
         }
       };
+      requestParams = await this.withHistoryAdapter(requestParams, client, { signal });
+      let nativeModelProvider = "";
       const readStatus = async () => {
         const { thread } = await request("thread/read", { threadId, includeTurns: false });
+        nativeModelProvider = thread?.modelProvider || "";
         return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
       };
       const nativeStatus = await readStatus();
+      const providerChanged = Boolean(requestParams.modelProvider && nativeModelProvider &&
+        requestParams.modelProvider !== nativeModelProvider);
+      if (providerChanged) {
+        const { goal } = await request("thread/goal/get", { threadId });
+        if (!["idle", "notLoaded"].includes(nativeStatus) || goal && !["complete", "completed"].includes(goal.status)) {
+          throw Object.assign(new Error("Stop the current turn and finish or clear its goal before changing model providers."), {
+            code: "vibe64_codex_provider_switch_busy"
+          });
+        }
+      }
       const executionId = normalizeAgentText(this.runtime?.executionId);
       // Reinstall startup instructions only for a cold thread in a replacement
       // process. A new socket or a changed command environment is not evidence
@@ -3608,7 +3678,11 @@ class CodexAppServerAgentProvider {
           processChanged: Boolean(bound?.executionId)
         }) || requestParams;
       }
-      const bindingMatches = bound?.client === client &&
+      const bindingMatches = !providerChanged && bound?.client === client &&
+        bound.params.config.openai_base_url === requestParams.config.openai_base_url &&
+        JSON.stringify(bound.params.config.model_providers) === JSON.stringify(requestParams.config.model_providers) &&
+        Object.keys(requestParams.config).filter((key) => key.startsWith("model_providers.")).every((key) =>
+          JSON.stringify(bound.params.config[key]) === JSON.stringify(requestParams.config[key])) &&
         JSON.stringify(bound.params.config.shell_environment_policy) === JSON.stringify(requestParams.config.shell_environment_policy);
       let pausedGoal = null;
       let resumed = null;
@@ -3656,6 +3730,11 @@ class CodexAppServerAgentProvider {
           this.threadEnvironments.delete(threadId);
           await this.options.beforeResumeThread?.(threadId);
           resumed = await request("thread/resume", { excludeTurns: true, ...requestParams, threadId });
+          if (requestParams.modelProvider && resumed.modelProvider !== requestParams.modelProvider) {
+            throw Object.assign(new Error("Another native subscriber retained the previous model provider. Close the native assistant terminal and retry."), {
+              code: "vibe64_codex_provider_binding_retained"
+            });
+          }
           if (!["idle", "active"].includes(await readStatus())) throw new Error("Codex did not confirm the thread loaded.");
           if (nativeStatus !== "notLoaded") {
             await this.#verifyThreadEnvironment(threadId, environment, request, signal);
@@ -3675,7 +3754,7 @@ class CodexAppServerAgentProvider {
         }
         this.threadEnvironments.delete(threadId);
         log("recovery_failed", { code: cause?.code || "", reason: cause.message });
-        throw Object.assign(new Error(cause?.code === "vibe64_agent_control_binding_retained"
+        throw Object.assign(new Error(["vibe64_agent_control_binding_retained", "vibe64_codex_provider_binding_retained"].includes(cause?.code)
           ? `${cause.message} Your conversation and work are preserved.`
           : "Assistant tool recovery could not be verified. Work is preserved; retry Resume after checking the assistant connection.", { cause }), {
           code: "vibe64_agent_control_recovery_failed", retryable: true

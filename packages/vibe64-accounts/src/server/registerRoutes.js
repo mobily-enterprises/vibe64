@@ -1,4 +1,5 @@
 import {
+  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
   ACTION_READ_HELPER_MODEL,
   ACTION_SAVE_HELPER_MODEL,
@@ -11,6 +12,7 @@ import {
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
+  modelRoutingInputValidator,
   codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,
@@ -103,6 +105,17 @@ function registerRoutes(
     buildInput: (request) => withVibe64User(request, { providerId: request.query?.providerId || "codex" }),
     query: accountsReadInputValidator,
     summary: "Read the native assistant helper model preference and available models."
+  });
+
+  routes.actionRoute("GET", "/model-routing", {
+    actionId: ACTION_READ_MODEL_ROUTING,
+    buildInput: (request) => withVibe64User(request),
+    summary: "Read model roles, availability, and recommendations."
+  });
+  routes.actionRoute("PATCH", "/model-routing", {
+    actionId: ACTION_SAVE_MODEL_ROUTING, body: modelRoutingInputValidator,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Save the workspace's model routing assignments."
   });
   routes.actionRoute("PATCH", "/helper-model", {
     actionId: ACTION_SAVE_HELPER_MODEL,

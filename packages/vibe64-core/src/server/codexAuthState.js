@@ -69,14 +69,27 @@ async function readCodexAuthStatus(systemRoot = "") {
   }
 }
 
+async function readCodexLoginId(systemRoot = "") {
+  const text = await readCodexAuthMarkerText(codexAuthMarkerPath(systemRoot));
+  let marker;
+  try {
+    marker = JSON.parse(text);
+  } catch {
+    return "";
+  }
+  return marker?.connected === true && typeof marker.loginId === "string" &&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(marker.loginId)
+    ? marker.loginId
+    : "";
+}
+
 async function clearCodexAuthStatus(systemRoot = "") {
   await rm(codexAuthStatusPath(systemRoot), {
     force: true
   });
 }
 
-async function writeCodexAuthStatus(systemRoot = "", status = {}) {
-  const statusPath = codexAuthStatusPath(systemRoot);
+async function writeCodexAuthRecord(statusPath, status) {
   const tempPath = `${statusPath}.${process.pid}.${randomUUID()}.tmp`;
   await mkdir(path.dirname(statusPath), {
     mode: 0o700,
@@ -89,6 +102,14 @@ async function writeCodexAuthStatus(systemRoot = "", status = {}) {
   await rename(tempPath, statusPath);
   await chmod(statusPath, 0o600).catch(() => null);
   return status;
+}
+
+async function writeCodexAuthStatus(systemRoot = "", status = {}) {
+  return writeCodexAuthRecord(codexAuthStatusPath(systemRoot), status);
+}
+
+async function writeCodexAuthMarker(systemRoot = "", marker = {}) {
+  return writeCodexAuthRecord(codexAuthMarkerPath(systemRoot), marker);
 }
 
 async function markCodexAuthReconnecting(systemRoot = "", {
@@ -154,5 +175,7 @@ export {
   markCodexAuthReconnecting,
   markCodexReconnectRequired,
   requireCodexAuthSystemRoot,
-  readCodexAuthStatus
+  readCodexAuthStatus,
+  readCodexLoginId,
+  writeCodexAuthMarker
 };

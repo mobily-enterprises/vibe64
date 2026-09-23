@@ -11,7 +11,8 @@
     @apply="save" @reload="reloadCatalog"
   >
     <template #before-choices>
-      <p v-if="engineId !== assistantSelection?.engineId || modelProviderId !== assistantSelection?.modelProviderId" class="text-body-small" role="status">
+      <p v-if="routingMode" class="text-body-small" role="status">{{ routingMode === 'auto' ? 'Choose Plan, Code, or Economy in chat before selecting a custom model. You can still change orchestrators here.' : `A model selected here overrides ${routingMode} for this conversation.` }}</p>
+      <p v-if="engineId !== assistantSelection?.engineId" class="text-body-small" role="status">
         Your conversation and files stay here. This AI will receive the recent or missed messages with your next message.
       </p>
       <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
@@ -132,6 +133,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { AssistantModelControl } from "@jskit-ai/assistant-core/client/conversation";
 import {
   mdiCreditCardOutline,
@@ -184,6 +186,7 @@ const props = defineProps({
   }
 });
 
+const routingMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode || "");
 const menuOpen = defineModel({ type: Boolean, default: false });
 const saving = ref(false);
 const modelAccessUpdating = ref(false);
@@ -310,6 +313,7 @@ const selectionChanged = computed(() => {
   ));
 });
 const canSave = computed(() => Boolean(
+  !(routingMode.value === "auto" && engineId.value === assistantSelection.value?.engineId) &&
   !props.changesDisabled &&
   selectionChanged.value &&
   selectedProvider.value &&

@@ -1,5 +1,8 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
+import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { ASSISTANT_ROUTING_ROLES, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices } from "@local/vibe64-runtime/shared/assistantRouting";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +52,9 @@ import {
   codexAuthOutputRequiresReconnect,
   markCodexAuthReconnecting,
   markCodexReconnectRequired,
-  readCodexAuthStatus
+  readCodexAuthStatus,
+  readCodexLoginId,
+  writeCodexAuthMarker
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   projectServiceNamespaceRoot
@@ -1398,6 +1403,7 @@ function createService({
     unsupportedCodexAuthModeMessage
   });
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
+  const routingStore = () => createAssistantRoutingStore({ systemRoot: resolvedSystemRoot });
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
   const resolvedPersonalProfileStore = personalProfileStore &&
@@ -1506,6 +1512,7 @@ function createService({
     }
     const existingMarkerPresent = Boolean(existingMarkerText);
     const existingConnected = existingMarker?.connected === true;
+    const existingLoginId = await readCodexLoginId(resolvedSystemRoot);
     const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot);
     const transitionPending = existingAuthStatus?.status === "reconnecting";
     const preserveReconnectRequired = account?.status === "reconnect_required";
@@ -1518,6 +1525,10 @@ function createService({
         });
         return;
       }
+      const loginId = rotateMarker || !existingConnected ? randomUUID() : existingLoginId;
+      if (!loginId) {
+        throw new Error("Codex login identity is invalid. Run the Vibe64 state upgrades with the service stopped.");
+      }
       if (!preserveReconnectRequired) {
         await markCodexAuthReconnecting(resolvedSystemRoot, {
           reason: reason || "codex-connected"
@@ -1529,8 +1540,9 @@ function createService({
         reason: reason || "codex-status-refresh",
         rotateMarker
       });
-      await writeJsonFile(markerPath, {
+      await writeCodexAuthMarker(resolvedSystemRoot, {
         connected: true,
+        loginId,
         updatedAt: new Date().toISOString(),
         version: 1
       });
@@ -1831,8 +1843,8 @@ function createService({
     return githubContext.ok && metadata.userKey === githubContext.userKey;
   }
 
-  function rotateCodexMarkerForFinalizedAuthSession(sessionId = "", metadata = {}) {
-    if (metadata.accountId !== "codex") {
+  function rotateCodexMarkerForFinalizedAuthSession(sessionId = "", metadata = {}, exitCode = null) {
+    if (metadata.accountId !== "codex" || exitCode !== 0) {
       return false;
     }
     const normalizedSessionId = String(sessionId || "").trim();
@@ -1894,7 +1906,7 @@ function createService({
     });
 
     const finalizedCodexAuthSession = terminal.status === "exited"
-      ? rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata)
+      ? rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata, terminal.exitCode)
       : false;
     const account = terminal.status === "exited"
       ? await accountStatus(metadata.accountId, {
@@ -2014,6 +2026,7 @@ function createService({
     previousGithub = null
   } = {}) {
     return async function handleAuthTerminalClose({
+      exitCode = null,
       id = "",
       reason = ""
     } = {}) {
@@ -2032,7 +2045,7 @@ function createService({
       });
       const finalizedCodexAuthSession = rotateCodexMarkerForFinalizedAuthSession(id, {
         accountId
-      });
+      }, exitCode);
       const account = await accountStatus(accountId, {
         codexMarkerReason: finalizedCodexAuthSession
           ? reason || "terminal-close"
@@ -2237,7 +2250,60 @@ function createService({
     });
   }
 
+  async function readModelRouting(input = {}) {
+    return accountsResult(async () => {
+      const saved = await routingStore().read();
+      const catalog = await listAssistantCapabilities({ vibe64User: input.vibe64User });
+      if (catalog?.ok === false) return catalog;
+      const engines = await Promise.all((catalog.engines || []).map(async (engine) => {
+        const helperModelId = ["codex", "claude"].includes(engine.engineId)
+          ? await createNativeHelperModelStore({ systemRoot: resolvedSystemRoot, providerId: engine.engineId }).read() : "";
+        const recommendations = recommendedRoutingAssignments(engine, { helperModelId });
+        const assignments = saved.orchestrators[engine.engineId] || {};
+        const roles = Object.fromEntries(ASSISTANT_ROUTING_ROLES.map((role) => {
+          const assignment = assignments[role] || null;
+          let error = "";
+          if (assignment) { try { routingAssignmentSelection(engine, assignment); } catch (cause) { error = cause.message; } }
+          return [role, { assignment, recommendation: recommendations[role], error }];
+        }));
+        return { engineId: engine.engineId, label: engine.label, roles, choices: routingModelChoices(engine) };
+      }));
+      return { ok: true, revision: saved.revision, engines };
+    });
+  }
+
   return Object.freeze({
+    readModelRouting,
+    async saveModelRouting(input = {}) {
+      return accountsResult(async () => {
+        const failure = codexManagementError(input);
+        if (failure) return failure;
+        if (!Number.isSafeInteger(input.revision) || input.revision < 0 || !input.orchestrators ||
+            typeof input.orchestrators !== "object" || Array.isArray(input.orchestrators)) {
+          throw new Error("Reload model routing and review your choices.");
+        }
+        const catalog = await listAssistantCapabilities({ vibe64User: input.vibe64User });
+        if (catalog?.ok === false) return catalog;
+        const orchestrators = {};
+        for (const [engineId, roles] of Object.entries(input.orchestrators)) {
+          const engine = catalog.engines?.find((item) => item.engineId === engineId);
+          if (!engine || !roles || typeof roles !== "object" || Array.isArray(roles)) throw new Error("Choose an available assistant.");
+          if (Object.keys(roles).some((role) => !ASSISTANT_ROUTING_ROLES.includes(role))) throw new Error("Unknown model routing role.");
+          orchestrators[engineId] = {};
+          for (const role of ASSISTANT_ROUTING_ROLES) {
+            if (!roles[role]) continue;
+            const selection = routingAssignmentSelection(engine, roles[role]);
+            const recommended = recommendedRoutingAssignments(engine)[role];
+            const fromRecommendation = roles[role].selectionSource === "recommended" && recommended &&
+              ["agentId", "modelProviderId", "modelId", "variantId"].every((key) => recommended[key] === selection[key]);
+            orchestrators[engineId][role] = { ...selection, selectionSource: fromRecommendation ? "recommended" : "explicit" };
+          }
+        }
+        await routingStore().write(orchestrators, input.revision);
+        await publishAccountChanged("codex", { reason: "model-routing-updated" });
+        return readModelRouting(input);
+      });
+    },
     async getStatus(input = {}) {
       return accountsResult(async () => {
         return accountsStatus(input);

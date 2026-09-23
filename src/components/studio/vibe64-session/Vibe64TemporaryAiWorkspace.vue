@@ -123,6 +123,7 @@
         :session-id="props.sessionId"
         :messages="activeTask.messages"
         :delivery="activeTask.delivery"
+        :routing-request="routingRequest"
         :working="activeTask.busy && !activeTask.delivery.state.sending"
         :scroll-key="activeTask.id"
         :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
@@ -174,6 +175,17 @@
           </div>
         </template>
         <template #composer>
+          <Vibe64ChatModeControls v-if="!activeTask.recoveryOperation" :session="modeSession"
+            :save-preferences="(preferences) => temporary.updateRouting(activeTask.id, preferences)"
+            :active="activeTask.busy" :disabled="props.repositoryBusy || activeTask.status === 'closing'" />
+          <v-alert v-if="routingLabel" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
+            {{ routingLabel }}
+            <p v-if="routingRequest?.error" class="text-body-small">{{ routingRequest.error }}</p>
+            <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
+              <v-btn variant="text" min-height="48" @click="temporary.retryReview(activeTask.id)">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
+              <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="stopTask(activeTask.id)">Skip review</v-btn>
+            </div>
+          </v-alert>
           <div v-if="activeTask.restoredAttachments?.length" aria-label="Saved draft attachments">
             <v-chip
               v-for="attachment in activeTask.restoredAttachments" :key="attachment.attachmentId"
@@ -209,7 +221,7 @@
               <AssistantComposerActions
                 :ref="(element) => setTaskSendButton(task.id, element)"
                 :state="{
-                  canSend: !props.connectionUnavailable && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit,
+                  canSend: !props.connectionUnavailable && !taskInputDisabled(task) && !routingPending && Boolean(task.draft.trim()) && attachmentState.canSubmit,
                   canStop: task.busy,
                   stopDisabled: !task.conversationId,
                   stopPending: stoppingTaskId === task.id,
@@ -221,8 +233,9 @@
                 @stop="stopTask(task.id)"
               >
                 <Vibe64AgentSettingsMenu
+                  v-if="!task.routingMetadata?.assistant_routing"
                   :agent-settings="task.agentSettings"
-                  :assistant-selection="props.assistantSelection"
+                  :assistant-selection="task.assistantSelection || props.assistantSelection"
                   :disabled="taskInputDisabled(task) || task.busy"
                   @update-setting="updateActiveAgentSetting"
                 />
@@ -300,6 +313,8 @@
 
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
+import { assistantRoutingStatusIsPending, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
@@ -406,6 +421,12 @@ const temporary = useVibe64TemporaryAi({
   sessionsApiPath: resolvedSessionsApiPath
 });
 const activeTask = temporary.activeTask;
+const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
+const routingLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
+const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
+const modeSession = computed(() => ({ sessionId: props.sessionId,
+  assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
+  metadata: activeTask.value?.routingMetadata || {} }));
 const activeTaskError = computed(() => {
   if (activeTask.value?.delivery.state.messages.some((message) => (
     message.status === "failed" && message.error === activeTask.value.error
@@ -559,7 +580,7 @@ async function stopTask(taskId) {
 }
 
 function taskInputDisabled(task) {
-  return props.repositoryBusy || task.delivery.state.sending || task.status === "closing" || task.recoveryOutcome === "checking";
+  return props.repositoryBusy || task.status === "closing" || task.recoveryOutcome === "checking";
 }
 
 function taskPrompt(taskId = "") {

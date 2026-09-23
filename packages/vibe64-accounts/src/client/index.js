@@ -1,4 +1,6 @@
 export { default as AiConnectionsSettings } from "./studio/AiConnectionsSettings.vue";
+export { default as ModelRoutingForm } from "./studio/ModelRoutingForm.vue";
+export { useModelRouting } from "./composables/useModelRouting.js";
 export { default as CodexProviderConnections } from "./studio/CodexProviderConnections.vue";
 export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 import HelperModelSettings from "./studio/HelperModelSettings.vue";

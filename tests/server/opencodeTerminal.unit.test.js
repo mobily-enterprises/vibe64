@@ -782,7 +782,8 @@ test("OpenCode reports local persistence failure after upstream admission withou
     messageId: "integration-continuation-1", threadId
   });
   assert.deepEqual(accepted, {
-    ok: true, admission: "accepted", messageId: "integration-continuation-1", threadId
+    ok: true, admission: "accepted", messageId: "integration-continuation-1", threadId,
+    turnId: harness.promptCalls[0].input.id
   });
   const unknown = await restarted.inspectMessageAdmission("session-1", {
     messageId: "another-continuation", threadId

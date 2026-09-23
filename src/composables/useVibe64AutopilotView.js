@@ -1,3 +1,4 @@
+import { assistantRoutingStatusIsPending, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -429,6 +430,11 @@ function useVibe64AutopilotView(props, emit, {
   const messageDelivery = createAssistantMessageDelivery();
   const composerSending = computed(() => messageDelivery.state.sending);
   const composerSubmissionKind = ref("");
+  const routingRequest = computed(() => {
+    try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
+  });
+  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
+  const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
   const questionAnswers = ref({});
@@ -576,6 +582,7 @@ function useVibe64AutopilotView(props, emit, {
     if (props.agentConnectionStatus !== "connected") {
       return "reconnecting";
     }
+    if (routingBusy.value && !agentActive.value) return "routing";
     if (agentActive.value && !agentSteerable.value) {
       return "waiting";
     }
@@ -588,6 +595,7 @@ function useVibe64AutopilotView(props, emit, {
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
   const composerSubmitLabel = computed(() => ({
+    routing: "Routing…",
     failed: "Unavailable",
     unavailable: "Connect AI",
     initializing: "Loading…",
@@ -599,6 +607,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting…"
   })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
+    routing: "Preparing the message recipient",
     failed: "Assistant unavailable",
     unavailable: "Connect your AI account to send messages",
     initializing: "Waiting for the assistant to load",
@@ -610,6 +619,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting for the assistant to accept guidance"
   })[composerSubmitMode.value] || "Send message");
   const composerSubmitTitle = computed(() => ({
+    routing: "Keep typing while this request is routed",
     failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
     unavailable: "Open AI Accounts to connect your assistant. Your draft is kept.",
     initializing: "Keep typing while the assistant loads",
@@ -621,7 +631,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
-    if (composerDisabled.value) return false;
+    if (composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
     if (assistantRequestOnly.value) {
       if (composerSending.value) return false;
     } else if (
@@ -640,11 +650,11 @@ function useVibe64AutopilotView(props, emit, {
       (answerChoices.value.length && selectedAnswerChoice.value) || composerDraft.value.trim()
     );
   });
-  const agentStopVisible = computed(() => agentActive.value);
+  const agentStopVisible = computed(() => agentActive.value || routingBusy.value);
   const agentStopEnabled = computed(() => Boolean(
     agentStopVisible.value &&
     !interrupting.value &&
-    !composerSending.value
+    (!composerSending.value || routingBusy.value)
   ));
   const assistantConnectionReady = computed(() => props.agentConnectionStatus === "connected");
   const assistantAccountUnavailable = computed(() => props.agentConnectionStatus === "unavailable");
@@ -1077,6 +1087,7 @@ function useVibe64AutopilotView(props, emit, {
         : props.sendAgentMessage;
       const response = await messageDelivery.send({
         ...payload,
+        submissionKind,
         agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
       }, {
         messageId,
@@ -1197,13 +1208,22 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function optimisticMessageById(messageId = "") {
-    return messageDelivery.find(messageId);
+    const local = messageDelivery.find(messageId);
+    if (local) return local;
+    const request = routingRequest.value;
+    return request?.messageId === messageId && ["routing", "sending", "uncertain", "failed"].includes(request.status)
+      ? { id: messageId, text: request.input.displayMessage || request.input.message, payload: request.input,
+        status: request.status === "failed" || request.status === "uncertain" ? "failed" : "pending" } : null;
   }
 
   async function cancelOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
     if (!message) {
       return false;
+    }
+    if (routingRequest.value?.messageId === messageId) {
+      if (routingRequest.value.status === "uncertain") return false;
+      if (await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
     }
     if (message.status === "pending" && await props.cancelAgentMessage(messageId) === false) {
       return false;
@@ -1215,13 +1235,14 @@ function useVibe64AutopilotView(props, emit, {
     return true;
   }
 
-  function editOptimisticMessage(messageId = "") {
+  async function editOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
     if (!message || message.status !== "failed") {
       return false;
     }
-    const draft = messageDelivery.edit(messageId, String(composerDraft.value || ""));
-    if (draft === null) return false;
+    if (!await cancelOptimisticMessage(messageId)) return false;
+    const current = String(composerDraft.value || "");
+    const draft = !current || current.startsWith(message.text) ? current || message.text : `${message.text}\n\n${current}`;
     composerDraft.value = draft;
     return true;
   }
@@ -1677,9 +1698,17 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
 
-  const chatTurns = computed(() => messageDelivery.turns(
-    Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []
-  ));
+  const chatTurns = computed(() => {
+    const turns = messageDelivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []);
+    const request = routingRequest.value;
+    if (!request || !["routing", "sending", "uncertain", "failed"].includes(request.status)) return turns;
+    if (!turns.some((turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId)) {
+      turns.push({ turnId: `routing:${request.messageId}`, user: { role: "user", text: request.input.displayMessage || request.input.message, messageId: request.messageId }, messages: [],
+        optimistic: { id: request.messageId, status: ["failed", "uncertain"].includes(request.status) ? "failed" : "pending", error: request.error || "" } });
+    }
+    return turns.map((turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId
+      ? { ...turn, system: { role: "system", text: routingStatusLabel.value }, routingRequest: request } : turn);
+  });
   const emptyConversationWelcome = computed(() => (
     sessionId.value &&
     !props.conversationLog?.loading &&
@@ -2127,6 +2156,8 @@ function useVibe64AutopilotView(props, emit, {
     composerHint,
     composerPlaceholder,
     composerSending,
+    routingRequest,
+    routingStatusLabel,
     composerSubmitAriaLabel,
     composerSubmitLabel,
     composerSubmitMode,

@@ -22,7 +22,8 @@ import {
   codexAuthMarkerPath,
   markCodexAuthReconnecting,
   markCodexReconnectRequired,
-  readCodexAuthStatus
+  readCodexAuthStatus,
+  readCodexLoginId
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   closeTerminalSessionsForNamespacePrefix,
@@ -135,6 +136,7 @@ async function writeReadyCodexMarker(systemRoot) {
     markerPath,
     `${JSON.stringify({
       connected: true,
+      loginId: "12345678-1234-4123-8123-123456789abc",
       updatedAt: "2026-06-17T00:00:00.000Z",
       version: 1
     }, null, 2)}\n`,
@@ -1769,6 +1771,8 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
 
     const firstStatus = await service.getCodexStatus();
     const firstMarkerText = await readFile(markerPath, "utf8");
+    const firstLoginId = await readCodexLoginId(systemRoot);
+    assert.match(firstLoginId, /^[a-f0-9-]{36}$/u);
 
     assert.equal(firstStatus.ok, true);
     assert.equal(firstStatus.account.connected, true);
@@ -1793,10 +1797,14 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
     assert.equal(logout.account.connected, false);
     assert.equal(invalidations.length, 2);
     assert.equal(invalidations[1].reason, "logout");
+    assert.equal(await readCodexLoginId(systemRoot), "");
     await assert.rejects(
       () => readFile(markerPath, "utf8"),
       /ENOENT/u
     );
+    codexConnected = true;
+    await service.getCodexStatus();
+    assert.notEqual(await readCodexLoginId(systemRoot), firstLoginId);
   });
 });
 
@@ -1822,12 +1830,103 @@ test("Codex status retries unfinished auth turnover without another login", asyn
     assert.equal(pending.ok, false);
     assert.equal(pending.code, "vibe64_codex_auth_runtime_invalidation_failed");
     assert.equal((await readCodexAuthStatus(systemRoot)).status, "reconnecting");
+    const pendingLoginId = await readCodexLoginId(systemRoot);
     const recovered = await service.getCodexStatus();
     assert.equal(recovered.account.connected, true);
     assert.equal(await readCodexAuthStatus(systemRoot), null);
     assert.equal(invalidations, 2);
+    assert.equal(await readCodexLoginId(systemRoot), pendingLoginId);
     await service.getCodexStatus();
     assert.equal(invalidations, 2);
+  });
+});
+
+test("ordinary Codex status reads never upgrade legacy login metadata", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const daemonHome = path.join(root, "daemon");
+    await writeReadyCodexMarker(systemRoot);
+    const markerPath = codexAuthMarkerPath(systemRoot);
+    const marker = JSON.parse(await readFile(markerPath, "utf8"));
+    delete marker.loginId;
+    await writeFile(markerPath, JSON.stringify(marker));
+    const authPath = path.join(daemonHome, ".codex", "auth.json");
+    await mkdir(path.dirname(authPath), { recursive: true });
+    const auth = JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: null, access_token: "native-token" } });
+    await writeFile(authPath, auth);
+    let probes = 0;
+    let invalidations = 0;
+    const options = {
+      accountRuntime: createAccountsRuntime({ daemonHome, systemRoot }),
+      invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
+      runHostToolCommand: async () => {
+        probes += 1;
+        assert.equal(await readCodexLoginId(systemRoot), "");
+        return { ok: true, output: "Logged in using ChatGPT" };
+      }
+    };
+    const service = createService(options);
+    const results = await Promise.all([
+      service.getStatus({ accountIds: ["codex"] }),
+      service.getStatus({ accountIds: ["codex"] })
+    ]);
+    assert.equal(results.every((result) => result.accounts[0].connected), true);
+    assert.equal(await readCodexLoginId(systemRoot), "");
+    assert.equal(probes, 0);
+    assert.equal(invalidations, 0);
+    const restarted = createService({ ...options, runHostToolCommand: async () => ({ ok: true }) });
+    assert.equal((await restarted.getCodexStatus()).account.connected, true);
+    assert.equal(await readCodexLoginId(systemRoot), "");
+    assert.equal(await readFile(markerPath, "utf8"), JSON.stringify(marker));
+    assert.equal(invalidations, 0);
+    assert.equal(await readFile(authPath, "utf8"), auth, "Vibe64 never rewrites native credentials");
+  });
+});
+
+test("Codex creates a new local identity once per successful sign-in and preserves it on failure", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeReadyCodexMarker(systemRoot);
+    const initialId = await readCodexLoginId(systemRoot);
+    const published = [];
+    let exitCode = 0;
+    let invalidations = 0;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      projectService: { currentTargetRoot: () => root },
+      invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
+      runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" }),
+      publishAuthSessionChanged: async (session) => { published.push(session); },
+      runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
+        args: ["-e", `process.exit(${exitCode});`],
+        command: process.execPath,
+        commandPreview: "fixture Codex login",
+        env: {}
+      })
+    });
+    const successful = await service.startAuth({ accountId: "codex", mode: "device" });
+    assert.equal(successful.ok, true);
+    await waitForAccountRuntimeCondition(
+      () => published.some((session) => session.id === successful.id && session.terminalStatus === "exited"),
+      "Successful Codex sign-in did not finalize."
+    );
+    const loginId = await readCodexLoginId(systemRoot);
+    assert.notEqual(loginId, initialId);
+    assert.equal(invalidations, 1);
+    await service.readAuthSession({ sessionId: successful.id });
+    await service.getCodexStatus();
+    assert.equal(await readCodexLoginId(systemRoot), loginId);
+    assert.equal(invalidations, 1, "Polling a completed sign-in must not rotate its ID again");
+
+    exitCode = 1;
+    const failed = await service.startAuth({ accountId: "codex", mode: "device" });
+    await waitForAccountRuntimeCondition(
+      () => published.some((session) => session.id === failed.id && session.terminalStatus === "exited"),
+      "Failed Codex sign-in did not finalize."
+    );
+    await service.readAuthSession({ sessionId: failed.id });
+    assert.equal(await readCodexLoginId(systemRoot), loginId);
+    assert.equal(invalidations, 1);
   });
 });
 

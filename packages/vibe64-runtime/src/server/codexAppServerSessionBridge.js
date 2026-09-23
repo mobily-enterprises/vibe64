@@ -499,11 +499,6 @@ function assertCodexAppServerEconomyCompatibility(provider) {
 }
 
 function codexAppServerEconomyMcpServerNames(configResult = null) {
-  assertCodexAppServerEconomyResponseBounded(
-    configResult,
-    CODEX_APP_SERVER_ECONOMY_CONFIG_RESPONSE_MAX_BYTES,
-    "configuration response"
-  );
   if (!isPlainRecord(configResult?.config)) {
     throw codexAppServerEconomyPolicyError(
       "Codex economy execution could not read the effective app-server configuration."
@@ -513,6 +508,13 @@ function codexAppServerEconomyMcpServerNames(configResult = null) {
   if (servers === undefined || servers === null) {
     return [];
   }
+  // Only the MCP inventory participates in this isolation check. The native
+  // response can also contain large model catalogues and configuration layers.
+  assertCodexAppServerEconomyResponseBounded(
+    servers,
+    CODEX_APP_SERVER_ECONOMY_CONFIG_RESPONSE_MAX_BYTES,
+    "MCP configuration"
+  );
   if (!isPlainRecord(servers)) {
     throw codexAppServerEconomyPolicyError(
       "Codex economy execution received an invalid MCP server configuration."
@@ -1973,7 +1975,7 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const providerId = selection?.engineId === "codex" ? selection.modelProviderId : "openai";
   const prefix = providerId === "openai" ? "codex" : `codex_${providerId}`;
   const identityProvider = metadata.agent_identity_model_provider || "openai";
-  if (metadata.agent_identity_provider !== "codex" || identityProvider !== providerId) {
+  if (metadata.agent_identity_provider !== "codex" || !metadata.codex_routing_home_provider && identityProvider !== providerId) {
     return normalizeWorkdir(workdir) && normalizeWorkdir(metadata[`${prefix}_conversation_workdir`]) === normalizeWorkdir(workdir)
       ? normalizeAgentText(metadata[`${prefix}_conversation_id`]) : "";
   }
@@ -2254,7 +2256,7 @@ async function ensureCodexAppServerThreadForSession({
     } catch (error) {
       // A changeover must never run the legacy standalone recovery prompt.
       // Keep the saved conversation and let the ordinary Send fail visibly.
-      if (session.metadata?.codex_changeover_pause_goal === "yes") throw error;
+      if (session.metadata?.codex_routing_home_provider || session.metadata?.codex_changeover_pause_goal === "yes") throw error;
       if (
         !codexAppServerRequestIsInvalid(error, "thread/resume") ||
         await codexAppServerThreadHasReadableHistory(provider, existingThreadId)

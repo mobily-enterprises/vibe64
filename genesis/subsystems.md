@@ -45,6 +45,8 @@ Consumes JSKIT conversation presentation, provider primitives and transcript
 policy; Vibe64 owns the adapters, filesystem history, access and execution.
 It also owns switching the main conversation between engines, preserving native
 identities and adding missed or corrected history to the next ordinary Send.
+Within an orchestrator it owns chat modes, request classification and delivery,
+per-turn destination attribution, cancellation, and optional automatic review.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
 
@@ -64,7 +66,8 @@ these chats survive view removal and stay separate from main History.
 ## `accounts` Agent connections
 
 Owns AI account setup, provider-key storage and validation, connection selection,
-helper-model preferences and connection health. Standalone and hosted editors
+helper-model preferences, per-orchestrator model routing and recommendations,
+and connection health. Standalone and hosted editors
 share these operations; hosts supply credential context and access policy.
 
 ### Program
@@ -187,7 +190,9 @@ Owns presenting Genesis explanations, authored subsystems and source Cities.
 
 Owns the shared compact runtime builder, npm artifact preparation, isolated
 installation proof, and the complete development preview with its bundled
-example project. Hosted consumers supply their private runtime requirements.
+example project. It also owns the numbered persisted-state upgrade runner and
+its completion ledger. Hosted consumers supply their private runtime requirements
+and coordinate stopped-service upgrades before activation.
 
 ### Program
 

@@ -6,6 +6,9 @@ session history.
 
 ## Sources
 
+- `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
+
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/studio/Vibe64SessionPanel.vue`
 
@@ -44,6 +47,15 @@ session history.
 - `src/composables/useVibe64AssistantCatalog.js`
 
 ## Public contract
+
+Ordinary persistent temporary chats offer the same Plan, Code, Economy, Auto
+and optional review controls as main chat. Each keeps its own selection, routing
+preferences, pending request and native conversation. The shared routing
+coordinator uses the temporary conversation's existing write lock and transcript;
+it does not write main-chat history or alter main-chat selection. Native idle
+events and read-time reconciliation recover one eligible review after normal
+Code completion. Closing or stopping a chat cancels pending routing and review.
+Dedicated repair requests keep their own instructions and do not expose modes.
 
 Each temporary task has its own model settings, attachments and message stream.
 User-facing temporary chats have the same capabilities, tools and project access
@@ -269,9 +281,12 @@ Prompt suggestions, commit subjects, database help, and source explanations
 use the bounded low-cost execution profile in a private non-project workspace.
 Their complete task prompt is their only model context: they receive neither
 Genesis project context nor Vibe64 driver output. Codex helper admission is
-bound to that shared service's selected
-account identity, so a credential refresh for the same account remains valid
-while an account switch cannot reuse earlier helper ownership. OpenCode tasks
+bound to the shared service's Vibe64 login identity. Its fingerprint remains
+stable across native token refreshes and server restarts, including when native
+ChatGPT tokens omit the OpenAI account ID. A new Vibe64 sign-in replaces that
+local identity, so it cannot reuse earlier helper ownership. Isolated runtimes
+that explicitly transfer authentication still require the actual OpenAI account
+ID and never substitute the local login ID. OpenCode tasks
 use the same model-advertised response-limit policy as the main conversation,
 and any narrower task-specific limit remains authoritative.
 

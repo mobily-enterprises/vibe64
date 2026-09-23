@@ -7,6 +7,7 @@ const VIBE64_AGENT_EXECUTION_WORKLOAD_IDS = Object.freeze({
   CONVERSATION_SUMMARY: "conversation_summary",
   DATABASE_ASSISTANT: "database_assistant",
   PROMPT_HINT: "prompt_hint",
+  REQUEST_ROUTING: "request_routing",
   SESSION_TITLE: "session_title",
   SOURCE_EXPLANATION: "source_explanation"
 });
@@ -31,6 +32,11 @@ const VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS = Object.freeze({
     maxInputCharacters: 24_000,
     maxOutputCharacters: 2_500,
     timeoutMs: 120_000
+  }),
+  [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.REQUEST_ROUTING]: Object.freeze({
+    maxInputCharacters: 24_000,
+    maxOutputCharacters: 512,
+    timeoutMs: 30_000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SESSION_TITLE]: Object.freeze({
     maxInputCharacters: 24_000,

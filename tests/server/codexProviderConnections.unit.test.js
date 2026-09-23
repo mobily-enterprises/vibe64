@@ -18,7 +18,7 @@ async function fixture(t) {
   const requests = [], stops = [];
   let reject = false, stopFails = false;
   const store = createCodexProviderConnectionStore({ systemRoot: root,
-    fetchImpl: async (url, input) => { requests.push({ url, input }); return new Response(JSON.stringify({ id: "fixture", output: [], status: "completed" }), { status: reject ? 401 : 200 }); },
+    fetchImpl: async (url, input) => { requests.push({ url, input }); return new Response(JSON.stringify(url.endsWith("/messages") ? { id: "fixture", type: "message", content: [] } : { id: "fixture", output: [], status: "completed" }), { status: reject ? 401 : 200 }); },
     invalidateRuntimes: async (input) => { stops.push(input); return { ok: !stopFails }; }
   });
   return { root, requests, stops, store, reject: () => { reject = true; }, failStop: () => { stopFails = true; } };
@@ -33,9 +33,11 @@ test("only the curated DeepSeek and GLM routes can receive a saved key", async (
   assert.equal(f.requests[0].input.headers.Authorization, "Bearer fixture-secret");
   assert.equal(JSON.stringify(rows).includes("fixture-secret"), false);
   assert.equal(rows[0].label, "DeepSeek");
+  assert.equal(rows[0].claudeReady, true);
+  assert.equal(f.requests[1].url, "https://api.deepseek.com/anthropic/v1/messages");
   await assert.rejects(f.store.change("unknown", { apiKey: "fixture-secret" }), /supported Codex provider/);
   await assert.rejects(f.store.change("deepseek", { apiKey: "bad\nkey" }), /valid provider API key/);
-  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests.length, 2);
   const locations = codexProviderPaths(f.root, "deepseek");
   assert.equal((await stat(locations.connectionPath)).mode & 0o777, 0o600);
   await writeFile(locations.connectionPath, JSON.stringify({ apiKey: "fixture-secret", label: "An old connection name" }));

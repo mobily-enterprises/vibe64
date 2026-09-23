@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import CodexProviderConnections from "./CodexProviderConnections.vue";
 import HelperModelSettings from "./HelperModelSettings.vue";
+import ModelRoutingForm from "./ModelRoutingForm.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
@@ -70,6 +71,10 @@ const preparedChoice = ref(null);
 const preparingProviderId = ref("");
 const catalogPreparationError = ref("");
 const editorOpen = ref(false);
+const routingOpen = ref(false);
+const routingSaving = ref(false);
+const editorRoutingPending = ref(false);
+const nativeRoutingReady = ref(false);
 const editorOrigin = ref("direct");
 const editorStarter = ref(null);
 const editorStarterSurface = ref("");
@@ -588,12 +593,24 @@ async function saveEditor() {
     return;
   }
   if (response?.ok !== false) {
-    resetEditor();
+    editorApiKey.value = "";
+    editorApiKeyVisible.value = false;
+    editorRoutingPending.value = true;
     await clearProviderQuery();
     emit("changed");
-    emit("connected");
   }
 }
+
+function finishConnectionRouting() {
+  editorRoutingPending.value = false;
+  resetEditor();
+  emit("connected");
+}
+
+watch(nativeSetupConnected, (connected, previous) => {
+  if (connected && previous === false && nativeSetupOpen.value) nativeRoutingReady.value = true;
+});
+watch(nativeSetupOpen, (open) => { if (!open) nativeRoutingReady.value = false; });
 
 function requestRemove(connection = {}) {
   if (connection.removable === false) return;
@@ -724,7 +741,7 @@ function openProvider(providerId, { providerLabel = "", providerRevision = "" } 
   else if (providerId === "opencode") void openProviderPicker();
   else addAiOpen.value = true;
 }
-watch(() => Boolean(editorSaving.value || removeRunning.value || modelAccessRunning.value || codexProviderSaving.value),
+watch(() => Boolean(routingSaving.value || editorSaving.value || removeRunning.value || modelAccessRunning.value || codexProviderSaving.value),
   (busy) => emit("busy", busy));
 defineExpose({ openProvider });
 </script>
@@ -757,6 +774,7 @@ defineExpose({ openProvider });
         class="vibe64-ai-connections__page-actions"
         aria-label="AI account actions"
       >
+        <v-btn variant="tonal" :disabled="accountsInitialLoading" @click="routingOpen = true">Model routing</v-btn>
         <v-btn
           :icon="mdiRefresh"
           aria-label="Refresh AI accounts"
@@ -1242,8 +1260,9 @@ defineExpose({ openProvider });
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
+          <ModelRoutingForm v-if="nativeRoutingReady" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
           <CodexProviderConnections
-            v-if="nativeSetupProviderId === 'codex'"
+            v-else-if="nativeSetupProviderId === 'codex'"
             v-model="codexModelProviderId"
             :actions-enabled="isOwner"
             show-close
@@ -1252,7 +1271,7 @@ defineExpose({ openProvider });
             @changed="codexProviders.resource.reload(); emit('changed')"
           />
           <ProviderAccountsSetup
-            v-if="nativeSetupProviderId !== 'codex' || codexModelProviderId === 'openai'"
+            v-if="!nativeRoutingReady && (nativeSetupProviderId !== 'codex' || codexModelProviderId === 'openai')"
             :accounts="nativeAccounts"
             :actions-enabled="isOwner"
             actions-disabled-message="Only the Vibe64 owner can manage this connection."
@@ -1285,11 +1304,11 @@ defineExpose({ openProvider });
       :open-on-click="false"
       :fullscreen="smAndDown"
       max-width="40rem"
-      :persistent="editorSaving"
-      @update:model-value="open => { if (!open) closeEditor(); }"
+      :persistent="editorSaving || routingSaving"
+      @update:model-value="open => { if (!open && !routingSaving) editorRoutingPending ? finishConnectionRouting() : closeEditor(); }"
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
-        <v-card-title class="vibe64-dialog-title">
+        <v-card-title v-if="!editorRoutingPending" class="vibe64-dialog-title">
           <span>
             <small class="vibe64-dialog-eyebrow">{{ editorEyebrow }}</small>
             <strong>{{ editorTitle }}</strong>
@@ -1304,7 +1323,10 @@ defineExpose({ openProvider });
           />
         </v-card-title>
 
-        <v-card-text v-if="catalogPreparationError" class="vibe64-provider-editor__body">
+        <v-card-text v-if="editorRoutingPending">
+          <ModelRoutingForm :connection-id="editorProviderId" :connection-label="editorLabel" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
+        </v-card-text>
+        <v-card-text v-else-if="catalogPreparationError" class="vibe64-provider-editor__body">
           <v-alert
             border="start"
             :text="catalogPreparationError"
@@ -1424,6 +1446,12 @@ defineExpose({ openProvider });
           </v-card-actions>
         </template>
       </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="routingOpen" max-width="38rem" :fullscreen="smAndDown" :persistent="routingSaving" scrollable>
+      <v-card><v-card-text>
+        <ModelRoutingForm v-if="routingOpen" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
+      </v-card-text></v-card>
     </v-dialog>
 
     <v-dialog v-model="modelAccessConfirmOpen" max-width="31rem" persistent>

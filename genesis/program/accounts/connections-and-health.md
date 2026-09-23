@@ -5,6 +5,13 @@ and see whether the Studio host is ready to support them.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/codexAuthState.js`
+
+- `packages/vibe64-core/src/server/assistantRoutingStore.js`
+- `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
+- `packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue`
+
 - `packages/vibe64-accounts/src/server/aiConnectionStore.js`
 - `packages/vibe64-accounts/src/server/aiConnectionService.js`
 - `packages/vibe64-accounts/src/server/aiConnectionRuntime.js`
@@ -47,6 +54,36 @@ and see whether the Studio host is ready to support them.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
 ## Public contract
+
+Model routing is a shared Accounts surface, separate from Background helpers.
+For each orchestrator it saves Plan, Code and Economy selections with thinking
+choices, using the current connected catalogue and existing account access
+policy. Saves are atomic and revision-checked in private installation state at
+`ai-connections/routing.json`; unreadable settings are preserved for recovery.
+The server validates every saved model and execution validates it again.
+
+Recommendations prefer Astra for Codex planning and DeepSeek over GLM for
+coding. Claude prefers its available flagship for planning, DeepSeek over GLM
+for coding, and Haiku for Economy. Existing helper choices seed Economy when
+available. Native models remain fallbacks when external connections are absent.
+These priorities apply only to qualified routing choices. Codex currently admits
+native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both
+external routes passed managed Astra → coding model → Astra tool-history and
+interruption checks; GLM uses the existing history adapter without another
+transport component. DeepSeek Pro shows Compatibility pending until its
+cross-model history is verified. A saved
+unqualified route reports an actionable error and is never silently replaced.
+Credential connectivity and Claude's protocol check do not establish Codex
+round-trip history compatibility.
+New-credential success replaces the setup form with a routing proposal for
+compatible orchestrators. It preserves custom assignments and requires an
+explicit save; adding a lower-priority provider does not replace a better choice.
+
+Curated external keys are checked separately against Responses for Codex and
+Messages for Claude Code. Claude readiness requires its successful protocol
+check; a failed Claude check leaves a working Codex connection usable. Older
+keys must be checked again before they become Claude-ready. Only readiness and
+redacted connection metadata reach the client. Provider URLs remain curated.
 
 Standalone and hosted editors compose the same AI Accounts screen, catalogue
 validation, provider policy, connection store and runtime wiring. The local
@@ -183,6 +220,18 @@ detached owned Codex runtimes before accepting the new account state. It reports
 success only after process exit is verified; a runtime that cannot be proven
 stopped leaves the account transition visibly unsuccessful rather than allowing
 an old credential-bearing process to survive silently.
+The existing `<systemRoot>/auth/codex/status.json` marker owns a random local
+`loginId`, written atomically after native authentication succeeds. Each
+successful Vibe64 sign-in replaces it; status reads, token refreshes, runtime
+retirement retries and server restarts preserve it. Failed or cancelled sign-in
+attempts do not replace an existing identity. Logout removes the marker.
+Existing connected markers without an ID are repaired once by the stopped-service
+`20260923-codex-login-id` state upgrade, never by an account read. Invalid existing
+IDs block the upgrade instead of being replaced silently. This ID is local
+bookkeeping, never an OpenAI account/workspace ID, and is neither written
+to native `auth.json` nor supplied to OpenAI authentication requests.
+The upgrade command, ledger, backup and authoring contract are documented in
+`docs/state-upgrades.md` and the runtime-release Program.
 If isolated temporary runtime removal finishes before thread deletion, cleanup
 reconciles the removed runtime's ownership records without reconnecting to its
 old account. The same reconciliation works on a later status retry in the

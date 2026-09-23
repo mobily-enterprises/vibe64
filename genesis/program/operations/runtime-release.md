@@ -10,6 +10,11 @@ Building a package leaves the development dependency installation intact.
 - `src/main.js`
 - `tooling/release/server-build.mjs`
 - `tooling/release/runtime-package.mjs`
+- `bin/upgrade-state.js`
+- `packages/vibe64-core/src/server/stateUpgrades.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js`
+- `tests/server/stateUpgrades.unit.test.js`
+- `docs/state-upgrades.md`
 - `tooling/release/pack-release.mjs`
 - `tooling/release/verify-runtime.mjs`
 - `tooling/release/verify-client-startup.mjs`
@@ -23,6 +28,21 @@ Building a package leaves the development dependency installation intact.
 - `tests/server/developmentExample.integration.test.js`
 
 ## Public contract
+
+Runtime packages include an explicit state-upgrade command. Operators preflight
+pending numbered scripts with `--check`, stop writers, then use `--apply` before
+activating the candidate. The installation records each successful upgrade once,
+retains private backups, and rejects unsupported upgrade history. Errors stop
+activation; interrupted scripts must be safe to retry. Ordinary application
+reads and startup do not backfill old metadata. The first upgrade supplies a
+Vibe64-local login identity for existing Codex connections without changing
+native credentials or canonical project content. See `docs/state-upgrades.md`
+for authoring, operation and recovery.
+This mechanism also applies to persisted message-format changes. Each script
+currently owns discovery, backups and transformation through its `run` callback;
+the runner supplies the backup directory and records completion. It does not
+consume path declarations or create automatic snapshots. The guide separates
+the implemented contract from the proposed `prepare()`/`backupPaths` extension.
 
 `npm run dev:example` starts both the editor backend and Vite, opening a working
 copy of `examples/hello-node` through the existing project startup contract.

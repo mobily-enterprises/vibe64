@@ -1983,7 +1983,8 @@ function createOpenCodeTerminalController({
       });
       const accepted = openCodeMessageRows(messages).some((message) =>
         message.type === "user" && text(message.id) === upstreamMessageId(messageId));
-      return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId };
+      return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId,
+        turnId: accepted ? upstreamMessageId(messageId) : "" };
     } catch {
       return { ok: true, admission: "unknown", messageId, threadId };
     }
@@ -2099,9 +2100,9 @@ function createOpenCodeTerminalController({
       if (startingTurn) {
         startingTurn.threadId = currentThreadId;
       }
-      actorMetadata = await conversationActorMetadata({
+      actorMetadata = { ...input.turnMetadata, ...await conversationActorMetadata({
         vibe64User: options.vibe64User || null
-      });
+      }), ...(input.turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {}) };
       const genesisTask = text(input.genesisTask);
       const conversation = genesisTask
         ? null
@@ -2196,6 +2197,7 @@ function createOpenCodeTerminalController({
           messageId,
           text: text(input.displayMessage) || message,
           turnMetadata: {
+            ...input.turnMetadata,
             assistantSelection: context.selection,
             ...actorMetadata,
             engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
@@ -2432,6 +2434,7 @@ function createOpenCodeTerminalController({
       await eventReady.promise;
       signal.throwIfAborted();
       await options.onEvent?.({ threadId: conversationId, type: "thread" });
+      await input.onPromptSending?.({ threadId: conversationId });
       promptAttempted = true;
       admitted = await target.server.client.prompt(conversationId, {
         agent: openCodeAgent(context.selection, executionProfile, context.assistantScope),
@@ -2500,6 +2503,15 @@ function createOpenCodeTerminalController({
     void tracked.completion.catch((error) => {
       if (tracked.abortController === turnAbort) tracked.error = error;
     });
+    if (input.persistent) {
+      void tracked.completion.then((result) => publishSessionChanged(sessionId, {
+        reason: "temporary-agent-turn-idle", payload: { conversationId,
+          temporaryRun: { active: false, state: result.status || "completed", providerTurnId: tracked.runId } }
+      }), () => publishSessionChanged(sessionId, {
+        reason: "temporary-agent-turn-idle", payload: { conversationId,
+          temporaryRun: { active: false, state: tracked.interrupted ? "interrupted" : "failed", providerTurnId: tracked.runId } }
+      })).catch(() => {});
+    }
     return waitForCompletion ? tracked.completion : {
       conversationId,
       ok: true,

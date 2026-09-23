@@ -7,6 +7,7 @@ import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } fr
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
+import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -178,8 +179,59 @@ async function conversationFixture(root, engineId = "codex") {
     publishSessionChanged: async (...args) => { events.push(args); },
     ...overrides
   });
-  return { attachments, events, native, restart, service: restart(), store, selection };
+  return { attachments, events, native, restart, service: restart(), store, selection, sessionAgent, capabilities };
 }
+
+test("temporary Auto and one automatic review retain the native conversation without changing main chat", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const role = (modelId) => resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, modelId, catalogRevision: f.capabilities.revision });
+    await createAssistantRoutingStore({ systemRoot: root }).write({ codex: {
+      plan: role("gpt-6-astra"), code: role("chosen"), economy: role("main-model")
+    } }, 0);
+    const admitted = new Set();
+    const starts = [];
+    const start = f.sessionAgent.startConversationTurn;
+    Object.assign(f.sessionAgent, {
+      listCapabilities: async () => ({ engines: [f.capabilities] }),
+      requireAssistantAccessForSelection: async () => {},
+      resolveExecutionProfile: async () => ({ model: "main-model" }),
+      streamDetachedChatTurn: async () => ({ ok: true, threadId: "helper", text: '{"mode":"code","reason":"explicit_implementation"}' }),
+      deleteDetachedChatThread: async () => ({ ok: true }),
+      readConversation: async (_id, input) => ({ ok: true, ...f.native, admitted: admitted.has(input.messageId) }),
+      startConversationTurn: async (id, input, context) => {
+        assert.equal(await f.store.conversationMessageIdExists({ sessionId: id, conversationId: "chat" }, input.messageId), false);
+        await input.onPromptSending?.({ threadId: input.conversationId });
+        const result = await start(id, input, context);
+        admitted.add(input.messageId); starts.push({ input, selection: context.assistantSelection });
+        return result;
+      }
+    });
+    const service = f.restart({ systemRoot: root });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "auto", review: true } });
+    const input = { conversationId: "chat", messageId: "request", message: "Implement the agreed change." };
+    await service.startTemporaryConversationTurn("one", input);
+    assert.equal(starts[0].selection.modelId, "chosen");
+    assert.match(starts[0].input.message, /Vibe64 mode: code/);
+    const record = await f.store.readSessionConversation("one", "chat");
+    assert.equal(JSON.parse(record.routingMetadata.assistant_routing_request).status, "sent");
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+    assert.equal(JSON.parse((await f.store.readSession("one")).metadata.assistant_selection).modelId, "main-model");
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
+    assert.equal(starts.length, 2, (await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing_request);
+    assert.equal(starts[1].selection.modelId, "gpt-6-astra");
+    assert.equal(starts[1].input.conversationId, starts[0].input.conversationId);
+    assert.equal(starts[1].input.messageId, JSON.parse(record.routingMetadata.assistant_routing_request).reviewMessageId);
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-2" } });
+    const restored = await f.restart({ systemRoot: root }).readTemporaryConversation("one", { conversationId: "chat" });
+    assert.equal(JSON.parse(restored.routingMetadata.assistant_routing_request).reviewStatus, "completed");
+    assert.equal(starts.length, 2);
+    assert.equal(restored.messages.filter((message) => message.role === "user").length, 2);
+  });
+});
 
 for (const [engineId, model] of [["codex", "gpt-6-astra"], ["opencode", "deepseek-reasoner"]]) {
   test(`temporary ${engineId} validates and retains its own model without changing main chat`, async () => {

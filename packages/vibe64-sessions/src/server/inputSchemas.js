@@ -88,6 +88,8 @@ function requiredInputSchema(fields) {
 }
 
 const agentMessageFields = {
+  reviewAction: { type: "string", enum: ["retry"], required: false },
+  submissionKind: { type: "string", enum: ["send", "steer"], required: false },
   agentSettings: {
     type: "object",
     additionalProperties: true,
@@ -372,19 +374,21 @@ const assistantModelAccessUpdateActionInputValidator = patchSchema({
 });
 
 const assistantSelectionUpdateInputValidator = patchSchema({
+  assistantRouting: { type: "object", additionalProperties: true, required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
-    required: true
+    required: false
   },
   ...optionalOrigin
 });
 
 const assistantSelectionUpdateActionInputValidator = patchSchema({
+  assistantRouting: { type: "object", additionalProperties: true, required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
-    required: true
+    required: false
   },
   ...optionalOrigin,
   ...optionalUser,

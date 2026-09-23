@@ -2742,7 +2742,7 @@ test("Codex admission inspection uses exact native user identity without sending
       type: "userMessage", clientId: messageId, id: "native-user"
     }] }];
     assert.deepEqual(await controller.inspectMessageAdmission(sessionId, { messageId, threadId }), {
-      ok: true, admission: "accepted", messageId, threadId
+      ok: true, admission: "accepted", messageId, threadId, turnId: "accepted-turn"
     });
     assert.equal((await controller.inspectMessageAdmission(sessionId, {
       messageId: "another-message", threadId

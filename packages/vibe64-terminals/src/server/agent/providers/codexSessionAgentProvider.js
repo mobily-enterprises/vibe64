@@ -583,12 +583,16 @@ function createCodexSessionAgentProvider({
         ...input,
         agentSettings: codexAssistantSettings(context, input)
       }, {
-        assistantScope: context.assistantScope
+        assistantScope: context.assistantScope,
+        runtime: context.runtime,
+        session: context.session
       });
     },
     async deleteConversation(context, input = {}) {
       return controller.deleteConversation(context.sessionId, input, {
-        assistantScope: context.assistantScope
+        assistantScope: context.assistantScope,
+        runtime: context.runtime,
+        session: context.session
       });
     },
     async deleteDetachedChatThread(context, input = {}) {
@@ -654,7 +658,9 @@ function createCodexSessionAgentProvider({
     },
     async readConversation(context, input = {}) {
       return controller.readConversation(context.sessionId, input, {
-        assistantScope: context.assistantScope
+        assistantScope: context.assistantScope,
+        runtime: context.runtime,
+        session: context.session
       });
     },
     async resolveExecutionProfile(context, input = {}) {
@@ -668,7 +674,8 @@ function createCodexSessionAgentProvider({
         executionProfile,
         limits
       } = codexEconomyExecutionProfileRequest(input);
-      const helperModelId = await controller.readHelperModel(context);
+      const helperModelId = input.workloadId === "request_routing"
+        ? context.assistantSelection.modelId : await controller.readHelperModel(context);
       return resolveCodexEconomyExecutionProfile(
         executionProfile,
         await controller.executionProfileModelCatalog(context.sessionId, {
@@ -766,7 +773,9 @@ function createCodexSessionAgentProvider({
         vibe64User: input.vibe64User || context.vibe64User || null
       };
       const result = await controller.startConversationTurn(context.sessionId, message, {
-        assistantScope: context.assistantScope
+        assistantScope: context.assistantScope,
+        runtime: context.runtime,
+        session: context.session
       });
       return result;
     },
@@ -775,7 +784,9 @@ function createCodexSessionAgentProvider({
     },
     async stopConversation(context, input = {}) {
       return controller.stopConversation(context.sessionId, input, {
-        assistantScope: context.assistantScope
+        assistantScope: context.assistantScope,
+        runtime: context.runtime,
+        session: context.session
       });
     },
     async streamDetachedChatTurn(context, input = {}) {

@@ -189,6 +189,21 @@ increase the button height, and the button has no tooltip. New replies retain th
 answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
+Main and ordinary temporary chats offer Plan, Code, Economy and Auto directly
+above the composer. Each assistant application has its own saved models for
+the three explicit modes. Auto asks Economy to choose Plan or Code when a
+message is sent; discussion, mixed requests and unresolved decisions go to Plan.
+Routing is visible before delivery, and each routed exchange retains its mode
+and answering model. Plan is instructed not to edit files. Code implements
+agreed work and stops for an unresolved architectural or product decision.
+Steering stays with the currently working assistant.
+
+People can enable Review after coding. After a normally completed Code turn,
+one visible follow-up asks the Plan model to inspect the implementation and fix
+in-scope defects. Its findings state what was checked; completion is not a
+guarantee of correctness. Stop cancels pending review, and an interrupted review
+remains incomplete. Goals require a concrete mode and model, with Auto and
+automatic review unavailable. Background helpers retain their separate settings.
 AI controls includes a Close button that remains available while the assistant
 is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery
@@ -500,6 +515,16 @@ Codex account shows its ChatGPT email when available; API-key access
 does not invent an account identity. Connected accounts offer Disconnect.
 Account setup keeps its title, connection status and Refresh action in one
 wrapping header row.
+Codex connections remain usable when a successful native login omits OpenAI's
+account identifier. Vibe64 tracks each successful sign-in separately, preserves
+that local identity across restarts and token refreshes, and retires earlier
+helper work when the person signs in again. It never invents an OpenAI account
+identifier or rewrites the native credentials.
+Existing installations receive historical metadata repairs through numbered
+deployment upgrades with read-only preflight, warnings, backups and a record of
+completion. Errors block activation. Ordinary account reads do not repair old
+formats, and the Codex identity upgrade does not rewrite project source.
+
 Codex code sign-in presents preparation and authorization as two clear steps.
 The full one-time code stays on one line beside Copy, with one primary action
 to continue to ChatGPT. Reference screenshots open on request, and the flow
@@ -537,9 +562,17 @@ and GLM uses a Z.AI Coding Plan key. Regular Z.AI API connections use OpenCode;
 they are not presented as verified Codex connections. Provider URLs and supported models are
 curated by Vibe64, with no custom URL field. Each connection has a private key
 and uses its provider's name automatically. Connecting or removing one preserves the others.
-Switching Codex providers between turns retains the visible session and files,
-resumes each provider's own native thread, and carries missed conversation
-history with the next message. Undo cannot cross a Codex provider switch.
+Routed Codex conversations switch models and providers within the same native
+conversation, preserving its history without restarting the shared assistant
+service. Older conversations already stored in separate provider homes retain
+their history; an unsupported adoption is explained before sending. Switching
+between different assistant applications retains the existing changeover behavior.
+Routing offers qualified model–orchestrator combinations. Connecting a key does
+not prove history can pass safely between models; unverified choices show
+Compatibility pending. The Codex runtime preserves native history and translates
+recognized foreign reasoning into readable historical context when OpenAI needs
+it. Handoffs do not add a summarization call.
+Undo cannot cross a Codex provider switch.
 Helper work uses the selected provider's default model and credentials.
 The GPT models and thinking choices come from the connected Codex service,
 so newly available GPT models appear without an editor update.

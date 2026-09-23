@@ -38,7 +38,7 @@ function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
     );
   }
   const selection = context.assistantSelection || {};
-  const economyModelId = String(context.assistantAccess?.economyModelId || "").trim();
+  const economyModelId = String(executionProfile.workloadId === "request_routing" ? selection.modelId : context.assistantAccess?.economyModelId || "").trim();
   if (
     selection.engineId !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
     !String(selection.modelProviderId || "").trim() ||

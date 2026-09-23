@@ -114,6 +114,7 @@ async function writeMetadata(runtimeDir, metadata) {
 
 async function writeCodexAuthMarker(systemRoot, {
   connected = true,
+  loginId = randomUUID(),
   updatedAt = "2026-06-04T00:00:00.000Z"
 } = {}) {
   const markerPath = codexAuthMarkerPath(systemRoot);
@@ -122,6 +123,7 @@ async function writeCodexAuthMarker(systemRoot, {
   });
   await writeFile(markerPath, `${JSON.stringify({
     connected,
+    loginId,
     updatedAt,
     version: 1
   }, null, 2)}\n`, {
@@ -222,6 +224,7 @@ function metadataForRuntime(runtimeDir, {
       userKey
     }),
     healthz: "",
+    historyAdapterBaseUrl: `http://127.0.0.1:23456/${processIdentity?.runtimeToken || "11111111-1111-4111-8111-111111111111"}`,
     logPath: path.join(runtimeDir, "app-server.log"),
     pid,
     processCwd: runtimeDir,
@@ -262,6 +265,10 @@ function codexAppServerCommandRunner(runtimeDir, commandCalls = []) {
   return async (request) => {
     if (request.args.includes("app-server")) {
       writeFileSync(socketPathForRuntime(runtimeDir), "");
+      const runtimeToken = request.baseEnv.VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN;
+      writeFileSync(path.join(runtimeDir, "history-adapter.json"), JSON.stringify({
+        baseUrl: `http://127.0.0.1:23456/${runtimeToken}`, runtimeToken
+      }));
     }
     commandCalls.push(request);
     return {
@@ -298,9 +305,12 @@ function managedCodexAppServerArgs(call = {}) {
       'exec "$@"'
     ].join("\n"),
     "vibe64-codex-app-server",
-    STUDIO_MANAGED_CODEX_COMMAND
+    process.execPath
   ]);
-  return call.args.slice(4);
+  assert.ok(call.args[4].endsWith("/codexAppServerProcess.js"));
+  assert.equal(call.args[5], path.dirname(call.logPath));
+  assert.equal(call.args[6], STUDIO_MANAGED_CODEX_COMMAND);
+  return call.args.slice(7);
 }
 
 function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
@@ -2694,50 +2704,68 @@ test("codex economy provider retires a started child when metadata persistence f
   });
 });
 
-test("shared Codex account identity signatures survive token refresh and change on account selection", async () => {
+test("shared Codex login identity accepts missing account metadata and survives refresh and restart", async () => {
   await withTemporaryDirectory(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeCodexAuthMarker(systemRoot);
     const chatgptHome = path.join(root, "chatgpt-home");
     await writeChatgptAuth(chatgptHome, {
       accessToken: "first-access-token",
-      accountId: "account-one"
+      accountId: null
     });
-    const first = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-      toolHomeSource: chatgptHome
-    });
+    const authPath = path.join(chatgptHome, ".codex", "auth.json");
+    const originalAuth = await readFile(authPath, "utf8");
     const provider = new CodexAppServerAgentProvider({
-      authStateSignature: "test-auth-state",
+      systemRoot,
       toolHomeSource: chatgptHome
     });
-    assert.equal((await provider.currentRuntimeInfo()).accountIdentitySignature, first);
+    const first = (await provider.currentRuntimeInfo()).accountIdentitySignature;
+    assert.match(first, /^sha256:[a-f0-9]{64}$/u);
     provider.ensureRuntime = async () => ({
       runtimeDir: path.join(root, "shared-runtime")
     });
     const economyContext = await provider.currentEconomyExecutionContext();
     assert.equal(economyContext.accountIdentitySignature, first);
     assert.equal(economyContext.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY);
+    assert.equal(await readFile(authPath, "utf8"), originalAuth);
     await writeChatgptAuth(chatgptHome, {
       accessToken: "second-access-token",
-      accountId: "account-one"
+      accountId: null
     });
-    const refreshed = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-      toolHomeSource: chatgptHome
-    });
-    assert.equal(refreshed, first);
     assert.equal((await provider.currentRuntimeInfo()).accountIdentitySignature, first);
-    assert.match(first, /^sha256:[a-f0-9]{64}$/u);
+    const restarted = new CodexAppServerAgentProvider({ systemRoot, toolHomeSource: chatgptHome });
+    assert.equal((await restarted.currentRuntimeInfo()).accountIdentitySignature, first);
+    assert.equal(JSON.parse(await readFile(authPath, "utf8")).tokens.account_id, null);
+    await assert.rejects(currentCodexAccountIdentitySignature({
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      systemRoot,
+      toolHomeSource: chatgptHome
+    }), (error) => error.code === "vibe64_codex_economy_auth_invalid");
 
-    await writeChatgptAuth(chatgptHome, {
-      accessToken: "third-access-token",
-      accountId: "account-two"
+    await writeCodexAuthMarker(systemRoot);
+    const switched = (await provider.currentRuntimeInfo()).accountIdentitySignature;
+    assert.notEqual(switched, first, "A new login retires helpers even when the OpenAI metadata stays missing");
+    await rm(codexAuthMarkerPath(systemRoot));
+    await assert.rejects(provider.currentRuntimeInfo(), {
+      code: "vibe64_codex_login_identity_unavailable"
     });
+  });
+});
+
+test("isolated Codex account identity uses the actual selected account and API key", async () => {
+  await withTemporaryDirectory(async (root) => {
+    const chatgptHome = path.join(root, "chatgpt-home");
+    await writeChatgptAuth(chatgptHome);
+    const options = { executionMode: "economy", toolHomeSource: chatgptHome };
+    const first = await currentCodexAccountIdentitySignature(options);
+    await writeChatgptAuth(chatgptHome, { accessToken: "second-access-token" });
+    assert.equal(await currentCodexAccountIdentitySignature(options), first);
+    await writeChatgptAuth(chatgptHome, { accountId: "account-two" });
     const switched = await currentCodexAccountIdentitySignature({
       executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
       toolHomeSource: chatgptHome
     });
     assert.notEqual(switched, first);
-    assert.equal((await provider.currentRuntimeInfo()).accountIdentitySignature, switched);
 
     const apiKeyHome = path.join(root, "api-key-home");
     await writeApiKeyAuth(apiKeyHome, "sk-first-selected-key");

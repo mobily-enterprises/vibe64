@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./server/stateUpgrades": "./src/server/stateUpgrades.js",
     "./server": "./src/server/index.js",
     "./server/core": "./src/server/core.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
@@ -40,6 +41,7 @@
     "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js",
     "./server/nativeHelperModel": "./src/server/nativeHelperModel.js",
+    "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./shared/curatedCodexProviders": "./src/shared/curatedCodexProviders.js",
     "./server/codexProviderConnections": "./src/server/codexProviderConnections.js"
   },

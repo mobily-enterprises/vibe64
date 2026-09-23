@@ -72,6 +72,7 @@ const temporaryConversationListInputValidator = validator({ sessionId: sessionId
 const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
 const temporaryConversationUpdateInputValidator = validator({
   conversationId: requiredText, sessionId: sessionIdField,
+  assistantRouting: { type: "object", additionalProperties: true, required: false },
   agentSettings: { type: "object", additionalProperties: true, required: false },
   presentation: temporaryConversationPresentationField,
   attachmentIds: attachmentIdsField
@@ -92,6 +93,8 @@ const temporaryConversationInputValidator = validator({
   sessionId: sessionIdField
 });
 const temporaryConversationTurnActionInputValidator = validator({
+  reviewAction: { type: "string", enum: ["retry"], required: false },
+  submissionKind: { type: "string", enum: ["send", "steer"], required: false },
   agentSettings: {
     type: "object",
     additionalProperties: true,

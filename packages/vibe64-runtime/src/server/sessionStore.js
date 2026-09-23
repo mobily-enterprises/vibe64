@@ -2441,6 +2441,10 @@ function createVibe64SessionStore({
       actorId: normalizeText(value.actorId),
       ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
+      ...(isPlainObject(value.assistantRouting) && ["plan", "code", "economy", "review"].includes(value.assistantRouting.resolvedMode) ? {
+        assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
+          .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
+      } : {}),
       ...(isPlainObject(value.nativeMessageVersions) ? {
         nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
           .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))

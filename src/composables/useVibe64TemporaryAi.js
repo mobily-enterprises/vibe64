@@ -1,3 +1,4 @@
+import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -40,7 +41,8 @@ function temporaryAiRequestError(response = {}, fallback = "Temporary AI request
 }
 
 function temporaryAiTurnIsActive(status = "") {
-  return ["starting", "inProgress"].includes(temporaryAiText(status));
+  const normalizedStatus = temporaryAiText(status);
+  return ["starting", "inProgress"].includes(normalizedStatus) || assistantRoutingStatusIsPending(normalizedStatus);
 }
 
 function temporaryAiProgressUpdates(value = []) {
@@ -156,7 +158,7 @@ function useVibe64TemporaryAi({
         presentation: taskPresentation(task)
       }
     }).then((created) => {
-      if (!disposed) updateTask(task.id, { conversationId: created.conversationId });
+      if (!disposed) updateTask(task.id, { conversationId: created.conversationId, assistantSelection: created.assistantSelection });
       return created.conversationId;
     });
     creations.set(task.id, creation);
@@ -450,6 +452,29 @@ function useVibe64TemporaryAi({
     });
   }
 
+  async function updateRouting(taskId, preferences) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const conversationId = await ensureConversation(task);
+    const result = await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
+      method: "PATCH", body: { assistantRouting: preferences }
+    });
+    updateTask(taskId, { routingMetadata: result.routingMetadata });
+    return result;
+  }
+
+  async function retryReview(taskId) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
+    if (!route) return;
+    try {
+      await request(vibe64TemporaryConversationTurnsPath(task.apiPath, task.sessionId, task.conversationId), {
+        method: "POST", body: { messageId: route.messageId, message: route.input.message, reviewAction: "retry" }
+      });
+      updateTask(taskId, { busy: true, error: "" });
+      void pollTask(taskId);
+    } catch (error) { updateTask(taskId, { error: error.message }); }
+  }
+
   function updateAgentSetting(taskId = "", parameterId = "", value = "") {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (!task) {
@@ -570,6 +595,8 @@ function useVibe64TemporaryAi({
       const active = temporaryAiTurnIsActive(status);
       updateTask(taskId, {
         busy: active,
+        routingMetadata: response.routingMetadata,
+        assistantSelection: response.assistantSelection,
         conversationId: response.conversationExpired === true ? "" : task.conversationId,
         error: temporaryAiText(response.error),
         messages,
@@ -611,13 +638,24 @@ function useVibe64TemporaryAi({
     }
   }
 
+  function pendingMessage(task, messageId) {
+    const local = task?.delivery.find(messageId);
+    if (local) return local;
+    const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
+    return route?.messageId === messageId && ["failed", "uncertain", "routing", "sending"].includes(route.status)
+      ? { id: messageId, status: ["failed", "uncertain"].includes(route.status) ? "failed" : "pending",
+        text: route.input.displayMessage || route.input.message, payload: { ...route.input, draftSnapshot: route.input.displayMessage || route.input.message } } : null;
+  }
+
   async function send(taskId = "", { retryMessageId = "" } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
         readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") {
       return false;
     }
-    const retry = retryMessageId ? task.delivery.find(retryMessageId) : null;
+    const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
+    if (!retryMessageId && assistantRoutingStatusIsPending(route?.status)) return false;
+    const retry = retryMessageId ? pendingMessage(task, retryMessageId) : null;
     if (retryMessageId && retry?.status !== "failed") return false;
     const draftPayload = chatMessagePayload(task.draft, task.attachments);
     const payload = retry?.payload || (draftPayload && {
@@ -673,6 +711,7 @@ function useVibe64TemporaryAi({
               displayMessage: submission.displayMessage,
               presentation: submission.presentation,
               message: submission.message,
+              submissionKind: ["starting", "inProgress"].includes(task.status) ? "steer" : "send",
               ...(submission.outputSchema ? { outputSchema: submission.outputSchema } : {}),
               promptLabel: submission.promptLabel
             },
@@ -706,6 +745,7 @@ function useVibe64TemporaryAi({
       const acceptedAttachmentIds = new Set(payload.attachmentIds || []);
       updateTask(taskId, {
         attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
+        ...(response.assistantRoutingRequest ? { routingMetadata: { ...current.routingMetadata, assistant_routing_request: JSON.stringify(response.assistantRoutingRequest) } } : {}),
         restoredAttachments: current.restoredAttachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
         busy: temporaryAiTurnIsActive(status),
         conversationId,
@@ -747,11 +787,16 @@ function useVibe64TemporaryAi({
     }
   }
 
-  function cancelMessage(taskId, messageId) {
+  async function cancelMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
-    const message = task?.delivery.find(messageId);
-    if (disposed || !message || message.status !== "failed" || task.busy ||
+    const message = pendingMessage(task, messageId);
+    if (disposed || !message || message.status !== "failed" ||
         readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
+    const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
+    if (route?.messageId === messageId) {
+      if (route.status === "uncertain") { updateTask(taskId, { error: "Check delivery before editing or cancelling this message." }); return false; }
+      await stopTask(taskId);
+    } else if (task.busy) return false;
     task.delivery.remove(messageId);
     updateTask(taskId, {
       ...(task.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
@@ -761,10 +806,10 @@ function useVibe64TemporaryAi({
     return true;
   }
 
-  function editMessage(taskId, messageId) {
+  async function editMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
-    const message = task?.delivery.find(messageId);
-    if (!message || !cancelMessage(taskId, messageId)) return false;
+    const message = pendingMessage(task, messageId);
+    if (!message || !await cancelMessage(taskId, messageId)) return false;
     const draft = task.draft;
     updateDraft(taskId, !draft || draft === message.payload.draftSnapshot
       ? message.text
@@ -774,7 +819,7 @@ function useVibe64TemporaryAi({
 
   async function stopTask(taskId = "") {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
-    if (disposed || !task?.busy || stoppingTaskIds.has(taskId)) {
+    if (disposed || !task || !task.busy && !task.routingMetadata?.assistant_routing_request || stoppingTaskIds.has(taskId)) {
       return false;
     }
     if (!task.conversationId) {
@@ -783,7 +828,7 @@ function useVibe64TemporaryAi({
     stoppingTaskIds.add(taskId);
     stopPolling(taskId);
     try {
-      await request(
+      const response = await request(
         vibe64TemporaryConversationStopPath(
           task.apiPath,
           task.sessionId,
@@ -797,6 +842,7 @@ function useVibe64TemporaryAi({
       if (!canApplyTaskResponse(taskId)) return false;
       updateTask(taskId, {
         busy: false,
+        ...(response.routingMetadata ? { routingMetadata: response.routingMetadata } : {}),
         error: "",
         messages: temporaryAiTurnMessages(task.messages, task.runId, {
           status: "interrupted"
@@ -873,14 +919,18 @@ function useVibe64TemporaryAi({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} }) => (
       !disposed && payload.projectSlug === projectSlug.value &&
-      payload.sessionId === currentSessionId() && payload.reason === "temporary-conversation-closed" &&
+      payload.sessionId === currentSessionId() && ["temporary-conversation-closed", "assistant-routing-changed"].includes(payload.reason) &&
       Boolean(payload.conversationId)
     ),
     onEvent: ({ payload }) => {
       const task = tasks.value.find((candidate) => (
         candidate.conversationId === payload.conversationId || candidate.id === payload.conversationId
       ));
-      removeTask(task?.id || payload.conversationId);
+      if (payload.reason === "temporary-conversation-closed") removeTask(task?.id || payload.conversationId);
+      else if (task && payload.assistantRoutingRequest) {
+        updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(payload.assistantRoutingRequest) }, busy: true });
+        void pollTask(task.id);
+      }
     }
   });
   // Read the current readiness as well as future changes; mounting after
@@ -943,6 +993,8 @@ function useVibe64TemporaryAi({
     updateAgentSetting,
     updateAttachments,
     updateDraft,
+    updateRouting,
+    retryReview,
     updateRepairTask
   };
 }

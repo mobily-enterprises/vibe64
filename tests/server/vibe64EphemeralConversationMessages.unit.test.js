@@ -11,7 +11,7 @@ test("temporary conversations use the same element and retain app-owned attachme
     "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue", import.meta.url
   ), "utf8");
   assert.match(source, /<AssistantConversationElement :adapter="adapter">/u);
-  assert.match(source, /conversationTurnsFromMessages\(props.messages\)/u);
+  assert.match(source, /conversationTurnsFromMessages\(props.messages/u);
   assert.match(source, /#system-message/u);
   assert.match(source, /#attachments/u);
   assert.doesNotMatch(source, /v-html/u);

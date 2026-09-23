@@ -10,6 +10,7 @@ import {
   codexAppServerTurnStatusIsProviderFailure
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import crypto from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 
@@ -1043,7 +1044,7 @@ function codexThreadIdForWorkdir(session = {}, workdir = "") {
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
   const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return "";
+  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return "";
   if (!codexThreadIdForWorkdir(session, workdir)) {
     return "";
   }
@@ -1054,7 +1055,7 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
   const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return null;
+  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return null;
   const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
   const identity = agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
@@ -1688,7 +1689,7 @@ function createCodexTerminalController({
 
   async function codexToolHomeResult(session = {}) {
     const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
-    const providerId = selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    const providerId = session?.metadata?.codex_routing_home_provider || selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
     if (curatedCodexProvider(providerId)) {
       const options = await providerConnections.runtimeOptions(providerId);
       return { ok: true, toolHomeSource: options.toolHomeSource };
@@ -1706,6 +1707,11 @@ function createCodexTerminalController({
           };
     }
     if (codexToolHomeRequired && !await directoryExists(toolHomeSource)) {
+      if (session.metadata?.codex_routing_home_provider && curatedCodexProvider(selection?.modelProviderId)) {
+        await providerConnections.threadConfig(selection.modelProviderId);
+        await mkdir(toolHomeSource, { recursive: true, mode: 0o700 });
+        return { ok: true, toolHomeSource };
+      }
       return retryableTerminalFailure({
         ok: false,
         error: "Codex is not ready for terminals. Connect Codex before continuing."
@@ -2060,6 +2066,24 @@ function createCodexTerminalController({
     const provider = codexAppServerProviderFactory({
       ...options,
       logger,
+      prepareAuth: (requestedProvider) => runWithCodexAppServerProjectContext(projectContext, async () => {
+        if (curatedCodexProvider(requestedProvider)) {
+          await providerConnections.threadConfig(requestedProvider);
+          return "external";
+        }
+        const runtime = await createRuntimeForSession();
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
+        if (session.metadata?.codex_routing_home_provider && curatedCodexProvider(selection?.modelProviderId)) {
+          await providerConnections.runtimeOptions(selection.modelProviderId);
+          return "external";
+        }
+        return "native";
+      }),
+      prepareThreadParams: async (params) => {
+        const modelProvider = params.modelProvider || curatedCodexModel(params.model)?.modelProviderId || "openai";
+        return { ...params, modelProvider, config: { ...params.config, ...await providerConnections.threadConfig(modelProvider) } };
+      },
       onClose() { unsubscribeControls?.(); },
       prepareThreadResumeParams: (threadId, params, { runtime: providerRuntime, processChanged }) =>
         runWithCodexAppServerProjectContext(projectContext, async () => {
@@ -2400,7 +2424,7 @@ function createCodexTerminalController({
       await acquireCodexAppServerRuntime({
         operation: () => {
           if (typeof provider.ensureAvailable === "function") {
-            return provider.ensureAvailable();
+            return provider.ensureAvailable({ modelProviderId: providerOptions.routingModelProviderId });
           }
           if (typeof provider.listLoadedThreads === "function") {
             return provider.listLoadedThreads({
@@ -2539,7 +2563,7 @@ function createCodexTerminalController({
       path.resolve(metadataRuntimeDir) === path.resolve(expectedRuntimeDir)
       ? metadataRuntimeDir
       : "";
-    return codexAppServerRuntimeOptions({
+    return { ...codexAppServerRuntimeOptions({
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
       session,
       executionRoot: effectiveExecutionRoot,
@@ -2549,7 +2573,7 @@ function createCodexTerminalController({
       },
       toolHomeSource,
       workdir: effectiveWorkdir
-    });
+    }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId };
   }
 
   async function codexAppServerEconomyRuntimeOptionsForSession(session = {}, options = {}) {
@@ -3678,7 +3702,7 @@ function createCodexTerminalController({
       terminalSessionSourceRoot(session) ||
       metadataSourcePath;
     const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
-    const providerId = selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    const providerId = session?.metadata?.codex_routing_home_provider || selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
     const providerHome = curatedCodexProvider(providerId) && codexAppServerProviderOptions.systemRoot
       ? codexProviderPaths(codexAppServerProviderOptions.systemRoot, providerId).toolHomeSource
       : "";
@@ -5438,7 +5462,7 @@ function createCodexTerminalController({
           normalizedSessionId,
           pendingMessage.text,
           ownership.clientId,
-          await currentConversationActorMetadata(pendingMessage.vibe64User),
+          { ...await currentConversationActorMetadata(pendingMessage.vibe64User), ...pendingMessage.turnMetadata },
           pendingMessage.attachments
         );
       } else if (recoveredMessage) {
@@ -8806,7 +8830,7 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
-    const turnMetadata = await currentConversationActorMetadata(vibe64User);
+    const turnMetadata = { ...input.turnMetadata, ...await currentConversationActorMetadata(vibe64User) };
     vibe64SessionDebugLog("server.codexTerminal.appServerPrompt.start", {
       durationMs: Date.now() - startedAt,
       messageId,
@@ -11402,6 +11426,11 @@ function createCodexTerminalController({
       if (status) state.status = status;
       if (notification.method === "thread/goal/updated") state.goal = notification.params.goal;
       if (notification.method === "thread/goal/cleared") state.goal = null;
+      if (notification.method === "turn/completed") {
+        void publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
+          conversationId, temporaryRun: { active: false, state: state.status, providerTurnId: state.runId }
+        } }).catch(() => {});
+      }
     });
     conversations.set(conversationId, state);
     codexAppServerConversations.set(key, conversations);
@@ -11625,6 +11654,7 @@ function createCodexTerminalController({
       }
       let delivery = null;
       try {
+        await input.onPromptSending?.({ threadId: conversationId });
         delivery = await sendCodexAppServerPromptForSession({
           agentSettings: context.agentSettings,
           clientUserMessageId: input.messageId,
@@ -12934,6 +12964,7 @@ function createCodexTerminalController({
         text: message,
         turnMetadata: {
           ...turnMetadata,
+          ...(turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {}),
           engineId: "codex",
           assistantSelection: vibe64AssistantSelectionFromMetadata({
             assistant_selection: await runtime.store.readMetadataValue(normalizedSessionId, "assistant_selection")
@@ -13043,7 +13074,7 @@ function createCodexTerminalController({
       }, session);
     }
     const vibe64User = input?.vibe64User || null;
-    const turnMetadata = await currentConversationActorMetadata(vibe64User);
+    const turnMetadata = { ...input.turnMetadata, ...await currentConversationActorMetadata(vibe64User) };
     vibe64SessionDebugLog("server.codexTerminal.appServerMessage.contextReady", {
       durationMs: Date.now() - startedAt,
       messageId,
@@ -13359,6 +13390,25 @@ function createCodexTerminalController({
   }
 
   return Object.freeze({
+    async prepareModelRouting(sessionId, selection, { runtime, session }) {
+      const existingProvider = session.metadata?.codex_routing_home_provider || (session.metadata?.agent_identity_provider === "codex" && session.metadata?.agent_identity_conversation_id
+        ? session.metadata?.agent_identity_model_provider || "openai" : "openai");
+      if (existingProvider !== "openai" && existingProvider !== selection.modelProviderId) {
+        throw Object.assign(new Error("This older Codex chat uses separate provider storage. Keep its current provider, or start a new chat to route across providers without losing native history."),
+          { code: "vibe64_codex_legacy_route_unavailable" });
+      }
+      if (session.metadata?.codex_routing_home_provider) return;
+      const changeover = JSON.parse(session.metadata?.assistant_changeover || "null");
+      const oldKey = existingProvider === "openai" ? "codex" : `codex/${existingProvider}`;
+      if (changeover && oldKey !== "codex" && changeover.engines?.[oldKey]) {
+        changeover.engines.codex = changeover.engines[oldKey];
+        delete changeover.engines[oldKey];
+        if (changeover.lastEngine === oldKey) changeover.lastEngine = "codex";
+        await runtime.store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify(changeover));
+      }
+      await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", existingProvider);
+      session.metadata.codex_routing_home_provider = existingProvider;
+    },
     closeGlobalTerminal(terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
         namespace: globalCodexTerminalNamespace()
@@ -13661,10 +13711,11 @@ function createCodexTerminalController({
         if (target.ok === false) return target;
         try {
           const thread = await target.provider.readThread(threadId);
-          const accepted = codexAppServerRenewalThreadTurns(thread).some((turn) =>
+          const accepted = codexAppServerRenewalThreadTurns(thread).find((turn) =>
             codexAppServerRenewalTurnItems(turn).some((item) => item.type === "userMessage" &&
               codexAppServerRenewalTurnClientIds({ items: [item] }).includes(messageId)));
-          return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId };
+          return { ok: true, admission: accepted ? "accepted" : "unknown", messageId, threadId,
+            turnId: normalizeText(accepted?.id) };
         } catch {
           return { ok: true, admission: "unknown", messageId, threadId };
         }
@@ -14105,6 +14156,7 @@ function createCodexTerminalController({
       if (deliveryKey) {
         codexAppServerPendingUserMessages.set(deliveryKey, {
           attachments: input?.displayAttachments,
+          turnMetadata: input?.turnMetadata,
           receipt: Promise.withResolvers(),
           text: codexAppServerMessageDisplayText(input, codexAppServerMessageText(input)),
           vibe64User: input?.vibe64User || null

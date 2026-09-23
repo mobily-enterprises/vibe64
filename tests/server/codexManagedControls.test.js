@@ -15,6 +15,7 @@ function harness({ status = "idle", goal = null, stayLoaded = false, beforeUnsub
   let loadedEnvironment = { ...environment };
   const client = { async request(method, params) {
     calls.push({ method, params });
+    if (method === "account/read") return { account: { type: "chatgpt" } };
     if (method === "thread/read") return { thread: { id: "thread-1", status } };
     if (method === "thread/goal/get") return { goal: goal && { ...goal } };
     if (method === "thread/goal/set") {
@@ -75,6 +76,21 @@ test("repeated reconnect checks preserve healthy work and coalesce a changed env
   await Promise.all(Array.from({ length: 4 }, () => h.provider.ensureThreadControls("thread-1")));
   assert.equal(h.environment.MARKER, "B");
   assert.equal(h.calls.filter((call) => call.method === "thread/unsubscribe").length, 1);
+});
+
+test("a replaced history adapter rebinds the same thread once without replaying work", async () => {
+  const h = harness();
+  h.provider.runtime = { historyAdapterBaseUrl: "http://127.0.0.1:12345/old-runtime" };
+  await h.provider.startThread();
+  h.calls.length = 0;
+  h.provider.runtime = { historyAdapterBaseUrl: "http://127.0.0.1:23456/new-runtime" };
+  await h.provider.ensureThreadControls("thread-1");
+  await h.provider.ensureThreadControls("thread-1");
+  const resumes = h.calls.filter((call) => call.method === "thread/resume");
+  assert.equal(resumes.length, 1);
+  assert.equal(resumes[0].params.threadId, "thread-1");
+  assert.equal(resumes[0].params.config.openai_base_url, "http://127.0.0.1:23456/new-runtime/chatgpt");
+  assert.equal(h.calls.filter((call) => call.method === "turn/start").length, 0);
 });
 
 test("active goal recovery confirms interruption, preserves usage and resumes the same goal once", async () => {

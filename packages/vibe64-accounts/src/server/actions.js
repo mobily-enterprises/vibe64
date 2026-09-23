@@ -1,4 +1,5 @@
 import {
+  modelRoutingInputValidator,
   codexProviderInputValidator,
   helperModelInputValidator,
   accountIdInputValidator,
@@ -15,6 +16,8 @@ import {
 } from "./accountRealtimeEvents.js";
 
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
+const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
+const ACTION_SAVE_MODEL_ROUTING = "vibe64.accounts.model-routing.save";
 const ACTION_SAVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.save";
 const ACTION_REMOVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.remove";
 const ACTION_READ_HELPER_MODEL = "vibe64.accounts.helper-model.read";
@@ -33,6 +36,17 @@ function createActions({ accounts } = {}) {
   }
 
   return Object.freeze([
+    {
+      id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: accountsReadInputValidator,
+      output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
+      execute: (input) => accounts.readModelRouting(input)
+    },
+    {
+      id: ACTION_SAVE_MODEL_ROUTING, version: 1, kind: "command", input: modelRoutingInputValidator,
+      output: null, idempotency: "optional", audit: { actionName: ACTION_SAVE_MODEL_ROUTING }, observability: {},
+      events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      execute: (input) => accounts.saveModelRouting(input)
+    },
     {
       id: ACTION_READ_CODEX_PROVIDERS,
       version: 1,
@@ -215,6 +229,7 @@ function createActions({ accounts } = {}) {
 }
 
 export {
+  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS,
   ACTION_SAVE_CODEX_PROVIDER,
   ACTION_REMOVE_CODEX_PROVIDER,
