@@ -8,6 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
+import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 
@@ -82,6 +83,27 @@ test("completed upgrades never run again, and interrupted ledger recording prese
   await rm(f.ledgerPath);
   await f.run(true);
   assert.equal(await readFile(f.markerPath, "utf8"), marker);
+});
+
+test("upgrading a legacy connection restores the AI controls identity lookup with a null native account ID", async t => {
+  const f = await fixture(t);
+  await f.marker();
+  const toolHomeSource = path.join(f.root, "daemon");
+  const authPath = path.join(toolHomeSource, ".codex/auth.json");
+  const credentials = JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: null } });
+  await mkdir(path.dirname(authPath), { recursive: true });
+  await writeFile(authPath, credentials);
+  const options = { systemRoot: f.systemRoot, toolHomeSource };
+  const beforeUpgrade = new CodexAppServerAgentProvider(options);
+  await assert.rejects(beforeUpgrade.currentRuntimeInfo(), { code: "vibe64_codex_login_identity_unavailable" });
+  await f.run();
+  assert.equal(await readCodexLoginId(f.systemRoot), "", "deployment preflight does not modify the marker");
+  await f.run(true);
+  const afterRestart = new CodexAppServerAgentProvider(options);
+  const identity = (await afterRestart.currentRuntimeInfo()).accountIdentitySignature;
+  assert.match(identity, /^sha256:[a-f0-9]{64}$/u);
+  assert.equal((await afterRestart.currentRuntimeInfo()).accountIdentitySignature, identity);
+  assert.equal(await readFile(authPath, "utf8"), credentials, "native account_id remains null and credentials are untouched");
 });
 
 test("fresh and disconnected installations record a successful no-op", async t => {
