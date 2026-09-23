@@ -31,6 +31,7 @@ const {
   handleProjectSelectionReady,
   mdiChevronDown,
   mdiChevronRight,
+  mobilePaneSwipeEnabled,
   mobileProjectAction,
   mobileProjectActionVisible,
   openProject,
@@ -56,7 +57,11 @@ const {
 </script>
 
 <template>
-  <StudioAppShellLayout>
+  <StudioAppShellLayout
+    :chat-collapsed="chatCollapsed"
+    :mobile-pane-swipe-enabled="mobilePaneSwipeEnabled"
+    @update:chat-collapsed="setChatCollapsed"
+  >
     <template #top-left>
       <div
         class="studio-home-shell-heading"

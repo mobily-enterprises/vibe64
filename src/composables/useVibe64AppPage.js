@@ -162,6 +162,7 @@ function useVibe64AppPage() {
     readyProjectSlug: projectPaneNavigationReadySlug.value
   }));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
+  const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const previewToolbarHostVisible = computed(() => previewToolbarTargetVisible({
     chatCollapsed: chatCollapsed.value,
     mobilePaneLayout: mobilePaneLayout.value,
@@ -318,6 +319,7 @@ function useVibe64AppPage() {
     handleProjectSelectionReady,
     mdiChevronDown,
     mdiChevronRight,
+    mobilePaneSwipeEnabled,
     mobileProjectAction,
     mobileProjectActionVisible,
     openProject,

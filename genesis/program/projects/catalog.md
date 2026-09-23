@@ -15,11 +15,24 @@ workspace.
 - `src/composables/useVibe64ProjectsResource.js`
 - `src/composables/useProjectSelectionGate.js`
 - `src/composables/useVibe64AppPage.js`
+- `src/components/StudioAppShellLayout.vue`
+- `src/pages/app/project/[slug].vue`
+- `tests/server/mobilePaneSwipe.unit.test.js`
 - `src/components/studio/ProjectSelectionGate.vue`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-core/src/server/projectRuntimeOpenState.js`
 
 ## Public contract
+
+The compact project shell shares its existing chat/project pane state with
+touch navigation. A deliberate single-finger horizontal swipe left reveals the
+currently selected Preview or Dashboard; right reveals chat, without route
+changes or remounting either side. The shared header accepts swipes above the
+embedded preview; suitable chat/dashboard content does too. Form controls,
+editors, terminals, horizontal scrollers, selected text, multi-touch, long holds,
+vertical gestures and browser screen-edge gestures remain outside this action.
+The embedded application's own gestures stay inside its iframe. Header taps and
+the existing pane-switch buttons retain their ordinary actions.
 
 The catalog lists stable project identities, creates projects, and selects one
 project as the current context. The default creation path produces one real Git

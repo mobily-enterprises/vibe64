@@ -195,6 +195,12 @@ the existing touch-target height.
 The desktop chat pane can shrink to 320 pixels, keeping Send and the working
 assistant's Stop button on the same row as the other controls. Narrow screens
 use the full-width chat.
+On narrow screens, swiping left shows the selected Preview or Dashboard and
+swiping right returns to chat. The header supports either gesture, including
+above an embedded preview; ordinary chat and dashboard areas support them too.
+Drafts and the running preview remain intact. Scrolling, text entry, selection,
+interactive content and browser edge gestures keep their normal behavior.
+The existing pane-switch buttons remain available.
 The empty input stays compact and grows with entered text. Recovery guidance
 uses a Settings badge and popover with Continue instead of a permanent footer;
 Continue preserves existing drafts and attachments for review.
