@@ -83,7 +83,7 @@
               title="Refresh files"
               :prepend-icon="mdiRefresh"
               :disabled="editor.loadingTree.value"
-              @click="editor.refresh"
+              @click="refreshFiles"
             />
           </v-list>
         </v-menu>
@@ -169,7 +169,7 @@
           title="Refresh files"
           type="button"
           variant="text"
-          @click="editor.refresh"
+          @click="refreshFiles"
         />
       </div>
     </header>
@@ -425,7 +425,7 @@
           {{ editor.loadError.value }}
         </div>
         <div
-          v-if="editor.downloadOnlyFile.value && !editor.loadingFile.value"
+          v-if="editor.downloadOnlyFile.value && !imagePreviewUrl && !editor.loadingFile.value"
           class="vibe64-source-editor__empty"
         >
           <p class="mb-4">{{ editor.downloadOnlyFile.value.message }}</p>
@@ -439,7 +439,7 @@
           </v-btn>
         </div>
         <div
-          v-else-if="!editor.selectedPath.value && !editor.loadingFile.value"
+          v-else-if="!displayedPath && !editor.loadingFile.value"
           class="vibe64-source-editor__empty"
         >
           Select a file to edit.
@@ -463,7 +463,27 @@
             :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value || editor.loadingFile.value }"
           />
           <div
-            v-if="editor.loadingFile.value"
+            v-if="imagePreviewUrl"
+            class="vibe64-source-editor__image-preview"
+            aria-label="Image preview"
+            tabindex="0"
+          >
+            <div v-if="imagePreviewStatus === 'failed'" class="pa-4">
+              <p class="mb-3" role="alert">This image could not be displayed. Try again or download the file.</p>
+              <v-btn variant="tonal" @click="imagePreviewVersion += 1">Retry</v-btn>
+            </div>
+            <img
+              v-else
+              :key="`${imagePreviewUrl}:${imagePreviewVersion}`"
+              :src="imagePreviewUrl"
+              :alt="selectedFileName"
+              :style="{ visibility: imagePreviewStatus === 'loaded' ? 'visible' : 'hidden' }"
+              @load="imagePreviewStatus = 'loaded'"
+              @error="imagePreviewStatus = 'failed'"
+            >
+          </div>
+          <div
+            v-if="editor.loadingFile.value || (imagePreviewUrl && imagePreviewStatus === 'loading')"
             :aria-label="`Opening ${selectedFileName}`"
             aria-live="polite"
             class="vibe64-source-editor__file-loading"
@@ -735,6 +755,25 @@ const editor = useVibe64SourceEditor({
   sessionsApiPath: () => props.sessionsApiPath
 });
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
+const imagePreviewStatus = ref("loading");
+const imagePreviewVersion = ref(0);
+const imagePreviewUrl = computed(() => {
+  const filePath = editor.downloadOnlyFile.value?.path || "";
+  if (editor.loadingFile.value || !/\.(?:png|jpe?g|gif|webp|avif|bmp|ico)$/iu.test(filePath)) return "";
+  return scopedDevelopmentApiUrl(
+    vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, filePath),
+    props.projectSlug
+  );
+});
+watch([imagePreviewUrl, imagePreviewVersion], () => {
+  imagePreviewStatus.value = "loading";
+}, { immediate: true });
+
+function refreshFiles() {
+  imagePreviewVersion.value += 1;
+  void editor.refresh();
+}
+
 const selectedStarred = computed(() => props.fileBookmarks?.paths.value.includes(displayedPath.value) || false);
 const downloadingPath = ref("");
 const downloadDraftOpen = ref(false);
@@ -1945,6 +1984,20 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__workspace--with-explanation {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 27rem);
+}
+
+.vibe64-source-editor__image-preview {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.vibe64-source-editor__image-preview img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-inline: auto;
 }
 
 .vibe64-source-editor__workspace--explanation-collapsed {

@@ -545,6 +545,11 @@ its filename and a Download action. That selection stays outside the editable
 buffer, autosave and text-file observation. Opening another text file restores
 editing; changing sessions discards the selection and ignores pending file-read
 results. Download failures show their error message and leave retry available.
+Repo displays PNG, JPEG, GIF, WebP, AVIF, BMP and ICO files inline through the
+existing project-scoped, authenticated download route. Images fit the pane's
+width and scroll vertically, with a loading skeleton and retry on decode or
+request failure. Refresh reloads the displayed image; it never enters the text
+buffer or autosave path. Other binary files retain the download-only view.
 
 Stars are personal and project-scoped, not Git changes or shared project settings.
 The server stores at most 100 paths per authenticated account in private project
