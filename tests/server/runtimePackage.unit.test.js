@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -90,6 +91,25 @@ test("runtime release relocates, runs native and browser services, and packs wit
     await assert.rejects(execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")
     ]), error => error.code === 2 && /Usage: vibe64-exec-helper execute/u.test(error.stderr));
+    const codexRuntime = path.join(root, "codex-runtime");
+    await mkdir(codexRuntime);
+    const descriptor = path.join(codexRuntime, "history-adapter.json");
+    const codexProcess = await execute(process.execPath, [
+      path.join(installed, "node_modules/@local/vibe64-runtime/src/server/codexAppServerProcess.js"),
+      codexRuntime, process.execPath, "--input-type=module", "-e", `
+        import assert from 'node:assert/strict';
+        import { readFileSync } from 'node:fs';
+        const { baseUrl } = JSON.parse(readFileSync(process.argv[1], 'utf8'));
+        assert.equal((await fetch(baseUrl + '/not-an-upstream')).status, 404);
+        console.log('packaged Codex child and history adapter ready');
+      `, descriptor
+    ], {
+      cwd: installed,
+      env: { ...process.env, VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN: randomUUID() },
+      timeout: 10000
+    });
+    assert.match(codexProcess.stdout, /packaged Codex child and history adapter ready/u);
+    await assert.rejects(readFile(descriptor), { code: "ENOENT" });
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
     assert.ok(manifest.dependencies["node-pty"]);
     assert.ok(manifest.dependencies["genesis-compiler"]);
