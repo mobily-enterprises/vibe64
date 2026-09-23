@@ -50,6 +50,7 @@ const selectedSource = computed(() => vibe64SessionPullRequest(props.dashboardCo
 const createAvailable = computed(() => Boolean(props.dashboardContext.sessionId) && !selectedSource.value?.number);
 const toolbar = computed(() => ({
   ...props.dashboardContext.sessionToolbar,
+  repositoryBranchSelectionDisabled: true,
   createSession: (selection) => props.dashboardContext.sessionToolbar?.createSession?.(selection, { pullRequestNumber: Number(number.value) })
 }));
 watch(() => route.query.createPullRequest, (value) => {

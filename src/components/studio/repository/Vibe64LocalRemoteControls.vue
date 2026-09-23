@@ -56,6 +56,8 @@
           <span>{{ syncStatus.label }}</span>
         </div>
         <div class="d-flex flex-column ga-1">
+          <v-btn height="48" variant="text" :prepend-icon="mdiSourceBranch" :disabled="isBusy || !state?.head" @click="openBranch('switch')">Switch branch…</v-btn>
+          <v-btn height="48" variant="text" :prepend-icon="mdiSourceBranch" :disabled="isBusy || !state?.head" @click="openBranch('create')">New branch…</v-btn>
           <v-btn
             height="48"
             variant="text"
@@ -120,7 +122,33 @@
       </v-sheet>
     </v-menu>
 
-    <v-dialog v-model="settingsOpen" max-width="560" :persistent="isBusy">
+    <v-dialog :model-value="Boolean(branchAction)" max-width="560" scrollable :persistent="isBusy" @update:model-value="!$event && (branchAction = '')">
+      <v-card :title="branchAction === 'create' ? 'Create and switch branch' : 'Switch local branch'">
+        <v-card-text class="d-flex flex-column ga-3">
+          <p>Changes the opened project folder from <strong>{{ branchReview?.branch }}</strong>. The folder must be clean.</p>
+          <p>Existing sessions keep their original destination. To commit or Update those sessions, switch this folder back to their branch. New sessions start on the selected branch.</p>
+          <p v-if="branchAction === 'create'">The new branch starts at the current local commit. Nothing is pushed.</p>
+          <v-text-field v-if="branchAction === 'create'" v-model="branchName" label="New branch name" :disabled="isBusy" maxlength="255" />
+          <v-select v-else v-model="branchName" :items="state?.localBranches || []" label="Local branch" :disabled="isBusy" />
+          <p>Database contents stay as they are. Branch selection does not undo migrations.</p>
+        </v-card-text>
+        <v-card-actions class="flex-wrap">
+          <v-spacer />
+          <v-btn height="48" :disabled="isBusy" @click="branchAction = ''">Cancel</v-btn>
+          <v-btn
+            height="48"
+            color="primary"
+            variant="flat"
+            :disabled="isBusy || !branchName || branchName === branchReview?.branch"
+            @click="execute({ action: branchAction, branch: branchName, review: branchReview })"
+          >
+            {{ isBusy ? 'Switching…' : branchAction === 'create' ? 'Create & switch' : 'Switch branch' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="settingsOpen" max-width="560" scrollable :persistent="isBusy">
       <v-card>
         <v-card-title>Remote settings</v-card-title>
         <v-card-text class="d-flex flex-column ga-3">
@@ -133,26 +161,26 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn :disabled="isBusy" @click="settingsOpen = false">Cancel</v-btn>
+          <v-btn height="48" :disabled="isBusy" @click="settingsOpen = false">Cancel</v-btn>
           <v-btn :disabled="isBusy || !settings.remote || !settings.branch || !settings.pushRemote || !settings.pushBranch" @click="saveSettings">{{ busy ? 'Saving…' : 'Save settings' }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <v-dialog :model-value="Boolean(pendingReview)" max-width="560" :persistent="isBusy" @update:model-value="!$event && (pendingReview = null)">
+    <v-dialog :model-value="Boolean(pendingReview)" max-width="560" scrollable :persistent="isBusy" @update:model-value="!$event && (pendingReview = null)">
       <v-card v-if="pendingReview">
         <v-card-title>{{ pendingReview.action === 'push' ? 'Push saved work' : 'Pull remote changes' }}</v-card-title>
         <v-card-text>
           <p>{{ pendingReview.action === 'push' ? 'Push to' : 'Pull from' }} <strong>{{ destination(pendingReview.target) }}</strong></p>
           <p class="local-remotes__url">{{ pendingReview.target.url }}</p>
-          <p v-if="pendingReview.action === 'push'">Publishes {{ pendingReview.count }} outgoing commits from the local project. Unsaved session work is not included.</p>
+          <p v-if="pendingReview.action === 'push'">Publishes {{ pendingReview.count }} outgoing {{ pendingReview.count === 1 ? 'commit' : 'commits' }} from the local project. Unsaved session work is not included.</p>
           <p v-else-if="pendingReview.merge">Local and remote history have both advanced. Merge the remote changes into the local project, preserving both histories. Conflicts stop the operation for review.</p>
           <p v-else>Update the local project folder. Your sessions keep their work and can then use Update this session.</p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn :disabled="isBusy" @click="pendingReview = null">Cancel</v-btn>
-          <v-btn :disabled="isBusy" @click="confirmOperation">{{ busy ? 'Working…' : pendingReview.action === 'push' ? 'Push saved work' : pendingReview.merge ? 'Merge remote changes' : 'Pull changes' }}</v-btn>
+          <v-btn height="48" :disabled="isBusy" @click="pendingReview = null">Cancel</v-btn>
+          <v-btn height="48" :disabled="isBusy" @click="confirmOperation">{{ busy ? 'Working…' : pendingReview.action === 'push' ? 'Push saved work' : pendingReview.merge ? 'Merge remote changes' : 'Pull changes' }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -183,6 +211,9 @@ const settingsOpen = ref(false);
 const settings = reactive({ remote: "", branch: "", pushRemote: "", pushBranch: "" });
 const settingsReview = ref(null);
 const pendingReview = ref(null);
+const branchAction = ref("");
+const branchName = ref("");
+const branchReview = ref(null);
 const feedback = useUiFeedback({ source: "vibe64.repository.remote" });
 const endpoint = computed(() => scopedDevelopmentApiUrl(studioApiPath("vibe64/repository/remote"), props.project.slug));
 let generation = 0;
@@ -210,7 +241,7 @@ async function request(body) {
   return result;
 }
 async function refresh(background = true) {
-  if (busy.value || settingsOpen.value || pendingReview.value || document.hidden || props.project.repositoryMode !== "local_source") return;
+  if (busy.value || settingsOpen.value || pendingReview.value || branchAction.value || document.hidden || props.project.repositoryMode !== "local_source") return;
   const current = generation;
   busy.value = "fetch";
   try {
@@ -247,6 +278,12 @@ function openSettings() {
   });
   settingsOpen.value = true;
 }
+function openBranch(action) {
+  detailsOpen.value = false;
+  branchReview.value = snapshot(state.value.review);
+  branchName.value = "";
+  branchAction.value = action;
+}
 async function execute(body) {
   if (busy.value) return;
   const current = generation;
@@ -257,6 +294,7 @@ async function execute(body) {
     state.value = result;
     settingsOpen.value = false;
     pendingReview.value = null;
+    branchAction.value = "";
     error.value = "";
   } catch (cause) {
     if (current === generation) feedback.error(cause, "The Git operation could not finish.");
@@ -279,6 +317,7 @@ watch(endpoint, () => {
   error.value = "";
   pendingReview.value = null;
   settingsOpen.value = false;
+  branchAction.value = "";
   detailsOpen.value = false;
   void refresh();
 }, { immediate: true });

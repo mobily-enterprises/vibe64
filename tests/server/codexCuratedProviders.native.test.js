@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { writeCodexAuthMarker } from "@local/vibe64-core/server/codexAuthState";
+import { codexHistoryAdapterFixture } from "../fixtures/codexHistoryAdapterFixture.js";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -29,6 +32,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   const codexHome = path.join(home, ".codex");
   await mkdir(codexHome, { recursive: true });
   await mkdir(source, { recursive: true });
+  assert.equal(spawnSync("git", ["init", "--quiet", source]).status, 0);
   const children = [], providers = [], requests = [];
   let stderr = "";
   const api = createServer(async (request, response) => {
@@ -75,6 +79,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   });
   await new Promise((resolve) => api.listen(0, "127.0.0.1", resolve));
   const fixtureUrl = `http://127.0.0.1:${api.address().port}/v1`;
+  const adapterOptions = await codexHistoryAdapterFixture(root, fixtureUrl);
   await writeFile(path.join(codexHome, "config.toml"), [
     'model_provider = "fixture-openai"', 'model = "gpt-5.6-luna"', 'cli_auth_credentials_store = "file"',
     '[model_providers.fixture-openai]', 'name = "OpenAI fixture"', `base_url = "${fixtureUrl}"`,
@@ -83,6 +88,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   const login = spawnSync("codex", ["login", "--with-api-key"], { input: "fixture-gpt", encoding: "utf8",
     env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: codexHome }, timeout: 5000 });
   assert.equal(login.status, 0, login.stderr);
+  await writeCodexAuthMarker(systemRoot, { connected: true, loginId: randomUUID() });
   const originalAuth = await readFile(path.join(codexHome, "auth.json"), "utf8");
   const session = { sessionId: "test-session", status: "active", sourceReady: true, metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" } };
   const store = createVibe64SessionStore({ projectContextRoot: source, projectRuntimeRoot: path.join(root, "state") });
@@ -95,7 +101,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   async function commandRunner(request) {
     const requestHome = request.credentialHome?.home || home;
     const child = spawn(request.command, request.args, { cwd: request.cwd,
-      env: { ...request.baseEnv, PATH: process.env.PATH, HOME: requestHome, CODEX_HOME: request.baseEnv.CODEX_HOME || path.join(requestHome, ".codex"), RUST_LOG: "error" },
+      env: { ...request.baseEnv, NODE_OPTIONS: adapterOptions, PATH: process.env.PATH, HOME: requestHome, CODEX_HOME: request.baseEnv.CODEX_HOME || path.join(requestHome, ".codex"), RUST_LOG: "error" },
       detached: true, stdio: ["ignore", "ignore", "pipe"] });
     children.push(child);
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-16000); });
@@ -105,7 +111,15 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
     codexAppServerProviderOptions: { systemRoot },
     env: { VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agents"), VIBE64_RUNTIME_NAMESPACE: "curated-fixture" },
     projectService, codexAppServerProviderFactory(options) {
-      const provider = createCodexAppServerAgentProvider({ ...options, codexCommand: "codex", commandRunner });
+      const provider = createCodexAppServerAgentProvider({ ...options, codexCommand: "codex", commandRunner,
+        async prepareThreadParams(params) {
+          const prepared = await options.prepareThreadParams?.(params) || params;
+          if ((options.modelProviderId || "openai") === "openai") return prepared;
+          const key = `model_providers.${options.modelProviderId}`;
+          assert.ok(prepared.config[key].base_url.startsWith("https://"));
+          return { ...prepared, config: { ...prepared.config, [key]: { ...prepared.config[key], base_url: fixtureUrl } } };
+        }
+      });
       providers.push(provider); return provider;
     }
   });
@@ -125,7 +139,8 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   for (const [id, model] of [["openai", "gpt-5.6-luna"], ["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"], ["openai", "gpt-5.6-luna"]]) {
     if (id !== "openai") {
       await connections.change(id, { apiKey: `fixture-${id}` });
-      // Only the fixture changes the fixed production URL; no product API accepts this setting.
+      // Economy threads use the isolated provider home; the main thread override
+      // above replaces the fixed upstream at the native test boundary.
       const configPath = path.join(codexProviderPaths(systemRoot, id).codexHome, "config.toml");
       await writeFile(configPath, (await readFile(configPath, "utf8")).replace(/base_url = "[^"]+"/u, `base_url = "${fixtureUrl}"`));
       assert.equal(await readFile(path.join(codexHome, "auth.json"), "utf8"), originalAuth);
@@ -206,8 +221,12 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   }
   const gpt = runtimes.get("openai");
   await connections.change("deepseek", { remove: true });
-  assert.doesNotThrow(() => process.kill(gpt.pid, 0), "disconnecting DeepSeek must not stop GPT");
+  assert.throws(() => process.kill(gpt.pid, 0), { code: "ESRCH" }, "revocation drains runtimes that could retain a routed key");
+  await controller.describeProvider(session.sessionId);
+  const restoredGpt = providers.findLast((provider) => !provider.options.modelProviderId);
+  await restoredGpt.resumeThread(threads.get("openai"), { cwd: source });
+  assert.notEqual(restoredGpt.runtime.pid, gpt.pid);
   assert.equal(await readFile(path.join(codexHome, "auth.json"), "utf8"), originalAuth);
-  assert.equal((await providers.find((provider) => !provider.options.modelProviderId).listThreadTurns(threads.get("openai"), { limit: 10, itemsView: "full" })).data.length, 2);
-  t.diagnostic(`${version.stdout.trim()}: three isolated providers, command execution, GPT thread resumed, DeepSeek disconnected without changing GPT.`);
+  assert.equal((await restoredGpt.listThreadTurns(threads.get("openai"), { limit: 10, itemsView: "full" })).data.length, 2);
+  t.diagnostic(`${version.stdout.trim()}: three isolated providers, command execution, GPT thread resumed, DeepSeek revoked, GPT credentials preserved and its thread resumed after runtime drainage.`);
 });

@@ -218,7 +218,8 @@ async function terminalServiceFixture(t, lock, {
     logger,
     codexTerminalController: {
       codexToolHomeRequired: false,
-      codexToolHomeSource
+      codexToolHomeSource,
+      codexAppServerProviderOptions: { systemRoot: path.join(root, "system") }
     },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot,
@@ -749,6 +750,18 @@ for (const method of ["saveSessionWork", "updateSessionWork"]) {
   });
 }
 
+test("publication rejects missing reviews and enforces the project's PR workflow before Git work", async (t) => {
+  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
+  projectService.readCurrentProject = async () => ({
+    repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } }
+  });
+  projectService.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
+  await assert.rejects(service.saveSessionWork(session.sessionId), { code: "vibe64_session_repository_review_changed" });
+  await assert.rejects(service.saveSessionWork(session.sessionId, {
+    destinationReview: { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: "main" }
+  }), { code: "vibe64_pull_request_required" });
+});
+
 test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
   const contended = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
@@ -772,6 +785,7 @@ test("Save rechecks active assistant work after waiting for preparation", { time
     await preparing;
   }
   assert.equal((await requested).code, "vibe64_session_save_agent_active");
+  session.agentRuns = [];
 });
 
 test("Save preparation timeout returns an actionable retry without starting repository work", async (t) => {
@@ -1339,6 +1353,7 @@ for (const personalMember of [false, true]) {
     projectService.runProjectSourceExclusive = async (operation) => operation();
     await writeFile(path.join(source, "app.txt"), "important work\n");
     const saved = await service.saveSessionWork(session.sessionId, {
+      destinationReview: { sessionId: session.sessionId, mode: "local_source", repository: baseline, branch: "main" },
       operationId: "save-without-assistant",
       vibe64User: personalMember ? { username: "member", role: "member" } : null,
       onProgress(event) { events.push(event); }
@@ -1401,4 +1416,20 @@ test("purpose access enables a member's configured chat after a personal turn wh
   await assert.rejects(service.inspectAssistantAccess(session.sessionId, options), { code: "vibe64_assistant_actor_unavailable" });
   await assert.rejects(service.requireAssistantSelectionAccess(shared, options), { code: "vibe64_assistant_actor_unavailable" });
   assert.equal(provider.promptCalls.length, 0);
+});
+
+test("local Git work records the local command actor before any AI interaction", async (t) => {
+  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
+  session.metadata.source_remote_url = "https://github.com/example/project.git";
+  const actors = [];
+  projectService.authorizeCodexGitActorAccess = async ({ actor }) => {
+    actors.push(actor);
+    return { ok: false, code: "fixture_access_denied", error: "Stop before credentials or Git." };
+  };
+  await assert.rejects(service.checkSessionUpdates(session.sessionId), { code: "fixture_access_denied" });
+  assert.equal(actors.length, 1);
+  assert.equal(actors[0].actorScope, "local");
+  assert.equal(actors[0].actorUserKey, "local");
+  assert.equal(session.metadata.session_git_command_actor_source_root, session.metadata.source_path);
+  assert.equal(session.metadata.session_git_command_actor_session_id, session.sessionId);
 });

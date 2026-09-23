@@ -1,3 +1,6 @@
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   isPlainObject,
   normalizeText
@@ -19,6 +22,36 @@ const PROJECT_REPOSITORY_MODES = Object.freeze({
   MANAGED_GIT: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   LOCAL_SOURCE: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
 });
+
+async function readProjectRepositoryWorkflow(projectRuntimeRoot) {
+  if (!path.isAbsolute(projectRuntimeRoot || "")) throw new Error("Repository workflow requires a project runtime root.");
+  try {
+    const settings = JSON.parse(await readFile(path.join(projectRuntimeRoot, "settings", "repository-workflow.json"), "utf8"));
+    if (Object.keys(settings).length !== 1 || typeof settings.requirePullRequest !== "boolean") {
+      throw new Error("Repository workflow settings are invalid.");
+    }
+    return settings;
+  } catch (error) {
+    if (error.code === "ENOENT") return { requirePullRequest: false };
+    throw error;
+  }
+}
+
+async function saveProjectRepositoryWorkflow(projectRuntimeRoot, requirePullRequest) {
+  if (!path.isAbsolute(projectRuntimeRoot || "") || typeof requirePullRequest !== "boolean") {
+    throw new Error("Choose whether to require pull requests.");
+  }
+  const directory = path.join(projectRuntimeRoot, "settings");
+  await mkdir(directory, { recursive: true });
+  const temporary = path.join(directory, `.repository-workflow.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, JSON.stringify({ requirePullRequest }) + "\n", { flag: "wx", mode: 0o660 });
+    await rename(temporary, path.join(directory, "repository-workflow.json"));
+  } finally {
+    await rm(temporary, { force: true });
+  }
+  return { requirePullRequest };
+}
 
 function normalizeRepositoryMode(value = "") {
   const mode = normalizeText(value).toLowerCase().replace(/[-\s]+/gu, "_");
@@ -200,6 +233,13 @@ function projectRepositoryMetadataError(code = "", message = "") {
 function sessionRepositoryProject(project = {}, session = {}) {
   const serialized = session?.metadata?.github_pull_request;
   if (!serialized) {
+    const branch = session?.metadata?.repository_branch;
+    if (branch && normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+      if (!validRepositoryBranch(branch)) {
+        throw projectRepositoryMetadataError("vibe64_session_branch_invalid", "This session's repository branch is invalid.");
+      }
+      return { ...project, repository: { ...project.repository, defaultBranch: branch } };
+    }
     return project;
   }
   let source;
@@ -212,10 +252,7 @@ function sessionRepositoryProject(project = {}, session = {}) {
   if (
     !source || source.baseRepository !== fullName ||
     !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(source.headRepository || "") ||
-    !source.headBranch || typeof source.headBranch !== "string" ||
-    /[\s~^:?*[\\]/u.test(source.headBranch) ||
-    [...source.headBranch].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
-    source.headBranch.startsWith("-") || source.headBranch.includes("..") || source.headBranch.includes("@{") ||
+    !validRepositoryBranch(source.headBranch) ||
     project.repositoryMode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
   ) {
     throw projectRepositoryMetadataError("vibe64_pull_request_authority_invalid", "This session's pull request source is invalid. Its Save destination could not be verified.");
@@ -231,7 +268,48 @@ function sessionRepositoryProject(project = {}, session = {}) {
   };
 }
 
+function validRepositoryBranch(branch) {
+  return typeof branch === "string" && branch.length > 0 && branch.length <= 255 &&
+    !["@", "HEAD"].includes(branch) && !branch.startsWith("-") && !branch.endsWith(".") &&
+    !/[\s~^:?*[\\]/u.test(branch) && !branch.includes("..") && !branch.includes("@{") &&
+    ![...branch].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) &&
+    branch.split("/").every((part) => part && !part.startsWith(".") && !part.endsWith(".lock"));
+}
+
+function sessionRepositoryDestination(project = {}, session = {}) {
+  const resolved = sessionRepositoryProject(project, session);
+  const mode = normalizeRepositoryMode(resolved.repositoryMode || resolved.repository?.mode);
+  return {
+    sessionId: normalizeText(session.sessionId || session.id),
+    mode,
+    repository: mode === PROJECT_REPOSITORY_MODE_GITHUB
+      ? normalizeText(resolved.githubRepository?.fullName || resolved.repository?.github?.fullName)
+      : mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+        ? normalizeText(resolved.sourceRoot)
+        : normalizeText(resolved.slug || resolved.projectSlug),
+    branch: normalizeText(mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      ? session?.metadata?.local_source_branch || resolved.repository?.defaultBranch
+      : resolved.repository?.defaultBranch)
+  };
+}
+
+function assertSessionRepositoryReview(project, session, review) {
+  const destination = sessionRepositoryDestination(project, session);
+  if (!review || Object.entries(destination).some(([key, value]) => !value || review[key] !== value)) {
+    throw projectRepositoryMetadataError(
+      "vibe64_session_repository_review_changed",
+      "Review this session's repository and branch again before publishing. Its destination is missing or has changed."
+    );
+  }
+  return destination;
+}
+
 export {
+  readProjectRepositoryWorkflow,
+  saveProjectRepositoryWorkflow,
+  validRepositoryBranch,
+  assertSessionRepositoryReview,
+  sessionRepositoryDestination,
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,

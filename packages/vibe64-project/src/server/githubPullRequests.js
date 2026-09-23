@@ -113,7 +113,9 @@ export async function preparePullRequestSource(project, session, input, options 
     baseRepository: fullName,
     baseBranch: project.repository?.defaultBranch,
     headRepository: fullName,
-    headBranch: `vibe64/pr-${session.sessionId}`,
+    headBranch: (project.repositoryMode || project.repository?.mode) === "github" &&
+      session.metadata?.repository_branch && session.metadata.repository_branch !== project.repository?.defaultBranch
+      ? session.metadata.repository_branch : `vibe64/pr-${session.sessionId}`,
     headCommit
   };
 }

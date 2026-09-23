@@ -10,8 +10,8 @@ import {
 } from "../../packages/vibe64-database-tools/src/server/databaseDialect.js";
 
 describe("database client dialect registry", () => {
-  it("owns PostgreSQL and MySQL editor and SQL literal behavior", () => {
-    expect(Object.keys(DATABASE_CLIENT_DIALECTS).sort()).toEqual(["mysql", "postgresql"]);
+  it("owns PostgreSQL, MySQL and SQLite editor and SQL literal behavior", () => {
+    expect(Object.keys(DATABASE_CLIENT_DIALECTS).sort()).toEqual(["mysql", "postgresql", "sqlite"]);
     expect(Object.keys(DATABASE_CLIENT_DIALECTS).sort())
       .toEqual(Object.keys(DATABASE_DIALECTS).sort());
 
@@ -27,7 +27,7 @@ describe("database client dialect registry", () => {
   });
 
   it("fails visibly when the UI has no adapter for an engine", () => {
-    expect(() => databaseClientDialect("sqlite")).toThrow(/Unsupported database client dialect/u);
+    expect(() => databaseClientDialect("unsupported")).toThrow(/Unsupported database client dialect/u);
     expect(() => defineDatabaseClientDialect({})).toThrow(/complete UI adapter contract/u);
   });
 });

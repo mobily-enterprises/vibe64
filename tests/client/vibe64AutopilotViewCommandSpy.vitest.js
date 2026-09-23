@@ -89,7 +89,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':aria-busy="saveWorkSending ? \'true\' : undefined"');
     expect(component).not.toContain(':loading="saveWorkSending"');
     expect(component).toContain(":icon=\"mdiIncognito\"");
-    expect(component).toContain("saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline");
+    expect(component).toContain("saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit");
     expect(component).toContain("@click=\"confirmSaveWork\"");
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(
@@ -97,7 +97,7 @@ describe("Vibe64 direct session view", () => {
     );
     expect(component).toContain('#error-actions');
     expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)");
-    expect(composable).toContain("const result = await props.saveSessionWork();");
+    expect(composable).toContain("const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value });");
     expect(composable).toContain("const result = await props.updateSessionWork(input);");
     expect(composable).toContain("const saveWorkUnsaved = computed");
     expect(composable).toContain("const saveWorkOperationActive = computed");
@@ -139,7 +139,7 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain(':icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline"');
+    expect(sessionHeader).toContain(':icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit"');
     expect(sessionHeader).toContain('height="48"');
     expect(sessionHeader).toContain('width="48"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");

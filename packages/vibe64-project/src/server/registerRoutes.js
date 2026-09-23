@@ -53,6 +53,14 @@ function registerRoutes(http, {
   routes.serviceRoute("GET", "/repository/remote", {
     summary: "Read local Git remote configuration and last observed freshness."
   }, () => project.repositoryRemote());
+  routes.serviceRoute("GET", "/repository/branches", {
+    summary: "List repository branches for a new session."
+  }, (request) => project.repositoryBranches({ vibe64User: request.vibe64User || null }));
+  routes.serviceRoute("PUT", "/repository/workflow", {
+    summary: "Choose whether native publication requires a pull request."
+  }, (request) => project.saveRepositoryWorkflow({
+    requirePullRequest: routes.requestBody(request).requirePullRequest, vibe64User: request.vibe64User || null
+  }));
 
   routes.serviceRoute("GET", "/issues", {
     summary: "List GitHub issues for this project."

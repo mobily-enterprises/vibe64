@@ -1,4 +1,5 @@
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { checkpointSessionTurn } from "../../sessionTurnCheckpoint.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -156,6 +157,14 @@ function createClaudeSessionAgentProvider({
   async function publishRun(entry, state, message = "") {
     if (!entry.turn) return;
     const active = [RUN.STARTING, RUN.ACTIVE, RUN.FINALIZING].includes(state);
+    if (!active && entry.turn.active && !entry.context.assistantScope && !entry.profile && !entry.renewal) {
+      await checkpointSessionTurn({
+        projectService, runtime: entry.context.runtime, session: entry.context.session,
+        sessionId: entry.context.sessionId, outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
+        outcome: [RUN.COMPLETED, RUN.INTERRUPTED, RUN.CANCELLED].includes(state) ? state : "failed",
+        publishSessionChanged
+      });
+    }
     Object.assign(entry.turn, { active, state, error: message, updatedAt: now() });
     await save(entry);
     if (!entry.main || entry.renewal) {

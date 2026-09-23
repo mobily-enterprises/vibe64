@@ -1032,6 +1032,7 @@ test("work inspection observes a live Save without mistaking it for an interrupt
   let recoveryCalls = 0;
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }
@@ -1102,6 +1103,7 @@ test("members can Save and create pull requests independently of AI access", asy
   };
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }
@@ -1234,6 +1236,7 @@ test("native Save persists bounded progress and advances the session base only a
   };
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }
@@ -1334,6 +1337,7 @@ test("native Save persists its semantic commit-title profile across a durable ta
     };
     const service = createService({
       project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
         async createRuntime() {
           return runtime;
         }
@@ -1411,6 +1415,7 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
   };
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }
@@ -1490,6 +1495,7 @@ test("a reconciled Save supersedes an older failed session update", async () => 
   };
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }
@@ -1809,6 +1815,7 @@ test("one exact update check is shared, cached, and invalidates every sibling se
   });
   const service = createService({
     project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
       }

@@ -132,6 +132,7 @@ function githubProject(root, remote) {
   return {
     githubMirrorPath: path.join(projectRuntimeRoot, "github-mirror", "repository.git"),
     githubRepository: {
+      fullName: "example/project",
       cloneUrl: remote
     },
     path: path.join(root, "project-cache"),
@@ -299,6 +300,7 @@ test("work inspection compares the complete session tree with its verified canon
 
     assert.equal(result.ok, true);
     assert.equal(result.repositoryMode, "github");
+    assert.deepEqual(result.destination, { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: "main" });
     assert.equal(result.canonicalCommit, fixture.baseCommit);
     assert.equal(result.sessionHead, await git(session.sourcePath, ["rev-parse", "HEAD"]));
     assert.equal(requests.length, 1);
@@ -346,6 +348,7 @@ test("current changes returns a bounded canonical file list and one selected-fil
     });
 
     assert.equal(changes.unsaved, true);
+    assert.deepEqual(changes.destination, { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: "main" });
     assert.equal(changes.totalCount, 2);
     assert.equal(changes.files.length, 1);
     assert.equal(changes.truncated, true);

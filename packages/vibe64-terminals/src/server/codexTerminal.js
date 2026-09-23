@@ -1,3 +1,4 @@
+import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -137,7 +138,6 @@ import {
   executionEnvFingerprint
 } from "./projectExecutionEnv.js";
 import {
-  createGitTurnCheckpoint,
   runVibe64Command,
   stableHash
 } from "@local/vibe64-execution/server";
@@ -214,7 +214,6 @@ const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_CONTEXT_TASK_ID = "codex_context";
-const CODEX_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 const CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA = "agent_briefing_fingerprint";
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_RESULT_PROCESSED_EVENT = "codex-app-server-result-processed";
@@ -6587,99 +6586,11 @@ function createCodexTerminalController({
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
     const outerTurnId = normalizeText(turn.outerTurnId);
-    if (!outerTurnId || normalizeText(turn.inputSource) === "terminal") {
-      return {
-        ok: true,
-        processed: false,
-        reason: "outer_turn_unavailable"
-      };
-    }
-    const worktreePath = terminalWorktreePath(session);
-    const outcome = checkpointOutcomeForCodexTurn(status, turnOutcome);
-    const timestamp = normalizeText(turn.completedAt || turn.updatedAt);
-    try {
-      const project = typeof projectService?.readCurrentProject === "function"
-        ? await projectService.readCurrentProject()
-        : projectService?.selectedProject || {};
-      const checkpoint = await createGitTurnCheckpoint({
-        outerTurnId,
-        outcome,
-        project,
-        sessionId: normalizedSessionId,
-        timestamp,
-        worktreePath
-      });
-      const task = await runtime.store.writeBackgroundTaskEvent(
-        normalizedSessionId,
-        CODEX_TURN_CHECKPOINT_TASK_ID,
-        {
-          event: {
-            kind: checkpoint.created ? "checkpoint-created" : "checkpoint-confirmed",
-            message: ""
-          },
-          patch: {
-            checkpointCommit: checkpoint.commit,
-            checkpointOutcome: outcome,
-            checkpointTurnId: outerTurnId,
-            error: "",
-            status: "ready"
-          },
-          shouldWrite({ previous }) {
-            return normalizeText(previous.checkpointCommit) !== checkpoint.commit ||
-              normalizeText(previous.checkpointTurnId) !== outerTurnId ||
-              normalizeText(previous.status) !== "ready";
-          }
-        }
-      );
-      await publishSessionChanged(normalizedSessionId, {
-        reason: "codex-turn-checkpoint-updated",
-        session: await runtime.getSession(normalizedSessionId)
-      });
-      return {
-        checkpoint,
-        ok: true,
-        processed: true,
-        task
-      };
-    } catch (error) {
-      const checkpointError = errorMessage(error, "Vibe64 could not create a recoverable turn checkpoint.");
-      const task = await runtime.store.writeBackgroundTaskEvent(
-        normalizedSessionId,
-        CODEX_TURN_CHECKPOINT_TASK_ID,
-        {
-          event: {
-            kind: "checkpoint-failed",
-            message: checkpointError
-          },
-          patch: {
-            checkpointOutcome: outcome,
-            checkpointTurnId: outerTurnId,
-            error: checkpointError,
-            status: "failed"
-          },
-          shouldWrite({ previous }) {
-            return normalizeText(previous.checkpointTurnId) !== outerTurnId ||
-              normalizeText(previous.error) !== checkpointError ||
-              normalizeText(previous.status) !== "failed";
-          }
-        }
-      );
-      await publishSessionChanged(normalizedSessionId, {
-        reason: "codex-turn-checkpoint-failed",
-        session: await runtime.getSession(normalizedSessionId)
-      });
-      vibe64SessionDebugLog("server.codexTerminal.appServerTurn.checkpoint.error", {
-        error: vibe64SessionDebugError(error),
-        outerTurnId,
-        sessionId: normalizedSessionId
-      });
-      return {
-        error: checkpointError,
-        ok: false,
-        processed: true,
-        task
-      };
-    }
+    return checkpointSessionTurn({
+      projectService, runtime, session, sessionId: normalizedSessionId, outerTurnId,
+      outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
+      timestamp: normalizeText(turn.completedAt || turn.updatedAt), publishSessionChanged
+    });
   }
 
   async function markCodexAppServerTurnIdle(sessionId = "", input = {}) {
@@ -11432,9 +11343,14 @@ function createCodexTerminalController({
       if (notification.method === "thread/goal/updated") state.goal = notification.params.goal;
       if (notification.method === "thread/goal/cleared") state.goal = null;
       if (notification.method === "turn/completed") {
-        void publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
-          conversationId, temporaryRun: { active: false, state: state.status, providerTurnId: state.runId }
-        } }).catch(() => {});
+        const completedTurnId = state.runId;
+        const completedStatus = state.status;
+        void checkpointSessionTurn({
+          projectService, sessionId, outerTurnId: `codex:${conversationId}:${completedTurnId}`,
+          outcome: checkpointOutcomeForCodexTurn(completedStatus), publishSessionChanged
+        }).then(() => publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
+          conversationId, temporaryRun: { active: false, state: completedStatus, providerTurnId: completedTurnId }
+        } })).catch(() => {});
       }
     });
     conversations.set(conversationId, state);

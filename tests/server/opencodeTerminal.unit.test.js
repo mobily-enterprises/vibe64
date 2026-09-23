@@ -27,6 +27,35 @@ import {
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 
+test("OpenCode shutdown waits for the completed turn's checkpoint persistence", async (t) => {
+  const harness = await controllerHarness();
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const write = harness.runtime.store.writeBackgroundTaskEvent;
+  harness.runtime.store.writeBackgroundTaskEvent = async (...args) => {
+    entered.resolve();
+    await release.promise;
+    return write(...args);
+  };
+  t.after(async () => {
+    release.resolve();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  await harness.controller.sendMessage("session-1", { message: "Finish", messageId: "checkpoint-before-close" });
+  await entered.promise;
+  let closed = false;
+  const closing = harness.controller.invalidateRuntimes({ reason: "server-shutdown" }).then((result) => {
+    closed = true;
+    return result;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(closed, false);
+  release.resolve();
+  assert.equal((await closing).ok, true);
+  assert.equal(harness.checkpoints.length, 1);
+});
+
 test("OpenCode retains its generated conversation ID across restarts and engine changeover", async (t) => {
   const harness = await controllerHarness();
   let controller = harness.controller;

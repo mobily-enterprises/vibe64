@@ -56,7 +56,7 @@
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
               height="48"
-              :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiContentSaveOutline"
+              :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit"
               :title="saveWorkCheckAvailable ? `${saveWorkTitle}. Click to check for updates.` : saveWorkTitle"
               type="button"
               variant="tonal"
@@ -176,10 +176,17 @@
       </header>
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
+        <v-alert v-if="checkpointFailure" type="warning" variant="tonal" title="Recovery checkpoint failed">
+          Your files remain in this session, but the last assistant turn has no confirmed recovery checkpoint. {{ checkpointFailure }}
+        </v-alert>
         <v-sheet v-if="githubProject && sessionPullRequest" color="surface-light" rounded="lg" class="pa-2 text-body-small" style="overflow-wrap: anywhere">
           <strong>{{ sessionPullRequest.number ? `PR #${sessionPullRequest.number}` : 'Pull request branch' }}</strong>
-          · Save to {{ sessionPullRequest.headRepository }}:{{ sessionPullRequest.headBranch }}
+          · Commit &amp; push to {{ sessionPullRequest.headRepository }}:{{ sessionPullRequest.headBranch }}
         </v-sheet>
+        <p v-else-if="props.workState?.destination" class="ma-0 text-body-small text-medium-emphasis" style="overflow-wrap: anywhere">
+          {{ props.workState.destination.mode === 'local_source' ? 'Local commit' : props.workState.destination.mode === 'github' ? 'Commit & push' : 'Project version' }}
+          · {{ props.workState.destination.repository }}:{{ props.workState.destination.branch }}
+        </p>
         <v-sheet
           v-if="connectionRecoveryVisible"
           class="studio-autopilot__connection-recovery"
@@ -838,28 +845,50 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="saveWorkConfirmOpen" max-width="34rem">
+    <v-dialog v-model="saveWorkConfirmOpen" max-width="42rem" scrollable>
       <v-card>
-        <v-card-title>Save current work?</v-card-title>
+        <v-card-title>Review session changes</v-card-title>
         <v-card-text>
-          Vibe64 will save this session to the project's canonical repository. It preserves concurrent canonical
-          changes and stops before publishing only when another open session has changes that Git cannot merge cleanly.
+          <p>{{ vibe64SessionDisplayTitle(props.session) }} · {{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</p>
+          <p class="mt-3">Your working files are already kept in this session. This action captures all changed files on disk as one commit, including eligible untracked files. Save open file edits first.</p>
+          <v-btn class="my-3" height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
+          <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-4" style="overflow-wrap: anywhere">
+            <strong>{{ saveWorkReview.repository }}:{{ saveWorkReview.branch }}</strong>
+            <p class="mt-2">{{ publicationExplanation }}</p>
+          </v-sheet>
+          <p v-else role="status">Refresh repository status to review the destination.</p>
+          <p class="mt-3">Database rows and conversation history are separate. Publishing the app is a separate action.</p>
+          <p v-if="saveWorkReview?.mode === 'github'" class="mt-2">A push or pull request may run this repository's GitHub automation.</p>
+          <p v-if="githubProject && !sessionPullRequest?.number" class="mt-3">Recommended: create a draft pull request to review these changes on a separate branch.</p>
+          <p v-if="props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number" class="mt-3">This project requires a pull request before Vibe64 can publish these changes.</p>
           <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="flex-column align-stretch ga-2">
           <v-spacer />
-          <v-btn :disabled="saveWorkSending" type="button" variant="text" @click="cancelSaveWork">
-            Cancel
+          <v-btn :disabled="saveWorkSending" height="48" type="button" variant="text" @click="cancelSaveWork">
+            Keep working
+          </v-btn>
+          <v-btn
+            v-if="githubProject && !sessionPullRequest?.number"
+            color="primary"
+            height="48"
+            variant="flat"
+            :disabled="saveWorkDisabled || !saveWorkReview"
+            @click="cancelSaveWork(); createPullRequestOpen = true"
+          >
+            Create draft PR
           </v-btn>
           <v-btn
             :aria-busy="saveWorkSending ? 'true' : undefined"
             color="primary"
-            :disabled="saveWorkDisabled"
+            min-height="48"
+            :disabled="saveWorkDisabled || !saveWorkReview || (props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number)"
             type="button"
-            variant="flat"
+            :variant="githubProject && !sessionPullRequest?.number ? 'outlined' : 'flat'"
+            class="h-auto py-3"
             @click="confirmSaveWork"
           >
-            {{ saveWorkSending ? "Saving…" : "Save" }}
+            <span class="text-wrap" style="overflow-wrap: anywhere">{{ saveWorkSending ? "Committing…" : publicationLabel }}</span>
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -889,7 +918,7 @@ import {
   mdiBroom,
   mdiCogOutline,
   mdiConsoleNetworkOutline,
-  mdiContentSaveOutline,
+  mdiSourceCommit,
   mdiDotsVertical,
   mdiEyePlusOutline,
   mdiGithub,
@@ -901,7 +930,7 @@ import {
   mdiStop,
   mdiUndo,
 } from "@mdi/js";
-import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
+import { vibe64SessionDisplayTitle, vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -1086,6 +1115,7 @@ const {
   withdrawSuggestion: withdrawAssistantSuggestion
 } = useVibe64AssistantAccess({
   active: computed(() => props.active && !props.sessionSelectionArchived),
+  messageSuggestionsEnabled: computed(() => props.projectContext?.repositoryMode !== "local_source"),
   sessionId: selectedAssistantSessionId,
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
@@ -1183,6 +1213,7 @@ const {
   rightPaneTab,
   rightPaneTabMounted,
   saveWorkConfirmOpen,
+  saveWorkReview,
   saveWorkActivityDismissed,
   saveWorkActivityKey,
   saveWorkActivityIsUpdate,
@@ -1204,6 +1235,7 @@ const {
   saveWorkUnsaved,
   savedCommitDeslop,
   savedCommitDeslopSending,
+  selectSessionTool,
   sessionId,
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
@@ -1416,9 +1448,23 @@ const composerSupportStatusVisible = computed(() => Boolean(
 ));
 
 const createPullRequestOpen = ref(false);
+const checkpointFailure = computed(() => (props.session?.backgroundTasks || [])
+  .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed")?.error || "");
 const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
 const assistantCodeRestrictionMessage = computed(() => assistantPurposes.value.code?.message || "Code is unavailable. Review model routing.");
+const publicationLabel = computed(() => {
+  const destination = saveWorkReview.value;
+  if (destination?.mode === "managed_git") return "Save project version";
+  if (destination?.mode === "github") return `Commit & push to ${destination.repository}:${destination.branch}`;
+  return `Commit to ${destination?.branch || "branch"}`;
+});
+const publicationExplanation = computed(() => {
+  if (saveWorkReview.value?.mode === "managed_git") return "Keep these changes as the current version of this branch in Vibe64.";
+  if (saveWorkReview.value?.mode === "local_source") return "Updates the opened local project folder and branch. Push to a remote is separate.";
+  if (sessionPullRequest.value) return `Updates this pull request's branch. Does not merge it into ${sessionPullRequest.value.baseBranch}.`;
+  return "Advances this GitHub branch now. Other sessions must Update to receive this version.";
+});
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
@@ -2056,7 +2102,7 @@ onBeforeUnmount(() => {
 }
 
 @media (pointer: coarse) {
-  .studio-autopilot__composer-action {
+  .studio-autopilot__composer-actions .studio-autopilot__composer-action {
     min-height: 3rem;
     min-width: 3rem;
   }

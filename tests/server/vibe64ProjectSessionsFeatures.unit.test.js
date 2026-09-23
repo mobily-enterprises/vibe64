@@ -84,7 +84,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.settings.read",
     "vibe64.project.templates.apply"
   ]);
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 15);
+  assert.equal(projectRoutes.length, projectActions[0].actions.length + 17);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,

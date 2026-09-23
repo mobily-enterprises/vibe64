@@ -33,6 +33,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
   })
 }));
 
+vi.mock("@/components/studio/vibe64-session/Vibe64ChatModeControls.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
 vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: defineComponent({ render: () => null }) }));
 
 vi.mock("vuetify/components/VSelect", () => ({ VSelect: defineComponent({ render: () => null }) }));

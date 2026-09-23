@@ -73,6 +73,23 @@ describe("useVibe64AssistantAccess", () => {
     });
   });
 
+  it("keeps local assistant access without reading the hosted message-request queue", async () => {
+    endpointMocks.resources = [resource({ ok: true, canUse: true }), resource({ ok: false, error: "Sign in required" })];
+    const scope = effectScope();
+    const access = scope.run(() => useVibe64AssistantAccess({
+      sessionId: "local-session", sessionsApiPath: "/api/vibe64/sessions", messageSuggestionsEnabled: false
+    }));
+    expect(endpointMocks.options[0].enabled.value).toBe(true);
+    expect(endpointMocks.options[1].enabled.value).toBe(false);
+    expect(access.canUseAi.value).toBe(true);
+    expect(access.suggestionsError.value).toBe("");
+    expect(access.pendingSuggestions.value).toEqual([]);
+    await access.reload();
+    expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
+    expect(endpointMocks.resources[1].reload).not.toHaveBeenCalled();
+    scope.stop();
+  });
+
   it("loads configured session choices without provider or model catalogs", () => {
     endpointMocks.resources = [resource({ engines: [] }), resource({ engines: [] }), resource({ engines: [] })];
     const scope = effectScope();

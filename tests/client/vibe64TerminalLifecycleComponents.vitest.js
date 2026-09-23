@@ -240,7 +240,7 @@ describe("Vibe64 terminal lifecycle components", () => {
     const title = findNode(summary, hasClass("vibe64-temporary-action-terminal__title"));
     const status = findNode(summary, hasClass("vibe64-temporary-action-terminal__status"));
     const body = findNode(surface, hasClass("vibe64-terminal-surface__body"));
-    expect(surface.props.color).toBe("surface");
+    expect(surface.props.color).toBe("surface-light");
     expect(nodeText(surface)).toContain("Saved revision 42");
     expect(body.style.display).toBe("none");
     expect(findNode(container, (node) => (
@@ -253,7 +253,7 @@ describe("Vibe64 terminal lifecycle components", () => {
     expect(findNode(container, hasClass("vibe64-temporary-action-terminal__summary"))).toBe(summary);
     expect(findNode(container, hasClass("vibe64-temporary-action-terminal__title"))).toBe(title);
     expect(findNode(container, hasClass("vibe64-temporary-action-terminal__status"))).toBe(status);
-    expect(surface.props.color).toBe("surface");
+    expect(surface.props.color).toBe("surface-light");
     expect(body.style.display).not.toBe("none");
     expect(findNode(container, (node) => (
       node.type === "button" && nodeText(node) === "Dismiss"

@@ -108,7 +108,7 @@ describe("useVibe64RepositoryWorkspace", () => {
     mocks.requestCalls.length = 0;
   });
 
-  it("allows deterministic Save when all inference is unavailable", async () => {
+  it("opens publication review without requiring direct assistant access", async () => {
     mocks.changes = { unsaved: true };
     const requestSaveWork = vi.fn(async () => ({ ok: true }));
     const { useVibe64RepositoryWorkspace } = await import(
@@ -126,7 +126,7 @@ describe("useVibe64RepositoryWorkspace", () => {
     await flushPromises();
 
     await expect(workspace.saveWork()).resolves.toEqual({ ok: true });
-    expect(requestSaveWork).toHaveBeenCalledTimes(1);
+    expect(requestSaveWork).toHaveBeenCalledOnce();
   });
 
   it("unwraps the runtime's ref-backed session API path without cross-loading destinations", async () => {

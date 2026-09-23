@@ -16,7 +16,8 @@ const optionalUser = {
 };
 
 const projectRemoteInputValidator = patchSchema({
-  action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure"] },
+  action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure", "switch", "create"] },
+  branch: { type: "string", maxLength: 255 },
   background: { type: "boolean" },
   merge: { type: "boolean" },
   review: { type: "object", additionalProperties: true },

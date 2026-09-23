@@ -264,3 +264,12 @@ test("remote actions preserve review inputs and only invalidate projects after m
   assert.deepEqual(event.realtime.payload, { projectSlug: "local", action: "pull" });
   assert.equal(await action.events[0]({ context: {}, input: { action: "fetch" }, result: { ok: true, remoteChanged: false } }), null);
 });
+
+
+test("repository policy changes carry only their public setting on the existing project event", async () => {
+  const publish = createVibe64ProjectChangedPublisher({ events: { publish: async (event) => event } });
+  const event = await publish({ projectSlug: "project-a", repositoryWorkflow: { requirePullRequest: true, privatePath: "/private/settings" } }, { reason: "repository-workflow-settings" });
+  assert.deepEqual(event.realtime.payload, {
+    projectSlug: "project-a", repositoryWorkflow: { requirePullRequest: true }, reason: "repository-workflow-settings"
+  });
+});

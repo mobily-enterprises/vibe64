@@ -673,15 +673,32 @@ Retries keep the saved handover without asking the AI to write it again. If the
 source or conversation changed, the existing text returns for review with
 current source details before the person confirms continuation.
 
+File Save writes the session file. The chat and Changes actions instead open
+Review changes, naming the session, whole-tree file scope and exact destination.
+A local project offers Commit to its branch; a Vibe64-only project offers Save
+project version; GitHub offers Create draft PR and an explicit Commit & push
+to the named repository and branch. The server rejects an outdated destination
+review. Working files, recovery checkpoints, project versions, database rows,
+conversation history and application publishing have separate effects.
+
 Every project has exactly one source authority. For a GitHub-connected project,
 the configured GitHub branch is authoritative. For a hosted Vibe64-only
 project, Vibe64's own repository is authoritative. For a standalone local
 project, the folder the person opened is authoritative and Save records the
 session's work there as an ordinary local commit. A PR session has an explicit
 GitHub branch authority of its own; publishing its work does not change the
-project authority or notify sessions that track a different branch.
+project authority or notify sessions that track a different branch. Hosted
+session creation also offers an optional existing or new branch. The default
+remains the project branch, and database scope still determines session limits.
+Explicit branch destinations survive renewal and archive indexing. Choosing a
+branch for a new session does not switch another session's files or database.
+GitHub project owners can require PR publication in the Vibe64 workflow. This
+does not retarget existing sessions or replace GitHub's own branch protection.
 
-Standalone projects expose Fetch, Pull, Push and per-branch remote settings.
+Standalone projects expose Fetch, Pull, Push, Switch branch, New branch and
+per-branch remote settings. Branch changes require a clean original folder and
+no unfinished Git operation. Existing sessions retain their branch binding;
+switch the folder back before accepting their work. Branch changes never push.
 Their project header keeps the new-session + beside the project name and one
 compact Git dropdown. A badge signals incoming/outgoing commits or a failed
 check. The dropdown contains sync status, Fetch, Pull/Push with commit counts,
@@ -698,7 +715,7 @@ review and reconcile an existing session's changes onto the new history,
 keeping its conversation and recoverable work. Hosted source authority and
 its Save and Update workflow remain unchanged.
 
-The muted Save disk remains clickable to request fresh repository status from
+The muted repository action remains clickable to request fresh status from
 the server. It shows “Checking…” while waiting, then reflects the latest Save
 or Update state without invoking either action. Repeated clicks cannot start
 overlapping checks; archived sessions, suspended source access and repository

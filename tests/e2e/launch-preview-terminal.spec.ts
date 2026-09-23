@@ -1403,6 +1403,7 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
   });
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
+    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 800,
     previewResponseDelayMs: 800
   });
@@ -1413,7 +1414,7 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
 
   const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
   const composerActions = page.locator(".studio-autopilot__composer-actions");
-  const captureButton = composerActions.getByRole("button", {
+  const captureButton = page.getByRole("button", {
     name: "Attach visible preview"
   });
   await expect(
@@ -1425,6 +1426,7 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
   await expect(captureButton).toHaveCount(0);
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
     .toBeVisible();
+  await composerActions.getByRole("button", { name: "Add to message", exact: true }).click();
   await expect(captureButton).toBeVisible();
 
   await captureButton.click();
@@ -1466,12 +1468,14 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
   await page.getByRole("tab", {
     name: "Preview"
   }).click();
+  await composerActions.getByRole("button", { name: "Add to message", exact: true }).click();
   await expect(captureButton).toBeVisible();
 });
 
 test("@preview-lifecycle attaches isolated proxied-app console and network diagnostics", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
+    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 800
   });
   await page.route("http://127.0.0.1:49000/api/diagnostics", async (route) => {
@@ -1544,10 +1548,8 @@ test("@preview-lifecycle attaches isolated proxied-app console and network diagn
     });
   });
 
-  const attachDiagnostics = page.locator(".studio-autopilot__composer-actions")
-    .getByRole("button", {
-      name: "Attach console & network"
-    });
+  await page.getByRole("button", { name: "Add to message", exact: true }).click();
+  const attachDiagnostics = page.getByRole("button", { name: "Attach console & network" });
   await expect(attachDiagnostics).toBeVisible();
   await attachDiagnostics.click();
   await expect(page.locator(".assistant-attachment-queue__item")).toHaveCount(1);
@@ -1591,6 +1593,7 @@ for (const viewportWidth of [390, 960, 1600]) {
     });
     await mockLaunchTerminalSocket(page);
     const launchSession = await mockLaunchSession(page, {
+      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       attachmentUploadOutcomes: ["failure", "success"],
       attachmentUploadResponseDelayMs: 800
     });
@@ -1603,6 +1606,7 @@ for (const viewportWidth of [390, 960, 1600]) {
     const sendMessage = page.getByRole("button", {
       name: "Send message"
     });
+    await page.getByRole("button", { name: "Add to message", exact: true }).click();
     const attachFiles = page.getByRole("button", {
       name: "Attach files"
     });
@@ -1672,11 +1676,13 @@ test("@preview-lifecycle multipart upload exposes genuine nonzero monotonic brow
   await observeBrowserUploadProgress(page);
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
+    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 1000
   });
   const fileName = "observed-browser-progress.bin";
   const fileContents = Buffer.alloc(512 * 1024, 0x61);
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  await page.getByRole("button", { name: "Add to message", exact: true }).click();
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Attach files" }).click();
   const fileChooser = await fileChooserPromise;
@@ -1717,11 +1723,13 @@ test("@preview-lifecycle reduced motion keeps unknown upload progress stationary
   });
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
+    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 1000
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
   const fileName = "reduced-motion-upload.bin";
+  await page.getByRole("button", { name: "Add to message", exact: true }).click();
   const chooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Attach files" }).click();
   const chooser = await chooserPromise;
@@ -2533,15 +2541,13 @@ test("@preview-lifecycle automatically recovers when the first status has no tar
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await expect(page.getByText("Preview will appear here when it is ready.")).toBeVisible();
-  await expect(page.locator(".vibe64-launch-controls__preview-empty").getByRole("button")).toHaveCount(0);
-
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u)
     }
   ]);
+  await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible();
 });
 
 test("@preview-lifecycle refreshes disabled targets after the selected session advances", async ({ page }) => {
@@ -3510,7 +3516,11 @@ for (const viewportWidth of [390, 960, 1600]) {
     });
     await mockLaunchTerminalSocket(page);
     await mockProjectGateReady(page);
-    await page.route(/\/api(?:\/app\/[^/]+)?\/vibe64\/settings(?:\?.*)?$/u, async (route) => {
+    await page.route(/\/api(?:\/app\/[^/]+)?\/vibe64\/settings(?:\/engineering)?(?:\?.*)?$/u, async (route) => {
+      if (new URL(route.request().url()).pathname.endsWith("/engineering")) {
+        await fulfillJson(route, { ok: true, engineering: { available: false } });
+        return;
+      }
       await fulfillJson(route, {
         collaboration: {
           available: true,
@@ -3609,8 +3619,12 @@ for (const viewportWidth of [390, 960, 1600]) {
       },
       scope: databaseScope
     });
-    await page.route(/\/api(?:\/app\/[^/]+)?\/vibe64\/settings(?:\/development-database)?(?:\?.*)?$/u, async (route) => {
+    await page.route(/\/api(?:\/app\/[^/]+)?\/vibe64\/settings(?:\/(?:development-database|engineering))?(?:\?.*)?$/u, async (route) => {
       const request = route.request();
+      if (new URL(request.url()).pathname.endsWith("/engineering")) {
+        await fulfillJson(route, { ok: true, engineering: { available: false } });
+        return;
+      }
       if (new URL(request.url()).pathname.endsWith("/development-database")) {
         expect(request.method()).toBe("PUT");
         expect(request.postDataJSON()).toEqual({
@@ -3677,19 +3691,8 @@ for (const viewportWidth of [390, 960, 1600]) {
       await expect.poll(() => creation.getSessionCreationRequestCount()).toBe(expectedCount);
       await expect(page.locator(".studio-ai-sessions__tab:visible")).toHaveCount(expectedCount);
     }
-    await expect(toolbarCreate).toBeVisible();
-    await expect(toolbarCreate).toBeDisabled();
-    await toolbarCreate.focus();
-    await expect(toolbarCreate).toBeFocused();
-    await expect(toolbarCreate).toHaveAttribute("aria-disabled", "true");
-    await expect(toolbarCreate).toHaveAttribute(
-      "aria-label",
-      "New session. Studio allows up to 3 open sessions. Archive one before creating another."
-    );
-    await expect(toolbarCreate).toHaveAttribute(
-      "title",
-      "Studio allows up to 3 open sessions. Archive one before creating another."
-    );
+    await expect(toolbarCreate).toHaveCount(0);
+    expect(creation.getSessionCreationRequestCount()).toBe(3);
     await expect.poll(() => page.evaluate(() => (
       document.documentElement.scrollWidth <= window.innerWidth
     ))).toBe(true);
@@ -4716,15 +4719,16 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const chat = await responsiveChatHarness(page);
     await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/work`, async (route) => {
-      await fulfillJson(route, { ok: true, unsaved: true, operation: null, updateOperation: null });
+      await fulfillJson(route, { ok: true, unsaved: true, operation: null, updateOperation: null,
+        destination: { sessionId: SESSION_ID, mode: "managed_git", repository: "example-target-app", branch: "main" } });
     });
     await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/save`, async (route) => {
       await fulfillJson(route, { ok: true, status: "saved", reconciled: true, saveCommit: "a".repeat(40) });
     });
     try {
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Save selected session work", exact: true }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+      await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Save project version", exact: true }).click();
       await expect(page.getByText("Work saved", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: /Deslop|Clean up/iu }).click();
       await expect.poll(() => chat.messages.length).toBe(1);

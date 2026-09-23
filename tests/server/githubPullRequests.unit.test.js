@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
-import { sessionRepositoryProject } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 import { prepareSessionPullRequestBranch, saveSessionWorkDirect, checkSessionUpdatesDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
@@ -19,12 +20,68 @@ const pr = { number: 7, title: "Improve search", body: "A description", url: "ht
   baseRefName: "main", baseRepository: { nameWithOwner: "example/project" },
   headRepository: { nameWithOwner: "alice/project", viewerPermission: "WRITE", isArchived: false } };
 const success = (body) => ({ ok: true, stdout: JSON.stringify(body) });
+test("local destination review stays bound to the session after the project folder switches branches", () => {
+  const project = { sourceRoot: "/project", repositoryMode: "local_source", repository: { mode: "local_source", defaultBranch: "feature/new" } };
+  const session = { sessionId: "old", metadata: { local_source_branch: "main" } };
+  const review = { sessionId: "old", mode: "local_source", repository: "/project", branch: "main" };
+  assert.deepEqual(sessionRepositoryDestination(project, session), review);
+  assert.doesNotThrow(() => assertSessionRepositoryReview(project, session, review));
+  assert.equal(sessionRepositoryProject(project, session).repository.defaultBranch, "feature/new");
+});
+
+test("session destination reviews fail closed when repository, branch or session changes", () => {
+  const session = { sessionId: "one", metadata: { repository_branch: "feature/search" } };
+  const review = sessionRepositoryDestination(project, session);
+  assert.equal(review.branch, "feature/search");
+  assert.equal(review.repository, "example/project");
+  assert.deepEqual(assertSessionRepositoryReview(project, session, review), review);
+  for (const changed of [undefined, { ...review, branch: "main" }, { ...review, repository: "other/project" }, { ...review, sessionId: "two" }]) {
+    assert.throws(() => assertSessionRepositoryReview(project, session, changed), { code: "vibe64_session_repository_review_changed" });
+  }
+  const managed = { slug: "project", repository: { mode: "managed_git", defaultBranch: "main" } };
+  assert.equal(sessionRepositoryProject(managed, session).repository.defaultBranch, "feature/search");
+  assert.throws(() => sessionRepositoryProject(managed, { metadata: { repository_branch: "../main" } }));
+});
 function fixture(replies) {
   const calls = [];
   return { calls, options: { env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" }, async runCommand(request) {
     calls.push(request); assert.ok(replies.length, "Unexpected GitHub request"); return replies.shift();
   } } };
 }
+
+test("GitHub branch choices validate the reviewed commit and never overwrite an existing branch", async () => {
+  const rows = [{ name: "main", commit: { sha: "a".repeat(40) } }];
+  const branchProject = { ...project, projectRuntimeRoot: "/test/project" };
+  const f = fixture([success(rows), success({ ref: "refs/heads/feature/new" })]);
+  const options = { ...f.options, runExclusive: async (_root, operation) => operation() };
+  const result = await repositoryBranches(branchProject, { vibe64User: user,
+    selection: { name: "feature/new", fromBranch: "main", expectedCommit: "a".repeat(40) } }, options);
+  assert.deepEqual(result, { name: "feature/new", commit: "a".repeat(40) });
+  assert.deepEqual(JSON.parse(f.calls[1].input), { ref: "refs/heads/feature/new", sha: "a".repeat(40) });
+  assert.equal(f.calls[1].actor, "named-user");
+  for (const selection of [
+    { name: "main", expectedCommit: "b".repeat(40) },
+    { name: "main", fromBranch: "main", expectedCommit: "a".repeat(40) },
+    { name: "../bad", fromBranch: "main", expectedCommit: "a".repeat(40) }
+  ]) {
+    const rejected = fixture([success(rows)]);
+    await assert.rejects(repositoryBranches(branchProject, { vibe64User: user, selection },
+      { ...rejected.options, runExclusive: options.runExclusive }));
+    assert.equal(rejected.calls.length, 1);
+  }
+});
+
+test("PR workflow settings default without backfilling and reject malformed persisted state", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-repository-workflow-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  assert.deepEqual(await readProjectRepositoryWorkflow(root), { requirePullRequest: false });
+  assert.deepEqual(await readdir(root), []);
+  await saveProjectRepositoryWorkflow(root, true);
+  assert.deepEqual(await readProjectRepositoryWorkflow(root), { requirePullRequest: true });
+  await assert.rejects(saveProjectRepositoryWorkflow(root, "false"));
+  await writeFile(path.join(root, "settings", "repository-workflow.json"), '{"requirePullRequest":"false"}');
+  await assert.rejects(readProjectRepositoryWorkflow(root));
+});
 
 test("PR navigation shares the project-wide GitHub-only Issues/PR entry", () => {
   const placements = getPlacements();
@@ -101,7 +158,8 @@ async function git(cwd, args) {
   assert.equal(result.ok, true, result.stderr); return result.stdout.trim();
 }
 
-test("a PR clone starts at the head, Save and Update stay on that branch, and main is untouched", async () => {
+for (const withPullRequest of [true, false]) {
+test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and keep Save and Update off main`, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-pr-"));
   try {
     const remote = path.join(root, "remote.git"), seed = path.join(root, "seed");
@@ -115,11 +173,13 @@ test("a PR clone starts at the head, Save and Update stay on that branch, and ma
     await git(seed, ["add", "."]); await git(seed, ["commit", "-m", "feature"]); await git(seed, ["push", "origin", "feature/search"]);
     const head = await git(seed, ["rev-parse", "HEAD"]);
     const source = { ...pullRequestSessionSource(pr), headCommit: head };
-    const session = { sessionId: "session-1", metadata: { github_pull_request: JSON.stringify(source) } };
+    const session = { sessionId: "session-1", metadata: withPullRequest
+      ? { github_pull_request: JSON.stringify(source) } : { repository_branch: "feature/search" } };
+    const remoteUrl = withPullRequest ? "https://github.com/alice/project.git" : "https://github.com/example/project.git";
     const calls = [];
     const runCommand = (request) => {
       calls.push(request);
-      return command({ ...request, args: request.args.map((arg) => arg === "https://github.com/alice/project.git" ? remote : arg) });
+      return command({ ...request, args: request.args.map((arg) => [remoteUrl, "https://github.com/alice/project.git"].includes(arg) ? remote : arg) });
     };
     await createSessionSource({ project, session, expectedCommit: head, runCommand,
       env: { VIBE64_GITHUB_ACCOUNT_MODE: "local" },
@@ -135,7 +195,7 @@ test("a PR clone starts at the head, Save and Update stay on that branch, and ma
     session.metadata.base_commit = saved.saveCommit; session.metadata.canonical_commit = saved.saveCommit;
     const checked = await checkSessionUpdatesDirect({ project, session, runCommand });
     assert.equal(checked.canonicalCommit, saved.saveCommit);
-    assert.ok(calls.some((request) => request.args.includes("https://github.com/alice/project.git")));
+    assert.ok(calls.some((request) => request.args.includes(remoteUrl)));
     // Creating a PR from a normal session supports baselines that have only been committed locally.
     await writeFile(path.join(session.sourcePath, "local.txt"), "locally committed\n");
     await git(session.sourcePath, ["add", "."]); await git(session.sourcePath, ["commit", "-m", "local baseline"]);
@@ -150,6 +210,8 @@ test("a PR clone starts at the head, Save and Update stay on that branch, and ma
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+}
+
 test("PR update notifications reach only sessions sharing the same source branch", async () => {
   const metadata = { github_pull_request: JSON.stringify(pullRequestSessionSource(pr)) };
   const sessions = [{ sessionId: "pr-one", metadata }, { sessionId: "pr-two", metadata },
@@ -159,7 +221,7 @@ test("PR update notifications reach only sessions sharing the same source branch
     async listSessionSummaries() { return sessions; },
     store: { async writeMetadataValue(id, name, value) { writes.push([id, name, value]); },
       async writeBackgroundTaskEvent() { return {}; }, async readBackgroundTask() { return null; } } };
-  const service = createService({ project: { async createRuntime() { return runtime; } },
+  const service = createService({ project: { async createRuntime() { return runtime; }, async readCurrentProject() { return project; } },
     async publishSessionChanged() {}, terminals: { async requireAssistantAccess() {},
       async saveSessionWork(_id, input) { await input.onRepositoryWriteAcquired(); return { ok: true, saveCommit: "new", reconciled: true }; } } });
   const result = await service.saveSessionWork("pr-one");

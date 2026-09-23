@@ -58,6 +58,7 @@ const SESSION_ARCHIVE_KIND = "vibe64.session_archive";
 const RENEWAL_ARCHIVE_SELECTION_METADATA = "renewal_selected_before_archive";
 const RENEWAL_ARCHIVE_SELECTION_NONE = "none";
 const SESSION_ARCHIVE_INDEX_METADATA_NAMES = Object.freeze([
+  "repository_branch",
   "github_pull_request",
   "base_branch",
   "base_commit",

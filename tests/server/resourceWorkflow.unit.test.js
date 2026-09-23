@@ -68,14 +68,14 @@ test("a pack upgrade changes identity even when its first executable resolves to
 
 test("mutable operator wrappers include both commands and their installed package manifests", async (t) => {
   const f = await fixture(t);
-  const manifests = ["operator-clis/lib/node_modules/@openai/codex/package.json", "operator-clis/lib/node_modules/opencode-ai/package.json"];
+  const manifests = ["operator-clis/lib/node_modules/@openai/codex/package.json", "operator-clis/lib/node_modules/opencode-ai/package.json", "operator-clis/lib/node_modules/@anthropic-ai/claude-code/package.json"];
   for (const file of manifests) {
     await mkdir(path.dirname(path.join(f.runtimeRoot, file)), { recursive: true });
     await writeFile(path.join(f.runtimeRoot, file), '{"version":"1.0.0"}');
   }
   for (const directory of ["managed-bin", "operator-clis/bin"]) {
     await mkdir(path.join(f.runtimeRoot, directory), { recursive: true });
-    for (const command of ["codex", "opencode"]) {
+    for (const command of ["claude", "codex", "opencode"]) {
       await writeFile(path.join(f.runtimeRoot, directory, command),
         `#!/bin/sh\necho should-not-run > ${JSON.stringify(path.join(f.root, "invoked"))}\n`, { mode: 0o755 });
     }

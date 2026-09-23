@@ -134,6 +134,11 @@ preserve the original source for Retry.
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it
 from legacy predecessor metadata or default a missing authority to local source.
+An optional hosted `repository_branch` binding chooses a verified branch at
+session creation. It survives renewal and archive indexing without changing
+database ownership, preparation or session admission limits. Existing sessions
+without it keep their current project authority; no cached source branch is
+promoted into a new binding. PR metadata takes precedence over this binding.
 The server-resolved PR source is an explicit session authority and survives
 renewal and archive indexing. A new PR session clones its head commit and gives
 the assistant the description as quoted background data on its opening turn.

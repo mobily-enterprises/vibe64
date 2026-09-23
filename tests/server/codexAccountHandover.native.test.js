@@ -1,3 +1,4 @@
+import { codexHistoryAdapterFixture } from "../fixtures/codexHistoryAdapterFixture.js";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -58,6 +59,7 @@ test("native account logout and credential restoration drain old processes and c
     response.end();
   });
   await new Promise((resolve) => api.listen(0, "127.0.0.1", resolve));
+  const adapterOptions = await codexHistoryAdapterFixture(root, `http://127.0.0.1:${api.address().port}`);
   await writeFile(path.join(codexHome, "config.toml"), [
     'model_provider = "handover"',
     'model = "gpt-5.6-luna"',
@@ -92,7 +94,7 @@ test("native account logout and credential restoration drain old processes and c
   // Only the host command transport is replaced: runtime ownership, process
   // identity checks, account transitions and JSON-RPC use production code.
   async function commandRunner(request) {
-    const commandEnv = { ...request.baseEnv, ...nativeEnv };
+    const commandEnv = { ...request.baseEnv, ...nativeEnv, NODE_OPTIONS: adapterOptions };
     if (request.mode === "capture") {
       const result = spawnSync("codex", request.args, {
         cwd: request.cwd, env: commandEnv, encoding: "utf8", timeout: 10_000

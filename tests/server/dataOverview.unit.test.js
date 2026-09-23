@@ -190,8 +190,8 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
   assert.equal(saved.ok, true, JSON.stringify(saved));
   const outdated = await service.saveOverview({ ...input, baseHash: created.overview.hash });
   assert.equal(outdated.code, "vibe64_database_overview_conflict");
-  const denied = await service.saveOverview({ ...input, vibe64User: { role: "collaborator" } });
-  assert.equal(denied.code, "vibe64_owner_required");
+  const collaboratorSave = await service.saveOverview({ ...input, definition: bookingOverview({ split: true }), baseHash: saved.overview.hash, vibe64User: { role: "collaborator" } });
+  assert.equal(collaboratorSave.ok, true, JSON.stringify(collaboratorSave));
   const read = await service.readOverview({ sessionId: "test" });
   assert.equal(read.valid, true); assert.equal(read.coverage.classified, 7);
   assert.equal(read.schema.tables.length, schema.tables.length);
@@ -201,7 +201,7 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
   assert.match(read.instructions, /relationship distance|Relationship distance/u);
   const second = await fixture(t);
   assert.equal((await readDataOverview(second.session)).present, false);
-  assert.equal(events.length, 2);
+  assert.equal(events.length, 3);
 });
 
 

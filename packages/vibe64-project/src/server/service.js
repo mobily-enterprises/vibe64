@@ -4,6 +4,8 @@ import { requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "./githubPullRequests.js";
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
+import { repositoryBranches } from "./repositoryBranches.js";
+import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
 
 import {
   Vibe64SessionRuntime
@@ -1307,6 +1309,26 @@ function createService({
     async repositoryRemote(input = {}) {
       return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
     },
+    async repositoryBranches(input = {}) {
+      return projectResult(async () => repositoryBranches(await currentProjectState(), input));
+    },
+    async resolveSessionBranch(input = {}) {
+      return repositoryBranches(await currentProjectState(), input);
+    },
+    async readRepositoryWorkflow() {
+      return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
+    },
+    async saveRepositoryWorkflow(input = {}) {
+      return projectResult(async () => {
+        if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change the repository workflow.", "vibe64_owner_required");
+        requireGithubRepository(await currentProjectState(), "Pull request workflow");
+        const workflow = await runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(),
+          () => saveProjectRepositoryWorkflow(selectedProjectRuntimeRoot(), input.requirePullRequest),
+          { operation: "repository-workflow-settings" });
+        await publishProjectChanged({ projectSlug: (await currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });
+        return { ok: true, workflow };
+      });
+    },
 
     async refreshGithub() {
       const project = await currentProjectState();
@@ -1392,14 +1414,20 @@ function createService({
 
     async readSettings(input = {}) {
       return projectResult(async () => {
-        const [collaboration, { settings }] = await Promise.all([
+        const [collaboration, { settings }, currentProject] = await Promise.all([
           collaborationSettingsState(input),
           readProjectPromptHints({
             projectRuntimeRoot: selectedProjectRuntimeRoot()
-          })
+          }),
+          currentProjectState()
         ]);
         return {
           collaboration,
+          repositoryWorkflow: {
+            ...(await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot())),
+            canEdit: canEditProjectSettings(input),
+            available: Boolean(currentProject.githubRepository?.fullName || currentProject.repository?.github?.fullName)
+          },
           developmentDatabase: await developmentDatabaseState(),
           ok: true,
           promptHints: {

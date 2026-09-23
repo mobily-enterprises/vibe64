@@ -335,6 +335,8 @@ class Vibe64SessionRuntime {
       confirmedAt,
       metadata: {
         ...metadata,
+        ...(predecessor.metadata?.repository_branch
+          ? { repository_branch: predecessor.metadata.repository_branch } : {}),
         ...(predecessor.metadata?.github_pull_request
           ? { github_pull_request: predecessor.metadata.github_pull_request } : {})
       },

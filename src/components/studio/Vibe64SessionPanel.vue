@@ -249,8 +249,8 @@ const {
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
 
-async function createSessionForEmptyState(assistantSelection = {}) {
-  const response = await toolbar.createSession?.(assistantSelection);
+async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
+  const response = await toolbar.createSession?.(assistantSelection, options);
   if (response?.sessionId) {
     void focusCreatedVibe64SessionTab(response.sessionId);
   }
@@ -258,6 +258,7 @@ async function createSessionForEmptyState(assistantSelection = {}) {
 }
 
 const emptyToolbar = computed(() => ({
+  projectContext: props.projectContext,
   ...toolbar,
   createSession: createSessionForEmptyState
 }));

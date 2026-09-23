@@ -62,7 +62,9 @@ the assistant as background data, not an instruction. PR identity and Save
 destination remain visible in chat and session info.
 
 Create pull request is available in session actions and in the PR browser for
-the selected session. The form preserves its text on failure and defaults to a
+the selected session, and is the recommended GitHub action in Review changes.
+The form captures and submits the reviewed source destination, explains the
+head-to-base direction and code-only effects, preserves its text on failure and defaults to a
 draft. Members do not need AI access to publish a PR; optional commit naming
 follows Save's access check and non-AI fallback. The server serializes publication with the existing assistant/repository
 write lock, checks GitHub write permission, binds a session-specific branch,
@@ -71,6 +73,12 @@ creator without replacing an existing ref. It supports locally committed
 baselines and publishes captured session changes through the ordinary Save
 implementation. The session stays bound to its branch after a partial failure;
 an explicit retry finds an existing open PR before attempting another creation.
+An explicitly selected non-default hosted branch becomes the PR head instead
+of generating another branch. Existing session work is never silently retargeted
+to an unrelated existing branch. Project owners may require PR publication in
+Vibe64; direct commits then require a numbered PR, while the server-owned
+Create PR operation can first publish its reviewed head. Repository-wide push
+restrictions remain GitHub's responsibility.
 GitHub mutations are never automatically retried. Saving to a PR branch does
 not merge it or advance the PR base branch.
 

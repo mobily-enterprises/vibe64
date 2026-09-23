@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { Readable, Duplex } from "node:stream";
 import { test } from "node:test";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
@@ -137,9 +138,14 @@ async function fixture(t) {
   const selection = { engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
   const workdir = path.join(root, "sessions", "active", "test", "source");
   await mkdir(workdir, { recursive: true });
+  const git = (...args) => execFileSync("git", args, { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main");
+  git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "Initial");
   const session = { sessionId: "test", sessionRoot: path.join(root, "state"), metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: workdir, assistant_selection: JSON.stringify(selection) } };
   const written = [];
+  const checkpoints = [];
   const store = {
+    async writeBackgroundTaskEvent(_id, _task, { patch }) { checkpoints.push(patch); return patch; },
     async mutateSession(_id, operation) { return operation(); },
     async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
     async deleteMetadataValue(_id, key) { delete session.metadata[key]; },
@@ -157,6 +163,7 @@ async function fixture(t) {
   const processes = [];
   const behavior = { account: { loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" } };
   const providerOptions = { systemRoot: path.join(root, "system"), env: { CLAUDE_CONFIG_DIR: path.join(root, "config") },
+    projectService: { readCurrentProject: async () => ({ sourceRoot: workdir }) },
     composeSessionContext: async () => ({ output: "Prepared session instructions" }),
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
@@ -181,7 +188,7 @@ async function fixture(t) {
     }
   };
   const provider = createClaudeSessionAgentProvider(providerOptions);
-  return { provider, providerOptions, behavior, context, processes, written, root };
+  return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git };
 }
 
 test("Claude provider admits prompts in order, steers, projects thinking and text, and deduplicates sends", async (t) => {
@@ -192,12 +199,17 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
   const steered = await f.provider.sendMessage(f.context, { message: "Change direction", messageId: "second" });
   assert.equal(steered.deliveryMode, "steer");
   assert.equal(f.processes.length, 1);
+  const previousHead = f.git("rev-parse", "HEAD");
+  await writeFile(path.join(f.context.session.metadata.source_path, "edited.txt"), "Retain this work");
   await f.processes[0].options.onEvent({ type: "assistant", message: { id: "answer", content: [
     { type: "thinking", thinking: "Exposed thinking summary." }, { type: "text", text: "Done." }
   ] } });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done.", uuid: "result" });
   assert.deepEqual(f.written.map((message) => message.role), ["user", "user", "thinking", "assistant"]);
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
+  assert.equal(f.checkpoints.at(-1).status, "ready");
+  assert.equal(f.git("show", `${f.checkpoints.at(-1).checkpointCommit}:edited.txt`), "Retain this work");
+  assert.equal(f.git("rev-parse", "HEAD"), previousHead);
   assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "first" })).duplicate, true);
 });
 

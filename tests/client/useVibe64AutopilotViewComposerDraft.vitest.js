@@ -2181,7 +2181,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       status: "saved"
     });
 
-    expect(saveSessionWork).toHaveBeenCalledWith();
+    expect(saveSessionWork).toHaveBeenCalledWith({ destinationReview: null });
     expect(sendAgentMessage).not.toHaveBeenCalled();
     expect(view.saveWorkConfirmOpen.value).toBe(false);
     expect(view.savedCommitDeslop.value).toBe(saveCommit);
@@ -2225,7 +2225,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkHeaderVisible.value).toBe(true);
-    expect(view.saveWorkHeaderAriaLabel.value).toBe("Save selected session work");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
 
     props.active = false;
     await nextTick();
@@ -2250,7 +2250,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     save.requestSaveWork();
     const saving = save.confirmSaveWork();
     await nextTick();
-    expect(save.saveWorkHeaderAriaLabel.value).toBe("Save selected session work");
+    expect(save.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
     saveResult.resolve({ ok: true, status: "saved" });
     await expect(saving).resolves.toEqual({ ok: true, status: "saved" });
 
@@ -2301,7 +2301,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       workState: { unsaved: true, updateAvailable: false, updateStatusPending: false }
     }, { assistantCanUseAi: ref(false), assistantCanRequestMessage: ref(true) });
     expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkTitle.value).toBe("Save this session's work to the project repository");
+    expect(view.saveWorkTitle.value).toBe("Review changes and choose where to commit them");
     await view.requestSaveWork();
     expect(view.saveWorkConfirmOpen.value).toBe(true);
   });
@@ -2355,7 +2355,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkDisabled.value).toBe(true);
-    expect(view.saveWorkActionLabel.value).toBe("Save work");
+    expect(view.saveWorkActionLabel.value).toBe("Review changes");
     expect(view.saveWorkActivityIsUpdate.value).toBe(true);
     expect(view.saveWorkActivityLabel.value).toBe("Update this session (rebase)");
     expect(view.saveWorkOperation.value).toStrictEqual(updateOperation);
@@ -2449,6 +2449,29 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.thinkingVisible.value).toBe(false);
     await expect(view.requestSaveWork()).resolves.toMatchObject({ ok: true });
     expect(props.updateSessionWork).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks active turns when confirming Save and clears the dialog when switching sessions", async () => {
+    const { props, view } = await createViewWithProps({ workState: { unsaved: true } });
+    expect(view.requestSaveWork()).toBe(true);
+    props.session.agentSession.turn = { active: true };
+    await nextTick();
+    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(props.saveSessionWork).not.toHaveBeenCalled();
+    expect(view.saveWorkTitle.value).toContain("Wait for the assistant turn");
+    props.session = { ...props.session, sessionId: "session-2" };
+    await nextTick();
+    expect(view.saveWorkConfirmOpen.value).toBe(false);
+  });
+
+  it("submits the destination the person reviewed even when a refresh reports a new branch", async () => {
+    const destination = { sessionId: "session-1", mode: "github", repository: "acme/shop", branch: "main" };
+    const { props, view } = await createViewWithProps({ workState: { unsaved: true, destination } });
+    expect(view.requestSaveWork()).toBe(true);
+    props.workState.destination.branch = "feature/new";
+    await nextTick();
+    await view.confirmSaveWork();
+    expect(props.saveSessionWork).toHaveBeenCalledWith({ destinationReview: { ...destination, branch: "main" } });
   });
 
   it("rechecks readiness when confirming Save and clears the dialog when switching sessions", async () => {
@@ -2809,7 +2832,7 @@ describe("useVibe64AutopilotView direct chat", () => {
         canonicalCommit: "new-version",
         checkedAt: "2026-09-08T02:26:07.000Z"
       });
-      expect(view.saveWorkHeaderAriaLabel.value).toBe("Save selected session work");
+      expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
     } finally {
       queue.dispose();
     }
@@ -2837,8 +2860,8 @@ describe("useVibe64AutopilotView direct chat", () => {
 
     expect(view.saveWorkUnsaved.value).toBe(true);
     expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkActionLabel.value).toBe("Save work");
-    expect(view.saveWorkTitle.value).toBe("Save this session's work to the project repository");
+    expect(view.saveWorkActionLabel.value).toBe("Review changes");
+    expect(view.saveWorkTitle.value).toBe("Review changes and choose where to commit them");
   });
 
   it.each([true, false])("preserves the Update requirement after failure (incoming: %s)", async (updateAvailable) => {
@@ -2866,7 +2889,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkRequiresUpdate.value).toBe(updateAvailable);
-    expect(view.saveWorkActionLabel.value).toBe(updateAvailable ? "Update this session (rebase)" : "Save work");
+    expect(view.saveWorkActionLabel.value).toBe(updateAvailable ? "Update this session (rebase)" : "Review changes");
     expect(view.saveWorkDisabled.value).toBe(false);
     if (updateAvailable) {
       await view.requestSaveWork();

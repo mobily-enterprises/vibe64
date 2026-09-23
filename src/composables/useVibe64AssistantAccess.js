@@ -38,6 +38,7 @@ function assistantAccessText(value = "") {
 
 function useVibe64AssistantAccess({
   active = true,
+  messageSuggestionsEnabled = true,
   sessionId = "",
   sessionsApiPath = ""
 } = {}) {
@@ -104,8 +105,9 @@ function useVibe64AssistantAccess({
     refreshOnPull: true,
     requestRecoveryLabel: "AI access"
   });
+  const suggestionsEnabled = computed(() => enabled.value && readRefOrGetterValue(messageSuggestionsEnabled) !== false);
   const suggestionsResource = useEndpointResource({
-    enabled,
+    enabled: suggestionsEnabled,
     fallbackLoadError: "Message suggestions could not be loaded.",
     path: suggestionsPath,
     queryKey: computed(() => [
@@ -170,7 +172,7 @@ function useVibe64AssistantAccess({
   const canSubmitMainChat = computed(() => canUseChat.value || canRequestMessage.value);
   const canManage = computed(() => Boolean(actorKey.value) && suggestionsResource.data.value?.canManage === true);
   const suggestions = computed(() => (
-    actorKey.value && Array.isArray(suggestionsResource.data.value?.suggestions)
+    suggestionsEnabled.value && Array.isArray(suggestionsResource.data.value?.suggestions)
       ? suggestionsResource.data.value.suggestions
       : []
   ));
@@ -187,7 +189,7 @@ function useVibe64AssistantAccess({
     accessResource.data.value,
     "AI access could not be loaded."
   ) || assistantAccessText(accessResource.loadError.value));
-  const suggestionsError = computed(() => vibe64ResourceResponseError(
+  const suggestionsError = computed(() => !suggestionsEnabled.value ? "" : vibe64ResourceResponseError(
     suggestionsResource.data.value,
     "Message suggestions could not be loaded."
   ) || assistantAccessText(suggestionsResource.loadError.value));
@@ -224,7 +226,7 @@ function useVibe64AssistantAccess({
   async function reload() {
     await Promise.all([
       accessResource.reload?.(),
-      suggestionsResource.reload?.()
+      ...(suggestionsEnabled.value ? [suggestionsResource.reload?.()] : [])
     ]);
   }
 
