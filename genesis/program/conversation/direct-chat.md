@@ -109,9 +109,12 @@ session read would reopen.
 The conversation client overlays realtime upserts received during each pending
 history request before publishing that response to the query cache. Upserts
 retain already delivered roles and progress messages, with stable message IDs
-allowing corrections. Later authoritative reads remain replacements, so Undo
-can remove its selected exchange. Pending-read overlays stay scoped to their
-project and session and are discarded when that request finishes or fails.
+allowing corrections. Progress without a message ID uses its role and saved
+timestamp, matching the transcript file identity; growing text replaces that
+entry instead of appearing as multiple partial paragraphs. Later authoritative
+reads remain replacements, so Undo can remove its selected exchange. Pending-read
+overlays stay scoped to their project and session and are discarded when that
+request finishes or fails.
 `tests/server/conversationLogReconciliation.unit.test.js` exercises the real Vue
 composable and query cache with delayed HTTP responses.
 

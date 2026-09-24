@@ -302,7 +302,11 @@ function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
     for (const role of ["thinking", "commentary"]) {
       const messages = new Map();
       for (const message of [...(existingTurn?.[role] || []), ...(patchedTurn?.[role] || [])]) {
-        const key = message.messageId || JSON.stringify([message.role, message.at, message.text]);
+        // Timestamped progress without a message ID updates one saved file as
+        // its text grows. Match that identity instead of retaining each version.
+        const key = message.messageId || JSON.stringify(message.at
+          ? [message.role, message.at]
+          : [message.role, "", message.text]);
         messages.set(key, message);
       }
       updated[role] = chronologicalConversationActivity([...messages.values()]);

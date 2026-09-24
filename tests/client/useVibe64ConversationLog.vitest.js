@@ -129,6 +129,39 @@ describe("useVibe64ConversationLog", () => {
     scope.stop();
   });
 
+  it("updates one timestamped reasoning paragraph as its text grows without refetching", async () => {
+    const scope = effectScope();
+    const user = { role: "user", messageId: "user", text: "Make the change." };
+    const first = { role: "thinking", at: "2026-09-24T07:45:00.000Z", text: "Preparing and applying patch" };
+    endpointMocks.resource.data.value = { conversationLog: [{ turnId: "000001", user, thinking: [first] }] };
+    queryMocks.getQueryData.mockImplementation(() => endpointMocks.resource.data.value);
+    queryMocks.setQueryData.mockImplementation((_key, value) => { endpointMocks.resource.data.value = value; });
+    const model = scope.run(() => useVibe64ConversationLog({ session: ref({ sessionId: "session-1" }) }));
+    const listener = realtimeMocks.events[0];
+    try {
+      for (const text of [
+        "Preparing and applying patch. I am updating",
+        "Preparing and applying patch. I am updating the relevant sections."
+      ]) {
+        const updated = { ...first, text };
+        listener.onEvent({ payload: { sessionId: "session-1", reason: "codex-app-server-reasoning-summary",
+          conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", user, thinking: [updated] } }
+        } });
+        expect(model.turns.value[0].thinking).toEqual([updated]);
+        expect(model.turns.value[0].messages).toEqual([{ ...user, at: "" }, updated]);
+      }
+      const next = { ...first, at: "2026-09-24T07:45:01.000Z" };
+      listener.onEvent({ payload: { sessionId: "session-1", reason: "codex-app-server-reasoning-summary",
+        conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", thinking: [next] } }
+      } });
+      expect(model.turns.value[0].thinking).toHaveLength(2);
+      expect(model.turns.value[0].thinking[1]).toEqual(next);
+      expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    } finally {
+      scope.stop();
+    }
+  });
+
   it("recognizes Analytics configuration from chat without executing setup or completing the request", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });
