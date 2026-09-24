@@ -421,12 +421,20 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         const decision = await classify(sessionId, context, state, task, options);
         state.resolvedMode = decision.mode; state.reason = decision.reason;
       }
+      if (task.cancelled) throw failure("Routing cancelled.");
       return await exclusive(sessionId, options, async (current) => {
         const persisted = await read(current.runtime.store, sessionId);
         if (task.cancelled || persisted?.status === "cancelled") throw failure("Routing cancelled.");
         return deliver(sessionId, current, state);
       });
     } catch (error) {
+      // A fully persisted cancellation needs no further mutation. Another
+      // conversation starting must not turn it into a write-admission error.
+      const persisted = await read(context.runtime.store, sessionId);
+      if (persisted?.messageId === state.messageId && persisted.status === "cancelled" &&
+          !persisted.helper && !persisted.attemptedMessageId) {
+        throw failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled");
+      }
       const cancelled = await exclusive(sessionId, options, async (current) => {
         const persisted = await read(current.runtime.store, sessionId);
         if (persisted?.messageId !== state.messageId) return;

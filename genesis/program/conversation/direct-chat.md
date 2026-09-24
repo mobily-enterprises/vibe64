@@ -237,7 +237,9 @@ form directly in an overlay, initially selecting this chat's orchestrator.
 Other users have no configuration action. The mode icon remains reachable when
 the current mode is unavailable. Its menu shows the actor's effective destination,
 Shared backup and pair-preservation reasons, and explains unavailable choices.
-Main-chat availability uses the selected mode; steering checks the bound native
+Saving a mode refreshes main-chat access immediately so Send reflects the new
+destination without waiting for a later session event. Main-chat availability
+uses the selected mode; steering checks the bound native
 connection. Members regain direct chat after an owner's personal turn finishes
 when their configured explicit mode is accessible. Suggestions independently use
 `prompt_hint` availability, allowing private drafts through accessible Economy.
@@ -268,8 +270,10 @@ Codex chats without a routing home retain their separate provider histories. Tem
 chat scopes the same owner to its own transcript and retained native bindings.
 
 One durable request record owns preparation, admission uncertainty and an optional
-review continuation. Stop cancels preparation and suppresses its late result;
-after native admission it uses ordinary interruption. Native receipts prevent
+review continuation. Stop cancels preparation and suppresses its late result.
+Once cancellation and helper cleanup are saved, the Send response reports that
+cancellation without competing with another chat for write admission.
+After native admission it uses ordinary interruption. Native receipts prevent
 duplicate delivery after a lost HTTP response. A failed classifier is retryable;
 uncertain delivery checks acceptance before any resend, including while the
 accepted native turn is active. It cannot become an accidental steering request. Unfinished preparation

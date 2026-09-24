@@ -10,6 +10,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, disabled: Boolean, active: Boolean, canConfigure: Boolean });
+const emit = defineEmits(["saved"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
 const review = ref(false);
@@ -69,6 +70,7 @@ async function save(nextMode = mode.value, nextReview = review.value) {
   try {
     const result = props.savePreferences ? await props.savePreferences({ mode: mode.value, review: review.value }) : await command.run();
     if (result?.ok === false) throw new Error(result.error || "Chat mode could not be saved.");
+    emit("saved");
   }
   catch (error) { mode.value = previous.mode; review.value = previous.review; saveError.value = error.message || "Chat mode could not be saved."; }
   finally { saving.value = false; }

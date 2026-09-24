@@ -1189,7 +1189,7 @@ function createOpenCodeTerminalController({
     };
   }
 
-  async function stopProcessRecord(target = null) {
+  async function stopProcessRecord(target = null, { retainSharedProcess = false } = {}) {
     if (!target) {
       return { exited: true };
     }
@@ -1220,7 +1220,7 @@ function createOpenCodeTerminalController({
       sessionEnvironments.delete(target.key);
       await writeSessionEnvironmentRegistry();
     }
-    const proof = processes.size === 0 && processStarts.size === 0
+    const proof = !retainSharedProcess && processes.size === 0 && processStarts.size === 0
       ? await stopSharedProcess()
       : {
           exited: true,
@@ -2794,7 +2794,11 @@ function createOpenCodeTerminalController({
       .map(([, start]) => start.catch(() => null));
     await Promise.all(pending);
     const targets = [...processes.values()].filter((target) => target.sessionId === id);
-    const proofs = await Promise.all(targets.map((target) => stopProcessRecord(target)));
+    // Helpers release their own context; the project runtime owns the shared
+    // service so the next Router or suggestion does not repeat cold startup.
+    const proofs = await Promise.all(targets.map((target) => stopProcessRecord(target, {
+      retainSharedProcess: Boolean(options.assistantScope)
+    })));
     if (getAssistantManager() && !options.assistantScope) {
       const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
       await cleanupReasoningSummary({ sessionId: id, runtime, vibe64User: options.vibe64User || null });
@@ -2824,7 +2828,7 @@ function createOpenCodeTerminalController({
       !projectContextRoot || target.projectContextRoot === path.resolve(projectContextRoot)
     ));
     const results = await Promise.all(targets.map((target) => stopProcessRecord(target)));
-    if (!projectContextRoot && processes.size === 0 && sharedProcess) {
+    if (processes.size === 0 && sharedProcess) {
       results.push(await stopSharedProcess(text(input.reason) || "opencode-project-close"));
     }
     return {

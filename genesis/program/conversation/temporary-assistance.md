@@ -301,6 +301,10 @@ within five seconds; a refusal or timeout leaves the turn available for retry.
 A confirmed Stop cancels only that conversation's pending reads. Deleting a
 conversation retires only its observer; provider shutdown drains all observers
 using that provider.
+Scoped helper cleanup removes its native conversation and environment entry,
+while the existing project runtime retains the shared OpenCode service for the
+next helper. Project closure, runtime invalidation and server shutdown still
+stop that service. Each new request rechecks its selected connection and access.
 
 Temporary and lightweight helper conversations use the parent session's
 selected Codex or OpenCode service, but they do not start or retain a second

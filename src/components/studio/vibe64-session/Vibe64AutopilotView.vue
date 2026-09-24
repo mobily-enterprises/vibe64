@@ -554,6 +554,7 @@
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
                     :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantSuggestionsCanManage"
+                    @saved="reloadAssistantAccess"
                   />
                   <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
                   <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />

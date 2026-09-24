@@ -1988,6 +1988,9 @@ test("non-project ephemeral conversations use OpenCode's guarded host agent with
   }, options);
   assert.equal(deleted.ok, true, JSON.stringify(deleted));
   assert.equal(deleted.providerExit.ok, true);
+  assert.equal(deleted.providerExit.processExitProof.sharedProcessRetained, true);
+  assert.equal(harness.processStops.length, 0);
+  await harness.controller.closeAllForProject();
   assert.equal(harness.processStops.length, 1);
 });
 
@@ -2028,6 +2031,34 @@ test("scoped OpenCode helpers retain bounded policy and cleanup without rebindin
   await harness.controller.sendMessage("session-1", { message: "Main continues", messageId: "main-continues" });
   await harness.controller.waitForTurn("session-1");
   assert.equal(harness.promptCalls.at(-1).input.model.id, harness.selection.modelId);
+});
+
+test("sequential scoped OpenCode helpers reuse the service after removing their private conversations", async (t) => {
+  const deleted = [];
+  const harness = await controllerHarness({ helperResponse: "Plan", beforeDeleteSession: id => deleted.push(id) });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  for (const id of ["router_first", "router_second"]) {
+    const assistantScope = { id, environment: {}, workdir: path.join(harness.root, id),
+      runtimeRoot: path.join(harness.root, id, "runtime"), stableContext: "Classify supplied text." };
+    const options = { assistantScope, assistantSelection: harness.selection };
+    const executionProfile = resolveOpenCodeEconomyExecutionProfile(options,
+      { profileId: "economy", workloadId: "request_routing" });
+    const { conversationId } = await harness.controller.createConversation(id, { ephemeral: true, executionProfile }, options);
+    const input = { conversationId, executionProfile, ephemeral: true, message: "Classify this request." };
+    await harness.controller.startConversationTurn(id, input, options);
+    assert.equal((await harness.controller.waitForConversationTurn(id, input, options)).text, "Plan");
+    const closed = await harness.controller.deleteConversation(id, input, options);
+    assert.equal(closed.ok, true);
+    assert.equal(closed.providerExit.processExitProof.sharedProcessRetained, true);
+    assert.ok(deleted.includes(conversationId));
+    const registry = JSON.parse(await readFile(harness.processStarts[0].options.sessionEnvironmentRegistry, "utf8"));
+    assert.deepEqual(registry.sessions, [], "the retained service must not retain helper scope or context");
+    assert.equal(harness.processStops.length, 0, "helper cleanup must not force the next request through cold startup");
+  }
+  assert.equal(harness.processStarts.length, 1);
+  assert.equal(harness.promptCalls.length, 2);
+  await harness.controller.closeAllForProject({ projectContextRoot: harness.root });
+  assert.equal(harness.processStops.length, 1, "project cleanup still stops an idle shared service");
 });
 
 test("OpenCode receives the same complete session command boundary as Codex", async (t) => {

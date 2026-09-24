@@ -9,7 +9,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
 
-async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser } = {}) {
+async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser, beforeExclusive } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const catalog = { engineId: "codex", revision: `sha256:${"a".repeat(64)}`, transportId: "codex_app_server", label: "Codex",
@@ -83,7 +83,10 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   agent.resolveAssistantPurpose = (input, options) => manager.resolveAssistantPurpose(input, options);
   let lock = Promise.resolve();
   const exclusive = (_id, _options, operation) => {
-    const next = lock.catch(() => {}).then(() => operation({ ...context, ..._options }));
+    const next = lock.catch(() => {}).then(() => {
+      beforeExclusive?.();
+      return operation({ ...context, ..._options });
+    });
     lock = next;
     return next;
   };
@@ -308,7 +311,11 @@ test("Stop cancels routing while helper cleanup finishes and prevents delivery",
 });
 
 test("Stop reports a clean routing cancellation instead of the provider's AbortError", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, undefined, { beforeExclusive() {
+    if (f.state()?.status === "cancelled" && !f.state().helper) {
+      throw Object.assign(new Error("Another conversation is starting."), { code: "vibe64_agent_write_mode_busy" });
+    }
+  } });
   const started = Promise.withResolvers();
   const finish = Promise.withResolvers();
   f.agent.waitForEphemeralConversationTurn = async () => {
