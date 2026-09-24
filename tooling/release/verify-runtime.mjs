@@ -9,6 +9,22 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
+async function verifyNativeTerminal(appRoot, { cwd = appRoot } = {}) {
+  const require = createRequire(path.join(appRoot, "package.json"));
+  const pty = require("node-pty");
+  await new Promise((resolve, reject) => {
+    const terminal = pty.spawn(process.execPath, ["-e", "console.log('native-pty-ok')"], { cwd });
+    let output = "";
+    const timeout = setTimeout(() => { terminal.kill(); reject(new Error("Native terminal timed out")); }, 10000);
+    terminal.onData(chunk => { output += chunk; });
+    terminal.onExit(({ exitCode }) => {
+      clearTimeout(timeout);
+      if (exitCode === 0 && output.includes("native-pty-ok")) resolve();
+      else reject(new Error(`Native terminal failed: ${output}`));
+    });
+  });
+}
+
 async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-runtime-proof-"));
   const project = path.join(root, "project");
@@ -25,18 +41,7 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
       const database = knex({ client, connection: {}, pool: { min: 0, max: 1 } });
       await database.destroy();
     }
-    const pty = require("node-pty");
-    await new Promise((resolve, reject) => {
-      const terminal = pty.spawn(process.execPath, ["-e", "console.log('native-pty-ok')"], { cwd: project });
-      let output = "";
-      const timeout = setTimeout(() => { terminal.kill(); reject(new Error("Native terminal timed out")); }, 10000);
-      terminal.onData(chunk => { output += chunk; });
-      terminal.onExit(({ exitCode }) => {
-        clearTimeout(timeout);
-        if (exitCode === 0 && output.includes("native-pty-ok")) resolve();
-        else reject(new Error(`Native terminal failed: ${output}`));
-      });
-    });
+    await verifyNativeTerminal(appRoot, { cwd: project });
     const module = await import(pathToFileURL(path.join(appRoot, serverEntry)).href);
     server = await module.createServer({ runtimeMode: "local", targetRoot: project, systemRoot: path.join(root, "state"), logLevel: "silent" });
     assert.equal((await server.inject("/api/health")).statusCode, 200);
@@ -99,4 +104,4 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
   }
 }
 
-export { verifyRuntime };
+export { verifyNativeTerminal, verifyRuntime };

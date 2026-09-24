@@ -97,6 +97,10 @@ The relocated runtime also instantiates Knex's MySQL and PostgreSQL clients
 without connecting to a database. Their dynamically loaded `mysql2` and `pg`
 drivers remain explicit runtime dependencies even when bundling cannot see the
 loads, so Database inspection works outside the development installation.
+The lazy-loaded `node-pty` terminal dependency is also explicitly included.
+The native-terminal proof is shared with hosted artifact creation: it starts a
+real PTY from the assembled package before release, catching missing packages
+and unusable native binaries without depending on a project's dependencies.
 
 `npm run release` keeps its existing token authentication and clean-worktree
 requirements, bumps the version without making a Git tag, then builds and tests

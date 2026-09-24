@@ -116,7 +116,8 @@ async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = []
   }
   // createRequire and computed imports cannot always be traced by esbuild.
   // Knex loads these supported drivers dynamically, without declaring them as dependencies.
-  const externals = new Set(["genesis-stack", "mysql2", "pg", ...runtimeDependencies]);
+  // Terminal execution loads node-pty lazily so offline upgrades do not need a PTY.
+  const externals = new Set(["genesis-stack", "mysql2", "pg", "node-pty", ...runtimeDependencies]);
   for (const result of results) {
     for (const output of Object.values(result.metafile.outputs)) {
       for (const entry of output.imports) {
