@@ -9,7 +9,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
 
-async function fixture(t, preferences = { mode: "auto", review: true }) {
+async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const catalog = { engineId: "codex", revision: `sha256:${"a".repeat(64)}`, transportId: "codex_app_server", label: "Codex",
@@ -72,6 +72,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }) {
   const catalogs = [catalog];
   const connections = new Map();
   const manager = createSessionAgentManager({
+    resolveAssistantUser,
     providers: ["codex", "opencode", "claude"].map((id) => ({ id, transportId: id === "codex" ? "codex_app_server" : id === "claude" ? "claude_stream_json" : "opencode_server",
       capabilities: async () => catalogs.find((row) => row.engineId === id) })),
     readRoutingConfiguration: () => configuration.read(),
@@ -572,6 +573,70 @@ test("review retries retain the original member when the owner triggers the retr
   await f.restart().send("session-1", { ...request, reviewAction: "retry" }, f.context);
   assert.equal(f.sends[1].selection.modelId, "big-pickle");
   assert.equal(f.state().submittedBy.username, "collaborator");
+});
+
+test("a changed Plan assignment affects the next request but not the captured reviewer", async (t) => {
+  const f = await fixture(t, { mode: "code", review: true });
+  await f.service.send("session-1", request, f.context);
+  await f.configuration.write({ codex: { ...f.assignments, plan: f.assignments.code } }, 1);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
+  await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+  await f.service.send("session-1", { ...request, messageId: "next-code" }, f.context);
+  await f.service.afterTurn("session-1", completion("turn-3"), f.context);
+  assert.equal(f.sends[3].selection.modelId, "deepseek-flash");
+});
+
+test("review cannot use a revoked or replacement connection and keeps the completed coding turn", async (t) => {
+  const f = await fixture(t, { mode: "code", review: true });
+  await f.service.send("session-1", request, f.context);
+  const codingSelection = f.metadata.assistant_selection;
+  f.connections.set("codex:openai", { available: false });
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().status, "review_pending");
+  assert.ok(f.state().error);
+  assert.equal(f.metadata.assistant_selection, codingSelection);
+  f.connections.set("codex:openai", { available: true, connectionIdentity: "codex:openai:replacement" });
+  await assert.rejects(f.service.send("session-1", { ...request, reviewAction: "retry" }, f.context), /connection changed/);
+  assert.equal(f.sends.length, 1);
+  f.connections.delete("codex:openai");
+  await f.service.send("session-1", { ...request, reviewAction: "retry" }, f.context);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
+});
+
+test("revoking the submitting member blocks review even when an owner retries it", async (t) => {
+  let active = true;
+  const actors = [];
+  const f = await fixture(t, { mode: "code", review: true }, {
+    resolveAssistantUser: async (actor) => {
+      actors.push(actor?.username);
+      if (!active || !actor?.username) throw Object.assign(new Error("The submitting user no longer has workspace access."), {
+        code: "vibe64_assistant_actor_unavailable"
+      });
+      return actor;
+    }
+  });
+  const backup = sharedOpenCode(f);
+  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
+  f.context.vibe64User = { role: "member", username: "collaborator" };
+  await f.service.send("session-1", request, f.context);
+  active = false;
+  f.context.vibe64User = { role: "owner", username: "owner" };
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().status, "review_pending");
+  assert.match(f.state().error, /no longer has workspace access/);
+  assert.equal(f.sends.length, 1);
+  await assert.rejects(f.restart().send("session-1", { ...request, reviewAction: "retry" }, f.context), {
+    code: "vibe64_assistant_actor_unavailable"
+  });
+  assert.equal(f.sends.length, 1);
+  assert.equal(actors.every((username) => username === "collaborator"), true);
+  assert.equal(f.state().submittedBy.username, "collaborator");
+  await f.service.cancel("session-1", f.context);
+  assert.equal(f.state().reviewStatus, "cancelled");
+  assert.equal(f.sends.length, 1);
 });
 
 test("replacing a captured connection while Router works refuses delivery", async (t) => {

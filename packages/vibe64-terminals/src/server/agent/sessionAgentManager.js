@@ -236,6 +236,7 @@ function createSessionAgentManager({
   attachments = null,
   defaultProviderId = "codex",
   readAssistantAccess = async () => ({ ownerOnly: false }),
+  resolveAssistantUser = async (user) => user || currentProjectVibe64User() || null,
   readRoutingConfiguration = null,
   providers = []
 } = {}) {
@@ -388,11 +389,11 @@ function createSessionAgentManager({
   }
 
   function assistantUser(options = {}) {
-    return options?.vibe64User || currentProjectVibe64User() || null;
+    return Object.hasOwn(options, "vibe64User") ? options.vibe64User : currentProjectVibe64User() || null;
   }
 
-  async function accessFor(provider = {}, sessionId = "", options = {}) {
-    const vibe64User = assistantUser(options);
+  async function accessContext(provider = {}, sessionId = "", options = {}) {
+    const vibe64User = await resolveAssistantUser(assistantUser(options));
     const assistantSelection = sessionAssistantSelection(options);
     const access = defineVibe64AssistantAccess(await readAssistantAccess({
       assistantSelection,
@@ -402,7 +403,7 @@ function createSessionAgentManager({
       sessionId: normalizeText(sessionId),
       vibe64User
     }));
-    return Object.freeze({
+    return { vibe64User, access: Object.freeze({
       ...access,
       canRequestMessage: Boolean(
         access.available &&
@@ -414,18 +415,27 @@ function createSessionAgentManager({
       engineId: provider.id,
       modelProviderId: assistantSelection?.modelProviderId || "",
       transportId: provider.transportId
-    });
+    }) };
   }
 
-  async function requireAccessFor(provider = {}, sessionId = "", options = {}) {
-    const access = await accessFor(provider, sessionId, options);
-    assertCanUseVibe64Assistant(access, assistantUser(options));
+  async function accessFor(provider, sessionId, options) {
+    return (await accessContext(provider, sessionId, options)).access;
+  }
+
+  async function requireAccessContext(provider = {}, sessionId = "", options = {}) {
+    const context = await accessContext(provider, sessionId, options);
+    const { access, vibe64User } = context;
+    assertCanUseVibe64Assistant(access, vibe64User);
     if (options.expectedConnectionIdentity && access.connectionIdentity !== options.expectedConnectionIdentity) {
       throw Object.assign(new Error("The selected AI connection changed. Start a new request."), {
         code: "vibe64_assistant_connection_changed", statusCode: 409
       });
     }
-    return access;
+    return context;
+  }
+
+  async function requireAccessFor(provider, sessionId, options) {
+    return (await requireAccessContext(provider, sessionId, options)).access;
   }
 
   function goalOptions(options) {
@@ -464,12 +474,12 @@ function createSessionAgentManager({
     if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
     }
-    const assistantAccess = AI_METHODS.has(method)
-      ? await requireAccessFor(provider, sessionId, operationOptions)
+    const authorization = AI_METHODS.has(method)
+      ? await requireAccessContext(provider, sessionId, operationOptions)
       : null;
     const context = {
       agentSettings: operationOptions.agentSettings,
-      assistantAccess,
+      assistantAccess: authorization?.access || null,
       assistantSelection: sessionAssistantSelection(operationOptions),
       assistantScope: operationOptions.assistantScope || null,
       onEvent: typeof operationOptions.onEvent === "function" ? operationOptions.onEvent : null,
@@ -481,7 +491,7 @@ function createSessionAgentManager({
       signal: operationOptions.signal || null,
       transportId: provider.transportId,
       turnOwnership: operationOptions.turnOwnership || null,
-      vibe64User: assistantUser(operationOptions)
+      vibe64User: authorization ? authorization.vibe64User : assistantUser(operationOptions)
     };
     const run = async () => {
       const executionProfileRequest = method === "resolveExecutionProfile"
@@ -554,7 +564,7 @@ function createSessionAgentManager({
         // A reused PTY keeps its original connection until explicitly closed.
         if (!terminalBindings.has(result.id)) {
           terminalBindings.set(result.id, { sessionId: context.sessionId, providerId: provider.id,
-            selection: context.assistantSelection, connectionIdentity: assistantAccess.connectionIdentity });
+            selection: context.assistantSelection, connectionIdentity: context.assistantAccess.connectionIdentity });
         }
       }
       if (method === "closeTerminal" && result?.ok !== false) terminalBindings.delete(terminalId);
@@ -654,7 +664,8 @@ function createSessionAgentManager({
     // Options are supplied by the server, never spread from a request body.
     // Preview and resumed work must retain their explicit actor even inside an
     // owner's request context. Provider execution still checks access itself.
-    const actor = assistantUser(options);
+    const actor = await resolveAssistantUser(assistantUser(options));
+    options = { ...options, vibe64User: actor };
     const configuration = structuredClone(options.configuration || await readRoutingConfiguration?.());
     const { purpose, workflowEngineId, override, requirements, reviewEnabled } = input;
     const assignments = configuration?.orchestrators?.[workflowEngineId] || {};
@@ -1020,12 +1031,12 @@ function createSessionAgentManager({
         ? providerFor({ ...options, providerId: sessionAgentProviderId(options,
           bindings.get(bindingKey(sessionId, options)) || defaultProviderId) })
         : bindSession(sessionId, options);
-      if (!stopping) await requireAccessFor(provider, sessionId, options);
+      const authorization = stopping ? null : await requireAccessContext(provider, sessionId, options);
       if (typeof provider.updateGoal !== "function") {
         throw new TypeError("This assistant does not support goal controls.");
       }
       return provider.updateGoal({ sessionId, runtime: options.runtime, session: options.session,
-        assistantSelection: sessionAssistantSelection(options), vibe64User: assistantUser(options) }, input);
+        assistantSelection: sessionAssistantSelection(options), vibe64User: authorization ? authorization.vibe64User : assistantUser(options) }, input);
     },
     async assistantAccess(sessionId = "", options = {}) {
       const provider = bindSession(sessionId, options);

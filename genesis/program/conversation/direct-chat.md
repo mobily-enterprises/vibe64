@@ -208,8 +208,12 @@ The chat coordinator, Save naming and prompt hints use this resolver. The
 session access response now resolves each chat/helper purpose from one saved
 configuration snapshot, sharing connection and catalogue reads within that
 response only. The response omits private connection identities. Dispatch still
-rechecks access. Source explanations and Database Copilot use their own resolved
-Economy destination too.
+rechecks access. An optional host user resolver refreshes the supplied actor
+before purpose resolution and native AI admission, and providers receive that
+current user. Hosted continuations with an explicitly missing actor cannot
+inherit the current viewer. Access responses omit the user record. Reads,
+Stop and cleanup remain separate from admission of new inference. Source
+explanations and Database Copilot use their own resolved Economy destination too.
 
 Main chat can save Plan, Code, Economy or Auto plus an optional review preference
 in the existing conversation metadata. A role resolves to a live, available
@@ -283,8 +287,10 @@ overwrite its cancellation. Completion must match the exact admitted turn,
 recovering that identity from its receipt when necessary. Unknown completion
 skips review visibly. Backend recovery offers an unsent review for Retry/Skip
 instead of launching it. Review retries use the original submitting actor even
-when an owner triggers Retry. Replaced connections cannot receive a captured
-request; changed configuration does not retarget it. Goal mode, workflow and
+when an owner triggers Retry. The host revalidates that original user's current
+access before review; removal blocks review and preserves completed coding work.
+Replaced connections cannot receive a captured request; changed configuration
+does not retarget it. Goal mode, workflow and
 selection are resolved centrally and pinned only after native goal acceptance.
 An unfinished native goal without a saved routing pin also prevents a new Send
 from changing its AI after configuration or access changes.

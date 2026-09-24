@@ -224,7 +224,10 @@ Steering stays with the currently working assistant.
 People can enable Review after coding. After a normally completed Code turn,
 one visible follow-up asks the Plan model to inspect the implementation and fix
 in-scope defects. Its findings state what was checked; completion is not a
-guarantee of correctness. Stop cancels pending review, and an interrupted review
+guarantee of correctness. Hosted AI work rechecks the submitting user's current
+access before starting, including automatic review and Retry. Removing that
+user blocks further inference without losing completed coding work. Stop
+cancels pending review, and an interrupted review
 remains incomplete. An unanswered structured question keeps the coding model
 selected and skips review so the user can answer first. Goals require a concrete
 mode and model, with Auto and automatic review unavailable. In Auto, the goal

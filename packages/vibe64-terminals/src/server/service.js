@@ -433,6 +433,7 @@ function createService({
     codexConnectionStatus: async () => true,
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
+    resolveAssistantUser: async (user) => user || currentProjectRequestContext()?.vibe64User || null,
     resolveConnection: async () => null,
     updateModelAccess: null
   };
@@ -556,6 +557,7 @@ function createService({
   });
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
+    resolveAssistantUser: (user) => assistantRuntime.resolveAssistantUser(user),
     readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read(),
     providers: [
       claudeProvider,
@@ -1679,6 +1681,7 @@ function createService({
         "codexConnectionStatus",
         "listConnections",
         "readAssistantAccess",
+        "resolveAssistantUser",
         "resolveConnection",
         "updateModelAccess"
       ]) {

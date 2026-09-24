@@ -13,7 +13,7 @@ import {
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
-function routingManagerFixture() {
+function routingManagerFixture({ resolveAssistantUser } = {}) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, agentId: engineId, modelProviderId, modelId, variantId: "", catalogRevision });
   const plan = selection("codex", "openai", "gpt-6-astra");
@@ -28,6 +28,7 @@ function routingManagerFixture() {
   }]));
   const calls = [];
   const manager = createSessionAgentManager({
+    resolveAssistantUser,
     readRoutingConfiguration: async () => configuration,
     readAssistantAccess: async (context) => {
       calls.push({ type: "access", ...context });
@@ -52,6 +53,51 @@ function routingManagerFixture() {
   const options = { session, vibe64User: { role: "user", username: "member" } };
   return { manager, configuration, facts, calls, options, plan, code, backup, economy };
 }
+
+test("purpose resolution uses the current user role instead of its saved role", async () => {
+  const current = { username: "changed-user", role: "member" };
+  const f = routingManagerFixture({ resolveAssistantUser: async (actor) => {
+    assert.equal(actor.username, current.username);
+    return current;
+  } });
+  const decision = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex" }, {
+    ...f.options, vibe64User: { username: current.username, role: "owner" }
+  });
+  assert.equal(decision.available, true);
+  assert.equal(decision.planCodePair.plan.effectiveSelection.modelId, "big-pickle");
+  assert.equal(decision.planCodePair.code.effectiveSelection.modelId, "big-pickle");
+  assert.equal(f.calls.filter(({ type }) => type === "access").every(({ vibe64User }) => vibe64User.role === "member"), true);
+});
+
+test("native AI admission refreshes the actor and revocation leaves Stop available", async () => {
+  let current = { username: "member", role: "member", home: "/current-home" };
+  const calls = [];
+  const manager = createSessionAgentManager({
+    resolveAssistantUser: async (actor) => {
+      if (!actor?.username || !current) throw Object.assign(new Error("Actor is no longer available."), { code: "actor_unavailable" });
+      return current;
+    },
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false }),
+    providers: [{ id: "codex", transportId: "codex_app_server",
+      async sendMessage(context) { calls.push(context.vibe64User); return { ok: true }; },
+      async stopConversation() { calls.push("stop"); return { ok: true }; }
+    }]
+  });
+  const options = { vibe64User: { username: "member", role: "owner", home: "/stale-home" } };
+  await manager.sendMessage("one", { message: "Code" }, options);
+  assert.deepEqual(calls, [current]);
+  const access = await manager.assistantAccess("one", options);
+  assert.equal(Object.hasOwn(access, "vibe64User"), false);
+  current = null;
+  await assert.rejects(manager.sendMessage("one", { message: "More" }, options), { code: "actor_unavailable" });
+  await manager.stopConversation("one", { conversationId: "native" }, options);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1], "stop");
+  await runWithProjectRequestContext({ vibe64User: { username: "owner", role: "owner" } }, async () => {
+    await assert.rejects(manager.sendMessage("one", { message: "Missing actor" }, { vibe64User: null }), { code: "actor_unavailable" });
+  });
+  assert.equal(calls.length, 2);
+});
 
 test("routing configuration preview shares admission decisions and exposes no connection identities", async () => {
   const f = routingManagerFixture();

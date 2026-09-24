@@ -1390,4 +1390,15 @@ test("purpose access enables a member's configured chat after a personal turn wh
   assert.equal(idle.canRequestMessage, false);
   assert.equal(idle.purposes.review.effectiveSelection.modelId, shared.modelId);
   assert.equal(provider.promptCalls.length, 0, "availability never sends work to a provider");
+  service.configureAssistantRuntime({
+    async resolveAssistantUser(actor) {
+      assert.equal(actor.username, "member");
+      throw Object.assign(new Error("The submitting user no longer has workspace access."), {
+        code: "vibe64_assistant_actor_unavailable"
+      });
+    }
+  });
+  await assert.rejects(service.inspectAssistantAccess(session.sessionId, options), { code: "vibe64_assistant_actor_unavailable" });
+  await assert.rejects(service.requireAssistantSelectionAccess(shared, options), { code: "vibe64_assistant_actor_unavailable" });
+  assert.equal(provider.promptCalls.length, 0);
 });
