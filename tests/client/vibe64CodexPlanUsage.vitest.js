@@ -240,6 +240,24 @@ it("offers goal creation before the first goal and hides it for OpenCode", async
   mocks.goal = null;
 });
 
+it("explains Auto before goal creation or resume while keeping pause and cancel available", async () => {
+  for (const engineId of ["codex", "claude"]) {
+    const props = { session: { sessionId: "one", assistantSelection: { engineId },
+      metadata: { assistant_routing: JSON.stringify({ schemaVersion: 2, workflowEngineId: engineId, mode: "auto", review: false }) } } };
+    for (const status of [null, "paused", "active"]) {
+      mocks.goal = { status: "available", goal: status ? { status, objective: "Finish the agreed work" } : null };
+      const html = await render(null, props);
+      expect(html).toContain("Choose Plan, Code, or Economy before starting or resuming a goal.");
+      expect(html).not.toContain("Goal objective");
+      expect(html).not.toContain("Start goal");
+      expect(html).not.toContain("Resume goal");
+      expect(html.includes("Pause goal")).toBe(status === "active");
+      expect(html.includes("Cancel goal")).toBe(Boolean(status));
+    }
+  }
+  mocks.goal = null;
+});
+
 
 it("shows Claude allowance and native goal controls without an unsupported token budget", async () => {
   mocks.goal = { status: "available", goal: null };

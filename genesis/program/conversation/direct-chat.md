@@ -1195,8 +1195,10 @@ reopening the terminal. Shared Backup never receives raw terminal input. Reading
 resizing and closing remain available after AI access is lost.
 Goal reads and pause/cancel controls likewise target the saved goal's connection
 independently of the last visible chat selection; starting or resuming still
-checks the effective destination's access. An unavailable goal observation never
-marks a saved goal complete or unlocks Auto. Goal and allowance caches separate
+checks the effective destination's access. In Auto, the goal menu explains the
+explicit-mode requirement before submission and omits Start/Resume; Pause and
+Cancel remain available for an existing goal. An unavailable goal observation
+never marks a saved goal complete or unlocks Auto. Goal and allowance caches separate
 viewers, and a late goal response cannot update another viewer's controls.
 
 Opening the selected session view prepares that session's chosen provider and

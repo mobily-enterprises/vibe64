@@ -10,6 +10,7 @@ import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64Ses
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const props = defineProps({
   active: Boolean,
@@ -89,6 +90,7 @@ const goalPreview = computed(() => {
 });
 watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = false; });
 const goalAvailable = computed(() => goalEnabled.value && !goalResource.loadError.value && goalResource.data.value?.status === "available");
+const goalExplicitMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode !== "auto");
 const changingGoal = ref(false);
 let goalChange = 0;
 const goalError = ref("");
@@ -103,6 +105,7 @@ async function changeGoal(action, input = {}) {
   if (changingGoal.value || !goalAvailable.value) {
     return;
   }
+  if (["set", "resume"].includes(action) && !goalExplicitMode.value) return false;
   const targetScope = scopeKey.value;
   const change = ++goalChange;
   changingGoal.value = true;
@@ -165,14 +168,15 @@ const goalState = computed(() => ({
   } : null,
   pending: changingGoal.value,
   error: goalError.value,
-  set: (input) => changeGoal("set", input),
+  set: goalExplicitMode.value ? (input) => changeGoal("set", input) : null,
   pause: () => changeGoal("pause"),
-  resume: () => changeGoal("resume")
+  resume: goalExplicitMode.value ? () => changeGoal("resume") : null
 }));
 </script>
 
 <template>
   <AssistantGoalControl v-if="goalEngineId === 'codex'" :state="goalState">
+    <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Plan, Code, or Economy before starting or resuming a goal.</p>
     <v-btn
       v-if="goalAvailable && goal && goal.status !== 'complete'"
       class="mt-2" color="error" size="small" variant="text"
@@ -201,12 +205,13 @@ const goalState = computed(() => ({
       <v-btn v-if="goal?.status === 'active'" size="small" :disabled="changingGoal" @click="changeGoal('pause')">
         {{ changingGoal ? 'Pausing…' : 'Pause goal' }}
       </v-btn>
-      <v-btn v-if="goal?.status === 'paused'" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
+      <v-btn v-if="goal?.status === 'paused' && goalExplicitMode" size="small" :disabled="changingGoal" @click="changeGoal('resume')">
         {{ changingGoal ? 'Resuming…' : 'Resume goal' }}
       </v-btn>
       <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">Cancel goal</v-btn>
       <p v-if="goal && goal.status !== 'complete'" class="text-body-small mt-2">Pause stops the current turn and keeps the goal for later. Cancel also clears the goal.</p>
-      <form v-if="!goal || goal.status === 'complete'" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
+      <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Plan, Code, or Economy before starting or resuming a goal.</p>
+      <form v-if="goalExplicitMode && (!goal || goal.status === 'complete')" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
         <v-textarea v-model="claudeObjective" label="Goal objective" placeholder="Describe the result Claude should work toward" rows="3" auto-grow maxlength="4000" :disabled="changingGoal" hide-details />
         <v-btn type="submit" class="align-self-start" size="small" :disabled="changingGoal || !claudeObjective.trim()">{{ changingGoal ? 'Starting…' : 'Start goal' }}</v-btn>
       </form>

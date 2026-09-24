@@ -226,7 +226,9 @@ one visible follow-up asks the Plan model to inspect the implementation and fix
 in-scope defects. Its findings state what was checked; completion is not a
 guarantee of correctness. Stop cancels pending review, and an interrupted review
 remains incomplete. Goals require a concrete mode and model, with Auto and
-automatic review unavailable. Background helpers use the independent Economy role.
+automatic review unavailable. In Auto, the goal menu explains that a concrete
+mode must be selected before offering Start or Resume. Background helpers use
+the independent Economy role.
 AI controls includes a Close button that remains available while the assistant
 is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery

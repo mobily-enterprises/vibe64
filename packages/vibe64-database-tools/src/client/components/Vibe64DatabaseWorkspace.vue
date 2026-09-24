@@ -1302,7 +1302,7 @@ async function askCopilot() {
 .database-workspace__body--overview > .database-workspace__navigator { display: none; }
 .database-workspace__loading { height: 100%; }
 .database-workspace__loading > * { padding: 1rem; border-right: 1px solid rgba(var(--v-theme-outline), 0.14); }
-.database-workspace__navigator, .database-workspace__copilot { display: grid; min-height: 0; overflow: hidden; background: rgb(var(--v-theme-surface-container-lowest)); }
+.database-workspace__navigator, .database-workspace__copilot { display: grid; min-height: 0; overflow: hidden; background: rgb(var(--v-theme-surface)); }
 .database-workspace__navigator { grid-template-rows: auto auto minmax(8rem, 1fr); padding: 0.7rem; border-right: 1px solid rgba(var(--v-theme-outline), 0.16); }
 .database-workspace__table-search { margin-bottom: 0.45rem; }
 .database-workspace__nav-scroll { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; margin-top: 0.45rem; scrollbar-gutter: stable; }
