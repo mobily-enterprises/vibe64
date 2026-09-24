@@ -57,10 +57,10 @@ test("Claude controls correlate out-of-order replies and events apply backpressu
   } });
   assert.deepEqual(await Promise.all([client.request({ subtype: "one" }), client.request({ subtype: "two" })]), [{ name: "one" }, { name: "two" }]);
   stream.push('{"type":"test","number":1}\n{"type":"test","number":2}\n');
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  stream.push(null);
+  await client.completion;
   assert.deepEqual(observed, [1, 2]);
   client.close();
-  await client.completion;
 });
 
 test("Claude control replies bypass slow event persistence while events remain ordered", async () => {
