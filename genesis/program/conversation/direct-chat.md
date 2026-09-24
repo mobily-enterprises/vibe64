@@ -269,6 +269,11 @@ After the matching Code turn completes normally, review uses one preallocated
 message identity and the snapshotted Plan selection. The visible automatic
 request permits scoped fixes. Structured waiting, failure, interruption, active
 goals and Stop suppress continuation; a reviewer never schedules another review.
+Before review changes models or sends, it also checks the saved last assistant
+reply using the same numbered-question and answer-choice parsers as the composer.
+An unanswered structured question visibly skips review, preserves the question
+and coding model, and allows the user's answer as the next ordinary request.
+Review Retry applies the same check after restart.
 If a read sees completion before the idle event, the coordinator may review a
 Code request it admitted in the current process. After a server restart, the
 same recovered completion requires explicit Retry/Skip instead.

@@ -1,5 +1,5 @@
 import { effectScope, nextTick, ref } from "vue";
-import { latestAssistantMessageAwaitingUserReply } from "../../src/lib/vibe64ConversationQuestions.js";
+import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const httpRequest = vi.hoisted(() => vi.fn());

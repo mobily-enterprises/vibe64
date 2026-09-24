@@ -225,8 +225,10 @@ People can enable Review after coding. After a normally completed Code turn,
 one visible follow-up asks the Plan model to inspect the implementation and fix
 in-scope defects. Its findings state what was checked; completion is not a
 guarantee of correctness. Stop cancels pending review, and an interrupted review
-remains incomplete. Goals require a concrete mode and model, with Auto and
-automatic review unavailable. In Auto, the goal menu explains that a concrete
+remains incomplete. An unanswered structured question keeps the coding model
+selected and skips review so the user can answer first. Goals require a concrete
+mode and model, with Auto and automatic review unavailable. In Auto, the goal
+menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
 the independent Economy role.
 AI controls includes a Close button that remains available while the assistant

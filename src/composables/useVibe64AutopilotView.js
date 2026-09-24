@@ -23,7 +23,7 @@ import {
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   latestAssistantMessageAwaitingUserReply
-} from "@/lib/vibe64ConversationQuestions.js";
+} from "@local/vibe64-runtime/shared/conversationQuestions";
 import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix,

@@ -177,6 +177,52 @@ test("changing routing settings while classifying does not retarget this request
   assert.equal(f.sends[0].selection.modelId, "deepseek-flash");
 });
 
+for (const question of [
+  "[1] Should persistence stay in this browser or be shared across devices?",
+  "Where should persistence live?\n\nPossible answers:\n- Browser: Keep it in this browser.\n- Server: Share it across devices."
+]) {
+  test(`review preserves an unanswered structured question: ${question.split("\n")[0]}`, async (t) => {
+    const f = await fixture(t, { mode: "code", review: true });
+    await f.service.send("session-1", request, f.context);
+    const codingSelection = f.metadata.assistant_selection;
+    const turns = [{ user: { text: request.message }, messages: [{ role: "assistant", text: question }] }];
+    f.context.runtime.store.readConversationTail = async () => turns;
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.sends.length, 1);
+    assert.equal(f.state().status, "done");
+    assert.equal(f.state().reviewStatus, "skipped_question");
+    assert.equal(f.events.some((event) => event.payload.assistantRoutingRequest.status.startsWith("review")), false);
+    assert.equal(f.metadata.assistant_selection, codingSelection);
+    assert.equal(turns[0].messages[0].text, question);
+    await f.restart().afterTurn("session-1", completion(), f.context, { recovered: true });
+    assert.equal(f.sends.length, 1);
+
+    await f.service.send("session-1", { ...request, messageId: "answer-1", message: "Keep it in this browser." }, f.context);
+    turns.push({ user: { text: "Keep it in this browser." }, messages: [{ role: "assistant", text: "Implemented and checked." }] });
+    await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+    assert.equal(f.sends.length, 3);
+    assert.equal(f.sends[2].selection.modelId, "gpt-6-astra");
+    assert.equal(f.helperCalls(), 0);
+  });
+}
+
+test("review retry rechecks saved questions before changing models or sending", async (t) => {
+  const f = await fixture(t, { mode: "code", review: true });
+  await f.service.send("session-1", request, f.context);
+  const codingSelection = f.metadata.assistant_selection;
+  const restarted = f.restart();
+  await restarted.afterTurn("session-1", completion(), f.context, { recovered: true });
+  assert.equal(f.state().status, "review_pending");
+  f.context.runtime.store.readConversationTail = async () => [{ messages: [{
+    role: "assistant", text: "[1] Should persistence stay in this browser?"
+  }] }];
+  await restarted.send("session-1", { ...request, reviewAction: "retry" }, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().reviewStatus, "skipped_question");
+  assert.equal(f.state().error, undefined);
+  assert.equal(f.metadata.assistant_selection, codingSelection);
+});
+
 test("uncertain native admission is inspected on retry without resending", async (t) => {
   const f = await fixture(t);
   f.failAdmission();

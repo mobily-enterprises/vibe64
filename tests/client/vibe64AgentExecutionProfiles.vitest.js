@@ -71,6 +71,7 @@ describe("vibe64 agent execution profiles", () => {
       CONVERSATION_SUMMARY: "conversation_summary",
       DATABASE_ASSISTANT: "database_assistant",
       PROMPT_HINT: "prompt_hint",
+      REQUEST_ROUTING: "request_routing",
       SESSION_TITLE: "session_title",
       SOURCE_EXPLANATION: "source_explanation"
     });

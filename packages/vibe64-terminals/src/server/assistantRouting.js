@@ -2,6 +2,8 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { parseNumberedQuestionPrompt, parseAnswerChoicePrompt } from "@jskit-ai/assistant-core/shared/conversation";
+import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingFromMetadata,
@@ -56,6 +58,15 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     const native = await agent.readGoal(sessionId, context);
     const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
     return { pinned, goal: native?.status === "available" ? native.goal : native?.goal || pinned };
+  }
+  async function skipReviewForQuestion(sessionId, context, state) {
+    const reply = latestAssistantMessageAwaitingUserReply(await context.runtime.store.readConversationTail(sessionId));
+    if (!parseNumberedQuestionPrompt(reply).questions?.length && !parseAnswerChoicePrompt(reply).choices?.length) return false;
+    liveReviewRequests.delete(keyFor(sessionId, context));
+    state.status = "done"; state.reviewStatus = "skipped_question";
+    delete state.error;
+    await save(context, state);
+    return true;
   }
   async function cleanupHelper(context, state) {
     const helper = state.helper;
@@ -231,6 +242,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       await save(context, state);
       return { ok: true, delivered: true, messageId, threadId: state.threadId };
     }
+    if (review && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
     await validateDecision(context, state, review);
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = review ? state.assignments[state.resolvedMode] : state.observedSelection;
@@ -245,6 +257,9 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     if (review && activeGoal((await currentGoal(sessionId, context)).goal)) {
       state.status = "done"; state.reviewStatus = "skipped_goal"; await save(context, state);
       return { ok: true, skipped: true };
+    }
+    if (review && (native?.pendingRequests?.length || native?.turn?.waitingForInput)) {
+      throw failure("Answer the pending question or approval before retrying review.");
     }
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
@@ -495,6 +510,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       }
       const native = await agent.sessionState(sessionId, context);
       if (native?.turn?.active || native?.pendingRequests?.length || native?.turn?.waitingForInput) return;
+      if (await skipReviewForQuestion(sessionId, context, state)) return;
       // Polling may observe completion before the native idle notification. Only
       // turns admitted by this coordinator may continue without an explicit retry.
       const needsRetry = recovered && liveReviewRequests.get(keyFor(sessionId, context)) !== state.messageId;

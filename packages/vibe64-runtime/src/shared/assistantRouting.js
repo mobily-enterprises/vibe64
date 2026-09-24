@@ -278,6 +278,7 @@ function assistantRoutingStatusLabel(request) {
     failed: "Request not sent", cancelled: "Request cancelled",
     done: request.reviewStatus === "completed" ? "Review finished — read the findings above."
       : request.reviewStatus === "incomplete" ? "Review stopped before finishing."
+        : request.reviewStatus === "skipped_question" ? "Waiting for your answer. Automatic review was skipped."
         : request.reviewStatus === "skipped_incomplete" ? "Coding stopped. Automatic review was skipped."
           : request.reviewStatus === "skipped_unconfirmed" ? "Automatic review skipped: coding completion could not be confirmed."
           : request.reviewStatus === "cancelled" ? "Automatic review cancelled."

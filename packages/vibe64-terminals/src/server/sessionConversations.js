@@ -512,10 +512,16 @@ function createSessionConversations({
     },
 
     async afterTemporaryTurn(sessionId, payload, options = {}) {
-      const conversations = await write(sessionId, options, async (ctx) => ctx.runtime.store.listSessionConversations(sessionId));
-      if (!Array.isArray(conversations)) return;
-      const record = conversations.find((item) => item.providerConversationId === payload.conversationId && item.state !== "closing");
-      if (record) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
+      const record = await write(sessionId, options, async (ctx) => {
+        const conversations = await ctx.runtime.store.listSessionConversations(sessionId);
+        const completed = conversations.find((item) => item.providerConversationId === payload.conversationId && item.state !== "closing");
+        if (!completed) return null;
+        // Persist the completed reply before review checks for unanswered questions.
+        const observed = await snapshot(ctx, completed);
+        if (observed.readError) throw new Error(observed.error);
+        return completed;
+      });
+      if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
     }
   };
 }

@@ -422,6 +422,10 @@ with Retry, and unavailable selections cannot be applied or executed.
 An unfinished native goal fixes the temporary chat's mode and model and suppresses
 automatic review. Its observed goal reaches the mode menu after restoration and
 polling; an omitted goal in a failed read cannot clear an earlier observation.
+Native completion first saves the final reply through the ordinary snapshot
+owner. Review then checks the saved reply for the composer's structured questions;
+an unanswered question retains the coding model and waits for the user's answer.
+This also applies when a collaborator uses a foreign Backup pair.
 Changing modes or models requires a successful native read. Configuration changes
 cannot move a paused native goal to another model on its next Send.
 

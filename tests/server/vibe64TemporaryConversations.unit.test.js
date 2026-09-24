@@ -740,6 +740,30 @@ test("a temporary read can observe live completion before its idle event without
   });
 });
 
+for (const role of ["owner", "member"]) {
+  test(`temporary ${role} coding waits for a structured answer before review without touching main chat`, async () => {
+    await withTemporaryRoot(async (root) => {
+      const f = await temporaryChangeoverFixture(root, { role, username: role }, true);
+      await f.send("code", "needs-decision");
+      const question = "[1] Should persistence stay in this browser or be shared?";
+      await f.finish(question);
+      assert.equal(f.calls.starts.length, 1);
+      const waiting = await f.record();
+      assert.equal(JSON.parse(waiting.routingMetadata.assistant_routing_request).reviewStatus, "skipped_question");
+      const restored = await f.restart().readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+      assert.equal(restored.messages.at(-1).text, question);
+      assert.equal(restored.assistantSelection.modelId, waiting.assistantSelection.modelId);
+      assert.equal(f.calls.starts.length, 1);
+      await f.send("code", "decision-answer", "Keep it in this browser.");
+      await f.finish("Implemented and checked.");
+      assert.equal(f.calls.starts.length, 3);
+      assert.match(f.calls.starts[2].input.message, /Vibe64 mode: review/);
+      await f.finish("Reviewed.");
+      assert.equal((await f.store.readConversationLog("one")).length, 0);
+    });
+  });
+}
+
 test("temporary HTTP turn input captures its authenticated actor for later review", async () => {
   await withTemporaryRoot(async (root) => {
     const member = { role: "member", username: "collaborator" };
