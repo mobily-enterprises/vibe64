@@ -636,6 +636,7 @@ test("revoking the submitting member blocks review even when an owner retries it
   assert.equal(f.state().submittedBy.username, "collaborator");
   await f.service.cancel("session-1", f.context);
   assert.equal(f.state().reviewStatus, "cancelled");
+  assert.equal(f.state().error, undefined, "Skip clears the resolved review-admission warning");
   assert.equal(f.sends.length, 1);
 });
 

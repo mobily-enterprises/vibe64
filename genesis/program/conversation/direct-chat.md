@@ -107,6 +107,8 @@ so retaining a different provider does not skip the selected provider's cleanup.
 ## Sources
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-terminals/src/server/registerRoutes.js`
+- `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
@@ -281,7 +283,9 @@ Review Retry applies the same check after restart.
 If a read sees completion before the idle event, the coordinator may review a
 Code request it admitted in the current process. After a server restart, the
 same recovered completion requires explicit Retry/Skip instead.
-Preparation failures retain Retry and Skip. A review stopped after admission is
+Preparation failures retain Retry and Skip. Skipping an unstarted review clears
+its preparation error so the composer no longer asks the user to cancel it.
+A review stopped after admission is
 incomplete and needs a new explicit request; even a late native success cannot
 overwrite its cancellation. Completion must match the exact admitted turn,
 recovering that identity from its receipt when necessary. Unknown completion
@@ -1280,7 +1284,10 @@ visible user and assistant messages, grounded in the session's Blueprint. Newer
 user corrections supersede earlier plans. Suggestions should develop that
 intent without inventing requirements or repeating finished or declined work.
 The browser waits for a short typing pause, cancels superseded requests and
-rejects late responses. Draft context is bounded to its latest 4,000 characters;
+rejects late responses. Cancellation submits only its operation and browser
+origin, without resending the private draft. The HTTP route preserves omitted
+optional fields so action validation can admit that cancellation. Draft context
+is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
 The server resolves the saved workflow's effective Economy destination for the
 requesting actor before creating a provider profile; a personal main-chat

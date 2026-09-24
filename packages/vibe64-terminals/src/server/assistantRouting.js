@@ -457,7 +457,10 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (!state) return false;
       const preparingReview = state.status === "review_pending";
       state.review = false;
-      if (preparingReview) state.status = "sent";
+      if (preparingReview) {
+        state.status = "sent";
+        delete state.error;
+      }
       else if (["routing", "sending", "failed"].includes(state.status) && !state.attemptedMessageId) state.status = "cancelled";
       state.reviewStatus = "cancelled";
       await save(context, state);

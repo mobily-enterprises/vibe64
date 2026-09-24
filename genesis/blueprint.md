@@ -544,6 +544,8 @@ only when that purpose is available, independently of the selected chat mode.
 Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
 intent instead of repeating finished work or proposing unrelated generic tasks.
+Changing the draft cancels superseded suggestion work without sending a chat
+message or stopping the main assistant.
 
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude

@@ -518,9 +518,9 @@ function bodyWithSessionId(routes) {
 function promptHintRouteInput(routes, request) {
   const body = routes.requestBody(request);
   return withVibe64User(request, {
-    draft: body.draft,
+    ...(Object.hasOwn(body, "draft") ? { draft: body.draft } : {}),
     operationId: body.operationId,
-    originId: body.originId,
+    ...(Object.hasOwn(body, "originId") ? { originId: body.originId } : {}),
     sessionId: request.params.sessionId
   });
 }

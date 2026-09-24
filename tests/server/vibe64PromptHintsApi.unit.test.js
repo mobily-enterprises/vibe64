@@ -248,3 +248,47 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
     });
   });
 });
+
+test("prompt-hint cancellation without a draft passes route validation and reaches the service", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = promptHintRouteApp({
+        async cancelSessionPromptHints(...args) {
+          calls.push(args);
+          return { ok: true, status: "cancelled" };
+        }
+      });
+      const actions = createTerminalActions({ terminals: app.service });
+      registerRoutes(app.http, {
+        fastify: app.fastify, projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+        terminals: app.service, uploads: { readSingleMultipartFile() {} }
+      });
+      const route = findRegisteredRoute(app, {
+        method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/prompt-hints/cancel`
+      });
+      const vibe64User = { username: "ada", role: "member" };
+      for (const body of [
+        { operationId: "hint:tab-1:cancel", originId: "tab:1" },
+        { operationId: "hint:without-origin" }
+      ]) {
+        const reply = testReply();
+        await route.handler({
+          body, params: routeProjectParams({ sessionId: "session-1" }), vibe64User,
+          async executeAction({ actionId, input }) {
+            const action = actionById(actions, actionId);
+            const validated = action.input.schema.patch(input);
+            assert.deepEqual(validated.errors, {});
+            return action.execute(validated.validatedObject);
+          }
+        }, reply);
+        assert.equal(reply.statusCode, 200);
+        assert.equal(reply.payload.status, "cancelled");
+        assert.deepEqual(calls.at(-1), ["session-1", {
+          operationId: body.operationId, originId: body.originId || "", vibe64User
+        }]);
+      }
+      assert.equal(calls.length, 2);
+    });
+  });
+});

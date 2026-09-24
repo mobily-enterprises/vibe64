@@ -10599,7 +10599,7 @@
       "title": "assistantChangeover.js"
     },
     {
-      "bytes": 35917,
+      "bytes": 35963,
       "districtId": "directory:packages/vibe64-terminals/src/server",
       "extractors": [
         "javascript"
@@ -10630,15 +10630,15 @@
         "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.attribution:function:293:3",
         "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.send:function:302:3",
         "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.cancel:function:449:3",
-        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.afterTurn:function:477:3",
-        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.reconcile:function:532:3",
-        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.prepareGoal:function:559:3"
+        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.afterTurn:function:480:3",
+        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.reconcile:function:535:3",
+        "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.prepareGoal:function:562:3"
       ],
-      "hash": "sha256:98e21f3f299505f9ea12889eb6146c6a1eae0be50e24a2a7e6390f5009bca595",
+      "hash": "sha256:646fe217695c2060b0e4e7f9222597916fe441f9f53d4b1637e1a0df352b085c",
       "id": "file:packages/vibe64-terminals/src/server/assistantRouting.js",
       "internalFunctionCount": 27,
       "language": "javascript",
-      "lines": 592,
+      "lines": 595,
       "mode": 33188,
       "path": "packages/vibe64-terminals/src/server/assistantRouting.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-terminals",
@@ -12144,7 +12144,7 @@
       "title": "projectExecutionEnv.js"
     },
     {
-      "bytes": 27342,
+      "bytes": 27435,
       "districtId": "directory:packages/vibe64-terminals/src/server",
       "extractors": [
         "javascript"
@@ -12213,7 +12213,7 @@
         "function:packages/vibe64-terminals/src/server/registerRoutes.js:registerVibe64TerminalWebSocketRoutes.resize:method:797:5",
         "function:packages/vibe64-terminals/src/server/registerRoutes.js:registerVibe64TerminalWebSocketRoutes.write:method:800:5"
       ],
-      "hash": "sha256:a18ae91c6300ab43da7455a938b6913064bdf1b4fffe056c7fb5f8961d2d28af",
+      "hash": "sha256:ea566c4e5e699ba0bc08df4b962f7ed0b45364d50cbda76ce3c62ea79baf0bce",
       "id": "file:packages/vibe64-terminals/src/server/registerRoutes.js",
       "internalFunctionCount": 61,
       "language": "javascript",
@@ -19979,7 +19979,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:07f140c8a1bec55eefafeef2a38c766d4e949f344c01a997fbb12143e7578037",
+  "codeHash": "sha256:5f401bbda7607b70733c163158c629c83d89759b7fc327c457b9a6b7f4a04c7d",
   "diagnostics": [],
   "districts": [
     {
@@ -112388,10 +112388,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-terminals/src/server/assistantRouting.js",
       "generator": false,
-      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.afterTurn:function:477:3",
+      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.afterTurn:function:480:3",
       "kind": "function",
       "language": "javascript",
-      "line": 477,
+      "line": 480,
       "name": "afterTurn",
       "parameters": [
         "sessionId",
@@ -112412,10 +112412,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-terminals/src/server/assistantRouting.js",
       "generator": false,
-      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.reconcile:function:532:3",
+      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.reconcile:function:535:3",
       "kind": "function",
       "language": "javascript",
-      "line": 532,
+      "line": 535,
       "name": "reconcile",
       "parameters": [
         "sessionId",
@@ -112434,10 +112434,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-terminals/src/server/assistantRouting.js",
       "generator": false,
-      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.prepareGoal:function:559:3",
+      "id": "function:packages/vibe64-terminals/src/server/assistantRouting.js:createAssistantRouting.prepareGoal:function:562:3",
       "kind": "function",
       "language": "javascript",
-      "line": 559,
+      "line": 562,
       "name": "prepareGoal",
       "parameters": [
         "sessionId",
