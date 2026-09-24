@@ -54,6 +54,16 @@ const description = computed(() => {
   return selectedOverride && !decisions.value[mode.value] ? `${selectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
 const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Review after coding on' : ''}`);
+const reviewDescription = computed(() => {
+  if (hasGoal.value) return "The mode is fixed during a goal. Auto and automatic review are unavailable.";
+  if (!reviewAvailable.value) return "Available in Code and Auto.";
+  if (decisions.value.review?.available === false) return decisions.value.review.message;
+  const reviewer = decisions.value.review?.effectiveSelection;
+  const coder = decisions.value.code?.effectiveSelection;
+  const sameModel = reviewer && coder && ["engineId", "modelProviderId", "modelId"]
+    .every((key) => reviewer[key] === coder[key]);
+  return `${roleLabel("review")} checks the work and may fix issues. ${sameModel ? "Same model as Code. " : ""}Uses an additional turn.`;
+});
 const command = useCommand({
   access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",
   buildCommandOptions: () => ({ method: "PATCH", path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), props.session.sessionId, "/assistant-selection") }),
@@ -123,7 +133,7 @@ function configure() {
             <p v-if="engine && ['plan', 'code', 'economy', 'router'].some((role) => !engine.roles[role]?.assignment)" class="text-body-small mt-2">{{ canConfigure ? 'Assign missing models in Configure model routing below.' : 'Ask the owner to configure the missing models.' }}</p>
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Plan and Code use the shared backup together to keep this workflow in one orchestrator.</p>
             <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Review after coding" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
-            <p class="text-body-small">{{ hasGoal ? 'The mode is fixed during a goal. Auto and automatic review are unavailable.' : !reviewAvailable ? 'Available in Code and Auto.' : decisions.review?.available === false ? decisions.review.message : `${roleLabel('review')} checks the work and may fix issues. Uses an additional turn.` }}</p>
+            <p class="text-body-small">{{ reviewDescription }}</p>
             <p v-if="mode === 'auto'" class="text-body-small mt-2">Router reads your request and recent chat first. Mixed or uncertain requests go to Plan.</p>
             <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>
           </div>

@@ -7,6 +7,8 @@ AI access still uses its existing check. This avoids an irrelevant sign-in
 warning and queue requests in a local editor with no hosted identity.
 Owner settings in main and temporary chat use the Model routing permission
 response independently of that queue, so they remain available in the local editor.
+The compact mode menu names the effective reviewer and states when it uses the
+same model as Code, including a collaborator's shared backup pair.
 The Settings cog stays on the same horizontal centerline as the neighboring icons.
 It labels the next recipient underneath in a compact, bordered rectangle with
 theme-aware contrast. The label extends beyond the button circle without
