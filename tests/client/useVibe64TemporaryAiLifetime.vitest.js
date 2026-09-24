@@ -115,6 +115,63 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.tasks.value).toEqual([]);
   });
 
+  it("coalesces routing events while a conversation read is pending", async () => {
+    const reading = Promise.withResolvers();
+    http.request.mockImplementation(async (url) => url === CONVERSATION_PATH ? reading.promise : {
+      ok: true, conversations: [{ conversationId: "conversation-1", status: "routing", messages: [] }]
+    });
+    const { temporary, socket } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    const reads = () => http.request.mock.calls.filter(([url]) => url === CONVERSATION_PATH);
+    expect(reads()).toHaveLength(1);
+    for (let i = 0; i < 10; i += 1) {
+      socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION,
+        reason: "assistant-routing-changed", assistantRoutingRequest: { status: "routing", messageId: "request-1" }
+      });
+    }
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reads()).toHaveLength(1);
+    reading.resolve({ ok: true, status: "completed", messages: [{ id: "reply", role: "assistant", text: "Done." }] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(temporary.activeTask.value.busy).toBe(false);
+    expect(temporary.activeTask.value.messages.at(-1).text).toBe("Done.");
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(reads()).toHaveLength(1);
+  });
+
+  it("observes a new turn after the stopped turn's pending read settles", async () => {
+    const oldRead = Promise.withResolvers();
+    let turn = 0;
+    let reads = 0;
+    http.request.mockImplementation(async (url, options) => {
+      if (url.endsWith("/turns")) return { ok: true, status: "inProgress", runId: `turn-${++turn}` };
+      if (url.endsWith("/stop")) return { ok: true, status: "interrupted" };
+      if (url === CONVERSATION_PATH && options.method === "GET") {
+        reads += 1;
+        return reads === 1 ? oldRead.promise : { ok: true, status: "completed", runId: "turn-2",
+          messages: [{ id: "new-reply", role: "assistant", text: "Second turn finished." }] };
+      }
+      return { ok: true, conversations: [{ conversationId: "conversation-1", status: "ready", messages: [] }] };
+    });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    temporary.updateDraft("conversation-1", "First task");
+    await temporary.send("conversation-1");
+    expect(reads).toBe(1);
+    await temporary.stopTask("conversation-1");
+    temporary.updateDraft("conversation-1", "Second task");
+    await temporary.send("conversation-1");
+    expect(reads).toBe(1);
+    expect(temporary.activeTask.value.runId).toBe("turn-2");
+    oldRead.resolve({ ok: true, status: "completed", runId: "turn-1", messages: [
+      { id: "old-reply", role: "assistant", text: "Stale response" }
+    ] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads).toBe(2);
+    expect(temporary.activeTask.value.busy).toBe(false);
+    expect(temporary.activeTask.value.messages.at(-1).text).toBe("Second turn finished.");
+  });
+
   it("shows a pending message throughout conversation creation and turn startup, then reconciles it once", async () => {
     const creation = Promise.withResolvers();
     const starting = Promise.withResolvers();

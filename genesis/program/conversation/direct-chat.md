@@ -98,6 +98,11 @@ composable and query cache with delayed HTTP responses.
 Automatic thinking uses the selected curated model's declared default in both
 native Codex terminals and app-server turns.
 
+After a backend or native process restart, managed-control recovery reads the
+thread's saved model provider and rebuilds its curated connection configuration
+before resuming. This uses the normal thread-parameter and history-adapter
+owners, preserving the provider without sending an inference request.
+
 When a Codex provider changes, shutdown retains verified exit evidence. If a
 server restart already removed the runtime record, managed hosts can prove the
 exact previous execution owner's scope empty. A missing file by itself is never

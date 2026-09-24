@@ -3663,7 +3663,6 @@ class CodexAppServerAgentProvider {
           shell_environment_policy: { inherit: "none", set: environment }
         }
       };
-      requestParams = await this.withHistoryAdapter(requestParams, client, { signal });
       let nativeModelProvider = "";
       const readStatus = async () => {
         const { thread } = await request("thread/read", { threadId, includeTurns: false });
@@ -3671,6 +3670,13 @@ class CodexAppServerAgentProvider {
         return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
       };
       const nativeStatus = await readStatus();
+      if (!bound && !requestParams.modelProvider && nativeModelProvider) {
+        // A restored observer has no saved request parameters. Recover the
+        // native thread's provider configuration before resuming its controls.
+        requestParams = { ...requestParams, modelProvider: nativeModelProvider };
+        requestParams = await this.options.prepareThreadParams?.(requestParams) || requestParams;
+      }
+      requestParams = await this.withHistoryAdapter(requestParams, client, { signal });
       const providerChanged = Boolean(requestParams.modelProvider && nativeModelProvider &&
         requestParams.modelProvider !== nativeModelProvider);
       if (providerChanged) {

@@ -79,6 +79,7 @@ function useVibe64TemporaryAi({
   const activeTaskId = ref("");
   const open = ref(false);
   const pollTimers = new Map();
+  const pendingPolls = new Set();
   const saveTimers = new Map();
   const creations = new Map();
   const saves = new Map();
@@ -592,6 +593,10 @@ function useVibe64TemporaryAi({
     if (!task?.conversationId || !canApplyResponse()) {
       return;
     }
+    // Realtime routing updates can arrive faster than a native history read.
+    // Share the pending read; each mounted conversation owns one poll at a time.
+    if (pendingPolls.has(task.delivery)) return;
+    pendingPolls.add(task.delivery);
     try {
       const response = await request(
         vibe64TemporaryConversationPath(
@@ -655,6 +660,12 @@ function useVibe64TemporaryAi({
       } else {
         reportTaskFinished(taskId);
       }
+    } finally {
+      pendingPolls.delete(task.delivery);
+      // A new turn can replace this poll while Stop/Send is in flight. Once
+      // the stale response settles, keep observing the current turn.
+      if (canApplyTaskResponse(task) && tasks.value.find((current) => current.id === taskId)?.busy &&
+          !pollTimers.has(taskId)) void pollTask(taskId);
     }
   }
 

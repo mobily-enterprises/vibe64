@@ -75,6 +75,9 @@ draft saves; native admission and transcript reconciliation remain serialized.
 The existing filesystem lock admits local waiters in arrival order, so repeated
 polls cannot overtake a pending routing update or cancellation. Wait timeouts
 still apply, and filesystem ownership continues to protect separate processes.
+Realtime routing updates share an already pending conversation read instead of
+starting overlapping polls. A replaced turn resumes polling after the older
+read settles; closed views and changed actors still discard that response.
 Native idle events and read-time reconciliation recover one eligible review after normal
 Code completion. Polling can schedule it when the current coordinator admitted
 that Code request, even if its native idle event arrives later. After a backend

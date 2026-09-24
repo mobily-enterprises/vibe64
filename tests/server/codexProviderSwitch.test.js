@@ -10,9 +10,9 @@ import test from "node:test";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
 import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
-test("native DeepSeek and GLM switches preserve history, tools and another conversation without restarting", {
+test("native provider switches preserve history without restarting, and cold recovery restores the provider", {
   skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false,
-  timeout: 30_000
+  timeout: 60_000
 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-provider-switch-"));
   const requests = [];
@@ -163,6 +163,24 @@ test("native DeepSeek and GLM switches preserve history, tools and another conve
   assert.equal(child.exitCode, null);
   assert.ok(!JSON.stringify(logs).includes("fixture-secret"));
 
+  // A fresh observer must reconstruct the saved provider's configuration when
+  // restoring a cold thread, even though a history read has no model override.
+  for (const modelProvider of ["deepseek", "glm"]) {
+    await provider.resumeThread(threadId, settings(modelProvider));
+    await client.request("thread/unsubscribe", { threadId });
+    const restored = new CodexAppServerAgentProvider(provider.options);
+    restored.runtime = provider.runtime;
+    restored.client = client;
+    restored.activeClient = async () => client;
+    const beforeRead = requests.length;
+    await restored.ensureThreadControls(threadId);
+    await restored.readThreadStatus(threadId);
+    assert.equal((await client.request("thread/read", { threadId })).thread.modelProvider, modelProvider);
+    assert.equal(requests.length, beforeRead, "restoring history must not send an inference request");
+    await provider.resumeThread(threadId, settings("openai"));
+  }
+
+
   // A second native subscriber must not make a successful settings ack conceal
   // an unchanged recipient. No user request is sent under uncertain settings.
   observer = await connect();
@@ -202,4 +220,42 @@ test("native DeepSeek and GLM switches preserve history, tools and another conve
       requires_openai_auth: false, supports_websockets: false, experimental_bearer_token: "fixture-secret-deepseek"
     } }
   }), /no rollout found/);
+
+  // Restart the native process as well as the observer, using the same saved history.
+  await provider.resumeThread(threadId, settings("deepseek"));
+  await client.request("thread/unsubscribe", { threadId });
+  client.close();
+  nextClient.close();
+  for (const ownedChild of [child, nextChild]) {
+    process.kill(-ownedChild.pid, "SIGTERM");
+    await new Promise((resolve) => ownedChild.exitCode !== null || ownedChild.signalCode !== null ? resolve() : ownedChild.once("exit", resolve));
+  }
+  const coldSocket = path.join(root, "cold.sock");
+  nextChild = spawn("codex", ["app-server", "--listen", `unix://${coldSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+    env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
+  });
+  nextChild.stderr.resume();
+  const coldDeadline = Date.now() + 10_000;
+  while (true) {
+    try { await access(coldSocket); break; } catch {
+      if (Date.now() > coldDeadline) throw new Error("Cold native app-server did not create its socket.");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  nextClient = new CodexAppServerJsonRpcClient({ endpoint: `unix://${coldSocket}`, requestTimeoutMs: 10_000 });
+  await nextClient.connect();
+  await nextClient.initialize({ clientInfo: { name: "vibe64-cold-provider-test", version: "1" }, capabilities: { experimentalApi: true } });
+  const coldObserver = new CodexAppServerAgentProvider(provider.options);
+  coldObserver.runtime = provider.runtime;
+  coldObserver.client = nextClient;
+  coldObserver.activeClient = async () => nextClient;
+  const coldCalls = [];
+  const coldRequest = nextClient.request.bind(nextClient);
+  nextClient.request = (method, ...args) => { coldCalls.push(method); return coldRequest(method, ...args); };
+  const beforeColdRead = requests.length;
+  await coldObserver.ensureThreadControls(threadId);
+  await coldObserver.readThreadStatus(threadId);
+  assert.equal((await nextClient.request("thread/read", { threadId })).thread.modelProvider, "deepseek");
+  assert.equal(requests.length, beforeColdRead, "cold recovery must not make an inference request");
+  assert.ok(!coldCalls.includes("account/read"), "an external-provider recovery must not require an OpenAI account");
 });
