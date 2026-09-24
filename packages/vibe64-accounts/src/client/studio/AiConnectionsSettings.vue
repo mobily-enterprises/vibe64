@@ -270,7 +270,7 @@ const editorRouteExplanation = computed(() => {
     ? "Authorized workspace members may use this connection."
     : "Only the Vibe64 owner may use this connection; members can suggest main-chat messages for approval.";
   const replacement = existingEditorConnection.value?.builtIn
-    ? " Adding a Zen key keeps Big Pickle as the default and lets you check or enable Zen's current models."
+    ? " Adding a Zen key keeps Big Pickle available and lets you check or enable Zen's current models. Choose their roles in Model routing."
     : existingEditorConnection.value
       ? " Saving a replacement restarts active assistant runtimes with the new key."
       : "";
@@ -316,7 +316,7 @@ const editorBackLabel = computed(() => (
 ));
 const editorEyebrow = computed(() => {
   if (existingEditorConnection.value) return "Manage AI";
-  if (editorProviderId.value === "zai" && editorStarter.value) return "Recommended free AI";
+  if (editorProviderId.value === "zai" && editorStarter.value) return "Regular Z.AI API";
   if (editorStarter.value) return "Free AI setup";
   return "Add AI";
 });
@@ -833,9 +833,9 @@ defineExpose({ openProvider });
             rounded="lg"
           >
             <div class="vibe64-ai-connections__recommendation-body">
-              <h2 class="text-title-medium">Recommended free upgrade: GLM-4.7 Flash</h2>
+              <h2 class="text-title-medium">Add GLM-4.7 Flash</h2>
               <p class="text-body-medium text-medium-emphasis">
-                Big Pickle works immediately. Connect a regular Z.AI API key to make GLM-4.7 Flash—Vibe64's recommended free coding model—the default for new sessions. This uses Z.AI's regular API, not Personal Coding Plan quota.
+                Connect a regular Z.AI API key to use GLM-4.7 Flash through OpenCode. Review its suggested roles in Model routing; your existing choices stay in place unless you change them. This connection uses Z.AI's regular API.
               </p>
               <div class="vibe64-ai-connections__recommendation-actions">
                 <v-btn

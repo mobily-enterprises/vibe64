@@ -159,6 +159,9 @@ and the current OpenCode provider catalogue. An AI connection request opens the
 requested provider's setup. Hosts choose the API endpoint, credential context
 and account-management authorization; they do not duplicate these forms or
 provider operations.
+Connection setup describes available models and directs role choices to Model
+routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
+recommendations and their application belong to the shared routing flow.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

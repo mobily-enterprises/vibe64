@@ -32,16 +32,16 @@ const { smAndDown } = useDisplay();
 const choices = [
   {
     ...REGULAR_ZAI_STARTER,
-    badge: "Recommended",
-    description: "GLM-4.7 Flash is Vibe64's recommended free coding model for building real apps. Connect one regular Z.AI API key and it becomes the default for new sessions.",
+    badge: "Optional",
+    description: "Connect a regular Z.AI API key to use GLM-4.7 Flash through OpenCode, then review its suggested roles in Model routing.",
     facts: [
       "Free through Z.AI's regular API—not Coding Plan quota",
-      "Selected automatically for new sessions",
+      "Existing model choices stay in place unless you change them",
       "Other regular-API models stay locked until you explicitly enable paid access"
     ],
     icon: mdiFlashOutline,
     recommended: true,
-    summary: "Best free coding choice"
+    summary: "Connect with Z.AI"
   },
   {
     accountAction: "Open Zen and create an optional API key",
@@ -77,11 +77,11 @@ const visibleChoices = computed(() => {
 const allChoicesConnected = computed(() => choices.every((choice) => connected(choice)));
 const introduction = computed(() => {
   if (connectedIds.value.has("opencode") && !connectedIds.value.has("zai")) {
-    return "Big Pickle is ready now. For real app-building, connect a regular Z.AI API key and make GLM-4.7 Flash your automatic default.";
+    return "Big Pickle is ready now. You can also connect GLM-4.7 Flash through Z.AI's regular API and choose its roles in Model routing.";
   }
   return allChoicesConnected.value
-    ? "Big Pickle stays included, and GLM-4.7 Flash is your default for new sessions."
-    : "Big Pickle needs no setup. Add our recommended free coding model, GLM-4.7 Flash, through Z.AI's regular API.";
+    ? "Big Pickle and GLM-4.7 Flash are available. Model routing controls which models your workflows use."
+    : "Big Pickle needs no setup. You can also connect GLM-4.7 Flash through Z.AI's regular API.";
 });
 
 function focusOption(providerId = "") {
@@ -110,7 +110,7 @@ defineExpose({ focusOption });
       </v-avatar>
       <div>
         <p class="text-label-large text-primary">FREE FROM DAY ONE</p>
-        <h2 id="vibe64-free-ai-title" class="text-headline-medium">Start now. Add the best free coding model.</h2>
+        <h2 id="vibe64-free-ai-title" class="text-headline-medium">Start with Big Pickle. Add models when you need them.</h2>
         <p class="text-body-large text-medium-emphasis">
           {{ introduction }}
         </p>
