@@ -45,7 +45,6 @@ import {
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
-  VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
   vibe64AssistantSelectionFromMetadata
@@ -2683,29 +2682,42 @@ test("session creation resolves a partial selection before checking access", asy
   assert.equal(harness.openSessions.length, 0);
 });
 
-test("new chats initialize the chosen workflow and start in the actor's effective Plan", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const actor = { role: "member", username: "collaborator" };
-    const calls = [];
-    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot),
-      initializeModelRouting: async (input) => { calls.push(["setup", input]); return { ok: true }; },
-      resolveAssistantPurpose: async (input, options) => {
-        calls.push(["resolve", input, options]);
-        return { available: true, effectiveSelection: initialPlanSelection, backupUsed: true, connectionIdentity: "shared-key" };
-      },
-      requireAssistantSelectionAccess: async (selection, options) => { calls.push(["access", selection, options]); }
+for (const chooseBranch of [false, true]) {
+  test(`new chats initialize the chosen workflow and start in the actor's effective Plan (branch=${chooseBranch})`, async () => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const actor = { role: "member", username: "collaborator" };
+      const calls = [];
+      const repositoryBranch = { name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) };
+      const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+        initializeModelRouting: async (input) => { calls.push(["setup", input]); return { ok: true }; },
+        resolveAssistantPurpose: async (input, options) => {
+          calls.push(["resolve", input, options]);
+          return { available: true, effectiveSelection: initialPlanSelection, backupUsed: true, connectionIdentity: "shared-key" };
+        },
+        requireAssistantSelectionAccess: async (selection, options) => { calls.push(["access", selection, options]); }
+      });
+      harness.project.resolveSessionBranch = async (input) => {
+        assert.equal(chooseBranch, true, "Default session creation must not inspect branches");
+        assert.deepEqual(input, { selection: repositoryBranch, vibe64User: actor });
+        return { name: repositoryBranch.name, commit: repositoryBranch.expectedCommit };
+      };
+      const result = await harness.service.createSession({ workflowEngineId: "codex", vibe64User: actor,
+        ...(chooseBranch ? { repositoryBranch } : {}) });
+      assert.equal(result.ok, true, result.error);
+      assert.deepEqual(calls, [
+        ["setup", { engineIds: ["codex"], vibe64User: actor }],
+        ["resolve", { purpose: "plan", workflowEngineId: "codex" }, { vibe64User: actor }],
+        ["access", initialPlanSelection, { vibe64User: actor, expectedConnectionIdentity: "shared-key" }]
+      ]);
+      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "codex" });
+      assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
+      assert.equal(harness.creationInputs[0].metadata.repository_branch, chooseBranch ? repositoryBranch.name : undefined);
+      assert.deepEqual(harness.creationInputs[0].sourceContext, {
+        ...(chooseBranch ? { expectedCommit: repositoryBranch.expectedCommit } : {}), vibe64User: actor
+      });
     });
-    const result = await harness.service.createSession({ workflowEngineId: "codex", vibe64User: actor });
-    assert.equal(result.ok, true, result.error);
-    assert.deepEqual(calls, [
-      ["setup", { engineIds: ["codex"], vibe64User: actor }],
-      ["resolve", { purpose: "plan", workflowEngineId: "codex" }, { vibe64User: actor }],
-      ["access", initialPlanSelection, { vibe64User: actor, expectedConnectionIdentity: "shared-key" }]
-    ]);
-    assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "codex" });
-    assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
   });
-});
+}
 
 test("unavailable routing and failed initialization do not create a session", async () => {
   for (const failedSetup of [true, false]) {

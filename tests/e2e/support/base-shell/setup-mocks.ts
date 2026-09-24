@@ -133,6 +133,19 @@ async function mockShellStatusEndpoints(page) {
   await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
     await fulfillJson(route, accountsPayload);
   });
+  await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async (route) => {
+    const selection = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-5.5", label: "GPT-5.5" };
+    const decision = { available: true, effectiveSelection: selection };
+    await fulfillJson(route, {
+      ok: true,
+      canConfigure: true,
+      engines: [{
+        engineId: "codex", label: "Codex", choices: [selection],
+        roles: { plan: { recommendation: selection }, code: { recommendation: selection } },
+        setupPreview: { plan: decision, code: decision }
+      }]
+    });
+  });
   await mockEmptySessions(page);
 }
 

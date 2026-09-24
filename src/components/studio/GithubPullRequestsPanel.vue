@@ -51,7 +51,10 @@ const createAvailable = computed(() => Boolean(props.dashboardContext.sessionId)
 const toolbar = computed(() => ({
   ...props.dashboardContext.sessionToolbar,
   repositoryBranchSelectionDisabled: true,
-  createSession: (selection) => props.dashboardContext.sessionToolbar?.createSession?.(selection, { pullRequestNumber: Number(number.value) })
+  createSession: (selection, options = {}) => props.dashboardContext.sessionToolbar?.createSession?.(selection, {
+    ...options,
+    pullRequestNumber: Number(number.value)
+  })
 }));
 watch(() => route.query.createPullRequest, (value) => {
   if (value && createAvailable.value) {

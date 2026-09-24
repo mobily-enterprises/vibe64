@@ -918,10 +918,41 @@ test.describe("direct chat", () => {
       await submit.click();
       await expect.poll(() => submissions.length).toBe(1);
       expect(submissions[0].repositoryBranch).toEqual({ name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) });
+      expect(submissions[0].workflowEngineId).toBe("codex");
     });
   }
 
-  test("allows reviewing changes while the assistant is reconnecting", async ({ page }) => {
+  test("opens a pull request session with the selected AI workflow", async ({ page }) => {
+    await mockDirectChat(page);
+    const submissions: Record<string, unknown>[] = [];
+    const project = { ...readyProjectSelectionPayload.currentProject,
+      repositoryMode: "github", repository: { mode: "github", defaultBranch: "main" },
+      githubRepository: { fullName: "example/project" } };
+    await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, {
+      ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+    }));
+    await routeApiEndpoint(page, "/vibe64/pull-requests/7", route => fulfillJson(route, {
+      ok: true, pullRequest: { number: 7, title: "Review this branch", state: "OPEN", body: "An innocuous change.",
+        headRefName: "feature/review", baseRefName: "main", headRepository: { nameWithOwner: "example/project" } }
+    }));
+    await routeApiEndpoint(page, "/vibe64/sessions", route => {
+      if (route.request().method() === "POST") {
+        submissions.push(requestBodyWithoutOrigin(route.request()));
+        return fulfillJson(route, { ok: true, ...directSession() });
+      }
+      return fulfillJson(route, { ok: true, sessions: [directSession()],
+        creation: { canCreate: true, showCreateAction: true, mode: "direct" }, limits: { openSessionCount: 1 } });
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/pull-requests?pr=7`);
+    await page.getByRole("button", { name: "Open as session", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Create session", exact: true }).click();
+    await expect.poll(() => submissions.length).toBe(1);
+    expect(submissions[0]).toEqual({ assistantSelection: {}, workflowEngineId: "codex", pullRequestNumber: 7 });
+  });
+
+  test("waits for assistant activity to settle before reviewing changes", async ({ page }) => {
     await mockDirectChat(page);
     let releasePreparation = () => {};
     const preparing = new Promise<void>((resolve) => { releasePreparation = resolve; });
@@ -932,9 +963,9 @@ test.describe("direct chat", () => {
     try {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
       const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
-      await expect(save).toBeVisible();
-      await expect(save).toBeEnabled();
       await expect(page.locator(".assistant-composer-support__assistant-status")).toHaveText("Loading assistant…");
+      await expect(save).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeVisible();
       releasePreparation();
       await expect(save).toBeEnabled();
       await save.click();

@@ -1,7 +1,13 @@
 import { computed, createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null }));
+const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, branches: null, branchOptions: null }));
+vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
+  useEndpointResource: (options) => {
+    mocks.branchOptions = options;
+    return mocks.branches;
+  }
+}));
 vi.mock("@local/vibe64-accounts/client", () => ({
   ModelRoutingForm: { render: () => null },
   useModelRouting: () => ({ resource: mocks.resource, scopeKey: mocks.scopeKey,
@@ -37,6 +43,11 @@ function mount(component = WorkflowSelector) {
   return { state: app._instance.setupState, createSession, created, update, workflow, ready };
 }
 beforeEach(() => {
+  mocks.branchOptions = null;
+  mocks.branches = {
+    data: ref({ defaultBranch: "main", branches: [{ name: "main", commit: "a".repeat(40) }] }),
+    isLoading: ref(false), loadError: ref(""), reload: vi.fn()
+  };
   mocks.scopeKey = ref("owner:workspace");
   mocks.resource = { data: ref({ canConfigure: true, engines: [engine("codex", "Codex", astra, deepseek), engine("opencode", "OpenCode", pickle, pickle)] }),
     isInitialLoading: ref(false), reload: vi.fn() };
@@ -116,4 +127,19 @@ it("creation stays open on failure and cannot submit an unready workflow", async
   await f.state.submit();
   expect(f.created).not.toHaveBeenCalled();
   expect(f.update).not.toHaveBeenCalled();
+});
+
+it("creation keeps the workflow choice when publishing a reviewed branch selection", async () => {
+  const f = mount(AssistantSessionDialog);
+  expect(mocks.branchOptions.enabled.value).toBe(false);
+  f.state.workflowEngineId = "opencode";
+  f.state.workflowReady = true;
+  f.state.chooseBranch = true;
+  f.state.createBranch = true;
+  f.state.newBranchName = "feature/review";
+  await f.state.submit();
+  expect(f.createSession).toHaveBeenCalledWith({}, {
+    workflowEngineId: "opencode",
+    repositoryBranch: { name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) }
+  });
 });
