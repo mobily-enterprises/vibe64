@@ -57,6 +57,10 @@ shows the most recently archived session first.
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
 chat updates do not need a new managed Git process to report activity.
+Live OpenCode messages and turn activity, like Codex progress, do not reload the
+project's session list. Routing progress refreshes the affected chat only. Durable
+session changes and explicit list-refresh hints still update the session tabs and
+creation policy.
 
 Archive confirmation immediately selects the preceding available tab and leaves
 the requested session gray and unavailable while its existing request runs.

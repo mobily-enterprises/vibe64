@@ -292,4 +292,31 @@ describe("direct assistant realtime state", () => {
       payload: { sessionId: "session-1" }
     })).toBe(true);
   });
+
+  it.each([
+    "opencode-server-assistant-message",
+    "opencode-server-message-delivered",
+    "opencode-server-progress",
+    "opencode-server-reasoning",
+    "opencode-server-tool",
+    "opencode-server-turn-active",
+    "opencode-server-turn-idle"
+  ])("does not reload the session list for %s", (reason) => {
+    const payload = { projectSlug: "project", sessionId: "session-1", reason };
+    expect(sessionListRealtimeShouldRefresh({ payload }, "project")).toBe(false);
+    expect(sessionListRealtimeShouldRefresh({
+      payload: { ...payload, clientRefresh: { includeList: true } }
+    }, "project")).toBe(true);
+  });
+
+  it("keeps routing progress in the chat without suppressing goal or explicit list refreshes", () => {
+    const payload = { reason: "assistant-routing-changed", sessionId: "session-1" };
+    expect(sessionListRealtimeShouldRefresh({ payload })).toBe(true);
+    const routingProgress = { ...payload, assistantRoutingRequest: { status: "preparing" } };
+    expect(sessionListRealtimeShouldRefresh({ payload: routingProgress })).toBe(false);
+    expect(sessionListRealtimeShouldRefresh({
+      payload: { ...routingProgress, clientRefresh: { includeList: true } }
+    })).toBe(true);
+    expect(mountedSessionRealtimeShouldRefresh({ payload: routingProgress }, "session-1")).toBe(true);
+  });
 });

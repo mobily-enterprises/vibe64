@@ -79,7 +79,13 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-message-delivered",
   "codex-prompt-injected",
   "codex-context-replaced",
+  "opencode-server-assistant-message",
+  "opencode-server-message-delivered",
   "opencode-server-progress",
+  "opencode-server-reasoning",
+  "opencode-server-tool",
+  "opencode-server-turn-active",
+  "opencode-server-turn-idle",
   "agent-terminal-started",
   "agent-terminal-closed",
   "output-target-started",
@@ -170,6 +176,9 @@ function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "
     return true;
   }
   const reason = sessionChangedReason(payload);
+  if (reason === "assistant-routing-changed" && payload.assistantRoutingRequest) {
+    return false;
+  }
   return !reason || !SESSION_LIST_IGNORED_REALTIME_REASONS.has(reason);
 }
 
