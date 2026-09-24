@@ -279,17 +279,19 @@ function validRepositoryBranch(branch) {
 function sessionRepositoryDestination(project = {}, session = {}) {
   const resolved = sessionRepositoryProject(project, session);
   const mode = normalizeRepositoryMode(resolved.repositoryMode || resolved.repository?.mode);
+  let repository = resolved.slug || resolved.projectSlug;
+  let branch = resolved.repository?.defaultBranch;
+  if (mode === PROJECT_REPOSITORY_MODE_GITHUB) {
+    repository = resolved.githubRepository?.fullName || resolved.repository?.github?.fullName;
+  } else if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+    repository = resolved.sourceRoot;
+    branch = session?.metadata?.local_source_branch || branch;
+  }
   return {
     sessionId: normalizeText(session.sessionId || session.id),
     mode,
-    repository: mode === PROJECT_REPOSITORY_MODE_GITHUB
-      ? normalizeText(resolved.githubRepository?.fullName || resolved.repository?.github?.fullName)
-      : mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-        ? normalizeText(resolved.sourceRoot)
-        : normalizeText(resolved.slug || resolved.projectSlug),
-    branch: normalizeText(mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-      ? session?.metadata?.local_source_branch || resolved.repository?.defaultBranch
-      : resolved.repository?.defaultBranch)
+    repository: normalizeText(repository),
+    branch: normalizeText(branch)
   };
 }
 

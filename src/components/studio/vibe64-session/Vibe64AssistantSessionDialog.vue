@@ -95,15 +95,22 @@ const branchRepository = computed(() => branchProject.value.githubRepository?.fu
   branchProject.value.repository?.github?.fullName || branchProject.value.slug);
 const branchPath = computed(() => scopedDevelopmentApiUrl("/api/vibe64/repository/branches", branchProject.value.slug));
 const branches = useEndpointResource({
-  path: branchPath, queryKey: computed(() => ["vibe64.branches", branchPath.value]),
+  path: branchPath,
+  queryKey: computed(() => ["vibe64.branches", branchPath.value]),
   enabled: computed(() => props.modelValue && branchSelectionAvailable.value && chooseBranch.value),
-  queryOptions: { retry: false }, fallbackLoadError: "Repository branches could not load."
+  queryOptions: { retry: false },
+  fallbackLoadError: "Repository branches could not load."
 });
 const selectedBranch = computed(() => branches.data.value?.branches?.find((item) => item.name === branchName.value));
-const branchSelectionReady = computed(() => !chooseBranch.value || (selectedBranch.value &&
-  !branches.isLoading.value && !branches.loadError.value && (!createBranch.value || newBranchName.value.trim())));
+const branchSelectionReady = computed(() => {
+  if (!chooseBranch.value) return true;
+  if (!selectedBranch.value || branches.isLoading.value || branches.loadError.value) return false;
+  return !createBranch.value || Boolean(newBranchName.value.trim());
+});
 watch(() => branches.data.value, (value) => {
-  if (!value?.branches?.some((item) => item.name === branchName.value)) branchName.value = value?.defaultBranch || "";
+  if (!value?.branches?.some((item) => item.name === branchName.value)) {
+    branchName.value = value?.defaultBranch || "";
+  }
 }, { immediate: true });
 
 function close() {

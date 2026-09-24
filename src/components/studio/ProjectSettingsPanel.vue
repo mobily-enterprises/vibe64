@@ -272,7 +272,7 @@
           </v-btn>
         </div>
       </section>
-      <section v-if="resource.data.value?.repositoryWorkflow?.available" class="project-settings__section" aria-labelledby="repository-workflow-title">
+      <section v-if="repositoryWorkflow.available" class="project-settings__section" aria-labelledby="repository-workflow-title">
         <div class="project-settings__section-copy">
           <h2 id="repository-workflow-title">Git workflow</h2>
           <p>Choose how Vibe64 publishes changes to this repository.</p>
@@ -282,14 +282,14 @@
           label="Require pull requests for Vibe64 publication"
           color="primary"
           hide-details
-          :disabled="!resource.data.value.repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning"
+          :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning"
         />
         <p>Reviewing changes will require Create pull request before commits can be published. Existing sessions keep their destinations and can explicitly create a PR from their work.</p>
         <p>This controls Vibe64's publication actions. Use GitHub branch rules to restrict pushes made through terminals and other tools.</p>
         <v-btn
           color="primary"
           variant="flat"
-          :disabled="!resource.data.value.repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning || requirePullRequest === resource.data.value.repositoryWorkflow.requirePullRequest"
+          :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning || requirePullRequest === repositoryWorkflow.requirePullRequest"
           @click="saveRepositoryWorkflow"
         >
           {{ repositoryWorkflowCommand.isRunning ? 'Saving…' : 'Save repository workflow' }}
@@ -451,15 +451,29 @@ const promptHintsSaveCommand = useCommand({
   writeMethod: "PUT"
 });
 const repositoryWorkflowCommand = useCommand({
-  access: "never", apiSuffix: "/vibe64/repository/workflow",
-  buildCommandOptions: () => ({ method: "PUT", path: scopedDevelopmentApiUrl("/api/vibe64/repository/workflow", projectSlug.value) }),
-  buildRawPayload: (_model, { context }) => ({ requirePullRequest: context.requirePullRequest }),
+  access: "never",
+  apiSuffix: "/vibe64/repository/workflow",
+  buildCommandOptions: () => ({
+    method: "PUT",
+    path: scopedDevelopmentApiUrl("/api/vibe64/repository/workflow", projectSlug.value)
+  }),
+  buildRawPayload: (_model, { context }) => ({
+    requirePullRequest: context.requirePullRequest
+  }),
   fallbackRunError: "Repository workflow could not be saved.",
-  messages: { error: "Repository workflow could not be saved.", success: "Repository workflow saved." },
-  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, placementSource: "vibe64.repository.workflow",
-  surfaceId: VIBE64_SURFACE_ID, writeMethod: "PUT"
+  messages: {
+    error: "Repository workflow could not be saved.",
+    success: "Repository workflow saved."
+  },
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+  placementSource: "vibe64.repository.workflow",
+  surfaceId: VIBE64_SURFACE_ID,
+  writeMethod: "PUT"
 });
-watch(() => resource.data.value?.repositoryWorkflow?.requirePullRequest, (value) => { requirePullRequest.value = value === true; }, { immediate: true });
+const repositoryWorkflow = computed(() => resource.data.value?.repositoryWorkflow || {});
+watch(() => repositoryWorkflow.value.requirePullRequest, (value) => {
+  requirePullRequest.value = value === true;
+}, { immediate: true });
 async function saveRepositoryWorkflow() {
   await repositoryWorkflowCommand.run({ requirePullRequest: requirePullRequest.value });
   await resource.reload();
