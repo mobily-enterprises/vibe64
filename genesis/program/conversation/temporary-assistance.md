@@ -72,6 +72,8 @@ lock and transcript; it does not write main-chat history or alter its selection.
 Creation and polling release that lock before looking up mode availability.
 Slow provider catalogue reads therefore do not block sibling Router updates or
 draft saves; native admission and transcript reconciliation remain serialized.
+Connected Codex history reads reuse their existing native observer. They do not
+rebuild the execution environment; Send and reconnection still prepare it.
 The existing filesystem lock admits local waiters in arrival order, so repeated
 polls cannot overtake a pending routing update or cancellation. Wait timeouts
 still apply, and filesystem ownership continues to protect separate processes.
@@ -96,7 +98,10 @@ inference. Explicit model/thinking edits update that mode's saved override; thei
 availability is validated against the current catalogue. Auto requires choosing
 an explicit mode before customizing its model. A foreign backup cannot turn a
 Plan/Code override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
-without replacing unsent drafts. Actor changes clear the old view and reload it;
+without replacing unsent drafts. Only account and connection events reload the
+collection; unrelated progress events do not. Refreshes during a pending read
+share that wait, then the latest refresh reads one fresh snapshot. Actor changes
+clear the old view and reload it;
 late responses from that view cannot alter the newly loaded chat with the same ID.
 Opening this workspace and restoring its history do not require access to the
 main chat's last model. An active turn reports its separate native steering

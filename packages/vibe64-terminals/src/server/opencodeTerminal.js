@@ -918,6 +918,9 @@ function createOpenCodeTerminalController({
     if (!target) {
       return { exited: true, reason };
     }
+    vibe64SessionDebugLog("server.opencode.shared-process.stop", {
+      reason, sessions: processes.size, startingSessions: processStarts.size
+    });
     const stopping = (async () => {
       const proof = await target.server.stop();
       if (proof?.exited !== true) {

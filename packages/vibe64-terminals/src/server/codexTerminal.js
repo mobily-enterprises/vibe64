@@ -11788,6 +11788,12 @@ function createCodexTerminalController({
       if (input.ephemeral === true) {
         return codexAppServerExpiredEphemeralConversation(conversationId, input);
       }
+      if (input.persistent && conversationState?.persistent && conversationState.provider.isAvailable?.() &&
+          !conversationState.provider.observationFailure && !codexAppServerAdmissionError(sessionId)) {
+        // Poll the already observed native thread. Execution environment setup
+        // belongs to Send and reconnection, not every history read.
+        return readPersistentCodexConversation(sessionId, input, { provider: conversationState.provider });
+      }
       const context = await codexAppServerConversationContext(sessionId, input, options);
       if (context.ok === false) {
         return context;

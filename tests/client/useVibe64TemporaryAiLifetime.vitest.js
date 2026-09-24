@@ -115,6 +115,37 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.tasks.value).toEqual([]);
   });
 
+  it("shares a pending restoration across account and connection refreshes", async () => {
+    const restoring = Promise.withResolvers();
+    http.request.mockReturnValue(restoring.promise);
+    const socket = new EventEmitter();
+    const anyListeners = new Set();
+    socket.onAny = (handler) => anyListeners.add(handler);
+    socket.offAny = (handler) => anyListeners.delete(handler);
+    const emit = socket.emit.bind(socket);
+    socket.emit = (...args) => {
+      for (const handler of anyListeners) handler(...args);
+      return emit(...args);
+    };
+    const { temporary } = mountTemporaryAi({ openTask: false, socket });
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 10; i += 1) socket.emit("vibe64.session.changed", { reason: "progress" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 10; i += 1) {
+      socket.emit("vibe64.accounts.changed", {});
+      socket.emit("vibe64.connections.changed", {});
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(1);
+    restoring.resolve({ conversations: [{ conversationId: "conversation-1", status: "ready", messages: [] }] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(temporary.tasks.value).toHaveLength(1);
+    await temporary.restoreTasks();
+    expect(http.request).toHaveBeenCalledTimes(3);
+  });
+
   it("coalesces routing events while a conversation read is pending", async () => {
     const reading = Promise.withResolvers();
     http.request.mockImplementation(async (url) => url === CONVERSATION_PATH ? reading.promise : {

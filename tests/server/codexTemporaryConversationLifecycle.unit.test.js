@@ -10771,6 +10771,33 @@ test("durable Codex chats keep native history and goal ownership across browser 
   });
 });
 
+test("connected durable chat reads reuse observation without rebuilding the execution environment", async () => {
+  await withConversationController(async ({ captures, controller }) => {
+    captures.persistentHistory = [{ id: "saved-turn", status: "completed", items: [
+      { id: "answer", type: "agentMessage", phase: "final_answer", text: "Saved reply" }
+    ] }];
+    const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+    let environmentReads = 0;
+    captures.onProjectEnvironment = () => { environmentReads += 1; };
+    for (let i = 0; i < 2; i += 1) {
+      const result = await controller.readConversation("session-1", { conversationId, persistent: true });
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.messages.at(-1).text, "Saved reply");
+    }
+    assert.equal(environmentReads, 0, "polling uses the connected native observer");
+    captures.connected = false;
+    await controller.readConversation("session-1", { conversationId, persistent: true });
+    assert.ok(environmentReads > 0, "reconnection still prepares the current environment");
+    captures.connected = true;
+    environmentReads = 0;
+    const sent = await controller.startConversationTurn("session-1", {
+      conversationId, persistent: true, messageId: "next", message: "Continue"
+    });
+    assert.equal(sent.ok, true, JSON.stringify(sent));
+    assert.ok(environmentReads > 0, "Send still prepares the current execution environment");
+  });
+});
+
 test("a fresh Codex observer pauses an unobserved temporary goal before exposing recovery", async () => {
   await withConversationController(async ({ captures, controller, calls }) => {
     captures.persistentHistory = [];

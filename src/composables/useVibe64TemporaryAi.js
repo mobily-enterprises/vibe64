@@ -80,6 +80,7 @@ function useVibe64TemporaryAi({
   const open = ref(false);
   const pollTimers = new Map();
   const pendingPolls = new Set();
+  const restorations = new Map();
   const saveTimers = new Map();
   const creations = new Map();
   const saves = new Map();
@@ -237,7 +238,19 @@ function useVibe64TemporaryAi({
     if (!ownerSessionId || !apiPath) return;
     const persistedTasks = tasks.value.filter((task) => task.conversationId);
     try {
-      const response = await request(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), { method: "GET" });
+      const key = JSON.stringify([apiPath, ownerSessionId, actorKey.value]);
+      let restoring = restorations.get(key);
+      if (restoring) {
+        await restoring.catch(() => {});
+        // The latest refresh reads again after the pending snapshot, which may
+        // predate a configuration change. Earlier refreshes are superseded.
+        if (!disposed && generation === restoreGeneration) return restoreTasks();
+        return;
+      }
+      restoring = request(vibe64TemporaryConversationsPath(apiPath, ownerSessionId), { method: "GET" })
+        .finally(() => restorations.delete(key));
+      restorations.set(key, restoring);
+      const response = await restoring;
       if (disposed || generation !== restoreGeneration) return;
       restoreError.value = "";
       const records = response.conversations || [];
@@ -959,10 +972,9 @@ function useVibe64TemporaryAi({
     if (!tasks.value.length) open.value = false;
   }
 
-  useRealtimeEvent({
-    events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT],
-    onEvent: () => void restoreTasks()
-  });
+  for (const event of [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT]) {
+    useRealtimeEvent({ event, onEvent: () => void restoreTasks() });
+  }
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} }) => (
