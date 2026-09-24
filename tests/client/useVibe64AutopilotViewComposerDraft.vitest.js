@@ -432,6 +432,19 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerDraft.value).toBe("");
   });
 
+  it("shows the active compaction phase and clears it for an idle or uncertain turn", async () => {
+    const { props, view } = await createViewWithProps();
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active", phase: "compacting" };
+    expect(view.thinkingLabel.value).toBe("Compacting conversation context…");
+    props.session.agentSession.turn.phase = "";
+    expect(view.thinkingLabel.value).toBe("Assistant is working...");
+    props.session.agentSession.turn.phase = "compacting";
+    props.session.agentSession.turn.status = "observation_lost";
+    expect(view.thinkingLabel.value).toContain("not yet confirmed");
+    props.session.agentSession.turn.active = false;
+    expect(view.thinkingLabel.value).not.toContain("Compacting");
+  });
+
   it("presents personal AI access as approval mode without connection errors", async () => {
     const canUse = ref(false);
     const canRequest = ref(true);

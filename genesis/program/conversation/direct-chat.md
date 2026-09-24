@@ -48,6 +48,21 @@ the renderer previews only trailing progress while working. No provider-turn
 association or history rewrite is required for grouping, including goal
 continuation and loading older history.
 
+Main chat shows “Compacting conversation context…” for native compaction in all
+three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
+summary message, or Claude's streamed compaction status. Completion, terminal
+outcomes and a new turn clear the phase; lost observation takes precedence. Browser
+reloads use the current provider/run state. Historical compaction counts never set
+this indicator. OpenCode reuses its existing message polling, with no extra network
+request. This display does not trigger compaction or rewrite conversation history.
+OpenCode follows native automatic-compaction control messages and their continuation
+or replay to the actual answer. Internal summaries cannot complete the user's turn
+or appear as assistant replies. An ordinary next user message remains a boundary.
+After a Codex observer reconnects, its old phase is unknown until a fresh native
+signal confirms it; an old stored phase cannot keep the indicator on.
+The optional phase belongs to new current-run writes; older records have no phase
+and need no historical state upgrade.
+
 Undo last turn is a main-conversation command, available while idle. Its saved
 target identifies the latest user prompt and every following reply/activity row.
 The preceding user turn must use the same current assistant application and,

@@ -567,6 +567,7 @@ function codexAppServerTurnStateFromAgentRun(run = {}) {
     goalThreadId: normalizeText(run.providerGoalThreadId),
     inputSource: normalizeText(run.inputSource),
     outerTurnId: normalizeText(run.outerTurnId),
+    phase: active && run.providerStatus !== "observation_lost" ? normalizeText(run.providerPhase) : "",
     runId: normalizeText(run.id),
     runState,
     startedAt: normalizeText(run.startedAt),
@@ -5877,6 +5878,7 @@ function createCodexTerminalController({
     error = "",
     inputSource = "",
     outerTurnId = "",
+    phase,
     runState = VIBE64_AGENT_RUN_STATE.COMPLETED,
     session = {},
     status = "",
@@ -5885,10 +5887,17 @@ function createCodexTerminalController({
     updatedAt = ""
   } = {}) {
     const normalizedRunState = normalizeVibe64AgentRunState(runState);
+    const currentRun = codexAppServerAgentRun(session);
+    const sameActiveTurn = normalizedRunState === VIBE64_AGENT_RUN_STATE.ACTIVE &&
+      currentRun?.providerThreadId === normalizeText(threadId) &&
+      currentRun?.providerTurnId === normalizeText(turnId);
     const patch = {
       error: normalizeText(error),
       provider: CODEX_AGENT_PROVIDER,
       providerInterface: "codex_app_server",
+      providerPhase: normalizedRunState === VIBE64_AGENT_RUN_STATE.ACTIVE && status !== "observation_lost"
+        ? normalizeText(phase === undefined && sameActiveTurn ? currentRun?.providerPhase : phase)
+        : "",
       providerStatus: normalizeText(status),
       providerThreadId: normalizeText(threadId),
       providerTurnId: normalizeText(turnId),
@@ -5936,6 +5945,7 @@ function createCodexTerminalController({
       error: normalizeText(runPatch.error),
       inputSource: normalizeText(runPatch.inputSource),
       outerTurnId: normalizeText(runPatch.outerTurnId),
+      phase: active && runPatch.providerStatus !== "observation_lost" ? normalizeText(runPatch.providerPhase) : "",
       runId: CODEX_APP_SERVER_AGENT_RUN_ID,
       runState,
       startedAt: normalizeText(runPatch.startedAt),
@@ -5972,6 +5982,7 @@ function createCodexTerminalController({
           id: turn.turnId,
           inputSource: turn.inputSource,
           outerTurnId: turn.outerTurnId,
+          phase: turn.phase,
           runState: turn.runState,
           startedAt: turn.startedAt,
           state: turn.state,
@@ -6101,6 +6112,7 @@ function createCodexTerminalController({
   async function writeCodexAppServerAgentRun(sessionId = "", {
     error = "",
     inputSource = "",
+    phase,
     publishPayload = null,
     publishReason = "",
     observedRun = null,
@@ -6133,6 +6145,7 @@ function createCodexTerminalController({
       runPatch = codexAppServerAgentRunPatch({
         error,
         inputSource,
+        phase,
         runState,
         session: currentSession || {},
         status,
@@ -6161,6 +6174,8 @@ function createCodexTerminalController({
         runPatch.state === VIBE64_AGENT_RUN_STATE.ACTIVE;
       if (
         (currentTurn.status === "observation_lost" && status !== "observation_lost") ||
+        (phase !== undefined && (!normalizeText(turnId) ||
+          !codexAppServerTurnCanReceiveProviderActivity(currentTurn, threadId, turnId))) ||
         (observedRun && !canRecoverStoppedTurn) ||
         (!canRecoverStoppedTurn && codexAppServerRunPatchIsStaleAfterTerminalState(currentTurn, runPatch))
       ) {
@@ -6242,6 +6257,7 @@ function createCodexTerminalController({
     const status = normalizeText(input.status) || "inProgress";
     const result = await writeCodexAppServerAgentRun(sessionId, {
       inputSource: normalizeText(input.inputSource),
+      phase: input.phase,
       publishReason: "codex-app-server-turn-active",
       observedRun: input.observedRun,
       runState: status === "starting" ? VIBE64_AGENT_RUN_STATE.STARTING : VIBE64_AGENT_RUN_STATE.ACTIVE,
@@ -7465,6 +7481,17 @@ function createCodexTerminalController({
     if (existing) {
       unsubscribeCodexAppServerEventSubscription(key);
     }
+    // A new observer cannot know whether compaction finished while disconnected.
+    // New native item events will restore the phase if compaction starts again.
+    runCodexAppServerNotificationTask({ projectContext, provider, sessionId: normalizedSessionId, sessionKey }, async () => {
+      const store = await createStoreForSession(normalizedSessionId);
+      const run = await readCodexAppServerAgentRunForSession(store, normalizedSessionId);
+      if (run?.providerPhase !== "compacting" || run.providerThreadId !== normalizedThreadId) return;
+      await markCodexAppServerTurnActive(normalizedSessionId, {
+        phase: "", requireTrackedTurn: true,
+        threadId: normalizedThreadId, turnId: run.providerTurnId
+      });
+    });
     const onNotification = (notification = {}) => {
       const method = normalizeText(notification.method);
       if (method === "account/rateLimits/updated" || method === "account/updated") {
@@ -7502,6 +7529,15 @@ function createCodexTerminalController({
         return;
       }
       const contextRefreshReason = codexAppServerContextRefreshReason(notification);
+      if (codexAppServerNotificationItem(notification)?.type === "contextCompaction" &&
+          ["item/started", "item/completed"].includes(method)) {
+        runCodexAppServerNotificationTask(notificationContext, () => markCodexAppServerTurnActive(normalizedSessionId, {
+          phase: method === "item/started" ? "compacting" : "",
+          requireTrackedTurn: true,
+          threadId: normalizedThreadId,
+          turnId: codexAppServerNotificationTurnId(notification)
+        }));
+      }
       if (contextRefreshReason) {
         runCodexAppServerNotificationTask(notificationContext, () => {
           return markCodexAppServerContextRefreshPending(

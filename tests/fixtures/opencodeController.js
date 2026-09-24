@@ -279,6 +279,7 @@ async function controllerHarness({
         const response = output && typeof output === "object" && !Array.isArray(output)
           ? output
           : { text: output };
+        if (response.messages) return { data: response.messages };
         const promptCall = [...promptCalls].reverse().find((entry) => entry.id === id);
         if (promptCall && queuedMessagesErrorAfterPrompt && queuedMessagesErrorCount > 0) {
           const error = queuedMessagesErrorAfterPrompt;
@@ -305,6 +306,7 @@ async function controllerHarness({
                 ? { content: response.content || assistantParts }
                 : {}),
               id: "msg_assistant",
+              ...(response.summary === true ? { summary: true } : {}),
               time: {
                 ...(response.pending ? {} : { completed: created + 1 }),
                 created: created + 1

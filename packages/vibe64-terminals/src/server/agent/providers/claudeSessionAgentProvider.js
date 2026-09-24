@@ -144,7 +144,8 @@ function createClaudeSessionAgentProvider({
   }
 
   function snapshot(entry) {
-    return entry?.turn ? { ...entry.turn, threadId: entry.id } : null;
+    return entry?.turn ? { ...entry.turn, threadId: entry.id,
+      phase: entry.turn.active && !entry.observationError ? text(entry.turn.phase) : "" } : null;
   }
   async function save(entry) {
     await metadata(entry.context, { [`claude_conversation_${entry.id}`]: JSON.stringify({
@@ -165,7 +166,8 @@ function createClaudeSessionAgentProvider({
         publishSessionChanged
       });
     }
-    Object.assign(entry.turn, { active, state, error: message, updatedAt: now() });
+    Object.assign(entry.turn, { active, state, error: message, updatedAt: now(),
+      phase: active && !entry.observationError ? text(entry.turn.phase) : "" });
     await save(entry);
     if (!entry.main || entry.renewal) {
       if (!active && entry.persistent && !entry.profile && !entry.context.assistantScope && !entry.renewal) {
@@ -178,7 +180,7 @@ function createClaudeSessionAgentProvider({
     const { runtime, sessionId, selection } = entry.context;
     const run = await runtime.store.writeAgentRunEvent(sessionId, TRANSPORT, {
       event: { kind: `claude-${state}`, state, message },
-      patch: { engineId: ENGINE, state, error: message, observationError: entry.observationError || "",
+      patch: { engineId: ENGINE, state, error: message, phase: entry.turn.phase, observationError: entry.observationError || "",
         model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
         turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : now(), updatedAt: now() }
     });
@@ -293,6 +295,13 @@ function createClaudeSessionAgentProvider({
         if (entry.main && frame.type === "user") await publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
       }
     } else if (frame.type === "system") {
+      if (entry.turn?.active && ["status", "compact_boundary"].includes(frame.subtype)) {
+        const phase = frame.subtype === "status" && frame.status === "compacting" ? "compacting" : "";
+        if (phase !== text(entry.turn.phase)) {
+          entry.turn.phase = phase;
+          await publishRun(entry, entry.turn.state);
+        }
+      }
       if (frame.subtype === "local_command_output" && frame.content) {
         await publishMessage(entry, { id: `claude_${frame.uuid}`, role: "commentary", text: frame.content, complete: true });
       }

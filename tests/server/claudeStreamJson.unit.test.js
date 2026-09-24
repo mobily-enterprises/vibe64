@@ -213,6 +213,34 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
   assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "first" })).duplicate, true);
 });
 
+test("Claude compaction status is scoped to the active conversation and clears after completion or Stop", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Work", messageId: "compact-work" });
+  const event = f.processes[0].options.onEvent;
+  const state = () => f.provider.sessionState(f.context);
+  await event({ type: "system", subtype: "status", status: "compacting", parent_tool_use_id: "nested-agent" });
+  assert.equal((await state()).turn.phase, "");
+  await event({ type: "system", subtype: "status", status: "compacting" });
+  assert.equal((await state()).turn.phase, "compacting");
+  await event({ type: "system", subtype: "compact_boundary" });
+  assert.equal((await state()).turn.phase, "");
+  assert.equal((await state()).turn.active, true);
+  await event({ type: "system", subtype: "status", status: "compacting" });
+  await event({ type: "system", subtype: "status", status: null });
+  assert.equal((await state()).turn.phase, "");
+  await event({ type: "system", subtype: "status", status: "compacting" });
+  await f.provider.interruptTurn(f.context);
+  assert.equal((await state()).turn.phase, "");
+  await event({ type: "system", subtype: "status", status: "compacting" });
+  assert.equal((await state()).turn.phase, "", "A stopped process cannot restore compaction");
+  await f.provider.sendMessage(f.context, { message: "Continue", messageId: "compact-continue" });
+  assert.equal((await state()).turn.phase, "");
+  const nextEvent = f.processes[1].options.onEvent;
+  await nextEvent({ type: "system", subtype: "status", status: "compacting" });
+  await nextEvent({ type: "result", subtype: "error_during_execution", is_error: true, errors: ["Provider unavailable"] });
+  assert.equal((await state()).turn.phase, "");
+});
+
 test("Claude stop requires process exit proof and resume keeps the native conversation", async (t) => {
   const f = await fixture(t);
   const initial = await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });

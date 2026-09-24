@@ -252,9 +252,13 @@ test("Codex adapter never presents an unconfirmed delivery claim as active assis
   providerTurn.state = "active";
   providerTurn.status = "inProgress";
   providerTurn.turnId = "turn-1";
+  providerTurn.phase = "compacting";
   const confirmed = await provider.sessionState({ sessionId: "session-1" });
   assert.equal(confirmed.turn?.active, true);
   assert.equal(confirmed.turn?.id, "turn-1");
+  assert.equal(confirmed.turn?.phase, "compacting");
+  providerTurn.active = false;
+  assert.equal((await provider.sessionState({ sessionId: "session-1" })).turn.phase, "");
 });
 
 test("Codex adapter preserves the hydrated session context when sending a message", async () => {

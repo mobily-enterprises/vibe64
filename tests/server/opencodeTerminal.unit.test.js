@@ -260,6 +260,91 @@ test("OpenCode streams partial snapshots before saving the final answer and clea
   assert.deepEqual(harness.runtime.store.readConversationStream("session-1").messages, []);
 });
 
+test("OpenCode compaction phase follows the live native summary and clears on Stop", { timeout: 5_000 }, async (t) => {
+  const response = { pending: true, summary: true, text: "" };
+  let changed = Promise.withResolvers();
+  const harness = await controllerHarness({ assistantResponses: [response, "Continued"],
+    onSessionChanged(_id, event) {
+      const turn = event.payload?.agentSession?.turn;
+      if (turn?.phase !== undefined) changed.resolve(turn);
+    }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  await harness.controller.sendMessage("session-1", { message: "Work", messageId: "compact-work" });
+  while ((await changed.promise).phase !== "compacting") changed = Promise.withResolvers();
+  assert.equal((await harness.controller.sessionState("session-1")).turn.phase, "compacting");
+  assert.equal((await harness.runtime.store.readAgentRun("session-1", "opencode_server")).phase, "compacting");
+  changed = Promise.withResolvers();
+  response.summary = false;
+  assert.equal((await changed.promise).phase, "");
+  assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+  changed = Promise.withResolvers();
+  response.summary = true;
+  assert.equal((await changed.promise).phase, "compacting");
+  await harness.controller.interruptTurn("session-1");
+  assert.equal((await harness.controller.sessionState("session-1")).turn.phase, "");
+  await harness.controller.sendMessage("session-1", { message: "Continue", messageId: "compact-continue" });
+  await harness.controller.waitForTurn("session-1");
+  assert.equal((await harness.controller.sessionState("session-1")).turn.phase, "");
+});
+
+for (const replay of [false, true]) {
+  test(`OpenCode follows automatic compaction to the actual answer (replayed prompt: ${replay})`, { timeout: 8_000 }, async (t) => {
+    const response = { pending: true, text: "" };
+    const compacting = Promise.withResolvers();
+    let observed = Promise.withResolvers();
+    let reads = 0;
+    let expectedReads = Infinity;
+    const harness = await controllerHarness({ assistantResponses: [response],
+      beforeMessages() { if (++reads >= expectedReads) observed.resolve(); },
+      onSessionChanged(_id, event) {
+        if (event.payload?.agentSession?.turn?.phase === "compacting") compacting.resolve();
+      }
+    });
+    t.after(async () => {
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { force: true, recursive: true });
+    });
+    const sent = await harness.controller.sendMessage("session-1", { message: "Finish the work", messageId: "compact-continuation" });
+    async function remainsActive() {
+      observed = Promise.withResolvers();
+      expectedReads = reads + 3;
+      await Promise.race([observed.promise, harness.controller.waitForTurn("session-1")]);
+      assert.equal((await harness.controller.sessionState("session-1")).turn.active, true, "Compaction must not finish the tracked request");
+    }
+    const created = Date.now();
+    response.messages = [
+      { id: sent.turn.id, type: "user", time: { created } },
+      { id: "before-compact", type: "assistant", text: "I will continue.", time: { created: created + 1, completed: created + 2 } },
+      { id: "compact-control", type: "user", time: { created: created + 3 }, content: [{ type: "compaction", auto: true }] }
+    ];
+    await remainsActive();
+    response.messages.push({ id: "compact-summary", type: "assistant", summary: true, text: "Internal summary", time: { created: created + 4 } });
+    await compacting.promise;
+    await remainsActive();
+    response.messages.at(-1).time.completed = created + 5;
+    await remainsActive();
+    response.messages.push({ id: "compact-followup", type: "user", time: { created: created + 6 }, content: replay
+      ? [{ type: "text", text: "Finish the work" }]
+      : [{ type: "text", synthetic: true, metadata: { compaction_continue: true }, text: "Continue" }]
+    });
+    await remainsActive();
+    response.messages.push(
+      { id: "actual-answer", type: "assistant", text: "The work is complete.", time: { created: created + 7, completed: created + 8 } },
+      { id: "next-request", type: "user", text: "A different request", time: { created: created + 9 } },
+      { id: "next-answer", type: "assistant", text: "A different answer", time: { created: created + 10, completed: created + 11 } }
+    );
+    assert.equal((await harness.controller.waitForTurn("session-1")).state, "completed");
+    assert.equal(harness.assistantMessages.at(-1).text, "The work is complete.");
+    assert.equal(harness.assistantMessages.some((message) => message.text.includes("Internal summary")), false);
+    assert.equal(harness.assistantMessages.some((message) => message.text.includes("A different answer")), false);
+    assert.equal(harness.userMessages.length, 1, "Native maintenance messages must not appear as user requests");
+  });
+}
+
 test("OpenCode Stop settles a stalled turn after native abort without waiting for a final answer", async (t) => {
   const harness = await controllerHarness({ assistantResponses: [{ pending: true, text: "" }] });
   t.after(async () => {

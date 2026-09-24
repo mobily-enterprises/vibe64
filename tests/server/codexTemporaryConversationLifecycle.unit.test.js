@@ -2165,6 +2165,55 @@ async function withAgentMessageController(operation, {
   }
 }
 
+test("Codex compaction phase follows native items and clears on completion and interruption", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+    const published = [];
+    captures.onSessionChanged = (_id, event) => published.push(event);
+    assert.equal((await controller.sendMessage(sessionId, { message: "Work", messageId: "compaction-work" })).ok, true);
+    const { threadId, turnId } = captures.provider;
+    captures.provider.interruptTurn = async () => {
+      captures.provider.status = "interrupted";
+      return { interrupted: true };
+    };
+    const notify = (method, id = turnId) => emitCodexNotification(captures.subscribers, {
+      method, params: { threadId, turnId: id, item: { id: "compact-item", type: "contextCompaction" } }
+    });
+    const readPhase = async () => (await controller.terminalState(sessionId)).codexAgentTurn.phase;
+    notify("item/started");
+    await waitForSessionValue(readPhase, (phase) => phase === "compacting", "compaction start");
+    await waitForSessionValue(async () => published,
+      (events) => events.some((event) => event.payload?.agentSession?.turn?.phase === "compacting"), "compaction publication");
+    const reader = createCodexTerminalController(controllerOptions);
+    assert.equal((await reader.terminalState(sessionId)).codexAgentTurn.phase, "compacting", "Fresh reads retain the current phase");
+    captures.provider.connectionGeneration = "after-compaction-reconnect";
+    captures.subscribers.clear();
+    assert.equal((await controller.ensureThread(sessionId)).ok, true);
+    await waitForSessionValue(readPhase, (phase) => phase === "", "reconnection clears an unconfirmed old phase");
+    notify("item/started");
+    await waitForSessionValue(readPhase, (phase) => phase === "compacting", "compaction on the new observer");
+    notify("item/completed");
+    await waitForSessionValue(readPhase, (phase) => phase === "", "compaction completion");
+    assert.equal((await controller.terminalState(sessionId)).codexAgentTurn.active, true);
+    notify("item/started");
+    await waitForSessionValue(readPhase, (phase) => phase === "compacting", "second compaction");
+    const stopped = await controller.interruptTurn(sessionId, { threadId });
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.equal(await readPhase(), "");
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).providerPhase, "");
+    assert.equal((await controller.sendMessage(sessionId, { message: "Continue", messageId: "after-compaction-stop" })).ok, true);
+    assert.equal(await readPhase(), "");
+    const successorId = captures.provider.turnId;
+    notify("item/started", turnId);
+    notify("item/started", successorId);
+    await waitForSessionValue(async () => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run.providerTurnId === successorId && run.providerPhase === "compacting", "successor compaction");
+    notify("item/completed", turnId);
+    notify("item/completed", successorId);
+    await waitForSessionValue(readPhase, (phase) => phase === "", "successor completion");
+    assert.equal((await controller.terminalState(sessionId)).codexAgentTurn.turnId, successorId);
+  });
+});
+
 test("assistant verification shares a stalled status read while attachments remain usable", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
     assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);

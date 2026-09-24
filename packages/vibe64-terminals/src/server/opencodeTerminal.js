@@ -297,32 +297,45 @@ function openCodeMessageRows(value = null) {
     .map(({ message }) => message);
 }
 
-function openCodeAssistantRowsForInput(value = null, inputMessageId = "") {
+function openCodeRowsForInput(value = null, inputMessageId = "") {
   const rows = openCodeMessageRows(value);
   const index = rows.findIndex((message) => text(message?.id) === text(inputMessageId));
   if (index < 0) {
     return [];
   }
-  const turnRows = rows.slice(index + 1);
-  const nextUserIndex = turnRows.findIndex((message) => message?.type === "user");
-  return (nextUserIndex < 0 ? turnRows : turnRows.slice(0, nextUserIndex))
-    .filter((message) => message?.type === "assistant");
+  const turnRows = [];
+  let compactionFollowup = false;
+  for (const message of rows.slice(index + 1)) {
+    if (message?.type === "user") {
+      if (message.content?.some((part) => part.type === "compaction" && part.auto === true)) {
+        compactionFollowup = true;
+      } else {
+        // Native automatic compaction emits one continuation or replays the
+        // original prompt. Both remain part of this already admitted request.
+        if (!compactionFollowup) break;
+        compactionFollowup = false;
+      }
+    }
+    turnRows.push(message);
+  }
+  return turnRows;
 }
 
 function openCodeMessageResultForInput(value = null, inputMessageId = "") {
-  const assistantRows = openCodeAssistantRowsForInput(value, inputMessageId);
-  if (!assistantRows.length && !openCodeMessageRows(value).some((message) => (
+  const rows = openCodeRowsForInput(value, inputMessageId);
+  if (!rows.length && !openCodeMessageRows(value).some((message) => (
     text(message?.id) === text(inputMessageId)
   ))) {
     return null;
   }
-  if (!assistantRows.length) {
+  if (rows.at(-1)?.type !== "assistant") {
     return { admitted: true, complete: false, error: "", text: "", turnId: "" };
   }
-  const result = lastAssistantResult(assistantRows);
+  const result = lastAssistantResult(rows);
   return {
     admitted: true,
-    complete: Boolean(result.message?.time?.completed || result.message?.finish || result.error),
+    complete: Boolean(result.error || (!result.message?.summary &&
+      (result.message?.time?.completed || result.message?.finish))),
     error: result.error,
     text: result.text,
     turnId: text(result.message?.id)
@@ -401,7 +414,7 @@ function lastAssistantResult(value = null) {
   return {
     error: openCodeMessageError(message),
     message,
-    text: assistantMessageText(message)
+    text: message?.summary ? "" : assistantMessageText(message)
   };
 }
 
@@ -412,7 +425,8 @@ function latestOpenCodeMessageResult(value = null) {
   }
   return {
     admitted: true,
-    complete: Boolean(result.message.time?.completed || result.message.finish || result.error),
+    complete: Boolean(result.error || (!result.message.summary &&
+      (result.message.time?.completed || result.message.finish))),
     error: result.error,
     text: result.text,
     turnId: text(result.message.id)
@@ -527,6 +541,7 @@ function openCodeRunRealtimePayload(run = {}) {
         completedAt: text(run.finishedAt),
         error: text(run.error),
         id: turnId,
+        phase: active && !run.observationError ? text(run.phase) : "",
         runState: state,
         startedAt: text(run.startedAt),
         state: turnState,
@@ -545,6 +560,7 @@ function openCodeTurnSnapshot(turn = null, threadId = "") {
         active,
         error: text(source.error),
         id: text(source.id),
+        phase: active && !source.observationError ? text(source.phase) : "",
         startedAt: text(source.startedAt),
         state: text(source.state) || (active ? "active" : "completed"),
         status: source.observationError ? "observation_lost" : text(source.state) || (active ? "active" : "completed"),
@@ -1582,12 +1598,13 @@ function createOpenCodeTerminalController({
   } = {}) {
     let failure = "";
     let providerApiFailure = false;
-    const rows = inputMessageId
-      ? openCodeAssistantRowsForInput(messages, inputMessageId)
-      : openCodeMessageRows(messages).filter((message) => message?.type === "assistant");
+    const rows = (inputMessageId
+      ? openCodeRowsForInput(messages, inputMessageId)
+      : openCodeMessageRows(messages)).filter((message) => message?.type === "assistant");
     for (const [index, message] of rows.entries()) {
       failure ||= openCodeMessageError(message);
       providerApiFailure ||= openCodeProviderApiFailure(message.error);
+      if (message.summary === true) continue;
       const assistantText = assistantMessageText(message);
       const messageId = assistantText ? conversationMessageId(message.id, "assistant") : "";
       const inFlight = streaming && index === rows.length - 1;
@@ -1679,6 +1696,7 @@ function createOpenCodeTerminalController({
           ...(Object.hasOwn(turn, "submittedBy") ? { submittedBy: turn.submittedBy } : {}),
           error,
           observationError: text(turn.observationError),
+          phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? text(turn.phase) : "",
           model: context.selection.modelId,
           modelProviderId: context.selection.modelProviderId,
           ...(vibe64AgentRunStateIsActive(state)
@@ -1869,14 +1887,17 @@ function createOpenCodeTerminalController({
           target.upstreamSessionId,
           () => turn.inputMessageId,
           {
-            onMessages: (messages, inputMessageId) => writeConversationProjection(
-              context,
-              messages,
-              {
-                inputMessageId,
-                streaming: true
+            onMessages: async (messages, inputMessageId) => {
+              const latest = lastAssistantResult(messages).message;
+              const phase = latest?.summary === true && Number(latest.time?.created) >= turn.eventStartedAt &&
+                !latest.time?.completed && !latest.finish && !latest.error ? "compacting" : "";
+              if (turn.active && !signal.aborted && text(turn.phase) !== phase) {
+                turn.phase = phase;
+                turn.updatedAt = new Date().toISOString();
+                await writeRun(context, turn, turn.state);
               }
-            ),
+              return writeConversationProjection(context, messages, { inputMessageId, streaming: true });
+            },
             readFailure: () => eventFailure,
             signal
           }
