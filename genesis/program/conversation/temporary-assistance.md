@@ -139,8 +139,12 @@ directory. Each chat uses the existing JSKIT transcript policy with a separate
 filesystem scope and a persisted native provider conversation. Codex user-facing
 chats are not native ephemeral threads. They never appear in main History.
 The collection GET restores open chats; POST creates an idempotently named draft;
-PATCH saves presentation and settings. First Send creates the native conversation
-under the session write coordinator. Accepted message identities prevent a retry
+PATCH saves presentation and settings. Draft and attachment saves omit model
+settings; only explicit model/thinking edits submit them. This prevents a stale
+pre-routing selection from becoming an override or blocking an Auto draft save.
+Acknowledging an older settings save retains a newer pending edit. First Send
+creates the native conversation under the session write coordinator. Accepted
+message identities prevent a retry
 from sending the same work again. Native history reconciles replies completed
 while the browser was absent; incomplete replies remain visible as they arrive.
 Temporary conversation requests wait briefly for that coordinator instead of

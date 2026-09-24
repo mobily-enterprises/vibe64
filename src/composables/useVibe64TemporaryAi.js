@@ -199,7 +199,7 @@ function useVibe64TemporaryAi({
         method: "PATCH",
         body: {
           presentation: taskPresentation(task),
-          agentSettings: task.agentSettings,
+          ...(task.settingsToSave ? { agentSettings: task.settingsToSave } : {}),
           attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)
         }
       });
@@ -207,6 +207,9 @@ function useVibe64TemporaryAi({
         updateTask(taskId, { routingMetadata: saved.routingMetadata, purposes: saved.purposes });
       }
       const current = tasks.value.find((candidate) => candidate.id === taskId);
+      if (canApplyTaskResponse(task) && current.settingsToSave === task.settingsToSave) {
+        updateTask(taskId, { settingsToSave: null });
+      }
       if (!disposed && current?.error?.startsWith("Draft could not be saved:")) {
         updateTask(taskId, { error: "" });
       }
@@ -511,12 +514,8 @@ function useVibe64TemporaryAi({
     if (!task) {
       return;
     }
-    updateTask(taskId, {
-      agentSettings: normalizeVibe64AgentSettings({
-        ...task.agentSettings,
-        [parameterId]: value
-      })
-    });
+    const settings = normalizeVibe64AgentSettings({ ...task.agentSettings, [parameterId]: value });
+    updateTask(taskId, { agentSettings: settings, settingsToSave: settings });
   }
 
   function reportRecoveryOutcome(taskId = "", {

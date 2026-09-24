@@ -87,6 +87,47 @@ describe("temporary AI mounted lifetime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("saves a routed draft without submitting the previous model as an override", async () => {
+    http.request.mockImplementation(async (_path, options) => options?.method === "PATCH"
+      ? { ok: true }
+      : { conversations: [{ conversationId: "conversation-1", status: "completed", messages: [],
+        agentSettings: { model: "deepseek-flash", thinking: "low" },
+        routingMetadata: { assistant_routing: '{"mode":"auto","workflowEngineId":"codex"}' }
+      }] });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.waitFor(() => expect(temporary.tasks.value).toHaveLength(1));
+    temporary.updateDraft("conversation-1", "Keep this cancelled request.");
+    await vi.advanceTimersByTimeAsync(300);
+    const patches = http.request.mock.calls.filter(([, options]) => options?.method === "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0][1].body.presentation.draft).toBe("Keep this cancelled request.");
+    expect(patches[0][1].body).not.toHaveProperty("agentSettings");
+  });
+
+  it("persists explicit model edits without replaying them on later draft saves", async () => {
+    const firstSave = Promise.withResolvers();
+    let patchCount = 0;
+    http.request.mockImplementation(async (_path, options) => {
+      if (options?.method === "PATCH") return ++patchCount === 1 ? firstSave.promise : { ok: true };
+      return { conversations: [{ conversationId: "conversation-1", status: "ready", messages: [],
+        agentSettings: { model: "original", thinking: "low" } }] };
+    });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.waitFor(() => expect(temporary.tasks.value).toHaveLength(1));
+    temporary.updateAgentSetting("conversation-1", "model", "first");
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateAgentSetting("conversation-1", "model", "second");
+    await vi.advanceTimersByTimeAsync(300);
+    firstSave.resolve({ ok: true });
+    await vi.waitFor(() => expect(patchCount).toBe(2));
+    const settings = http.request.mock.calls.filter(([, options]) => options?.method === "PATCH")
+      .map(([, options]) => options.body.agentSettings.model);
+    expect(settings).toEqual(["first", "second"]);
+    temporary.updateDraft("conversation-1", "Next question");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(http.request.mock.calls.at(-1)[1].body).not.toHaveProperty("agentSettings");
+  });
+
   it("reloads per-conversation access for a new actor and ignores the old actor's late turn", async () => {
     const viewer = ref({ actorKey: "owner" });
     const started = Promise.withResolvers();
