@@ -68,8 +68,14 @@ The authenticated actor supplied by the HTTP turn action is captured with the
 routing request, so later automatic review retains the submitting user's access
 even when an owner reads the conversation or triggers reconciliation.
 The shared routing coordinator uses the temporary conversation's existing write
-lock and transcript; it does not write main-chat history or alter its selection. Native idle
-events and read-time reconciliation recover one eligible review after normal
+lock and transcript; it does not write main-chat history or alter its selection.
+Creation and polling release that lock before looking up mode availability.
+Slow provider catalogue reads therefore do not block sibling Router updates or
+draft saves; native admission and transcript reconciliation remain serialized.
+The existing filesystem lock admits local waiters in arrival order, so repeated
+polls cannot overtake a pending routing update or cancellation. Wait timeouts
+still apply, and filesystem ownership continues to protect separate processes.
+Native idle events and read-time reconciliation recover one eligible review after normal
 Code completion. Polling can schedule it when the current coordinator admitted
 that Code request, even if its native idle event arrives later. After a backend
 restart, a completed Code request instead offers explicit review Retry/Skip.

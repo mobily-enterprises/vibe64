@@ -105,7 +105,7 @@ function createSessionConversations({
       ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value));
   }
 
-  async function snapshot(ctx, record, includePurposes = false) {
+  async function snapshot(ctx, record, includeAccess = false) {
     ctx = selectedContext(ctx, record);
     const sessionId = ctx.session.sessionId;
     const scope = { sessionId, conversationId: record.conversationId };
@@ -165,7 +165,7 @@ function createSessionConversations({
       ...record,
       ...response,
       outcome,
-      ...(includePurposes ? { purposes: await purposes(ctx, record),
+      ...(includeAccess ? {
         canSteer: ["starting", "inProgress"].includes(response.status)
           ? (await sessionAgent.assistantAccess(sessionId, ctx)).canUse : null } : {}),
       conversationId: record.conversationId,
@@ -186,6 +186,16 @@ function createSessionConversations({
     operation: "temporary-conversation",
     waitMs: 10_000
   });
+
+  async function writeSnapshot(sessionId, options, operation) {
+    let context;
+    const result = await write(sessionId, options, (ctx) => {
+      context = ctx;
+      return operation(ctx);
+    });
+    if (result?.ok === false) return result;
+    return { ...result, purposes: await purposes(context, result) };
+  }
 
   // Reuse the routing lifecycle with the temporary chat's existing metadata and
   // transcript scope. Native providers continue to receive the actual store.
@@ -365,7 +375,7 @@ function createSessionConversations({
 
   return {
     async createTemporaryConversation(sessionId, input = {}, options = {}) {
-      return write(sessionId, options, async (ctx) => {
+      return writeSnapshot(sessionId, options, async (ctx) => {
         const conversationId = input.conversationId || randomUUID();
         const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
         if (existing) return snapshot(ctx, existing, true);
@@ -390,17 +400,25 @@ function createSessionConversations({
     },
 
     async listTemporaryConversations(sessionId, options = {}) {
-      return write(sessionId, options, async (ctx) => {
+      let context;
+      const result = await write(sessionId, options, async (ctx) => {
+        context = ctx;
         const records = await ctx.runtime.store.listSessionConversations(sessionId);
         const conversations = [];
         for (const record of records) conversations.push(await snapshot(ctx, record, true));
         return { ok: true, conversations };
       });
+      if (result?.ok === false) return result;
+      // Provider availability is read-only and can be slow. Polling must not
+      // hold the session write lock while looking up every chat's modes.
+      return { ...result, conversations: await Promise.all(result.conversations.map(async (record) => ({
+        ...record, purposes: await purposes(context, record)
+      }))) };
     },
 
     async readTemporaryConversation(sessionId, input = {}, options = {}) {
       await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId });
-      return write(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true));
+      return writeSnapshot(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true));
     },
 
     async updateTemporaryConversation(sessionId, input = {}, options = {}) {

@@ -115,6 +115,31 @@ test("waiting logs one contention and correlated acquisition/release, without ne
   });
 });
 
+test("a waiting assistant operation enters before a newer polling read", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const contended = Promise.withResolvers();
+    const { run } = await fixture(targetRoot, (event) => {
+      if (event.event === "vibe64.session_lock.contended" && event.operation === "routing-update") contended.resolve();
+    });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const order = [];
+    const holder = run("temporary-read", async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    await entered.promise;
+    const waiter = run("routing-update", () => order.push("routing"), 1000);
+    await contended.promise;
+    release.resolve();
+    await holder;
+    const poll = run("temporary-read", () => order.push("poll"), 1000);
+    const results = await Promise.all([waiter, poll]);
+    assert.ok(results.every((result) => result.acquired));
+    assert.deepEqual(order, ["routing", "poll"]);
+  });
+});
+
 test("wait timeout logs its blocker once and a final rejection rather than each poll", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { events, run } = await fixture(targetRoot);
@@ -138,6 +163,7 @@ test("wait timeout logs its blocker once and a final rejection rather than each 
       release.resolve();
       await holder;
     }
+    assert.equal((await run("update-session-work", () => "retried")).value, "retried");
   });
 });
 

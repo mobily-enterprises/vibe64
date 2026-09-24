@@ -176,6 +176,7 @@ const SESSION_LOCK_PROCESS_IDENTITY_PLATFORM = "linux-proc";
 const SESSION_LOCK_PROCESS_IDENTITY_PID_ONLY_PLATFORM = "pid-only";
 const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();
+const sessionLockWaiters = new Map();
 const conversationStreams = createConversationStreams();
 const sessionMutationContext = new AsyncLocalStorage();
 const sessionExclusiveContext = new AsyncLocalStorage();
@@ -728,59 +729,58 @@ async function acquireSessionLock(sessionPaths, lockName = "", {
       // Diagnostics must never affect lock ownership or operation admission.
     }
   }
-  await mkdir(lockRoot, {
-    recursive: true
-  });
-  while (true) {
-    try {
-      await mkdir(lockPath, {
-        mode: 0o700
-      });
-      const acquiredAtMs = Date.now();
-      try {
-        await writeJsonFile(path.join(lockPath, "owner.json"), {
-          createdAt: new Date(acquiredAtMs).toISOString(),
-          operation: operation || lockName,
-          attemptId,
-          pid: process.pid,
-          processIdentity,
-          schemaVersion: SESSION_LOCK_OWNER_SCHEMA_VERSION,
-          token
-        });
-      } catch (error) {
-        await rm(lockPath, {
-          force: true,
-          recursive: true
-        });
-        throw error;
-      }
-      logLockEvent("acquired", { waitedMs: Date.now() - startedAtMs });
-      return async () => {
-        const owner = await readSessionLockOwner(lockPath);
-        if (normalizeText(owner?.token) !== token) {
-          return;
-        }
-        const releasedPath = `${lockPath}.released.${process.pid}.${token}`;
+  // Keep newer polling reads behind requests already waiting in this process.
+  // The filesystem lock still arbitrates ownership across processes.
+  const waiters = sessionLockWaiters.get(lockPath) || new Set();
+  sessionLockWaiters.set(lockPath, waiters);
+  waiters.add(attemptId);
+  try {
+    await mkdir(lockRoot, { recursive: true });
+    while (true) {
+      if (waiters.values().next().value === attemptId) {
         try {
-          await rename(lockPath, releasedPath);
-        } catch (error) {
-          if (isMissingPathError(error)) {
-            return;
+          await mkdir(lockPath, { mode: 0o700 });
+          const acquiredAtMs = Date.now();
+          try {
+            await writeJsonFile(path.join(lockPath, "owner.json"), {
+              createdAt: new Date(acquiredAtMs).toISOString(),
+              operation: operation || lockName,
+              attemptId,
+              pid: process.pid,
+              processIdentity,
+              schemaVersion: SESSION_LOCK_OWNER_SCHEMA_VERSION,
+              token
+            });
+          } catch (error) {
+            await rm(lockPath, { force: true, recursive: true });
+            throw error;
           }
-          throw error;
+          logLockEvent("acquired", { waitedMs: Date.now() - startedAtMs });
+          return async () => {
+            const owner = await readSessionLockOwner(lockPath);
+            if (normalizeText(owner?.token) !== token) {
+              return;
+            }
+            const releasedPath = `${lockPath}.released.${process.pid}.${token}`;
+            try {
+              await rename(lockPath, releasedPath);
+            } catch (error) {
+              if (isMissingPathError(error)) {
+                return;
+              }
+              throw error;
+            }
+            await rm(releasedPath, { force: true, recursive: true });
+            logLockEvent("released", { heldMs: Date.now() - acquiredAtMs });
+          };
+        } catch (error) {
+          if (error?.code !== "EEXIST") {
+            throw error;
+          }
+          if (await quarantineAbandonedSessionLock(lockPath)) {
+            continue;
+          }
         }
-        await rm(releasedPath, {
-          force: true,
-          recursive: true
-        });
-        logLockEvent("released", { heldMs: Date.now() - acquiredAtMs });
-      };
-    } catch (error) {
-      if (error?.code !== "EEXIST") {
-        throw error;
-      }
-      if (await quarantineAbandonedSessionLock(lockPath)) {
-        continue;
       }
       const waitedMs = Date.now() - startedAtMs;
       const rejected = waitedMs >= waitMs;
@@ -808,6 +808,9 @@ async function acquireSessionLock(sessionPaths, lockName = "", {
       }
       await delay(Math.min(SESSION_LOCK_POLL_MS, Math.max(1, waitMs - (Date.now() - startedAtMs))));
     }
+  } finally {
+    waiters.delete(attemptId);
+    if (waiters.size === 0) sessionLockWaiters.delete(lockPath);
   }
 }
 

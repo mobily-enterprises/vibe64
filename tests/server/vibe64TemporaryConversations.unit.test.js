@@ -376,6 +376,39 @@ test("a temporary draft waits for another assistant operation and saves once the
   });
 });
 
+for (const operation of ["list", "read"]) {
+  test(`temporary ${operation} availability checks do not block another conversation's saved draft`, async () => {
+    await withTemporaryRoot(async (root) => {
+      const f = await conversationFixture(root);
+      await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+      await f.service.createTemporaryConversation("one", { conversationId: "other" });
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      f.sessionAgent.inspectAssistantPurposes = async () => {
+        entered.resolve();
+        await release.promise;
+        return { plan: { available: true } };
+      };
+      const reading = operation === "list" ? f.service.listTemporaryConversations("one")
+        : f.service.readTemporaryConversation("one", { conversationId: "chat" });
+      await entered.promise;
+      try {
+        const saving = await runVibe64AgentWriteExclusive(f.runtime, "one", () =>
+          f.service.updateTemporaryConversation("one", { conversationId: "other", presentation: { draft: "Still editable" } }));
+        assert.equal(saving.acquired, true, "provider availability must not hold the session write lock");
+        assert.equal(saving.value.ok, true);
+        assert.equal((await f.store.readSessionConversation("one", "other")).draft, "Still editable");
+      } finally {
+        release.resolve();
+        await reading;
+      }
+      const result = await reading;
+      const records = operation === "list" ? result.conversations : [result];
+      assert.ok(records.every((record) => record.purposes.plan.available));
+    });
+  });
+}
+
 test("Close publishes its exact conversation after deletion, including retries, without recreating it on publication failure", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, store, restart, events } = await conversationFixture(root);
