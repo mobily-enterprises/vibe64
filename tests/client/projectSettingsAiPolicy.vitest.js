@@ -543,6 +543,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       createCommand(),
       createCommand(),
       createCommand(),
+      createCommand(),
       createCommand()
     ];
     projectSettingsMocks.dialog.mockReset();
@@ -560,6 +561,19 @@ describe("ProjectSettingsPanel AI behaviour", () => {
 
   afterEach(() => {
     resetHttpWebClientForTests();
+  });
+
+  it("restores the cached PR requirement when Settings is mounted again", async () => {
+    projectSettingsMocks.resource.data.value.repositoryWorkflow = { available: true, canEdit: true, requirePullRequest: true };
+    for (let visit = 0; visit < 2; visit += 1) {
+      projectSettingsMocks.endpointOptions.length = 0;
+      projectSettingsMocks.commandOptions.length = 0;
+      const { app, container } = mountPanel();
+      await nextTick();
+      expect(findField(container, "Require pull requests for Vibe64 publication").props.modelValue).toBe(true);
+      expect(findButton(container, "Save repository workflow").props.disabled).toBe(true);
+      app.unmount();
+    }
   });
 
   it("binds panel and persistent settings read URLs to the query's project and source", async () => {
@@ -1722,6 +1736,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       createCommand(),
       createCommand(),
       createCommand(),
+      createCommand(),
       engineeringCommand
     ];
     const { app, container } = mountPanel();
@@ -1736,7 +1751,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
 
     expect(findButton(container, "Saving…").props.disabled).toBe(true);
     expect(engineeringCommand.run).toHaveBeenCalledOnce();
-    expect(projectSettingsMocks.commandOptions[3].buildRawPayload(null, {
+    expect(projectSettingsMocks.commandOptions[4].buildRawPayload(null, {
       context: engineeringCommand.run.mock.calls[0][0]
     })).toEqual({
       profile: "durable.v1",
@@ -1807,11 +1822,11 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       await refreshStarted.promise;
       await nextTick();
 
-      expect(projectSettingsMocks.commands[3].isRunning).toBe(false);
+      expect(projectSettingsMocks.commands[4].isRunning).toBe(false);
       expect(findField(container, "Engineering profile").props.disabled).toBe(true);
       expect(findButton(container, "Saving…").props.disabled).toBe(true);
       await findButton(container, "Saving…").props.onClick();
-      expect(projectSettingsMocks.commands[3].run).toHaveBeenCalledOnce();
+      expect(projectSettingsMocks.commands[4].run).toHaveBeenCalledOnce();
       refresh.resolve();
       await saving;
       await nextTick();
@@ -1849,7 +1864,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     const { app, container } = mountPanel();
     try {
       const failure = new Error(`Controlled engineering ${stage} failure`);
-      if (stage === "save") projectSettingsMocks.commands[3].run.mockRejectedValueOnce(failure);
+      if (stage === "save") projectSettingsMocks.commands[4].run.mockRejectedValueOnce(failure);
       else projectSettingsMocks.engineeringResource.reload.mockRejectedValueOnce(failure);
       findField(container, "Engineering profile").props["onUpdate:modelValue"]("durable.v1");
       await nextTick();
@@ -1862,7 +1877,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       expect(findField(container, "Engineering profile").props.disabled).toBe(false);
       expect(findButton(container, "Save engineering approach").props.disabled).toBe(false);
       await findButton(container, "Save engineering approach").props.onClick();
-      expect(projectSettingsMocks.commands[3].run).toHaveBeenCalledTimes(2);
+      expect(projectSettingsMocks.commands[4].run).toHaveBeenCalledTimes(2);
     } finally {
       app.unmount();
     }
@@ -1888,7 +1903,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       await findButton(container, "Save engineering approach").props.onClick();
       await nextTick();
 
-      expect(projectSettingsMocks.commands[3].run).toHaveBeenCalledWith({
+      expect(projectSettingsMocks.commands[4].run).toHaveBeenCalledWith({
         profile: "durable.v1",
         sessionId: "session-a"
       });

@@ -44,6 +44,30 @@ async function fixture(t) {
   return { root, remote, source, peer, project, events, options, call, commit };
 }
 
+test("creates and switches local branches without pushing, rejects dirty or stale reviews, and keeps session binding", async (t) => {
+  const f = await fixture(t);
+  const state = await f.call();
+  const created = await f.call({ action: "create", branch: "feature/search", review: state.review });
+  assert.equal(created.branch, "feature/search");
+  assert.equal(created.head, state.head);
+  assert.deepEqual(created.localBranches, ["feature/search", "trunk"]);
+  assert.equal(await git(f.root, "--git-dir", f.remote, "for-each-ref", "--format=%(refname)", "refs/heads"), "refs/heads/trunk");
+  await assert.rejects(f.call({ action: "switch", branch: "trunk", review: state.review }), { code: "vibe64_remote_review_changed" });
+  await writeFile(path.join(f.source, "keep.txt"), "my work");
+  await assert.rejects(f.call({ action: "switch", branch: "trunk", review: created.review }), { code: "vibe64_remote_dirty" });
+  assert.equal(await readFile(path.join(f.source, "keep.txt"), "utf8"), "my work");
+  await rm(path.join(f.source, "keep.txt"));
+  await assert.rejects(f.call({ action: "create", branch: "-bad", review: created.review }), { code: "vibe64_remote_branch_invalid" });
+  await assert.rejects(checkSessionUpdatesDirect({
+    project: { ...f.project, repository: { mode: "local_source", defaultBranch: "feature/search" } },
+    session: { sessionId: "old", sourcePath: f.peer, metadata: { base_commit: state.head, local_source_branch: "trunk" } },
+    runCommand
+  }), { code: "vibe64_session_local_branch_changed" });
+  const switched = await f.call({ action: "switch", branch: "trunk", review: created.review });
+  assert.equal(switched.branch, "trunk");
+  assert.equal(switched.head, state.head);
+});
+
 test("uses the original folder's upstream, fetches without moving files, and pulls with a reviewed destination", async (t) => {
   const f = await fixture(t);
   const before = await git(f.source, "rev-parse", "HEAD");

@@ -161,7 +161,7 @@ function handleCreated(response = {}) {
   font-weight: 500;
   letter-spacing: 0;
   min-height: 3rem;
-  min-width: 9.5rem;
+  min-width: 12rem;
 }
 
 .studio-ai-sessions__preview-create-button:hover {

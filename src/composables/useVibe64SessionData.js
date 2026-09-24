@@ -244,6 +244,7 @@ function useVibe64SessionData({
     buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
       assistantSelection: context?.assistantSelection || {},
       ...(context?.workflowEngineId ? { workflowEngineId: context.workflowEngineId } : {}),
+      ...(context?.repositoryBranch ? { repositoryBranch: context.repositoryBranch } : {}),
       ...(context?.pullRequestNumber ? { pullRequestNumber: context.pullRequestNumber } : {})
     }),
     fallbackRunError: "Vibe64 session could not be created.",
@@ -572,7 +573,7 @@ function useVibe64SessionData({
 
   let createSessionInFlight = null;
 
-  async function createSession(assistantSelection = {}, { pullRequestNumber, workflowEngineId } = {}) {
+  async function createSession(assistantSelection = {}, { pullRequestNumber, workflowEngineId, repositoryBranch } = {}) {
     if (createSessionInFlight) {
       return createSessionInFlight;
     }
@@ -582,7 +583,7 @@ function useVibe64SessionData({
     createSessionPending.value = true;
     createSessionInFlight = (async () => {
       try {
-        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, workflowEngineId });
+        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, workflowEngineId, repositoryBranch });
         if (
           !sessionDataDisposed &&
           creationProjectSlug === String(projectSlug.value || "").trim()

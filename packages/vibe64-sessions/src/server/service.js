@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
@@ -446,9 +447,10 @@ function createService({
       ? await runtime.listSessionSummaries({ statusGroup: "open" })
       : [];
     const source = await runtime.getSession(sourceSessionId, { inspectSource: false });
+    const currentProject = await project.readCurrentProject();
     const authorityKey = (session) => {
-      const source = JSON.parse(session?.metadata?.github_pull_request || "null");
-      return source ? `${source.headRepository}:${source.headBranch}` : "project";
+      const { mode, repository, branch } = sessionRepositoryDestination(currentProject, session);
+      return JSON.stringify([mode, repository, branch]);
     };
     const sourceAuthority = authorityKey(source);
     const deliveries = await Promise.allSettled(sessions.map(async (candidate) => {
@@ -1052,6 +1054,7 @@ function createService({
         const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
           number: input.pullRequestNumber, vibe64User
         });
+        if (pullRequest && input.repositoryBranch) throw new Error("Choose a branch or a pull request for this session.");
         const { assistantSelection, assistantRouting } = await resolveSessionStart(input, { vibe64User });
         const runtime = await project.createRuntime(sessionRuntimeOptions(terminals));
         if (
@@ -1069,8 +1072,12 @@ function createService({
           if (policy?.creation?.canCreate !== true) {
             throw sessionCreationLimitError(policy);
           }
+          const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
+            selection: input.repositoryBranch, vibe64User
+          }) : null;
           const session = await runtime.createSession({
             metadata: {
+              ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
               ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
               [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
               [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
@@ -1079,6 +1086,7 @@ function createService({
               created_by: text(vibe64User?.username || vibe64User?.name)
             },
             sourceContext: {
+              ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
               ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
               vibe64User
             }
@@ -1297,6 +1305,7 @@ function createService({
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         try {
           return await terminals.createSessionPullRequest(sessionId, {
+            destinationReview: input.destinationReview,
             title: input.title, body: input.body, draft: input.draft,
             operationId: crypto.randomUUID(), runtime, session, vibe64User
           });
@@ -1322,6 +1331,7 @@ function createService({
         let operationStarted = false;
         try {
           const result = await terminals.saveSessionWork(sessionId, {
+            destinationReview: input.destinationReview,
             onRepositoryWriteAcquired: async () => {
               operationStarted = true;
               activeSaveOperations.set(sessionId, operationId);

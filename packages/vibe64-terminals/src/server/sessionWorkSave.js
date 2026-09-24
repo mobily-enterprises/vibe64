@@ -8,6 +8,7 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   normalizeRepositoryMode,
+  sessionRepositoryDestination,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -114,6 +115,7 @@ function repositoryContext(session = {}, project = {}) {
     lastCanonicalCommit,
     mode,
     githubMirrorPath: text(project.githubMirrorPath),
+    repositoryFullName: text(project.githubRepository?.fullName || project.repository?.github?.fullName),
     githubMirrorOptional: Boolean(sessionMetadata.github_pull_request) || project.githubMirrorOptional === true,
     remoteUrl,
     sessionId,
@@ -215,7 +217,7 @@ function sessionWorkOperationProject(context, project = {}) {
       ? {
           githubMirrorPath: context.githubMirrorPath,
           githubMirrorOptional: context.githubMirrorOptional,
-          githubRepository: { cloneUrl: context.remoteUrl }
+          githubRepository: { cloneUrl: context.remoteUrl, fullName: context.repositoryFullName }
         }
       : {}),
     ...(context.mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
@@ -230,7 +232,7 @@ function sessionWorkOperationProject(context, project = {}) {
       defaultBranch: context.branch,
       mode: context.mode,
       ...(context.mode === PROJECT_REPOSITORY_MODE_GITHUB
-        ? { github: { cloneUrl: context.remoteUrl } }
+        ? { github: { cloneUrl: context.remoteUrl, fullName: context.repositoryFullName } }
         : {})
     },
     repositoryMode: context.mode,
@@ -831,6 +833,7 @@ async function inspectSessionWorkDirect({
     changeBaseCommit: comparison.changeBaseCommit,
     changeBaseTree: comparison.changeBaseTree,
     changedPaths,
+    destination: sessionRepositoryDestination(project, session),
     dirty: tree !== headTree || !worktreeClean,
     mode: context.mode,
     ok: true,

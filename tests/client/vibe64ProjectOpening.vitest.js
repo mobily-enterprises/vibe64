@@ -212,20 +212,21 @@ describe("opening a routed project", () => {
     expect(view.sessionMounted).toHaveBeenCalledTimes(1);
   });
 
-  it("reopens from the same project link and from the current project selector", async () => {
+  it("reuses a healthy same-project route and reopens on explicit selection from Dashboard", async () => {
     const view = await mountPage();
     mocks.requests[0].resolve(success);
     await flush();
     await view.router.push("/app/project/dogandgroom");
     await flush();
-    expect(mocks.requests).toHaveLength(2);
-    expect(view.page.projectRuntimeReady.value).toBe(false);
-    mocks.requests[1].resolve(success);
+    expect(mocks.requests).toHaveLength(1);
+    expect(view.page.projectRuntimeReady.value).toBe(true);
+    await view.router.push("/app/project/dogandgroom/dashboard/files");
     await flush();
+    expect(mocks.requests).toHaveLength(1);
     view.page.openProject({ slug: "dogandgroom" });
     await flush();
-    expect(mocks.requests).toHaveLength(3);
-    mocks.requests[2].resolve(success);
+    expect(mocks.requests).toHaveLength(2);
+    mocks.requests[1].resolve(success);
     await flush();
     expect(view.page.projectRuntimeReady.value).toBe(true);
   });

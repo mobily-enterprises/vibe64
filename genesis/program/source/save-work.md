@@ -1,4 +1,4 @@
-# Save session work
+# Review and publish session work
 
 People can deliberately publish the complete current session work to the
 project's configured source authority without asking the coding agent to run
@@ -6,6 +6,11 @@ Git commands.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/projectRepository.js`
+- `packages/vibe64-project/src/server/repositoryBranches.js`
+- `packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js`
+- `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
+- `src/components/studio/ProjectSettingsPanel.vue`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/agentWriteLock.js`
 - `packages/vibe64-terminals/src/server/service.js`
@@ -26,6 +31,22 @@ Git commands.
 
 ## Public contract
 
+File Save writes only that file in the session. Review changes opens a publication
+review with the session, changed-file count, View diff and a captured destination.
+The review describes the complete on-disk tree, including eligible untracked
+files, and tells people to save open buffers first. It distinguishes database
+rows, conversation history and application publishing from the code commit.
+
+The confirmation is Commit to the local branch, Save project version for
+Vibe64 Git, or Commit & push to the exact GitHub repository and branch. GitHub
+also offers Create draft PR as the recommended path and explains possible
+repository automation. A PR session names its head destination and base.
+The browser retains the reviewed destination across refreshes; the server
+rechecks session, mode, repository and branch before preparation and under the
+publication lock. A stale review requires a new review. These commands do not
+require an AI connection; server write admission still rejects active work.
+
+The internal Save operation described below is this explicit publication action.
 Save captures tracked, staged, unstaged, and relevant untracked session work,
 asks the workflow's effective Economy model to give that exact checkpoint a concise
 commit subject, and publishes one ordinary commit to the exact configured
@@ -90,7 +111,7 @@ Returning to a visible tab requests a normal canonical check, allowing the
 server's 25-second shared result cache to serve sibling tabs. Explicit source
 and canonical-change invalidations still force a fresh check. Worktree fallback
 inspection on visibility remains immediate.
-Clicking the muted Save disk explicitly forces a server update check through
+Clicking the muted repository action explicitly forces a server update check through
 the same registry and waits for the work inspection to settle. A visible
 “Checking…” hint and busy state last for that request, with repeated clicks
 suppressed. The refreshed state may enable Save or show Update, but checking
@@ -187,7 +208,8 @@ The standalone project shell shows one branch dropdown beside the project name
 and new-session button, with no separate Git row. A badge shows the total
 incoming/outgoing count, or an error marker when a check fails. The button's
 accessible name and hover title include the full branch and sync status; small
-screens use a Git icon. The dropdown contains status, Fetch, Pull and Push with
+screens use a Git icon. The dropdown contains status, Switch branch, New branch,
+Fetch, Pull and Push with
 nonzero commit counts, full branch and remote names, the last check time, any
 fetch error and Remote settings. Pull/Push close this menu before opening their
 existing review dialog. Long branch names truncate in the header; details wrap.
@@ -205,8 +227,8 @@ history. Conflicts leave the working files untouched for terminal resolution.
 Push publishes the original folder's saved commits to its exact reviewed push
 branch, never force-pushes, and verifies the remote result. Save remains local;
 unsaved session changes are not pushed. Existing session checks then offer
-Update when the local baseline advances. These controls are unavailable to hosted
-GitHub and managed-Git projects, whose existing publication behavior is unchanged.
+Update when the local baseline advances. The original-folder controls are
+unavailable to hosted projects, which choose a branch when opening a session.
 Remote operations use the execution gateway and existing project source lock.
 Logs identify action, project and attempt, without recording remote credentials.
 
@@ -222,6 +244,45 @@ New local sessions remember their original project branch and refuse to retarget
 when the opened folder switches branches. Legacy sessions without this marker
 continue using verified project authority. Hosted rewritten-history rejection
 is unchanged.
+
+Switch branch and New branch review the original folder's current branch, HEAD
+and configuration, require a clean tree and no merge/rebase/sequencer in progress,
+and use native non-forcing Git switch. Creation starts at the reviewed HEAD and
+does not set an upstream or push. Older sessions keep their original binding.
+
+Hosted session creation can list or create branches through the existing project
+owner. A selection carries its observed commit, which the server rechecks under
+the project source lock. Creating a branch is absent-only; opening an existing
+branch clones that branch's verified commit. No current worktree is retargeted.
+The optional `repository_branch` metadata explicitly overrides the project branch
+for source inspection, publication, Update and renewal. Legacy sessions without
+it retain their existing project authority. Notifications only affect sessions
+sharing the same mode, repository and branch. Local sessions retain their
+existing original-folder binding instead of using this hosted override.
+
+Codex, Claude and OpenCode observed writable session turns create private Git
+recovery checkpoints on completion, interruption or failure. Ordinary temporary
+conversations participate; scoped read-only helpers and naming profiles do not.
+Checkpoints preserve the saveable files without advancing the project branch or
+changing the index. A durable background-task failure appears in chat; the files
+remain but a successful recovery point is not claimed. This is not continuous
+backup of arbitrary terminal edits, unsaved editor buffers or database contents.
+
+GitHub project owners can require PR publication through
+`settings/repository-workflow.json` in private project runtime state. Absence
+means false and reads never create or rewrite a file. The owner-only command
+atomically replaces the validated setting. Direct publication is rejected
+unless the session has a numbered PR; server-owned PR creation may publish its
+head first. This is checked again immediately before publication. Existing
+session destinations are unchanged. Native GitHub rules remain the authority
+for pushes made outside this workflow. No historical data upgrade is needed:
+the optional setting and branch binding have no historical rewrite.
+The Git workflow setting has its own Project settings section. Its existing
+project event carries the changed boolean to open session reviews without a Git
+inspection or account refresh. Work and Changes reads both carry the policy and
+the complete reviewed repository/branch, including across the Git subprocess
+boundary. Local Git operations can establish their local command identity
+before any AI conversation has started.
 
 ## Implementation map
 

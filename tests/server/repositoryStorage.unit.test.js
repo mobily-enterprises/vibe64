@@ -4,6 +4,7 @@ import { access, mkdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 
 import {
   CANONICAL_REPOSITORY_PUSH_OPTION,
@@ -60,6 +61,19 @@ test("canonical repository pushes are guarded and copy the old ref to backup sto
       sourceRepository: sourceRoot,
       targetRef: "refs/heads/main"
     }), root);
+    const project = { slug: "test", projectRuntimeRoot: root, canonicalRepositoryPath: canonicalPath,
+      repository: { mode: "managed_git", defaultBranch: "main" } };
+    const options = { runCommand: async (request) => {
+      try { return { ok: true, stdout: await run(request.command, request.args, request.cwd) }; }
+      catch (error) { return { ok: false, stderr: error.stderr || error.message }; }
+    } };
+    const listed = await repositoryBranches(project, {}, options);
+    assert.deepEqual(listed.branches, [{ name: "main", commit: firstCommit }]);
+    const selection = { name: "feature/search", fromBranch: "main", expectedCommit: firstCommit };
+    await repositoryBranches(project, { selection }, options);
+    assert.equal(await run("git", ["--git-dir", canonicalPath, "rev-parse", "refs/heads/feature/search"], root), firstCommit);
+    await assert.rejects(repositoryBranches(project, { selection }, options), /already exists/u);
+    await assert.rejects(repositoryBranches(project, { selection: { name: "main", expectedCommit: "b".repeat(40) } }, options), /changed/u);
 
     const worktreeRoot = path.join(root, "worktree");
     await run("git", ["clone", canonicalPath, worktreeRoot], root);

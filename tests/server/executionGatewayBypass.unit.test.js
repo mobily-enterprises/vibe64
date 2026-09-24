@@ -19,6 +19,10 @@ const DIRECT_EXECUTION_PATTERNS = Object.freeze([
     pattern: /\bspawn\s*\(/gu
   },
   {
+    id: "fork call",
+    pattern: /\bfork\s*\(/gu
+  },
+  {
     id: "execFile call",
     pattern: /\bexecFile\s*\(/gu
   },
@@ -32,7 +36,20 @@ const DIRECT_EXECUTION_PATTERNS = Object.freeze([
   }
 ]);
 
-const DIRECT_EXECUTION_ALLOWLIST = new Map();
+const DIRECT_EXECUTION_ALLOWLIST = new Map([
+  ["packages/vibe64-runtime/src/server/codexAppServerProcess.js", {
+    "child_process import": { count: 1, reason: "Managed execution leader owns the history adapter and native Codex child." },
+    "spawn call": { count: 1, reason: "Native Codex shares the managed leader's execution lifetime." }
+  }],
+  ["packages/vibe64-terminals/src/server/claudeStdioBridge.js", {
+    "child_process import": { count: 1, reason: "Managed execution bridge owns native Claude stdio." },
+    "spawn call": { count: 1, reason: "Claude runs inside the bridge's existing managed execution scope." }
+  }],
+  ["packages/vibe64-database-tools/src/server/sqliteClient.js", {
+    "child_process import": { count: 1, reason: "SQLite connections isolate synchronous native code from the server event loop." },
+    "fork call": { count: 1, reason: "A fixed IPC worker allows cancellation of native SQLite queries." }
+  }]
+]);
 
 const ENV_POLICY_PATTERNS = Object.freeze([
   {
@@ -126,12 +143,14 @@ function assertAllowedMatches(actual = [], allowlist = new Map()) {
   assert.deepEqual(unexpected, []);
   assert.deepEqual(staleAllowlist, []);
 
-  for (const { filePath, id } of actual) {
-    assert.match(allowlist.get(filePath)[id], /^Phase \d+(?:\/\d+)?: /u);
+  for (const { filePath, id, count } of actual) {
+    const allowed = allowlist.get(filePath)[id];
+    assert.equal(count, allowed.count, `${filePath} :: ${id}`);
+    assert.ok(allowed.reason.length > 20);
   }
 }
 
-test("direct command execution bypasses stay explicit while migrating to vibe64-execution", async () => {
+test("direct process creation stays limited to managed leaders and the SQLite worker", async () => {
   const files = await listJavaScriptFiles(PACKAGES_ROOT);
   const actual = [];
   for (const filePath of files) {

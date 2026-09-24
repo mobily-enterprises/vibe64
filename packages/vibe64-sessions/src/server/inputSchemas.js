@@ -292,6 +292,7 @@ const sessionListInputValidator = patchSchema({
 });
 
 const sessionPullRequestInputValidator = patchSchema({
+  destinationReview: { type: "object", additionalProperties: true, required: true },
   sessionId: { type: "string", required: true },
   title: { type: "string", required: true, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
@@ -302,6 +303,7 @@ const sessionPullRequestInputValidator = patchSchema({
 
 const sessionCreateInputValidator = patchSchema({
   workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
+  repositoryBranch: { type: "object", additionalProperties: true, required: false },
   pullRequestNumber: { type: "integer", min: 1, required: false },
   assistantSelection: {
     type: "object",
@@ -421,6 +423,7 @@ const sessionIdInputValidator = patchSchema({
 });
 
 const sessionSaveInputValidator = patchSchema({
+  destinationReview: { type: "object", additionalProperties: true, required: true },
   ...optionalOrigin,
   ...optionalUser,
   sessionId: {

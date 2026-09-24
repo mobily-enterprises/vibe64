@@ -25,12 +25,11 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.getByRole("button", { name: "Account settings" }).click();
   const accountConnectionsDialog = page.getByRole("dialog");
   await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeVisible();
-  await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "Codex Connection" })).toBeVisible();
-  const refreshAccountsButton = accountConnectionsDialog.getByRole("button", { name: "Refresh" });
+  const refreshAccountsButton = accountConnectionsDialog.getByRole("button", { name: "Refresh AI accounts" });
   await expect(refreshAccountsButton).toBeEnabled();
   await refreshAccountsButton.click();
   await expect(refreshAccountsButton).toBeEnabled();
-  await expect(accountConnectionsDialog.getByRole("button", { name: "Login with ChatGPT" })).toBeEnabled();
+  await expect(accountConnectionsDialog.getByRole("button", { name: "Add AI", exact: true })).toBeEnabled();
   await accountConnectionsDialog.getByRole("tab", { name: "GitHub" }).click();
   await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "GitHub Connection" })).toBeVisible();
   await accountConnectionsDialog.getByRole("button", { name: "Close account settings" }).click();
@@ -86,6 +85,8 @@ type MockReadyStudioShellOptions = {
 async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOptions = {}) {
   const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   const apiPayloads = new Map<string, unknown>([
+    ["/api/vibe64/accounts/codex-providers", { ok: true, providers: [] }],
+    ["/api/vibe64/accounts/ai-connections", { ok: true, connections: [] }],
     [
       "/api/vibe64/assistants/capabilities",
       {

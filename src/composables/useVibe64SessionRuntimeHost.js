@@ -1,4 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, proxyRefs, ref, unref, watch } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ConversationLog } from "@/composables/useVibe64ConversationLog.js";
@@ -207,6 +209,18 @@ function useVibe64SessionRuntimeHost(props, emit) {
     operation: null,
     unsaved: null
   });
+  useRealtimeEvent({
+    event: VIBE64_PROJECT_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => payload.projectSlug === props.projectContext?.slug &&
+      typeof payload.repositoryWorkflow?.requirePullRequest === "boolean",
+    onEvent: ({ payload }) => {
+      workState.value = {
+        ...workState.value,
+        publicationRequiresPullRequest: workState.value.destination?.mode === "github" &&
+          payload.repositoryWorkflow.requirePullRequest
+      };
+    }
+  });
   let workStateActive = true;
 
   async function inspectWorkState({ isCurrent }) {
@@ -341,6 +355,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     statusLabel: vibe64SessionStatusLabel
   });
   const autopilotSessionToolbar = proxyRefs({
+    projectContext: computed(() => props.projectContext || {}),
     refreshRepositoryState: props.refreshRepositoryState,
     canCreateSession: props.sessionData.canCreateSession,
     createSession: props.sessionData.createSession,
@@ -490,7 +505,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return true;
   }
 
-  async function saveSessionWork() {
+  async function saveSessionWork({ destinationReview } = {}) {
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
@@ -502,7 +517,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/save"
       ),
       {
-        body: vibe64RealtimeOriginPayload(),
+        body: { ...vibe64RealtimeOriginPayload(), destinationReview },
         method: "POST"
       }
     );

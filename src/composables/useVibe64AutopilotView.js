@@ -502,6 +502,7 @@ function useVibe64AutopilotView(props, emit, {
   const dismissedNumberedQuestionText = ref("");
   const submittedQuestionText = ref("");
   const saveWorkConfirmOpen = ref(false);
+  const saveWorkReview = ref(null);
   const saveWorkError = ref("");
   const saveWorkFailure = ref(null);
   const saveWorkAttempt = ref(null);
@@ -1400,12 +1401,12 @@ function useVibe64AutopilotView(props, emit, {
     (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
   ));
   const saveWorkActionLabel = computed(() => (
-    saveWorkRequiresUpdate.value ? "Update this session (rebase)" : "Save work"
+    saveWorkRequiresUpdate.value ? "Update this session (rebase)" : "Review changes"
   ));
   const saveWorkHeaderAriaLabel = computed(() => (
     saveWorkRequiresUpdate.value
       ? "Update selected session (rebase)"
-      : "Save selected session work"
+      : "Review selected session changes"
   ));
   const saveWorkHeaderVisible = computed(() => Boolean(
     props.active && sessionId.value
@@ -1439,7 +1440,7 @@ function useVibe64AutopilotView(props, emit, {
     if (!saveWorkUnsaved.value) {
       return "No work to save";
     }
-    return "Save this session's work to the project repository";
+    return "Review changes and choose where to commit them";
   });
   watch(() => {
     const attempt = saveWorkAttempt.value;
@@ -1624,6 +1625,9 @@ function useVibe64AutopilotView(props, emit, {
     if (saveWorkRequiresUpdate.value) {
       return updateBeforeSave();
     }
+    saveWorkReview.value = saveWorkRepositoryState.value?.destination
+      ? { ...saveWorkRepositoryState.value.destination }
+      : null;
     saveWorkConfirmOpen.value = true;
     return true;
   }
@@ -1669,7 +1673,7 @@ function useVibe64AutopilotView(props, emit, {
     savedCommitDeslop.value = "";
     saveWorkConfirmOpen.value = false;
     try {
-      const result = await props.saveSessionWork();
+      const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value });
       if (!requestIsCurrent()) {
         return false;
       }
@@ -2291,6 +2295,7 @@ function useVibe64AutopilotView(props, emit, {
     rightPaneTab,
     rightPaneTabMounted,
     saveWorkConfirmOpen,
+    saveWorkReview,
     saveWorkDisabled,
     updateWorkDisabled,
     saveWorkActivityDismissed,

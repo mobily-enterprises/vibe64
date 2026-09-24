@@ -13,14 +13,26 @@ const title = ref("");
 const body = ref("");
 const draft = ref(true);
 const pending = ref(false);
+const destinationReview = ref(null);
 const feedback = useUiFeedback({ source: "vibe64.pullRequests.create" });
 const session = computed(() => props.dashboardContext.session || {});
 const source = computed(() => vibe64SessionPullRequest(session.value));
 const repository = computed(() => githubProjectRepositoryName(props.dashboardContext.projectContext));
-const branch = computed(() => source.value?.headBranch || `vibe64/pr-${props.dashboardContext.sessionId}`);
+const branch = computed(() => {
+  if (source.value?.headBranch) return source.value.headBranch;
+  const destination = props.dashboardContext.workState?.destination;
+  if (destination?.mode === "github" && destination.branch !== props.dashboardContext.projectContext?.repository?.defaultBranch) {
+    return destination.branch;
+  }
+  return `vibe64/pr-${props.dashboardContext.sessionId}`;
+});
 const base = computed(() => source.value?.baseBranch || props.dashboardContext.projectContext?.repository?.defaultBranch || "");
 const path = computed(() => `${readRefOrGetterValue(props.dashboardContext.sessionsApiPath)}/${props.dashboardContext.sessionId}/pull-request`);
 const resource = useEndpointResource({ path, queryKey: computed(() => ["vibe64.createPullRequest", path.value]), enabled: false });
+watch(() => props.modelValue, (open) => {
+  if (open) destinationReview.value = props.dashboardContext.workState?.destination
+    ? { ...props.dashboardContext.workState.destination } : null;
+}, { immediate: true });
 watch(() => props.dashboardContext.sessionId, () => {
   title.value = source.value?.title || vibe64SessionDisplayTitle(session.value);
   body.value = source.value?.body || "";
@@ -30,8 +42,8 @@ async function submit() {
   if (pending.value || !title.value.trim()) return;
   pending.value = true;
   try {
-    const result = await resource.save({ title: title.value.trim(), body: body.value, draft: draft.value }, { method: "POST" });
-    feedback.success("Pull request created. Save now updates its source branch.");
+    const result = await resource.save({ title: title.value.trim(), body: body.value, draft: draft.value, destinationReview: destinationReview.value }, { method: "POST" });
+    feedback.success("Pull request created. Future commits update its source branch.");
     emit("created", result.pullRequest);
     emit("update:modelValue", false);
     void props.dashboardContext.refreshSessionWork?.();
@@ -53,8 +65,10 @@ async function submit() {
         <v-sheet color="surface-light" rounded="lg" class="pa-4 pr-destination">
           <div class="text-label-large">{{ repository }}</div>
           <div class="text-body-medium mt-1">{{ branch }} → {{ base }}</div>
-          <p class="text-body-small text-medium-emphasis mt-2 mb-0">Your changes go to a new branch. Future saves update that branch.</p>
+          <p class="text-body-small text-medium-emphasis mt-2 mb-0">Commit and push all session files on disk to this branch, then open a pull request. Future commits update that branch. The base branch stays unchanged.</p>
         </v-sheet>
+        <p class="text-body-small ma-0">Save open file edits first. Database rows and conversation history are separate. GitHub automation may run; Vibe64 app publishing is separate.</p>
+        <p v-if="!destinationReview" role="status">Refresh repository status before creating a pull request.</p>
         <v-text-field v-model="title" label="Title" variant="outlined" maxlength="256" :disabled="pending" hide-details />
         <v-textarea
           v-model="body" label="Description" placeholder="What changed, and how did you check it?" variant="outlined"
@@ -67,7 +81,7 @@ async function submit() {
         <v-spacer />
         <v-btn variant="text" height="48" :disabled="pending" @click="emit('update:modelValue', false)">Cancel</v-btn>
         <v-btn
-          color="primary" variant="flat" rounded="pill" height="48" :disabled="pending || !title.trim() || dashboardContext.sourceOperationsSuspended"
+          color="primary" variant="flat" rounded="pill" height="48" :disabled="pending || !title.trim() || !destinationReview || dashboardContext.sourceOperationsSuspended"
           :aria-busy="pending" @click="submit"
         >
           {{ pending ? 'Publishing…' : draft ? 'Create draft PR' : 'Create pull request' }}

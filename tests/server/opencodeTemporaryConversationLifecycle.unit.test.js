@@ -35,6 +35,7 @@ test("temporary OpenCode uses the main agent and project commands while keeping 
   });
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { recursive: true, force: true }); });
   const workdir = harness.session.metadata.source_path;
+  const previousHead = harness.git("rev-parse", "HEAD");
   await writeFile(path.join(workdir, "existing.txt"), "Unrelated local work");
   await harness.controller.sendMessage("session-1", { message: "Main question", messageId: "main-question" });
   await harness.controller.waitForTurn("session-1");
@@ -42,6 +43,9 @@ test("temporary OpenCode uses the main agent and project commands while keeping 
   const conversation = await harness.controller.createConversation("session-1", { ephemeral: true });
   await harness.controller.startConversationTurn("session-1", { conversationId: conversation.conversationId, message: "Edit the project." });
   await harness.controller.waitForConversationTurn("session-1", { conversationId: conversation.conversationId });
+  assert.equal(harness.checkpoints.at(-1).status, "ready");
+  assert.equal(harness.git("show", `${harness.checkpoints.at(-1).checkpointCommit}:temporary-edit.txt`), "Temporary command edit");
+  assert.equal(harness.git("rev-parse", "HEAD"), previousHead);
   assert.equal(harness.promptCalls.at(-1).input.agent, harness.promptCalls[0].input.agent);
   assert.equal(harness.promptDirectories.at(-1).directory, workdir);
   assert.equal(harness.promptDirectories[0].directory, workdir);

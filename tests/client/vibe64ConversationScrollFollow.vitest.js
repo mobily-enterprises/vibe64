@@ -355,11 +355,11 @@ describe("Vibe64 conversation scroll following", () => {
     for (const recipient of ["Codex", "OpenCode"]) {
       mounted.state.assistantLabel.value = recipient;
       await flushScrollWork();
-      for (const name of ["agent", "Codex", "OpenCode (big-pickle)"]) {
+      for (const name of ["agent", "Codex · gpt-6-astra", "OpenCode · big-pickle"]) {
         const label = findNode(mounted.container, node => node.type === "span" && nodeText(node).trim() === name);
         expect(label).not.toBeNull();
         if (name === "agent") expect(label.props.title).toBeUndefined();
-        if (name === "Codex") expect(label.props.title).toContain("gpt-6-astra");
+        if (name === "Codex · gpt-6-astra") expect(label.props.title).toContain("gpt-6-astra");
       }
     }
     mounted.app.unmount();

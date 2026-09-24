@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -1655,6 +1656,14 @@ function createOpenCodeTerminalController({
     if (typeof context.runtime.store?.writeAgentRunEvent !== "function") {
       return null;
     }
+    if (!vibe64AgentRunStateIsActive(state) && turn.id && !context.assistantScope) {
+      await checkpointSessionTurn({
+        projectService, runtime: context.runtime, session: context.session, sessionId: context.sessionId,
+        outerTurnId: `opencode:${turn.threadId}:${turn.id}`,
+        outcome: ["completed", "interrupted", "cancelled"].includes(state) ? state : "failed",
+        timestamp: turn.updatedAt || new Date().toISOString(), publishSessionChanged
+      });
+    }
     let written = null;
     const write = () => context.runtime.store.writeAgentRunEvent(
       context.sessionId,
@@ -2502,6 +2511,7 @@ function createOpenCodeTerminalController({
     tracked.runId = text(admitted.id);
     tracked.completion = (async () => {
       let stopped = true;
+      let checkpointOutcome = "completed";
       try {
         const timeoutMs = openCodeExecutionTimeout(input, executionProfile);
         await waitForOpenCodeMessages(target.server.client, conversationId, () => tracked.runId, {
@@ -2525,6 +2535,7 @@ function createOpenCodeTerminalController({
         };
       } catch (error) {
         const failure = signal.aborted ? signal.reason : error;
+        checkpointOutcome = tracked.interrupted ? "interrupted" : "failed";
         if (tracked.interrupted) {
           return { conversationId, ok: true, runId: tracked.runId, status: "interrupted", text: "" };
         }
@@ -2541,6 +2552,14 @@ function createOpenCodeTerminalController({
         eventAbort.abort();
         await events;
         if (tracked.abortController === turnAbort) tracked.active = !stopped;
+        if (stopped && !executionProfile && !context.assistantScope) {
+          await checkpointSessionTurn({
+            projectService, runtime: context.runtime, session: context.session, sessionId,
+            outerTurnId: `opencode:${conversationId}:${tracked.runId}`,
+            outcome: checkpointOutcome,
+            publishSessionChanged
+          });
+        }
       }
     })();
     // Keep a failed admitted turn observable to the client's conversation reads.

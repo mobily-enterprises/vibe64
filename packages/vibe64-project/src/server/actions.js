@@ -86,6 +86,9 @@ function projectRealtimePayload(value = {}) {
     ...(source.runtime?.open === false ? { message: "Project is closed." } : {}),
     ...(source.action ? { action: String(source.action).trim() } : {}),
     ...(source.githubRefresh === true ? { githubRefresh: true } : {}),
+    ...(typeof source.repositoryWorkflow?.requirePullRequest === "boolean"
+      ? { repositoryWorkflow: { requirePullRequest: source.repositoryWorkflow.requirePullRequest } }
+      : {}),
     ...(source.issueComment ? {
       issueComment: {
         number: source.issueComment.number,

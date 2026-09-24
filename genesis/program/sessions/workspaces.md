@@ -44,6 +44,9 @@ roles as part of explicit creation. The central resolver chooses the user's
 accessible Plan destination before creating the workspace, and its credential
 identity is checked again. Native selection and the intended workflow are stored
 separately, including when a member starts on another orchestrator's Shared backup.
+The optional hosted branch choice is independent of that AI workflow and both
+choices survive creation. Opening a pull request as a session keeps the selected
+workflow and uses the PR head, without offering a second branch destination.
 Its conversation, source location,
 agent activity, workspace preparation, and repository status remain available
 across UI refreshes. Archiving stops active work, removes its active workspace,
@@ -134,6 +137,11 @@ preserve the original source for Retry.
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it
 from legacy predecessor metadata or default a missing authority to local source.
+An optional hosted `repository_branch` binding chooses a verified branch at
+session creation. It survives renewal and archive indexing without changing
+database ownership, preparation or session admission limits. Existing sessions
+without it keep their current project authority; no cached source branch is
+promoted into a new binding. PR metadata takes precedence over this binding.
 The server-resolved PR source is an explicit session authority and survives
 renewal and archive indexing. A new PR session clones its head commit and gives
 the assistant the description as quoted background data on its opening turn.

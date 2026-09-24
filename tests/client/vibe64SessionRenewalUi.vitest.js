@@ -579,7 +579,6 @@ describe("session renewal dialog", () => {
     expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
     expect(autopilotSource).toContain('].filter(Boolean).join(": ")');
     expect(autopilotSource).toContain(':icon="mdiDotsVertical"');
-    expect(autopilotSource).toContain('title="Temporary AI"');
     expect(autopilotSource).toContain("studio-autopilot__session-action-item");
     expect(autopilotSource).toContain("studio-autopilot__header-actions--compact");
     expect(autopilotSource).toContain("@container studio-chat-pane (max-width: 32rem)");

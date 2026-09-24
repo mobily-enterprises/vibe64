@@ -207,7 +207,7 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot.indexOf("const promptHintsBlankConversation"))
       .toBeLessThan(canRequestStart);
     expect(canRequest).toMatch(
-      /promptHintsBlankConversation\.value \|\| \(\s*props\.agentConnectionStatus === "connected" &&\s*assistantDirectAllowed\.value\s*\)/u
+      /promptHintsBlankConversation\.value \|\| \(\s*\(assistantCanUsePurpose\("prompt_hint"\) \|\| assistantCanRequestMessage\.value\)\s*\)/u
     );
   });
 

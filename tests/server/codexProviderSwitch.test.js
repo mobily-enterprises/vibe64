@@ -51,7 +51,7 @@ test("native provider switches preserve history without restarting, and cold rec
     fetch(`http://127.0.0.1:${server.address().port}/openai/responses`, options) });
   await writeFile(path.join(root, "config.toml"), "check_for_update_on_startup = false\n");
   const socket = path.join(root, "server.sock");
-  const child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+  const child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   child.stderr.resume();
@@ -199,7 +199,7 @@ test("native provider switches preserve history without restarting, and cold rec
   const nextHome = path.join(root, "next-home");
   await mkdir(nextHome, { mode: 0o700 });
   const nextSocket = path.join(nextHome, "server.sock");
-  nextChild = spawn("codex", ["app-server", "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+  nextChild = spawn("codex", ["app-server", "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
     env: { PATH: process.env.PATH, HOME: nextHome, CODEX_HOME: nextHome, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   let nextDiagnostic = "";

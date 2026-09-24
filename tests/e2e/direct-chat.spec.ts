@@ -6,7 +6,8 @@ import {
   BASE_URL,
   DASHBOARD_PATH,
   DEVELOPMENT_PATH,
-  sessionRuntimeRoot
+  sessionRuntimeRoot,
+  readyProjectSelectionPayload
 } from "./support/base-shell-data";
 import {
   mockProjectGateReady
@@ -15,6 +16,17 @@ import {
   routeApiEndpoint
 } from "./support/base-shell/http";
 
+const ASSISTANT_CATALOG = {
+  ok: true,
+  engines: [{
+    schema: "vibe64.assistant-capabilities.v1", revision: `sha256:${"a".repeat(64)}`,
+    engineId: "codex", label: "Codex", transportId: "codex_app_server", health: { status: "ready" },
+    agents: [{ id: "codex", label: "Codex", mode: "primary" }],
+    defaults: { agentId: "codex", modelProviderId: "openai", modelId: "gpt-5.5", variantId: "high" },
+    modelProviders: [{ id: "openai", label: "OpenAI", connected: true, connectionStatus: "connected",
+      models: [{ id: "gpt-5.5", label: "GPT-5.5", status: "available", variants: [{ id: "low", label: "Low" }, { id: "high", label: "High" }] }] }]
+  }]
+};
 const SESSION_ID = "direct-chat-session";
 const SCROLL_TEST_COPY = "A deliberately detailed update keeps the conversation tall enough to exercise the real overflow container.";
 const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
@@ -54,14 +66,13 @@ const hintTest = test.extend<{ hintRealtime: void }>({
 async function openTemporaryAiWorkspace(page: Page) {
   await expect(page.getByRole("region", { name: "Session chat" })).toBeVisible();
   const expandedAction = page.getByRole("button", {
-    name: "Open temporary AI",
-    exact: true
+    name: /^Open temporary AI(?::|$)/u
   });
   if (await expandedAction.isVisible()) {
     await expandedAction.click();
     return;
   }
-  await page.getByRole("button", { name: "Session actions", exact: true }).click();
+  await page.getByRole("button", { name: /^Session actions(?::|$)/u }).click();
   await page.locator("[data-vibe64-temporary-ai-action]").click();
 }
 
@@ -214,15 +225,15 @@ test.describe("direct chat", () => {
     await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
     await expect(workspace.locator(".assistant-composer-support__assistant-status")).toHaveText("Sending to assistant…");
     startup.resolve();
-    await expect(workspace.getByRole("button", { name: "Resend", exact: true })).toBeVisible();
+    await expect(workspace.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
     await expect(workspace.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
     await expect(workspace.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
-    await expect(workspace.getByText("Assistant could not start.", { exact: true })).toHaveCount(1);
+    await expect(workspace.getByText("Failed: Assistant could not start.", { exact: true })).toHaveCount(1);
     await input.fill("Keep this newer draft.");
-    await workspace.getByRole("button", { name: "Resend", exact: true }).click();
+    await workspace.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(workspace.getByText("Here is the explanation.", { exact: true })).toBeVisible();
     await expect(workspace.getByText(message, { exact: true })).toHaveCount(1);
-    await expect(workspace.getByRole("button", { name: "Resend", exact: true })).not.toBeVisible();
+    await expect(workspace.getByRole("button", { name: "Retry", exact: true })).not.toBeVisible();
     await expect(input).toHaveValue("Keep this newer draft.");
     expect(submissions).toHaveLength(2);
     expect(submissions[1]).toEqual(submissions[0]);
@@ -380,7 +391,7 @@ test.describe("direct chat", () => {
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     const input = page.getByLabel("Message AI assistant");
-    const settings = page.getByRole("button", { name: "Chat settings for Codex: attention required", exact: true });
+    const settings = page.getByRole("button", { name: /^Chat settings for Codex.*: attention required$/ });
     const notice = page.getByRole("status").filter({ hasText: "The assistant stopped because its progress could not be tracked." });
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -776,31 +787,172 @@ test.describe("direct chat", () => {
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
     const sessionChat = page.getByRole("region", { name: "Session chat" });
-    const saveButton = sessionChat.getByRole("button", { name: "Save selected session work", exact: true });
+    const saveButton = sessionChat.getByRole("button", { name: "Review selected session changes", exact: true });
     await expect(saveButton).toBeVisible();
     await expect(page.locator(".studio-home-shell-save-work-host")).toHaveCount(0);
     await saveButton.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Save current work?", { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/canonical repository/iu)).toBeVisible();
-    await expect(dialog.getByText(/concurrent canonical changes/iu)).toBeVisible();
+    await expect(dialog.getByText("Review session changes", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("example-target-app:main", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/Database rows and conversation history are separate/iu)).toBeVisible();
 
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: "Keep working", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     expect(messages).toHaveLength(0);
 
     await saveButton.click();
-    const confirmButton = dialog.getByRole("button", { name: "Save", exact: true });
+    const confirmButton = dialog.getByRole("button", { name: "Save project version", exact: true });
     await confirmButton.click();
 
     await expect.poll(() => saves).toHaveLength(1);
-    expect(saves[0]).toEqual({});
+    expect(saves[0]).toEqual({ destinationReview: { sessionId: SESSION_ID, mode: "managed_git", repository: "example-target-app", branch: "main" } });
     expect(messages).toHaveLength(0);
     await expect(dialog).not.toBeVisible();
   });
 
-  test("keeps Save unavailable until assistant preparation completes", async ({ page }) => {
+  for (const scenario of [
+    { mode: "local_source", repository: "/workspace/example-target-app", branch: "feature/editor", requirePullRequest: false },
+    { mode: "github", repository: "example/project", branch: "main", requirePullRequest: false },
+    { mode: "github", repository: "example/project", branch: "feature/review", requirePullRequest: true }
+  ]) {
+    test(`reviews the exact ${scenario.mode} destination with PR requirement ${scenario.requirePullRequest}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      const destinationReview = { sessionId: SESSION_ID, mode: scenario.mode, repository: scenario.repository, branch: scenario.branch };
+      const saves: Record<string, unknown>[] = [];
+      const messageRequestReads: string[] = [];
+      page.on("request", request => { if (request.url().includes("/message-suggestions")) messageRequestReads.push(request.url()); });
+      await mockDirectChat(page, { workState: { unsaved: true, destination: destinationReview, publicationRequiresPullRequest: scenario.requirePullRequest }, onSave: (body) => { saves.push(body); } });
+      const project = { ...readyProjectSelectionPayload.currentProject, repositoryMode: scenario.mode,
+        repository: { mode: scenario.mode, defaultBranch: "main", ...(scenario.mode === "github" ? { github: { fullName: scenario.repository } } : {}) } };
+      await routeApiEndpoint(page, "/vibe64/projects", (route) => fulfillJson(route, {
+        ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+      }));
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+      const review = page.getByRole("dialog");
+      await expect(review.getByText(`${scenario.repository}:${scenario.branch}`, { exact: true })).toBeVisible();
+      await expect(review.getByText(/Save open file edits first/)).toBeVisible();
+      for (const button of await review.getByRole("button").all()) {
+        await expect.poll(async () => (await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+      }
+      if (scenario.mode === "local_source") {
+        expect(messageRequestReads).toHaveLength(0);
+        await expect(page.getByRole("region", { name: "Message requests", exact: true })).toHaveCount(0);
+      }
+      const publish = review.getByRole("button", { name: scenario.mode === "github"
+        ? `Commit & push to ${scenario.repository}:${scenario.branch}` : `Commit to ${scenario.branch}`, exact: true });
+      if (scenario.requirePullRequest) {
+        await expect(publish).toBeDisabled();
+        await review.getByRole("button", { name: "Create draft PR", exact: true }).click();
+        const pullRequest = page.getByRole("dialog");
+        await expect(pullRequest.getByRole("heading", { name: "Create pull request", exact: true })).toBeVisible();
+        await expect(pullRequest.getByText(`${scenario.branch} → main`, { exact: true })).toBeVisible();
+        await expect(pullRequest.getByText(/The base branch stays unchanged/)).toBeVisible();
+        await expect(pullRequest.getByRole("checkbox", { name: "Create as draft" })).toBeChecked();
+        expect(saves).toHaveLength(0);
+      } else {
+        await publish.click();
+        await expect.poll(() => saves).toEqual([{ destinationReview }]);
+      }
+    });
+  }
+
+  test("opens the Changes panel from review without publishing", async ({ page }) => {
+    const saves: unknown[] = [];
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await mockDirectChat(page, { onSave: body => { saves.push(body); } });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "View diff", exact: true }).click();
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/changes`);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(errors).toEqual([]);
+    expect(saves).toHaveLength(0);
+  });
+
+  for (const width of [390, 1280]) {
+    test(`loads branches only on request and keeps branch confirmation reachable at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 577 });
+      let branchReads = 0;
+      const submissions: Record<string, unknown>[] = [];
+      await mockDirectChat(page);
+      const project = { ...readyProjectSelectionPayload.currentProject,
+        repositoryMode: "managed_git", repository: { mode: "managed_git", defaultBranch: "main" } };
+      await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, {
+        ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+      }));
+      await routeApiEndpoint(page, "/vibe64/assistants/capabilities", route => fulfillJson(route, ASSISTANT_CATALOG));
+      await routeApiEndpoint(page, "/vibe64/repository/branches", route => {
+        branchReads += 1;
+        return fulfillJson(route, { ok: true, defaultBranch: "main", branches: [{ name: "main", commit: "a".repeat(40) }] });
+      });
+      await routeApiEndpoint(page, "/vibe64/sessions", route => {
+        if (route.request().method() === "POST") {
+          submissions.push(requestBodyWithoutOrigin(route.request()));
+          return fulfillJson(route, { ok: true, ...directSession() });
+        }
+        return fulfillJson(route, { ok: true, sessions: [directSession()],
+          creation: { canCreate: true, showCreateAction: true, mode: "direct" }, limits: { openSessionCount: 1 } });
+      });
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await page.getByRole("button", { name: "New session", exact: true }).click();
+      let dialog = page.getByRole("dialog");
+      await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
+      expect(branchReads).toBe(0);
+      await dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" }).check();
+      await expect(dialog.getByRole("combobox", { name: "Start from branch", exact: true })).toHaveValue("main");
+      expect(branchReads).toBe(1);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page.getByRole("button", { name: "New session", exact: true }).click();
+      dialog = page.getByRole("dialog");
+      await dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" }).check();
+      await expect(dialog.getByRole("combobox", { name: "Start from branch", exact: true })).toHaveValue("main");
+      await dialog.getByRole("checkbox", { name: "Create a new branch from this version" }).check();
+      await dialog.getByRole("textbox", { name: "New branch name", exact: true }).fill("feature/review");
+      const submit = dialog.getByRole("button", { name: "Create branch & session", exact: true });
+      await expect(submit).toBeEnabled();
+      const bounds = await submit.boundingBox();
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(577);
+      await submit.click();
+      await expect.poll(() => submissions.length).toBe(1);
+      expect(submissions[0].repositoryBranch).toEqual({ name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) });
+      expect(submissions[0].workflowEngineId).toBe("codex");
+    });
+  }
+
+  test("opens a pull request session with the selected AI workflow", async ({ page }) => {
+    await mockDirectChat(page);
+    const submissions: Record<string, unknown>[] = [];
+    const project = { ...readyProjectSelectionPayload.currentProject,
+      repositoryMode: "github", repository: { mode: "github", defaultBranch: "main" },
+      githubRepository: { fullName: "example/project" } };
+    await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, {
+      ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+    }));
+    await routeApiEndpoint(page, "/vibe64/pull-requests/7", route => fulfillJson(route, {
+      ok: true, pullRequest: { number: 7, title: "Review this branch", state: "OPEN", body: "An innocuous change.",
+        headRefName: "feature/review", baseRefName: "main", headRepository: { nameWithOwner: "example/project" } }
+    }));
+    await routeApiEndpoint(page, "/vibe64/sessions", route => {
+      if (route.request().method() === "POST") {
+        submissions.push(requestBodyWithoutOrigin(route.request()));
+        return fulfillJson(route, { ok: true, ...directSession() });
+      }
+      return fulfillJson(route, { ok: true, sessions: [directSession()],
+        creation: { canCreate: true, showCreateAction: true, mode: "direct" }, limits: { openSessionCount: 1 } });
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/pull-requests?pr=7`);
+    await page.getByRole("button", { name: "Open as session", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Create session", exact: true }).click();
+    await expect.poll(() => submissions.length).toBe(1);
+    expect(submissions[0]).toEqual({ assistantSelection: {}, workflowEngineId: "codex", pullRequestNumber: 7 });
+  });
+
+  test("waits for assistant activity to settle before reviewing changes", async ({ page }) => {
     await mockDirectChat(page);
     let releasePreparation = () => {};
     const preparing = new Promise<void>((resolve) => { releasePreparation = resolve; });
@@ -810,10 +962,10 @@ test.describe("direct chat", () => {
     });
     try {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      const save = page.getByRole("button", { name: "Save selected session work", exact: true });
-      await expect(save).toBeVisible();
-      await expect(save).toBeDisabled();
+      const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
       await expect(page.locator(".assistant-composer-support__assistant-status")).toHaveText("Loading assistant…");
+      await expect(save).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeVisible();
       releasePreparation();
       await expect(save).toBeEnabled();
       await save.click();
@@ -840,10 +992,10 @@ test.describe("direct chat", () => {
         });
         await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
         const header = page.getByRole("button", {
-          name: update ? "Update selected session (rebase)" : "Save selected session work", exact: true
+          name: update ? "Update selected session (rebase)" : "Review selected session changes", exact: true
         });
         const confirm = async () => {
-          if (!update) await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+          if (!update) await page.getByRole("dialog").getByRole("button", { name: "Save project version", exact: true }).click();
         };
         await header.click();
         await confirm();
@@ -886,14 +1038,19 @@ test.describe("direct chat", () => {
     }
   }
 
-  test("disables Save work while the agent is active", async ({ page }) => {
+  test("only allows a status check while the agent is active", async ({ page }) => {
+    const saves: Record<string, unknown>[] = [];
     await mockDirectChat(page, {
-      agentActive: true
+      agentActive: true,
+      onSave: body => { saves.push(body); }
     });
 
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    await expect(page.getByRole("button", { name: "Save selected session work", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Review selected session changes", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Check for updates", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(saves).toHaveLength(0);
   });
 
   test.describe("session-chat Save on a phone", () => {
@@ -907,7 +1064,7 @@ test.describe("direct chat", () => {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
       const sessionHeader = page.getByRole("region", { name: "Session chat" }).locator(".studio-autopilot__session-header");
-      const saveButton = sessionHeader.getByRole("button", { name: "Save selected session work", exact: true });
+      const saveButton = sessionHeader.getByRole("button", { name: "Review selected session changes", exact: true });
       await expect(saveButton).toBeVisible();
       await expect(saveButton).toHaveText("");
       const bounds = await saveButton.boundingBox();
@@ -927,7 +1084,7 @@ test.describe("direct chat", () => {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
       const saveButton = page.getByRole("region", { name: "Session chat" }).getByRole("button", {
-        name: "Save selected session work",
+        name: "Review selected session changes",
         exact: true
       });
       await expect(saveButton).toBeVisible();
@@ -949,7 +1106,7 @@ test.describe("direct chat", () => {
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
     const visibleChat = page.locator(".studio-autopilot__chat-panel:visible");
-    const saveButton = visibleChat.getByRole("button", { name: "Save selected session work" });
+    const saveButton = visibleChat.getByRole("button", { name: "Review selected session changes" });
     await expect(saveButton).toHaveCount(1);
     await visibleChat.locator('[aria-label^="Direct chat."]').click();
     await expect(saveButton).toHaveCount(1);
@@ -958,7 +1115,7 @@ test.describe("direct chat", () => {
 
     await saveButton.click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await dialog.getByRole("button", { name: "Save project version", exact: true }).click();
     await expect.poll(() => saves).toEqual(["direct-chat-session-b"]);
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1021,6 +1178,12 @@ test.describe("direct chat", () => {
         }
       });
 
+      const session = { ...directSession(), assistantSelection: {
+        engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-5.5",
+        variantId: "low", catalogRevision: ASSISTANT_CATALOG.engines[0].revision
+      } };
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+      await routeApiEndpoint(page, "/vibe64/assistants/capabilities", route => fulfillJson(route, ASSISTANT_CATALOG));
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
       await openTemporaryAiWorkspace(page);
 
@@ -1085,12 +1248,13 @@ test.describe("direct chat", () => {
 
       await openTemporaryAiWorkspace(page);
       await expect(workspace).toBeVisible();
-      await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toBeVisible();
+      const unreadTask = navigation.getByRole("button", { name: "Temporary 1: unread messages", exact: true });
+      await expect(unreadTask).toBeVisible();
       await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
         "aria-current",
         "page"
       );
-      await navigation.getByRole("button", { name: "Temporary 1", exact: true }).click();
+      await unreadTask.click();
       await workspace.getByRole("button", { name: "Show all 1 progress update", exact: true }).click();
       await expect(workspace.getByText("Continued while Main chat was visible.", { exact: true })).toBeVisible();
       await expect(workspace.getByText("Finished while Main chat was visible.", { exact: true })).toBeVisible();
@@ -1634,6 +1798,7 @@ async function mockDirectChat(page: Page, {
     }
     if (method === "GET" && url.pathname.endsWith("/work")) {
       await fulfillJson(route, {
+        destination: { sessionId: sessionIdFromApiPath(url.pathname), mode: "managed_git", repository: "example-target-app", branch: "main" },
         ...workState,
         ok: true
       });

@@ -110,14 +110,14 @@
             :color="changes.payload?.unsaved === true ? 'error' : undefined"
             :disabled="saveWorkDisabled"
             :loading="saving"
-            :prepend-icon="mdiContentSaveOutline"
+            :prepend-icon="mdiSourceCommit"
             size="small"
             type="button"
             :title="saveWorkTitle"
             variant="tonal"
             @click="saveWork"
           >
-            Save work
+            Review changes
           </v-btn>
         </div>
       </v-sheet>
@@ -391,7 +391,6 @@ import {
   mdiClockOutline,
   mdiClose,
   mdiCloudRefreshOutline,
-  mdiContentSaveOutline,
   mdiSourceCommit,
   mdiSourceMerge,
   mdiSourcePull
@@ -501,7 +500,7 @@ const saveWorkTitle = computed(() => {
   if (changes.payload?.unsaved !== true) {
     return "No work to save";
   }
-  return "Save this session's work to the project repository";
+  return "Review changes and choose where to commit them";
 });
 
 const repositorySummaryTitle = computed(() => {

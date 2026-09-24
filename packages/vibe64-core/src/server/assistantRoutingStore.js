@@ -4,6 +4,8 @@ import path from "node:path";
 
 const writes = new Map();
 const routingRoles = ["plan", "code", "economy", "router", "sharedBackup"];
+// eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
+const controlCharacters = /[\x00-\x1f\x7f]/u;
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 
 function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
@@ -17,7 +19,7 @@ function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
         !/^sha256:[a-f0-9]{64}$/u.test(entry.catalogRevision || "") ||
         !["engineId", "agentId", "modelProviderId", "modelId", "variantId"].every((name) =>
           typeof entry[name] === "string" && entry[name].length <= 512 &&
-          (name === "variantId" || entry[name].trim().length) && !/[\x00-\x1f\x7f]/u.test(entry[name])) ||
+          (name === "variantId" || entry[name].trim().length) && !controlCharacters.test(entry[name])) ||
         !(legacy && entry.selectionSource === undefined || ["recommended", "explicit"].includes(entry.selectionSource))) invalid();
   };
   for (const [engineId, roles] of Object.entries(value.orchestrators)) {
@@ -35,7 +37,7 @@ function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
           !review.previous.length || review.previous.some((entry) => !object(entry) ||
             Object.keys(entry).some((key) => !["engineId", "modelProviderId", "modelId", "selectionSource"].includes(key)) ||
             !["codex", "claude", "opencode"].includes(entry.engineId) ||
-            !["modelProviderId", "modelId"].every((key) => typeof entry[key] === "string" && entry[key].length > 0 && entry[key].length <= 512 && !/[\x00-\x1f\x7f]/u.test(entry[key])) ||
+            !["modelProviderId", "modelId"].every((key) => typeof entry[key] === "string" && entry[key].length > 0 && entry[key].length <= 512 && !controlCharacters.test(entry[key])) ||
             !["explicit", "default"].includes(entry.selectionSource))) invalid();
       if (review.proposed != null) assignment(review.proposed);
     }

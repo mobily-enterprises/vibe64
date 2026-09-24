@@ -1,4 +1,5 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -872,6 +873,18 @@ function createService({
       "session-save"
     );
     const project = await projectService.readCurrentProject();
+    const destination = assertSessionRepositoryReview(project, session, input.destinationReview);
+    const assertWorkflow = async () => {
+      if (destination.mode !== "github") return;
+      const workflow = await projectService.readRepositoryWorkflow();
+      if (workflow.requirePullRequest && !context.creatingPullRequest &&
+          !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
+        const error = new Error("This project requires a pull request. Create or open a pull request before publishing this session.");
+        error.code = "vibe64_pull_request_required";
+        throw error;
+      }
+    };
+    await assertWorkflow();
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
@@ -948,7 +961,11 @@ function createService({
       operationId: input.operationId,
       project,
       runCommand: execution.runCommand,
-      runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+      runProjectSourceExclusive: (operation, options) => projectService.runProjectSourceExclusive(async () => {
+        assertSessionRepositoryReview(await projectService.readCurrentProject(), session, input.destinationReview);
+        await assertWorkflow();
+        return operation();
+      }, options),
       session
     });
     return {
@@ -1632,7 +1649,7 @@ function createService({
       session,
       sessionId: normalizedSessionId
     });
-    if (execution?.ok === false && input.vibe64User) {
+    if (execution?.ok === false) {
       const sessionSourceRoot = terminalSessionSourceRoot(session);
       const workdir = terminalWorktreePath(session);
       const recorded = sessionSourceRoot && workdir
@@ -2006,6 +2023,8 @@ function createService({
       return runSessionRepositoryWrite(sessionId, input, { operation: "create-pull-request" }, async (context) => {
         const { runtime } = context;
         let session = context.session;
+        const project = await projectService.readCurrentProject();
+        assertSessionRepositoryReview(project, session, input.destinationReview);
         let source = session.metadata?.github_pull_request
           ? JSON.parse(session.metadata.github_pull_request)
           : await projectService.preparePullRequestSource(session, input);
@@ -2043,7 +2062,10 @@ function createService({
           runCommand: execution.runCommand
         });
 
-        const saved = await saveSessionWorkInsideWrite(sessionId, input, { ...context, session });
+        const saved = await saveSessionWorkInsideWrite(sessionId, {
+          ...input,
+          destinationReview: sessionRepositoryDestination(project, session)
+        }, { ...context, session, creatingPullRequest: true });
         await runtime.store.writeMetadataValue(sessionId, "canonical_commit", saved.saveCommit);
         if (saved.reconciled === true) {
           await runtime.store.writeMetadataValue(sessionId, "base_commit", saved.saveCommit);
@@ -2154,11 +2176,16 @@ function createService({
         : await runtime.getSession(normalizedSessionId, {
             inspectSource: false
           });
-      return inspectManagedSessionWork({
+      const work = await inspectManagedSessionWork({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         project: await projectService.readCurrentProject(),
         session
       });
+      return {
+        ...work,
+        publicationRequiresPullRequest: work.destination?.mode === "github" &&
+          (await projectService.readRepositoryWorkflow()).requirePullRequest
+      };
     },
 
     async inspectSessionChanges(sessionId, input = {}) {
@@ -2171,13 +2198,18 @@ function createService({
         : await runtime.getSession(normalizedSessionId, {
             inspectSource: false
           });
-      return inspectManagedSessionChanges({
+      const work = await inspectManagedSessionChanges({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         limit: input.limit,
         offset: input.offset,
         project: await projectService.readCurrentProject(),
         session
       });
+      return {
+        ...work,
+        publicationRequiresPullRequest: work.destination?.mode === "github" &&
+          (await projectService.readRepositoryWorkflow()).requirePullRequest
+      };
     },
 
     async inspectSessionChangeDiff(sessionId, input = {}) {

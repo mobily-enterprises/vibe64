@@ -26,7 +26,7 @@ const catalog = useVibe64AssistantCatalog({
   modelProviderId,
   providerConnectedOnly: true
 });
-const provider = computed(() => catalog.modelEngine.value?.engineId === engineId.value
+const provider = computed(() => engineId.value && catalog.modelEngine.value?.engineId === engineId.value
   ? catalog.modelEngine.value.modelProviders.find(row => row.id === modelProviderId.value && row.connected)
   : null);
 const models = computed(() => (provider.value?.models || []).filter(model => model.status === "available"));

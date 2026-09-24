@@ -152,7 +152,7 @@ describe("session creation controls", () => {
     const nodes = [];
     const renderer = VueRuntime.createRenderer({
       createElement(type) {
-        const node = { type, props: {} };
+        const node = { type, props: {}, style: {} };
         nodes.push(node);
         return node;
       },

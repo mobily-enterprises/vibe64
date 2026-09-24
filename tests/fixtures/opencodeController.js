@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";
 import os from "node:os";
 import path from "node:path";
@@ -103,6 +104,10 @@ async function controllerHarness({
   const metadataWrites = [];
   const agentRunEvents = [];
   const agentRuns = new Map();
+  const checkpoints = [];
+  const git = (...args) => execFileSync("git", args, { cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main");
+  git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "Initial");
   const renderPromptCalls = [];
   let runStartedAt = "";
   let queuedMessagesErrorAfterPrompt = messagesErrorAfterPrompt;
@@ -121,6 +126,7 @@ async function controllerHarness({
     },
     store: {
       async readAgentRun(sessionId, id) { return structuredClone(agentRuns.get(`${sessionId}:${id}`) || null); },
+      async writeBackgroundTaskEvent(_id, _task, { patch }) { checkpoints.push(patch); return patch; },
       readConversationStream: streams.read,
       updateConversationStream: streams.update,
       completeConversationStreamMessage: streams.complete,
@@ -432,6 +438,7 @@ async function controllerHarness({
       }];
     },
     projectService: {
+      async readCurrentProject() { return { sourceRoot }; },
       currentServiceDataRoot() {
         return path.join(root, "services");
       },
@@ -490,6 +497,8 @@ async function controllerHarness({
     },
     listConnectionCalls: () => listConnectionCalls,
     metadataWrites,
+    checkpoints,
+    git,
     processStarts,
     processStops,
     providerCatalogCalls: () => providerCatalogCalls,
